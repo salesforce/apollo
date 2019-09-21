@@ -1,0 +1,4 @@
+faultTolerance: 0.1
+probabilityByzantine: 0.2
+cardinality: 100
+dbConnect: "jdbc:h2:mem:seeds"

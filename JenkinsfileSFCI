@@ -1,0 +1,89 @@
+@Library('sfci-pipeline-sharedlib@master') _
+
+import net.sfdc.dci.BuildUtils
+import net.sfdc.dci.MavenUtils
+import net.sfdc.dci.ExecutionHandler
+
+def eh = ExecutionHandler.getInstance(this)
+
+def major_version = '222'
+def minor_version = '0'
+def patch_version = '0'
+def build_timestamp = new Date().format( 'yyyyMMddHHmmss' )
+def release_version = "${major_version}.${minor_version}.${patch_version}+${build_timestamp}"
+env.RELEASE_BRANCHES = ['master']
+
+def envDef = [
+    // Default email notifications for SFCI - https://confluence.internal.salesforce.com/display/public/ZEN/SFCI+Email+Notifications
+    buildImage: 'ops0-artifactrepo1-0-prd.data.sfdc.net/dci/centos-openjdk-sfci-maven:jdk11',
+    emailTo: BuildUtils.isReleaseBuild(env) ? 'Hal.Hildebrand@salesforce.com' : null,
+    flavor:'huge'
+]
+
+executePipeline(envDef) {
+    try {
+        stage ('Init') {
+            def pr = BuildUtils.isPullRequestBuild(env)
+            echo "Is this a pull request? ${pr}"
+            echo('my branch name is:' + env.BRANCH_NAME)
+
+            checkout scm
+
+            // generates settings.xml into $WORKSPACE/.m2
+            mavenInit()
+
+            // promote the workspace settings.xml to the global one so other projects can find it
+            sh "mkdir ~/.m2"
+            sh "cp $WORKSPACE/.m2/settings.xml ~/.m2/settings.xml"
+        }
+
+        stage('Validation') {
+            echo "Building version: $release_version"
+            script {
+                if ( env.BRANCH_NAME ==~ /release\/.*/ ) {
+                    branch_major_version = env.BRANCH_NAME.split('/')[1]
+                    if ( major_version != branch_major_version ) {
+                        def err_message = "Build failed because Major version number in release branch doesn't match with what is expected"
+                        err_message = "$err_message \n Jenkins majorVersion:$major_version branch version: $branch_major_version"
+                        echo "Validation failed: $err_message!"
+                        sh 'exit 1'
+                    }
+                }
+            }
+        }
+
+        stage('Record Environment') {
+            echo "********************************************************************  Record Ye Env ******************************************************************** "
+            script {
+                sh 'mvn --version'
+            }
+        }
+
+        stage('Build and Test') {
+            script {
+                sh "mvn -B clean install -Djava.security.egd=file:/dev/./urandom"
+            }
+        }
+
+        stage('deploy') {
+            if (BuildUtils.isReleaseBuild(env)) {
+                echo "******************************************************************** Deploy stage ********************************************************************"
+                script {
+                    sh "mvn versions:set -DgenerateBackupPoms=false -DnewVersion=${release_version}"
+                    sh "mvn versions:set -DgenerateBackupPoms=false -DnewVersion=${release_version}"
+                    sh 'mvn deploy -DskipTests'
+                }
+
+                currentBuild.description = "Build: ${release_version}"
+            } else {
+                echo 'Skipping this phase for non release build'
+            }
+        }
+
+        stage('GUS Compliance'){
+            git2gus()
+        }
+    } finally {
+        mavenPostBuild()
+    }
+}

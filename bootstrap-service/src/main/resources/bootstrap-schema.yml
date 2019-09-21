@@ -1,0 +1,86 @@
+databaseChangeLog:
+-  preConditions:
+   -  runningAs:
+         username: bootstrap
+-  changeSet:
+      id: 1
+      author: hhildebrand
+      changes:
+      -  createTable:
+            tableName: settings
+            columns:
+            -  column:
+                  name: version
+                  type: INT
+                  autoIncrement: true
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: cardinality
+                  type: INT
+            -  column:
+                  name: probability_byzantine
+                  type: DOUBLE
+            -  column:
+                  name: faultTolerance
+                  type: DOUBLE
+            -  column:
+                  name: ca_certificate
+                  type: BINARY
+            -  column:
+                  name: certificate_hash
+                  type: BINARY(32)
+      -  createTable:
+            tableName: assigned_ids
+            columns:
+            -  column:
+                  name: id
+                  type: UUID
+                  autoIncrement: false
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: version
+                  type: INT 
+      -  createTable:
+            tableName: members
+            columns:
+            -  column:
+                  name: id
+                  type: UUID
+                  autoIncrement: false
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: version
+                  type: INT
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: host
+                  type: VARCHAR
+            -  column:
+                  name: fireflies_port
+                  type: INT
+            -  column:
+                  name: ghost_port
+                  type: INT
+            -  column:
+                  name: avalanche_port
+                  type: INT
+            -  column:
+                  name: certificate
+                  type: BINARY
+            -  column:
+                  name: certificate_hash
+                  type: BINARY(32)
+            -  column:
+                  name: signing_ca
+                  type: INT
+      -  addUniqueConstraint:
+            tableName: members
+            columnNames: id, version
+            constraintName: member_unique_id_version
+            deferrable: false
+            disabled: false
+            initiallyDeferred: false

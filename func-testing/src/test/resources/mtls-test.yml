@@ -1,0 +1,17 @@
+apollo:
+   gossipInterval: "PT1S"
+   avalanche:
+      dbConnect: jdbc:h2:mem:test-1;DB_CLOSE_ON_EXIT=FALSE
+   source:
+      type: env
+      firefliesPort: 1638
+      ghostPort: 1639
+      avalanchePort: 1640
+logging:
+   level: INFO
+   loggers:
+      liquibase: WARN
+      com.salesforce.apollo.fireflies: INFO
+      com.salesforce.apollo.avalanche: INFO
+   appenders:
+   -  type: console

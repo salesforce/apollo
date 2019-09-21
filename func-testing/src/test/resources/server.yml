@@ -1,0 +1,22 @@
+apollo:
+   gossipInterval: "PT0.1S"
+   source:
+      type: file
+      store: target/test-classes/members/member-1.p12
+   communications:
+      type: sim
+   avalanche:
+      alpha: 0.45
+      k: 2
+      beta1: 3
+      beta2: 5
+      dbConnect: jdbc:h2:mem:test-1;DB_CLOSE_ON_EXIT=FALSE
+      limit: 200
+      parentCount: 3
+logging:
+   level: INFO
+   loggers:
+      liquibase: WARN
+      com.salesforce.apollo.avalanche: INFO
+   appenders:
+   -  type: console

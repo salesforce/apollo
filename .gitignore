@@ -1,0 +1,21 @@
+/target
+.project
+.settings
+.classpath
+**/.DS_Store
+**/target
+**/.project
+**/.settings
+**/.classpath
+**/.DS_Store
+**/bin/
+/bin/
+*.csv
+**/dependency-reduced-pom.xml
+pom.xml.bak
+
+## Intellij stuff
+.idea
+*.iml 
+**/.iml
+/conduit-ci/jenkins/jobs/
