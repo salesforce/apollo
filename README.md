@@ -1,24 +1,37 @@
-# Genesis Apollo
-The Apollo service is a distributed ledger based on a sea of DAG nodes.  The underlying membership is managed by the Fireflies secure communication layer.  Consensus is supplied by Avalanche.  An IPFS-esque DAG based DHT is provided in addition to DAG ledger state.
+# Apollo
+The Apollo project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.   The underlying membership of Apollo is managed by the Fireflies secure communication layer.  The consensus layer is supplied by Avalanche.  An IPFS-esque DAG based DHT is provided in addition to DAG ledger state.
 
-The operation of a node is the same regardless of whether an Apollo node is a single node or a member of a decentralized network.  The nature of the decentralized architecture dictates that building out a single node is required before building out any interactions between nodes.
 
 ## Protocols
-* [Avalanche](https://avalabs.org/snow-avalanche.pdf) - scalable, leaderless, Byzantine Fault Tolerant consensus
-  * Comes to consensus on causal ordering of events with a high dynamic range of nodes
-* [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - a gossip-based membership service
-  * Assumes byzantine members (and allows one to parameterize the system according to the probability of such)
-  * Creates an overlay network in which each member gossips with the successor of the member in a ring
-  * The monitoring ring is capable of detecting member crashes (failures)
-* [Ghost](https://eprint.iacr.org/2018/104.pdf) - a Merkle directed acyclic graph (DAG) used for storing block data
-  * Uses an immutable, idempotent, content-based Distributed Hash Table (DHT) in which the "key" of data stored is the hash of that data (meaning you look up data with the key)
+* [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communictions
+    * Assumes byzantine members (and allows one to parameterize the system according to the probability of such)
+    * Creates an overlay network in which each member gossips with the successor of the member in a ring
+    * The monitoring ring is capable of detecting member crashes (failures)
+    * Reliable group message flooding
+* [Avalanche](https://arxiv.org/abs/1906.08936) - scalable, leaderless, byzantine fault tolerant consensus
+    * Consensus on causal ordering of events with a high dynamic range of nodes
+* Ghost- a Merkle directed acyclic graph (DAG) used for storing block data
+    * An immutable, content-based, single hop Distributed Hash Table (DHT) in which the "key" of data stored is the hash of that data (meaning you look up data with the key)
+    * Leverages the underlying Fireflies rings for consistent hash rings and single hop routing
 
-## Instructions
-If you haven't already, you'll first want to configure your system for Maven development at Salesforce.  You'll do this by configuring your `~/.m2/settings.xml` file per [the instructions here](https://git.soma.salesforce.com/modularization-team/maven-settings).
 
-You can then clone the Genesis Apollo Git repository to your local box.
-```
-git clone git@git.soma.salesforce.com:salesforce-blockchain/genesis-apollo.git
-```
+## Not A Coin Platform(tm)
+Apollo isn't designed for coins, rather as essentially a distributed database.  Of course the systems of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
 
-You're now ready to import the project into your IDE of choice.  Apollo requires JDK 11.  It's important to note though that you'll want to use Salesforce's version of Java that is provided with BLT.  If not, you'll encounter certificate trust issues with Nexus.  Example: `/Library/Java/JavaVirtualMachines/sfdc-openjdk_11.0.1.jdk/Contents/Home`.
+
+## Status
+Note that Apollo is very much a _work in progress_.  It is by no means a full featured, hardened distributed leder platform.  I am a strong believer in iterative development and believe it is the only way to create robust systems.  Consequently, things are still changing, there is much experimental in the current work, and much left to be done. ;)
+
+
+## Requirements
+Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.5.3+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using __Java 11__.
+
+Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html).  This means that the various modules of Apollo are built and versioned as a whole, rather than being seperated out into individual repositories.  This also means that modules refer to other modules within the project as dependencies, and consequently must be built in the correct order.  Note that Maven does this by default, so there should be no issues.  However, it does mean that you can't simply cd into a module and build it without building its dependencies first.
+
+
+## Building
+To build Apollo, cd to the root directory of the repository and then do:
+   
+    mvn clean install
+
+Note that the _install_ maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.
