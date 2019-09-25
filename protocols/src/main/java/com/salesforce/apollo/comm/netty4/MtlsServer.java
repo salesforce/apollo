@@ -46,6 +46,8 @@ import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.compression.FastLzFrameDecoder;
+import io.netty.handler.codec.compression.FastLzFrameEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.util.concurrent.Future;
@@ -205,6 +207,8 @@ public class MtlsServer implements Server {
                                                             SslHandler newHandler = sslCtx.newHandler(ch.alloc());
                                                             pipeline.addLast(newHandler);
                                                             SSLEngine engine = newHandler.engine();
+                                                            pipeline.addLast(new FastLzFrameDecoder());
+                                                            pipeline.addLast(new FastLzFrameEncoder());
                                                             // pipeline.addLast(new LoggingHandler("server",
                                                             // LogLevel.WARN));
                                                             pipeline.addLast(new NettyFrameDecoder());
