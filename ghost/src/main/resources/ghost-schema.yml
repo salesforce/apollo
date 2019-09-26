@@ -1,0 +1,59 @@
+databaseChangeLog:
+-  preConditions:
+   -  runningAs:
+         username: ghost
+-  changeSet:
+      id: 1
+      author: hhildebrand
+      changes:
+      -  createTable:
+            tableName: dag
+            columns:
+            -  column:
+                  name: hash
+                  type: BINARY(32)
+                  autoIncrement: false
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: data
+                  type: BINARY
+      -  addUniqueConstraint:
+            tableName: dag
+            columnNames: hash
+            constraintName: dag_unique_hash
+            deferrable: false
+            disabled: false
+            initiallyDeferred: false
+      -  createTable:
+            tableName: link
+            columns:
+            -  column:
+                  name: node
+                  type: BINARY(32)
+            -  column:
+                  name: hash
+                  type: BINARY(32)
+      -  addForeignKeyConstraint:
+            baseColumnNames: node
+            baseTableName: link
+            constraintName: link_node_ref
+            onDelete: CASCADE
+            referencedColumnNames: hash
+            referencedTableName: dag
+      -  createIndex:
+            columns:
+            -  column:
+                  name: node
+                  type: BINARY(32)
+            indexName: idx_link_node
+            tableName: link
+            unique: false
+      -  createIndex:
+            columns:
+            -  column:
+                  name: hash
+                  type: BINARY(32)
+            indexName: idx_link_hash
+            tableName: link
+            unique: false
