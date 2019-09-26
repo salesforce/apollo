@@ -91,7 +91,7 @@
 					<changeLogFile>src/main/resources/bootstrap-schema.yml</changeLogFile>
 					<driver>org.h2.Driver</driver>
 					<url>jdbc:h2:file:${project.build.directory}/data/jooq</url>
-					<username>bootstrap</username>
+					<username>ghost</username>
 					<password>${db.password}</password>
 				</configuration>
 				<executions>
@@ -132,7 +132,7 @@
 					<jdbc>
 						<driver>org.h2.Driver</driver>
 						<url>jdbc:h2:file:${project.build.directory}/data/jooq</url>
-						<user>bootstrap</user>
+						<user>ghost</user>
 						<password>${db.password}</password>
 					</jdbc>
 					<generator>
