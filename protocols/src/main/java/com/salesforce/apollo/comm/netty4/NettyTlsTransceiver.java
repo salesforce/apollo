@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -52,11 +51,14 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.compression.FastLzFrameDecoder;
 import io.netty.handler.codec.compression.FastLzFrameEncoder;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 
 /**
@@ -137,9 +139,12 @@ public class NettyTlsTransceiver extends Transceiver {
 
 			@Override
 			protected void initChannel(SocketChannel ch) throws Exception {
-				ch.pipeline().addLast(sslCtx.newHandler(ch.alloc(), addr.getHostName(), addr.getPort()))
-//                           .addLast(new LoggingHandler("client", LogLevel.WARN))
-						.addLast(new FastLzFrameDecoder()).addLast(new FastLzFrameEncoder())
+				ChannelPipeline pipeline = ch.pipeline()
+						.addLast(sslCtx.newHandler(ch.alloc(), addr.getHostName(), addr.getPort()));
+				if (LOG.isTraceEnabled()) {
+					pipeline.addLast(new LoggingHandler("client", LogLevel.TRACE));
+				}
+				pipeline.addLast(new FastLzFrameDecoder()).addLast(new FastLzFrameEncoder())
 						.addLast("frameDecoder", new NettyFrameDecoder())
 						.addLast("frameEncoder", new NettyFrameEncoder())
 						.addLast("handler", createNettyClientAvroHandler());
@@ -540,32 +545,5 @@ public class NettyTlsTransceiver extends Transceiver {
 			super.channelInactive(ctx);
 		}
 
-	}
-
-	/**
-	 * Creates threads with unique names based on a specified name prefix.
-	 */
-	protected static class NettyTransceiverThreadFactory implements ThreadFactory {
-		private final AtomicInteger threadId = new AtomicInteger(0);
-		private final String prefix;
-
-		/**
-		 * Creates a NettyTransceiverThreadFactory that creates threads with the
-		 * specified name.
-		 * 
-		 * @param prefix the name prefix to use for all threads created by this
-		 *               ThreadFactory. A unique ID will be appended to this prefix to
-		 *               form the final thread name.
-		 */
-		public NettyTransceiverThreadFactory(String prefix) {
-			this.prefix = prefix;
-		}
-
-		@Override
-		public Thread newThread(Runnable r) {
-			Thread thread = new Thread(r);
-			thread.setName(prefix + " " + threadId.incrementAndGet());
-			return thread;
-		}
 	}
 }
