@@ -21,6 +21,10 @@
 			<artifactId>h2</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>com.zaxxer</groupId>
+			<artifactId>HikariCP</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.jooq</groupId>
 			<artifactId>jooq</artifactId>
 		</dependency>
@@ -144,7 +148,7 @@
 						</database>
 						<generate></generate>
 						<target>
-							<packageName>com.salesforce.apollo.boostrap.schema</packageName>
+							<packageName>com.salesforce.apollo.ghost.schema</packageName>
 							<directory>target/generated-sources/jooq</directory>
 						</target>
 					</generator>
@@ -153,7 +157,8 @@
 		</plugins>
 		<pluginManagement>
 			<plugins>
-				<!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+				<!--This plugin's configuration is used to store Eclipse m2e settings 
+					only. It has no influence on the Maven build itself. -->
 				<plugin>
 					<groupId>org.eclipse.m2e</groupId>
 					<artifactId>lifecycle-mapping</artifactId>

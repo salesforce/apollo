@@ -47,4 +47,14 @@ public class GhostServerCommunications implements SpaceGhost {
     public void put(Entry value) {
         ghost.put(value);
     }
+
+	@Override
+	public List<HASH> join(HASH from, int ring) { 
+		return ghost.join(from, ring);
+	}
+
+	@Override
+	public List<Entry> pull(List<HASH> want) { 
+		return ghost.pull(want);
+	}
 }

@@ -20,11 +20,15 @@ import com.salesforce.apollo.avro.HASH;
  * @since 220
  */
 public interface SpaceGhost {
-    Entry get(HASH key) throws org.apache.avro.AvroRemoteException;
+	Entry get(HASH key) throws org.apache.avro.AvroRemoteException;
 
-    void put(Entry entry);
+	GhostUpdate ghostGossip(List<Interval> intervals, List<HASH> digests) throws AvroRemoteException;
 
-    GhostUpdate ghostGossip(List<Interval> intervals, List<HASH> digests) throws AvroRemoteException;
+	void gUpdate(java.util.List<Entry> updates);
 
-    void gUpdate(java.util.List<Entry> updates);
+	List<HASH> join(HASH from, int ring);
+
+	List<Entry> pull(List<HASH> want);
+
+	void put(Entry entry);
 }
