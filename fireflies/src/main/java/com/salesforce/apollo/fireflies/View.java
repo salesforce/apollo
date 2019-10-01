@@ -216,8 +216,7 @@ public class View {
 
 		/**
 		 * Perform ye one ring round of gossip. Gossip is performed per ring, requiring
-		 * 2 * tolerance + 1 gossip rounds for a complete round, with t byzantine
-		 * failures
+		 * 2 * tolerance + 1 gossip rounds across all rings.
 		 */
 		public void gossip() {
 			FfClientCommunications link = nextRing();
@@ -229,7 +228,7 @@ public class View {
 			log.trace("gossiping with {} on {}", link.getMember(), lastRing);
 			boolean success;
 			try {
-				success = gossip(lastRing, link);
+				success = View.this.gossip(lastRing, link);
 			} catch (AvroRemoteException e) {
 				connections.invalidate(link.getMember());
 				log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing, e);
@@ -242,7 +241,7 @@ public class View {
 						log.debug("No link for ring {}", lastRing);
 						return;
 					}
-					success = gossip(lastRing, link);
+					success = View.this.gossip(lastRing, link);
 				} catch (AvroRemoteException e) {
 					connections.invalidate(link.getMember());
 					log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing);
@@ -301,6 +300,11 @@ public class View {
 		 *         would like updated.
 		 */
 		public Gossip rumors(int ring, Digests digests, UUID from, X509Certificate certificate, Signed note) {
+			if (ring >= rings.size() || ring < 0) {
+				log.info("invalid ring {} from {}", ring, from);
+				return emptyGossip();
+			}
+
 			Member member = view.get(from);
 			if (member == null) {
 				add(certificate);
@@ -311,19 +315,15 @@ public class View {
 					return emptyGossip();
 				}
 			}
+
 			add(new Note(note.getContent().array(), note.getSignature().array()));
-			if (ring >= rings.size() || ring < 0) {
-				log.info("invalid ring {} from {}", ring, from);
-				return emptyGossip();
-			}
 
 			Member successor = getRing(ring).successor(member, m -> !m.isFailed());
-
-			return successor == null || successor.equals(node) ? new Gossip(false,
-					messageBuffer.process(digests.getMessages()),
-					processCertificateDigests(from, digests.getCertificates()),
-					processNoteDigests(from, digests.getNotes()), processAccusationDigests(digests.getAccusations()))
-					: redirectTo(member, ring, successor);
+			return successor == null || !successor.equals(node) ? redirectTo(member, ring, successor)
+					: new Gossip(false, messageBuffer.process(digests.getMessages()),
+							processCertificateDigests(from, digests.getCertificates()),
+							processNoteDigests(from, digests.getNotes()),
+							processAccusationDigests(digests.getAccusations()));
 		}
 
 		public void start(Duration d) {
@@ -376,46 +376,6 @@ public class View {
 		}
 
 		/**
-		 * Gossip with the member
-		 * 
-		 * @param ring - the index of the gossip ring the gossip is originating from in
-		 *             this view
-		 * @param link - the outbound communications to the paired member
-		 * @throws AvroRemoteException
-		 */
-		boolean gossip(int ring, FfClientCommunications link) throws AvroRemoteException {
-			Gossip gossip = link.gossip(node.getSignedNote(), ring, commonDigests());
-			if (gossip.getRedirect()) {
-				if (gossip.getCertificates().getUpdates().size() != 1 && gossip.getNotes().getUpdates().size() != 1) {
-					log.warn(
-							"Redirect response from {} on ring {} did not contain redirect member certificate and note",
-							link.getMember(), ring);
-					return false;
-				}
-				CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates().get(0));
-				if (certificate != null) {
-					connections.invalidate(link.getMember());
-					add(certificate);
-					Signed signed = gossip.getNotes().getUpdates().get(0);
-					Note note = new Note(signed.getContent().array(), signed.getSignature().array());
-					add(note);
-					gossip.getAccusations().getUpdates()
-							.forEach(s -> add(new Accusation(s.getContent().array(), s.getSignature().array())));
-					log.debug("Redirected from {} to {} on ring {}", link.getMember(), note.getId(), ring);
-					return false;
-				} else {
-					log.warn("Redirect certificate from {} on ring {} is null", link.getMember(), ring);
-					return false;
-				}
-			}
-			Update update = response(gossip);
-			if (!isEmpty(update)) {
-				link.update(ring, update);
-			}
-			return true;
-		}
-
-		/**
 		 * @return the next ClientCommunications in the next ring
 		 */
 		FfClientCommunications nextRing() {
@@ -433,33 +393,13 @@ public class View {
 			return link;
 		}
 
-		/**
-		 * Drive one round of the View. This involves a round of gossip() and a round of
-		 * monitor().
-		 */
-		void oneRound() {
-			comm.logDiag();
-			try {
-				service.gossip();
-			} catch (Throwable e) {
-				log.error("unexpected error during gossip round", e);
-			}
-			try {
-				service.monitor();
-			} catch (Throwable e) {
-				log.error("unexpected error during monitor round", e);
-			}
-		}
-
 		void startServer() {
 			comm.start();
 		}
 	}
 
 	private static final CertificateFactory cf;
-
 	private static final Duration DEFAULT_INTERVAL = Duration.ofMillis(3 * 1000);
-
 	private static Logger log = LoggerFactory.getLogger(View.class);
 
 	static {
@@ -1036,6 +976,52 @@ public class View {
 	}
 
 	/**
+	 * Gossip with the member
+	 * 
+	 * @param ring - the index of the gossip ring the gossip is originating from in
+	 *             this view
+	 * @param link - the outbound communications to the paired member
+	 * @throws AvroRemoteException
+	 */
+	boolean gossip(int ring, FfClientCommunications link) throws AvroRemoteException {
+		Gossip gossip = link.gossip(node.getSignedNote(), ring, commonDigests());
+		if (gossip.getRedirect()) {
+			if (gossip.getCertificates().getUpdates().size() != 1 && gossip.getNotes().getUpdates().size() != 1) {
+				log.warn("Redirect response from {} on ring {} did not contain redirect member certificate and note",
+						link.getMember(), ring);
+				return false;
+			}
+			if (gossip.getAccusations().getUpdates().size() > 0) {
+				// Reset our epoch to whatever the group has recorded for this recovering node
+				long max = gossip.getAccusations().getUpdates().stream()
+						.map(signed -> new Accusation(signed.getContent().array(), signed.getSignature().array()))
+						.mapToLong(a -> a.getEpoch()).max().orElse(-1);
+				node.nextNote(max + 1);
+			}
+			CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates().get(0));
+			if (certificate != null) {
+				connections.invalidate(link.getMember());
+				add(certificate);
+				Signed signed = gossip.getNotes().getUpdates().get(0);
+				Note note = new Note(signed.getContent().array(), signed.getSignature().array());
+				add(note);
+				gossip.getAccusations().getUpdates()
+						.forEach(s -> add(new Accusation(s.getContent().array(), s.getSignature().array())));
+				log.debug("Redirected from {} to {} on ring {}", link.getMember(), note.getId(), ring);
+				return false;
+			} else {
+				log.warn("Redirect certificate from {} on ring {} is null", link.getMember(), ring);
+				return false;
+			}
+		}
+		Update update = response(gossip);
+		if (!isEmpty(update)) {
+			link.update(ring, update);
+		}
+		return true;
+	}
+
+	/**
 	 * If member currently is accused on ring, keep the new accusation only if it is
 	 * from a closer predecessor.
 	 * 
@@ -1124,6 +1110,24 @@ public class View {
 		}
 
 		return linkFor(successor);
+	}
+
+	/**
+	 * Drive one round of the View. This involves a round of gossip() and a round of
+	 * monitor().
+	 */
+	void oneRound() {
+		comm.logDiag();
+		try {
+			service.gossip();
+		} catch (Throwable e) {
+			log.error("unexpected error during gossip round", e);
+		}
+		try {
+			service.monitor();
+		} catch (Throwable e) {
+			log.error("unexpected error during monitor round", e);
+		}
 	}
 
 	/**
