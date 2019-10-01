@@ -26,10 +26,8 @@ import org.junit.Test;
 import com.salesforce.apollo.avro.Apollo;
 import com.salesforce.apollo.avro.Digests;
 import com.salesforce.apollo.avro.Entry;
-import com.salesforce.apollo.avro.GhostUpdate;
 import com.salesforce.apollo.avro.Gossip;
 import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.avro.Interval;
 import com.salesforce.apollo.avro.QueryResult;
 import com.salesforce.apollo.avro.Signed;
 import com.salesforce.apollo.avro.Update;
@@ -89,25 +87,13 @@ public class TestMtls {
 			}
 
 			@Override
-			public GhostUpdate ghostGossip(List<Interval> intervals, List<HASH> digests) {
-				// TODO Auto-generated method stub
-				return null;
-			}
-
-			@Override
 			public Gossip gossip(Signed note, int ring, Digests gossip) {
 				// TODO Auto-generated method stub
 				return null;
 			}
 
 			@Override
-			public void gUpdate(List<Entry> updates) {
-				// TODO Auto-generated method stub
-
-			}
-
-			@Override
-			public List<HASH> join(HASH from, int ring) {
+			public List<HASH> interval(HASH from, int ring) {
 				// TODO Auto-generated method stub
 				return null;
 			}
@@ -116,12 +102,6 @@ public class TestMtls {
 			public int ping(int ping) {
 				// TODO Auto-generated method stub
 				return 110;
-			}
-
-			@Override
-			public List<Entry> pull(List<HASH> want) {
-				// TODO Auto-generated method stub
-				return null;
 			}
 
 			@Override
@@ -138,6 +118,12 @@ public class TestMtls {
 
 			@Override
 			public List<Entry> requestDAG(List<HASH> want) {
+				// TODO Auto-generated method stub
+				return null;
+			}
+
+			@Override
+			public List<Entry> satisfy(List<HASH> want) {
 				// TODO Auto-generated method stub
 				return null;
 			}

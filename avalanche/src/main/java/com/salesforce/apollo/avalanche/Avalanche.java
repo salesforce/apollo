@@ -89,8 +89,6 @@ import liquibase.resource.ClassLoaderResourceAccessor;
  */
 public class Avalanche {
 
-	public static final int AVALANCHE_TRANSACTION_CHANNEL = 2;
-
 	public class Listener implements MessageChannelHandler {
 		private final AtomicBoolean pending = new AtomicBoolean();
 
@@ -182,17 +180,11 @@ public class Avalanche {
 		}
 	}
 
+	public static final int AVALANCHE_TRANSACTION_CHANNEL = 2;
+
 	private static final String DAG_SCHEMA_YML = "dag-schema.yml";
 	private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
 	private static final String PASSWORD = "";
-	@SuppressWarnings("unused")
-	private static EntryProcessor UNKNOWN_ENTRY_PROCESSOR = new EntryProcessor() {
-
-		@Override
-		public HashKey validate(HashKey hash, DagEntry block) {
-			return hash;
-		}
-	};
 	private static final String USER_NAME = "Apollo";
 
 	public static void loadSchema(String dbConnect) {
@@ -233,7 +225,6 @@ public class Avalanche {
 	}
 
 	private final AvalancheCommunications comm;
-
 	private final Dag dag;
 	private final AtomicInteger finalized = new AtomicInteger();
 	private final BlockingDeque<HASH> finalizing = new LinkedBlockingDeque<>();
@@ -246,15 +237,15 @@ public class Avalanche {
 	private final BlockingDeque<HASH> preferings = new LinkedBlockingDeque<>();
 	private final Map<HashKey, EntryProcessor> processors = new ConcurrentSkipListMap<>();
 	private final DSLContext queryPool;
-	private final DSLContext submitPool;
 	private final int required;
 	private final AtomicInteger round = new AtomicInteger();
 	private final ExecutorService roundExecutor;
+	private final DSLContext roundPool;
 	private final int rounds2Flood;
 	private final AtomicBoolean running = new AtomicBoolean();
 	private final RandomMemberGenerator sampler;
 	private final Service service = new Service();
-	private final DSLContext roundPool;
+	private final DSLContext submitPool;
 	private final View view;
 
 	public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p) {
@@ -298,7 +289,7 @@ public class Avalanche {
 
 		view.register(AVALANCHE_TRANSACTION_CHANNEL, listener);
 		view.registerRoundListener(() -> listener.round());
-		
+
 		sampler = new RandomMemberGenerator(view);
 		required = (int) (parameters.k * parameters.alpha);
 		ClassLoader loader = resolver;
@@ -310,7 +301,7 @@ public class Avalanche {
 		}
 
 		initializeProcessors(loader);
-		rounds2Flood = view.getNode().getParameters().toleranceLevel * 2;
+		rounds2Flood = view.getNode().getParameters().toleranceLevel * view.getDiameter() + 1;
 
 		AtomicInteger rT = new AtomicInteger();
 		roundExecutor = Executors.newSingleThreadExecutor(r -> {

@@ -13,19 +13,15 @@ import static com.salesforce.apollo.protocols.HashKey.LAST;
 import static com.salesforce.apollo.protocols.HashKey.ORIGIN;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletionService;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -105,6 +101,7 @@ public class Ghost {
 
 		@Override
 		public void fail(Member member) {
+			joining.remove(member);
 		}
 
 		@Override
@@ -115,23 +112,14 @@ public class Ghost {
 
 		@Override
 		public void recover(Member member) {
-			joining.put(member.getId(), round.get() + rounds2Flood);
+			joining.add(member);
 		}
 
 		public void round() {
-			if (joined.get() > 0) {
-				joined.decrementAndGet();
+			if (!joined()) {
+				service.join();
+				return;
 			}
-			int current = round.incrementAndGet();
-			for (Iterator<java.util.Map.Entry<UUID, Integer>> iterator = joining.entrySet().iterator(); iterator
-					.hasNext();) {
-				java.util.Map.Entry<UUID, Integer> next = iterator.next();
-				if (next.getValue() <= current) {
-					iterator.remove();
-				}
-
-			}
-			service.gossip();
 		}
 
 	}
@@ -140,55 +128,48 @@ public class Ghost {
 	 * The network service interface
 	 */
 	public class Service {
-		private volatile int lastRing = -1;
+		private final AtomicBoolean busy = new AtomicBoolean();
 		private final AtomicBoolean started = new AtomicBoolean();
 
 		public Entry get(HASH key) {
 			return store.get(key);
 		}
 
-		/**
-		 * 3 phase gossip with the N successors of the next ring
-		 */
-		public void gossip() {
+		private void join() {
 			if (!started.get()) {
 				return;
 			}
 
-			int current = (lastRing + 1) % (getNode().getParameters().toleranceLevel + 1);
-			lastRing = current;
+			if (!busy.compareAndSet(false, true)) {
+				log.trace("Busy");
+			}
 
-			for (int i = 0; i < parameters.redundancy; i++) {
-				AtomicInteger span = new AtomicInteger(i);
-
-				Member target = view.getRing(current).successor(getNode(),
-						n -> n.isLive() && span.getAndDecrement() == 0);
-				if (target == null) {
-					log.trace("Finished {} rounds of gossip on ring {}", parameters.redundancy, current);
-					return;
-				}
-				log.trace("Round {} of gossip on ring {}", i, current);
-				GhostClientCommunications connection = communications.connect(target, getNode());
-				if (connection == null) {
-					break;
-				}
-				GhostUpdate update;
-				CombinedIntervals intervals = keyIntervals();
-				try {
-					try {
-						update = connection.ghostGossip(intervals.toIntervals(), store.keySet());
-					} catch (AvroRemoteException e) {
-						log.debug("Error gossiping with {} : {}", target, e.getCause());
+			try {
+				for (int i = 0; i < rings; i++) {
+					Member target = view.getRing(i).successor(getNode());
+					if (target == null) {
+						log.trace("No target on ring: {}", i);
 						return;
 					}
-					List<Entry> updates = process(update, intervals);
-					if (!updates.isEmpty()) {
-						log.debug("Updates for {} are {}", target.getId(), updates);
-						connection.gUpdate(updates);
+					log.trace("Join round on ring {}", i);
+					GhostClientCommunications connection = communications.connect(target, getNode());
+					if (connection == null) {
+						break;
 					}
-				} finally {
-					connection.close();
+					try {
+						try {
+							@SuppressWarnings("unused")
+							List<HASH> response = connection.interval(getNode().hashFor(i).toHash(), i);
+						} catch (Throwable e) {
+							log.debug("Error interval gossiping with {} : {}", target, e.getCause());
+							return;
+						}
+					} finally {
+						connection.close();
+					}
 				}
+			} finally {
+				busy.set(false);
 			}
 		}
 
@@ -198,18 +179,18 @@ public class Ghost {
 					digests.stream().map(e -> new HashKey(e)).collect(Collectors.toList()), keyIntervals());
 		}
 
-		public List<HASH> join(HASH from, int ring) {
-			// TODO Auto-generated method stub
-			return null;
-		}
-
-		public List<Entry> pull(List<HASH> want) {
+		public List<HASH> interval(HASH from, int ring) {
 			// TODO Auto-generated method stub
 			return null;
 		}
 
 		public Void put(Entry value) {
 			store.put(new HASH(hashOf(value)), value);
+			return null;
+		}
+
+		public List<Entry> satisfy(List<HASH> want) {
+			// TODO Auto-generated method stub
 			return null;
 		}
 
@@ -226,17 +207,6 @@ public class Ghost {
 			}
 			communications.close();
 		}
-
-		public Void update(List<Entry> updates) {
-			CombinedIntervals intervals = keyIntervals();
-			for (Entry entry : updates) {
-				HASH hash = new HASH(hashOf(entry));
-				if (intervals.test(hash)) {
-					store.put(hash, entry);
-				}
-			}
-			return null;
-		}
 	}
 
 	public static final int JOIN_MESSAGE_CHANNEL = 3;
@@ -244,12 +214,11 @@ public class Ghost {
 	private static final Logger log = LoggerFactory.getLogger(Ghost.class);
 
 	private final GhostCommunications communications;
-	private final AtomicInteger joined;
-	private final ConcurrentNavigableMap<UUID, Integer> joining = new ConcurrentSkipListMap<>();
+	private final AtomicBoolean joined = new AtomicBoolean(true);
+	private final ConcurrentSkipListSet<Member> joining = new ConcurrentSkipListSet<>();
 	private final Listener listener = new Listener();
 	private final GhostParameters parameters;
-	private final AtomicInteger round = new AtomicInteger();
-	private final int rounds2Flood;
+	private final int rings;
 	private final Service service = new Service();
 	private final Store store;
 	private final View view;
@@ -265,8 +234,7 @@ public class Ghost {
 		view.register(JOIN_MESSAGE_CHANNEL, listener);
 		view.registerRoundListener(() -> listener.round());
 
-		rounds2Flood = view.getNode().getParameters().toleranceLevel * view.getDiameter() + 1;
-		joined = new AtomicInteger(rounds2Flood);
+		rings = (2 * view.getNode().getParameters().toleranceLevel) + 1;
 	}
 
 	/**
@@ -297,29 +265,28 @@ public class Ghost {
 		HASH keyBits = key.toHash();
 		CompletionService<Entry> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
 		List<Future<Entry>> futures;
-		futures = IntStream.range(0, view.getNode().getParameters().toleranceLevel + 1).mapToObj(i -> view.getRing(i))
-				.map(ring -> frist.submit(() -> {
-					Member successor = ring.successor(key, m -> m.isLive() && !joining.containsKey(m.getId()));
-					if (successor != null) {
-						Entry entry;
-						GhostClientCommunications connection = communications.connect(successor, getNode());
-						if (connection == null) {
-							return null;
-						}
-						try {
-							entry = connection.get(keyBits);
-						} catch (AvroRemoteException e) {
-							log.debug("Error looking up {} on {} : {}", key, successor, e);
-							return null;
-						} finally {
-							connection.close();
-						}
-						log.debug("ring {} on {} get {} from {} get: {}", ring.getIndex(), getNode().getId(), key,
-								successor.getId(), entry != null);
-						return entry;
-					}
+		futures = IntStream.range(0, rings).mapToObj(i -> view.getRing(i)).map(ring -> frist.submit(() -> {
+			Member successor = ring.successor(key, m -> m.isLive() && !joining.contains(m));
+			if (successor != null) {
+				Entry entry;
+				GhostClientCommunications connection = communications.connect(successor, getNode());
+				if (connection == null) {
 					return null;
-				})).collect(Collectors.toList());
+				}
+				try {
+					entry = connection.get(keyBits);
+				} catch (AvroRemoteException e) {
+					log.debug("Error looking up {} on {} : {}", key, successor, e);
+					return null;
+				} finally {
+					connection.close();
+				}
+				log.debug("ring {} on {} get {} from {} get: {}", ring.getIndex(), getNode().getId(), key,
+						successor.getId(), entry != null);
+				return entry;
+			}
+			return null;
+		})).collect(Collectors.toList());
 
 		int retries = futures.size();
 		long remainingTimout = parameters.unit.toMillis(parameters.timeout);
@@ -369,8 +336,7 @@ public class Ghost {
 	 * @return true if the node has joined the cluster, false otherwise
 	 */
 	public boolean joined() {
-		int current = joined.get();
-		return current == 0;
+		return joined.get();
 	}
 
 	/**
@@ -397,8 +363,8 @@ public class Ghost {
 		byte[] digest = hashOf(entry);
 		HashKey key = new HashKey(digest);
 		CompletionService<Boolean> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
-		List<Future<Boolean>> futures = IntStream.range(0, view.getNode().getParameters().toleranceLevel + 1)
-				.mapToObj(i -> view.getRing(i)).map(ring -> frist.submit(() -> {
+		List<Future<Boolean>> futures = IntStream.range(0, rings).mapToObj(i -> view.getRing(i))
+				.map(ring -> frist.submit(() -> {
 					Member successor = ring.successor(key);
 					if (successor != null) {
 						GhostClientCommunications connection = communications.connect(successor, getNode());
@@ -418,7 +384,7 @@ public class Ghost {
 		int retries = futures.size();
 		long remainingTimout = parameters.unit.toMillis(parameters.timeout);
 
-		int remainingAcks = (view.getNode().getParameters().toleranceLevel + 1) / 2 + 1;
+		int remainingAcks = rings;
 
 		while (--retries >= 0) {
 			long then = System.currentTimeMillis();

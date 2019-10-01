@@ -317,9 +317,7 @@ public class View {
 				return emptyGossip();
 			}
 
-			Ring theOne = getRing(ring);
-
-			Member successor = theOne.successor(member, m -> !m.isFailed());
+			Member successor = getRing(ring).successor(member, m -> !m.isFailed());
 
 			return successor == null || successor.equals(node) ? new Gossip(false,
 					messageBuffer.process(digests.getMessages()),
@@ -877,26 +875,17 @@ public class View {
 			return false;
 		}
 
-		if (!m.isFailed()) {
-			assert m.getEpoch() > 0 : "Epoch of " + m.getId() + " should be > 0";
-			if (m.isAccused()) {
-				stopRebutalTimer(m);
-			}
-			m.setNote(note);
-			return false;
+		if (m.isAccused()) {
+			stopRebutalTimer(m);
+			checkInvalidations(m);
 		}
 
-		if (m.getEpoch() == 0) {
-			assert !m.isAccused() : "Member " + m.getId() + " is accused, but epoch is 0";
-			m.setNote(note);
+		if (m.isFailed() || m.getEpoch() == 0) {
 			recover(m);
-			return false;
 		}
 
 		m.setNote(note);
-		recover(m);
 
-		checkInvalidations(m);
 		return true;
 	}
 

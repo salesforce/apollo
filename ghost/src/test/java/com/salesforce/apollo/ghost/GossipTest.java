@@ -173,6 +173,7 @@ public class GossipTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + testViews.size() + " members");
 
+        Thread.sleep(20_000);
         for (java.util.Map.Entry<HashKey, Entry> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
                 Entry found = ghost.getEntry(entry.getKey());

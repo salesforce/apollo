@@ -17,9 +17,7 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.avro.Apollo;
 import com.salesforce.apollo.avro.Entry;
-import com.salesforce.apollo.avro.GhostUpdate;
 import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.avro.Interval;
 import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.communications.CommonClientCommunications;
 import com.salesforce.apollo.protocols.SpaceGhost;
@@ -58,28 +56,18 @@ public class GhostClientCommunications extends CommonClientCommunications implem
 	}
 
 	@Override
-	public GhostUpdate ghostGossip(List<Interval> intervals, List<HASH> digests) throws AvroRemoteException {
-		return client.ghostGossip(intervals, digests);
-	}
-
-	@Override
-	public void gUpdate(List<Entry> updates) {
-		client.gUpdate(updates);
-	}
-
-	@Override
-	public List<HASH> join(HASH from, int ring) {
-		return client.join(from, ring);
-	}
-
-	@Override
-	public List<Entry> pull(List<HASH> want) {
-		return client.pull(want);
+	public List<HASH> interval(HASH from, int ring) {
+		return client.interval(from, ring);
 	}
 
 	@Override
 	public void put(Entry value) {
 		client.put(value);
+	}
+
+	@Override
+	public List<Entry> satisfy(List<HASH> want) {
+		return client.satisfy(want);
 	}
 
 }

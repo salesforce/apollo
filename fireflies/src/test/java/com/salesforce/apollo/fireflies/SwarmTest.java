@@ -80,7 +80,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
+            testViews.forEach(view -> view.getService().start(Duration.ofMillis(100)));
 
             assertTrue("View did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
@@ -98,7 +98,7 @@ public class SwarmTest {
         initialize();
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(100)));
 
         assertTrue("View did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;

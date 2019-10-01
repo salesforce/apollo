@@ -141,7 +141,7 @@ public class MessageTest {
 		assertEquals(members.size(), communications.getServers().size());
 
 		long then = System.currentTimeMillis();
-		views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
+		views.forEach(view -> view.getService().start(Duration.ofMillis(100)));
 
 		Utils.waitForCondition(15_000, 1_000, () -> {
 			return views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
