@@ -32,7 +32,6 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.Entry;
 import com.salesforce.apollo.avro.EntryType;
-import com.salesforce.apollo.avro.GhostUpdate;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.Interval;
 import com.salesforce.apollo.fireflies.Member;
@@ -412,24 +411,6 @@ public class Ghost {
 			remainingTimout = remainingTimout - (System.currentTimeMillis() - then);
 		}
 		return key;
-	}
-
-	/**
-	 * Process the updates, storing only the entries that are valid for the Ghost's
-	 * node
-	 * 
-	 * @param update
-	 * @param intervals - the key intervals that the receiver is responsible for
-	 * @return
-	 */
-	List<Entry> process(GhostUpdate update, CombinedIntervals intervals) {
-		for (Entry entry : update.getUpdates()) {
-			HASH hash = new HASH(hashOf(entry));
-			if (intervals.test(hash)) {
-				store.put(hash, entry);
-			}
-		}
-		return update.getWant().stream().map(key -> store.get(key)).filter(e -> e != null).collect(Collectors.toList());
 	}
 
 	private CombinedIntervals keyIntervals() {
