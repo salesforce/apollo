@@ -12,6 +12,7 @@ import org.apache.avro.AvroRemoteException;
 
 import com.salesforce.apollo.avro.Entry;
 import com.salesforce.apollo.avro.HASH;
+import com.salesforce.apollo.avro.Interval;
 import com.salesforce.apollo.ghost.Ghost.Service;
 import com.salesforce.apollo.protocols.SpaceGhost;
 
@@ -32,8 +33,8 @@ public class GhostServerCommunications implements SpaceGhost {
 	}
 
 	@Override
-	public List<HASH> interval(HASH from, int ring) {
-		return ghost.interval(from, ring);
+	public List<Entry> intervals(List<Interval> intervals, List<HASH> have) {
+		return ghost.intervals(intervals, have);
 	}
 
 	@Override
@@ -41,8 +42,4 @@ public class GhostServerCommunications implements SpaceGhost {
 		ghost.put(value);
 	}
 
-	@Override
-	public List<Entry> satisfy(List<HASH> want) {
-		return ghost.satisfy(want);
-	}
 }

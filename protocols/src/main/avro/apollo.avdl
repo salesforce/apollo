@@ -125,12 +125,6 @@ protocol Apollo {
         HASH end;
     }
 
-    record GhostUpdate {
-        array<Interval> intervals;
-        array<HASH> want;
-        array<Entry> updates;
-    }
-
     record JoinResponse {
         Signed forward;
         array<HASH> interval;
@@ -161,8 +155,7 @@ protocol Apollo {
     /**
 	 * Ghost interval gossip
 	 */
-    array<HASH> interval ( HASH from, int ring );
-    array<Entry> satisfy ( array<HASH> want );
+    array<Entry> intervals ( array<Interval> intervals, array<HASH> have );
 
     /**
      * Avalanche query

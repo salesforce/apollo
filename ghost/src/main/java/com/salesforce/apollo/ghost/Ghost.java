@@ -106,8 +106,9 @@ public class Ghost {
 
 		@Override
 		public void message(List<Msg> messages) {
-			// TODO Auto-generated method stub
-
+			messages.forEach(msg -> {
+				joining.remove(msg.from);
+			});
 		}
 
 		@Override
@@ -143,26 +144,33 @@ public class Ghost {
 			if (!busy.compareAndSet(false, true)) {
 				log.trace("Busy");
 			}
-
 			try {
+				CombinedIntervals keyIntervals = keyIntervals();
+				List<HASH> have = store.have(keyIntervals);
+
 				for (int i = 0; i < rings; i++) {
-					Member target = view.getRing(i).successor(getNode());
+					Member target = view.getRing(i).successor(getNode(), m -> m.isLive() && !joining.contains(m));
 					if (target == null) {
-						log.trace("No target on ring: {}", i);
-						return;
+						log.debug("No target on ring: {}", i);
+						continue;
 					}
-					log.trace("Join round on ring {}", i);
+					assert !target.equals(getNode());
 					GhostClientCommunications connection = communications.connect(target, getNode());
 					if (connection == null) {
-						break;
+						continue;
 					}
 					try {
 						try {
-							@SuppressWarnings("unused")
-							List<HASH> response = connection.interval(getNode().hashFor(i).toHash(), i);
+							List<Entry> entries = connection.intervals(keyIntervals.toIntervals(), have);
+							if (entries.isEmpty()) {
+								joined.set(true);
+								view.publish(JOIN_MESSAGE_CHANNEL, "joined".getBytes());
+								break;
+							}
+							store.add(entries, have);
 						} catch (Throwable e) {
 							log.debug("Error interval gossiping with {} : {}", target, e.getCause());
-							return;
+							continue;
 						}
 					} finally {
 						connection.close();
@@ -173,15 +181,10 @@ public class Ghost {
 			}
 		}
 
-		public GhostUpdate gossip(List<Interval> i, List<HASH> digests) {
-			return store.updatesFor(
-					new CombinedIntervals(i.stream().map(e -> new KeyInterval(e)).collect(Collectors.toList())),
-					digests.stream().map(e -> new HashKey(e)).collect(Collectors.toList()), keyIntervals());
-		}
-
-		public List<HASH> interval(HASH from, int ring) {
-			// TODO Auto-generated method stub
-			return null;
+		public List<Entry> intervals(List<Interval> intervals, List<HASH> have) {
+			return store.entriesIn(
+					new CombinedIntervals(intervals.stream().map(e -> new KeyInterval(e)).collect(Collectors.toList())),
+					have);
 		}
 
 		public Void put(Entry value) {
@@ -190,8 +193,7 @@ public class Ghost {
 		}
 
 		public List<Entry> satisfy(List<HASH> want) {
-			// TODO Auto-generated method stub
-			return null;
+			return store.getUpdates(want);
 		}
 
 		public void start() {
@@ -214,7 +216,7 @@ public class Ghost {
 	private static final Logger log = LoggerFactory.getLogger(Ghost.class);
 
 	private final GhostCommunications communications;
-	private final AtomicBoolean joined = new AtomicBoolean(true);
+	private final AtomicBoolean joined = new AtomicBoolean(false);
 	private final ConcurrentSkipListSet<Member> joining = new ConcurrentSkipListSet<>();
 	private final Listener listener = new Listener();
 	private final GhostParameters parameters;
@@ -234,7 +236,7 @@ public class Ghost {
 		view.register(JOIN_MESSAGE_CHANNEL, listener);
 		view.registerRoundListener(() -> listener.round());
 
-		rings = (2 * view.getNode().getParameters().toleranceLevel) + 1;
+		rings = view.getNode().getParameters().toleranceLevel + 1;
 	}
 
 	/**
@@ -432,7 +434,7 @@ public class Ghost {
 
 	private CombinedIntervals keyIntervals() {
 		List<KeyInterval> intervals = new ArrayList<>();
-		for (int i = 0; i < getNode().getParameters().rings; i++) {
+		for (int i = 0; i < rings; i++) {
 			Ring ring = view.getRing(i);
 			Member predecessor = ring.predecessor(getNode(), n -> n.isLive());
 			if (predecessor == null) {

@@ -7,6 +7,8 @@
 
 package com.salesforce.apollo.ghost;
 
+import static com.salesforce.apollo.ghost.schema.Tables.DAG;
+
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
@@ -20,13 +22,9 @@ import org.jooq.impl.DSL;
 
 import com.salesforce.apollo.avro.Entry;
 import com.salesforce.apollo.avro.EntryType;
-import com.salesforce.apollo.avro.GhostUpdate;
 import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.protocols.HashKey;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-
-import static com.salesforce.apollo.ghost.schema.Tables.*;
 
 /**
  * @author hhildebrand
@@ -34,9 +32,9 @@ import static com.salesforce.apollo.ghost.schema.Tables.*;
  */
 public class H2Store implements Store {
 
-	private static final String USER_NAME = null;
-	private static final String PASSWORD = null;
 	private static final Map<Integer, EntryType> INVERSE = new HashMap<>();
+	private static final String PASSWORD = null;
+	private static final String USER_NAME = null;
 
 	static {
 		for (EntryType type : EntryType.values()) {
@@ -58,12 +56,34 @@ public class H2Store implements Store {
 	}
 
 	@Override
+	public void add(List<Entry> entries, List<HASH> total) { 
+	}
+
+	@Override
+	public List<Entry> entriesIn(CombinedIntervals combinedIntervals, List<HASH> have) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
 	public Entry get(HASH key) {
 		return context.transactionResult(config -> {
 			Record2<byte[], Integer> entry = DSL.using(config).select(DAG.DATA, DAG.TYPE).from(DAG)
 					.where(DAG.HASH.eq(key.bytes())).fetchOne();
 			return new Entry(INVERSE.get(entry.value2()), ByteBuffer.wrap(entry.value1()));
 		});
+	}
+
+	@Override
+	public List<Entry> getUpdates(List<HASH> want) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<HASH> have(CombinedIntervals keyIntervals) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 	@Override
@@ -80,13 +100,6 @@ public class H2Store implements Store {
 			DSL.using(config).insertInto(DAG, DAG.HASH, DAG.DATA, DAG.TYPE)
 					.values(key.bytes(), value.getData().array(), value.getType().ordinal()).execute();
 		});
-	}
-
-	@Override
-	public GhostUpdate updatesFor(CombinedIntervals theirIntervals, List<HashKey> digests,
-			CombinedIntervals combinedIntervals) {
-		// TODO Auto-generated method stub
-		return null;
 	}
 
 }

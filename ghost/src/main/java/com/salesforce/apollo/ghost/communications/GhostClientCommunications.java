@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.avro.Apollo;
 import com.salesforce.apollo.avro.Entry;
 import com.salesforce.apollo.avro.HASH;
+import com.salesforce.apollo.avro.Interval;
 import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.communications.CommonClientCommunications;
 import com.salesforce.apollo.protocols.SpaceGhost;
@@ -56,18 +57,13 @@ public class GhostClientCommunications extends CommonClientCommunications implem
 	}
 
 	@Override
-	public List<HASH> interval(HASH from, int ring) {
-		return client.interval(from, ring);
+	public List<Entry> intervals(List<Interval> intervals, List<HASH> have) {
+		return client.intervals(intervals, have);
 	}
 
 	@Override
 	public void put(Entry value) {
 		client.put(value);
-	}
-
-	@Override
-	public List<Entry> satisfy(List<HASH> want) {
-		return client.satisfy(want);
 	}
 
 }

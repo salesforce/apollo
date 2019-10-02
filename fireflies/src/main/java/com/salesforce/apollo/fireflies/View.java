@@ -83,9 +83,8 @@ import com.salesforce.apollo.protocols.Conversion;
  * monitors other members, issuing Accusations against failed members that this
  * View is monitoring. Accusations may be rebutted. Then there's discovery and
  * garbage collection. It's all very complicated. These complications and many
- * others are detailed in the wonderful <a href=
- * "https://munin.uit.no/bitstream/handle/10037/8712/article.pdf?sequence=7&isAllowed=y">Fireflies
- * paper</a>.
+ * others are detailed in the wonderful
+ * <a href= "https://ymsir.com/papers/fireflies-tocs.pdf">Fireflies paper</a>.
  * 
  * @author hal.hildebrand
  * @since 220

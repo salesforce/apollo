@@ -165,7 +165,7 @@ public class DagTest {
 		testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000)));
 		ghosties.forEach(e -> e.getService().start());
 		assertEquals("Not all nodes joined the cluster", ghosties.size(), ghosties.parallelStream()
-				.map(g -> Utils.waitForCondition(30_000, () -> g.joined())).filter(e -> e).count());
+				.map(g -> Utils.waitForCondition(240_000, () -> g.joined())).filter(e -> e).count());
 
 		assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 1_000, () -> {
 			return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;

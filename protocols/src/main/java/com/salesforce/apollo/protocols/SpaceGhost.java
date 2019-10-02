@@ -10,6 +10,7 @@ import java.util.List;
 
 import com.salesforce.apollo.avro.Entry;
 import com.salesforce.apollo.avro.HASH;
+import com.salesforce.apollo.avro.Interval;
 
 /**
  * @author hal.hildebrand
@@ -18,9 +19,7 @@ import com.salesforce.apollo.avro.HASH;
 public interface SpaceGhost {
 	Entry get(HASH key) throws org.apache.avro.AvroRemoteException;
 
-	List<HASH> interval(HASH from, int ring);
-
-	List<Entry> satisfy(List<HASH> want);
+	List<Entry> intervals(List<Interval> intervals, List<HASH> have);
 
 	void put(Entry entry);
 }
