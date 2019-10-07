@@ -9,7 +9,6 @@ package com.salesforce.apollo.fireflies;
 import static com.salesforce.apollo.fireflies.Member.getMemberId;
 
 import java.io.ByteArrayInputStream;
-import java.nio.channels.ClosedChannelException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
@@ -27,22 +26,24 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import org.apache.avro.AvroRemoteException;
@@ -144,6 +145,30 @@ public class View {
 		}
 	}
 
+	public class FutureRebutal implements Comparable<FutureRebutal> {
+		public final Member member;
+		public final long targetRound;
+
+		public FutureRebutal(long targetRound, Member member) {
+			this.targetRound = targetRound;
+			this.member = member;
+		}
+
+		@Override
+		public int compareTo(FutureRebutal o) {
+			int comparison = Long.compare(targetRound, o.targetRound);
+			if (comparison != 0) {
+				return comparison;
+			}
+			return member.getId().compareTo(o.member.getId());
+		}
+
+		@Override
+		public String toString() {
+			return "FutureRebutal(" + node.getId() + " [member=" + member + ", targetRound=" + targetRound + "]";
+		}
+	}
+
 	public interface MembershipListener {
 
 		/**
@@ -199,19 +224,6 @@ public class View {
 		 * Service lifecycle
 		 */
 		private final AtomicBoolean started = new AtomicBoolean();
-
-		/**
-		 * The interval between each round of the view
-		 */
-		private volatile Duration timeoutInterval;
-
-		/**
-		 * @return The Duration to wait before a failed member is garbage collected from
-		 *         the view.
-		 */
-		public Duration getTimeoutInterval() {
-			return timeoutInterval;
-		}
 
 		/**
 		 * Perform ye one ring round of gossip. Gossip is performed per ring, requiring
@@ -273,12 +285,22 @@ public class View {
 		 * rings of this view.
 		 */
 		public void monitor() {
-			if (lastRing < 0) {
+			int ring = lastRing;
+			if (ring < 0) {
 				return;
 			}
-			FfClientCommunications link = linkFor(lastRing);
-			if (link != null) {
-				View.this.monitor(link, lastRing);
+			Member successor = rings.get(ring).successor(node, m -> !m.isFailed() && !m.isAccused());
+			if (successor == null) {
+				log.info("No successor to node on ring: {}", ring);
+				return;
+			}
+
+			FfClientCommunications link = linkFor(successor);
+			if (link == null) {
+				log.info("Accusing: {} on: {}", successor.getId(), ring);
+				accuseOn(successor, ring);
+			} else {
+				View.this.monitor(link, ring);
 			}
 		}
 
@@ -318,7 +340,10 @@ public class View {
 			add(new Note(note.getContent().array(), note.getSignature().array()));
 
 			Member successor = getRing(ring).successor(member, m -> !m.isFailed());
-			return successor == null || !successor.equals(node) ? redirectTo(member, ring, successor)
+			if (successor == null) {
+				return emptyGossip();
+			}
+			return !successor.equals(node) ? redirectTo(member, ring, successor)
 					: new Gossip(false, messageBuffer.process(digests.getMessages()),
 							processCertificateDigests(from, digests.getCertificates()),
 							processNoteDigests(from, digests.getNotes()),
@@ -329,16 +354,26 @@ public class View {
 			if (!started.compareAndSet(false, true)) {
 				return;
 			}
-			startServer();
-			calculateTimeoutInterval(d);
+
+			node.setFailed(false);
+			node.nextNote();
+			recover(node);
+			List<UUID> seedList = new ArrayList<>();
+			seeds.stream().map(cert -> new Member(cert, parameters)).peek(m -> seedList.add(m.getId()))
+					.forEach(m -> addSeed(m));
+
+			comm.initialize(View.this);
+			comm.start();
 			long interval = d.toMillis();
+			int initialDelay = parameters.entropy.nextInt((int) interval * 2);
 			futureGossip = scheduler.scheduleWithFixedDelay(() -> {
 				try {
 					oneRound();
 				} catch (Throwable e) {
 					log.error("unexpected error during gossip round", e);
 				}
-			}, parameters.entropy.nextInt((int) interval * 2), interval, TimeUnit.MILLISECONDS);
+			}, initialDelay, interval, TimeUnit.MILLISECONDS);
+			log.info("{} started, initial delay: {} ms", node.getId(), initialDelay);
 		}
 
 		/**
@@ -353,7 +388,14 @@ public class View {
 			if (currentGossip != null) {
 				currentGossip.cancel(false);
 			}
+			scheduledRebutals.clear();
+			pendingRebutals.clear();
+			failed.putAll(live);
+			live.values().forEach(m -> m.setFailed(true));
+			live.clear();
+			connections.invalidateAll();
 			comm.close();
+			messageBuffer.clear();
 		}
 
 		/**
@@ -368,10 +410,6 @@ public class View {
 			assert from != null;
 			processUpdates(update.getCertificates(), update.getNotes(), update.getAccusations(), update.getMessages());
 
-		}
-
-		void calculateTimeoutInterval(Duration interval) {
-			timeoutInterval = interval.multipliedBy(parameters.toleranceLevel * diameter + 1);
 		}
 
 		/**
@@ -391,14 +429,9 @@ public class View {
 			lastRing = current;
 			return link;
 		}
-
-		void startServer() {
-			comm.start();
-		}
 	}
 
 	private static final CertificateFactory cf;
-	private static final Duration DEFAULT_INTERVAL = Duration.ofMillis(3 * 1000);
 	private static Logger log = LoggerFactory.getLogger(View.class);
 
 	static {
@@ -496,9 +529,9 @@ public class View {
 	private final FirefliesParameters parameters;
 
 	/**
-	 * Pending rebutal timers
+	 * Pending rebutal timers by member id
 	 */
-	private final ConcurrentMap<UUID, Future<?>> pendingRebutals = new ConcurrentHashMap<>();
+	private final ConcurrentMap<UUID, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>();
 
 	/**
 	 * Gossip rings - the list of rings that determine the magical low diameter
@@ -507,9 +540,19 @@ public class View {
 	private final List<Ring> rings = new ArrayList<>();
 
 	/**
+	 * Current gossip round
+	 */
+	private final AtomicLong round = new AtomicLong(0);
+
+	/**
 	 * Core round listeners
 	 */
 	private final List<Runnable> roundListeners = new CopyOnWriteArrayList<>();
+
+	/**
+	 * Rebutals sorted by target round
+	 */
+	private final ConcurrentSkipListSet<FutureRebutal> scheduledRebutals = new ConcurrentSkipListSet<>();
 
 	/**
 	 * Scheduler for the view
@@ -525,13 +568,15 @@ public class View {
 	 * The view of all known members
 	 */
 	private final ConcurrentMap<UUID, Member> view = new ConcurrentHashMap<>();
+	private final List<X509Certificate> seeds;
 
-	public View(Node node, FirefliesCommunications communications, List<X509Certificate> seeds,
+	public View(Node node, FirefliesCommunications communications, List<X509Certificate> s,
 			ScheduledExecutorService scheduler) {
 		this.node = node;
 		this.comm = communications;
 		this.parameters = this.node.getParameters();
 		this.scheduler = scheduler;
+		this.seeds = s;
 		diameter = diameter(parameters);
 		assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
 		dispatcher = Executors.newSingleThreadExecutor(new ThreadFactory() {
@@ -544,8 +589,6 @@ public class View {
 		});
 		this.messageBuffer = new MessageBuffer(parameters.bufferSize, parameters.toleranceLevel * diameter + 1);
 
-		service.calculateTimeoutInterval(DEFAULT_INTERVAL);
-
 		connections = cacheBuilder().build(new CacheLoader<Member, FfClientCommunications>() {
 			@Override
 			public FfClientCommunications load(Member to) throws Exception {
@@ -556,17 +599,7 @@ public class View {
 		for (int i = 0; i < parameters.rings; i++) {
 			rings.add(new Ring(i));
 		}
-
-		if (node.getNote() == null) {
-			node.nextNote();
-		}
-		node.setFailed(false);
 		add(node);
-		List<UUID> seedList = new ArrayList<>();
-		seeds.stream().map(cert -> new Member(cert, parameters)).peek(m -> seedList.add(m.getId()))
-				.forEach(m -> addSeed(m));
-		comm.initialize(this);
-		log.info("{} using seeds: {}", node.getId(), seedList);
 	}
 
 	/**
@@ -605,6 +638,13 @@ public class View {
 	}
 
 	/**
+	 * @return the parameters
+	 */
+	public FirefliesParameters getParameters() {
+		return parameters;
+	}
+
+	/**
 	 * @param ring
 	 * @return the Ring corresponding to the index
 	 */
@@ -617,6 +657,20 @@ public class View {
 	 */
 	public List<Ring> getRings() {
 		return rings;
+	}
+
+	/**
+	 * current round of gossip for this view
+	 */
+	public long getRound() {
+		return round.get();
+	}
+
+	/**
+	 * @return the scheduledRebutals
+	 */
+	public ConcurrentSkipListSet<FutureRebutal> getScheduledRebutals() {
+		return scheduledRebutals;
 	}
 
 	/**
@@ -694,7 +748,7 @@ public class View {
 		}
 
 		if (!accused.getNote().getMask().get(accusation.getRingNumber())) {
-			log.warn("Member {} accussed on disabled ring {} by {}", accused.getId(), accusation.getRingNumber(),
+			log.debug("Member {} accussed on disabled ring {} by {}", accused.getId(), accusation.getRingNumber(),
 					accuser.getId());
 			return;
 		}
@@ -724,13 +778,13 @@ public class View {
 			Accusation currentAccusation = accused.getAccusation(ring.getIndex());
 			Member currentAccuser = view.get(currentAccusation.getAccuser());
 
-			if (ring.isBetween(currentAccuser, accuser, accused)) {
+			if (!currentAccuser.equals(accuser) && ring.isBetween(currentAccuser, accuser, accused)) {
 				accused.addAccusation(accusation);
 				log.info("{} accused by {} on ring {} (replacing {})", accused, accuser, ring.getIndex(),
 						currentAccuser);
 			}
 		} else {
-			Member predecessor = ring.predecessor(accused, x -> (!x.isAccused()) || (x.equals(accuser)));
+			Member predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
 			if (accuser.equals(predecessor)) {
 				accused.addAccusation(accusation);
 				if (!accused.equals(node) && !pendingRebutals.containsKey(accused.getId()) && accused.isLive()) {
@@ -770,7 +824,7 @@ public class View {
 	Member add(Member member) {
 		Member previous = view.putIfAbsent(member.getId(), member);
 		if (previous == null) {
-			log.info("Adding member: {}", member.getId(), member.getCertificate().getSubjectDN());
+			log.trace("Adding member: {}", member.getId(), member.getCertificate().getSubjectDN());
 			rings.forEach(ring -> ring.insert(member));
 			if (!member.isFailed()) {
 				recover(member);
@@ -970,7 +1024,7 @@ public class View {
 	 * 
 	 * @return
 	 */
-	Map<UUID, Future<?>> getPendingRebutals() {
+	Map<UUID, FutureRebutal> getPendingRebutals() {
 		return pendingRebutals;
 	}
 
@@ -983,7 +1037,21 @@ public class View {
 	 * @throws AvroRemoteException
 	 */
 	boolean gossip(int ring, FfClientCommunications link) throws AvroRemoteException {
-		Gossip gossip = link.gossip(node.getSignedNote(), ring, commonDigests());
+		Digests outbound = commonDigests();
+		if (log.isTraceEnabled()) {
+			log.trace("outbound, certs: {}, notes: {}, accusations: {}, messages: {}",
+					outbound.getCertificates().size(), outbound.getNotes().size(), outbound.getAccusations().size(),
+					outbound.getMessages().size());
+		}
+		Gossip gossip = link.gossip(node.getSignedNote(), ring, outbound);
+		if (log.isTraceEnabled()) {
+			log.trace(
+					"inbound\nwant: certs: {}, notes: {}, accusations: {}, messages: {}\nupdates: certs: {}, notes: {}, accusations: {}, messages: {}",
+					gossip.getCertificates().getDigests().size(), gossip.getNotes().getDigests().size(),
+					gossip.getAccusations().getDigests().size(), gossip.getMessages().getDigests().size(),
+					gossip.getCertificates().getUpdates().size(), gossip.getNotes().getUpdates().size(),
+					gossip.getAccusations().getUpdates().size(), gossip.getMessages().getUpdates().size());
+		}
 		if (gossip.getRedirect()) {
 			if (gossip.getCertificates().getUpdates().size() != 1 && gossip.getNotes().getUpdates().size() != 1) {
 				log.warn("Redirect response from {} on ring {} did not contain redirect member certificate and note",
@@ -1071,6 +1139,29 @@ public class View {
 	}
 
 	/**
+	 * Collect and fail all expired pending future rebutal timers that have come due
+	 */
+	void maintainTimers() {
+		List<FutureRebutal> expired = new ArrayList<>();
+		for (Iterator<FutureRebutal> iterator = scheduledRebutals.iterator(); iterator.hasNext();) {
+			FutureRebutal future = iterator.next();
+			long currentRound = round.get();
+			if (future.targetRound <= currentRound) {
+				expired.add(future);
+				iterator.remove();
+			} else {
+				break; // remaining in the future
+			}
+		}
+		if (expired.isEmpty()) {
+			return;
+		}
+		log.info("{} failing members {}", node.getId(),
+				expired.stream().map(f -> f.member.getId()).collect(Collectors.toList()));
+		expired.forEach(f -> gc(f.member));
+	}
+
+	/**
 	 * Check the link. If it stands accused, accuse this link on the supplied rings.
 	 * In the fortunate, lucky case, the list of rings is a singleton list - this is
 	 * fundamental to a good quality mesh. But on the off chance there's an overlap
@@ -1083,13 +1174,9 @@ public class View {
 	void monitor(FfClientCommunications link, int lastRing) {
 		try {
 			link.ping(200);
+			log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
 		} catch (AvroRemoteException e) {
 			connections.invalidate(link.getMember());
-			if (e.getCause() instanceof ClosedChannelException) {
-				log.error("Closed channel when pinging {} -> {} : {}", link.getMember(),
-						link.getMember().getFirefliesEndpoint(), e.toString());
-				return;
-			}
 			log.error("Exception pinging {} -> {} : {}", link.getMember(), link.getMember().getFirefliesEndpoint(),
 					e.toString());
 			accuseOn(link.getMember(), lastRing);
@@ -1116,6 +1203,7 @@ public class View {
 	 * monitor().
 	 */
 	void oneRound() {
+		round.incrementAndGet();
 		comm.logDiag();
 		try {
 			service.gossip();
@@ -1127,6 +1215,7 @@ public class View {
 		} catch (Throwable e) {
 			log.error("unexpected error during monitor round", e);
 		}
+		maintainTimers();
 	}
 
 	/**
@@ -1325,7 +1414,7 @@ public class View {
 		failed.remove(member.getId());
 		live.putIfAbsent(member.getId(), member);
 		rings.forEach(ring -> ring.insert(member));
-		log.debug("Recovering: {}", member.getId());
+		log.info("Recovering: {}", member.getId());
 		dispatcher.execute(() -> membershipListeners.parallelStream().forEach(l -> {
 			try {
 				l.recover(member);
@@ -1345,7 +1434,9 @@ public class View {
 	 *         view
 	 */
 	Gossip redirectTo(Member member, int ring, Member successor) {
-		log.info("Redirecting from {} to {} on ring {}", node, successor, ring);
+		assert member != null;
+		assert successor != null;
+		log.debug("Redirecting from {} to {} on ring {}", node, successor, ring);
 		return new Gossip(true, new MessageGossip(Collections.emptyList(), Collections.emptyList()),
 				new CertificateGossip(Collections.emptyList(),
 						Collections.singletonList(successor.getEncodedCertificate())),
@@ -1371,16 +1462,19 @@ public class View {
 	 * @param m
 	 */
 	void startRebutalTimer(Member m) {
-		pendingRebutals.computeIfAbsent(m.getId(),
-				id -> scheduler.schedule(() -> gc(m), service.getTimeoutInterval().toMillis(), TimeUnit.MILLISECONDS));
+		pendingRebutals.computeIfAbsent(m.getId(), id -> {
+			FutureRebutal future = new FutureRebutal(round.get() + 2 * (diameter * parameters.toleranceLevel), m);
+			scheduledRebutals.add(future);
+			return future;
+		});
 	}
 
 	void stopRebutalTimer(Member m) {
 		m.clearAccusations();
 		log.info("New note, epoch {}, clearing accusations on {}", m.getEpoch(), m.getId());
-		Future<?> pending = pendingRebutals.remove(m.getId());
+		FutureRebutal pending = pendingRebutals.remove(m.getId());
 		if (pending != null) {
-			pending.cancel(true);
+			scheduledRebutals.remove(pending);
 		}
 	}
 
@@ -1499,11 +1593,14 @@ public class View {
 		try {
 			return connections.get(m);
 		} catch (UncheckedExecutionException e) {
-			log.debug("error caching connections to " + m, e.getCause());
+			log.debug("error opening connection to {}: {}", m.getId(),
+					(e.getCause() != null ? e.getCause() : e).getMessage());
 		} catch (InvalidCacheLoadException e) {
-			log.debug("error caching connections to " + m, e.getCause());
+			log.debug("error opening connection to {}: {}", m.getId(),
+					(e.getCause() != null ? e.getCause() : e).getMessage());
 		} catch (ExecutionException e) {
-			log.debug("error caching connections to " + m, e.getCause());
+			log.debug("error opening connection to {}: {}", m.getId(),
+					(e.getCause() != null ? e.getCause() : e).getMessage());
 		}
 		return null;
 	}

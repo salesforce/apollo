@@ -61,7 +61,6 @@ abstract public class CommonNettyCommunications {
     protected final Set<CommonClientCommunications> openOutbound = Collections.newSetFromMap(new ConcurrentHashMap<>());
     protected final RPCPlugin stats;
     private final AtomicBoolean running = new AtomicBoolean();
-
     private volatile MtlsServer server;
 
     public CommonNettyCommunications() {

@@ -31,71 +31,77 @@ import com.salesforce.apollo.fireflies.View;
  * @since 220
  */
 public class FfLocalCommSim implements FirefliesCommunications {
-    private static final Logger log = LoggerFactory.getLogger(FfLocalCommSim.class);
+	private static final Logger log = LoggerFactory.getLogger(FfLocalCommSim.class);
 
-    private volatile boolean checkStarted;
-    private final Map<UUID, View> servers = new ConcurrentHashMap<>();
-    private final RPCPlugin stats;
+	private volatile boolean checkStarted;
+	private final Map<UUID, View> servers = new ConcurrentHashMap<>();
+	private final RPCPlugin stats;
 
-    public FfLocalCommSim() {
-        this(null);
-    }
+	public FfLocalCommSim() {
+		this(null);
+	}
 
-    public FfLocalCommSim(RPCPlugin stats) {
-        this.stats = stats;
-    }
+	public FfLocalCommSim(RPCPlugin stats) {
+		this.stats = stats;
+	}
 
-    public void checkStarted(boolean b) {
-        this.checkStarted = b;
-    }
+	public void checkStarted(boolean b) {
+		this.checkStarted = b;
+	}
 
-    @Override
-    public void close() {}
+	public void clear() {
+		servers.clear();
+	}
 
-    @Override
-    public FfClientCommunications connectTo(Member to, Node from) {
-        View view = servers.get(to.getId());
-        if (view == null || (checkStarted && !view.getService().isStarted())) {
-            log.debug("Unable to connect to: " + to + " from: " + from
-                    + (view == null ? null : view.getService().isStarted()));
-            return null;
-        }
-        SpecificResponder responder = new SpecificResponder(Apollo.PROTOCOL,
-                                                            new FfServerCommunications(view.getService(),
-                                                                                       from.getCertificate()));
+	@Override
+	public void close() {
+	}
 
-        FfClientCommunications clientCommunications = new FfClientCommunications(new LocalTransceiver(responder), to);
-        if (stats != null) {
-            responder.addRPCPlugin(stats);
-            clientCommunications.add(stats);
-        }
-        return clientCommunications;
-    }
+	@Override
+	public FfClientCommunications connectTo(Member to, Node from) {
+		View view = servers.get(to.getId());
+		if (view == null || (checkStarted && !view.getService().isStarted())) {
+			log.debug("Unable to connect to: " + to + " from: " + from
+					+ (view == null ? null : view.getService().isStarted()));
+			return null;
+		}
+		SpecificResponder responder = new SpecificResponder(Apollo.PROTOCOL,
+				new FfServerCommunications(view.getService(), from.getCertificate()));
 
-    public Map<UUID, View> getServers() {
-        return servers;
-    }
+		FfClientCommunications clientCommunications = new FfClientCommunications(new LocalTransceiver(responder), to);
+		if (stats != null) {
+			responder.addRPCPlugin(stats);
+			clientCommunications.add(stats);
+		}
+		return clientCommunications;
+	}
 
-    public RPCPlugin getStats() {
-        return stats;
-    }
+	public Map<UUID, View> getServers() {
+		return servers;
+	}
 
-    @Override
-    public void initialize(View view) {
-        servers.put(view.getNode().getId(), view);
-    }
+	public RPCPlugin getStats() {
+		return stats;
+	}
 
-    @Override
-    public Node newNode(CertWithKey identity, FirefliesParameters parameters) {
-        return new Node(identity, parameters);
-    }
+	@Override
+	public void initialize(View view) {
+		log.debug("adding view: {}" + view.getNode().getId());
+		servers.put(view.getNode().getId(), view);
+	}
 
-    @Override
-    public Node newNode(CertWithKey identity, FirefliesParameters parameters, InetSocketAddress[] boundPorts) {
-        return new Node(identity, parameters, boundPorts);
-    }
+	@Override
+	public Node newNode(CertWithKey identity, FirefliesParameters parameters) {
+		return new Node(identity, parameters);
+	}
 
-    @Override
-    public void start() {}
+	@Override
+	public Node newNode(CertWithKey identity, FirefliesParameters parameters, InetSocketAddress[] boundPorts) {
+		return new Node(identity, parameters, boundPorts);
+	}
+
+	@Override
+	public void start() {
+	}
 
 }

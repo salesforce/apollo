@@ -50,6 +50,11 @@ public class MessageBuffer {
 		this.tooOld = tooOld;
 	}
 
+	public void clear() {
+		maxTimes.clear();
+		state.clear();
+	}
+
 	public void gc() {
 		if (state.size() > bufferSize) {
 			compact();

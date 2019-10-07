@@ -44,133 +44,143 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class SwarmTest {
 
-    private static final RootCertificate ca = getCa();
-    private static Map<UUID, CertWithKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+	private static final RootCertificate ca = getCa();
+	private static Map<UUID, CertWithKey> certs;
+	private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-    @BeforeClass
-    public static void beforeClass() {
-        certs = IntStream.range(1, 101)
-                         .parallel()
-                         .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
-                                                   cert -> cert));
-    }
+	@BeforeClass
+	public static void beforeClass() {
+		certs = IntStream.range(1, 101).parallel().mapToObj(i -> getMember(i))
+				.collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+	}
 
-    private List<Node> members;
-    private MetricRegistry registry;
-    private List<View> views;
+	private List<Node> members;
+	private MetricRegistry registry;
+	private List<View> views;
+	private FfLocalCommSim communications;
 
-    @After
-    public void after() {
-        if (views != null) {
-            views.forEach(v -> v.getService().stop());
-        }
-    }
+	@After
+	public void after() {
+		if (views != null) {
+			views.forEach(v -> v.getService().stop());
+		}
+	}
 
-    @Test
-    public void churn() throws Exception {
-        initialize();
+	@Test
+	public void churn() throws Exception {
+		initialize();
 
-        List<View> testViews = new ArrayList<>();
+		List<View> testViews = new ArrayList<>();
 
-        for (int i = 0; i < 4; i++) {
-            int start = testViews.size();
-            for (int j = 0; j < 25; j++) {
-                testViews.add(views.get(start + j));
-            }
-            long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(100)));
+		for (int i = 0; i < 4; i++) {
+			int start = testViews.size();
+			for (int j = 0; j < 25; j++) {
+				testViews.add(views.get(start + j));
+			}
+			long then = System.currentTimeMillis();
+			testViews.forEach(view -> view.getService().start(Duration.ofMillis(100)));
 
-            assertTrue("View did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
-                return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
-            }));
+			assertTrue("View did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
+				return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
+			}));
 
-            System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                    + testViews.size() + " members");
-        }
+			System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+					+ testViews.size() + " members");
+		}
+		System.out.println("Stopping views");
+		testViews.forEach(e -> e.getService().stop());
+		testViews.clear();
+		communications.clear();
+		for (int i = 0; i < 4; i++) {
+			int start = testViews.size();
+			for (int j = 0; j < 25; j++) {
+				testViews.add(views.get(start + j));
+			}
+			long then = System.currentTimeMillis();
+			testViews.forEach(view -> view.getService().start(Duration.ofMillis(10)));
 
-        Thread.sleep(5_000);
-    }
+			boolean stabilized = Utils.waitForCondition(15_000, 1_000, () -> {
+				return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
+			});
 
-    @Test
-    public void swarm() throws Exception {
-        initialize();
+			assertTrue("View did not stabilize to: " + testViews.size() + " found: "
+					+ testViews.stream().map(v -> v.getLive().size()).collect(Collectors.toList()), stabilized);
 
-        long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(100)));
+			System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+					+ testViews.size() + " members");
+		}
+	}
 
-        assertTrue("View did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
-            return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
-        }));
+	@Test
+	public void swarm() throws Exception {
+		initialize();
 
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + views.size() + " members");
+		long then = System.currentTimeMillis();
+		views.forEach(view -> view.getService().start(Duration.ofMillis(100)));
 
-        Thread.sleep(5_000);
+		assertTrue("View did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
+			return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
+		}));
 
-        views.forEach(view -> view.getService().stop());
+		System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+				+ views.size() + " members");
 
-        for (int i = 0; i < parameters.rings; i++) {
-            for (View view : views) {
-                assertEquals(views.get(0).getRing(i).getRing(), view.getRing(i).getRing());
-            }
-        }
+		Thread.sleep(5_000);
 
-        List<View> invalid = views.stream()
-                                  .map(view -> view.getLive().size() != views.size() ? view : null)
-                                  .filter(view -> view != null)
-                                  .collect(Collectors.toList());
-        assertEquals(invalid.stream().map(view -> {
-            Set<?> difference = Sets.difference(views.stream()
-                                                     .map(v -> v.getNode().getId())
-                                                     .collect(Collectors.toSet()),
-                                                view.getLive().keySet());
-            return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
-        }).collect(Collectors.toList()).toString(), 0, invalid.size());
+		for (int i = 0; i < parameters.rings; i++) {
+			for (View view : views) {
+				assertEquals(views.get(0).getRing(i).getRing(), view.getRing(i).getRing());
+			}
+		}
 
-        System.out.println();
-        System.out.println();
-        ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
-                                                  .convertRatesTo(TimeUnit.SECONDS)
-                                                  .convertDurationsTo(TimeUnit.NANOSECONDS)
-                                                  .build();
-        reporter.report();
+		List<View> invalid = views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
+				.filter(view -> view != null).collect(Collectors.toList());
+		Set<UUID> expected = views.stream().map(v -> v.getNode().getId()).collect(Collectors.toSet());
+		assertEquals(invalid.stream().map(view -> {
+			Set<?> difference = Sets.difference(expected, view.getLive().keySet());
+			return "Invalid membership: " + view.getNode() + " have: " + view.getLive().keySet().size() + ", missing: "
+					+ difference.size();
+		}).collect(Collectors.toList()).toString(), 0, invalid.size());
 
-        Graph<Member> testGraph = new Graph<>();
-        for (View v : views) {
-            for (int i = 0; i < parameters.rings; i++) {
-                testGraph.addEdge(v.getNode(), v.getRing(i).successor(v.getNode()));
-            }
-        }
-        assertTrue("Graph is not connected", testGraph.isSC());
-    }
+		views.forEach(view -> view.getService().stop());
 
-    private void initialize() {
-        Random entropy = new Random(0x666);
+		System.out.println();
+		System.out.println();
+		ConsoleReporter reporter = ConsoleReporter.forRegistry(registry).convertRatesTo(TimeUnit.SECONDS)
+				.convertDurationsTo(TimeUnit.MILLISECONDS).build();
+		reporter.report();
 
-        List<X509Certificate> seeds = new ArrayList<>();
-        members = certs.values()
-                       .parallelStream()
-                       .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
-                       .map(cert -> new Node(cert, parameters))
-                       .collect(Collectors.toList());
-        registry = new MetricRegistry();
-        FfLocalCommSim communications = new FfLocalCommSim(new DropWizardStatsPlugin(registry));
-        assertEquals(certs.size(), members.size());
+		Graph<Member> testGraph = new Graph<>();
+		for (View v : views) {
+			for (int i = 0; i < parameters.rings; i++) {
+				testGraph.addEdge(v.getNode(), v.getRing(i).successor(v.getNode()));
+			}
+		}
+		assertTrue("Graph is not connected", testGraph.isSC());
+	}
 
-        while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
-            }
-        }
+	private void initialize() {
+		Random entropy = new Random(0x666);
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
+		List<X509Certificate> seeds = new ArrayList<>();
+		members = certs.values().parallelStream()
+				.map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
+				.map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
+		registry = new MetricRegistry();
+		communications = new FfLocalCommSim(new DropWizardStatsPlugin(registry));
+		communications.checkStarted(true);
+		assertEquals(certs.size(), members.size());
 
-        views = members.stream()
-                       .map(node -> new View(node, communications, seeds, scheduler))
-                       .collect(Collectors.toList());
-        assertEquals(members.size(), communications.getServers().size());
-    }
+		while (seeds.size() < parameters.toleranceLevel + 1) {
+			CertWithKey cert = certs.get(members.get(entropy.nextInt(24)).getId());
+			if (!seeds.contains(cert.getCertificate())) {
+				seeds.add(cert.getCertificate());
+			}
+		}
+
+		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
+
+		views = members.stream().map(node -> new View(node, communications, seeds, scheduler))
+				.collect(Collectors.toList());
+	}
 }

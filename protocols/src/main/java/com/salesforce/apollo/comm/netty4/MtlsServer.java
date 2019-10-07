@@ -14,6 +14,7 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadFactory;
 import java.util.function.Function;
 
 import javax.net.ssl.SSLEngine;
@@ -186,13 +187,33 @@ public class MtlsServer implements Server {
 
 	public MtlsServer(InetSocketAddress address, SslContext sslCtx,
 			Function<X509Certificate, Responder> responderProvider, CacheBuilder<String, Responder> builder,
-			int bossThreads, int workerThreads) {
+			int bossThreads, String labelPrefix, int workerThreads) {
 		LOG.debug("Server starting, binding to: {}", address);
 		responders = builder.build();
 		this.responderProvider = responderProvider;
 
-		bossGroup = new NioEventLoopGroup(bossThreads);
-		workerGroup = new NioEventLoopGroup(workerThreads);
+		bossGroup = new NioEventLoopGroup(bossThreads, new ThreadFactory() {
+			volatile int i = 0;
+
+			@Override
+			public Thread newThread(Runnable r) {
+				int thread = i++;
+				Thread t = new Thread(r, labelPrefix + " boss [" + thread + "]");
+				t.setDaemon(true);
+				return t;
+			}
+		});
+		workerGroup = new NioEventLoopGroup(workerThreads, new ThreadFactory() {
+			volatile int i = 0;
+
+			@Override
+			public Thread newThread(Runnable r) {
+				int thread = i++;
+				Thread t = new Thread(r, labelPrefix + " worker[" + thread + "]");
+				t.setDaemon(true);
+				return t;
+			}
+		});
 
 		ChannelFuture future = new ServerBootstrap().option(ChannelOption.SO_BACKLOG, 128)
 				.option(ChannelOption.SO_REUSEADDR, true).childOption(ChannelOption.TCP_NODELAY, true)

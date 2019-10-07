@@ -54,131 +54,124 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class GossipTest {
 
-    private static final RootCertificate ca = getCa();
-    private static Map<UUID, CertWithKey> certs;
-    private static int initial = 50;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+	private static final RootCertificate ca = getCa();
+	private static Map<UUID, CertWithKey> certs;
+	private static int initial = 50;
+	private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-    @BeforeClass
-    public static void beforeClass() {
-        certs = IntStream.range(1, 101)
-                         .parallel()
-                         .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
-                                                   cert -> cert));
-    }
+	@BeforeClass
+	public static void beforeClass() {
+		certs = IntStream.range(1, 101).parallel().mapToObj(i -> getMember(i))
+				.collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+	}
 
-    private List<Node> members;
-    private ScheduledExecutorService scheduler;
-    private List<View> views;
-    private List<X509Certificate> seeds;
+	private List<Node> members;
+	private ScheduledExecutorService scheduler;
+	private List<View> views;
+	private List<X509Certificate> seeds;
 
-    @After
-    public void after() {
-        views.forEach(e -> e.getService().stop());
-    }
+	@After
+	public void after() {
+		views.forEach(e -> e.getService().stop());
+	}
 
-    @Before
-    public void before() {
-        Random entropy = new Random(0x666);
+	@Before
+	public void before() {
+		Random entropy = new Random(0x666);
 
-        seeds = new ArrayList<>();
-        members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        MetricRegistry registry = new MetricRegistry();
-        com.salesforce.apollo.fireflies.communications.FfLocalCommSim ffComms = new com.salesforce.apollo.fireflies.communications.FfLocalCommSim(new DropWizardStatsPlugin(registry));
-        assertEquals(certs.size(), members.size());
+		seeds = new ArrayList<>();
+		members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
+		MetricRegistry registry = new MetricRegistry();
+		com.salesforce.apollo.fireflies.communications.FfLocalCommSim ffComms = new com.salesforce.apollo.fireflies.communications.FfLocalCommSim(
+				new DropWizardStatsPlugin(registry));
+		assertEquals(certs.size(), members.size());
 
-        while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(20)).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
-            }
-        }
+		while (seeds.size() < parameters.toleranceLevel + 1) {
+			CertWithKey cert = certs.get(members.get(entropy.nextInt(20)).getId());
+			if (!seeds.contains(cert.getCertificate())) {
+				seeds.add(cert.getCertificate());
+			}
+		}
 
-        System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
-        scheduler = Executors.newScheduledThreadPool(members.size() * 3);
+		System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
+		scheduler = Executors.newScheduledThreadPool(members.size() * 3);
 
-        views = members.stream()
-                       .map(node -> new View(node, ffComms, seeds, scheduler))
-                       .collect(Collectors.toList());
-        assertEquals(members.size(), ffComms.getServers().size());
-    }
+		views = members.stream().map(node -> new View(node, ffComms, seeds, scheduler)).collect(Collectors.toList());
+		assertEquals(members.size(), ffComms.getServers().size());
+	}
 
-    @Test
-    public void gossip() throws Exception {
-        long then = System.currentTimeMillis();
+	@Test
+	public void gossip() throws Exception {
+		long then = System.currentTimeMillis();
 
-        List<View> testViews = new ArrayList<>();
+		List<View> testViews = new ArrayList<>();
 
-        for (int i = 0; i < initial; i++) {
-            testViews.add(views.get(i));
-        }
+		for (int i = 0; i < initial; i++) {
+			testViews.add(views.get(i));
+		}
 
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000)));
+		testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000)));
 
-        assertTrue("view did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
-            return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
-        }));
+		assertTrue("view did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
+			return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
+		}));
 
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + testViews.size() + " members");
+		System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+				+ testViews.size() + " members");
 
-        GhostLocalCommSim communications = new GhostLocalCommSim();
-        List<Ghost> ghosties = testViews.stream()
-                                        .map(view -> new Ghost(new GhostParameters(), communications, view,
-                                                               new MemoryStore()))
-                                        .collect(Collectors.toList());
-        ghosties.forEach(e -> e.getService().start());
+		GhostLocalCommSim communications = new GhostLocalCommSim();
+		List<Ghost> ghosties = testViews.stream()
+				.map(view -> new Ghost(new GhostParameters(), communications, view, new MemoryStore()))
+				.collect(Collectors.toList());
+		ghosties.forEach(e -> e.getService().start());
 		assertEquals("Not all nodes joined the cluster", ghosties.size(), ghosties.parallelStream()
 				.map(g -> Utils.waitForCondition(30_000, () -> g.joined())).filter(e -> e).count());
 
-        int rounds = 3;
-        Map<HashKey, Entry> stored = new HashMap<>();
-        for (int i = 0; i < rounds; i++) {
-            for (Ghost ghost : ghosties) {
-                Entry entry = new Entry(EntryType.DAG, ByteBuffer.wrap(String
-                                                                             .format("Member: %s round: %s",
-                                                                                     ghost.getNode().getId(), i)
-                                                                             .getBytes()));
-                stored.put(ghost.putEntry(entry), entry);
-            }
-        }
+		int rounds = 3;
+		Map<HashKey, Entry> stored = new HashMap<>();
+		for (int i = 0; i < rounds; i++) {
+			for (Ghost ghost : ghosties) {
+				Entry entry = new Entry(EntryType.DAG,
+						ByteBuffer.wrap(String.format("Member: %s round: %s", ghost.getNode().getId(), i).getBytes()));
+				stored.put(ghost.putEntry(entry), entry);
+			}
+		}
 
-        for (java.util.Map.Entry<HashKey, Entry> entry : stored.entrySet()) {
-            for (Ghost ghost : ghosties) {
-                Entry found = ghost.getEntry(entry.getKey());
-                assertNotNull(found);
-                assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
-            }
-        }
-        int start = testViews.size();
+		for (java.util.Map.Entry<HashKey, Entry> entry : stored.entrySet()) {
+			for (Ghost ghost : ghosties) {
+				Entry found = ghost.getEntry(entry.getKey());
+				assertNotNull(found);
+				assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
+			}
+		}
 
-        int add = 25;
-        for (int i = 0; i < add; i++) {
-            View view = views.get(i + start);
-            testViews.add(view);
-            ghosties.add(new Ghost(new GhostParameters(), communications, view, new MemoryStore()));
-        }
+		while (testViews.size() < views.size()) {
+			int start = testViews.size() + 1;
+			for (int i = 0; i < views.get(0).getParameters().toleranceLevel
+					&& testViews.size() < views.size(); i++) {
+				View view = views.get(i + start);
+				testViews.add(view);
+				ghosties.add(new Ghost(new GhostParameters(), communications, view, new MemoryStore()));
+			}
+			then = System.currentTimeMillis();
+			testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000)));
+			assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 1_000, () -> {
+				return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
+			}));
+			System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+					+ testViews.size() + " members");
+			ghosties.forEach(e -> e.getService().start());
+			assertEquals("Not all nodes joined the cluster", ghosties.size(), ghosties.parallelStream()
+					.map(g -> Utils.waitForCondition(60_000, () -> g.joined())).filter(e -> e).count());
 
-        then = System.currentTimeMillis();
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000)));
-        assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 1_000, () -> {
-            return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
-        }));
-        ghosties.forEach(e -> e.getService().start());
-		assertEquals("Not all nodes joined the cluster", ghosties.size(), ghosties.parallelStream()
-				.map(g -> Utils.waitForCondition(30_000, () -> g.joined())).filter(e -> e).count());
+		}
 
-
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + testViews.size() + " members");
-
-        for (java.util.Map.Entry<HashKey, Entry> entry : stored.entrySet()) {
-            for (Ghost ghost : ghosties) {
-                Entry found = ghost.getEntry(entry.getKey());
-                assertNotNull("Not found: " + entry.getKey(), found);
-                assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
-            }
-        }
-    }
+		for (java.util.Map.Entry<HashKey, Entry> entry : stored.entrySet()) {
+			for (Ghost ghost : ghosties) {
+				Entry found = ghost.getEntry(entry.getKey());
+				assertNotNull("Not found: " + entry.getKey(), found);
+				assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
+			}
+		}
+	}
 }

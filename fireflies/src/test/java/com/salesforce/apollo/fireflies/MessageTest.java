@@ -138,7 +138,6 @@ public class MessageTest {
 
 		List<View> views = members.stream().map(node -> new View(node, communications, seeds, scheduler))
 				.collect(Collectors.toList());
-		assertEquals(members.size(), communications.getServers().size());
 
 		long then = System.currentTimeMillis();
 		views.forEach(view -> view.getService().start(Duration.ofMillis(100)));

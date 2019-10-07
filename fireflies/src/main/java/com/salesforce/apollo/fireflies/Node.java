@@ -370,7 +370,7 @@ public class Node extends Member {
 			// Fill the rest of the mask with randomly set index
 			while (mask.cardinality() > parameters.toleranceLevel + 1) {
 				int index = parameters.entropy.nextInt(parameters.rings);
-				if (!mask.get(index)) {
+				if (mask.get(index)) {
 					mask.set(index, false);
 				}
 			}
