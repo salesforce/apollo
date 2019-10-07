@@ -97,7 +97,6 @@ public class DagTest {
 		scheduler = Executors.newScheduledThreadPool(members.size() * 3);
 
 		views = members.stream().map(node -> new View(node, ffComms, seeds, scheduler)).collect(Collectors.toList());
-		assertEquals(members.size(), ffComms.getServers().size());
 	}
 
 	@Test

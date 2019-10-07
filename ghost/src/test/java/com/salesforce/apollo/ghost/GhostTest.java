@@ -84,7 +84,6 @@ public class GhostTest {
 
 		List<View> views = members.stream().map(node -> new View(node, ffComms, seeds, scheduler))
 				.collect(Collectors.toList());
-		assertEquals(members.size(), ffComms.getServers().size());
 
 		long then = System.currentTimeMillis();
 		views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
