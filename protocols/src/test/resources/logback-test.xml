@@ -13,8 +13,12 @@
             </Pattern>
         </encoder>
     </appender>
-    <root level="TRACE">
+    <root level="INFO">
         <appender-ref ref="STDOUT" />
     </root>
+    <logger name="com.salesforce.apollo" level="TRACE"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
 
 </configuration>

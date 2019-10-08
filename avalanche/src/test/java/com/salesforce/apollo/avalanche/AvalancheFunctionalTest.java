@@ -104,7 +104,6 @@ public class AvalancheFunctionalTest {
         scheduler = Executors.newScheduledThreadPool(members.size());
 
         views = members.stream().map(node -> new View(node, ffComms, seeds, scheduler)).collect(Collectors.toList());
-        assertEquals(members.size(), ffComms.getServers().size());
     }
 
     @Test
@@ -235,7 +234,7 @@ public class AvalancheFunctionalTest {
         System.out.println();
         ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
                                                   .convertRatesTo(TimeUnit.SECONDS)
-                                                  .convertDurationsTo(TimeUnit.NANOSECONDS)
+                                                  .convertDurationsTo(TimeUnit.MILLISECONDS)
                                                   .build();
         reporter.report();
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);

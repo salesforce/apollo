@@ -1,163 +1,169 @@
 @namespace ( "com.salesforce.apollo.avro" )
 protocol Apollo {
-	fixed ADDRESS ( 70 );
-	fixed HASH ( 32 );
-	fixed Uuid ( 16 );
-	record MessageDigest {
-		Uuid source;
-		Uuid id;
-		int age;
-		long time;
-	}
+    fixed ADDRESS ( 70 );
+    fixed HASH ( 32 );
+    fixed Uuid ( 16 );
+    record MessageDigest {
+        Uuid source;
+        Uuid id;
+        int age;
+        long time;
+    }
 
-	record Message {
-		MessageDigest digest;
-		bytes content;
-		bytes signature;
-	}
+    record Message {
+        MessageDigest digest;
+        int channel;
+        bytes content;
+        bytes signature;
+    }
 
-	record MessageGossip {
-		array<MessageDigest> digests;
-		array<Message> updates;
-	}
+    record MessageGossip {
+        array<MessageDigest> digests;
+        array<Message> updates;
+    }
 
-	record Signed {
-		bytes content;
-		bytes signature;
-	}
+    record Signed {
+        bytes content;
+        bytes signature;
+    }
 
-	record AccusationDigest {
-		Uuid id;
-		long epoch;
-		int ring;
-	}
+    record AccusationDigest {
+        Uuid id;
+        long epoch;
+        int ring;
+    }
 
-	record AccusationGossip {
-		array<AccusationDigest> digests;
-		array<Signed> updates;
-	}
+    record AccusationGossip {
+        array<AccusationDigest> digests;
+        array<Signed> updates;
+    }
 
-	record CertificateDigest {
-		Uuid id;
-		long epoch;
-		bytes hash;
-	}
+    record CertificateDigest {
+        Uuid id;
+        long epoch;
+        bytes hash;
+    }
 
-	record EncodedCertificate {
-		CertificateDigest digest;
-		bytes content;
-	}
+    record EncodedCertificate {
+        CertificateDigest digest;
+        bytes content;
+    }
 
-	record CertificateGossip {
-		array<CertificateDigest> digests;
-		array<EncodedCertificate> updates;
-	}
+    record CertificateGossip {
+        array<CertificateDigest> digests;
+        array<EncodedCertificate> updates;
+    }
 
-	record NoteDigest {
-		Uuid id;
-		long epoch;
-	}
+    record NoteDigest {
+        Uuid id;
+        long epoch;
+    }
 
-	record NoteGossip {
-		array<NoteDigest> digests;
-		array<Signed> updates;
-	}
+    record NoteGossip {
+        array<NoteDigest> digests;
+        array<Signed> updates;
+    }
 
-	record Digests {
-		array<MessageDigest> messages;
-		array<CertificateDigest> certificates;
-		array<NoteDigest> notes;
-		array<AccusationDigest> accusations;
-	}
+    record Digests {
+        array<MessageDigest> messages;
+        array<CertificateDigest> certificates;
+        array<NoteDigest> notes;
+        array<AccusationDigest> accusations;
+    }
 
-	record Gossip {
-		boolean redirect;
-		MessageGossip messages;
-		CertificateGossip certificates;
-		NoteGossip notes;
-		AccusationGossip accusations;
-	}
+    record Gossip {
+        boolean redirect;
+        MessageGossip messages;
+        CertificateGossip certificates;
+        NoteGossip notes;
+        AccusationGossip accusations;
+    }
 
-	record Update {
-		array<Message> messages;
-		array<EncodedCertificate> certificates;
-		array<Signed> notes;
-		array<Signed> accusations;
-	}
+    record Update {
+        array<Message> messages;
+        array<EncodedCertificate> certificates;
+        array<Signed> notes;
+        array<Signed> accusations;
+    }
 
-	enum EntryType {
-		DAG,
-		SIGNED,
-		ENCRYPTED
-	}
+    enum EntryType {
+        DAG,
+        BLOCK,
+        TREE,
+        LIST,
+        COMMIT
+    }
 
-	record Entry {
-		EntryType type;
-		bytes data;
-	}
+    record Entry {
+        EntryType type;
+        bytes data;
+    }
 
-	record SignedEntry {
-		bytes data;
-		bytes signature;
-	}
+    record Block {
+        bytes data;
+    }
 
-	record EncryptedEntry {
-		bytes data;
-		bytes tag;
-	}
+    record TREE {
+        array<string> names;
+        array<int> sizes;
+        bytes data;
+    }
 
-	record DagEntry {
-		union { null, HASH } description;
-		union { null, array<HASH> } links;
-		union { null, bytes } data;
-	}
-	record Interval {
-		HASH start;
-		HASH end;
-	}
+    record List {
+        array<int> sizes;
+        bytes data;
+    }
 
-	record GhostUpdate {
-		array<Interval> intervals;
-		array<HASH> want;
-		array<Entry> updates;
-	}
+    record DagEntry {
+        union { null, HASH } description;
+        union { null, array<HASH> } links;
+        union { null, bytes } data;
+    }
 
-	record QueryResult {
-		array<boolean> result;
-		array<Entry> entries;
-	}
+    record Interval {
+        HASH start;
+        HASH end;
+    }
 
-	/*
+    record JoinResponse {
+        Signed forward;
+        array<HASH> interval;
+    }
+
+    record QueryResult {
+        array<boolean> result;
+        array<Entry> entries;
+    }
+
+    /*
      * Fireflies 3 phase gossip
      */
-	Gossip gossip ( Signed note, int ring, Digests gossip );
-	void update ( int ring, Update update ) oneway;
+    Gossip gossip ( Signed note, int ring, Digests gossip );
+    void update ( int ring, Update update ) oneway;
 
-	/**
+    /**
      * Fireflies liveness ping
      */
-	int ping ( int ping );
+    int ping ( int ping );
 
-	/*
+    /*
      * Ghost API
      */
-	union { null, Entry } get ( HASH key );
-	void put ( Entry entry ) oneway;
+    union { null, Entry } get ( HASH key );
+    void put ( Entry entry ) oneway;
 
-	/**
-     * Ghost 3 phase gossip
-     */
-	union { null, GhostUpdate } ghostGossip ( array<Interval> intervals,
-	array<HASH> digests );
-	void gUpdate ( array<Entry> updates ) oneway;
+    /**
+	 * Ghost interval gossip
+	 */
+    array<Entry> intervals ( array<Interval> intervals, array<HASH> have );
 
-	/**
+    /**
      * Avalanche query
      */
-	QueryResult query ( array<HASH> transactions, array<HASH> want);
+    QueryResult query ( array<HASH> transactions, array<HASH> want );
 
-	/**
+    /**
      * Avalanche lazy DAG update gossip
      */
-	array<Entry> requestDAG ( array<HASH> want );
+    array<Entry> requestDAG ( array<HASH> want );
 }

@@ -35,62 +35,57 @@ import io.netty.handler.ssl.ClientAuth;
  * @since 220
  */
 public class GhostNettyCommunications extends CommonNettyCommunications implements GhostCommunications {
-    private volatile Ghost ghost;
+	private volatile Ghost ghost;
 
-    @Override
-    public GhostClientCommunications connect(Member to, Node from) {
-        try {
-            GhostClientCommunications thisOutbound[] = new GhostClientCommunications[1];
-            GhostClientCommunications outbound = new GhostClientCommunications(
-                                                                               new NettyTlsTransceiver(to.getGhostEndpoint(),
-                                                                                                       forClient(from).build(),
-                                                                                                       eventGroup) {
+	@Override
+	public GhostClientCommunications connect(Member to, Node from) {
+		try {
+			GhostClientCommunications thisOutbound[] = new GhostClientCommunications[1];
+			GhostClientCommunications outbound = new GhostClientCommunications(
+					new NettyTlsTransceiver(to.getGhostEndpoint(), forClient(from).build(), eventGroup) {
 
-                                                                                   @Override
-                                                                                   public void close() {
-                                                                                       openOutbound.remove(thisOutbound[0]);
-                                                                                       try {
-                                                                                           super.close();
-                                                                                       } catch (Throwable e) {
-                                                                                           log.info("error closing connection to "
-                                                                                                   + to, e);
-                                                                                       }
-                                                                                   }
+						@Override
+						public void close() {
+							openOutbound.remove(thisOutbound[0]);
+							try {
+								super.close();
+							} catch (Throwable e) {
+								log.info("error closing connection to " + to, e);
+							}
+						}
 
-                                                                               }, to);
-            thisOutbound[0] = outbound;
-            openOutbound.add(outbound);
-            return outbound;
-        } catch (Throwable e) {
-            log.debug("Error connecting to {}", to, e);
-            return null;
-        }
-    }
+					}, to);
+			thisOutbound[0] = outbound;
+			openOutbound.add(outbound);
+			return outbound;
+		} catch (Throwable e) {
+			log.debug("Error connecting to {}", to, e);
+			return null;
+		}
+	}
 
-    @Override
-    public void initialize(Ghost ghost) {
-        this.ghost = ghost;
-    }
+	@Override
+	public void initialize(Ghost ghost) {
+		this.ghost = ghost;
+	}
 
-    @Override
-    protected MtlsServer newServer() {
-        try {
-            return new MtlsServer(ghost.getNode().getGhostEndpoint(),
-                                  forServer(ghost.getNode()).clientAuth(ClientAuth.REQUIRE).build(),
-                                  provider(),
-                                  defaultBuiilder(), 1, ghost.getNode().getParameters().rings);
-        } catch (SSLException e) {
-            throw new IllegalStateException("Unable to construct SslContext for " + ghost.getNode().getId(), e);
-        }
-    }
+	@Override
+	protected MtlsServer newServer() {
+		try {
+			return new MtlsServer(ghost.getNode().getGhostEndpoint(),
+					forServer(ghost.getNode()).clientAuth(ClientAuth.REQUIRE).build(), provider(), defaultBuiilder(), 1,
+					"Ghost[" + ghost.getNode().getId() + "]", ghost.getNode().getParameters().rings);
+		} catch (SSLException e) {
+			throw new IllegalStateException("Unable to construct SslContext for " + ghost.getNode().getId(), e);
+		}
+	}
 
-    private Function<X509Certificate, Responder> provider() {
-        return certificate -> {
-            Service service = ghost.getService();
-            SpecificResponder responder = new SpecificResponder(Apollo.class,
-                                                                new GhostServerCommunications(service));
-            return responder;
-        };
-    }
+	private Function<X509Certificate, Responder> provider() {
+		return certificate -> {
+			Service service = ghost.getService();
+			SpecificResponder responder = new SpecificResponder(Apollo.class, new GhostServerCommunications(service));
+			return responder;
+		};
+	}
 
 }

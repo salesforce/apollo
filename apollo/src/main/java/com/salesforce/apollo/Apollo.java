@@ -76,7 +76,7 @@ public class Apollo {
     public void start() {
         if (!running.compareAndSet(false, true)) { return; }
         view.getService().start(configuration.gossipInterval);
-        ghost.getService().start(configuration.gossipInterval);
+        ghost.getService().start();
         avalanche.start();
     }
 
