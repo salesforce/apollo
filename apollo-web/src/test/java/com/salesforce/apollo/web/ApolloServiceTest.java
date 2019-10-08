@@ -44,6 +44,10 @@ import io.dropwizard.testing.junit.DropwizardAppRule;
  * @author hhildebrand
  */
 public class ApolloServiceTest {
+	
+	static {
+    	ApolloConfiguration.SimCommunicationsFactory.reset();
+	}
 
     @ClassRule
     public static final DropwizardAppRule<ApolloServiceConfiguration> RULE = new DropwizardAppRule<ApolloServiceConfiguration>(ApolloService.class,
@@ -71,13 +75,13 @@ public class ApolloServiceTest {
     public void smoke() throws Exception {
         List<Apollo> oracles = new ArrayList<>();
 
-        for (int i = 2; i < PregenPopulation.getCardinality(); i++) {
+        for (int i = 2; i < PregenPopulation.getCardinality() + 1; i++) {
             ApolloConfiguration config = new ApolloConfiguration();
             config.avalanche.alpha = 0.6;
             config.avalanche.k = 6;
             config.avalanche.beta1 = 3;
             config.avalanche.beta2 = 5;
-            config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i + ";DB_CLOSE_ON_EXIT=FALSE";
+            config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i ;
             config.avalanche.limit = 20;
             config.avalanche.parentCount = 3;
             config.avalanche.epsilon = 9;

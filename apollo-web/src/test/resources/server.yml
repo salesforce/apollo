@@ -10,13 +10,13 @@ apollo:
       k: 2
       beta1: 3
       beta2: 5
-      dbConnect: jdbc:h2:mem:test-1;DB_CLOSE_ON_EXIT=FALSE
+      dbConnect: jdbc:h2:mem:test-1
       limit: 200
       parentCount: 3
 logging:
    level: INFO
    loggers:
       liquibase: WARN
-      com.salesforce.apollo.avalanche: INFO
+      com.salesforce.apollo: INFO
    appenders:
    -  type: console

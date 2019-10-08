@@ -112,16 +112,25 @@ public class ApolloConfiguration {
 
 		@Override
 		public AvalancheCommunications avalanche() {
+			if (AVALANCHE_LOCAL_COMM == null) {
+				throw new IllegalStateException("SimCommunicationsFactory must be reset first");
+			}
 			return AVALANCHE_LOCAL_COMM;
 		}
 
 		@Override
 		public FirefliesCommunications fireflies() {
+			if (FF_LOCAL_COM == null) {
+				throw new IllegalStateException("SimCommunicationsFactory must be reset first");
+			}
 			return FF_LOCAL_COM;
 		}
 
 		@Override
 		public GhostCommunications ghost() {
+			if (GHOST_LOCAL_COMM == null) {
+				throw new IllegalStateException("SimCommunicationsFactory must be reset first");
+			}
 			return GHOST_LOCAL_COMM;
 		}
 
