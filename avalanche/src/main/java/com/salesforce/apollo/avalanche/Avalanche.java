@@ -347,8 +347,16 @@ public class Avalanche {
 		return futureSailor;
 	}
 
+	public Dag getDag() {
+		return dag;
+	}
+
 	public DagDao getDagDao() {
 		return new DagDao(dag, submitPool);
+	}
+
+	public DSLContext getDslContext() {
+		return submitPool;
 	}
 
 	public int getFinalized() {
@@ -552,14 +560,6 @@ public class Avalanche {
 				}
 			}
 		});
-	}
-
-	Dag getDag() {
-		return dag;
-	}
-
-	DSLContext getDslContext() {
-		return submitPool;
 	}
 
 	/**

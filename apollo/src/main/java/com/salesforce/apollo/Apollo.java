@@ -17,8 +17,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.ghost.Ghost;
-import com.salesforce.apollo.ghost.MemoryStore;
 import com.salesforce.apollo.protocols.Utils;
 
 /**
@@ -47,7 +45,6 @@ public class Apollo {
 
     private final Avalanche avalanche;
     private final ApolloConfiguration configuration;
-    private final Ghost ghost;
     private final AtomicBoolean running = new AtomicBoolean();
     private final View view;
 
@@ -57,16 +54,11 @@ public class Apollo {
         view = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
                                           ApolloConfiguration.DEFAULT_IDENTITY_ALIAS)
                        .createView(configuration.communications.fireflies(), scheduler);
-        ghost = new Ghost(configuration.ghost, configuration.communications.ghost(), view, new MemoryStore());
         avalanche = new Avalanche(view, configuration.communications.avalanche(), c.avalanche);
     }
 
     public Avalanche getAvalanche() {
         return avalanche;
-    }
-
-    public Ghost getGhost() {
-        return ghost;
     }
 
     public View getView() {
@@ -76,14 +68,12 @@ public class Apollo {
     public void start() {
         if (!running.compareAndSet(false, true)) { return; }
         view.getService().start(configuration.gossipInterval);
-        ghost.getService().start();
         avalanche.start();
     }
 
     public void stop() {
         if (!running.compareAndSet(true, false)) { return; }
         view.getService().stop();
-        ghost.getService().stop();
         avalanche.stop();
     }
 }
