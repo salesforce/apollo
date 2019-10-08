@@ -24,6 +24,11 @@ import org.junit.Test;
  * @since 220
  */
 public class E2ETest {
+
+	static {
+		ApolloConfiguration.SimCommunicationsFactory.reset();
+	}
+	
     class StreamGobbler implements Runnable {
         private InputStream inputStream;
         private Consumer<String> consumeInputLine;

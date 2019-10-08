@@ -100,6 +100,10 @@ public class ApolloConfiguration {
 
 	public static class SimCommunicationsFactory implements CommunicationsFactory {
 
+		static {
+			reset();
+		}
+
 		public static AvalancheLocalCommSim AVALANCHE_LOCAL_COMM;
 		public static FfLocalCommSim FF_LOCAL_COM;
 		public static GhostLocalCommSim GHOST_LOCAL_COMM;
