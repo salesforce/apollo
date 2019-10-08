@@ -6,27 +6,27 @@
  */
 package com.salesforce.apollo;
 
-import static org.junit.Assert.assertArrayEquals;
+import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
+import static com.salesforce.apollo.dagwood.schema.Tables.UNQUERIED;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Random;
-import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import org.junit.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.salesforce.apollo.avro.DagEntry;
+import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -36,7 +36,35 @@ import com.salesforce.apollo.protocols.Utils;
  * @since 218
  */
 public class TestApollo {
-	private Random entropy;
+
+	public static void summarize(List<Apollo> nodes) {
+		int finalized = nodes
+				.stream().map(a -> a.getAvalanche()).map(n -> n.getDslContext().selectCount().from(DAG)
+						.where(DAG.NOOP.isFalse()).and(DAG.FINALIZED.isTrue()).fetchOne().value1())
+				.reduce(0, (a, b) -> a + b);
+		System.out.println("Total finalized : " + finalized);
+		System.out.println();
+	}
+
+	public static void summary(Avalanche node) {
+		System.out.println(node.getNode().getId() + " : ");
+		System.out.println("    Rounds: " + node.getRoundCounter());
+		System.out.println("    Claimed finalized: " + node.getFinalized());
+		System.out.println("    User txns: "
+				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1()
+				+ " finalized: "
+				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).and(DAG.FINALIZED.isTrue())
+						.fetchOne().value1()
+				+ " unqueried: " + node.getDslContext().selectCount().from(DAG).join(UNQUERIED)
+						.on(UNQUERIED.HASH.eq(DAG.HASH)).where(DAG.NOOP.isFalse()).fetchOne().value1());
+		System.out.println("    No Op txns: "
+				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isTrue()).fetchOne().value1()
+				+ " finalized: "
+				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isTrue()).and(DAG.FINALIZED.isTrue())
+						.fetchOne().value1()
+				+ " unqueried: " + node.getDslContext().selectCount().from(DAG).join(UNQUERIED)
+						.on(UNQUERIED.HASH.eq(DAG.HASH)).where(DAG.NOOP.isTrue()).fetchOne().value1());
+	}
 
 	@Test
 	public void configuration() throws Exception {
@@ -46,7 +74,6 @@ public class TestApollo {
 
 	@Test
 	public void smoke() throws Exception {
-		entropy = new Random(0x666);
 		List<Apollo> oracles = new ArrayList<>();
 
 		for (int i = 1; i < PregenPopulation.getCardinality() + 1; i++) {
@@ -84,51 +111,55 @@ public class TestApollo {
 
 		System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
 				+ oracles.size() + " members");
+		Avalanche master = oracles.get(0).getAvalanche();
+		System.out.println("Start round: " + master.getRoundCounter());
+		ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+		CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
+				scheduler);
+		HashKey genesisKey = null;
+		try {
+			genesisKey = genesis.get(60, TimeUnit.SECONDS);
+		} catch (TimeoutException e) {
+			oracles.forEach(node -> node.stop());
+		}
+		System.out.println("Rounds: " + master.getRoundCounter());
+		assertNotNull(genesisKey);
 
-		boolean joined = Utils.waitForCondition(15_000, 1_000, () -> {
-			return oracles.stream().map(o -> o.getGhost()).map(g -> g.joined()).filter(e -> e).count() == oracles
-					.size();
+		long now = System.currentTimeMillis();
+		List<Transactioneer> transactioneers = new ArrayList<>();
+		HASH k = genesisKey.toHash();
+		for (Apollo o : oracles) {
+			assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
+					Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)));
+			transactioneers.add(new Transactioneer(o.getAvalanche()));
+		}
+
+		// # of txns per node
+		int target = 15;
+		transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target * 40, scheduler));
+
+		boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
+			return transactioneers.stream().mapToInt(t -> t.getSuccess()).filter(s -> s >= target)
+					.count() == transactioneers.size();
 		});
-		assertTrue("Not all joined: "
-				+ oracles.stream().map(o -> o.getGhost()).map(g -> g.joined()).filter(e -> e).count(), joined);
 
-		Map<HashKey, DagEntry> stored = new HashMap<>();
+		System.out.println("Completed in " + (System.currentTimeMillis() - now) + " ms");
+		transactioneers.forEach(t -> t.stop());
+		oracles.forEach(node -> node.stop());
+		// System.out.println(profiler.getTop(3));
 
-		DagEntry root = new DagEntry();
-		root.setData(ByteBuffer.wrap("root node".getBytes()));
-		stored.put(oracles.get(0).getGhost().putDagEntry(root), root);
+		summarize(oracles);
+		oracles.forEach(node -> summary(node.getAvalanche()));
 
-		int rounds = 10;
+		System.out.println("wanted: ");
+		System.out.println(master.getDag().getWantedSlow(Integer.MAX_VALUE, master.getDslContext()).stream()
+				.map(e -> new HashKey(e)).collect(Collectors.toList()));
+		System.out.println();
+		System.out.println();
+		assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
+		transactioneers.forEach(t -> {
+			System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
+		});
 
-		for (int i = 0; i < rounds; i++) {
-			for (Apollo oracle : oracles) {
-				DagEntry entry = new DagEntry();
-				entry.setData(ByteBuffer.wrap(
-						String.format("Member: %s round: %s", oracle.getGhost().getNode().getId(), i).getBytes()));
-				entry.setLinks(randomLinksTo(stored));
-				stored.put(oracle.getGhost().putDagEntry(entry), entry);
-			}
-		}
-
-		for (Entry<HashKey, DagEntry> entry : stored.entrySet()) {
-			for (Apollo oracle : oracles) {
-				DagEntry found = oracle.getGhost().getDagEntry(entry.getKey());
-				assertNotNull(found);
-				assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
-			}
-		}
-	}
-
-	private List<HASH> randomLinksTo(Map<HashKey, DagEntry> stored) {
-		List<HASH> links = new ArrayList<HASH>();
-		Set<HashKey> keys = stored.keySet();
-		for (int i = 0; i < entropy.nextInt(10); i++) {
-			Iterator<HashKey> it = keys.iterator();
-			for (int j = 0; j < entropy.nextInt(keys.size()); j++) {
-				it.next();
-			}
-			links.add(it.next().toHash());
-		}
-		return links;
 	}
 }
