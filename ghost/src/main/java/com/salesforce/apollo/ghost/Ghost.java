@@ -146,9 +146,10 @@ public class Ghost {
 			try {
 				CombinedIntervals keyIntervals = keyIntervals();
 				List<HASH> have = store.have(keyIntervals);
+				int zeros = 0;
 
-				for (int i = 0; i < rings; i++) {
-					Member target = view.getRing(i).successor(getNode(), m -> m.isLive() && !joining.contains(m));
+				for (int i = 0; i < view.getRings().size(); i++) {
+					Member target = view.getRing(i).successor(getNode(), m -> m.isLive());
 					if (target == null) {
 						log.debug("No target on ring: {}", i);
 						continue;
@@ -162,9 +163,7 @@ public class Ghost {
 						try {
 							List<Entry> entries = connection.intervals(keyIntervals.toIntervals(), have);
 							if (entries.isEmpty()) {
-								joined.set(true);
-								view.publish(JOIN_MESSAGE_CHANNEL, "joined".getBytes());
-								break;
+								zeros++;
 							}
 							store.add(entries, have);
 						} catch (Throwable e) {
@@ -174,6 +173,10 @@ public class Ghost {
 					} finally {
 						connection.close();
 					}
+				}
+				if (zeros == view.getRings().size()) {
+					joined.set(true);
+					view.publish(JOIN_MESSAGE_CHANNEL, "joined".getBytes());
 				}
 			} finally {
 				busy.set(false);
