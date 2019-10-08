@@ -74,6 +74,7 @@ public class TestApollo {
 
 	@Test
 	public void smoke() throws Exception {
+		ApolloConfiguration.SimCommunicationsFactory.reset();
 		List<Apollo> oracles = new ArrayList<>();
 
 		for (int i = 1; i < PregenPopulation.getCardinality() + 1; i++) {
@@ -82,7 +83,7 @@ public class TestApollo {
 			config.avalanche.k = 6;
 			config.avalanche.beta1 = 3;
 			config.avalanche.beta2 = 5;
-			config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i + ";DB_CLOSE_ON_EXIT=FALSE";
+			config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i;
 			config.avalanche.limit = 20;
 			config.avalanche.parentCount = 3;
 			config.avalanche.epsilon = 9;

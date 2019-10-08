@@ -54,6 +54,7 @@ public class BoostrapTest {
 
 	@Test
 	public void smoke() throws Exception {
+		ApolloConfiguration.SimCommunicationsFactory.reset();
 		List<Apollo> oracles = new ArrayList<>();
 		URL endpoint = new URL(String.format("http://localhost:%d/api/cnc/mint", RULE.getLocalPort()));
 
@@ -63,7 +64,7 @@ public class BoostrapTest {
 			config.avalanche.k = 6;
 			config.avalanche.beta1 = 3;
 			config.avalanche.beta2 = 5;
-			config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i + ";DB_CLOSE_ON_EXIT=FALSE";
+			config.avalanche.dbConnect = "jdbc:h2:mem:bootstrap-" + i;
 			config.avalanche.limit = 20;
 			config.avalanche.parentCount = 3;
 			config.avalanche.epsilon = 9;
