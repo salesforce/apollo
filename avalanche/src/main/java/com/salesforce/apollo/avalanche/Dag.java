@@ -742,16 +742,16 @@ public class Dag {
 
     // members from close to the frontier of the DAG
     Result<Record1<byte[]>> frontier(DSLContext create) {
-        return create.select(CLOSURE.CHILD)
-                     .from(CLOSURE)
+        return create.select(LINK.HASH)
+                     .from(LINK)
                      .join(DAG)
-                     .on(CLOSURE.CHILD.eq(DAG.HASH).and(CLOSURE.DEPTH.eq(DSL.inline(1))))
+                     .on(LINK.HASH.eq(DAG.HASH))
                      .join(CONFLICTSET)
                      .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
-                     .where(CLOSURE.PARENT.in(create.select(DAG.HASH)
-                                                    .from(DAG)
-                                                    .leftAntiJoin(LINK)
-                                                    .on(LINK.HASH.eq(DAG.HASH))))
+                     .where(LINK.NODE.in(create.select(DAG.HASH)
+                                               .from(DAG)
+                                               .leftAntiJoin(LINK)
+                                               .on(LINK.HASH.eq(DAG.HASH))))
                      .and(DAG.FINALIZED.isFalse()
                                        .and(DAG.NOOP.isFalse())
                                        .and(DAG.CONFIDENCE.greaterThan(DSL.inline(0))

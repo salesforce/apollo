@@ -30,7 +30,7 @@ public class DagDao {
         return dag.getDagEntry(key, context);
     }
 
-    public Boolean isFinalized(HASH hash) { 
+    public Boolean isFinalized(HASH hash) {
         return dag.isFinalized(hash, context);
     }
 

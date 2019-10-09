@@ -49,16 +49,12 @@ public class HashKey implements Comparable<HashKey> {
 
     public static int compare(byte[] buffer1, byte[] buffer2) {
         // Short circuit equal case
-        if (buffer1 == buffer2) {
-            return 0;
-        }
+        if (buffer1 == buffer2) { return 0; }
         // Bring WritableComparator code local
         for (int i = 0, j = 0; i < buffer1.length && j < buffer1.length; i++, j++) {
             int a = (buffer1[i] & 0xff);
             int b = (buffer2[j] & 0xff);
-            if (a != b) {
-                return a - b;
-            }
+            if (a != b) { return a - b; }
         }
         return 0;
     }
@@ -91,17 +87,21 @@ public class HashKey implements Comparable<HashKey> {
         this(key.bytes());
     }
 
+    public String b64Encoded() {
+        return Base64.getEncoder().withoutPadding().encodeToString(itself);
+    }
+
     public byte[] bytes() {
         return itself;
+    }
+
+    public int compareTo(HASH t) {
+        return compare(itself, t.bytes());
     }
 
     @Override
     public int compareTo(HashKey o) {
         return compare(itself, o.itself);
-    }
-
-    public int compareTo(HASH t) {
-        return compare(itself, t.bytes());
     }
 
     public HASH toHash() {
@@ -110,7 +110,7 @@ public class HashKey implements Comparable<HashKey> {
 
     @Override
     public String toString() {
-        return "HashKey[" + Base64.getEncoder().withoutPadding().encodeToString(itself) + "]";
+        return "HashKey[" + b64Encoded() + "]";
     }
 
     public void write(ByteBuffer dest) {

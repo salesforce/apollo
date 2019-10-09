@@ -66,7 +66,7 @@ public class AvalancheFunctionalTest {
 
     @BeforeClass
     public static void beforeClass() {
-        certs = IntStream.range(1, 14)
+        certs = IntStream.range(1, 25)
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
@@ -127,10 +127,10 @@ public class AvalancheFunctionalTest {
             aParams.parentCount = 3;
 
             // Avalanche implementation parameters
-            aParams.limit = 40;
+            aParams.limit = 400;
             aParams.insertBatchSize = 100;
-            aParams.preferBatchSize = 50;
-            aParams.finalizeBatchSize = 50;
+            aParams.preferBatchSize = 100;
+            aParams.finalizeBatchSize = 100;
             aParams.noOpsPerRound = 1;
             aParams.maxQueries = 10;
 
@@ -142,7 +142,7 @@ public class AvalancheFunctionalTest {
             aParams.gamma = 3;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
-                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;DB_CLOSE_ON_EXIT=FALSE";
+                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
                 aParams.dbConnect += ";TRACE_LEVEL_FILE=2";
                 frist.set(false);
@@ -198,7 +198,7 @@ public class AvalancheFunctionalTest {
         HASH k = genesisKey.toHash();
         for (Avalanche a : nodes) {
             assertTrue("Failed to finalize genesis on: " + a.getNode().getId(),
-                       Utils.waitForCondition(15_000, () -> a.getDagDao().isFinalized(k)));
+                       Utils.waitForCondition(60_000, () -> a.getDagDao().isFinalized(k)));
             transactioneers.add(new Transactioneer(a));
         }
 

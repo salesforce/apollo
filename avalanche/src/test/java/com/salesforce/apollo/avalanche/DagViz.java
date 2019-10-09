@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -102,9 +101,8 @@ public class DagViz {
         Set<HashKey> frontier = new ConcurrentSkipListSet<>();
         Set<HashKey> next = new ConcurrentSkipListSet<>();
         Map<HashKey, String> labels = new ConcurrentSkipListMap<>();
-        AtomicInteger nextLabel = new AtomicInteger();
         Function<HashKey, String> labelFor = h -> labels.computeIfAbsent(h,
-                                                                         k -> Integer.toString(nextLabel.getAndIncrement()));
+                                                                         k -> k.b64Encoded().substring(0, 6));
         frontier.addAll(roots);
 
         while (!frontier.isEmpty()) {

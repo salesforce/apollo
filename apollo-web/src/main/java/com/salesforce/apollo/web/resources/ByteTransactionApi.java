@@ -140,9 +140,10 @@ public class ByteTransactionApi {
 
         return Base64.getUrlEncoder()
                      .withoutPadding()
-                     .encodeToString(avalanche.submitAsyncTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
+                     .encodeToString(avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
                                                                       data,
                                                                       Duration.ofMillis(transaction.timeoutMillis),
+                                                                      null,
                                                                       scheduler)
                                               .bytes());
     }

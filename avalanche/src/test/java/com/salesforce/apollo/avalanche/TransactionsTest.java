@@ -72,7 +72,7 @@ public class TransactionsTest {
     }
 
     @Before
-    public void before() throws SQLException {
+    public void before() throws SQLException { 
         Avalanche.loadSchema(CONNECTION_URL);
         connection = DriverManager.getConnection(CONNECTION_URL, "apollo", "");
         connection.setAutoCommit(false);
@@ -501,15 +501,13 @@ public class TransactionsTest {
                                   .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
         assertEquals(1, sampled.size());
 
-        assertTrue(sampled.contains(ordered.get(2)));
+        assertTrue(sampled.contains(ordered.get(1)) || sampled.contains(ordered.get(2)));
 
         sampled = dag.selectParents(2, create)
                      .stream()
                      .map(h -> new HashKey(h))
                      .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-        assertEquals(1, sampled.size());
-
-        assertTrue(sampled.contains(ordered.get(2)));
+        assertEquals(1, sampled.size()); 
 
         // two eligable interiors
         assertTrue(sampled.contains(ordered.get(1)) || sampled.contains(ordered.get(2)));
@@ -520,7 +518,7 @@ public class TransactionsTest {
                      .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
         assertEquals(1, sampled.size());
 
-        assertTrue(sampled.contains(ordered.get(2)));
+        assertTrue(sampled.contains(ordered.get(1)) || sampled.contains(ordered.get(2)));
 
         // Add a new node to the frontier
         entry = new DagEntry();
@@ -536,7 +534,7 @@ public class TransactionsTest {
                      .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
 
         assertEquals(1, sampled.size());
-        assertTrue(sampled.toString(), sampled.contains(ordered.get(2)) || sampled.contains(ordered.get(5)));
+        assertTrue(sampled.toString(), sampled.contains(ordered.get(1)) || sampled.contains(ordered.get(2)) || sampled.contains(ordered.get(5)));
 
         sampled = dag.selectParents(2, create)
                      .stream()
@@ -556,7 +554,7 @@ public class TransactionsTest {
     }
 
     @Test
-    public void parentSelectionWithPreferred() {
+    public void parentSelectionWithPreferred() throws Exception {
         List<HashKey> ordered = new ArrayList<>();
         Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(new HashKey(rootKey), root);
@@ -601,7 +599,7 @@ public class TransactionsTest {
                                    .stream()
                                    .map(r -> new HashKey(r.value1()))
                                    .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-        assertEquals(1, frontier.size());
+        assertEquals(2, frontier.size());
 
         // Nodes 3 and 4 are in conflict and are always excluded
         assertFalse(frontier.contains(ordered.get(3)));
@@ -627,7 +625,7 @@ public class TransactionsTest {
                       .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
 
         // No nodes available near the frontier now
-        assertEquals(2, frontier.size());
+        assertEquals(3, frontier.size());
 
         middling = dag.middling(create)
                       .stream()
@@ -651,7 +649,7 @@ public class TransactionsTest {
                       .map(r -> new HashKey(r.value1()))
                       .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
 
-        assertEquals(2, frontier.size());
+        assertEquals(3, frontier.size());
 
         middling = dag.middling(create)
                       .stream()
@@ -774,12 +772,12 @@ public class TransactionsTest {
                            .fetchOne()
                            .value1());
 
-        assertFalse(String.format("node 3 is strongly preferred "  + ordered.get(3)),
-                   create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(3).toHash(),
-                                                                              DSL.using(config))));
-        assertTrue(String.format("node 4 is not strongly preferred"),
-                    create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(4).toHash(),
+        assertFalse(String.format("node 3 is strongly preferred " + ordered.get(3)),
+                    create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(3).toHash(),
                                                                                DSL.using(config))));
+        assertTrue(String.format("node 4 is not strongly preferred"),
+                   create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(4).toHash(),
+                                                                              DSL.using(config))));
 
         entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 6).getBytes()));
