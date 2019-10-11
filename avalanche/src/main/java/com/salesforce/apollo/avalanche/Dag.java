@@ -23,7 +23,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -305,18 +304,6 @@ public class Dag {
                      .on(LINK.HASH.eq(DAG.HASH))
                      .where(DAG.FINALIZED.isFalse())
                      .and(DAG.NOOP.isFalse())
-                     .stream()
-                     .map(r -> new HashKey(r.value1()))
-                     .collect(Collectors.toList());
-    }
-
-    public List<HashKey> getNeglectedNoOps(DSLContext create) {
-        return create.select(DAG.HASH)
-                     .from(DAG)
-                     .leftAntiJoin(LINK)
-                     .on(LINK.HASH.eq(DAG.HASH))
-                     .where(DAG.FINALIZED.isFalse())
-                     .and(DAG.NOOP.isTrue())
                      .stream()
                      .map(r -> new HashKey(r.value1()))
                      .collect(Collectors.toList());
@@ -671,65 +658,91 @@ public class Dag {
      * Select a random sample of parents for the transaction. The selection process starts at the DAG frontier and
      * proceeds upwards towards the genesis root
      * 
-     * @param sample
+     * @param parentSize
      *            - the number of parents required
      * @return a list of parent transactions, with up to sample elements
      */
-    public List<HASH> selectParents(int sample, DSLContext create) {
+    public List<HASH> selectParents(int parentSize, DSLContext create) {
         Set<HashKey> parents = new TreeSet<>();
+
         // Start with the frontier of the DAG with confidence > 0. Randomly sample the transactions on the frontier.
         // Require at least 1 parent from the frontier, if available.
-        int frontierSample = Math.max(1, entropy.nextInt(Math.max(1, sample - 1)));
+        int frontierSample = Math.max(1, entropy.nextInt(Math.max(1, parentSize - 1)));
 
-        Result<Record1<byte[]>> frontier = frontier(create);
-        if (frontier.size() <= frontierSample) {
-            parents.addAll(frontier.stream().map(r -> new HashKey(r.value1())).collect(Collectors.toList()));
+        Result<Record1<byte[]>> sample = frontier(create);
+        if (sample.size() <= frontierSample) {
+            parents.addAll(sample.stream().map(r -> new HashKey(r.value1())).collect(Collectors.toList()));
         } else {
-            Set<Integer> sampled = new HashSet<>();
-            while (parents.size() < frontierSample) {
-                int next = entropy.nextInt(frontier.size());
-                if (sampled.add(next)) {
-                    parents.add(new HashKey(frontier.get(next).value1()));
+            for (int i = 0; i <= frontierSample; i++) {
+                parents.add(new HashKey(sample.get(i).value1()));
+                if (parents.size() == frontierSample) {
+                    break;
                 }
             }
         }
 
-        if (parents.size() == sample) { return parents.stream().map(e -> e.toHash()).collect(Collectors.toList()); }
+        if (parents.size() == parentSize) { return parents.stream().map(e -> e.toHash()).collect(Collectors.toList()); }
 
+        // Next select non finalized nodes that have a low confidence, but are the only member of their conflict set.
         create.select(DAG.HASH)
               .from(DAG)
+              .join(CONFLICTSET)
+              .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
               .where(DAG.CONFIDENCE.gt(DSL.inline(0)).and(DAG.CONFIDENCE.le(3)))
+              .and(DAG.FINALIZED.isFalse())
               .and(DAG.NOOP.isFalse())
-              .limit(parents.size() - sample)
+              .and(CONFLICTSET.CARDINALITY.eq(1))
+              .orderBy(DSL.rand())
+              .limit(parents.size() - parentSize)
               .stream()
               .map(r -> new HashKey(r.value1()))
-              .filter(e -> parents.size() < sample)
+              .filter(e -> parents.size() < parentSize)
               .forEach(h -> parents.add(h));
 
-        // Result<Record2<byte[], Integer>> middling = middling(create);
-        // if (parents.size() - sample >= middling.size()) {
-        // parents.addAll(middling.stream().map(r -> new HashKey(r.value1())).collect(Collectors.toList()));
-        // } else {
-        // Set<Integer> sampled = new HashSet<>();
-        // while (parents.size() < sample && sampled.size() < middling.size()) {
-        // int next = entropy.nextInt(middling.size());
-        // if (sampled.add(next)) {
-        // parents.add(new HashKey(middling.get(next).value1()));
-        // }
-        // }
-        // }
+        if (parents.size() == parentSize) { return parents.stream().map(e -> e.toHash()).collect(Collectors.toList()); }
 
-        if (parents.size() > 0) { return parents.stream().map(e -> e.toHash()).collect(Collectors.toList()); }
+        // Next select any non finalized nodes that are the only member of their conflict set
+        create.select(DAG.HASH)
+              .from(DAG)
+              .join(CONFLICTSET)
+              .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
+              .where(DAG.FINALIZED.isFalse())
+              .and(DAG.NOOP.isFalse())
+              .and(CONFLICTSET.CARDINALITY.eq(1))
+              .orderBy(DSL.rand())
+              .limit(parents.size() - parentSize)
+              .stream()
+              .map(r -> new HashKey(r.value1()))
+              .filter(e -> parents.size() < parentSize)
+              .forEach(h -> parents.add(h));
 
+        if (parents.size() == parentSize) { return parents.stream().map(e -> e.toHash()).collect(Collectors.toList()); }
+
+        // Next, select any nodes that are not finalized
+        create.select(DAG.HASH)
+              .from(DAG)
+              .where(DAG.FINALIZED.isFalse())
+              .and(DAG.NOOP.isFalse())
+              .orderBy(DSL.rand())
+              .limit(parents.size() - parentSize)
+              .stream()
+              .map(r -> new HashKey(r.value1()))
+              .filter(e -> parents.size() < parentSize)
+              .forEach(h -> parents.add(h));
+
+        if (parents.size() == parentSize) { return parents.stream().map(e -> e.toHash()).collect(Collectors.toList()); }
+
+        // If still none, select any finalized node
         create.select(DAG.HASH)
               .from(DAG)
               .where(DAG.CONFIDENCE.gt(DSL.inline(0)))
               .or(DAG.FINALIZED.isTrue())
               .and(DAG.NOOP.isFalse())
-              .limit(parents.size() - sample)
+              .orderBy(DSL.rand())
+              .limit(parents.size() - parentSize)
               .stream()
               .map(r -> new HashKey(r.value1()))
-              .filter(e -> parents.size() < sample)
+              .filter(e -> parents.size() < parentSize)
               .forEach(h -> parents.add(h));
         assert parents.size() > 0;
 
@@ -748,14 +761,16 @@ public class Dag {
                      .on(LINK.HASH.eq(DAG.HASH))
                      .join(CONFLICTSET)
                      .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
-                     .where(LINK.NODE.in(create.select(DAG.HASH)
-                                               .from(DAG)
-                                               .leftAntiJoin(LINK)
-                                               .on(LINK.HASH.eq(DAG.HASH))))
-                     .and(DAG.FINALIZED.isFalse()
-                                       .and(DAG.NOOP.isFalse())
-                                       .and(DAG.CONFIDENCE.greaterThan(DSL.inline(0))
-                                                          .or(CONFLICTSET.CARDINALITY.eq(1))))
+                     .where(DAG.FINALIZED.isFalse()
+                                         .and(DAG.NOOP.isFalse())
+                                         .and(DAG.CONFIDENCE.greaterThan(DSL.inline(0))
+                                                            .or(CONFLICTSET.CARDINALITY.eq(1))))
+                     .and(LINK.NODE.in(create.select(DAG.HASH)
+                                             .from(DAG)
+                                             .leftAntiJoin(LINK)
+                                             .on(LINK.HASH.eq(DAG.HASH))
+                                             .where(DAG.NOOP.isFalse())))
+                     .orderBy(DSL.rand())
                      .limit(100)
                      .fetch();
     }

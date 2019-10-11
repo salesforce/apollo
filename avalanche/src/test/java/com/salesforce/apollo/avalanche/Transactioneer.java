@@ -81,7 +81,7 @@ public class Transactioneer {
                     e.getCause().printStackTrace();
                 }
             }
-        }, 0, 100, TimeUnit.MILLISECONDS);
+        }, 0, 50, TimeUnit.MILLISECONDS);
     }
 
     private void addTransaction(Duration txnWait, ScheduledExecutorService scheduler) {

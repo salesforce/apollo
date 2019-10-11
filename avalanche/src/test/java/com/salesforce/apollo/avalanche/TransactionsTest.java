@@ -72,7 +72,7 @@ public class TransactionsTest {
     }
 
     @Before
-    public void before() throws SQLException { 
+    public void before() throws SQLException {
         Avalanche.loadSchema(CONNECTION_URL);
         connection = DriverManager.getConnection(CONNECTION_URL, "apollo", "");
         connection.setAutoCommit(false);
@@ -459,6 +459,17 @@ public class TransactionsTest {
         stored.put(new HashKey(rootKey), root);
         ordered.add(new HashKey(rootKey));
 
+        // Finalize ye root
+        create.update(DAG).set(DAG.FINALIZED, true).where(DAG.HASH.eq(rootKey.bytes())).execute();
+
+        // 1 elegible parent, the root
+        Set<HashKey> sampled = dag.selectParents(1, create)
+                                  .stream()
+                                  .map(h -> new HashKey(h))
+                                  .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
+        assertEquals(1, sampled.size());
+        assertTrue(sampled.contains(ordered.get(0)));
+
         DagEntry entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 1).getBytes()));
         entry.setLinks(asList(rootKey));
@@ -466,12 +477,29 @@ public class TransactionsTest {
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
+        sampled = dag.selectParents(3, create)
+                     .stream()
+                     .map(h -> new HashKey(h))
+                     .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
+        assertEquals(2, sampled.size());
+        assertTrue(sampled.contains(ordered.get(0)));
+        assertTrue(sampled.contains(ordered.get(1)));
+
         entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 2).getBytes()));
         entry.setLinks(asList(key));
         key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
+
+        sampled = dag.selectParents(3, create)
+                     .stream()
+                     .map(h -> new HashKey(h))
+                     .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
+        assertEquals(3, sampled.size());
+        assertTrue(sampled.contains(ordered.get(0)));
+        assertTrue(sampled.contains(ordered.get(1)));
+        assertTrue(sampled.contains(ordered.get(2)));
 
         entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 3).getBytes()));
@@ -494,31 +522,15 @@ public class TransactionsTest {
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
-        // 1 elegible parent in the frontier
-        Set<HashKey> sampled = dag.selectParents(1, create)
-                                  .stream()
-                                  .map(h -> new HashKey(h))
-                                  .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-        assertEquals(1, sampled.size());
-
-        assertTrue(sampled.contains(ordered.get(1)) || sampled.contains(ordered.get(2)));
-
-        sampled = dag.selectParents(2, create)
-                     .stream()
-                     .map(h -> new HashKey(h))
-                     .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-        assertEquals(1, sampled.size()); 
-
-        // two eligable interiors
-        assertTrue(sampled.contains(ordered.get(1)) || sampled.contains(ordered.get(2)));
-
         sampled = dag.selectParents(3, create)
                      .stream()
                      .map(h -> new HashKey(h))
                      .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-        assertEquals(1, sampled.size());
+        assertEquals(3, sampled.size());
 
-        assertTrue(sampled.contains(ordered.get(1)) || sampled.contains(ordered.get(2)));
+        assertTrue(sampled.contains(ordered.get(1)));
+        assertTrue(sampled.contains(ordered.get(2)));
+        assertTrue(sampled.contains(ordered.get(5)));
 
         // Add a new node to the frontier
         entry = new DagEntry();
@@ -528,29 +540,17 @@ public class TransactionsTest {
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
-        sampled = dag.selectParents(1, create)
+        sampled = dag.selectParents(4, create)
                      .stream()
                      .map(h -> new HashKey(h))
                      .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
 
-        assertEquals(1, sampled.size());
-        assertTrue(sampled.toString(), sampled.contains(ordered.get(1)) || sampled.contains(ordered.get(2)) || sampled.contains(ordered.get(5)));
+        assertEquals(4, sampled.size());
 
-        sampled = dag.selectParents(2, create)
-                     .stream()
-                     .map(h -> new HashKey(h))
-                     .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-
-        assertEquals(1, sampled.size());
-        Set<HashKey> allowed = new ConcurrentSkipListSet<>();
-        allowed.add(ordered.get(0));
-        allowed.add(ordered.get(1));
-        allowed.add(ordered.get(2));
-        allowed.add(ordered.get(5));
-
-        for (HashKey h : sampled) {
-            assertTrue(allowed.contains(h));
-        }
+        assertTrue(sampled.contains(ordered.get(1)));
+        assertTrue(sampled.contains(ordered.get(2)));
+        assertTrue(sampled.contains(ordered.get(5)));
+        assertTrue(sampled.contains(ordered.get(6)));
     }
 
     @Test

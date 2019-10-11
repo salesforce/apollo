@@ -52,6 +52,8 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import guru.nidi.graphviz.engine.Format;
+import guru.nidi.graphviz.engine.Graphviz;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -128,16 +130,16 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.limit = 400;
-            aParams.insertBatchSize = 100;
-            aParams.preferBatchSize = 100;
-            aParams.finalizeBatchSize = 100;
+            aParams.insertBatchSize = 400;
+            aParams.preferBatchSize = 400;
+            aParams.finalizeBatchSize = 400;
             aParams.noOpsPerRound = 1;
-            aParams.maxQueries = 10;
+            aParams.maxQueries = 100;
 
             // # of firefly rounds per avalanche round
             aParams.epsilon = 1;
             // # of FF rounds per NoOp generation
-            aParams.delta = 4;
+            aParams.delta = 6;
             // # of Avalanche queries per FF round
             aParams.gamma = 3;
 
@@ -151,7 +153,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 15;
+        int target = 100;
 
         views.forEach(view -> view.getService().start(Duration.ofMillis(500)));
 
@@ -220,9 +222,9 @@ public class AvalancheFunctionalTest {
         summarize(nodes);
         nodes.forEach(node -> summary(node));
 
-        // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), true))
-        // .render(Format.PNG)
-        // .toFile(new File("smoke.png"));
+        Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), true))
+                .render(Format.XDOT)
+                .toFile(new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()

@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 
 import org.jooq.DSLContext;
 import org.jooq.Record1;
-import org.jooq.Record4;
+import org.jooq.Record3;
 import org.jooq.Result;
 import org.jooq.impl.DSL;
 
@@ -155,25 +155,31 @@ public class DagViz {
             parent.add(Color.BLUE);
         }
 
-        parent.add(create.fetchExists(create.selectFrom(UNQUERIED).where(UNQUERIED.HASH.eq(h.bytes()))) ? Shape.DIAMOND
-                : Shape.CIRCLE);
+        boolean unqueried = create.fetchExists(create.selectFrom(UNQUERIED).where(UNQUERIED.HASH.eq(h.bytes())));
+        parent.add(unqueried ? Shape.DIAMOND : Shape.CIRCLE);
         if (!entry.getFinalized()) {
             parent.add(Style.DASHED);
         }
 
         links.forEach(c -> parent.addLink(mutNode(labelFor.apply(new HashKey(c.value1())))));
 
-        Record4<Integer, byte[], Integer, Integer> info = create.select(CONFLICTSET.CARDINALITY, CONFLICTSET.PREFERRED,
-                                                                        CONFLICTSET.COUNTER, UNQUERIED.TARGETROUND)
-                                                                .from(CONFLICTSET)
-                                                                .join(DAG)
-                                                                .on(DAG.CONFLICTSET.eq(CONFLICTSET.NODE))
-                                                                .join(UNQUERIED)
-                                                                .on(UNQUERIED.HASH.eq(DAG.HASH))
-                                                                .where(DAG.HASH.eq(h.bytes()))
-                                                                .fetchOne();
+        Record3<Integer, byte[], Integer> info = create.select(CONFLICTSET.CARDINALITY, CONFLICTSET.PREFERRED,
+                                                               CONFLICTSET.COUNTER)
+                                                       .from(CONFLICTSET)
+                                                       .join(DAG)
+                                                       .on(DAG.CONFLICTSET.eq(CONFLICTSET.NODE))
+                                                       .where(DAG.HASH.eq(h.bytes()))
+                                                       .fetchOne();
+        int targetRound = -1;
+        if (unqueried) {
+            targetRound = create.select(UNQUERIED.TARGETROUND)
+                                .from(UNQUERIED)
+                                .where(UNQUERIED.HASH.eq(h.bytes()))
+                                .fetchOne()
+                                .value1();
+        }
         parent.add(Label.of(String.format("%s\n%s : %s : %s\n%s : %s : %s", name, entry.getChit(),
-                                          entry.getConfidence(), info.value4(), info.value1(),
+                                          entry.getConfidence(), targetRound, info.value1(),
                                           info.value3(),
                                           Arrays.equals(info.value2(), h.bytes()))));
     }
