@@ -286,7 +286,7 @@ public class Dag {
     }
 
     public List<HashKey> getNeglected(DSLContext create) {
-        return create.select(DAG.HASH)
+        return create.selectDistinct(DAG.HASH)
                      .from(DAG)
                      .where(DAG.NOOP.isFalse())
                      .stream()
@@ -297,16 +297,28 @@ public class Dag {
     /**
      * @return the non noOp transactions on the frontier in the DAG that are currently neglegected
      */
-    public List<HashKey> getNeglectedFrontier(DSLContext create) {
+    public Set<HashKey> getNeglectedFrontier(DSLContext create) {
         return create.select(DAG.HASH)
                      .from(DAG)
-                     .leftAntiJoin(LINK)
-                     .on(LINK.HASH.eq(DAG.HASH))
-                     .where(DAG.FINALIZED.isFalse())
-                     .and(DAG.NOOP.isFalse())
+                     .join(LINK)
+                     .on(LINK.NODE.eq(DAG.HASH))
+                     .join(CONFLICTSET)
+                     .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
+                     .where(DAG.FINALIZED.isFalse()
+                                         .and(DAG.NOOP.isFalse())
+                                         .and(DAG.CONFIDENCE.greaterThan(DSL.inline(0))
+                                                            .or(CONFLICTSET.CARDINALITY.eq(1))))
+                     .and(DAG.HASH.in(create.select(DAG.HASH)
+                                            .from(DAG)
+                                            .leftAntiJoin(LINK)
+                                            .on(LINK.HASH.eq(DAG.HASH))
+                                            .where(DAG.NOOP.isFalse())))
+                     .orderBy(DSL.rand())
+                     .limit(100)
                      .stream()
                      .map(r -> new HashKey(r.value1()))
-                     .collect(Collectors.toList());
+                     .collect(Collectors.toCollection(TreeSet::new));
+
     }
 
     /**
@@ -777,7 +789,7 @@ public class Dag {
 
     // members from within the middle of the DAG
     Result<Record2<byte[], Integer>> middling(DSLContext create) {
-        return create.select(CLOSURE.CHILD, CLOSURE.DEPTH)
+        return create.selectDistinct(CLOSURE.CHILD, CLOSURE.DEPTH)
                      .from(CLOSURE)
                      .join(DAG)
                      .on(CLOSURE.CHILD.eq(DAG.HASH).and(CLOSURE.DEPTH.gt(DSL.inline(1))))

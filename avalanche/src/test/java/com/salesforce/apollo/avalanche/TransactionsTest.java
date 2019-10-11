@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
@@ -283,48 +284,49 @@ public class TransactionsTest {
     }
 
     @Test
-    public void frontier() {
+    public void frontier() throws Exception {
         List<HashKey> ordered = new ArrayList<>();
         Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(new HashKey(rootKey), root);
         ordered.add(new HashKey(rootKey));
 
-        HASH last = rootKey;
-        HASH firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));
+        HashKey last = new HashKey(rootKey);
+        HashKey firstCommit = new HashKey(newDagEntry("1st commit", ordered, stored, Arrays.asList(rootKey)));
         ordered.add(new HashKey(firstCommit.bytes()));
         last = firstCommit;
-        HASH secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
+        
+        HashKey secondCommit = new HashKey(newDagEntry("2nd commit", ordered, stored, Arrays.asList(rootKey)));
         ordered.add(new HashKey(secondCommit.bytes()));
         last = secondCommit;
 
-        List<HashKey> frontier = dag.getNeglectedFrontier(create);
+        TreeSet<HashKey> frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
 
-        assertEquals(1, frontier.size());
+        assertEquals(2, frontier.size());
 
-        assertArrayEquals(secondCommit.bytes(), frontier.get(0).bytes());
+        assertTrue(frontier.contains(secondCommit));
 
-        HASH userTxn = newDagEntry("Ye test transaction", ordered, stored,
+        HashKey userTxn = new HashKey(newDagEntry("Ye test transaction", ordered, stored,
                                    dag.selectParents(2, create)
                                       .stream()
-                                      .collect(Collectors.toList()));
-        ordered.add(new HashKey(userTxn.bytes()));
+                                      .collect(Collectors.toList())));
+        ordered.add(new HashKey(userTxn.bytes())); 
+ 
+        frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
 
-        frontier = dag.getNeglectedFrontier(create);
-
-        assertEquals(2, frontier.size());
-
-        assertArrayEquals(secondCommit.bytes(), frontier.get(0).bytes());
-        assertArrayEquals(userTxn.bytes(), frontier.get(1).bytes());
+        assertEquals(2, frontier.size()); 
+        
+        assertTrue(frontier.contains(secondCommit));
+        assertTrue(frontier.contains(userTxn));
 
         last = userTxn;
-        last = newDagEntry("entry: " + 0, ordered, stored, Arrays.asList(last));
+        last = new HashKey(newDagEntree("entry: " + 0, ordered, stored, Arrays.asList(last)));
 
-        frontier = dag.getNeglectedFrontier(create);
+        frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
 
         assertEquals(2, frontier.size());
 
-        assertArrayEquals(secondCommit.bytes(), frontier.get(0).bytes());
-        assertArrayEquals(last.bytes(), frontier.get(1).bytes());
+        assertTrue(frontier.contains(secondCommit));
+        assertTrue(frontier.contains(last));
     }
 
     @Test
@@ -843,6 +845,10 @@ public class TransactionsTest {
                       System.out.println(String.format("   -> %s: %s", r.value2(), new HashKey(r.value1())));
                   });
         });
+    }
+
+    HASH newDagEntree(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links) {
+        return newDagEntry(contents, ordered, stored, links.stream().map(e -> e.toHash()).collect(Collectors.toList()), null);
     }
 
     HASH newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HASH> links) {
