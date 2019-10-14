@@ -294,7 +294,7 @@ public class TransactionsTest {
         HashKey firstCommit = new HashKey(newDagEntry("1st commit", ordered, stored, Arrays.asList(rootKey)));
         ordered.add(new HashKey(firstCommit.bytes()));
         last = firstCommit;
-        
+
         HashKey secondCommit = new HashKey(newDagEntry("2nd commit", ordered, stored, Arrays.asList(rootKey)));
         ordered.add(new HashKey(secondCommit.bytes()));
         last = secondCommit;
@@ -306,16 +306,16 @@ public class TransactionsTest {
         assertTrue(frontier.contains(secondCommit));
 
         HashKey userTxn = new HashKey(newDagEntry("Ye test transaction", ordered, stored,
-                                   dag.selectParents(2, create)
-                                      .stream()
-                                      .collect(Collectors.toList())));
-        ordered.add(new HashKey(userTxn.bytes())); 
- 
+                                                  dag.selectParents(2, create)
+                                                     .stream()
+                                                     .collect(Collectors.toList())));
+        ordered.add(new HashKey(userTxn.bytes()));
+
         frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
 
-        assertEquals(2, frontier.size()); 
-        
-        assertTrue(frontier.contains(secondCommit));
+        assertEquals(2, frontier.size());
+
+        assertTrue(frontier.contains(secondCommit) || frontier.contains(firstCommit));
         assertTrue(frontier.contains(userTxn));
 
         last = userTxn;
@@ -325,7 +325,7 @@ public class TransactionsTest {
 
         assertEquals(2, frontier.size());
 
-        assertTrue(frontier.contains(secondCommit));
+        assertTrue(frontier.contains(secondCommit) || frontier.contains(firstCommit));
         assertTrue(frontier.contains(last));
     }
 
@@ -848,7 +848,8 @@ public class TransactionsTest {
     }
 
     HASH newDagEntree(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links) {
-        return newDagEntry(contents, ordered, stored, links.stream().map(e -> e.toHash()).collect(Collectors.toList()), null);
+        return newDagEntry(contents, ordered, stored, links.stream().map(e -> e.toHash()).collect(Collectors.toList()),
+                           null);
     }
 
     HASH newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HASH> links) {

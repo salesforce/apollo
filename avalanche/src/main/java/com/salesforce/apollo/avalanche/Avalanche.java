@@ -224,7 +224,6 @@ public class Avalanche {
 
     private final AvalancheCommunications comm;
     private final Dag dag;
-    private final AtomicInteger finalized = new AtomicInteger();
     private final BlockingDeque<HASH> finalizing = new LinkedBlockingDeque<>();
     private final InsertQ insertions = new InsertQ();
     private final Listener listener = new Listener();
@@ -342,10 +341,6 @@ public class Avalanche {
 
     public DSLContext getDslContext() {
         return submitPool;
-    }
-
-    public int getFinalized() {
-        return finalized.get();
     }
 
     public Node getNode() {
@@ -812,7 +807,6 @@ public class Avalanche {
         List<byte[]> batch = nextFinalizations(parameters.finalizeBatchSize);
         if (batch.isEmpty()) { return; }
         FinalizationData d = context.transactionResult(config -> dag.tryFinalize(batch, DSL.using(config)));
-        finalized.addAndGet(d.finalized.size());
         ForkJoinPool.commonPool().execute(() -> {
             d.finalized.forEach(key -> {
                 PendingTransaction pending = pendingTransactions.remove(key);

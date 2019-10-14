@@ -127,10 +127,10 @@ public class AvalancheFunctionalTest {
             aParams.parentCount = 3;
 
             // Avalanche implementation parameters
-            aParams.limit = 400;
-            aParams.insertBatchSize = 400;
-            aParams.preferBatchSize = 400;
-            aParams.finalizeBatchSize = 400;
+            aParams.limit = 800;
+            aParams.insertBatchSize = 800;
+            aParams.preferBatchSize = 800;
+            aParams.finalizeBatchSize = 800;
             aParams.noOpsPerRound = 1;
             aParams.maxQueries = 100;
 
@@ -139,12 +139,12 @@ public class AvalancheFunctionalTest {
             // # of FF rounds per NoOp generation
             aParams.delta = 3;
             // # of Avalanche queries per FF round
-            aParams.gamma = 20;
+            aParams.gamma = 1;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
                     + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
-                aParams.dbConnect += ";TRACE_LEVEL_FILE=2";
+                aParams.dbConnect += ";TRACE_LEVEL_FILE=4";
                 frist.set(false);
             }
             return new Avalanche(view, comm, aParams);
@@ -220,9 +220,9 @@ public class AvalancheFunctionalTest {
         summarize(nodes);
         nodes.forEach(node -> summary(node));
 
-//        Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), true))
-//                .render(Format.XDOT)
-//                .toFile(new File("smoke.dot"));
+        // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), true))
+        // .render(Format.XDOT)
+        // .toFile(new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
@@ -247,23 +247,23 @@ public class AvalancheFunctionalTest {
      * @param nodes
      */
     private void summarize(List<Avalanche> nodes) {
-        int finalized = nodes.stream()
-                             .map(n -> n.getDslContext()
-                                        .selectCount()
-                                        .from(DAG)
-                                        .where(DAG.NOOP.isFalse())
-                                        .and(DAG.FINALIZED.isTrue())
-                                        .fetchOne()
-                                        .value1())
-                             .reduce(0, (a, b) -> a + b);
-        System.out.println("Total finalized : " + finalized);
+        int max = nodes.stream()
+                       .mapToInt(n -> n.getDslContext()
+                                       .selectCount()
+                                       .from(DAG)
+                                       .where(DAG.NOOP.isFalse())
+                                       .and(DAG.FINALIZED.isTrue())
+                                       .fetchOne()
+                                       .value1())
+                       .max()
+                       .orElse(0);
+        System.out.println("Max finalized : " + max);
         System.out.println();
     }
 
     private void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
         System.out.println("    Rounds: " + node.getRoundCounter());
-        System.out.println("    Claimed finalized: " + node.getFinalized());
         System.out.println("    User txns: "
                 + node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1()
                 + " finalized: "
