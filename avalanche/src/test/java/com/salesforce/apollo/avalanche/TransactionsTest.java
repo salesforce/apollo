@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
@@ -283,48 +284,49 @@ public class TransactionsTest {
     }
 
     @Test
-    public void frontier() {
+    public void frontier() throws Exception {
         List<HashKey> ordered = new ArrayList<>();
         Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(new HashKey(rootKey), root);
         ordered.add(new HashKey(rootKey));
 
-        HASH last = rootKey;
-        HASH firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));
+        HashKey last = new HashKey(rootKey);
+        HashKey firstCommit = new HashKey(newDagEntry("1st commit", ordered, stored, Arrays.asList(rootKey)));
         ordered.add(new HashKey(firstCommit.bytes()));
         last = firstCommit;
-        HASH secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
+
+        HashKey secondCommit = new HashKey(newDagEntry("2nd commit", ordered, stored, Arrays.asList(rootKey)));
         ordered.add(new HashKey(secondCommit.bytes()));
         last = secondCommit;
 
-        List<HashKey> frontier = dag.getNeglectedFrontier(create);
+        TreeSet<HashKey> frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
 
-        assertEquals(1, frontier.size());
+        assertEquals(2, frontier.size());
 
-        assertArrayEquals(secondCommit.bytes(), frontier.get(0).bytes());
+        assertTrue(frontier.contains(secondCommit));
 
-        HASH userTxn = newDagEntry("Ye test transaction", ordered, stored,
-                                   dag.selectParents(2, create)
-                                      .stream()
-                                      .collect(Collectors.toList()));
+        HashKey userTxn = new HashKey(newDagEntry("Ye test transaction", ordered, stored,
+                                                  dag.selectParents(2, create)
+                                                     .stream()
+                                                     .collect(Collectors.toList())));
         ordered.add(new HashKey(userTxn.bytes()));
 
-        frontier = dag.getNeglectedFrontier(create);
+        frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
 
         assertEquals(2, frontier.size());
 
-        assertArrayEquals(secondCommit.bytes(), frontier.get(0).bytes());
-        assertArrayEquals(userTxn.bytes(), frontier.get(1).bytes());
+        assertTrue(frontier.contains(secondCommit) || frontier.contains(firstCommit));
+        assertTrue(frontier.contains(userTxn));
 
         last = userTxn;
-        last = newDagEntry("entry: " + 0, ordered, stored, Arrays.asList(last));
+        last = new HashKey(newDagEntree("entry: " + 0, ordered, stored, Arrays.asList(last)));
 
-        frontier = dag.getNeglectedFrontier(create);
+        frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
 
         assertEquals(2, frontier.size());
 
-        assertArrayEquals(secondCommit.bytes(), frontier.get(0).bytes());
-        assertArrayEquals(last.bytes(), frontier.get(1).bytes());
+        assertTrue(frontier.contains(secondCommit) || frontier.contains(firstCommit));
+        assertTrue(frontier.contains(last));
     }
 
     @Test
@@ -459,6 +461,17 @@ public class TransactionsTest {
         stored.put(new HashKey(rootKey), root);
         ordered.add(new HashKey(rootKey));
 
+        // Finalize ye root
+        create.update(DAG).set(DAG.FINALIZED, true).where(DAG.HASH.eq(rootKey.bytes())).execute();
+
+        // 1 elegible parent, the root
+        Set<HashKey> sampled = dag.selectParents(1, create)
+                                  .stream()
+                                  .map(h -> new HashKey(h))
+                                  .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
+        assertEquals(1, sampled.size());
+        assertTrue(sampled.contains(ordered.get(0)));
+
         DagEntry entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 1).getBytes()));
         entry.setLinks(asList(rootKey));
@@ -466,12 +479,29 @@ public class TransactionsTest {
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
+        sampled = dag.selectParents(3, create)
+                     .stream()
+                     .map(h -> new HashKey(h))
+                     .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
+        assertEquals(2, sampled.size());
+        assertTrue(sampled.contains(ordered.get(0)));
+        assertTrue(sampled.contains(ordered.get(1)));
+
         entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 2).getBytes()));
         entry.setLinks(asList(key));
         key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
+
+        sampled = dag.selectParents(3, create)
+                     .stream()
+                     .map(h -> new HashKey(h))
+                     .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
+        assertEquals(3, sampled.size());
+        assertTrue(sampled.contains(ordered.get(0)));
+        assertTrue(sampled.contains(ordered.get(1)));
+        assertTrue(sampled.contains(ordered.get(2)));
 
         entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 3).getBytes()));
@@ -494,33 +524,15 @@ public class TransactionsTest {
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
-        // 1 elegible parent in the frontier
-        Set<HashKey> sampled = dag.selectParents(1, create)
-                                  .stream()
-                                  .map(h -> new HashKey(h))
-                                  .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-        assertEquals(1, sampled.size());
-
-        assertTrue(sampled.contains(ordered.get(2)));
-
-        sampled = dag.selectParents(2, create)
-                     .stream()
-                     .map(h -> new HashKey(h))
-                     .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-        assertEquals(1, sampled.size());
-
-        assertTrue(sampled.contains(ordered.get(2)));
-
-        // two eligable interiors
-        assertTrue(sampled.contains(ordered.get(1)) || sampled.contains(ordered.get(2)));
-
         sampled = dag.selectParents(3, create)
                      .stream()
                      .map(h -> new HashKey(h))
                      .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-        assertEquals(1, sampled.size());
+        assertEquals(3, sampled.size());
 
+        assertTrue(sampled.contains(ordered.get(1)));
         assertTrue(sampled.contains(ordered.get(2)));
+        assertTrue(sampled.contains(ordered.get(5)));
 
         // Add a new node to the frontier
         entry = new DagEntry();
@@ -530,33 +542,21 @@ public class TransactionsTest {
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
-        sampled = dag.selectParents(1, create)
+        sampled = dag.selectParents(4, create)
                      .stream()
                      .map(h -> new HashKey(h))
                      .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
 
-        assertEquals(1, sampled.size());
-        assertTrue(sampled.toString(), sampled.contains(ordered.get(2)) || sampled.contains(ordered.get(5)));
+        assertEquals(4, sampled.size());
 
-        sampled = dag.selectParents(2, create)
-                     .stream()
-                     .map(h -> new HashKey(h))
-                     .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-
-        assertEquals(1, sampled.size());
-        Set<HashKey> allowed = new ConcurrentSkipListSet<>();
-        allowed.add(ordered.get(0));
-        allowed.add(ordered.get(1));
-        allowed.add(ordered.get(2));
-        allowed.add(ordered.get(5));
-
-        for (HashKey h : sampled) {
-            assertTrue(allowed.contains(h));
-        }
+        assertTrue(sampled.contains(ordered.get(1)));
+        assertTrue(sampled.contains(ordered.get(2)));
+        assertTrue(sampled.contains(ordered.get(5)));
+        assertTrue(sampled.contains(ordered.get(6)));
     }
 
     @Test
-    public void parentSelectionWithPreferred() {
+    public void parentSelectionWithPreferred() throws Exception {
         List<HashKey> ordered = new ArrayList<>();
         Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(new HashKey(rootKey), root);
@@ -601,7 +601,7 @@ public class TransactionsTest {
                                    .stream()
                                    .map(r -> new HashKey(r.value1()))
                                    .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-        assertEquals(1, frontier.size());
+        assertEquals(2, frontier.size());
 
         // Nodes 3 and 4 are in conflict and are always excluded
         assertFalse(frontier.contains(ordered.get(3)));
@@ -627,7 +627,7 @@ public class TransactionsTest {
                       .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
 
         // No nodes available near the frontier now
-        assertEquals(2, frontier.size());
+        assertEquals(3, frontier.size());
 
         middling = dag.middling(create)
                       .stream()
@@ -651,7 +651,7 @@ public class TransactionsTest {
                       .map(r -> new HashKey(r.value1()))
                       .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
 
-        assertEquals(2, frontier.size());
+        assertEquals(3, frontier.size());
 
         middling = dag.middling(create)
                       .stream()
@@ -774,12 +774,12 @@ public class TransactionsTest {
                            .fetchOne()
                            .value1());
 
-        assertFalse(String.format("node 3 is strongly preferred "  + ordered.get(3)),
-                   create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(3).toHash(),
-                                                                              DSL.using(config))));
-        assertTrue(String.format("node 4 is not strongly preferred"),
-                    create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(4).toHash(),
+        assertFalse(String.format("node 3 is strongly preferred " + ordered.get(3)),
+                    create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(3).toHash(),
                                                                                DSL.using(config))));
+        assertTrue(String.format("node 4 is not strongly preferred"),
+                   create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(4).toHash(),
+                                                                              DSL.using(config))));
 
         entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 6).getBytes()));
@@ -845,6 +845,11 @@ public class TransactionsTest {
                       System.out.println(String.format("   -> %s: %s", r.value2(), new HashKey(r.value1())));
                   });
         });
+    }
+
+    HASH newDagEntree(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links) {
+        return newDagEntry(contents, ordered, stored, links.stream().map(e -> e.toHash()).collect(Collectors.toList()),
+                           null);
     }
 
     HASH newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HASH> links) {

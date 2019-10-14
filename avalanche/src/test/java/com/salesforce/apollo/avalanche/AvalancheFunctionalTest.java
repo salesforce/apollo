@@ -127,31 +127,31 @@ public class AvalancheFunctionalTest {
             aParams.parentCount = 3;
 
             // Avalanche implementation parameters
-            aParams.limit = 40;
-            aParams.insertBatchSize = 100;
-            aParams.preferBatchSize = 50;
-            aParams.finalizeBatchSize = 50;
+            aParams.limit = 800;
+            aParams.insertBatchSize = 800;
+            aParams.preferBatchSize = 800;
+            aParams.finalizeBatchSize = 800;
             aParams.noOpsPerRound = 1;
-            aParams.maxQueries = 10;
+            aParams.maxQueries = 100;
 
             // # of firefly rounds per avalanche round
             aParams.epsilon = 1;
             // # of FF rounds per NoOp generation
-            aParams.delta = 4;
+            aParams.delta = 3;
             // # of Avalanche queries per FF round
-            aParams.gamma = 3;
+            aParams.gamma = 1;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
-                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;DB_CLOSE_ON_EXIT=FALSE";
+                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
-                aParams.dbConnect += ";TRACE_LEVEL_FILE=2";
+                aParams.dbConnect += ";TRACE_LEVEL_FILE=4";
                 frist.set(false);
             }
             return new Avalanche(view, comm, aParams);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 15;
+        int target = 400;
 
         views.forEach(view -> view.getService().start(Duration.ofMillis(500)));
 
@@ -198,7 +198,7 @@ public class AvalancheFunctionalTest {
         HASH k = genesisKey.toHash();
         for (Avalanche a : nodes) {
             assertTrue("Failed to finalize genesis on: " + a.getNode().getId(),
-                       Utils.waitForCondition(15_000, () -> a.getDagDao().isFinalized(k)));
+                       Utils.waitForCondition(60_000, () -> a.getDagDao().isFinalized(k)));
             transactioneers.add(new Transactioneer(a));
         }
 
@@ -221,8 +221,8 @@ public class AvalancheFunctionalTest {
         nodes.forEach(node -> summary(node));
 
         // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), true))
-        // .render(Format.PNG)
-        // .toFile(new File("smoke.png"));
+        // .render(Format.XDOT)
+        // .toFile(new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
@@ -247,23 +247,23 @@ public class AvalancheFunctionalTest {
      * @param nodes
      */
     private void summarize(List<Avalanche> nodes) {
-        int finalized = nodes.stream()
-                             .map(n -> n.getDslContext()
-                                        .selectCount()
-                                        .from(DAG)
-                                        .where(DAG.NOOP.isFalse())
-                                        .and(DAG.FINALIZED.isTrue())
-                                        .fetchOne()
-                                        .value1())
-                             .reduce(0, (a, b) -> a + b);
-        System.out.println("Total finalized : " + finalized);
+        int max = nodes.stream()
+                       .mapToInt(n -> n.getDslContext()
+                                       .selectCount()
+                                       .from(DAG)
+                                       .where(DAG.NOOP.isFalse())
+                                       .and(DAG.FINALIZED.isTrue())
+                                       .fetchOne()
+                                       .value1())
+                       .max()
+                       .orElse(0);
+        System.out.println("Max finalized : " + max);
         System.out.println();
     }
 
     private void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
         System.out.println("    Rounds: " + node.getRoundCounter());
-        System.out.println("    Claimed finalized: " + node.getFinalized());
         System.out.println("    User txns: "
                 + node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1()
                 + " finalized: "
