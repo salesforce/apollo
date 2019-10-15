@@ -128,9 +128,9 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.limit = 800;
-            aParams.insertBatchSize = 800;
-            aParams.preferBatchSize = 800;
-            aParams.finalizeBatchSize = 800;
+            aParams.insertBatchSize = 100;
+            aParams.preferBatchSize = 100;
+            aParams.finalizeBatchSize = 100;
             aParams.noOpsPerRound = 1;
             aParams.maxQueries = 100;
 
@@ -151,7 +151,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 400;
+        int target = 200;
 
         views.forEach(view -> view.getService().start(Duration.ofMillis(500)));
 

@@ -49,7 +49,6 @@ public class TestApollo {
 	public static void summary(Avalanche node) {
 		System.out.println(node.getNode().getId() + " : ");
 		System.out.println("    Rounds: " + node.getRoundCounter());
-		System.out.println("    Claimed finalized: " + node.getFinalized());
 		System.out.println("    User txns: "
 				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1()
 				+ " finalized: "

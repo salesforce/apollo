@@ -100,8 +100,9 @@ public class Avalanche {
                 messages.forEach(message -> {
                     Entry entry = new Entry(EntryType.DAG, ByteBuffer.wrap(message.content));
                     DagEntry dagEntry = manifestDag(entry);
-                    insertions.add(new HASH(hashOf(entry)), dagEntry, entry, null, dagEntry.getDescription() == null,
-                                   r);
+                    insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
+                                                 dagEntry.getDescription() == null,
+                                                 r));
                 });
             });
         }
@@ -225,9 +226,8 @@ public class Avalanche {
     private final AvalancheCommunications comm;
     private final Dag dag;
     private final BlockingDeque<HASH> finalizing = new LinkedBlockingDeque<>();
-    private final InsertQ insertions = new InsertQ();
+    private final BlockingDeque<DagInsert> insertions = new LinkedBlockingDeque<>();
     private final Listener listener = new Listener();
-    private final ExecutorService mutator;
     private final AvalancheParameters parameters;
     private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentSkipListMap<>();
     private final AtomicReference<String> phase = new AtomicReference<>();
@@ -261,12 +261,37 @@ public class Avalanche {
         queryConfig.setPassword(PASSWORD);
         queryConfig.setJdbcUrl(parameters.dbConnect);
         queryConfig.setAutoCommit(false);
+        queryConfig.addDataSourceProperty("cachePrepStmts", "true");
+        queryConfig.addDataSourceProperty("prepStmtCacheSize", "250");
+        queryConfig.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
+        queryConfig.addDataSourceProperty("useServerPrepStmts", "true");
         queryPool = DSL.using(new HikariDataSource(queryConfig), SQLDialect.H2);
 
-        String rawConnect = parameters.dbConnect + ";USER=" + Avalanche.USER_NAME + ";PASSWORD=" + Avalanche.PASSWORD;
+        final HikariConfig roundConfig = new HikariConfig();
+        roundConfig.setMinimumIdle(3_000);
+        roundConfig.setMaximumPoolSize(1);
+        roundConfig.setUsername(USER_NAME);
+        roundConfig.setPassword(PASSWORD);
+        roundConfig.setJdbcUrl(parameters.dbConnect);
+        roundConfig.setAutoCommit(false);
+        roundConfig.addDataSourceProperty("cachePrepStmts", "true");
+        roundConfig.addDataSourceProperty("prepStmtCacheSize", "250");
+        roundConfig.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
+        roundConfig.addDataSourceProperty("useServerPrepStmts", "true");
+        roundPool = DSL.using(new HikariDataSource(roundConfig), SQLDialect.H2);
 
-        roundPool = DSL.using(rawConnect);
-        submitPool = DSL.using(rawConnect);
+        final HikariConfig submitConfig = new HikariConfig();
+        submitConfig.setMinimumIdle(3_000);
+        submitConfig.setMaximumPoolSize(1);
+        submitConfig.setUsername(USER_NAME);
+        submitConfig.setPassword(PASSWORD);
+        submitConfig.setJdbcUrl(parameters.dbConnect);
+        submitConfig.setAutoCommit(false);
+        submitConfig.addDataSourceProperty("cachePrepStmts", "true");
+        submitConfig.addDataSourceProperty("prepStmtCacheSize", "250");
+        submitConfig.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
+        submitConfig.addDataSourceProperty("useServerPrepStmts", "true");
+        submitPool = DSL.using(new HikariDataSource(submitConfig), SQLDialect.H2);
 
         loadSchema(parameters.dbConnect);
         this.dag = new Dag(parameters, view.getNode().getParameters().entropy);
@@ -293,12 +318,6 @@ public class Avalanche {
             t.setDaemon(true);
             return t;
         });
-        AtomicInteger mT = new AtomicInteger();
-        mutator = Executors.newFixedThreadPool(2, r -> {
-            Thread t = new Thread(r, "DAG Mutator[" + view.getNode().getId() + ":" + mT.incrementAndGet() + "]");
-            t.setDaemon(true);
-            return t;
-        });
     }
 
     /**
@@ -321,8 +340,8 @@ public class Avalanche {
         // genesis has no parents
         Entry entry = serialize(dagEntry);
         byte[] hash = hashOf(entry);
-        insertions.add(new HASH(hash), dagEntry, entry, WellKnownDescriptions.GENESIS.toHash(), false,
-                       round.get() + rounds2Flood);
+        insertions.add(new DagInsert(new HASH(hash), dagEntry, entry, WellKnownDescriptions.GENESIS.toHash(), false,
+                                     round.get() + rounds2Flood));
         flood(entry);
         HashKey key = new HashKey(hash);
         pendingTransactions.put(key, new PendingTransaction(futureSailor,
@@ -357,8 +376,14 @@ public class Avalanche {
 
     public void start() {
         if (!running.compareAndSet(false, true)) { return; }
+        AtomicInteger mT = new AtomicInteger();
+        ExecutorService mutator = Executors.newFixedThreadPool(3, r -> {
+            Thread t = new Thread(r, "DAG Mutator[" + view.getNode().getId() + ":" + mT.incrementAndGet() + "]");
+            t.setDaemon(true);
+            return t;
+        });
         mutator.execute(() -> insertLoop());
-        mutator.execute(() -> finalizerLoop());
+        mutator.execute(() -> finalizationLoop());
         comm.start();
     }
 
@@ -406,7 +431,7 @@ public class Avalanche {
         dagEntry.setLinks(parents);
         Entry entry = serialize(dagEntry);
         byte[] hash = hashOf(entry);
-        insertions.add(new HASH(hash), dagEntry, entry, null, false, round.get() + rounds2Flood);
+        insertions.add(new DagInsert(new HASH(hash), dagEntry, entry, null, false, round.get() + rounds2Flood));
         flood(entry);
         pendingTransactions.put(new HashKey(hash), new PendingTransaction(future,
                                                                           scheduler.schedule(() -> timeout(new HashKey(hash)),
@@ -470,8 +495,9 @@ public class Avalanche {
             log.trace("wanted {} received {} entries", wanted.size(), received.size());
             received.forEach(entry -> {
                 DagEntry dagEntry = manifestDag(entry);
-                insertions.add(new HASH(hashOf(entry)), dagEntry, entry, null, dagEntry.getDescription() == null,
-                               round.get() + rounds2Flood);
+                insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
+                                             dagEntry.getDescription() == null,
+                                             round.get() + rounds2Flood));
             });
         }
 
@@ -517,7 +543,8 @@ public class Avalanche {
             dagEntry.setData(ByteBuffer.wrap(dummy));
             dagEntry.setLinks(pList);
             Entry entry = serialize(dagEntry);
-            insertions.add(new HASH(hashOf(entry)), dagEntry, entry, null, true, round.get() + rounds2Flood);
+            insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null, true,
+                                         round.get() + rounds2Flood));
             flood(entry);
             if (log.isTraceEnabled()) {
                 log.trace("noOp transaction {}",
@@ -538,30 +565,25 @@ public class Avalanche {
      * determine confidence from the results of the query results.
      */
     int query() {
+        long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        List<HASH> query = roundPool
-                                    .transactionResult(config -> dag.query(parameters.limit, DSL.using(config),
-                                                                           round.get()));
-        if (query.isEmpty()) {
-            log.trace("no queriable txns");
-            return 0;
-        }
-        long retrieveTime = System.currentTimeMillis();
-        log.trace("querying {} user txns in {} ms", query.size(), retrieveTime);
+        List<HASH> unqueried = dag.query(parameters.limit, roundPool,
+                                         round.get());
+        if (unqueried.isEmpty()) { return 0; }
+        long retrieveTime = System.currentTimeMillis() - now;
         Collection<Member> sample = sampler.sample(parameters.k);
-        long sampleTime = System.currentTimeMillis() - retrieveTime;
-        List<Boolean> results = query(query, sample);
-        long queryResults = System.currentTimeMillis() - retrieveTime;
-        ForkJoinPool.commonPool().execute(() -> {
-            for (int i = 0; i < results.size(); i++) {
-                Boolean result = results.get(i);
-                if (result != null && result) {
-                    preferings.add(query.get(i));
-                }
+        now = System.currentTimeMillis();
+        List<Boolean> results = query(unqueried, sample);
+        long sampleTime = System.currentTimeMillis() - now;
+        for (int i = 0; i < results.size(); i++) {
+            Boolean result = results.get(i);
+            if (result != null && result) {
+                preferings.add(unqueried.get(i));
             }
-        });
-        log.debug("querying {} user txns in {} ms ({} Q) ({} S) {{} N}", query.size(), System.currentTimeMillis() - now,
-                  sampleTime, retrieveTime - now, queryResults);
+        }
+        log.info("querying {} txns in {} ms ({} Query) ({} Sample)}", unqueried.size(),
+                 System.currentTimeMillis() - start,
+                 retrieveTime, sampleTime);
         return results.size();
     }
 
@@ -608,8 +630,9 @@ public class Avalanche {
 
             result.getEntries().forEach(entry -> {
                 DagEntry dagEntry = manifestDag(entry);
-                insertions.add(new HASH(hashOf(entry)), dagEntry, entry, null, dagEntry.getDescription() == null,
-                               round.get());
+                insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
+                                             dagEntry.getDescription() == null,
+                                             round.get()));
             });
             if (result.getResult().isEmpty()) { return false; }
             for (int i = 0; i < batch.size(); i++) {
@@ -679,36 +702,37 @@ public class Avalanche {
         pending.pending.complete(null);
     }
 
-    private void finalizerLoop() {
-        DSLContext context;
+    private void finalizationLoop() {
+        final HikariConfig config = new HikariConfig();
+        config.setMinimumIdle(3_000);
+        config.setMaximumPoolSize(1);
+        config.setUsername(USER_NAME);
+        config.setPassword(PASSWORD);
+        config.setJdbcUrl(parameters.dbConnect);
+        config.setAutoCommit(false);
+        config.addDataSourceProperty("cachePrepStmts", "true");
+        config.addDataSourceProperty("prepStmtCacheSize", "250");
+        config.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
+        config.addDataSourceProperty("useServerPrepStmts", "true");
+        final DSLContext pool = DSL.using(new HikariDataSource(config), SQLDialect.H2);
         try {
-            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
-        } catch (SQLException e) {
-            throw new IllegalStateException(e);
-        }
-        while (running.get()) {
-            try {
-                if (!running.get()) { return; }
-                nextPreferred(context);
-                if (!running.get()) { return; }
-                nextFinalized(context);
-            } catch (Throwable e) {
-                if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
-                    log.info("mutator rolled back: {}", e);
-                } else {
-                    log.error("error in mutator", e);
-                    context.close();
-                    try {
-                        context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD),
-                                            SQLDialect.H2);
-                    } catch (SQLException s) {
-                        throw new IllegalStateException(s);
+            while (running.get()) {
+                try {
+                    if (!running.get()) { return; }
+                    nextPreferred(pool);
+                    if (!running.get()) { return; }
+                    nextFinalized(pool);
+                } catch (Throwable e) {
+                    if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
+                        log.info("mutator rolled back: {}", e);
                     }
                 }
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {}
             }
-            try {
-                Thread.sleep(1);
-            } catch (InterruptedException e) {}
+        } finally {
+            pool.close();
         }
     }
 
@@ -734,8 +758,9 @@ public class Avalanche {
         if (requested.isEmpty()) { return; }
         requested.forEach(entry -> {
             DagEntry dagEntry = manifestDag(entry);
-            insertions.add(new HASH(hashOf(entry)), dagEntry, entry, null, dagEntry.getDescription() == null,
-                           round.get());
+            insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
+                                         dagEntry.getDescription() == null,
+                                         round.get()));
         });
     }
 
@@ -755,33 +780,31 @@ public class Avalanche {
     }
 
     private void insertLoop() {
-        DSLContext context;
+        final HikariConfig config = new HikariConfig();
+        config.setMinimumIdle(3_000);
+        config.setMaximumPoolSize(1);
+        config.setUsername(USER_NAME);
+        config.setPassword(PASSWORD);
+        config.setJdbcUrl(parameters.dbConnect);
+        config.setAutoCommit(false);
+        config.addDataSourceProperty("cachePrepStmts", "true");
+        config.addDataSourceProperty("prepStmtCacheSize", "250");
+        config.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
+        config.addDataSourceProperty("useServerPrepStmts", "true");
+        final DSLContext pool = DSL.using(new HikariDataSource(config), SQLDialect.H2);
         try {
-            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
-        } catch (SQLException e) {
-            throw new IllegalStateException(e);
-        }
-        while (running.get()) {
-            try {
-                if (!running.get()) { return; }
-                nextInserts(context);
-            } catch (Throwable e) {
-                if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
-                    log.info("mutator rolled back: {}", e);
-                } else {
-                    log.error("error in mutator", e);
-                    context.close();
-                    try {
-                        context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD),
-                                            SQLDialect.H2);
-                    } catch (SQLException s) {
-                        throw new IllegalStateException(s);
+            while (running.get()) {
+                try {
+                    if (!running.get()) { return; }
+                    nextInserts(pool);
+                } catch (Throwable e) {
+                    if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
+                        log.info("insertions rolled back: {}", e);
                     }
                 }
             }
-            try {
-                Thread.sleep(1);
-            } catch (InterruptedException e) {}
+        } finally {
+            pool.close();
         }
     }
 
@@ -790,7 +813,7 @@ public class Avalanche {
         for (int i = 0; i < batch; i++) {
             HASH key;
             try {
-                key = finalizing.poll(i == 0 ? 10 : 2, TimeUnit.MILLISECONDS);
+                key = finalizing.poll(200, TimeUnit.NANOSECONDS);
             } catch (InterruptedException e) {
                 break;
             }
@@ -806,6 +829,7 @@ public class Avalanche {
     private void nextFinalized(DSLContext context) {
         List<byte[]> batch = nextFinalizations(parameters.finalizeBatchSize);
         if (batch.isEmpty()) { return; }
+        log.trace("Finalizations: {}", batch.size());
         FinalizationData d = context.transactionResult(config -> dag.tryFinalize(batch, DSL.using(config)));
         ForkJoinPool.commonPool().execute(() -> {
             d.finalized.forEach(key -> {
@@ -825,9 +849,28 @@ public class Avalanche {
         });
     }
 
+    private List<DagInsert> nextInsertions() {
+        List<DagInsert> next = new ArrayList<>();
+        for (int i = 0; i < parameters.insertBatchSize; i++) {
+            DagInsert insert;
+            try {
+                insert = insertions.poll(200, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                break;
+            }
+            if (insert != null) {
+                next.add(insert);
+            } else {
+                break;
+            }
+        }
+        return next;
+    }
+
     private void nextInserts(DSLContext context) {
-        List<DagInsert> next = insertions.next(parameters.insertBatchSize);
+        List<DagInsert> next = nextInsertions();
         if (next.isEmpty()) { return; }
+        log.trace("Insertions: {}", next.size());
         context.transaction(config -> {
             next.forEach(insert -> {
                 dag.putDagEntry(insert.key, insert.dagEntry, insert.entry, insert.conflictSet, DSL.using(config),
@@ -841,7 +884,7 @@ public class Avalanche {
         for (int i = 0; i < batch; i++) {
             HASH key;
             try {
-                key = preferings.poll(i == 0 ? 10 : 2, TimeUnit.MILLISECONDS);
+                key = preferings.poll(200, TimeUnit.NANOSECONDS);
             } catch (InterruptedException e) {
                 break;
             }
