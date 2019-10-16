@@ -547,7 +547,7 @@ public class Dag {
         // .eq(CLOSURE.PARENT))
         // .fetch());
         if (updated != 0) {
-            log.debug("Preferred {}:{} in {} ms", updated, entries.size(),
+            log.trace("Preferred {}:{} in {} ms", updated, entries.size(),
                       System.currentTimeMillis() - start);
         }
         create.deleteFrom(p).execute();
@@ -922,7 +922,7 @@ public class Dag {
                .map(r -> new HashKey(r.value1()))
                .forEach(k -> data.finalized.add(k));
         if (updated != 0) {
-            log.debug("Finalized {}:{}:{} out of {} in {} ms", updated, data.finalized.size(), closure, keys.size(),
+            log.trace("Finalized {}:{}:{} out of {} in {} ms", updated, data.finalized.size(), closure, keys.size(),
                       System.currentTimeMillis() - start);
         }
 

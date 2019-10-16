@@ -78,6 +78,8 @@ public class AvalancheFunctionalTest {
     private ScheduledExecutorService scheduler;
     private List<X509Certificate> seeds;
     private List<View> views;
+    private DropWizardStatsPlugin rpcStats;
+    private MetricRegistry registry;
 
     @After
     public void after() {
@@ -86,11 +88,13 @@ public class AvalancheFunctionalTest {
 
     @Before
     public void before() {
+        registry = new MetricRegistry();
+        rpcStats = new DropWizardStatsPlugin(registry);
         entropy = new Random(0x666);
 
         seeds = new ArrayList<>();
         members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        FfLocalCommSim ffComms = new FfLocalCommSim();
+        FfLocalCommSim ffComms = new FfLocalCommSim(rpcStats);
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < Math.min(parameters.toleranceLevel + 1, certs.size())) {
@@ -110,12 +114,10 @@ public class AvalancheFunctionalTest {
     public void smoke() throws Exception {
         File baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         baseDir.mkdirs();
-
-        MetricRegistry registry = new MetricRegistry();
-        DropWizardStatsPlugin stats = new DropWizardStatsPlugin(registry);
-        AvalancheCommunications comm = new AvalancheLocalCommSim(stats);
+        AvaMetrics avaMetrics = new AvaMetrics(registry);
+        AvalancheCommunications comm = new AvalancheLocalCommSim(rpcStats);
         AtomicInteger index = new AtomicInteger(0);
-        AtomicBoolean frist = new AtomicBoolean(false);
+        AtomicBoolean frist = new AtomicBoolean(true);
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
             // Avalanche protocol parameters
@@ -128,9 +130,9 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.limit = 800;
-            aParams.insertBatchSize = 100;
-            aParams.preferBatchSize = 100;
-            aParams.finalizeBatchSize = 100;
+            aParams.insertBatchSize = 400;
+            aParams.preferBatchSize = 400;
+            aParams.finalizeBatchSize = 400;
             aParams.noOpsPerRound = 1;
             aParams.maxQueries = 100;
 
@@ -139,15 +141,15 @@ public class AvalancheFunctionalTest {
             // # of FF rounds per NoOp generation
             aParams.delta = 3;
             // # of Avalanche queries per FF round
-            aParams.gamma = 1;
+            aParams.gamma = 2;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
                     + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
-                aParams.dbConnect += ";TRACE_LEVEL_FILE=4";
                 frist.set(false);
+                return new Avalanche(view, comm, aParams, avaMetrics);
             }
-            return new Avalanche(view, comm, aParams);
+            return new Avalanche(view, comm, aParams, new AvaMetrics(new MetricRegistry()));
         }).collect(Collectors.toList());
 
         // # of txns per node
@@ -162,6 +164,7 @@ public class AvalancheFunctionalTest {
                         .count() == 0;
         }));
         nodes.forEach(node -> node.start());
+        ScheduledExecutorService txnScheduler = Executors.newScheduledThreadPool(nodes.size());
         // Profiler profiler = new Profiler();
         // profiler.startCollecting();
 
@@ -170,7 +173,7 @@ public class AvalancheFunctionalTest {
         System.out.println("Start round: " + master.getRoundCounter());
         CompletableFuture<HashKey> genesis = nodes.get(0)
                                                   .createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
-                                                                 scheduler);
+                                                                 txnScheduler);
         HashKey genesisKey = null;
         try {
             genesisKey = genesis.get(60, TimeUnit.SECONDS);
@@ -202,7 +205,7 @@ public class AvalancheFunctionalTest {
             transactioneers.add(new Transactioneer(a));
         }
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target * 40, scheduler));
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target * 40, txnScheduler));
 
         boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
             return transactioneers.stream()
@@ -211,13 +214,25 @@ public class AvalancheFunctionalTest {
                                   .count() == transactioneers.size();
         });
 
-        System.out.println("Completed in " + (System.currentTimeMillis() - now) + " ms");
+        long duration = System.currentTimeMillis() - now;
+
+        System.out.println("Completed in " + duration + " ms");
         transactioneers.forEach(t -> t.stop());
         views.forEach(v -> v.getService().stop());
         nodes.forEach(node -> node.stop());
         // System.out.println(profiler.getTop(3));
 
-        summarize(nodes);
+        System.out.println("Max tps: " + nodes.stream()
+                                              .mapToInt(n -> n.getDslContext()
+                                                              .selectCount()
+                                                              .from(DAG)
+                                                              .where(DAG.NOOP.isFalse())
+                                                              .and(DAG.FINALIZED.isTrue())
+                                                              .fetchOne()
+                                                              .value1())
+                                              .max()
+                                              .orElse(0)
+                / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
         // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), true))
@@ -241,24 +256,6 @@ public class AvalancheFunctionalTest {
         transactioneers.forEach(t -> {
             System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
         });
-    }
-
-    /**
-     * @param nodes
-     */
-    private void summarize(List<Avalanche> nodes) {
-        int max = nodes.stream()
-                       .mapToInt(n -> n.getDslContext()
-                                       .selectCount()
-                                       .from(DAG)
-                                       .where(DAG.NOOP.isFalse())
-                                       .and(DAG.FINALIZED.isTrue())
-                                       .fetchOne()
-                                       .value1())
-                       .max()
-                       .orElse(0);
-        System.out.println("Max finalized : " + max);
-        System.out.println();
     }
 
     private void summary(Avalanche node) {
