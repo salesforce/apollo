@@ -247,6 +247,10 @@ public class Avalanche {
     private final DSLContext submitPool;
     private final View view;
 
+    public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p) {
+        this(view, communications, p, null, null);
+    }
+
     public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p, AvaMetrics metrics) {
         this(view, communications, p, metrics, null);
     }
@@ -414,7 +418,7 @@ public class Avalanche {
     public HASH submitTransaction(HASH description, byte[] data, Duration timeout, CompletableFuture<HashKey> future,
             ScheduledExecutorService scheduler) {
         if (!running.get()) { throw new IllegalStateException("Service is not running"); }
-        Context timer = metrics.getSubmissionTimer().time();
+        Context timer = metrics == null ? null : metrics.getSubmissionTimer().time();
         DagEntry dagEntry = new DagEntry();
         dagEntry.setDescription(description);
         dagEntry.setData(ByteBuffer.wrap(data));
@@ -425,11 +429,17 @@ public class Avalanche {
             if (future != null) {
                 future.completeExceptionally(e);
             }
+            if (timer != null) {
+                timer.close();
+            }
             return null;
         }
         if (parents.isEmpty()) {
             if (future != null) {
                 future.completeExceptionally(new IllegalStateException("No parents available for transaction"));
+            }
+            if (timer != null) {
+                timer.close();
             }
             return null;
         }
@@ -442,8 +452,13 @@ public class Avalanche {
                                                                           scheduler.schedule(() -> timeout(new HashKey(hash)),
                                                                                              timeout.toMillis(),
                                                                                              TimeUnit.MILLISECONDS)));
-        timer.stop();
-        metrics.getSubmissionRate().mark();
+
+        if (timer != null) {
+            timer.close();
+        }
+        if (metrics != null) {
+            metrics.getSubmissionRate().mark();
+        }
         return new HASH(hash);
     }
 
@@ -534,7 +549,7 @@ public class Avalanche {
      */
     void generateNoOpTxns() {
         log.trace("generating NoOp transactions");
-        Context timer = metrics.getNoOpTimer().time();
+        Context timer = metrics == null ? null : metrics.getNoOpTimer().time();
         Set<HashKey> selected = new TreeSet<>();
 
         selected.addAll(dag.getNeglectedFrontier(queryPool));
@@ -542,7 +557,12 @@ public class Avalanche {
         if (selected.isEmpty()) {
             selected.addAll(dag.getNeglected(queryPool));
         }
-        if (selected.isEmpty()) { return; }
+        if (selected.isEmpty()) {
+            if (timer != null) {
+                timer.close();
+            }
+            return;
+        }
         List<HASH> pList = selected.stream().map(k -> k.toHash()).collect(Collectors.toList());
         for (int i = 0; i < parameters.noOpsPerRound; i++) {
             DagEntry dagEntry = new DagEntry();
@@ -559,7 +579,9 @@ public class Avalanche {
                           pList.stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
             }
         }
-        timer.stop();
+        if (timer != null) {
+            timer.close();
+        }
     }
 
     /**
@@ -576,16 +598,25 @@ public class Avalanche {
     int query() {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        Context timer = metrics.getQueryTimer().time();
+        Context timer = metrics == null ? null : metrics.getQueryTimer().time();
         List<HASH> unqueried = dag.query(parameters.limit, roundPool,
                                          round.get());
-        if (unqueried.isEmpty()) { return 0; }
+        if (unqueried.isEmpty()) {
+            if (timer != null) {
+                timer.close();
+            }
+            return 0;
+        }
         long retrieveTime = System.currentTimeMillis() - now;
         Collection<Member> sample = sampler.sample(parameters.k);
         now = System.currentTimeMillis();
         List<Boolean> results = query(unqueried, sample);
-        timer.stop();
-        metrics.getQueryRate().mark(unqueried.size());
+        if (timer != null) {
+            timer.close();
+        }
+        if (metrics != null) {
+            metrics.getQueryRate().mark(unqueried.size());
+        }
         long sampleTime = System.currentTimeMillis() - now;
         for (int i = 0; i < results.size(); i++) {
             Boolean result = results.get(i);
@@ -844,10 +875,14 @@ public class Avalanche {
         List<byte[]> batch = nextFinalizations(parameters.finalizeBatchSize);
         if (batch.isEmpty()) { return; }
         log.trace("Finalizations: {}", batch.size());
-        Context timer = metrics.getFinalizeTimer().time();
+        Context timer = metrics == null ? null : metrics.getFinalizeTimer().time();
         FinalizationData d = context.transactionResult(config -> dag.tryFinalize(batch, DSL.using(config)));
-        timer.stop();
-        metrics.getFinalizerRate().mark(d.finalized.size());
+        if (timer != null) {
+            timer.close();
+        }
+        if (metrics != null) {
+            metrics.getFinalizerRate().mark(d.finalized.size());
+        }
         ForkJoinPool.commonPool().execute(() -> {
             d.finalized.forEach(key -> {
                 PendingTransaction pending = pendingTransactions.remove(key);
@@ -888,15 +923,19 @@ public class Avalanche {
         List<DagInsert> next = nextInsertions();
         if (next.isEmpty()) { return; }
         log.trace("Insertions: {}", next.size());
-        Context timer = metrics.getInputTimer().time();
+        Context timer = metrics == null ? null : metrics.getInputTimer().time();
         context.transaction(config -> {
             next.forEach(insert -> {
                 dag.putDagEntry(insert.key, insert.dagEntry, insert.entry, insert.conflictSet, DSL.using(config),
                                 insert.noOp, insert.targetRound);
             });
         });
-        timer.stop();
-        metrics.getInputRate().mark(next.size());
+        if (timer != null) {
+            timer.close();
+        }
+        if (metrics != null) {
+            metrics.getInputRate().mark(next.size());
+        }
     }
 
     private List<HASH> nextPreferences(int batch) {
@@ -920,10 +959,14 @@ public class Avalanche {
     private void nextPreferred(DSLContext context) {
         List<HASH> batch = nextPreferences(parameters.preferBatchSize);
         if (!batch.isEmpty()) {
-            Context timer = metrics.getPreferTimer().time();
+            Context timer = metrics == null ? null : metrics.getPreferTimer().time();
             context.transaction(config -> dag.prefer(batch, DSL.using(config)));
-            timer.stop();
-            metrics.getPreferRate().mark(batch.size());
+            if (timer != null) {
+                timer.close();
+            }
+            if (metrics != null) {
+                metrics.getPreferRate().mark(batch.size());
+            }
             finalizing.addAll(batch);
         }
     }

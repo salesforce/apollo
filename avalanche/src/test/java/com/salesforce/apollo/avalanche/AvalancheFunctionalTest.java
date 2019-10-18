@@ -79,7 +79,8 @@ public class AvalancheFunctionalTest {
     private List<X509Certificate> seeds;
     private List<View> views;
     private DropWizardStatsPlugin rpcStats;
-    private MetricRegistry registry;
+    private MetricRegistry commRegistry;
+    private MetricRegistry node0Registry;
 
     @After
     public void after() {
@@ -88,8 +89,9 @@ public class AvalancheFunctionalTest {
 
     @Before
     public void before() {
-        registry = new MetricRegistry();
-        rpcStats = new DropWizardStatsPlugin(registry);
+        commRegistry = new MetricRegistry();
+        node0Registry = new MetricRegistry();
+        rpcStats = new DropWizardStatsPlugin(commRegistry);
         entropy = new Random(0x666);
 
         seeds = new ArrayList<>();
@@ -114,7 +116,7 @@ public class AvalancheFunctionalTest {
     public void smoke() throws Exception {
         File baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         baseDir.mkdirs();
-        AvaMetrics avaMetrics = new AvaMetrics(registry);
+        AvaMetrics avaMetrics = new AvaMetrics(node0Registry);
         AvalancheCommunications comm = new AvalancheLocalCommSim(rpcStats);
         AtomicInteger index = new AtomicInteger(0);
         AtomicBoolean frist = new AtomicBoolean(true);
@@ -129,7 +131,7 @@ public class AvalancheFunctionalTest {
             aParams.parentCount = 3;
 
             // Avalanche implementation parameters
-            aParams.limit = 800;
+            aParams.limit = 100;
             aParams.insertBatchSize = 400;
             aParams.preferBatchSize = 400;
             aParams.finalizeBatchSize = 400;
@@ -141,7 +143,7 @@ public class AvalancheFunctionalTest {
             // # of FF rounds per NoOp generation
             aParams.delta = 3;
             // # of Avalanche queries per FF round
-            aParams.gamma = 2;
+            aParams.gamma = 4;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
                     + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
@@ -149,11 +151,11 @@ public class AvalancheFunctionalTest {
                 frist.set(false);
                 return new Avalanche(view, comm, aParams, avaMetrics);
             }
-            return new Avalanche(view, comm, aParams, new AvaMetrics(new MetricRegistry()));
+            return new Avalanche(view, comm, aParams);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 200;
+        int target = 800;
 
         views.forEach(view -> view.getService().start(Duration.ofMillis(500)));
 
@@ -246,12 +248,19 @@ public class AvalancheFunctionalTest {
                                  .map(e -> new HashKey(e))
                                  .collect(Collectors.toList()));
         System.out.println();
+        System.out.println("Node 0 Metrics");
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
         System.out.println();
-        ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
-                                                  .convertRatesTo(TimeUnit.SECONDS)
-                                                  .convertDurationsTo(TimeUnit.MILLISECONDS)
-                                                  .build();
-        reporter.report();
+        // System.out.println("Comm Metrics");
+        // ConsoleReporter.forRegistry(metricsRegistry)
+        // .convertRatesTo(TimeUnit.SECONDS)
+        // .convertDurationsTo(TimeUnit.MILLISECONDS)
+        // .build()
+        // .report();
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
         transactioneers.forEach(t -> {
             System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
