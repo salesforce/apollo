@@ -131,11 +131,12 @@ public class AvalancheFunctionalTest {
             aParams.parentCount = 3;
 
             // Avalanche implementation parameters
-            aParams.limit = 100;
-            aParams.insertBatchSize = 400;
-            aParams.preferBatchSize = 400;
-            aParams.finalizeBatchSize = 400;
+            aParams.queryBatchSize = 100;
+            aParams.insertBatchSize = 800;
+            aParams.preferBatchSize = 100;
+            aParams.finalizeBatchSize = 100;
             aParams.noOpsPerRound = 1;
+            aParams.maxNoOpParents = 100;
             aParams.maxQueries = 100;
 
             // # of firefly rounds per avalanche round
@@ -143,7 +144,7 @@ public class AvalancheFunctionalTest {
             // # of FF rounds per NoOp generation
             aParams.delta = 3;
             // # of Avalanche queries per FF round
-            aParams.gamma = 4;
+            aParams.gamma = 10;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
                     + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
@@ -155,7 +156,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 800;
+        int target = 400;
 
         views.forEach(view -> view.getService().start(Duration.ofMillis(500)));
 
@@ -209,7 +210,7 @@ public class AvalancheFunctionalTest {
 
         transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target * 40, txnScheduler));
 
-        boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
+        boolean finalized = Utils.waitForCondition(600_000, 1_000, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= target)

@@ -20,6 +20,8 @@ public class AvaMetrics {
     private final Meter inputRate;
     private final Timer inputTimer;
     private final Timer noOpTimer;
+    private final Meter parentSampleRate;
+    private final Timer parentSampleTimer;
     private final Meter preferRate;
     private final Timer preferTimer;
     private final Meter queryRate;
@@ -44,6 +46,9 @@ public class AvaMetrics {
         queryRate = registry.meter("Query rate");
 
         noOpTimer = registry.timer("NoOp txn generation duration");
+
+        parentSampleTimer = registry.timer("Parent sample duration");
+        parentSampleRate = registry.meter("Parent sample rate");
     }
 
     /**
@@ -84,6 +89,20 @@ public class AvaMetrics {
 
     public Timer getNoOpTimer() {
         return noOpTimer;
+    }
+
+    /**
+     * @return the parentSampleRate
+     */
+    public Meter getParentSampleRate() {
+        return parentSampleRate;
+    }
+
+    /**
+     * @return the parentSampleTimer
+     */
+    public Timer getParentSampleTimer() {
+        return parentSampleTimer;
     }
 
     /**

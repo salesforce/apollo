@@ -32,10 +32,6 @@ public class AvalancheParameters {
      */
     public String dbConnect = DEFAULT_CONNECTION;
     /**
-     * The number of queries per FF round
-     */
-    public int gamma = 2;
-    /**
      * The number of FF rounds per NoOp generation round
      */
     public int delta = 9;
@@ -43,18 +39,37 @@ public class AvalancheParameters {
      * The number of FF rounds per Avalanche round
      */
     public int epsilon = 9;
+    public int finalizeBatchSize = 50;
+    /**
+     * The number of queries per FF round
+     */
+    public int gamma = 2;
+    public int insertBatchSize = 100;
     /**
      * The number of members to sample for a vote
      */
     public int k = 10;
     /**
-     * The limit on gossipped DAG entries and the limit of dag entries in query batch
+     * The limit on the Avalanche query batch size
      */
-    public int limit = 40;
+    public int queryBatchSize = 40;
+
+    public int maxNoOpParents = 100;
+
+    /**
+     * Max JDBC connections in pool
+     */
+    public int maxQueries = 3;
+
+    public int noOpsPerRound = 1;
+
     /**
      * The number of parents we desire for new txns
      */
     public int parentCount = 3;
+
+    public int preferBatchSize = 50;
+
     /**
      * Query timeout
      */
@@ -64,17 +79,4 @@ public class AvalancheParameters {
      * Query timeout unit
      */
     public TimeUnit unit = TimeUnit.SECONDS;
-
-    /**
-     * Max JDBC connections in pool
-     */
-    public int maxQueries = 3;
-
-    public int noOpsPerRound = 1;
-
-    public int finalizeBatchSize = 50;
-
-    public int insertBatchSize = 100;
-
-    public int preferBatchSize = 50;
 }

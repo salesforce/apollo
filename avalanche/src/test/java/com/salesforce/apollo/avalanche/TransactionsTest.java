@@ -299,7 +299,9 @@ public class TransactionsTest {
         ordered.add(new HashKey(secondCommit.bytes()));
         last = secondCommit;
 
-        TreeSet<HashKey> frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
+        TreeSet<HashKey> frontier = dag.getNeglectedFrontier(create)
+                                       .map(e -> new HashKey(e))
+                                       .collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(2, frontier.size());
 
@@ -311,7 +313,9 @@ public class TransactionsTest {
                                                      .collect(Collectors.toList())));
         ordered.add(new HashKey(userTxn.bytes()));
 
-        frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
+        frontier = dag.getNeglectedFrontier(create)
+                      .map(e -> new HashKey(e))
+                      .collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(2, frontier.size());
 
@@ -321,7 +325,9 @@ public class TransactionsTest {
         last = userTxn;
         last = new HashKey(newDagEntree("entry: " + 0, ordered, stored, Arrays.asList(last)));
 
-        frontier = new TreeSet<>(dag.getNeglectedFrontier(create));
+        frontier = dag.getNeglectedFrontier(create)
+                      .map(e -> new HashKey(e))
+                      .collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(2, frontier.size());
 

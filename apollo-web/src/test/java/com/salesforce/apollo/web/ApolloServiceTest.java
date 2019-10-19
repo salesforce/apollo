@@ -82,7 +82,7 @@ public class ApolloServiceTest {
             config.avalanche.beta1 = 3;
             config.avalanche.beta2 = 5;
             config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i ;
-            config.avalanche.limit = 20;
+            config.avalanche.queryBatchSize = 20;
             config.avalanche.parentCount = 3;
             config.avalanche.epsilon = 9;
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
