@@ -63,7 +63,7 @@ public class Transactioneer {
 
     public void transact(Duration txnWait, int maintain, ScheduledExecutorService scheduler) {
         scheduler.scheduleWithFixedDelay(() -> {
-            if (getSuccess() < maintain) {
+            if (outstanding.size() < maintain) {
                 addTransaction(txnWait, scheduler);
             }
         }, 50, 75, TimeUnit.MILLISECONDS);

@@ -52,6 +52,7 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -208,7 +209,7 @@ public class AvalancheFunctionalTest {
             transactioneers.add(new Transactioneer(a));
         }
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target * 40, txnScheduler));
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target, txnScheduler));
 
         boolean finalized = Utils.waitForCondition(600_000, 1_000, () -> {
             return transactioneers.stream()
@@ -223,24 +224,28 @@ public class AvalancheFunctionalTest {
         transactioneers.forEach(t -> t.stop());
         views.forEach(v -> v.getService().stop());
         nodes.forEach(node -> node.stop());
+        Thread.sleep(2_000); // drain the swamp
         // System.out.println(profiler.getTop(3));
 
-        System.out.println("Max tps: " + nodes.stream()
-                                              .mapToInt(n -> n.getDslContext()
-                                                              .selectCount()
-                                                              .from(DAG)
-                                                              .where(DAG.NOOP.isFalse())
-                                                              .and(DAG.FINALIZED.isTrue())
-                                                              .fetchOne()
-                                                              .value1())
-                                              .max()
-                                              .orElse(0)
+        System.out.println("Global tps: " + transactioneers.stream()
+                                                           .mapToInt(e -> e.getSuccess())
+                                                           .sum()
+                / (duration / 1000));
+
+        System.out.println("Max tps per node: " + nodes.stream()
+                                                       .mapToInt(n -> n.getDslContext()
+                                                                       .selectCount()
+                                                                       .from(DAG)
+                                                                       .where(DAG.NOOP.isFalse())
+                                                                       .and(DAG.FINALIZED.isTrue())
+                                                                       .fetchOne()
+                                                                       .value1())
+                                                       .max()
+                                                       .orElse(0)
                 / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-        // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), true))
-        // .render(Format.XDOT)
-        // .toFile(new File("smoke.dot"));
+        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
@@ -256,12 +261,12 @@ public class AvalancheFunctionalTest {
                        .build()
                        .report();
         System.out.println();
-        // System.out.println("Comm Metrics");
-        // ConsoleReporter.forRegistry(metricsRegistry)
-        // .convertRatesTo(TimeUnit.SECONDS)
-        // .convertDurationsTo(TimeUnit.MILLISECONDS)
-        // .build()
-        // .report();
+        System.out.println("Comm Metrics");
+        ConsoleReporter.forRegistry(commRegistry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
         transactioneers.forEach(t -> {
             System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());

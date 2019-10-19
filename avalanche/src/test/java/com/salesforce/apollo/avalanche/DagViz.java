@@ -111,10 +111,18 @@ public class DagViz {
                 DagRecord entry = create.selectFrom(DAG).where(DAG.HASH.eq(h.bytes())).fetchOne();
                 Result<Record1<byte[]>> links = null;
                 if (entry != null) {
-                    links = create.select(LINK.HASH)
-                                  .from(LINK)
-                                  .where(LINK.NODE.eq(h.bytes()))
-                                  .fetch();
+                    if (!entry.getNoop()) {
+                        links = create.select(LINK.HASH)
+                                      .from(LINK)
+                                      .where(LINK.NODE.eq(h.bytes()))
+                                      .fetch();
+                    } else {
+                        links = create.select(CLOSURE.CHILD)
+                                      .from(CLOSURE)
+                                      .where(CLOSURE.PARENT.eq(h.bytes()))
+                                      .and(CLOSURE.DEPTH.gt(0))
+                                      .fetch();
+                    }
                 }
                 decorate(create, h, entry, labelFor, links, traversed, ignoreNoOp, next);
             });

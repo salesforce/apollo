@@ -518,7 +518,7 @@ public class Dag {
         create.update(DAG).set(DAG.CHIT, 1).where(DAG.HASH.in(create.select(toPreferHash).from(toPrefer))).execute();
         create.update(DAG)
               .set(DAG.CONFIDENCE, DAG.CONFIDENCE.plus(1))
-              .where(DAG.HASH.in(create.select(pChild).from(p).where(pDepth.gt(0)).orderBy(pChild)))
+              .where(DAG.HASH.in(create.selectDistinct(pChild).from(p).where(pDepth.gt(0)).orderBy(pChild)))
               .execute();
         create.mergeInto(CONFLICTSET, CONFLICTSET.NODE, CONFLICTSET.LAST, CONFLICTSET.PREFERRED, CONFLICTSET.COUNTER)
               .key(CONFLICTSET.NODE)
@@ -891,7 +891,7 @@ public class Dag {
         com.salesforce.apollo.dagwood.schema.tables.Dag childe = DAG.as("childe");
         context.mergeInto(toQuery, toQueryHash)
                .key(toQueryHash)
-               .select(context.select(CLOSURE.CHILD)
+               .select(context.selectDistinct(CLOSURE.CHILD)
                               .from(CLOSURE)
                               .join(toQuery)
                               .on(CLOSURE.PARENT.eq(DSL.field("TO_QUERY.HASH", byte[].class)))
@@ -930,7 +930,7 @@ public class Dag {
         Closure c = CLOSURE.as("c");
         // int closure = 0;
         int closure = context.deleteFrom(CLOSURE)
-                             .where(CLOSURE.CHILD.in(context.select(c.field(CLOSURE.CHILD))
+                             .where(CLOSURE.CHILD.in(context.selectDistinct(c.field(CLOSURE.CHILD))
                                                             .from(c)
                                                             .join(allFinalized)
                                                             .on(c.field(CLOSURE.PARENT).eq(allFinalizedHash))))

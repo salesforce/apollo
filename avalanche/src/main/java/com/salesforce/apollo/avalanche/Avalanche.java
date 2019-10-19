@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionService;
@@ -250,7 +251,7 @@ public class Avalanche {
     private volatile Thread queryThread;
     private final int required;
     private final AtomicInteger round = new AtomicInteger();
-    private final DSLContext roundPool;
+    private final DSLContext roundContext;
     private final int rounds2Flood;
     private final AtomicBoolean running = new AtomicBoolean();
     private final RandomMemberGenerator sampler;
@@ -286,18 +287,12 @@ public class Avalanche {
         queryConfig.addDataSourceProperty("useServerPrepStmts", "true");
         queryPool = DSL.using(new HikariDataSource(queryConfig), SQLDialect.H2);
 
-        final HikariConfig roundConfig = new HikariConfig();
-        roundConfig.setMinimumIdle(3_000);
-        roundConfig.setMaximumPoolSize(1);
-        roundConfig.setUsername(USER_NAME);
-        roundConfig.setPassword(PASSWORD);
-        roundConfig.setJdbcUrl(parameters.dbConnect);
-        roundConfig.setAutoCommit(false);
-        roundConfig.addDataSourceProperty("cachePrepStmts", "true");
-        roundConfig.addDataSourceProperty("prepStmtCacheSize", "250");
-        roundConfig.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
-        roundConfig.addDataSourceProperty("useServerPrepStmts", "true");
-        roundPool = DSL.using(new HikariDataSource(roundConfig), SQLDialect.H2);
+        try {
+            roundContext = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD),
+                                     SQLDialect.H2);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Cannot obtain jdbc connection", e);
+        }
 
         final HikariConfig submitConfig = new HikariConfig();
         submitConfig.setMinimumIdle(3_000);
@@ -402,10 +397,7 @@ public class Avalanche {
 
     public void stop() {
         if (!running.compareAndSet(true, false)) { return; }
-        pendingTransactions.values().forEach(pending -> {
-            pending.pending.complete(null);
-            pending.timer.cancel(true);
-        });
+        pendingTransactions.values().clear();
         comm.close();
     }
 
@@ -499,13 +491,13 @@ public class Avalanche {
         if (parentSample.isEmpty()) {
             sampleParents();
         }
-        List<HASH> parents = new ArrayList<>();
+        TreeSet<HashKey> parents = new TreeSet<>();
         while (parents.size() < parameters.parentCount) {
             HASH parent = parentSample.poll();
             if (parent == null) {
                 break;
             }
-            parents.add(parent);
+            parents.add(new HashKey(parent));
         }
         if (parents.isEmpty()) {
             if (future != null) {
@@ -519,7 +511,7 @@ public class Avalanche {
             DagEntry dagEntry = new DagEntry();
             dagEntry.setDescription(description);
             dagEntry.setData(ByteBuffer.wrap(data));
-            dagEntry.setLinks(parents);
+            dagEntry.setLinks(parents.stream().map(e -> e.toHash()).collect(Collectors.toList()));
             Entry entry = serialize(dagEntry);
             hash = hashOf(entry);
             insertions.add(new DagInsert(new HASH(hash), dagEntry, entry, null, false, round.get() + rounds2Flood));
@@ -569,9 +561,9 @@ public class Avalanche {
             if (successor == null) {
                 break;
             }
-            List<HASH> wanted = roundPool
-                                         .transactionResult(config -> dag.getWanted(parameters.queryBatchSize,
-                                                                                    DSL.using(config)));
+            List<HASH> wanted = roundContext
+                                            .transactionResult(config -> dag.getWanted(parameters.queryBatchSize,
+                                                                                       DSL.using(config)));
             if (wanted.isEmpty()) {
                 log.trace("No DAG holes on: {}", view.getNode().getId());
                 return;
@@ -633,26 +625,25 @@ public class Avalanche {
         }
 
         for (int i = 0; i < parameters.noOpsPerRound; i++) {
-            List<HASH> parents = new ArrayList<>();
+            TreeSet<HashKey> parents = new TreeSet<>();
             while (parents.size() < parameters.maxNoOpParents) {
                 if (noOpParentSample.peek() == null) {
                     break;
                 }
-                parents.add(noOpParentSample.removeFirst());
+                parents.add(new HashKey(noOpParentSample.removeFirst()));
             }
             if (parents.isEmpty()) { return; }
             DagEntry dagEntry = new DagEntry();
             byte[] dummy = new byte[4];
             getEntropy().nextBytes(dummy);
             dagEntry.setData(ByteBuffer.wrap(dummy));
-            dagEntry.setLinks(parents);
+            dagEntry.setLinks(parents.stream().map(e -> e.toHash()).collect(Collectors.toList()));
             Entry entry = serialize(dagEntry);
             insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null, true,
                                          round.get() + rounds2Flood));
             flood(entry);
             if (log.isTraceEnabled()) {
-                log.trace("noOp transaction {}",
-                          parents.stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
+                log.trace("noOp transaction {}", parents);
             }
         }
     }
@@ -664,10 +655,7 @@ public class Avalanche {
         Context timer = metrics == null ? null : metrics.getNoOpTimer().time();
 
         dag.getNeglectedFrontier(queryPool).forEach(e -> noOpParentSample.add(e));
-
-        if (noOpParentSample.isEmpty()) {
-            dag.getNeglected(queryPool).forEach(e -> noOpParentSample.add(e));
-        }
+        dag.getNeglected(queryPool).forEach(e -> noOpParentSample.add(e));
 
         if (noOpParentSample.isEmpty()) {
             // if still none, select any nodes that are not finalized
@@ -715,7 +703,7 @@ public class Avalanche {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
         Context timer = metrics == null ? null : metrics.getQueryTimer().time();
-        List<HASH> unqueried = dag.query(parameters.queryBatchSize, roundPool,
+        List<HASH> unqueried = dag.query(parameters.queryBatchSize, roundContext,
                                          round.get());
         if (unqueried.isEmpty()) {
             if (timer != null) {
@@ -804,7 +792,7 @@ public class Avalanche {
 
         long remainingTimout = parameters.unit.toMillis(parameters.timeout);
 
-        roundPool.transaction(config -> {
+        roundContext.transaction(config -> {
             dag.markQueried(batch.stream().map(k -> k.bytes()).collect(Collectors.toList()), DSL.using(config));
         });
 
@@ -862,24 +850,17 @@ public class Avalanche {
     }
 
     private void preferLoop() {
-        final HikariConfig config = new HikariConfig();
-        config.setPoolName(getNode() + "Prefer pool");
-        config.setMinimumIdle(3_000);
-        config.setMaximumPoolSize(1);
-        config.setUsername(USER_NAME);
-        config.setPassword(PASSWORD);
-        config.setJdbcUrl(parameters.dbConnect);
-        config.setAutoCommit(false);
-        config.addDataSourceProperty("cachePrepStmts", "true");
-        config.addDataSourceProperty("prepStmtCacheSize", "250");
-        config.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
-        config.addDataSourceProperty("useServerPrepStmts", "true");
-        final DSLContext pool = DSL.using(new HikariDataSource(config), SQLDialect.H2);
+        DSLContext context;
+        try {
+            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
+        } catch (SQLException e) {
+            throw new IllegalStateException("unable to create jdbc connection", e);
+        }
         try {
             while (running.get()) {
                 try {
                     if (!running.get()) { return; }
-                    nextPreferred(pool);
+                    nextPreferred(context);
                 } catch (Throwable e) {
                     if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
                         log.info("mutator rolled back: {}", e);
@@ -890,29 +871,22 @@ public class Avalanche {
                 } catch (InterruptedException e) {}
             }
         } finally {
-            pool.close();
+            context.close();
         }
     }
 
     private void finalizationLoop() {
-        final HikariConfig config = new HikariConfig();
-        config.setPoolName(getNode() + "Finalize pool");
-        config.setMinimumIdle(3_000);
-        config.setMaximumPoolSize(1);
-        config.setUsername(USER_NAME);
-        config.setPassword(PASSWORD);
-        config.setJdbcUrl(parameters.dbConnect);
-        config.setAutoCommit(false);
-        config.addDataSourceProperty("cachePrepStmts", "true");
-        config.addDataSourceProperty("prepStmtCacheSize", "250");
-        config.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
-        config.addDataSourceProperty("useServerPrepStmts", "true");
-        final DSLContext pool = DSL.using(new HikariDataSource(config), SQLDialect.H2);
+        DSLContext context;
+        try {
+            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
+        } catch (SQLException e) {
+            throw new IllegalStateException("unable to create jdbc connection", e);
+        }
         try {
             while (running.get()) {
                 try {
                     if (!running.get()) { return; }
-                    nextFinalized(pool);
+                    nextFinalized(context);
                 } catch (Throwable e) {
                     if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
                         log.info("mutator rolled back: {}", e);
@@ -923,7 +897,7 @@ public class Avalanche {
                 } catch (InterruptedException e) {}
             }
         } finally {
-            pool.close();
+            context.close();
         }
     }
 
@@ -936,8 +910,8 @@ public class Avalanche {
         Member next = sampler.next();
         if (next == null) { return; }
 
-        List<HASH> want = roundPool.transactionResult(config -> dag.getWanted(parameters.queryBatchSize,
-                                                                              DSL.using(config)));
+        List<HASH> want = roundContext.transactionResult(config -> dag.getWanted(parameters.queryBatchSize,
+                                                                                 DSL.using(config)));
         AvalancheClientCommunications connection = comm.connectToNode(next, getNode());
         if (connection == null) { return; }
         List<Entry> requested;
@@ -972,24 +946,17 @@ public class Avalanche {
     }
 
     private void insertLoop() {
-        final HikariConfig config = new HikariConfig();
-        config.setPoolName(getNode() + "Input pool");
-        config.setMinimumIdle(3_000);
-        config.setMaximumPoolSize(1);
-        config.setUsername(USER_NAME);
-        config.setPassword(PASSWORD);
-        config.setJdbcUrl(parameters.dbConnect);
-        config.setAutoCommit(false);
-        config.addDataSourceProperty("cachePrepStmts", "true");
-        config.addDataSourceProperty("prepStmtCacheSize", "250");
-        config.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
-        config.addDataSourceProperty("useServerPrepStmts", "true");
-        final DSLContext pool = DSL.using(new HikariDataSource(config), SQLDialect.H2);
+        DSLContext context;
+        try {
+            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
+        } catch (SQLException e) {
+            throw new IllegalStateException("unable to create jdbc connection", e);
+        }
         try {
             while (running.get()) {
                 try {
                     if (!running.get()) { return; }
-                    nextInserts(pool);
+                    nextInserts(context);
                 } catch (Throwable e) {
                     if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
                         log.info("insertions rolled back: {}", e);
@@ -997,7 +964,7 @@ public class Avalanche {
                 }
             }
         } finally {
-            pool.close();
+            context.close();
         }
     }
 
