@@ -52,7 +52,6 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
-import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -134,7 +133,7 @@ public class AvalancheFunctionalTest {
             // Avalanche implementation parameters
             aParams.queryBatchSize = 100;
             aParams.insertBatchSize = 800;
-            aParams.preferBatchSize = 100;
+            aParams.preferBatchSize = 200;
             aParams.finalizeBatchSize = 100;
             aParams.noOpsPerRound = 1;
             aParams.maxNoOpParents = 100;
@@ -145,7 +144,7 @@ public class AvalancheFunctionalTest {
             // # of FF rounds per NoOp generation
             aParams.delta = 3;
             // # of Avalanche queries per FF round
-            aParams.gamma = 10;
+            aParams.gamma = 20;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
                     + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
@@ -157,11 +156,11 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 400;
+        int target = 200;
 
         views.forEach(view -> view.getService().start(Duration.ofMillis(500)));
 
-        assertTrue("Could not stabilize view membership)", Utils.waitForCondition(30_000, 1_000, () -> {
+        assertTrue("Could not stabilize view membership)", Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
@@ -209,9 +208,9 @@ public class AvalancheFunctionalTest {
             transactioneers.add(new Transactioneer(a));
         }
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target, txnScheduler));
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 200, txnScheduler));
 
-        boolean finalized = Utils.waitForCondition(600_000, 1_000, () -> {
+        boolean finalized = Utils.waitForCondition(600_000, 10_000, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= target)
@@ -245,7 +244,7 @@ public class AvalancheFunctionalTest {
                 / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
+//        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()

@@ -973,7 +973,7 @@ public class Avalanche {
         for (int i = 0; i < batch; i++) {
             HASH key;
             try {
-                key = finalizing.poll(200, TimeUnit.NANOSECONDS);
+                key = i == 0 ? finalizing.poll(1, TimeUnit.SECONDS) : finalizing.poll(200, TimeUnit.MICROSECONDS);
             } catch (InterruptedException e) {
                 break;
             }
@@ -1021,7 +1021,7 @@ public class Avalanche {
         for (int i = 0; i < parameters.insertBatchSize; i++) {
             DagInsert insert;
             try {
-                insert = insertions.poll(200, TimeUnit.NANOSECONDS);
+                insert = i == 0 ? insertions.poll(1, TimeUnit.SECONDS) : insertions.poll(200, TimeUnit.MICROSECONDS);
             } catch (InterruptedException e) {
                 break;
             }
@@ -1059,7 +1059,7 @@ public class Avalanche {
         for (int i = 0; i < batch; i++) {
             HASH key;
             try {
-                key = preferings.poll(200, TimeUnit.NANOSECONDS);
+                key = i == 0 ? preferings.poll(1, TimeUnit.SECONDS) : preferings.poll(200, TimeUnit.MICROSECONDS);
             } catch (InterruptedException e) {
                 break;
             }
