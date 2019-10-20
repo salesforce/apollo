@@ -589,23 +589,29 @@ public class Dag {
                     if (dagEntry.getLinks().isEmpty()) {
                         System.out.println("Empty link entry: " + key);
                     }
-                    dagEntry.getLinks().forEach(link -> updateClosure(hash, link, create));
+                    dagEntry.getLinks()
+                            .forEach(link -> create.insertInto(LINK, LINK.NODE, LINK.HASH)
+                                                   .values(key.bytes(), link.bytes())
+                                                   .execute());
+                    updateClosure(hash, create, noOp);
                 } else {
                     System.out.println("Genesis entry: " + key);
                     conflictSet = new HASH(GENESIS_CONFLICT_SET);
                 }
                 addToConflictSet(hash, conflictSet, create);
 
-                BigDecimal confidence = create.select(DSL.sum(DAG.CHIT))
-                                              .from(DAG)
-                                              .join(CLOSURE)
-                                              .on(DAG.HASH.eq(CLOSURE.PARENT))
-                                              .where(CLOSURE.CHILD.eq(key.bytes()))
-                                              .fetchOne()
-                                              .value1();
-                create.update(DAG).set(DAG.CONFIDENCE, confidence.intValue());
-                if (confidence.intValue() != 0) {
-                    log.info("updated confidence to: {}", confidence.intValue());
+                if (!noOp) {
+                    BigDecimal confidence = create.select(DSL.sum(DAG.CHIT))
+                                                  .from(DAG)
+                                                  .join(CLOSURE)
+                                                  .on(DAG.HASH.eq(CLOSURE.PARENT))
+                                                  .where(CLOSURE.CHILD.eq(key.bytes()))
+                                                  .fetchOne()
+                                                  .value1();
+                    create.update(DAG).set(DAG.CONFIDENCE, confidence.intValue());
+                    if (confidence.intValue() != 0) {
+                        log.info("updated confidence to: {}", confidence.intValue());
+                    }
                 }
             }
         } catch (DataAccessException e) {
@@ -796,8 +802,8 @@ public class Dag {
                      .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
                      .where(DAG.FINALIZED.isFalse()
                                          .and(DAG.NOOP.isFalse())
-                                         .and(DAG.CONFIDENCE.greaterThan(DSL.inline(0))
-                                                            .and(DAG.CONFIDENCE.le(3))
+                                         .and(DAG.CONFIDENCE.ge(DSL.inline(0))
+                                                            .and(DAG.CONFIDENCE.le(parameters.beta1 / 1))
                                                             .and(CONFLICTSET.PREFERRED.eq(DAG.HASH))))
                      .and(LINK.NODE.in(create.select(DAG.HASH)
                                              .from(DAG)
@@ -958,9 +964,9 @@ public class Dag {
      * Maintain the transitive closure of the DAG
      * 
      * @param n
-     * @param link
+     * @param noOp
      */
-    void updateClosure(HASH n, HASH link, DSLContext create) {
+    void updateClosure(HASH n, DSLContext create, boolean noOp) {
         Closure p = CLOSURE.as("p");
         Closure c = CLOSURE.as("c");
 
@@ -968,9 +974,10 @@ public class Dag {
               .key(CLOSURE.PARENT, CLOSURE.CHILD)
               .select(create.select(p.PARENT, c.CHILD, p.DEPTH.plus(c.DEPTH).plus(1))
                             .from(p, c)
+                            .join(LINK)
+                            .on(LINK.NODE.eq(n.bytes()))
                             .where(p.CHILD.eq(n.bytes()))
-                            .and(c.PARENT.eq(link.bytes())))
+                            .and(c.PARENT.eq(LINK.HASH)))
               .execute();
-        create.insertInto(LINK, LINK.NODE, LINK.HASH).values(n.bytes(), link.bytes()).execute();
     }
 }

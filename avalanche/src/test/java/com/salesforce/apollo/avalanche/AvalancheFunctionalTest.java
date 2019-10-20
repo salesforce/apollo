@@ -157,8 +157,11 @@ public class AvalancheFunctionalTest {
 
         // # of txns per node
         int target = 200;
+        Duration ffRound = Duration.ofMillis(500);
 
-        views.forEach(view -> view.getService().start(Duration.ofMillis(500)));
+        views.forEach(view -> {
+            view.getService().start(ffRound);
+        });
 
         assertTrue("Could not stabilize view membership)", Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()
