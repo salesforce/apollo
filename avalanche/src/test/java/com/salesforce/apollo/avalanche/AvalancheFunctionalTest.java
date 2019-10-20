@@ -132,7 +132,7 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.queryBatchSize = 100;
-            aParams.insertBatchSize = 800;
+            aParams.insertBatchSize = 200;
             aParams.preferBatchSize = 200;
             aParams.finalizeBatchSize = 100;
             aParams.noOpsPerRound = 1;
