@@ -831,6 +831,9 @@ public class Avalanche {
         try {
             for (int i = 0; i < parameters.gamma; i++) {
                 query();
+                if (parameters.gamma > 1) {
+                    Thread.sleep(2);
+                }
             }
         } catch (Throwable t) {
             log.error("Error performing Avalanche batch round", t);

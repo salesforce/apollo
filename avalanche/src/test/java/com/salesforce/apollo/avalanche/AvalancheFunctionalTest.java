@@ -211,7 +211,7 @@ public class AvalancheFunctionalTest {
             transactioneers.add(new Transactioneer(a));
         }
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 200, txnScheduler));
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 400, txnScheduler));
 
         boolean finalized = Utils.waitForCondition(600_000, 10_000, () -> {
             return transactioneers.stream()
