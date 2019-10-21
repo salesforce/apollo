@@ -52,6 +52,7 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -132,19 +133,19 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.queryBatchSize = 100;
-            aParams.insertBatchSize = 200;
-            aParams.preferBatchSize = 200;
+            aParams.insertBatchSize = 2;
+            aParams.preferBatchSize = 100;
             aParams.finalizeBatchSize = 100;
             aParams.noOpsPerRound = 1;
             aParams.maxNoOpParents = 100;
-            aParams.maxQueries = 100;
+            aParams.maxActiveQueries = 100;
 
             // # of firefly rounds per avalanche round
             aParams.epsilon = 1;
             // # of FF rounds per NoOp generation
-            aParams.delta = 3;
+            aParams.delta = 2;
             // # of Avalanche queries per FF round
-            aParams.gamma = 20;
+            aParams.gamma = 30;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
                     + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
@@ -159,9 +160,7 @@ public class AvalancheFunctionalTest {
         int target = 200;
         Duration ffRound = Duration.ofMillis(500);
 
-        views.forEach(view -> {
-            view.getService().start(ffRound);
-        });
+        views.forEach(view -> view.getService().start(ffRound));
 
         assertTrue("Could not stabilize view membership)", Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()
@@ -182,7 +181,7 @@ public class AvalancheFunctionalTest {
                                                                  txnScheduler);
         HashKey genesisKey = null;
         try {
-            genesisKey = genesis.get(60, TimeUnit.SECONDS);
+            genesisKey = genesis.get(10, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             nodes.forEach(node -> node.stop());
             views.forEach(v -> v.getService().stop());
@@ -247,7 +246,7 @@ public class AvalancheFunctionalTest {
                 / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-//        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
+        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()

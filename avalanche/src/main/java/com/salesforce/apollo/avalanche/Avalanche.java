@@ -276,7 +276,7 @@ public class Avalanche {
         comm.initialize(this);
         final HikariConfig queryConfig = new HikariConfig();
         queryConfig.setMinimumIdle(3_000);
-        queryConfig.setMaximumPoolSize(parameters.maxQueries);
+        queryConfig.setMaximumPoolSize(parameters.maxActiveQueries);
         queryConfig.setUsername(USER_NAME);
         queryConfig.setPassword(PASSWORD);
         queryConfig.setJdbcUrl(parameters.dbConnect);
@@ -770,7 +770,11 @@ public class Avalanche {
             } finally {
                 connection.close();
             }
-            log.trace("queried: {} for: {} result: {}", m, batch, result.getResult());
+            if (log.isTraceEnabled()) {
+                log.trace("queried: {} for: {} result: {}", m,
+                          batch.stream().map(e -> new HashKey(e)).collect(Collectors.toList()), result.getResult());
+            }
+
             if (!wanted.isEmpty()) {
                 log.trace("wanted {} received {} entries", wanted.size(), result.getEntries().size());
             }
@@ -869,9 +873,6 @@ public class Avalanche {
                         log.info("mutator rolled back: {}", e);
                     }
                 }
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e) {}
             }
         } finally {
             context.close();
@@ -895,9 +896,6 @@ public class Avalanche {
                         log.info("mutator rolled back: {}", e);
                     }
                 }
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e) {}
             }
         } finally {
             context.close();
@@ -1043,10 +1041,11 @@ public class Avalanche {
         log.trace("Insertions: {}", next.size());
         Context timer = metrics == null ? null : metrics.getInputTimer().time();
         context.transaction(config -> {
-            next.forEach(insert -> {
-                dag.putDagEntry(insert.key, insert.dagEntry, insert.entry, insert.conflictSet, DSL.using(config),
-                                insert.noOp, insert.targetRound);
-            });
+            dag.put(next, DSL.using(config));
+//            next.forEach(insert -> {
+//                dag.putDagEntry(insert.key, insert.dagEntry, insert.entry, insert.conflictSet, DSL.using(config),
+//                                insert.noOp, insert.targetRound);
+//            });
         });
 
         if (timer != null) {

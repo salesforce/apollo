@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit;
  * @author hal.hildebrand
  * @since 220
  */
-public class AvalancheParameters {
-    private static final String DEFAULT_CONNECTION = "jdbc:h2:mem:dagCache";
+public class AvalancheParameters { 
+    private static final String DEFAULT_CONNECTION = "jdbc:h2:mem:dagCache;LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
 
     /**
      * The percentage of k members that need to vote for a txn to be preferred
@@ -34,17 +34,17 @@ public class AvalancheParameters {
     /**
      * The number of FF rounds per NoOp generation round
      */
-    public int delta = 9;
+    public int delta = 2;
     /**
      * The number of FF rounds per Avalanche round
      */
-    public int epsilon = 9;
-    public int finalizeBatchSize = 50;
+    public int epsilon = 1;
+    public int finalizeBatchSize = 100;
     /**
      * The number of queries per FF round
      */
-    public int gamma = 2;
-    public int insertBatchSize = 100;
+    public int gamma = 20;
+    public int insertBatchSize = 8;
     /**
      * The number of members to sample for a vote
      */
@@ -59,7 +59,7 @@ public class AvalancheParameters {
     /**
      * Max JDBC connections in pool
      */
-    public int maxQueries = 3;
+    public int maxActiveQueries = 100;
 
     public int noOpsPerRound = 1;
 
@@ -68,7 +68,7 @@ public class AvalancheParameters {
      */
     public int parentCount = 3;
 
-    public int preferBatchSize = 50;
+    public int preferBatchSize = 100;
 
     /**
      * Query timeout

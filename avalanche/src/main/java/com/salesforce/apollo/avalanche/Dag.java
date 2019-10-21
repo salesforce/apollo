@@ -13,9 +13,7 @@ import static com.salesforce.apollo.dagwood.schema.Tables.LINK;
 import static com.salesforce.apollo.dagwood.schema.Tables.UNQUERIED;
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
 import static com.salesforce.apollo.protocols.Conversion.manifestDag;
-import static com.salesforce.apollo.protocols.Conversion.serialize;
 
-import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.sql.Connection;
@@ -34,6 +32,7 @@ import org.h2.tools.TriggerAdapter;
 import org.jooq.BatchBindStep;
 import org.jooq.DSLContext;
 import org.jooq.Field;
+import org.jooq.Query;
 import org.jooq.Record;
 import org.jooq.Record1;
 import org.jooq.Record2;
@@ -553,6 +552,55 @@ public class Dag {
         create.deleteFrom(toPrefer).execute();
     }
 
+    public void put(List<DagInsert> inserts, DSLContext context) {
+        Query dagMerge = context.mergeInto(DAG, DAG.HASH, DAG.DATA, DAG.NOOP, DAG.CONFLICTSET)
+                                .key(DAG.HASH)
+                                .values((byte[])null, (byte[])null, (Boolean)null, (byte[])null)
+                                .keepStatement(true);
+        Query insertLinks = context.insertInto(LINK, LINK.NODE, LINK.HASH)
+                                   .values((byte[])null, (byte[])null)
+                                   .keepStatement(true);
+        BatchBindStep batch = context.batch(insertLinks);
+        Query insertUnqueried = context.insertInto(UNQUERIED, UNQUERIED.HASH, UNQUERIED.TARGETROUND)
+                                       .values((byte[])null, 0)
+                                       .keepStatement(true);
+
+        Query insertClosure0 = context.insertInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.DEPTH)
+                                      .values((byte[])null, (byte[])null, 0)
+                                      .keepStatement(true);
+        Query updateConfidence = context.update(DAG)
+                                        .set(DAG.CONFIDENCE,
+                                             context.select(DSL.cast(DSL.sum(DAG.CHIT), Integer.class))
+                                                    .from(DAG)
+                                                    .join(CLOSURE)
+                                                    .on(DAG.HASH.eq(CLOSURE.PARENT))
+                                                    .where(CLOSURE.CHILD.eq((byte[])null)))
+                                        .where(DAG.HASH.eq((byte[])null))
+                                        .keepStatement(true);
+        Query mergeConflictSet = context.mergeInto(CONFLICTSET, CONFLICTSET.NODE, CONFLICTSET.PREFERRED,
+                                                   CONFLICTSET.LAST, CONFLICTSET.CARDINALITY)
+                                        .key(CONFLICTSET.NODE)
+                                        .values((byte[])null, (byte[])null, (byte[])null, 1)
+                                        .keepStatement(true);
+        Query updateConflictCard = context.update(CONFLICTSET)
+                                          .set(CONFLICTSET.CARDINALITY, CONFLICTSET.CARDINALITY.plus(1))
+                                          .where(CONFLICTSET.NODE.eq((byte[])null))
+                                          .keepStatement(true);
+
+        try {
+            put(inserts, context, dagMerge, batch, insertUnqueried, insertClosure0, updateConfidence, mergeConflictSet,
+                updateConflictCard);
+        } finally {
+            dagMerge.close();
+            insertLinks.close();
+            insertUnqueried.close();
+            insertClosure0.close();
+            updateConfidence.close();
+            mergeConflictSet.close();
+            updateConflictCard.close();
+        }
+    }
+
     public HASH putDagEntry(DagEntry dagEntry, Entry entry, HASH conflictSet, DSLContext create, boolean noOp,
             int targetRound) {
         return putDagEntry(new HashKey(hashOf(entry)), dagEntry, entry, conflictSet, create, noOp, targetRound);
@@ -564,96 +612,87 @@ public class Dag {
 
         HASH hash = key.toHash();
         conflictSet = dagEntry.getLinks() == null ? new HASH(GENESIS_CONFLICT_SET)
-                : conflictSet == null ? hash : conflictSet;
+                                                  : conflictSet == null ? hash : conflictSet;
+        if (dagEntry.getLinks() == null) {
+            System.out.println("Genesis entry: " + key);
+        }
+        Query dagMerge = create.mergeInto(DAG, DAG.HASH, DAG.DATA, DAG.NOOP, DAG.CONFLICTSET)
+                               .key(DAG.HASH)
+                               .values((byte[])null, (byte[])null, (Boolean)null, (byte[])null)
+                               .keepStatement(true);
+        Query insertLinks = create.insertInto(LINK, LINK.NODE, LINK.HASH)
+                                  .values((byte[])null, (byte[])null)
+                                  .keepStatement(true);
+        BatchBindStep batch = create.batch(insertLinks);
+        Query insertUnqueried = create.insertInto(UNQUERIED, UNQUERIED.HASH, UNQUERIED.TARGETROUND)
+                                      .values((byte[])null, 0)
+                                      .keepStatement(true);
 
+        Query insertClosure0 = create.insertInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.DEPTH)
+                                     .values((byte[])null, (byte[])null, 0)
+                                     .keepStatement(true);
+        Query updateConfidence = create.update(DAG)
+                                       .set(DAG.CONFIDENCE, create.select(DSL.cast(DSL.sum(DAG.CHIT), Integer.class))
+                                                                  .from(DAG)
+                                                                  .join(CLOSURE)
+                                                                  .on(DAG.HASH.eq(CLOSURE.PARENT))
+                                                                  .where(CLOSURE.CHILD.eq((byte[])null)))
+                                       .where(DAG.HASH.eq((byte[])null))
+                                       .keepStatement(true);
+        Query mergeConflictSet = create.mergeInto(CONFLICTSET, CONFLICTSET.NODE, CONFLICTSET.PREFERRED,
+                                                  CONFLICTSET.LAST, CONFLICTSET.CARDINALITY)
+                                       .key(CONFLICTSET.NODE)
+                                       .values((byte[])null, (byte[])null, (byte[])null, 1)
+                                       .keepStatement(true);
+        Query updateConflictCard = create.update(CONFLICTSET)
+                                         .set(CONFLICTSET.CARDINALITY, CONFLICTSET.CARDINALITY.plus(1))
+                                         .where(CONFLICTSET.NODE.eq((byte[])null))
+                                         .keepStatement(true);
         try {
-            if (create.select(DSL.inline(true))
-                      .from(DAG)
-                      .where(DAG.HASH.eq(key.bytes()))
-                      .fetchOne() == null) {
-                create.select(DSL.inline(true))
-                      .from(DAG)
-                      .where(DAG.HASH.eq(key.bytes()))
-                      .forUpdate()
-                      .execute();
-                create.insertInto(DAG, DAG.HASH, DAG.DATA, DAG.NOOP)
-                      .values(key.bytes(), entry.getData().array(), noOp)
-                      .execute();
-                create.insertInto(UNQUERIED, UNQUERIED.HASH, UNQUERIED.TARGETROUND)
-                      .values(key.bytes(), targetRound)
-                      .execute();
-                create.insertInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.DEPTH)
-                      .values(key.bytes(), key.bytes(), 0)
-                      .execute();
+            if (dagMerge.bind(1, key.bytes())
+                        .bind(2, entry.getData().array())
+                        .bind(3, noOp)
+                        .bind(4, conflictSet.bytes())
+                        .execute() != 0) {
+                insertUnqueried.bind(1, key.bytes()).bind(2, targetRound).execute();
+                insertClosure0.bind(1, key.bytes())
+                              .bind(2, key.bytes())
+                              .execute();
                 if (dagEntry.getLinks() != null) {
                     if (dagEntry.getLinks().isEmpty()) {
                         System.out.println("Empty link entry: " + key);
                     }
                     dagEntry.getLinks()
-                            .forEach(link -> create.insertInto(LINK, LINK.NODE, LINK.HASH)
-                                                   .values(key.bytes(), link.bytes())
-                                                   .execute());
-                    updateClosure(hash, create, noOp);
-                } else {
-                    System.out.println("Genesis entry: " + key);
-                    conflictSet = new HASH(GENESIS_CONFLICT_SET);
+                            .forEach(link -> batch.bind(key.bytes(), link.bytes()));
+                    batch.execute();
+                    updateClosure(key, create, noOp);
                 }
-                addToConflictSet(hash, conflictSet, create);
+                if (mergeConflictSet.bind(1, conflictSet.bytes())
+                                    .bind(2, key.bytes())
+                                    .bind(3, key.bytes())
+                                    .execute() == 0) {
+                    updateConflictCard.bind(1, conflictSet.bytes()).execute();
+                }
 
                 if (!noOp) {
-                    BigDecimal confidence = create.select(DSL.sum(DAG.CHIT))
-                                                  .from(DAG)
-                                                  .join(CLOSURE)
-                                                  .on(DAG.HASH.eq(CLOSURE.PARENT))
-                                                  .where(CLOSURE.CHILD.eq(key.bytes()))
-                                                  .fetchOne()
-                                                  .value1();
-                    create.update(DAG).set(DAG.CONFIDENCE, confidence.intValue());
-                    if (confidence.intValue() != 0) {
-                        log.info("updated confidence to: {}", confidence.intValue());
-                    }
+                    updateConfidence.bind(1, key.bytes()).bind(2, key.bytes()).execute();
                 }
             }
         } catch (DataAccessException e) {
             if (e.getCause() instanceof JdbcSQLTimeoutException) {
-                log.trace("Concurrency failure", e.getCause());
+                log.error("Concurrency failure", e.getCause());
             }
+        } finally {
+            dagMerge.close();
+            insertLinks.close();
+            insertUnqueried.close();
+            insertClosure0.close();
+            updateConfidence.close();
+            mergeConflictSet.close();
+            updateConflictCard.close();
         }
         log.trace("inserted: {}", key);
         return hash;
-    }
-
-    public void put(List<DagInsert> inserts, DSLContext context) {
-        @SuppressWarnings("unused")
-        long start = System.currentTimeMillis();
-
-        Table<Record> toInsert = DSL.table("TO_INSERT");
-        Field<byte[]> toInsertHash = DSL.field("TO_INSERT.HASH", byte[].class, toInsert);
-        Field<byte[]> toInsertData = DSL.field("TO_INSERT.DATA", byte[].class, toInsert);
-        Field<byte[]> toInsertCs = DSL.field("TO_INSERT.CONFLICT_SET", byte[].class, toInsert);
-        Field<Integer> toInsertTr = DSL.field("TO_INSERT.TARGET_ROUND", Integer.class, toInsert);
-        Field<Boolean> toInsertNoOp = DSL.field("TO_INSERT.NOOP", Boolean.class, toInsert);
-        context.execute("create cached local temporary table if not exists TO_INSERT(HASH binary(32), DATA binary, CONFLICT_SET binary(32), TARGET_ROUND INT, NO_OP BOOLEAN)");
-
-        BatchBindStep batch = context.batch(context.insertInto(toInsert, toInsertHash, toInsertData, toInsertCs,
-                                                               toInsertTr, toInsertNoOp)
-                                                   .values((byte[])null, null, null, null, null));
-        inserts.forEach(e -> batch.bind(e.key.bytes(), serialize(e.entry), e.conflictSet.bytes(), e.targetRound,
-                                        e.noOp));
-        batch.execute();
-
-        context.deleteFrom(toInsert)
-               .where(toInsertHash.in(context.select(DAG.HASH).from(DAG).join(toInsert).on(DAG.HASH.eq(toInsertHash))))
-               .execute();
-
-        context.update(DAG)
-               .set(DAG.HASH, toInsertHash)
-               .set(DAG.DATA, toInsertData)
-               .set(DAG.CONFLICTSET, toInsertCs)
-               .set(DAG.NOOP, toInsertNoOp)
-               .from(toInsert);
-
-        context.deleteFrom(toInsert);
     }
 
     public List<HASH> query(int limit, DSLContext create, int round) {
@@ -836,6 +875,67 @@ public class Dag {
                      .fetch();
     }
 
+    void put(List<DagInsert> inserts, DSLContext context, Query dagMerge, BatchBindStep linkBatch,
+            Query insertUnqueried, Query insertClosure0, Query updateConfidence, Query mergeConflictSet,
+            Query updateConflictCard) {
+        Closure p = CLOSURE.as("p");
+        Closure c = CLOSURE.as("c");
+
+        inserts.forEach(insert -> {
+            HASH conflictSet = insert.conflictSet;
+            HASH hash = insert.key.toHash();
+            conflictSet = insert.dagEntry.getLinks() == null ? new HASH(GENESIS_CONFLICT_SET)
+                                                             : conflictSet == null ? hash : conflictSet;
+            if (insert.dagEntry.getLinks() == null) {
+                System.out.println("Genesis entry: " + insert.key);
+            }
+            try {
+                if (dagMerge.bind(1, insert.key.bytes())
+                            .bind(2, insert.entry.getData().array())
+                            .bind(3, insert.noOp)
+                            .bind(4, conflictSet.bytes())
+                            .execute() != 0) {
+                    insertUnqueried.bind(1, insert.key.bytes()).bind(2, insert.targetRound).execute();
+                    insertClosure0.bind(1, insert.key.bytes())
+                                  .bind(2, insert.key.bytes())
+                                  .execute();
+                    if (insert.dagEntry.getLinks() != null) {
+                        if (insert.dagEntry.getLinks().isEmpty()) {
+                            System.out.println("Empty link entry: " + insert.key);
+                        }
+                        insert.dagEntry.getLinks()
+                                       .forEach(link -> linkBatch.bind(insert.key.bytes(), link.bytes()));
+                        linkBatch.execute();
+                        context.mergeInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.DEPTH)
+                               .key(CLOSURE.PARENT, CLOSURE.CHILD)
+                               .select(context.select(p.PARENT, c.CHILD, DSL.inline(1))
+                                              .from(p, c)
+                                              .join(LINK)
+                                              .on(LINK.NODE.eq(insert.key.bytes()))
+                                              .where(p.CHILD.eq(insert.key.bytes()))
+                                              .and(c.PARENT.eq(LINK.HASH)))
+                               .execute();
+                    }
+                    if (mergeConflictSet.bind(1, conflictSet.bytes())
+                                        .bind(2, insert.key.bytes())
+                                        .bind(3, insert.key.bytes())
+                                        .execute() == 0) {
+                        updateConflictCard.bind(1, conflictSet.bytes()).execute();
+                    }
+
+                    if (!insert.noOp) {
+                        updateConfidence.bind(1, insert.key.bytes()).bind(2, insert.key.bytes()).execute();
+                    }
+                }
+            } catch (DataAccessException e) {
+                if (e.getCause() instanceof JdbcSQLTimeoutException) {
+                    log.error("Concurrency failure", e.getCause());
+                }
+            }
+            log.trace("inserted: {}", insert.key);
+        });
+    }
+
     /**
      * Finalize the transactions that are eligible for commit in the closure of the supplied keys (note, the closure
      * includes the node itself ;) ). There are two ways a transaction can finalize: safe early commit and late
@@ -963,20 +1063,20 @@ public class Dag {
     /**
      * Maintain the transitive closure of the DAG
      * 
-     * @param n
+     * @param key
      * @param noOp
      */
-    void updateClosure(HASH n, DSLContext create, boolean noOp) {
+    void updateClosure(HashKey key, DSLContext create, boolean noOp) {
         Closure p = CLOSURE.as("p");
         Closure c = CLOSURE.as("c");
 
         create.mergeInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.DEPTH)
               .key(CLOSURE.PARENT, CLOSURE.CHILD)
-              .select(create.select(p.PARENT, c.CHILD, p.DEPTH.plus(c.DEPTH).plus(1))
+              .select(create.select(p.PARENT, c.CHILD, DSL.inline(1))
                             .from(p, c)
                             .join(LINK)
-                            .on(LINK.NODE.eq(n.bytes()))
-                            .where(p.CHILD.eq(n.bytes()))
+                            .on(LINK.NODE.eq(key.bytes()))
+                            .where(p.CHILD.eq(key.bytes()))
                             .and(c.PARENT.eq(LINK.HASH)))
               .execute();
     }
