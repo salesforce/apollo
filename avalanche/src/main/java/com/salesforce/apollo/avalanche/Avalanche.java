@@ -240,6 +240,7 @@ public class Avalanche {
     private final BlockingDeque<DagInsert> insertions = new LinkedBlockingDeque<>();
     private final Listener listener = new Listener();
     private final AvaMetrics metrics;
+    private final DSLContext noOpContext;
     private final Deque<HASH> noOpParentSample = new ArrayDeque<>();
     private volatile Thread noOpThread;
     private final AvalancheParameters parameters;
@@ -306,6 +307,13 @@ public class Avalanche {
         submitConfig.addDataSourceProperty("prepStmtCacheSqlLimit", "8192");
         submitConfig.addDataSourceProperty("useServerPrepStmts", "true");
         submitPool = DSL.using(new HikariDataSource(submitConfig), SQLDialect.H2);
+
+        try {
+            noOpContext = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD),
+                                    SQLDialect.H2);
+        } catch (SQLException e) {
+            throw new IllegalStateException("unable to create jdbc connection", e);
+        }
 
         loadSchema(parameters.dbConnect);
         this.dag = new Dag(parameters, view.getNode().getParameters().entropy);
@@ -399,79 +407,6 @@ public class Avalanche {
         if (!running.compareAndSet(true, false)) { return; }
         pendingTransactions.values().clear();
         comm.close();
-    }
-
-    private void sampleParents() {
-        Context timer = metrics == null ? null : metrics.getParentSampleTimer().time();
-        AtomicInteger sampleCount = new AtomicInteger(0);
-        try {
-            dag.frontierSample(submitPool).forEach(e -> parentSample.add(e));
-            if (parentSample.isEmpty()) {
-                submitPool.select(DAG.HASH)
-                          .from(DAG)
-                          .join(CONFLICTSET)
-                          .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
-                          .where(DAG.CONFIDENCE.gt(DSL.inline(0)).and(DAG.CONFIDENCE.le(3)))
-                          .and(DAG.FINALIZED.isFalse())
-                          .and(DAG.NOOP.isFalse())
-                          .and(CONFLICTSET.CARDINALITY.eq(1))
-                          .orderBy(DSL.rand())
-                          .stream()
-                          .peek(e -> sampleCount.incrementAndGet())
-                          .map(r -> new HASH(r.value1()))
-                          .forEach(h -> parentSample.add(h));
-            }
-            if (parentSample.isEmpty()) {
-                // Next select any non finalized nodes that are the only member of their conflict set
-                submitPool.select(DAG.HASH)
-                          .from(DAG)
-                          .join(CONFLICTSET)
-                          .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
-                          .where(DAG.FINALIZED.isFalse())
-                          .and(DAG.NOOP.isFalse())
-                          .and(CONFLICTSET.CARDINALITY.eq(1))
-                          .orderBy(DSL.rand())
-                          .stream()
-                          .peek(e -> sampleCount.incrementAndGet())
-                          .map(r -> new HASH(r.value1()))
-                          .forEach(h -> parentSample.add(h));
-            }
-
-            if (parentSample.isEmpty()) {
-                // Next, select any nodes that are not finalized
-                submitPool.select(DAG.HASH)
-                          .from(DAG)
-                          .where(DAG.FINALIZED.isFalse())
-                          .and(DAG.NOOP.isFalse())
-                          .orderBy(DSL.rand())
-                          .stream()
-                          .peek(e -> sampleCount.incrementAndGet())
-                          .map(r -> new HASH(r.value1()))
-                          .forEach(h -> parentSample.add(h));
-            }
-            if (parentSample.isEmpty()) {
-                // If still none, select any finalized node
-                submitPool.select(DAG.HASH)
-                          .from(DAG)
-                          .where(DAG.CONFIDENCE.gt(DSL.inline(0)))
-                          .or(DAG.FINALIZED.isTrue())
-                          .and(DAG.NOOP.isFalse())
-                          .orderBy(DSL.rand())
-                          .limit(100)
-                          .stream()
-                          .peek(e -> sampleCount.incrementAndGet())
-                          .map(r -> new HASH(r.value1()))
-                          .forEach(h -> parentSample.add(h));
-            }
-        } finally {
-            if (timer != null) {
-                timer.close();
-            }
-            if (metrics != null) {
-                metrics.getParentSampleRate().mark(sampleCount.get());
-            }
-        }
-
     }
 
     /**
@@ -649,46 +584,6 @@ public class Avalanche {
     }
 
     /**
-     * 
-     */
-    void sampleNoOpParents() {
-        Context timer = metrics == null ? null : metrics.getNoOpTimer().time();
-
-        dag.getNeglectedFrontier(queryPool).forEach(e -> noOpParentSample.add(e));
-        dag.getNeglected(queryPool).forEach(e -> noOpParentSample.add(e));
-
-        if (noOpParentSample.isEmpty()) {
-            // if still none, select any nodes that are not finalized
-            submitPool.select(DAG.HASH)
-                      .from(DAG)
-                      .where(DAG.FINALIZED.isFalse())
-                      .and(DAG.NOOP.isFalse())
-                      .orderBy(DSL.rand())
-                      .limit(100)
-                      .stream()
-                      .map(r -> new HASH(r.value1()))
-                      .forEach(h -> parentSample.add(h));
-        }
-
-        if (noOpParentSample.isEmpty()) {
-            // If still none, select any finalized node
-            submitPool.select(DAG.HASH)
-                      .from(DAG)
-                      .where(DAG.CONFIDENCE.gt(DSL.inline(0)))
-                      .or(DAG.FINALIZED.isTrue())
-                      .and(DAG.NOOP.isFalse())
-                      .orderBy(DSL.rand())
-                      .limit(100)
-                      .stream()
-                      .map(r -> new HASH(r.value1()))
-                      .forEach(h -> parentSample.add(h));
-        }
-        if (timer != null) {
-            timer.close();
-        }
-    }
-
-    /**
      * for test access
      */
     ConcurrentMap<HashKey, PendingTransaction> getPendingTransactions() {
@@ -842,6 +737,46 @@ public class Avalanche {
     }
 
     /**
+     * 
+     */
+    void sampleNoOpParents() {
+        Context timer = metrics == null ? null : metrics.getNoOpTimer().time();
+
+        dag.getNeglectedFrontier(noOpContext).forEach(e -> noOpParentSample.add(e));
+        dag.getNeglected(noOpContext).forEach(e -> noOpParentSample.add(e));
+
+        if (noOpParentSample.isEmpty()) {
+            // if still none, select any nodes that are not finalized
+            noOpContext.select(DAG.HASH)
+                       .from(DAG)
+                       .where(DAG.FINALIZED.isFalse())
+                       .and(DAG.NOOP.isFalse())
+                       .orderBy(DSL.rand())
+                       .limit(100)
+                       .stream()
+                       .map(r -> new HASH(r.value1()))
+                       .forEach(h -> parentSample.add(h));
+        }
+
+        if (noOpParentSample.isEmpty()) {
+            // If still none, select any finalized node
+            noOpContext.select(DAG.HASH)
+                       .from(DAG)
+                       .where(DAG.CONFIDENCE.gt(DSL.inline(0)))
+                       .or(DAG.FINALIZED.isTrue())
+                       .and(DAG.NOOP.isFalse())
+                       .orderBy(DSL.rand())
+                       .limit(100)
+                       .stream()
+                       .map(r -> new HASH(r.value1()))
+                       .forEach(h -> parentSample.add(h));
+        }
+        if (timer != null) {
+            timer.close();
+        }
+    }
+
+    /**
      * Timeout the pending transaction
      * 
      * @param key
@@ -851,29 +786,6 @@ public class Avalanche {
         if (pending == null) { return; }
         pending.timer.cancel(true);
         pending.pending.complete(null);
-    }
-
-    private void preferLoop() {
-        DSLContext context;
-        try {
-            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
-        } catch (SQLException e) {
-            throw new IllegalStateException("unable to create jdbc connection", e);
-        }
-        try {
-            while (running.get()) {
-                try {
-                    if (!running.get()) { return; }
-                    nextPreferred(context);
-                } catch (Throwable e) {
-                    if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
-                        log.info("mutator rolled back: {}", e);
-                    }
-                }
-            }
-        } finally {
-            context.close();
-        }
     }
 
     private void finalizationLoop() {
@@ -1039,10 +951,10 @@ public class Avalanche {
         Context timer = metrics == null ? null : metrics.getInputTimer().time();
         context.transaction(config -> {
             dag.put(next, DSL.using(config));
-//            next.forEach(insert -> {
-//                dag.putDagEntry(insert.key, insert.dagEntry, insert.entry, insert.conflictSet, DSL.using(config),
-//                                insert.noOp, insert.targetRound);
-//            });
+            // next.forEach(insert -> {
+            // dag.putDagEntry(insert.key, insert.dagEntry, insert.entry, insert.conflictSet, DSL.using(config),
+            // insert.noOp, insert.targetRound);
+            // });
         });
 
         if (timer != null) {
@@ -1086,6 +998,29 @@ public class Avalanche {
         }
     }
 
+    private void preferLoop() {
+        DSLContext context;
+        try {
+            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
+        } catch (SQLException e) {
+            throw new IllegalStateException("unable to create jdbc connection", e);
+        }
+        try {
+            while (running.get()) {
+                try {
+                    if (!running.get()) { return; }
+                    nextPreferred(context);
+                } catch (Throwable e) {
+                    if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
+                        log.info("mutator rolled back: {}", e);
+                    }
+                }
+            }
+        } finally {
+            context.close();
+        }
+    }
+
     private EntryProcessor resolve(String processor, ClassLoader resolver) {
         try {
             return (EntryProcessor)resolver.loadClass(processor).getConstructor(new Class[0]).newInstance();
@@ -1094,5 +1029,78 @@ public class Avalanche {
             log.warn("Unresolved processor configured: {} : {}", processor, e);
             return null;
         }
+    }
+
+    private void sampleParents() {
+        Context timer = metrics == null ? null : metrics.getParentSampleTimer().time();
+        AtomicInteger sampleCount = new AtomicInteger(0);
+        try {
+            dag.frontierSample(submitPool).forEach(e -> parentSample.add(e));
+            if (parentSample.isEmpty()) {
+                submitPool.select(DAG.HASH)
+                          .from(DAG)
+                          .join(CONFLICTSET)
+                          .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
+                          .where(DAG.CONFIDENCE.gt(DSL.inline(0)).and(DAG.CONFIDENCE.le(3)))
+                          .and(DAG.FINALIZED.isFalse())
+                          .and(DAG.NOOP.isFalse())
+                          .and(CONFLICTSET.CARDINALITY.eq(1))
+                          .orderBy(DSL.rand())
+                          .stream()
+                          .peek(e -> sampleCount.incrementAndGet())
+                          .map(r -> new HASH(r.value1()))
+                          .forEach(h -> parentSample.add(h));
+            }
+            if (parentSample.isEmpty()) {
+                // Next select any non finalized nodes that are the only member of their conflict set
+                submitPool.select(DAG.HASH)
+                          .from(DAG)
+                          .join(CONFLICTSET)
+                          .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
+                          .where(DAG.FINALIZED.isFalse())
+                          .and(DAG.NOOP.isFalse())
+                          .and(CONFLICTSET.CARDINALITY.eq(1))
+                          .orderBy(DSL.rand())
+                          .stream()
+                          .peek(e -> sampleCount.incrementAndGet())
+                          .map(r -> new HASH(r.value1()))
+                          .forEach(h -> parentSample.add(h));
+            }
+
+            if (parentSample.isEmpty()) {
+                // Next, select any nodes that are not finalized
+                submitPool.select(DAG.HASH)
+                          .from(DAG)
+                          .where(DAG.FINALIZED.isFalse())
+                          .and(DAG.NOOP.isFalse())
+                          .orderBy(DSL.rand())
+                          .stream()
+                          .peek(e -> sampleCount.incrementAndGet())
+                          .map(r -> new HASH(r.value1()))
+                          .forEach(h -> parentSample.add(h));
+            }
+            if (parentSample.isEmpty()) {
+                // If still none, select any finalized node
+                submitPool.select(DAG.HASH)
+                          .from(DAG)
+                          .where(DAG.CONFIDENCE.gt(DSL.inline(0)))
+                          .or(DAG.FINALIZED.isTrue())
+                          .and(DAG.NOOP.isFalse())
+                          .orderBy(DSL.rand())
+                          .limit(100)
+                          .stream()
+                          .peek(e -> sampleCount.incrementAndGet())
+                          .map(r -> new HASH(r.value1()))
+                          .forEach(h -> parentSample.add(h));
+            }
+        } finally {
+            if (timer != null) {
+                timer.close();
+            }
+            if (metrics != null) {
+                metrics.getParentSampleRate().mark(sampleCount.get());
+            }
+        }
+
     }
 }

@@ -422,27 +422,7 @@ public class Dag {
 
         BatchBindStep batch = create.batch(create.insertInto(toMark, toMarkHash).values((byte[])null));
         nodes.forEach(e -> batch.bind(e));
-        batch.execute();
-        // try {
-        // create.select(DAG.HASH)
-        // .from(DAG)
-        // .where(DAG.HASH.in(create.select(toMarkHash).from(toMark)))
-        // .orderBy(DAG.HASH)
-        // .forUpdate()
-        // .execute();
-        // } catch (DataAccessException e) {
-        // if (e.getCause() instanceof JdbcSQLTimeoutException) {
-        // try {
-        // create.configuration().connectionProvider().acquire().rollback();
-        // } catch (DataAccessException | SQLException e1) {
-        // log.error("Cannot rollback", e);
-        // }
-        // log.info("Cannot mark queried");
-        // return;
-        // }
-        // log.error("Cannot mark queried", e);
-        // throw new IllegalStateException("Cannot mark queried", e);
-        // }
+        batch.execute(); 
         create.deleteFrom(UNQUERIED)
               .where(UNQUERIED.HASH.in(create.select(toMarkHash).from(toMark)))
               .execute();
