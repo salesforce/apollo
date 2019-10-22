@@ -52,6 +52,7 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -78,6 +79,9 @@ public class AvalancheFunctionalTest {
     private ScheduledExecutorService scheduler;
     private List<X509Certificate> seeds;
     private List<View> views;
+    private DropWizardStatsPlugin rpcStats;
+    private MetricRegistry commRegistry;
+    private MetricRegistry node0Registry;
 
     @After
     public void after() {
@@ -86,11 +90,14 @@ public class AvalancheFunctionalTest {
 
     @Before
     public void before() {
+        commRegistry = new MetricRegistry();
+        node0Registry = new MetricRegistry();
+        rpcStats = new DropWizardStatsPlugin(commRegistry);
         entropy = new Random(0x666);
 
         seeds = new ArrayList<>();
         members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        FfLocalCommSim ffComms = new FfLocalCommSim();
+        FfLocalCommSim ffComms = new FfLocalCommSim(rpcStats);
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < Math.min(parameters.toleranceLevel + 1, certs.size())) {
@@ -110,12 +117,10 @@ public class AvalancheFunctionalTest {
     public void smoke() throws Exception {
         File baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         baseDir.mkdirs();
-
-        MetricRegistry registry = new MetricRegistry();
-        DropWizardStatsPlugin stats = new DropWizardStatsPlugin(registry);
-        AvalancheCommunications comm = new AvalancheLocalCommSim(stats);
+        AvaMetrics avaMetrics = new AvaMetrics(node0Registry);
+        AvalancheCommunications comm = new AvalancheLocalCommSim(rpcStats);
         AtomicInteger index = new AtomicInteger(0);
-        AtomicBoolean frist = new AtomicBoolean(false);
+        AtomicBoolean frist = new AtomicBoolean(true);
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
             // Avalanche protocol parameters
@@ -127,41 +132,44 @@ public class AvalancheFunctionalTest {
             aParams.parentCount = 3;
 
             // Avalanche implementation parameters
-            aParams.limit = 800;
-            aParams.insertBatchSize = 800;
-            aParams.preferBatchSize = 800;
-            aParams.finalizeBatchSize = 800;
+            aParams.queryBatchSize = 100;
+            aParams.insertBatchSize = 2;
+            aParams.preferBatchSize = 100;
+            aParams.finalizeBatchSize = 100;
             aParams.noOpsPerRound = 1;
-            aParams.maxQueries = 100;
+            aParams.maxNoOpParents = 100;
+            aParams.maxActiveQueries = 100;
 
             // # of firefly rounds per avalanche round
             aParams.epsilon = 1;
             // # of FF rounds per NoOp generation
-            aParams.delta = 3;
+            aParams.delta = 2;
             // # of Avalanche queries per FF round
-            aParams.gamma = 1;
+            aParams.gamma = 30;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
                     + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
-                aParams.dbConnect += ";TRACE_LEVEL_FILE=4";
                 frist.set(false);
+                return new Avalanche(view, comm, aParams, avaMetrics);
             }
             return new Avalanche(view, comm, aParams);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 400;
+        int target = 200;
+        Duration ffRound = Duration.ofMillis(500);
 
-        views.forEach(view -> view.getService().start(Duration.ofMillis(500)));
+        views.forEach(view -> view.getService().start(ffRound));
 
-        assertTrue("Could not stabilize view membership)", Utils.waitForCondition(30_000, 1_000, () -> {
+        assertTrue("Could not stabilize view membership)", Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
         }));
         nodes.forEach(node -> node.start());
+        ScheduledExecutorService txnScheduler = Executors.newScheduledThreadPool(nodes.size());
         // Profiler profiler = new Profiler();
         // profiler.startCollecting();
 
@@ -170,10 +178,10 @@ public class AvalancheFunctionalTest {
         System.out.println("Start round: " + master.getRoundCounter());
         CompletableFuture<HashKey> genesis = nodes.get(0)
                                                   .createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
-                                                                 scheduler);
+                                                                 txnScheduler);
         HashKey genesisKey = null;
         try {
-            genesisKey = genesis.get(60, TimeUnit.SECONDS);
+            genesisKey = genesis.get(10, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             nodes.forEach(node -> node.stop());
             views.forEach(v -> v.getService().stop());
@@ -202,27 +210,43 @@ public class AvalancheFunctionalTest {
             transactioneers.add(new Transactioneer(a));
         }
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target * 40, scheduler));
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 400, txnScheduler));
 
-        boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
+        boolean finalized = Utils.waitForCondition(600_000, 10_000, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= target)
                                   .count() == transactioneers.size();
         });
 
-        System.out.println("Completed in " + (System.currentTimeMillis() - now) + " ms");
+        long duration = System.currentTimeMillis() - now;
+
+        System.out.println("Completed in " + duration + " ms");
         transactioneers.forEach(t -> t.stop());
         views.forEach(v -> v.getService().stop());
         nodes.forEach(node -> node.stop());
+        Thread.sleep(2_000); // drain the swamp
         // System.out.println(profiler.getTop(3));
 
-        summarize(nodes);
+        System.out.println("Global tps: " + transactioneers.stream()
+                                                           .mapToInt(e -> e.getSuccess())
+                                                           .sum()
+                / (duration / 1000));
+
+        System.out.println("Max tps per node: " + nodes.stream()
+                                                       .mapToInt(n -> n.getDslContext()
+                                                                       .selectCount()
+                                                                       .from(DAG)
+                                                                       .where(DAG.NOOP.isFalse())
+                                                                       .and(DAG.FINALIZED.isTrue())
+                                                                       .fetchOne()
+                                                                       .value1())
+                                                       .max()
+                                                       .orElse(0)
+                / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-        // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), true))
-        // .render(Format.XDOT)
-        // .toFile(new File("smoke.dot"));
+        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
@@ -231,34 +255,23 @@ public class AvalancheFunctionalTest {
                                  .map(e -> new HashKey(e))
                                  .collect(Collectors.toList()));
         System.out.println();
+        System.out.println("Node 0 Metrics");
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
         System.out.println();
-        ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
-                                                  .convertRatesTo(TimeUnit.SECONDS)
-                                                  .convertDurationsTo(TimeUnit.MILLISECONDS)
-                                                  .build();
-        reporter.report();
+        System.out.println("Comm Metrics");
+        ConsoleReporter.forRegistry(commRegistry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
         transactioneers.forEach(t -> {
             System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
         });
-    }
-
-    /**
-     * @param nodes
-     */
-    private void summarize(List<Avalanche> nodes) {
-        int max = nodes.stream()
-                       .mapToInt(n -> n.getDslContext()
-                                       .selectCount()
-                                       .from(DAG)
-                                       .where(DAG.NOOP.isFalse())
-                                       .and(DAG.FINALIZED.isTrue())
-                                       .fetchOne()
-                                       .value1())
-                       .max()
-                       .orElse(0);
-        System.out.println("Max finalized : " + max);
-        System.out.println();
     }
 
     private void summary(Avalanche node) {

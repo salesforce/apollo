@@ -64,6 +64,14 @@ databaseChangeLog:
       -  createIndex:
             columns:
             -  column:
+                  name: hash
+                  type: BINARY(32)
+            indexName: idx_dag_hash
+            tableName: dag
+            unique: true
+      -  createIndex:
+            columns:
+            -  column:
                   name: discovered
                   type: TIMESTAMP
             indexName: idx_dag_discovered

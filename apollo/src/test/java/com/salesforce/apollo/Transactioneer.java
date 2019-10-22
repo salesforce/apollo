@@ -65,10 +65,11 @@ public class Transactioneer {
 
     public void transact(Duration txnWait, int maintain, ScheduledExecutorService scheduler) {
         scheduler.scheduleWithFixedDelay(() -> {
-            if (getSuccess() < maintain) {
+            if (outstanding.size() < maintain) {
+                addTransaction(txnWait, scheduler);
                 addTransaction(txnWait, scheduler);
             }
-        }, 50, 200, TimeUnit.MILLISECONDS);
+        }, 50, 75, TimeUnit.MILLISECONDS);
         futureSailor = scheduler.scheduleWithFixedDelay(() -> {
             for (int i = 0; i < outstanding.size(); i++) {
                 try {
@@ -83,7 +84,7 @@ public class Transactioneer {
                     e.getCause().printStackTrace();
                 }
             }
-        }, 0, 100, TimeUnit.MILLISECONDS);
+        }, 0, 50, TimeUnit.MILLISECONDS);
     }
 
     private void addTransaction(Duration txnWait, ScheduledExecutorService scheduler) {

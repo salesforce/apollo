@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
 
+import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
 import com.salesforce.apollo.avalanche.communications.AvalancheLocalCommSim;
 import com.salesforce.apollo.avro.HASH;
@@ -41,7 +42,7 @@ public class AvalancheTest {
 
     @Test
     public void smoke() throws Exception {
-
+        AvaMetrics metrics = new AvaMetrics(new MetricRegistry());
         List<X509Certificate> seeds = Arrays.asList(getMember(1).getCertificate(),
                                                     getMember(2).getCertificate());
         FirefliesParameters ffParameters = new FirefliesParameters(getCa().getX509Certificate());
@@ -59,7 +60,7 @@ public class AvalancheTest {
         Node node1 = new Node(getMember(1), ffParameters);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         View view1 = new View(node1, ffCommunications, seeds, scheduler);
-        Avalanche avalanche1 = new Avalanche(view1, communications, p1);
+        Avalanche avalanche1 = new Avalanche(view1, communications, p1, metrics);
 
         AvalancheParameters p2 = new AvalancheParameters();
         p2.alpha = 0.45;
@@ -70,7 +71,7 @@ public class AvalancheTest {
         p2.epsilon = 2;
         Node node2 = new Node(getMember(2), ffParameters);
         View view2 = new View(node2, ffCommunications, seeds, scheduler);
-        Avalanche avalanche2 = new Avalanche(view2, communications, p2);
+        Avalanche avalanche2 = new Avalanche(view2, communications, p2, metrics);
 
         Duration period = Duration.ofMillis(100);
         view1.getService().start(period);

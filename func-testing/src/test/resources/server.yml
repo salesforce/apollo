@@ -6,13 +6,11 @@ apollo:
    communications:
       type: sim
    avalanche:
-      alpha: 0.45
-      k: 2
+      alpha: 0.6
+      k: 3
       beta1: 3
       beta2: 5
-      dbConnect: jdbc:h2:mem:test-1;DB_CLOSE_ON_EXIT=FALSE
-      limit: 200
-      parentCount: 3
+      dbConnect: jdbc:h2:mem:test-1;DB_CLOSE_ON_EXIT=FALSE 
 logging:
    level: INFO
    loggers:
