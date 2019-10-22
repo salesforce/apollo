@@ -25,3 +25,7 @@ __To Do__
     * currently, the system is basically expecting RSA keys and such.  Hasn't been tested with ECC and other signinig algorithms.
 * Handling of the certificate authority certificate rotation
     * this is a doozy, obviously. ;)
+
+## API
+
+Fireflies exposes the __View__, __Member__ and __Node__ as the fundamental abstractions.  The Fireflies rings are represented by the Ring abstraction and each view provides a access to the configured Rings and all the traversal mechanisms provided by such.  Several abstractions are provided to allow clients of the Apollo Fireflies substrate to "hook" into lifecycle and important transport events.  Clients making use of the FF substrate are designed to be driven by the _round_ of the Fireflies _Node_ for the Java process.  Given that much of FF is dependent on the 2 * T + 1 rings, this allows client layers to synchronize work with the underlying pulse of the system.  As the reliable message flooding is a value add of Apollo, the FF provides a simple channel oriented reliable broadcast API for both flooding - i.e. sending - and receiving messages within the group.
