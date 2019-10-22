@@ -77,15 +77,12 @@ public class TestApollo {
 		List<Apollo> oracles = new ArrayList<>();
 
 		for (int i = 1; i < PregenPopulation.getCardinality() + 1; i++) {
-			ApolloConfiguration config = new ApolloConfiguration();
+			ApolloConfiguration config = new ApolloConfiguration(); 
 			config.avalanche.alpha = 0.6;
-			config.avalanche.k = 6;
+			config.avalanche.k = 3;
 			config.avalanche.beta1 = 3;
 			config.avalanche.beta2 = 5;
-			config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i;
-			config.avalanche.queryBatchSize = 20;
-			config.avalanche.parentCount = 3;
-			config.avalanche.epsilon = 9;
+			config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i; 
 			config.gossipInterval = Duration.ofMillis(100);
 			config.communications = new ApolloConfiguration.SimCommunicationsFactory();
 			ApolloConfiguration.FileIdentitySource ks = new ApolloConfiguration.FileIdentitySource();
@@ -136,7 +133,7 @@ public class TestApollo {
 
 		// # of txns per node
 		int target = 15;
-		transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target * 40, scheduler));
+		transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 20, scheduler));
 
 		boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
 			return transactioneers.stream().mapToInt(t -> t.getSuccess()).filter(s -> s >= target)

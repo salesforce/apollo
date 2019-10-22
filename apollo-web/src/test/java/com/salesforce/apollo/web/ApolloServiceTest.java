@@ -44,10 +44,10 @@ import io.dropwizard.testing.junit.DropwizardAppRule;
  * @author hhildebrand
  */
 public class ApolloServiceTest {
-	
-	static {
-    	ApolloConfiguration.SimCommunicationsFactory.reset();
-	}
+
+    static {
+        ApolloConfiguration.SimCommunicationsFactory.reset();
+    }
 
     @ClassRule
     public static final DropwizardAppRule<ApolloServiceConfiguration> RULE = new DropwizardAppRule<ApolloServiceConfiguration>(ApolloService.class,
@@ -81,10 +81,7 @@ public class ApolloServiceTest {
             config.avalanche.k = 6;
             config.avalanche.beta1 = 3;
             config.avalanche.beta2 = 5;
-            config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i ;
-            config.avalanche.queryBatchSize = 20;
-            config.avalanche.parentCount = 3;
-            config.avalanche.epsilon = 9;
+            config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i;
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             ApolloConfiguration.ResourceIdentitySource ks = new ApolloConfiguration.ResourceIdentitySource();
             ks.store = PregenPopulation.memberKeystoreResource(i);
