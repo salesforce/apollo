@@ -20,7 +20,7 @@ Apollo isn't designed for coins, rather as essentially a distributed database.  
 
 
 ## Status
-Note that Apollo is very much a _work in progress_.  It is by no means a full featured, hardened distributed leder platform.  I am a strong believer in iterative development and believe it is the only way to create robust systems.  Consequently, things are still changing, there is much experimental in the current work, and much left to be done. ;)
+Note that Apollo is very much a _work in progress_.  It is by no means a full featured, hardened distributed ledger platform.  I am a strong believer in iterative development and believe it is the only way to create robust systems.  Consequently, things are still changing, there is much experimental in the current work, and much left to be done. ;)
 
 
 ## Requirements
