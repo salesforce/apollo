@@ -533,10 +533,9 @@ public class Dag {
     }
 
     public void put(List<DagInsert> inserts, DSLContext context) {
-        Query dagMerge = context.mergeInto(DAG, DAG.HASH, DAG.DATA, DAG.NOOP, DAG.CONFLICTSET)
-                                .key(DAG.HASH)
-                                .values((byte[])null, (byte[])null, (Boolean)null, (byte[])null)
-                                .keepStatement(true);
+        Query dagInsert = context.insertInto(DAG, DAG.HASH, DAG.DATA, DAG.NOOP, DAG.CONFLICTSET)
+                                 .values((byte[])null, (byte[])null, (Boolean)null, (byte[])null)
+                                 .keepStatement(true);
         Query insertLinks = context.insertInto(LINK, LINK.NODE, LINK.HASH)
                                    .values((byte[])null, (byte[])null)
                                    .keepStatement(true);
@@ -564,10 +563,10 @@ public class Dag {
                                          .keepStatement(true);
 
         try {
-            put(inserts, context, dagMerge, batch, insertUnqueried, insertClosure0, updateConfidence,
+            put(inserts, context, dagInsert, batch, insertUnqueried, insertClosure0, updateConfidence,
                 insertConflictSet);
         } finally {
-            dagMerge.close();
+            dagInsert.close();
             insertLinks.close();
             insertUnqueried.close();
             insertClosure0.close();
@@ -763,25 +762,25 @@ public class Dag {
                      .fetch();
     }
 
-    void put(List<DagInsert> inserts, DSLContext context, Query dagMerge, BatchBindStep linkBatch,
+    void put(List<DagInsert> inserts, DSLContext context, Query dagInsert, BatchBindStep linkBatch,
             Query insertUnqueried, Query insertClosure0, Query updateConfidence, Query insertConflictSet) {
         Closure p = CLOSURE.as("p");
         Closure c = CLOSURE.as("c");
 
         inserts.forEach(insert -> {
             HASH conflictSet = insert.conflictSet;
-            HASH hash = insert.key.toHash();
             conflictSet = insert.dagEntry.getLinks() == null ? new HASH(GENESIS_CONFLICT_SET)
-                                                             : conflictSet == null ? hash : conflictSet;
+                                                             : conflictSet == null ? insert.key.toHash() : conflictSet;
             if (insert.dagEntry.getLinks() == null) {
                 System.out.println("Genesis entry: " + insert.key);
             }
             try {
-                if (dagMerge.bind(1, insert.key.bytes())
-                            .bind(2, insert.entry.getData().array())
-                            .bind(3, insert.noOp)
-                            .bind(4, conflictSet.bytes())
-                            .execute() != 0) {
+                if (!context.fetchExists(DAG, DAG.HASH.eq(insert.key.bytes()))) {
+                    dagInsert.bind(1, insert.key.bytes())
+                             .bind(2, insert.entry.getData().array())
+                             .bind(3, insert.noOp)
+                             .bind(4, conflictSet.bytes())
+                             .execute();
                     insertUnqueried.bind(1, insert.key.bytes()).bind(2, insert.targetRound).execute();
                     insertClosure0.bind(1, insert.key.bytes())
                                   .bind(2, insert.key.bytes())
