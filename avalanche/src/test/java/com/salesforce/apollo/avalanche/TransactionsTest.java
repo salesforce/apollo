@@ -305,7 +305,7 @@ public class TransactionsTest {
                                        .map(e -> new HashKey(e))
                                        .collect(Collectors.toCollection(TreeSet::new));
 
-        assertEquals(2, frontier.size());
+        assertEquals(3, frontier.size());
 
         assertTrue(frontier.contains(secondCommit));
 
@@ -319,7 +319,7 @@ public class TransactionsTest {
                       .map(e -> new HashKey(e))
                       .collect(Collectors.toCollection(TreeSet::new));
 
-        assertEquals(2, frontier.size());
+        assertEquals(4, frontier.size());
 
         assertTrue(frontier.contains(secondCommit) || frontier.contains(firstCommit));
         assertTrue(frontier.contains(userTxn));
@@ -331,7 +331,7 @@ public class TransactionsTest {
                       .map(e -> new HashKey(e))
                       .collect(Collectors.toCollection(TreeSet::new));
 
-        assertEquals(2, frontier.size());
+        assertEquals(5, frontier.size());
 
         assertTrue(frontier.contains(secondCommit) || frontier.contains(firstCommit));
         assertTrue(frontier.contains(last));
@@ -608,10 +608,10 @@ public class TransactionsTest {
         Set<HashKey> frontier = dag.frontierSample(create)
                                    .map(r -> new HashKey(r))
                                    .collect(Collectors.toCollection(TreeSet::new));
-        assertEquals(2, frontier.size());
+        assertEquals(5, frontier.size());
 
         // Nodes 3 and 4 are in conflict and are always excluded
-        assertFalse(frontier.contains(ordered.get(3)));
+        assertTrue(frontier.contains(ordered.get(3)));
         assertFalse(frontier.contains(ordered.get(4)));
 
         // Add a new node to the frontier
@@ -625,25 +625,20 @@ public class TransactionsTest {
         frontier = dag.frontierSample(create)
                       .map(r -> new HashKey(r))
                       .collect(Collectors.toCollection(TreeSet::new));
-
-        // No nodes available near the frontier now
-        assertEquals(3, frontier.size());
-
-        // Nodes 3 and 4 are in conflict and are always excluded
-        assertFalse(frontier.contains(ordered.get(3)));
-        assertFalse(frontier.contains(ordered.get(4)));
+ 
+        assertEquals(6, frontier.size()); 
 
         // prefer node 6, raising the confidence of nodes 3, 2, 1 and 0
         dag.prefer(ordered.get(6).toHash(), create);
-        // dumpClosure(ordered);
+        dumpClosure(ordered);
 
         frontier = dag.frontierSample(create)
                       .map(r -> new HashKey(r))
                       .collect(Collectors.toCollection(TreeSet::new));
 
-        assertEquals(3, frontier.size());
+        assertEquals(6, frontier.size());
 
-        assertFalse(frontier.contains(ordered.get(3)));
+        assertTrue(frontier.contains(ordered.get(3)));
         assertFalse(frontier.contains(ordered.get(4)));
     }
 

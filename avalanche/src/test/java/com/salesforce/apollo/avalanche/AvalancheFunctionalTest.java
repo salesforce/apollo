@@ -132,10 +132,10 @@ public class AvalancheFunctionalTest {
             aParams.parentCount = 3;
 
             // Avalanche implementation parameters
-            aParams.queryBatchSize = 100;
+            aParams.queryBatchSize = 40;
             aParams.insertBatchSize = 2;
-            aParams.preferBatchSize = 100;
-            aParams.finalizeBatchSize = 100;
+            aParams.preferBatchSize = 40;
+            aParams.finalizeBatchSize = 40;
             aParams.noOpsPerRound = 1;
             aParams.maxNoOpParents = 100;
             aParams.maxActiveQueries = 100;
@@ -143,7 +143,7 @@ public class AvalancheFunctionalTest {
             // # of firefly rounds per avalanche round
             aParams.epsilon = 1;
             // # of FF rounds per NoOp generation
-            aParams.delta = 2;
+            aParams.delta = 1;
             // # of Avalanche queries per FF round
             aParams.gamma = 30;
 

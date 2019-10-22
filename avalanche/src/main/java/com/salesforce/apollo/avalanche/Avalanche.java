@@ -20,7 +20,6 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -241,7 +240,7 @@ public class Avalanche {
     private final Listener listener = new Listener();
     private final AvaMetrics metrics;
     private final DSLContext noOpContext;
-    private final Deque<HASH> noOpParentSample = new ArrayDeque<>();
+    private final Deque<HASH> noOpParentSample = new LinkedBlockingDeque<>();
     private volatile Thread noOpThread;
     private final AvalancheParameters parameters;
     private final Deque<HASH> parentSample = new LinkedBlockingDeque<>();
@@ -532,16 +531,6 @@ public class Avalanche {
     }
 
     /**
-     * Broadcast the transaction to all members
-     * 
-     * @param transaction
-     */
-    void flood(DagEntry transaction) {
-        Entry entry = serialize(transaction);
-        flood(entry);
-    }
-
-    /**
      * Broadcast the entry to all members
      * 
      * @param entry
@@ -743,7 +732,7 @@ public class Avalanche {
         Context timer = metrics == null ? null : metrics.getNoOpTimer().time();
 
         dag.getNeglectedFrontier(noOpContext).forEach(e -> noOpParentSample.add(e));
-        dag.getNeglected(noOpContext).forEach(e -> noOpParentSample.add(e));
+//        dag.getNeglected(noOpContext).forEach(e -> noOpParentSample.add(e));
 
         if (noOpParentSample.isEmpty()) {
             // if still none, select any nodes that are not finalized
