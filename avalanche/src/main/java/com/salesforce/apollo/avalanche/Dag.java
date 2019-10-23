@@ -35,7 +35,6 @@ import org.jooq.Field;
 import org.jooq.Query;
 import org.jooq.Record;
 import org.jooq.Record1;
-import org.jooq.Record2;
 import org.jooq.Record3;
 import org.jooq.Result;
 import org.jooq.SQLDialect;
@@ -236,7 +235,7 @@ public class Dag {
         return create.select(CLOSURE.CHILD)
                      .from(CLOSURE)
                      .where(CLOSURE.PARENT.eq(node.bytes()))
-                     .and(CLOSURE.DEPTH.notEqual(DSL.inline(0)))
+                     .and(CLOSURE.CLOSURE_.isTrue())
                      .stream()
                      .map(r -> new HASH(r.value1()));
     }
@@ -304,7 +303,7 @@ public class Dag {
                      .join(CONFLICTSET)
                      .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET).and(CONFLICTSET.PREFERRED.eq(DAG.HASH)))
                      .where(DAG.FINALIZED.isFalse())
-                     .and(DAG.NOOP.isFalse()) 
+                     .and(DAG.NOOP.isFalse())
                      .and(DAG.CONFIDENCE.le(DSL.inline(parameters.beta1 / 2)))
                      .orderBy(DSL.rand())
                      .stream()
@@ -325,19 +324,6 @@ public class Dag {
                      .limit(limit)
                      .stream()
                      .map(r -> new HASH(r.value1()))
-                     .filter(e -> e != null)
-                     .collect(Collectors.toList());
-    }
-
-    public List<HASH> getWantedSlow(int limit, DSLContext create) {
-        return create.selectDistinct(LINK.HASH)
-                     .from(LINK)
-                     .leftAntiJoin(DAG)
-                     .on(LINK.HASH.eq(DAG.HASH))
-                     .limit(limit)
-                     .stream()
-                     .map(r -> new HASH(r.value1()))
-                     .filter(e -> e != null)
                      .collect(Collectors.toList());
     }
 
@@ -436,7 +422,7 @@ public class Dag {
     public void prefer(List<HASH> entries, DSLContext create) {
         long start = System.currentTimeMillis();
         create.execute("create cached local temporary table if not exists TO_PREFER(HASH binary(32))");
-        create.execute("create cached local temporary table if not exists PREFERRED(PARENT binary(32), CHILD binary(32), DEPTH INT, CONFLICT_SET binary(32), CONFLICT_SET_COUNTER INT, CONFIDENCE INT, CS_PREFERRED binary(32), PREFERRED_CONFIDENCE INT, LAST binary(32))");
+        create.execute("create cached local temporary table if not exists PREFERRED(PARENT binary(32), CHILD binary(32), CONFLICT_SET binary(32), CONFLICT_SET_COUNTER INT, CONFIDENCE INT, CS_PREFERRED binary(32), PREFERRED_CONFIDENCE INT, LAST binary(32))");
 
         Table<Record> toPrefer = DSL.table("TO_PREFER");
         Field<byte[]> toPreferHash = DSL.field("HASH", byte[].class, toPrefer);
@@ -458,7 +444,6 @@ public class Dag {
         Table<Record> p = DSL.table("PREFERRED");
         Field<byte[]> pParent = DSL.field("PARENT", byte[].class, p);
         Field<byte[]> pChild = DSL.field("CHILD", byte[].class, p);
-        Field<Integer> pDepth = DSL.field("DEPTH", Integer.class, p);
         Field<byte[]> pCs = DSL.field("CONFLICT_SET", byte[].class, p);
         Field<Integer> pConfidence = DSL.field("CONFIDENCE", Integer.class, p);
         Field<Integer> pCsCounter = DSL.field("CONFLICT_SET_COUNTER", Integer.class, p);
@@ -466,10 +451,10 @@ public class Dag {
         Field<Integer> pPreferredConfidence = DSL.field("PREFERRED_CONFIDENCE", Integer.class, p);
         Field<byte[]> pLast = DSL.field("LAST", byte[].class, p);
 
-        int updated = create.mergeInto(p, pParent, pChild, pDepth, pCs, pCsCounter, pConfidence, pPreferred,
+        int updated = create.mergeInto(p, pParent, pChild, pCs, pCsCounter, pConfidence, pPreferred,
                                        pPreferredConfidence, pLast)
                             .key(pParent, pChild)
-                            .select(create.select(CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.DEPTH, CONFLICTSET.NODE,
+                            .select(create.select(CLOSURE.PARENT, CLOSURE.CHILD, CONFLICTSET.NODE,
                                                   CONFLICTSET.COUNTER,
                                                   DAG.CONFIDENCE,
                                                   preferred.field(DAG.HASH),
@@ -490,7 +475,7 @@ public class Dag {
         create.update(DAG).set(DAG.CHIT, 1).where(DAG.HASH.in(create.select(toPreferHash).from(toPrefer))).execute();
         create.update(DAG)
               .set(DAG.CONFIDENCE, DAG.CONFIDENCE.plus(1))
-              .where(DAG.HASH.in(create.selectDistinct(pChild).from(p).where(pDepth.gt(0)).orderBy(pChild)))
+              .where(DAG.HASH.in(create.selectDistinct(pChild).from(p)))
               .execute();
         create.mergeInto(CONFLICTSET, CONFLICTSET.NODE, CONFLICTSET.LAST, CONFLICTSET.PREFERRED, CONFLICTSET.COUNTER)
               .key(CONFLICTSET.NODE)
@@ -537,8 +522,8 @@ public class Dag {
                                        .values((byte[])null, 0)
                                        .keepStatement(true);
 
-        Query insertClosure0 = context.insertInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.DEPTH)
-                                      .values((byte[])null, (byte[])null, 0)
+        Query insertClosure0 = context.insertInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.CLOSURE_)
+                                      .values((byte[])null, (byte[])null, false)
                                       .keepStatement(true);
         Query updateConfidence = context.update(DAG)
                                         .set(DAG.CONFIDENCE,
@@ -726,26 +711,6 @@ public class Dag {
                      .map(e -> new HASH(e.value1()));
     }
 
-    // members from within the middle of the DAG
-    Result<Record2<byte[], Integer>> middling(DSLContext create) {
-        return create.selectDistinct(CLOSURE.CHILD, CLOSURE.DEPTH)
-                     .from(CLOSURE)
-                     .join(DAG)
-                     .on(CLOSURE.CHILD.eq(DAG.HASH).and(CLOSURE.DEPTH.gt(DSL.inline(1))))
-                     .join(CONFLICTSET)
-                     .on(CONFLICTSET.NODE.eq(DAG.CONFLICTSET))
-                     .where(CLOSURE.PARENT.in(create.select(DAG.HASH)
-                                                    .from(DAG)
-                                                    .leftAntiJoin(CLOSURE)
-                                                    .on(CLOSURE.DEPTH.gt(1).and(CLOSURE.CHILD.eq(DAG.HASH)))))
-                     .and(DAG.FINALIZED.isFalse()
-                                       .and(DAG.NOOP.isFalse())
-                                       .and(DAG.CONFIDENCE.greaterThan(DSL.inline(0))))
-                     .orderBy(CLOSURE.DEPTH)
-                     .limit(100)
-                     .fetch();
-    }
-
     void put(List<DagInsert> inserts, DSLContext context, Query dagInsert, BatchBindStep linkBatch,
             Query insertUnqueried, Query insertClosure0, Query updateConfidence, Query insertConflictSet) {
         Closure p = CLOSURE.as("p");
@@ -758,7 +723,7 @@ public class Dag {
             if (insert.dagEntry.getLinks() == null) {
                 System.out.println("Genesis entry: " + insert.key);
             }
-            try {
+            try { 
                 if (!context.fetchExists(DAG, DAG.HASH.eq(insert.key.bytes()))) {
                     dagInsert.bind(1, insert.key.bytes())
                              .bind(2, insert.entry.getData().array())
@@ -776,9 +741,9 @@ public class Dag {
                         insert.dagEntry.getLinks()
                                        .forEach(link -> linkBatch.bind(insert.key.bytes(), link.bytes()));
                         linkBatch.execute();
-                        context.mergeInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.DEPTH)
+                        context.mergeInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.CLOSURE_)
                                .key(CLOSURE.PARENT, CLOSURE.CHILD)
-                               .select(context.select(p.PARENT, c.CHILD, DSL.inline(1))
+                               .select(context.select(p.field(CLOSURE.PARENT), c.field(CLOSURE.CHILD), DSL.inline(true))
                                               .from(p, c)
                                               .join(LINK)
                                               .on(LINK.NODE.eq(insert.key.bytes()))
@@ -879,7 +844,7 @@ public class Dag {
                               .from(CLOSURE)
                               .join(toQuery)
                               .on(CLOSURE.PARENT.eq(DSL.field("TO_QUERY.HASH", byte[].class)))
-                              .and(CLOSURE.DEPTH.gt(0))
+                              .and(CLOSURE.CLOSURE_.isTrue())
                               .join(childe)
                               .on(CLOSURE.CHILD.eq(childe.field(DAG.HASH)))
                               .and(childe.field(DAG.FINALIZED).isFalse()))
@@ -933,26 +898,5 @@ public class Dag {
         context.delete(toQuery).execute();
         context.delete(allFinalized).execute();
         return data;
-    }
-
-    /**
-     * Maintain the transitive closure of the DAG
-     * 
-     * @param key
-     * @param noOp
-     */
-    void updateClosure(HashKey key, DSLContext create, boolean noOp) {
-        Closure p = CLOSURE.as("p");
-        Closure c = CLOSURE.as("c");
-
-        create.mergeInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.DEPTH)
-              .key(CLOSURE.PARENT, CLOSURE.CHILD)
-              .select(create.select(p.PARENT, c.CHILD, DSL.inline(1))
-                            .from(p, c)
-                            .join(LINK)
-                            .on(LINK.NODE.eq(key.bytes()))
-                            .where(p.CHILD.eq(key.bytes()))
-                            .and(c.PARENT.eq(LINK.HASH)))
-              .execute();
     }
 }

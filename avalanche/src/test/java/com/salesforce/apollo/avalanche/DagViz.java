@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 import org.jooq.DSLContext;
 import org.jooq.Record1;
 import org.jooq.Record3;
-import org.jooq.Result;
 import org.jooq.impl.DSL;
 
 import com.salesforce.apollo.avro.HASH;
@@ -57,14 +56,13 @@ public class DagViz {
                                                    .where(DAG.HASH.eq(k.bytes()))
                                                    .fetchOne()
                                                    .value1()));
-            create.select(CLOSURE.CHILD, CLOSURE.DEPTH)
+            create.select(CLOSURE.CHILD)
                   .from(CLOSURE)
                   .where(CLOSURE.PARENT.eq(DSL.inline(k.bytes())))
-                  .and(CLOSURE.DEPTH.notEqual(DSL.inline(0)))
-                  .orderBy(CLOSURE.DEPTH)
+                  .and(CLOSURE.CLOSURE_.isTrue())
                   .stream()
                   .forEach(r -> {
-                      System.out.println(String.format("   -> %s: %s", r.value2(), new HashKey(r.value1())));
+                      System.out.println(String.format("   -> %s", new HashKey(r.value1())));
                   });
         });
     }
@@ -109,20 +107,12 @@ public class DagViz {
             frontier.forEach(h -> {
                 traversed.add(h);
                 DagRecord entry = create.selectFrom(DAG).where(DAG.HASH.eq(h.bytes())).fetchOne();
-                Result<Record1<byte[]>> links = null;
+                List<Record1<byte[]>> links = Collections.emptyList();
                 if (entry != null) {
-                    if (!entry.getNoop()) {
-                        links = create.select(LINK.HASH)
-                                      .from(LINK)
-                                      .where(LINK.NODE.eq(h.bytes()))
-                                      .fetch();
-                    } else {
-                        links = create.select(CLOSURE.CHILD)
-                                      .from(CLOSURE)
-                                      .where(CLOSURE.PARENT.eq(h.bytes()))
-                                      .and(CLOSURE.DEPTH.gt(0))
-                                      .fetch();
-                    }
+                    links = create.select(LINK.HASH)
+                                  .from(LINK)
+                                  .where(LINK.NODE.eq(h.bytes()))
+                                  .fetch();
                 }
                 decorate(create, h, entry, labelFor, links, traversed, ignoreNoOp, next);
             });
@@ -133,7 +123,7 @@ public class DagViz {
     }
 
     private static void decorate(DSLContext create, HashKey h, DagRecord entry,
-            Function<HashKey, String> labelFor, Result<Record1<byte[]>> links, Set<HashKey> traversed,
+            Function<HashKey, String> labelFor, List<Record1<byte[]>> links, Set<HashKey> traversed,
             boolean ignoreNoOps, Set<HashKey> next) {
         String name = labelFor.apply(h);
 

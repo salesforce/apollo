@@ -109,6 +109,14 @@ databaseChangeLog:
       -  createIndex:
             columns:
             -  column:
+                  name: hash
+                  type: BINARY(32)
+            indexName: idx_unqueried_hash
+            tableName: unqueried
+            unique: true
+      -  createIndex:
+            columns:
+            -  column:
                   name: targetRound
                   type: INT
             indexName: idx_unqueried_target_round
@@ -138,14 +146,6 @@ databaseChangeLog:
             indexName: idx_link_node
             tableName: link
             unique: false
-      -  createIndex:
-            columns:
-            -  column:
-                  name: hash
-                  type: BINARY(32)
-            indexName: idx_link_hash
-            tableName: link
-            unique: false
       -  createTable:
             tableName: closure
             columns:
@@ -161,8 +161,8 @@ databaseChangeLog:
                   constraints:
                      primaryKey: true
             -  column:
-                  name: depth
-                  type: INT
+                  name: closure
+                  type: BOOLEAN
       -  createIndex:
             columns:
             -  column:
@@ -179,10 +179,6 @@ databaseChangeLog:
             indexName: idx_closure_child
             tableName: closure
             unique: false
-      -  addUniqueConstraint:
-            tableName: closure
-            columnNames: parent, child
-            constraintName: closure_unique_parent_child
       -  addForeignKeyConstraint:
             baseColumnNames: parent
             baseTableName: closure

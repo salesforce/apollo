@@ -52,7 +52,6 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
-import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -157,7 +156,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 200;
+        int target = 800;
         Duration ffRound = Duration.ofMillis(500);
 
         views.forEach(view -> view.getService().start(ffRound));
@@ -189,14 +188,7 @@ public class AvalancheFunctionalTest {
             System.out.println("Rounds: " + master.getRoundCounter());
             // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), false))
             // .render(Format.PNG)
-            // .toFile(new File("smoke.png"));
-
-            System.out.println("wanted: ");
-            System.out.println(master.getDag()
-                                     .getWanted(Integer.MAX_VALUE, master.getDslContext())
-                                     .stream()
-                                     .map(h -> new HashKey(h))
-                                     .collect(Collectors.toList()));
+            // .toFile(new File("smoke.png")); 
         }
         System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
@@ -246,11 +238,11 @@ public class AvalancheFunctionalTest {
                 / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
+//        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
-                                 .getWantedSlow(Integer.MAX_VALUE, master.getDslContext())
+                                 .getWanted(Integer.MAX_VALUE, master.getDslContext())
                                  .stream()
                                  .map(e -> new HashKey(e))
                                  .collect(Collectors.toList()));

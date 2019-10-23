@@ -172,7 +172,7 @@ public class TestApollo {
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
-                                 .getWantedSlow(Integer.MAX_VALUE, master.getDslContext())
+                                 .getWanted(Integer.MAX_VALUE, master.getDslContext())
                                  .stream()
                                  .map(e -> new HashKey(e))
                                  .collect(Collectors.toList()));
