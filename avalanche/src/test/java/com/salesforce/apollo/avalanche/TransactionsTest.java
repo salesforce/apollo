@@ -630,7 +630,7 @@ public class TransactionsTest {
 
         // prefer node 6, raising the confidence of nodes 3, 2, 1 and 0
         dag.prefer(ordered.get(6).toHash(), create);
-        dumpClosure(ordered);
+        DagViz.dumpClosure(ordered, create);
 
         frontier = dag.frontierSample(create)
                       .map(r -> new HashKey(r))
@@ -798,26 +798,6 @@ public class TransactionsTest {
         assertTrue(String.format("node 4 is not strongly preferred"),
                    create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(4).toHash(),
                                                                               DSL.using(config))));
-    }
-
-    void dumpClosure(List<HashKey> ordered) {
-        ordered.forEach(k -> {
-            System.out.println();
-            System.out.println(String.format("%s : %s", k,
-                                             create.select(DAG.CONFIDENCE)
-                                                   .from(DAG)
-                                                   .where(DAG.HASH.eq(k.bytes()))
-                                                   .fetchOne()
-                                                   .value1()));
-            create.select(CLOSURE.CHILD)
-                  .from(CLOSURE)
-                  .where(CLOSURE.PARENT.eq(DSL.inline(k.bytes())))
-                  .and(CLOSURE.CLOSURE_.isTrue())
-                  .stream()
-                  .forEach(r -> {
-                      System.out.println(String.format("   -> %s", new HashKey(r.value1())));
-                  });
-        });
     }
 
     HASH newDagEntree(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links) {

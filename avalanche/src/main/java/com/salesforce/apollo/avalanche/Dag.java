@@ -514,10 +514,7 @@ public class Dag {
         Query dagInsert = context.insertInto(DAG, DAG.HASH, DAG.DATA, DAG.NOOP, DAG.CONFLICTSET)
                                  .values((byte[])null, (byte[])null, (Boolean)null, (byte[])null)
                                  .keepStatement(true);
-        Query insertLinks = context.insertInto(LINK, LINK.NODE, LINK.HASH)
-                                   .values((byte[])null, (byte[])null)
-                                   .keepStatement(true);
-        BatchBindStep batch = context.batch(insertLinks);
+
         Query insertUnqueried = context.insertInto(UNQUERIED, UNQUERIED.HASH, UNQUERIED.TARGETROUND)
                                        .values((byte[])null, 0)
                                        .keepStatement(true);
@@ -541,11 +538,10 @@ public class Dag {
                                          .keepStatement(true);
 
         try {
-            put(inserts, context, dagInsert, batch, insertUnqueried, insertClosure0, updateConfidence,
+            put(inserts, context, dagInsert, insertUnqueried, insertClosure0, updateConfidence,
                 insertConflictSet);
         } finally {
             dagInsert.close();
-            insertLinks.close();
             insertUnqueried.close();
             insertClosure0.close();
             updateConfidence.close();
@@ -711,7 +707,7 @@ public class Dag {
                      .map(e -> new HASH(e.value1()));
     }
 
-    void put(List<DagInsert> inserts, DSLContext context, Query dagInsert, BatchBindStep linkBatch,
+    void put(List<DagInsert> inserts, DSLContext context, Query dagInsert,
             Query insertUnqueried, Query insertClosure0, Query updateConfidence, Query insertConflictSet) {
         Closure p = CLOSURE.as("p");
         Closure c = CLOSURE.as("c");
@@ -723,7 +719,7 @@ public class Dag {
             if (insert.dagEntry.getLinks() == null) {
                 System.out.println("Genesis entry: " + insert.key);
             }
-            try { 
+            try {
                 if (!context.fetchExists(DAG, DAG.HASH.eq(insert.key.bytes()))) {
                     dagInsert.bind(1, insert.key.bytes())
                              .bind(2, insert.entry.getData().array())
@@ -738,9 +734,11 @@ public class Dag {
                         if (insert.dagEntry.getLinks().isEmpty()) {
                             System.out.println("Empty link entry: " + insert.key);
                         }
+                        BatchBindStep batch = context.batch(context.insertInto(LINK, LINK.NODE, LINK.HASH)
+                                                                   .values((byte[])null, (byte[])null));
                         insert.dagEntry.getLinks()
-                                       .forEach(link -> linkBatch.bind(insert.key.bytes(), link.bytes()));
-                        linkBatch.execute();
+                                       .forEach(link -> batch.bind(insert.key.bytes(), link.bytes()));
+                        batch.execute();
                         context.mergeInto(CLOSURE, CLOSURE.PARENT, CLOSURE.CHILD, CLOSURE.CLOSURE_)
                                .key(CLOSURE.PARENT, CLOSURE.CHILD)
                                .select(context.select(p.field(CLOSURE.PARENT), c.field(CLOSURE.CHILD), DSL.inline(true))

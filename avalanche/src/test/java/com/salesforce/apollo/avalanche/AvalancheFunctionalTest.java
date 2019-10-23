@@ -52,6 +52,7 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -144,7 +145,7 @@ public class AvalancheFunctionalTest {
             // # of FF rounds per NoOp generation
             aParams.delta = 1;
             // # of Avalanche queries per FF round
-            aParams.gamma = 30;
+            aParams.gamma = 20;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
                     + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
@@ -156,7 +157,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 800;
+        int target = 1600;
         Duration ffRound = Duration.ofMillis(500);
 
         views.forEach(view -> view.getService().start(ffRound));
@@ -238,7 +239,7 @@ public class AvalancheFunctionalTest {
                 / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-        // FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
+        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
