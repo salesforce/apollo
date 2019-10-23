@@ -188,7 +188,7 @@ public class AvalancheFunctionalTest {
             System.out.println("Rounds: " + master.getRoundCounter());
             // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), false))
             // .render(Format.PNG)
-            // .toFile(new File("smoke.png")); 
+            // .toFile(new File("smoke.png"));
         }
         System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
@@ -238,7 +238,7 @@ public class AvalancheFunctionalTest {
                 / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-//        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
+        // FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
@@ -269,16 +269,20 @@ public class AvalancheFunctionalTest {
     private void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
         System.out.println("    Rounds: " + node.getRoundCounter());
+        Integer total = node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1();
+        Integer finalized = node.getDslContext()
+                                .selectCount()
+                                .from(DAG)
+                                .where(DAG.NOOP.isFalse())
+                                .and(DAG.FINALIZED.isTrue())
+                                .fetchOne()
+                                .value1();
         System.out.println("    User txns: "
-                + node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1()
+                + total
                 + " finalized: "
-                + node.getDslContext()
-                      .selectCount()
-                      .from(DAG)
-                      .where(DAG.NOOP.isFalse())
-                      .and(DAG.FINALIZED.isTrue())
-                      .fetchOne()
-                      .value1()
+                + finalized
+                + " unfinalized: "
+                + (total - finalized)
                 + " unqueried: "
                 + node.getDslContext()
                       .selectCount()
