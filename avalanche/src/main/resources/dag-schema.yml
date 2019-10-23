@@ -109,14 +109,6 @@ databaseChangeLog:
       -  createIndex:
             columns:
             -  column:
-                  name: hash
-                  type: BINARY(32)
-            indexName: idx_unqueried_hash
-            tableName: unqueried
-            unique: true
-      -  createIndex:
-            columns:
-            -  column:
                   name: targetRound
                   type: INT
             indexName: idx_unqueried_target_round
@@ -138,14 +130,6 @@ databaseChangeLog:
             onDelete: CASCADE
             referencedColumnNames: hash
             referencedTableName: dag
-      -  createIndex:
-            columns:
-            -  column:
-                  name: node
-                  type: BINARY(32)
-            indexName: idx_link_node
-            tableName: link
-            unique: false
       -  createTable:
             tableName: closure
             columns:
