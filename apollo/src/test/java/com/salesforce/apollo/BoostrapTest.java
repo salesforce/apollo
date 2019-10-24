@@ -134,7 +134,7 @@ public class BoostrapTest {
 		oracles.forEach(node -> TestApollo.summary(node.getAvalanche()));
 
 		System.out.println("wanted: ");
-		System.out.println(master.getDag().getWantedSlow(Integer.MAX_VALUE, master.getDslContext()).stream()
+		System.out.println(master.getDag().getWanted(Integer.MAX_VALUE, master.getDslContext()).stream()
 				.map(e -> new HashKey(e)).collect(Collectors.toList()));
 		System.out.println();
 		System.out.println();

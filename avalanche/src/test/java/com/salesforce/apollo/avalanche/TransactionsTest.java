@@ -281,7 +281,7 @@ public class TransactionsTest {
                                                                               .collect(Collectors.toList()),
                                                                        DSL.using(config)));
         assertNotNull(finalized);
-        assertEquals(142, finalized.finalized.size());
+        assertEquals(143, finalized.finalized.size());
         assertEquals(0, finalized.deleted.size());
     }
 
@@ -625,12 +625,12 @@ public class TransactionsTest {
         frontier = dag.frontierSample(create)
                       .map(r -> new HashKey(r))
                       .collect(Collectors.toCollection(TreeSet::new));
- 
-        assertEquals(6, frontier.size()); 
+
+        assertEquals(6, frontier.size());
 
         // prefer node 6, raising the confidence of nodes 3, 2, 1 and 0
         dag.prefer(ordered.get(6).toHash(), create);
-        dumpClosure(ordered);
+        DagViz.dumpClosure(ordered, create);
 
         frontier = dag.frontierSample(create)
                       .map(r -> new HashKey(r))
@@ -709,7 +709,7 @@ public class TransactionsTest {
         assertEquals(Integer.valueOf(0),
                      create.select(DAG.CONFIDENCE)
                            .from(DAG)
-                           .where(DAG.HASH.eq(ordered.get(3).bytes()))
+                           .where(DAG.HASH.eq(ordered.get(4).bytes()))
                            .fetchOne()
                            .value1());
         assertTrue(String.format("node 3 is not strongly preferred"),
@@ -735,25 +735,25 @@ public class TransactionsTest {
                            .where(DAG.HASH.eq(ordered.get(2).bytes()))
                            .fetchOne()
                            .value1());
-        assertEquals(Integer.valueOf(0),
+        assertEquals(Integer.valueOf(1),
                      create.select(DAG.CONFIDENCE)
                            .from(DAG)
                            .where(DAG.HASH.eq(ordered.get(3).bytes()))
                            .fetchOne()
                            .value1());
-        assertEquals(Integer.valueOf(0),
+        assertEquals(Integer.valueOf(1),
                      create.select(DAG.CONFIDENCE)
                            .from(DAG)
                            .where(DAG.HASH.eq(ordered.get(4).bytes()))
                            .fetchOne()
                            .value1());
 
-        assertFalse(String.format("node 3 is strongly preferred " + ordered.get(3)),
-                    create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(3).toHash(),
-                                                                               DSL.using(config))));
-        assertTrue(String.format("node 4 is not strongly preferred"),
-                   create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(4).toHash(),
+        assertTrue(String.format("node 3 is not strongly preferred " + ordered.get(3)),
+                   create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(3).toHash(),
                                                                               DSL.using(config))));
+        assertFalse(String.format("node 4 is strongly preferred"),
+                    create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(4).toHash(),
+                                                                               DSL.using(config))));
 
         entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 6).getBytes()));
@@ -779,13 +779,13 @@ public class TransactionsTest {
                            .where(DAG.HASH.eq(ordered.get(2).bytes()))
                            .fetchOne()
                            .value1());
-        assertEquals(Integer.valueOf(0),
+        assertEquals(Integer.valueOf(1),
                      create.select(DAG.CONFIDENCE)
                            .from(DAG)
                            .where(DAG.HASH.eq(ordered.get(3).bytes()))
                            .fetchOne()
                            .value1());
-        assertEquals(Integer.valueOf(1),
+        assertEquals(Integer.valueOf(2),
                      create.select(DAG.CONFIDENCE)
                            .from(DAG)
                            .where(DAG.HASH.eq(ordered.get(4).bytes()))
@@ -795,30 +795,9 @@ public class TransactionsTest {
         assertFalse(String.format("node 3 is strongly preferred " + ordered.get(3)),
                     create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(3).toHash(),
                                                                                DSL.using(config))));
-        assertTrue(String.format("node 4 is notstrongly preferred"),
+        assertTrue(String.format("node 4 is not strongly preferred"),
                    create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(4).toHash(),
                                                                               DSL.using(config))));
-    }
-
-    void dumpClosure(List<HashKey> ordered) {
-        ordered.forEach(k -> {
-            System.out.println();
-            System.out.println(String.format("%s : %s", k,
-                                             create.select(DAG.CONFIDENCE)
-                                                   .from(DAG)
-                                                   .where(DAG.HASH.eq(k.bytes()))
-                                                   .fetchOne()
-                                                   .value1()));
-            create.select(CLOSURE.CHILD, CLOSURE.DEPTH)
-                  .from(CLOSURE)
-                  .where(CLOSURE.PARENT.eq(DSL.inline(k.bytes())))
-                  .and(CLOSURE.DEPTH.notEqual(DSL.inline(0)))
-                  .orderBy(CLOSURE.DEPTH)
-                  .stream()
-                  .forEach(r -> {
-                      System.out.println(String.format("   -> %s: %s", r.value2(), new HashKey(r.value1())));
-                  });
-        });
     }
 
     HASH newDagEntree(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links) {

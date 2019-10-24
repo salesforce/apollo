@@ -19,6 +19,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Function;
@@ -57,14 +58,13 @@ public class DagViz {
                                                    .where(DAG.HASH.eq(k.bytes()))
                                                    .fetchOne()
                                                    .value1()));
-            create.select(CLOSURE.CHILD, CLOSURE.DEPTH)
+            create.select(CLOSURE.CHILD)
                   .from(CLOSURE)
                   .where(CLOSURE.PARENT.eq(DSL.inline(k.bytes())))
-                  .and(CLOSURE.DEPTH.notEqual(DSL.inline(0)))
-                  .orderBy(CLOSURE.DEPTH)
+                  .and(CLOSURE.CLOSURE_.isTrue())
                   .stream()
                   .forEach(r -> {
-                      System.out.println(String.format("   -> %s: %s", r.value2(), new HashKey(r.value1())));
+                      System.out.println(String.format("   -> %s", new HashKey(r.value1())));
                   });
         });
     }
@@ -82,7 +82,7 @@ public class DagViz {
 
     public static MutableGraph visualize(String title, DSLContext create, boolean ignoreNoOp) {
         return mutGraph(title).setDirected(true).use((gr, ctx) -> {
-            traverse(create, rawFrontier(create), ignoreNoOp);
+            traverse(create, ignoreNoOp);
         }).graphAttrs().add(RankDir.BOTTOM_TO_TOP);
     }
 
@@ -94,6 +94,32 @@ public class DagViz {
                      .stream()
                      .map(r -> new HashKey(r.value1()))
                      .collect(Collectors.toList());
+    }
+
+    static void traverse(DSLContext create, boolean ignoreNoOp) {
+        Map<HashKey, String> labels = new ConcurrentSkipListMap<>();
+        Function<HashKey, String> labelFor = h -> labels.computeIfAbsent(h,
+                                                                         k -> k.b64Encoded());
+        TreeMap<HashKey, MutableNode> nodes = new TreeMap<>();
+        create.selectFrom(DAG).where(DAG.NOOP.isFalse()).fetch().forEach(entry -> {
+            HashKey key = new HashKey(entry.value1());
+            nodes.put(key, decorate(key, entry, labelFor, create));
+        });
+
+        nodes.entrySet().forEach(entry -> {
+            List<Record1<byte[]>> links = create.select(LINK.HASH)
+                                                .from(LINK)
+                                                .where(LINK.NODE.eq(entry.getKey().bytes()))
+                                                .fetch();
+            links.forEach(e -> {
+                HashKey targetKey = new HashKey(e.value1());
+                MutableNode target = nodes.get(targetKey);
+                if (target == null) {
+                    System.out.println("Orphan: " + targetKey);
+                }
+                entry.getValue().addLink(target.asLinkTarget());
+            });
+        });
     }
 
     static void traverse(DSLContext create, List<HashKey> roots, boolean ignoreNoOp) {
@@ -111,20 +137,12 @@ public class DagViz {
                 DagRecord entry = create.selectFrom(DAG).where(DAG.HASH.eq(h.bytes())).fetchOne();
                 Result<Record1<byte[]>> links = null;
                 if (entry != null) {
-                    if (!entry.getNoop()) {
-                        links = create.select(LINK.HASH)
-                                      .from(LINK)
-                                      .where(LINK.NODE.eq(h.bytes()))
-                                      .fetch();
-                    } else {
-                        links = create.select(CLOSURE.CHILD)
-                                      .from(CLOSURE)
-                                      .where(CLOSURE.PARENT.eq(h.bytes()))
-                                      .and(CLOSURE.DEPTH.gt(0))
-                                      .fetch();
-                    }
+                    links = create.select(LINK.HASH)
+                                  .from(LINK)
+                                  .where(LINK.NODE.eq(h.bytes()))
+                                  .fetch();
+                    decorate(create, h, entry, labelFor, links, traversed, ignoreNoOp, next);
                 }
-                decorate(create, h, entry, labelFor, links, traversed, ignoreNoOp, next);
             });
             frontier.clear();
             frontier.addAll(next);
@@ -135,11 +153,10 @@ public class DagViz {
     private static void decorate(DSLContext create, HashKey h, DagRecord entry,
             Function<HashKey, String> labelFor, Result<Record1<byte[]>> links, Set<HashKey> traversed,
             boolean ignoreNoOps, Set<HashKey> next) {
-        String name = labelFor.apply(h);
 
         if (entry == null) {
             System.out.println("Missing from local DAG: " + h);
-            MutableNode parent = mutNode(name);
+            MutableNode parent = mutNode(labelFor.apply(h));
             parent.add(Color.ORANGE);
             parent.add(Shape.OCTAGON);
             return;
@@ -152,10 +169,15 @@ public class DagViz {
                      next.add(key);
                  }
              });
+        if (entry.getNoop() && ignoreNoOps) { return; }
+        decorate(h, entry, labelFor, links, create);
+    }
 
+    private static MutableNode decorate(HashKey h, DagRecord entry, Function<HashKey, String> labelFor,
+            DSLContext create) {
+        String name = labelFor.apply(h);
         MutableNode parent;
         if (entry.getNoop()) {
-            if (ignoreNoOps) { return; }
             parent = mutNode(name);
             parent.add(Color.RED);
         } else {
@@ -169,7 +191,47 @@ public class DagViz {
             parent.add(Style.DASHED);
         }
 
-        links.forEach(c -> parent.addLink(mutNode(labelFor.apply(new HashKey(c.value1())))));
+        Record3<Integer, byte[], Integer> info = create.select(CONFLICTSET.CARDINALITY, CONFLICTSET.PREFERRED,
+                                                               CONFLICTSET.COUNTER)
+                                                       .from(CONFLICTSET)
+                                                       .join(DAG)
+                                                       .on(DAG.CONFLICTSET.eq(CONFLICTSET.NODE))
+                                                       .where(DAG.HASH.eq(h.bytes()))
+                                                       .fetchOne();
+        int targetRound = -1;
+        if (unqueried) {
+            targetRound = create.select(UNQUERIED.TARGETROUND)
+                                .from(UNQUERIED)
+                                .where(UNQUERIED.HASH.eq(h.bytes()))
+                                .fetchOne()
+                                .value1();
+        }
+        parent.add(Label.of(String.format("%s\n%s : %s : %s\n%s : %s : %s", name, entry.getChit(),
+                                          entry.getConfidence(), targetRound, info.value1(),
+                                          info.value3(),
+                                          Arrays.equals(info.value2(), h.bytes()))));
+        return parent;
+    }
+
+    private static void decorate(HashKey h, DagRecord entry, Function<HashKey, String> labelFor,
+            Result<Record1<byte[]>> links, DSLContext create) {
+        String name = labelFor.apply(h);
+        MutableNode parent;
+        if (entry.getNoop()) {
+            parent = mutNode(name);
+            parent.add(Color.RED);
+        } else {
+            parent = mutNode(name);
+            parent.add(Color.BLUE);
+        }
+
+        boolean unqueried = create.fetchExists(create.selectFrom(UNQUERIED).where(UNQUERIED.HASH.eq(h.bytes())));
+        parent.add(unqueried ? Shape.DIAMOND : Shape.CIRCLE);
+        if (!entry.getFinalized()) {
+            parent.add(Style.DASHED);
+        }
+
+        links.forEach(c -> parent.addLink(labelFor.apply(new HashKey(c.value1()))));
 
         Record3<Integer, byte[], Integer> info = create.select(CONFLICTSET.CARDINALITY, CONFLICTSET.PREFERRED,
                                                                CONFLICTSET.COUNTER)

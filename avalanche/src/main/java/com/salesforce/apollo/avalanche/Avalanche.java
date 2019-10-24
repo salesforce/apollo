@@ -732,7 +732,7 @@ public class Avalanche {
         Context timer = metrics == null ? null : metrics.getNoOpTimer().time();
 
         dag.getNeglectedFrontier(noOpContext).forEach(e -> noOpParentSample.add(e));
-//        dag.getNeglected(noOpContext).forEach(e -> noOpParentSample.add(e));
+        // dag.getNeglected(noOpContext).forEach(e -> noOpParentSample.add(e));
 
         if (noOpParentSample.isEmpty()) {
             // if still none, select any nodes that are not finalized
@@ -888,6 +888,9 @@ public class Avalanche {
     private void nextFinalized(DSLContext context) {
         List<byte[]> batch = nextFinalizations(parameters.finalizeBatchSize);
         if (batch.isEmpty()) { return; }
+        if (metrics != null) {
+            metrics.getFinalizerBacklog().set(finalizing.size());
+        }
         log.trace("Finalizations: {}", batch.size());
         Context timer = metrics == null ? null : metrics.getFinalizeTimer().time();
         FinalizationData d = context.transactionResult(config -> dag.tryFinalize(batch, DSL.using(config)));
@@ -936,14 +939,13 @@ public class Avalanche {
     private void nextInserts(DSLContext context) {
         List<DagInsert> next = nextInsertions();
         if (next.isEmpty()) { return; }
+        if (metrics != null) {
+            metrics.getInputBacklog().set(insertions.size());
+        }
         log.trace("Insertions: {}", next.size());
         Context timer = metrics == null ? null : metrics.getInputTimer().time();
         context.transaction(config -> {
             dag.put(next, DSL.using(config));
-            // next.forEach(insert -> {
-            // dag.putDagEntry(insert.key, insert.dagEntry, insert.entry, insert.conflictSet, DSL.using(config),
-            // insert.noOp, insert.targetRound);
-            // });
         });
 
         if (timer != null) {
@@ -975,6 +977,9 @@ public class Avalanche {
     private void nextPreferred(DSLContext context) {
         List<HASH> batch = nextPreferences(parameters.preferBatchSize);
         if (!batch.isEmpty()) {
+            if (metrics != null) {
+                metrics.getPreferBacklog().set(preferings.size());
+            }
             Context timer = metrics == null ? null : metrics.getPreferTimer().time();
             context.transaction(config -> dag.prefer(batch, DSL.using(config)));
             if (timer != null) {

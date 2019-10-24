@@ -133,7 +133,7 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.queryBatchSize = 40;
-            aParams.insertBatchSize = 2;
+            aParams.insertBatchSize = 10;
             aParams.preferBatchSize = 40;
             aParams.finalizeBatchSize = 40;
             aParams.noOpsPerRound = 1;
@@ -145,7 +145,7 @@ public class AvalancheFunctionalTest {
             // # of FF rounds per NoOp generation
             aParams.delta = 1;
             // # of Avalanche queries per FF round
-            aParams.gamma = 30;
+            aParams.gamma = 20;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
                     + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
@@ -157,7 +157,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 200;
+        int target = 800;
         Duration ffRound = Duration.ofMillis(500);
 
         views.forEach(view -> view.getService().start(ffRound));
@@ -190,13 +190,6 @@ public class AvalancheFunctionalTest {
             // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), false))
             // .render(Format.PNG)
             // .toFile(new File("smoke.png"));
-
-            System.out.println("wanted: ");
-            System.out.println(master.getDag()
-                                     .getWanted(Integer.MAX_VALUE, master.getDslContext())
-                                     .stream()
-                                     .map(h -> new HashKey(h))
-                                     .collect(Collectors.toList()));
         }
         System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
@@ -250,7 +243,7 @@ public class AvalancheFunctionalTest {
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
-                                 .getWantedSlow(Integer.MAX_VALUE, master.getDslContext())
+                                 .getWanted(Integer.MAX_VALUE, master.getDslContext())
                                  .stream()
                                  .map(e -> new HashKey(e))
                                  .collect(Collectors.toList()));
@@ -277,16 +270,20 @@ public class AvalancheFunctionalTest {
     private void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
         System.out.println("    Rounds: " + node.getRoundCounter());
+        Integer total = node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1();
+        Integer finalized = node.getDslContext()
+                                .selectCount()
+                                .from(DAG)
+                                .where(DAG.NOOP.isFalse())
+                                .and(DAG.FINALIZED.isTrue())
+                                .fetchOne()
+                                .value1();
         System.out.println("    User txns: "
-                + node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1()
+                + total
                 + " finalized: "
-                + node.getDslContext()
-                      .selectCount()
-                      .from(DAG)
-                      .where(DAG.NOOP.isFalse())
-                      .and(DAG.FINALIZED.isTrue())
-                      .fetchOne()
-                      .value1()
+                + finalized
+                + " unfinalized: "
+                + (total - finalized)
                 + " unqueried: "
                 + node.getDslContext()
                       .selectCount()
