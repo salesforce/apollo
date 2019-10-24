@@ -98,6 +98,13 @@ databaseChangeLog:
             onDelete: CASCADE
             referencedColumnNames: hash
             referencedTableName: dag
+      -  addUniqueConstraint:
+            tableName: unqueried
+            columnNames: hash
+            constraintName: unqueried_unique_hash
+            deferrable: false
+            disabled: false
+            initiallyDeferred: false
       -  createIndex:
             columns:
             -  column:
@@ -205,6 +212,13 @@ databaseChangeLog:
             initiallyDeferred: false
             referencedColumnNames: hash
             referencedTableName: dag
+      -  addUniqueConstraint:
+            tableName: conflictSet
+            columnNames: node
+            constraintName: conflictSet_unique_node
+            deferrable: false
+            disabled: false
+            initiallyDeferred: false
       -  createTable:
             tableName: processors
             columns:
