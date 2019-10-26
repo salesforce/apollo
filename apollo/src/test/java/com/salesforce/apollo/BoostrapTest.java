@@ -58,17 +58,14 @@ public class BoostrapTest {
 		List<Apollo> oracles = new ArrayList<>();
 		URL endpoint = new URL(String.format("http://localhost:%d/api/cnc/mint", RULE.getLocalPort()));
 
-		for (int i = 1; i <= 9; i++) {
+		for (int i = 1; i <= PregenPopulation.getCardinality(); i++) {
 			ApolloConfiguration config = new ApolloConfiguration();
 			config.avalanche.alpha = 0.6;
 			config.avalanche.k = 6;
 			config.avalanche.beta1 = 3;
 			config.avalanche.beta2 = 5;
 			config.avalanche.dbConnect = "jdbc:h2:mem:bootstrap-" + i;
-			config.avalanche.queryBatchSize = 20;
-			config.avalanche.parentCount = 3;
-			config.avalanche.epsilon = 9;
-			config.gossipInterval = Duration.ofMillis(100);
+			config.gossipInterval = Duration.ofMillis(500);
 			config.communications = new ApolloConfiguration.SimCommunicationsFactory();
 			BootstrapIdSource ks = new BootstrapIdSource();
 			ks.endpoint = endpoint;

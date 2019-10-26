@@ -34,17 +34,17 @@ public class AvalancheParameters {
     /**
      * The number of FF rounds per NoOp generation round
      */
-    public int delta = 2;
+    public int delta = 1;
     /**
      * The number of FF rounds per Avalanche round
      */
     public int epsilon = 1;
-    public int finalizeBatchSize = 100;
+    public int finalizeBatchSize = 40;
     /**
      * The number of queries per FF round
      */
     public int gamma = 20;
-    public int insertBatchSize = 8;
+    public int insertBatchSize = 10;
     /**
      * The number of members to sample for a vote
      */
@@ -68,7 +68,7 @@ public class AvalancheParameters {
      */
     public int parentCount = 3;
 
-    public int preferBatchSize = 100;
+    public int preferBatchSize = 40;
 
     /**
      * Query timeout

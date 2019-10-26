@@ -141,7 +141,7 @@ public class ApolloConfiguration {
 	}
 
 	public static final String DEFAULT_CA_ALIAS = "CA";
-	public static final Duration DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(1_000);
+	public static final Duration DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(500);
 	public static final String DEFAULT_IDENTITY_ALIAS = "identity";
 	public static final char[] DEFAULT_PASSWORD = "".toCharArray();
 	public static final String DEFAULT_TYPE = "PKCS12";
@@ -162,5 +162,5 @@ public class ApolloConfiguration {
 			@Type(value = EnvironmentConfiguredIdSource.class, name = "env") })
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 	public IdentityStoreSource source;
-	public int threadPool = 10;
+	public int threadPool = 1;
 }
