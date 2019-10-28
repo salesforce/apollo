@@ -150,14 +150,14 @@ public class AvalancheFunctionalTest {
 					+ ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
 			if (frist.get()) {
 				frist.set(false);
-//				aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
+				aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
 				return new Avalanche(view, comm, aParams, avaMetrics);
 			}
 			return new Avalanche(view, comm, aParams);
 		}).collect(Collectors.toList());
 
 		// # of txns per node
-		int target = 800;
+		int target = 100;
 		Duration ffRound = Duration.ofMillis(500);
 
 		views.forEach(view -> view.getService().start(ffRound));

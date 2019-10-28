@@ -64,6 +64,30 @@ databaseChangeLog:
       -  createIndex:
             columns:
             -  column:
+                  name: finalized
+                  type: BOOLEAN
+            indexName: idx_dag_finalized
+            tableName: dag
+            unique: false
+      -  createIndex:
+            columns:
+            -  column:
+                  name: noOp
+                  type: BOOLEAN
+            indexName: idx_dag_noOp
+            tableName: dag
+            unique: false
+      -  createIndex:
+            columns:
+            -  column:
+                  name: conflictSet
+                  type: BINARY(32)
+            indexName: idx_dag_conflictSet
+            tableName: dag
+            unique: false
+      -  createIndex:
+            columns:
+            -  column:
                   name: discovered
                   type: TIMESTAMP
             indexName: idx_dag_discovered
@@ -80,11 +104,108 @@ databaseChangeLog:
             defaultValueComputed: CURRENT_TIMESTAMP
             tableName: dag
       -  createTable:
+            tableName: unfinalized
+            columns:
+            -  column:
+                  name: hash
+                  type: BINARY(32)
+                  autoIncrement: false
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: data
+                  type: BINARY
+            -  column:
+                  name: finalized
+                  type: BOOLEAN
+            -  column:
+                  name: chit
+                  type: INT
+            -  column:
+                  name: confidence
+                  type: INT
+            -  column:
+                  name: conflictSet
+                  type: BINARY(32)
+            -  column:
+                  name: discovered
+                  type: TIMESTAMP
+            -  column:
+                  name: noOp
+                  type: BOOLEAN
+      -  addDefaultValue:
+            columnDataType: BOOLEAN
+            columnName: finalized
+            defaultValueBoolean: false
+            tableName: unfinalized
+      -  addDefaultValue:
+            columnDataType: INT
+            columnName: chit
+            defaultValue: 0
+            tableName: unfinalized
+      -  addDefaultValue:
+            columnDataType: INT
+            columnName: confidence
+            defaultValue: 0
+            tableName: unfinalized
+      -  addUniqueConstraint:
+            tableName: unfinalized
+            columnNames: hash
+            constraintName: unfinalized_unique_hash
+            deferrable: false
+            disabled: false
+            initiallyDeferred: false
+      -  createIndex:
+            columns:
+            -  column:
+                  name: finalized
+                  type: BOOLEAN
+            indexName: idx_unfinalized_finalized
+            tableName: unfinalized
+            unique: false
+      -  createIndex:
+            columns:
+            -  column:
+                  name: noOp
+                  type: BOOLEAN
+            indexName: idx_unfinalized_noOp
+            tableName: unfinalized
+            unique: false
+      -  createIndex:
+            columns:
+            -  column:
+                  name: conflictSet
+                  type: BINARY(32)
+            indexName: idx_unfinalized_conflictSet
+            tableName: unfinalized
+            unique: false
+      -  createIndex:
+            columns:
+            -  column:
+                  name: discovered
+                  type: TIMESTAMP
+            indexName: idx_unfinalized_discovered
+            tableName: unfinalized
+            unique: false
+      -  addDefaultValue:
+            columnDataType: BOOLEAN
+            columnName: noOp
+            defaultValueBoolean: false
+            tableName: unfinalized
+      -  addDefaultValue:
+            columnDataType: TIMESTAMP
+            columnName: discovered
+            defaultValueComputed: CURRENT_TIMESTAMP
+            tableName: unfinalized
+      -  createTable:
             tableName: unqueried
             columns:
             -  column:
                   name: hash
                   type: BINARY(32)
+                  autoIncrement: false
+                  constraints:
+                     primaryKey: true
             -  column:
                   name: targetRound
                   type: INT
@@ -168,7 +289,7 @@ databaseChangeLog:
             constraintName: closure_parent_ref
             onDelete: CASCADE
             referencedColumnNames: hash
-            referencedTableName: dag
+            referencedTableName: unfinalized
       -  createTable:
             tableName: conflictSet
             columns:
