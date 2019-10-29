@@ -325,11 +325,11 @@ public class Dag {
 				.on(CONFLICTSET.NODE.eq(child.field(UNFINALIZED.CONFLICTSET)))
 				.where(CLOSURE.PARENT.eq(UNFINALIZED.HASH)).and(CONFLICTSET.PREFERRED.eq(child.field(UNFINALIZED.HASH)))
 				.asField();
-		System.out.println(create
-				.select(UNFINALIZED.HASH, closureCount.as("closure"), accepted.as("accepted"),
-						DSL.when(UNFINALIZED.HASH.isNull(), false).when(closureCount.eq(accepted), true)
-								.otherwise(false))
-				.from(queried).leftOuterJoin(UNFINALIZED).on(UNFINALIZED.HASH.eq(queriedHash)).fetch());
+//		System.out.println(create
+//				.select(UNFINALIZED.HASH, closureCount.as("closure"), accepted.as("accepted"),
+//						DSL.when(UNFINALIZED.HASH.isNull(), false).when(closureCount.eq(accepted), true)
+//								.otherwise(false))
+//				.from(queried).leftOuterJoin(UNFINALIZED).on(UNFINALIZED.HASH.eq(queriedHash)).fetch());
 		List<Boolean> result = create
 				.select(DSL.when(UNFINALIZED.HASH.isNull(), false).when(closureCount.eq(accepted), true)
 						.otherwise(false))
@@ -401,7 +401,7 @@ public class Dag {
 						.on(DSL.field("TO_PREFER.HASH", byte[].class, toPrefer).eq(CLOSURE.PARENT)))
 				.execute();
 
-		System.out.println("before \n" + create.selectFrom(p).fetch());
+//		System.out.println("before \n" + create.selectFrom(p).fetch());
 
 		create.update(UNFINALIZED).set(UNFINALIZED.CHIT, 1)
 				.where(UNFINALIZED.HASH.in(create.select(toPreferHash).from(toPrefer))).execute();
@@ -416,13 +416,13 @@ public class Dag {
 						.from(p))
 				.execute();
 
-		System.out.println("after \n" + create
-				.select(CLOSURE.CHILD, CONFLICTSET.NODE, CONFLICTSET.COUNTER, UNFINALIZED.CONFIDENCE,
-						preferred.field(UNFINALIZED.HASH), preferred.field(UNFINALIZED.CONFIDENCE), CONFLICTSET.LAST)
-				.from(CLOSURE).join(UNFINALIZED).on(UNFINALIZED.HASH.eq(CLOSURE.CHILD)).join(CONFLICTSET)
-				.on(CONFLICTSET.NODE.eq(UNFINALIZED.CONFLICTSET)).join(preferred)
-				.on(preferred.field(UNFINALIZED.HASH).eq(CONFLICTSET.PREFERRED)).join(toPrefer)
-				.on(DSL.field("TO_PREFER.HASH", byte[].class, toPrefer).eq(CLOSURE.PARENT)).fetch());
+//		System.out.println("after \n" + create
+//				.select(CLOSURE.CHILD, CONFLICTSET.NODE, CONFLICTSET.COUNTER, UNFINALIZED.CONFIDENCE,
+//						preferred.field(UNFINALIZED.HASH), preferred.field(UNFINALIZED.CONFIDENCE), CONFLICTSET.LAST)
+//				.from(CLOSURE).join(UNFINALIZED).on(UNFINALIZED.HASH.eq(CLOSURE.CHILD)).join(CONFLICTSET)
+//				.on(CONFLICTSET.NODE.eq(UNFINALIZED.CONFLICTSET)).join(preferred)
+//				.on(preferred.field(UNFINALIZED.HASH).eq(CONFLICTSET.PREFERRED)).join(toPrefer)
+//				.on(DSL.field("TO_PREFER.HASH", byte[].class, toPrefer).eq(CLOSURE.PARENT)).fetch());
 		if (updated != 0) {
 			log.trace("Preferred {}:{} in {} ms", updated, entries.size(), System.currentTimeMillis() - start);
 		}
@@ -432,8 +432,9 @@ public class Dag {
 
 	public void put(List<DagInsert> inserts, DSLContext context) {
 		Query dagInsert = context
-				.insertInto(UNFINALIZED, UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.NOOP, UNFINALIZED.CONFLICTSET)
-				.values((byte[]) null, (byte[]) null, (Boolean) null, (byte[]) null).keepStatement(true);
+				.insertInto(UNFINALIZED, UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.NOOP, UNFINALIZED.CONFLICTSET,
+							UNFINALIZED.LINKS)
+				.values((byte[]) null, (byte[]) null, (Boolean) null, (byte[]) null, (byte[]) null).keepStatement(true);
 
 		Query insertUnqueried = context.insertInto(UNQUERIED, UNQUERIED.HASH, UNQUERIED.TARGETROUND)
 				.values((byte[]) null, 0).keepStatement(true);
@@ -502,8 +503,18 @@ public class Dag {
 			}
 			try {
 				if (!context.fetchExists(UNFINALIZED, UNFINALIZED.HASH.eq(insert.key.bytes()))) {
+					byte[] links = null;
+					List<HASH> yeLinks = insert.dagEntry.getLinks();
+
+					if (yeLinks != null) {
+						ByteBuffer linkBuf = ByteBuffer.allocate(32 * yeLinks.size());
+						for (HASH hash : yeLinks) {
+							linkBuf.put(hash.bytes());
+						}
+						links = linkBuf.array();
+					}
 					dagInsert.bind(1, insert.key.bytes()).bind(2, insert.entry.getData().array()).bind(3, insert.noOp)
-							.bind(4, conflictSet.bytes()).execute();
+							.bind(4, conflictSet.bytes()).bind(5, links).execute();
 					insertUnqueried.bind(1, insert.key.bytes()).bind(2, insert.targetRound).execute();
 					insertClosure0.bind(1, insert.key.bytes()).bind(2, insert.key.bytes()).execute();
 					if (insert.dagEntry.getLinks() != null) {

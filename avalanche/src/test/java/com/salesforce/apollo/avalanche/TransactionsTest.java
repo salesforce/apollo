@@ -7,8 +7,6 @@
 package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.dagwood.schema.Tables.*;
-import static com.salesforce.apollo.dagwood.schema.Tables.CONFLICTSET;
-import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
 import static com.salesforce.apollo.protocols.Conversion.serialize;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertArrayEquals;
@@ -36,6 +34,7 @@ import java.util.stream.Collectors;
 
 import org.jooq.ConnectionProvider;
 import org.jooq.DSLContext;
+import org.jooq.Record2;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.jooq.impl.DefaultConnectionProvider;
@@ -54,13 +53,27 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class TransactionsTest {
 
+	public static void dumpClosure(List<HashKey> nodes, DSLContext create) {
+		nodes.forEach(k -> {
+			System.out.println();
+			Record2<Integer, Integer> node = create.select(UNFINALIZED.CHIT, UNFINALIZED.CONFIDENCE).from(UNFINALIZED)
+					.where(UNFINALIZED.HASH.eq(k.bytes())).fetchOne();
+			System.out.println(String.format("%s : %s : %s", k, node.value1(), node.value2()));
+			create.select(CLOSURE.CHILD).from(CLOSURE).where(CLOSURE.PARENT.eq(DSL.inline(k.bytes())))
+					.and(CLOSURE.CLOSURE_.isTrue()).stream().forEach(r -> {
+						System.out.println(String.format("   -> %s", new HashKey(r.value1())));
+					});
+		});
+	}
+
 	private String              connection_url;
 	private Connection          connection;
 	private DSLContext          create;
 	private Dag                 dag;
 	private AvalancheParameters parameters;
 	private DagEntry            root;
-	private HASH                rootKey;
+
+	private HASH rootKey;
 
 	@After
 	public void after() {
@@ -565,8 +578,9 @@ public class TransactionsTest {
 	public void prefer() throws Exception {
 		List<HashKey> ordered = new ArrayList<>();
 		Map<HashKey, DagEntry> stored = new TreeMap<>();
-		stored.put(new HashKey(rootKey), root);
-		ordered.add(new HashKey(rootKey));
+		HashKey rootHashKey = new HashKey(rootKey);
+		stored.put(rootHashKey, root);
+		ordered.add(rootHashKey);
 
 		DagEntry entry = new DagEntry();
 		entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 1).getBytes()));
@@ -604,15 +618,17 @@ public class TransactionsTest {
 		stored.put(new HashKey(key), entry);
 		ordered.add(new HashKey(key));
 
+//		dumpClosure(ordered, create);
 		for (HashKey e : ordered) {
 			assertEquals(Integer.valueOf(0), create.select(UNFINALIZED.CONFIDENCE).from(UNFINALIZED)
 					.where(UNFINALIZED.HASH.eq(e.bytes())).fetchOne().value1());
-			DagViz.dumpClosure(Collections.singletonList(e), create);
-			assertFalse(String.format("node " + e + " is strongly preferred: ") + ordered.get(4),
-						dag.isStronglyPreferred(e.toHash(), create));
+//			assertFalse(String.format("node " + e + " is strongly preferred: ") + ordered.get(4),
+//						dag.isStronglyPreferred(e.toHash(), create));
 		}
 
 		dag.prefer(ordered.get(3).toHash(), create);
+
+//		dumpClosure(ordered, create);
 		assertFalse(String.format("node 4 is strongly preferred: ") + ordered.get(4),
 					dag.isStronglyPreferred(ordered.get(4).toHash(), create));
 

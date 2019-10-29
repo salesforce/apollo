@@ -250,8 +250,8 @@ public class AvalancheFunctionalTest {
 		Integer unfinalizedUser = node.getDslContext().selectCount().from(UNFINALIZED).where(UNFINALIZED.NOOP.isFalse())
 				.fetchOne().value1();
 		System.out.println("    User txns finalized: " + finalized + " unfinalized: " + unfinalizedUser + " unqueried: "
-				+ node.getDslContext().selectCount().from(UNFINALIZED).where(UNFINALIZED.NOOP.isFalse())
-						.and(UNFINALIZED.QUERIED.isFalse()).fetchOne().value1());
+				+ node.getDslContext().selectCount().from(UNFINALIZED).where(UNFINALIZED.NOOP.isTrue()).fetchOne()
+						.value1());
 		System.out.println("    No Op txns: " + node.getDslContext().selectCount().from(UNFINALIZED)
 				.where(UNFINALIZED.NOOP.isTrue()).fetchOne().value1());
 	}
