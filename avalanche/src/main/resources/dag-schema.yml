@@ -13,7 +13,7 @@ databaseChangeLog:
             tableName: dag
             columns:
             -  column:
-                  name: hash
+                  name: key
                   type: BINARY(32)
                   autoIncrement: false
                   constraints:
@@ -22,87 +22,15 @@ databaseChangeLog:
                   name: data
                   type: BINARY
             -  column:
-                  name: finalized
-                  type: BOOLEAN
-            -  column:
-                  name: chit
-                  type: INT
-            -  column:
-                  name: confidence
-                  type: INT
-            -  column:
-                  name: conflictSet
-                  type: BINARY(32)
-            -  column:
-                  name: discovered
-                  type: TIMESTAMP
-            -  column:
-                  name: noOp
-                  type: BOOLEAN
-      -  addDefaultValue:
-            columnDataType: BOOLEAN
-            columnName: finalized
-            defaultValueBoolean: false
-            tableName: dag
-      -  addDefaultValue:
-            columnDataType: INT
-            columnName: chit
-            defaultValue: 0
-            tableName: dag
-      -  addDefaultValue:
-            columnDataType: INT
-            columnName: confidence
-            defaultValue: 0
-            tableName: dag
+                  name: links
+                  type: BINARY
       -  addUniqueConstraint:
             tableName: dag
-            columnNames: hash
-            constraintName: dag_unique_hash
+            columnNames: key
+            constraintName: dag_unique_key
             deferrable: false
             disabled: false
             initiallyDeferred: false
-      -  createIndex:
-            columns:
-            -  column:
-                  name: finalized
-                  type: BOOLEAN
-            indexName: idx_dag_finalized
-            tableName: dag
-            unique: false
-      -  createIndex:
-            columns:
-            -  column:
-                  name: noOp
-                  type: BOOLEAN
-            indexName: idx_dag_noOp
-            tableName: dag
-            unique: false
-      -  createIndex:
-            columns:
-            -  column:
-                  name: conflictSet
-                  type: BINARY(32)
-            indexName: idx_dag_conflictSet
-            tableName: dag
-            unique: false
-      -  createIndex:
-            columns:
-            -  column:
-                  name: discovered
-                  type: TIMESTAMP
-            indexName: idx_dag_discovered
-            tableName: dag
-            unique: false
-      -  addDefaultValue:
-            columnDataType: BOOLEAN
-            columnName: noOp
-            defaultValueBoolean: false
-            tableName: dag
-      -  addDefaultValue:
-            columnDataType: TIMESTAMP
-            columnName: discovered
-            defaultValueComputed: CURRENT_TIMESTAMP
-            tableName: dag
       -  createTable:
             tableName: unfinalized
             columns:
@@ -116,8 +44,8 @@ databaseChangeLog:
                   name: data
                   type: BINARY
             -  column:
-                  name: finalized
-                  type: BOOLEAN
+                  name: links
+                  type: BINARY
             -  column:
                   name: chit
                   type: INT
@@ -134,11 +62,6 @@ databaseChangeLog:
                   name: noOp
                   type: BOOLEAN
       -  addDefaultValue:
-            columnDataType: BOOLEAN
-            columnName: finalized
-            defaultValueBoolean: false
-            tableName: unfinalized
-      -  addDefaultValue:
             columnDataType: INT
             columnName: chit
             defaultValue: 0
@@ -148,6 +71,16 @@ databaseChangeLog:
             columnName: confidence
             defaultValue: 0
             tableName: unfinalized
+      -  addDefaultValue:
+            columnDataType: BOOLEAN
+            columnName: noOp
+            defaultValueBoolean: false
+            tableName: unfinalized
+      -  addDefaultValue:
+            columnDataType: TIMESTAMP
+            columnName: discovered
+            defaultValueComputed: CURRENT_TIMESTAMP
+            tableName: unfinalized
       -  addUniqueConstraint:
             tableName: unfinalized
             columnNames: hash
@@ -155,14 +88,6 @@ databaseChangeLog:
             deferrable: false
             disabled: false
             initiallyDeferred: false
-      -  createIndex:
-            columns:
-            -  column:
-                  name: finalized
-                  type: BOOLEAN
-            indexName: idx_unfinalized_finalized
-            tableName: unfinalized
-            unique: false
       -  createIndex:
             columns:
             -  column:
@@ -179,77 +104,6 @@ databaseChangeLog:
             indexName: idx_unfinalized_conflictSet
             tableName: unfinalized
             unique: false
-      -  createIndex:
-            columns:
-            -  column:
-                  name: discovered
-                  type: TIMESTAMP
-            indexName: idx_unfinalized_discovered
-            tableName: unfinalized
-            unique: false
-      -  addDefaultValue:
-            columnDataType: BOOLEAN
-            columnName: noOp
-            defaultValueBoolean: false
-            tableName: unfinalized
-      -  addDefaultValue:
-            columnDataType: TIMESTAMP
-            columnName: discovered
-            defaultValueComputed: CURRENT_TIMESTAMP
-            tableName: unfinalized
-      -  createTable:
-            tableName: unqueried
-            columns:
-            -  column:
-                  name: hash
-                  type: BINARY(32)
-                  autoIncrement: false
-                  constraints:
-                     primaryKey: true
-            -  column:
-                  name: targetRound
-                  type: INT
-                  autoIncrement: false
-                  constraints:
-                     nullable: false
-      -  addForeignKeyConstraint:
-            baseColumnNames: hash
-            baseTableName: unqueried
-            constraintName: unqueried_dag_ref
-            onDelete: CASCADE
-            referencedColumnNames: hash
-            referencedTableName: dag
-      -  addUniqueConstraint:
-            tableName: unqueried
-            columnNames: hash
-            constraintName: unqueried_unique_hash
-            deferrable: false
-            disabled: false
-            initiallyDeferred: false
-      -  createIndex:
-            columns:
-            -  column:
-                  name: targetRound
-                  type: INT
-            indexName: idx_unqueried_target_round
-            tableName: unqueried
-            unique: false
-      -  createTable:
-            tableName: link
-            columns:
-            -  column:
-                  name: node
-                  type: BINARY(32)
-            -  column:
-                  name: hash
-                  type: BINARY(32)
-      -  addForeignKeyConstraint:
-            baseColumnNames: node
-            baseTableName: link
-            constraintName: link_node_ref
-            onDelete: CASCADE
-            referencedColumnNames: hash
-            referencedTableName: dag
       -  createTable:
             tableName: closure
             columns:
@@ -291,6 +145,43 @@ databaseChangeLog:
             referencedColumnNames: hash
             referencedTableName: unfinalized
       -  createTable:
+            tableName: unqueried
+            columns:
+            -  column:
+                  name: hash
+                  type: BINARY(32)
+                  autoIncrement: false
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: targetRound
+                  type: INT
+                  autoIncrement: false
+                  constraints:
+                     nullable: false
+      -  addForeignKeyConstraint:
+            baseColumnNames: hash
+            baseTableName: unqueried
+            constraintName: unqueried_dag_ref
+            onDelete: CASCADE
+            referencedColumnNames: hash
+            referencedTableName: unfinalized
+      -  addUniqueConstraint:
+            tableName: unqueried
+            columnNames: hash
+            constraintName: unqueried_unique_hash
+            deferrable: false
+            disabled: false
+            initiallyDeferred: false
+      -  createIndex:
+            columns:
+            -  column:
+                  name: targetRound
+                  type: INT
+            indexName: idx_unqueried_target_round
+            tableName: unqueried
+            unique: false
+      -  createTable:
             tableName: conflictSet
             columns:
             -  column:
@@ -325,14 +216,6 @@ databaseChangeLog:
             columnName: counter
             defaultValue: 0
             tableName: conflictSet
-      -  addForeignKeyConstraint:
-            baseColumnNames: preferred
-            baseTableName: conflictSet
-            constraintName: conflict_set_preferred_ref
-            deferrable: false
-            initiallyDeferred: false
-            referencedColumnNames: hash
-            referencedTableName: dag
       -  addUniqueConstraint:
             tableName: conflictSet
             columnNames: node
@@ -358,7 +241,7 @@ databaseChangeLog:
             constraintName: processors_dag_ref
             deferrable: false
             initiallyDeferred: false
-            referencedColumnNames: hash
+            referencedColumnNames: key
             referencedTableName: dag
       -  addUniqueConstraint:
             tableName: processors

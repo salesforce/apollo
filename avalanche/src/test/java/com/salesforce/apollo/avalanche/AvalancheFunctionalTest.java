@@ -7,7 +7,7 @@
 package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
-import static com.salesforce.apollo.dagwood.schema.Tables.UNQUERIED;
+import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
 import static org.junit.Assert.assertEquals;
@@ -61,8 +61,8 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class AvalancheFunctionalTest {
 
-	private static final RootCertificate ca = getCa();
-	private static Map<UUID, CertWithKey> certs;
+	private static final RootCertificate     ca         = getCa();
+	private static Map<UUID, CertWithKey>    certs;
 	private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
 	@BeforeClass
@@ -71,15 +71,15 @@ public class AvalancheFunctionalTest {
 				.collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
 	}
 
-	private Random entropy;
-	private List<Node> members;
+	private Random                   entropy;
+	private List<Node>               members;
 	private ScheduledExecutorService scheduler;
-	private List<X509Certificate> seeds;
-	private List<View> views;
-	private DropWizardStatsPlugin rpcStats;
-	private MetricRegistry commRegistry;
-	private MetricRegistry node0Registry;
-	private File baseDir;
+	private List<X509Certificate>    seeds;
+	private List<View>               views;
+	private DropWizardStatsPlugin    rpcStats;
+	private MetricRegistry           commRegistry;
+	private MetricRegistry           node0Registry;
+	private File                     baseDir;
 
 	@After
 	public void after() {
@@ -175,7 +175,7 @@ public class AvalancheFunctionalTest {
 		Avalanche master = nodes.get(0);
 		System.out.println("Start round: " + master.getRoundCounter());
 		CompletableFuture<HashKey> genesis = nodes.get(0).createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
-				txnScheduler);
+																		txnScheduler);
 		HashKey genesisKey = null;
 		try {
 			genesisKey = genesis.get(10, TimeUnit.SECONDS);
@@ -195,8 +195,8 @@ public class AvalancheFunctionalTest {
 		List<Transactioneer> transactioneers = new ArrayList<>();
 		HASH k = genesisKey.toHash();
 		for (Avalanche a : nodes) {
-			assertTrue("Failed to finalize genesis on: " + a.getNode().getId(),
-					Utils.waitForCondition(60_000, () -> a.getDagDao().isFinalized(k)));
+			assertTrue( "Failed to finalize genesis on: " + a.getNode().getId(),
+						Utils.waitForCondition(60_000, () -> a.getDagDao().isFinalized(k)));
 			transactioneers.add(new Transactioneer(a));
 		}
 
@@ -216,15 +216,12 @@ public class AvalancheFunctionalTest {
 		Thread.sleep(2_000); // drain the swamp
 		// System.out.println(profiler.getTop(3));
 
-		System.out.println(
-				"Global tps: " + transactioneers.stream().mapToInt(e -> e.getSuccess()).sum() / (duration / 1000));
+		System.out.println("Global tps: "
+				+ transactioneers.stream().mapToInt(e -> e.getSuccess()).sum() / (duration / 1000));
 
-		System.out
-				.println(
-						"Max tps per node: " + nodes.stream()
-								.mapToInt(n -> n.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse())
-										.and(DAG.FINALIZED.isTrue()).fetchOne().value1())
-								.max().orElse(0) / (duration / 1000));
+		System.out.println("Max tps per node: "
+				+ nodes.stream().mapToInt(n -> n.getDslContext().selectCount().from(DAG).fetchOne().value1()).max()
+						.orElse(0) / (duration / 1000));
 		nodes.forEach(node -> summary(node));
 
 		FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
@@ -249,18 +246,13 @@ public class AvalancheFunctionalTest {
 	private void summary(Avalanche node) {
 		System.out.println(node.getNode().getId() + " : ");
 		System.out.println("    Rounds: " + node.getRoundCounter());
-		Integer total = node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1();
-		Integer finalized = node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse())
-				.and(DAG.FINALIZED.isTrue()).fetchOne().value1();
-		System.out.println("    User txns: " + total + " finalized: " + finalized + " unfinalized: "
-				+ (total - finalized) + " unqueried: " + node.getDslContext().selectCount().from(DAG).join(UNQUERIED)
-						.on(UNQUERIED.HASH.eq(DAG.HASH)).where(DAG.NOOP.isFalse()).fetchOne().value1());
-		System.out.println("    No Op txns: "
-				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isTrue()).fetchOne().value1()
-				+ " finalized: "
-				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isTrue()).and(DAG.FINALIZED.isTrue())
-						.fetchOne().value1()
-				+ " unqueried: " + node.getDslContext().selectCount().from(DAG).join(UNQUERIED)
-						.on(UNQUERIED.HASH.eq(DAG.HASH)).where(DAG.NOOP.isTrue()).fetchOne().value1());
+		Integer finalized = node.getDslContext().selectCount().from(DAG).fetchOne().value1();
+		Integer unfinalizedUser = node.getDslContext().selectCount().from(UNFINALIZED).where(UNFINALIZED.NOOP.isFalse())
+				.fetchOne().value1();
+		System.out.println("    User txns finalized: " + finalized + " unfinalized: " + unfinalizedUser + " unqueried: "
+				+ node.getDslContext().selectCount().from(UNFINALIZED).where(UNFINALIZED.NOOP.isFalse())
+						.and(UNFINALIZED.QUERIED.isFalse()).fetchOne().value1());
+		System.out.println("    No Op txns: " + node.getDslContext().selectCount().from(UNFINALIZED)
+				.where(UNFINALIZED.NOOP.isTrue()).fetchOne().value1());
 	}
 }
