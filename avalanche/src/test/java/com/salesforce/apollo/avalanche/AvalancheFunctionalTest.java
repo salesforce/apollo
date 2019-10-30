@@ -133,7 +133,7 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.queryBatchSize = 40;
-            aParams.insertBatchSize = 1;
+            aParams.insertBatchSize = 4;
             aParams.preferBatchSize = 40;
             aParams.finalizeBatchSize = 10;
             aParams.noOpsPerRound = 1;
@@ -148,7 +148,7 @@ public class AvalancheFunctionalTest {
             aParams.gamma = 20;
 
             aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
-                    + ";LOCK_MODE=1;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
+                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
             if (frist.get()) {
                 frist.set(false);
                 aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
@@ -158,7 +158,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 100;
+        int target = 200;
         Duration ffRound = Duration.ofMillis(500);
 
         views.forEach(view -> view.getService().start(ffRound));
