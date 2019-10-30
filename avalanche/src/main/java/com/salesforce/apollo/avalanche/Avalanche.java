@@ -220,14 +220,6 @@ public class Avalanche {
             throw new IllegalStateException("Cannot load schema", e);
         }
 
-        liquibase = new Liquibase("functions.yml", new ClassLoaderResourceAccessor(Avalanche.class.getClassLoader()),
-                database);
-        try {
-            liquibase.update((Contexts) null);
-        } catch (LiquibaseException e) {
-            throw new IllegalStateException("Cannot load functions", e);
-        }
-
         try {
             connection.commit();
         } catch (SQLException e) {

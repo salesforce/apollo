@@ -16,8 +16,6 @@ import static com.salesforce.apollo.protocols.Conversion.manifestDag;
 
 import java.nio.ByteBuffer;
 import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -30,7 +28,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.h2.jdbc.JdbcSQLTimeoutException;
-import org.h2.tools.TriggerAdapter;
 import org.jooq.BatchBindStep;
 import org.jooq.DSLContext;
 import org.jooq.Field;
@@ -59,34 +56,6 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Dag {
-    /**
-     * H2 after delete trigger to gc links, transitive closure and conflict sets
-     */
-    public static class DagDeleteTrigger extends TriggerAdapter {
-
-        @Override
-        public void fire(Connection conn, ResultSet oldRow, ResultSet newRow) throws SQLException {
-            byte[] cs = oldRow.getBytes("CONFLICTSET");
-            assert cs != null;
-            DSLContext create = DSL.using(conn, SQLDialect.H2);
-            create.deleteFrom(CLOSURE).where(CLOSURE.PARENT.eq(oldRow.getBytes("HASH"))).execute();
-            Record1<Integer> result = create.select(CONFLICTSET.CARDINALITY)
-                                            .from(CONFLICTSET)
-                                            .where(CONFLICTSET.NODE.eq(cs))
-                                            .fetchOne();
-            if (result == null) {
-                return; // row has been deleted
-            }
-            if (result.value1() <= 1) {
-                create.deleteFrom(CONFLICTSET).where(CONFLICTSET.NODE.eq(cs)).execute();
-            } else {
-                create.update(CONFLICTSET)
-                      .set(CONFLICTSET.CARDINALITY, CONFLICTSET.CARDINALITY.minus(DSL.inline(1)))
-                      .where(CONFLICTSET.NODE.eq(cs))
-                      .execute();
-            }
-        }
-    }
 
     public static class DagInsert {
         public final HASH     conflictSet;
@@ -305,7 +274,7 @@ public class Dag {
         return context.fetchExists(DAG, DAG.KEY.eq(hash.bytes()));
     }
 
-    public boolean isStronglyPreferred(HASH key, DSLContext create) {
+    public Boolean isStronglyPreferred(HASH key, DSLContext create) {
         return isStronglyPreferred(Collections.singletonList(key), create).get(0);
     }
 
@@ -353,12 +322,8 @@ public class Dag {
                                         .where(CLOSURE.PARENT.eq(UNFINALIZED.HASH))
                                         .and(CONFLICTSET.PREFERRED.eq(child.field(UNFINALIZED.HASH)))
                                         .asField();
-//		System.out.println(create
-//				.select(UNFINALIZED.HASH, closureCount.as("closure"), accepted.as("accepted"),
-//						DSL.when(UNFINALIZED.HASH.isNull(), false).when(closureCount.eq(accepted), true)
-//								.otherwise(false))
-//				.from(queried).leftOuterJoin(UNFINALIZED).on(UNFINALIZED.HASH.eq(queriedHash)).fetch());
-        List<Boolean> result = create.select(DSL.when(UNFINALIZED.HASH.isNull(), false)
+
+        List<Boolean> result = create.select(DSL.when(UNFINALIZED.HASH.isNull(), DSL.inline((Boolean) null))
                                                 .when(closureCount.eq(accepted), true)
                                                 .otherwise(false))
                                      .from(queried)
@@ -440,19 +405,19 @@ public class Dag {
 //		System.out.println("before \n" + create.selectFrom(p).fetch());
 
         create.update(UNFINALIZED)
-              .set(UNFINALIZED.CHIT, 1)
+              .set(UNFINALIZED.CHIT, DSL.inline(1))
               .where(UNFINALIZED.HASH.in(create.select(toPreferHash).from(toPrefer)))
               .execute();
         create.update(UNFINALIZED)
-              .set(UNFINALIZED.CONFIDENCE, UNFINALIZED.CONFIDENCE.plus(1))
+              .set(UNFINALIZED.CONFIDENCE, UNFINALIZED.CONFIDENCE.plus(DSL.inline(1)))
               .where(UNFINALIZED.HASH.in(create.selectDistinct(pChild).from(p)))
               .execute();
         create.mergeInto(CONFLICTSET, CONFLICTSET.NODE, CONFLICTSET.LAST, CONFLICTSET.PREFERRED, CONFLICTSET.COUNTER)
               .key(CONFLICTSET.NODE)
               .select(create.select(pCs, pChild,
-                                    DSL.when(pConfidence.plus(1).gt(pPreferredConfidence), pChild)
+                                    DSL.when(pConfidence.plus(DSL.inline(1)).gt(pPreferredConfidence), pChild)
                                        .otherwise(pPreferred),
-                                    DSL.when(pChild.eq(pLast), pCsCounter.plus(1)).otherwise(0))
+                                    DSL.when(pChild.eq(pLast), pCsCounter.plus(1)).otherwise(DSL.inline(0)))
                             .from(p))
               .execute();
 
@@ -535,9 +500,9 @@ public class Dag {
                    .from(UNFINALIZED)
                    .join(CONFLICTSET)
                    .on(CONFLICTSET.NODE.eq(UNFINALIZED.CONFLICTSET))
-                   .where(UNFINALIZED.CONFIDENCE.gt(DSL.inline(0)).and(UNFINALIZED.CONFIDENCE.le(3)))
+                   .where(UNFINALIZED.CONFIDENCE.gt(DSL.inline(0)).and(UNFINALIZED.CONFIDENCE.le(DSL.inline(3))))
                    .and(UNFINALIZED.NOOP.isFalse())
-                   .and(CONFLICTSET.CARDINALITY.eq(1))
+                   .and(CONFLICTSET.CARDINALITY.eq(DSL.inline(1)))
                    .orderBy(DSL.rand())
                    .stream()
                    .peek(e -> sampleCount.incrementAndGet())
@@ -552,7 +517,7 @@ public class Dag {
                    .join(CONFLICTSET)
                    .on(CONFLICTSET.NODE.eq(UNFINALIZED.CONFLICTSET))
                    .and(UNFINALIZED.NOOP.isFalse())
-                   .and(CONFLICTSET.CARDINALITY.eq(1))
+                   .and(CONFLICTSET.CARDINALITY.eq(DSL.inline(1)))
                    .orderBy(DSL.rand())
                    .stream()
                    .peek(e -> sampleCount.incrementAndGet())
@@ -611,7 +576,9 @@ public class Dag {
      * transitive closure of parents.
      */
     public FinalizationData tryFinalize(List<byte[]> keys, DSLContext context) {
-        assert !keys.isEmpty();
+        if (keys.isEmpty()) {
+            return new FinalizationData();
+        }
         long start = System.currentTimeMillis();
 
         Table<Record> toQuery = DSL.table("TO_QUERY");
@@ -637,10 +604,10 @@ public class Dag {
                                          .join(CONFLICTSET)
                                          .on(CONFLICTSET.NODE.eq(child.field(UNFINALIZED.CONFLICTSET)))
                                          .where(CLOSURE.PARENT.eq(UNFINALIZED.HASH))
-                                         .and(CONFLICTSET.CARDINALITY.eq(1)
+                                         .and(CONFLICTSET.CARDINALITY.eq(DSL.inline(1))
                                                                      .and(child.field(UNFINALIZED.CONFIDENCE)
-                                                                               .gt(parameters.beta1))
-                                                                     .or(CONFLICTSET.COUNTER.gt(parameters.beta2)
+                                                                               .gt(DSL.inline(parameters.beta1)))
+                                                                     .or(CONFLICTSET.COUNTER.gt(DSL.inline(parameters.beta2))
                                                                                             .and(CONFLICTSET.PREFERRED.eq(child.field(UNFINALIZED.HASH)))))
                                          .asField();
         SelectConditionStep<Record1<byte[]>> selectFinalized;
@@ -688,10 +655,6 @@ public class Dag {
                                                  .on(UNFINALIZED.HASH.eq((DSL.field("ALL_FINALIZED.HASH",
                                                                                     byte[].class))))))
                .execute();
-        context.deleteFrom(UNFINALIZED)
-               .where(UNFINALIZED.HASH.in(context.select(allFinalizedHash).from(allFinalized)))
-               .execute();
-
         Closure c = CLOSURE.as("c");
         int closure = context.deleteFrom(CLOSURE)
                              .where(CLOSURE.CHILD.in(context.selectDistinct(c.field(CLOSURE.CHILD))
@@ -699,6 +662,10 @@ public class Dag {
                                                             .join(allFinalized)
                                                             .on(c.field(CLOSURE.PARENT).eq(allFinalizedHash))))
                              .execute();
+        context.deleteFrom(UNFINALIZED)
+               .where(UNFINALIZED.HASH.in(context.select(allFinalizedHash).from(allFinalized)))
+               .execute();
+
         FinalizationData data = new FinalizationData();
         context.select(allFinalizedHash)
                .from(allFinalized)
@@ -781,8 +748,8 @@ public class Dag {
                                                                                   .and(c.PARENT.eq((byte[]) null))));
                         insert.dagEntry.getLinks().forEach(link -> batch.bind(insert.key.bytes(), link.bytes()));
                         batch.execute();
-                        
-                        // remove any finalized parents
+
+                        // remove any finalized parents from the closure
                         context.deleteFrom(CLOSURE)
                                .where(CLOSURE.PARENT.eq(insert.key.bytes())
                                                     .and(CLOSURE.CHILD.in(context.select(DAG.KEY)
@@ -793,7 +760,7 @@ public class Dag {
                     }
                     if (context.fetchExists(CONFLICTSET, CONFLICTSET.NODE.eq(conflictSet.bytes()))) {
                         context.update(CONFLICTSET)
-                               .set(CONFLICTSET.CARDINALITY, CONFLICTSET.CARDINALITY.plus(1))
+                               .set(CONFLICTSET.CARDINALITY, CONFLICTSET.CARDINALITY.plus(DSL.inline(1)))
                                .where(CONFLICTSET.NODE.eq(conflictSet.bytes()))
                                .execute();
                     } else {

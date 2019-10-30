@@ -29,7 +29,7 @@
         </dependency>
         <dependency>
             <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId> 
+            <artifactId>HikariCP</artifactId>
         </dependency>
 
         <!-- Test only deps below this line -->
@@ -104,16 +104,6 @@
                         </goals>
                         <configuration>
                             <changeLogFile>src/main/resources/dag-schema.yml</changeLogFile>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>load-faux</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>update</goal>
-                        </goals>
-                        <configuration>
-                            <changeLogFile>src/test/resources/faux-functions.yml</changeLogFile>
                         </configuration>
                     </execution>
                 </executions>
