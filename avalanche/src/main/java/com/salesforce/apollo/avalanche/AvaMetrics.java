@@ -19,21 +19,21 @@ import com.codahale.metrics.Timer;
  */
 public class AvaMetrics {
     private final AtomicInteger finalizerBacklog = new AtomicInteger();
-    private final Meter finalizerRate;
-    private final Timer finalizeTimer;
-    private final AtomicInteger inputBacklog = new AtomicInteger();
-    private final Meter inputRate;
-    private final Timer inputTimer;
-    private final Timer noOpTimer;
-    private final Meter parentSampleRate;
-    private final Timer parentSampleTimer;
-    private final AtomicInteger preferBacklog = new AtomicInteger();
-    private final Meter preferRate;
-    private final Timer preferTimer;
-    private final Meter queryRate;
-    private final Timer queryTimer;
-    private final Meter submissionRate;
-    private final Timer submissionTimer;
+    private final Meter         finalizerRate;
+    private final Timer         finalizeTimer;
+    private final AtomicInteger inputBacklog     = new AtomicInteger();
+    private final Meter         inputRate;
+    private final Timer         inputTimer;
+    private final Timer         noOpTimer;
+    private final Meter         parentSampleRate;
+    private final Timer         parentSampleTimer;
+    private final AtomicInteger preferBacklog    = new AtomicInteger();
+    private final Meter         preferRate;
+    private final Timer         preferTimer;
+    private final Meter         queryRate;
+    private final Timer         queryTimer;
+    private final Meter         submissionRate;
+    private final Timer         submissionTimer;
 
     public AvaMetrics(MetricRegistry registry) {
         submissionTimer = registry.timer("Txn submission duration");

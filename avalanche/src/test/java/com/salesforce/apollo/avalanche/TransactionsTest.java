@@ -6,7 +6,10 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.*;
+import static com.salesforce.apollo.dagwood.schema.Tables.CLOSURE;
+import static com.salesforce.apollo.dagwood.schema.Tables.CONFLICTSET;
+import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
+import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static com.salesforce.apollo.protocols.Conversion.serialize;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertArrayEquals;
@@ -16,13 +19,11 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
-import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -266,9 +267,8 @@ public class TransactionsTest {
 
 		assertTrue(frontier.contains(secondCommit));
 
-		HashKey userTxn = new HashKey(
-				newDagEntry("Ye test transaction", ordered, stored,
-							dag.selectParents(2, create).stream().collect(Collectors.toList())));
+		HashKey userTxn = new HashKey(newDagEntry(  "Ye test transaction", ordered, stored,
+													dag.sampleParents(create).stream().collect(Collectors.toList())));
 		ordered.add(new HashKey(userTxn.bytes()));
 
 		frontier = dag.getNeglectedFrontier(create).map(e -> new HashKey(e))
@@ -391,7 +391,7 @@ public class TransactionsTest {
 		last = secondCommit;
 
 		HASH userTxn = newDagEntry( "Ye test transaction", ordered, stored,
-									dag.selectParents(2, create).stream().collect(Collectors.toList()));
+									dag.sampleParents(create).stream().collect(Collectors.toList()));
 
 		last = userTxn;
 
@@ -417,10 +417,13 @@ public class TransactionsTest {
 		ordered.add(new HashKey(rootKey));
 
 		// Finalize ye root
-		create.update(DAG).set(DAG.FINALIZED, true).where(DAG.HASH.eq(rootKey.bytes())).execute();
+		create.insertInto(DAG, DAG.KEY, DAG.LINKS).select(create.select(UNFINALIZED.HASH, UNFINALIZED.LINKS)
+				.from(UNFINALIZED).where(UNFINALIZED.HASH.eq(rootKey.bytes()))).execute();
+		create.deleteFrom(UNFINALIZED).where(UNFINALIZED.HASH.eq(rootKey.bytes())).execute();
+		assertTrue(dag.isFinalized(rootKey, create));
 
 		// 1 elegible parent, the root
-		Set<HashKey> sampled = dag.selectParents(1, create).stream().map(h -> new HashKey(h))
+		Set<HashKey> sampled = dag.sampleParents(create).stream().map(h -> new HashKey(h))
 				.collect(Collectors.toCollection(ConcurrentSkipListSet::new));
 		assertEquals(1, sampled.size());
 		assertTrue(sampled.contains(ordered.get(0)));
@@ -432,10 +435,9 @@ public class TransactionsTest {
 		stored.put(new HashKey(key), entry);
 		ordered.add(new HashKey(key));
 
-		sampled = dag.selectParents(3, create).stream().map(h -> new HashKey(h))
+		sampled = dag.sampleParents(create).stream().map(h -> new HashKey(h))
 				.collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-		assertEquals(2, sampled.size());
-		assertTrue(sampled.contains(ordered.get(0)));
+		assertEquals(1, sampled.size());
 		assertTrue(sampled.contains(ordered.get(1)));
 
 		entry = new DagEntry();
@@ -445,10 +447,9 @@ public class TransactionsTest {
 		stored.put(new HashKey(key), entry);
 		ordered.add(new HashKey(key));
 
-		sampled = dag.selectParents(3, create).stream().map(h -> new HashKey(h))
+		sampled = dag.sampleParents(create).stream().map(h -> new HashKey(h))
 				.collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-		assertEquals(3, sampled.size());
-		assertTrue(sampled.contains(ordered.get(0)));
+		assertEquals(2, sampled.size());
 		assertTrue(sampled.contains(ordered.get(1)));
 		assertTrue(sampled.contains(ordered.get(2)));
 
@@ -473,12 +474,13 @@ public class TransactionsTest {
 		stored.put(new HashKey(key), entry);
 		ordered.add(new HashKey(key));
 
-		sampled = dag.selectParents(3, create).stream().map(h -> new HashKey(h))
+		sampled = dag.sampleParents(create).stream().map(h -> new HashKey(h))
 				.collect(Collectors.toCollection(ConcurrentSkipListSet::new));
-		assertEquals(3, sampled.size());
+		assertEquals(4, sampled.size());
 
 		assertTrue(sampled.contains(ordered.get(1)));
 		assertTrue(sampled.contains(ordered.get(2)));
+		assertTrue(sampled.contains(ordered.get(3)));
 		assertTrue(sampled.contains(ordered.get(5)));
 
 		// Add a new node to the frontier
@@ -489,13 +491,14 @@ public class TransactionsTest {
 		stored.put(new HashKey(key), entry);
 		ordered.add(new HashKey(key));
 
-		sampled = dag.selectParents(4, create).stream().map(h -> new HashKey(h))
+		sampled = dag.sampleParents(create).stream().map(h -> new HashKey(h))
 				.collect(Collectors.toCollection(ConcurrentSkipListSet::new));
 
-		assertEquals(4, sampled.size());
+		assertEquals(5, sampled.size());
 
 		assertTrue(sampled.contains(ordered.get(1)));
 		assertTrue(sampled.contains(ordered.get(2)));
+		assertTrue(sampled.contains(ordered.get(3)));
 		assertTrue(sampled.contains(ordered.get(5)));
 		assertTrue(sampled.contains(ordered.get(6)));
 	}
@@ -564,8 +567,6 @@ public class TransactionsTest {
 
 		// prefer node 6, raising the confidence of nodes 3, 2, 1 and 0
 		dag.prefer(ordered.get(6).toHash(), create);
-		DagViz.dumpClosure(ordered, create);
-
 		frontier = dag.frontierSample(create).map(r -> new HashKey(r)).collect(Collectors.toCollection(TreeSet::new));
 
 		assertEquals(6, frontier.size());

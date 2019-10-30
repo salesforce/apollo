@@ -108,30 +108,6 @@ public class DagViz {
 		});
 	}
 
-	static void traverse(DSLContext create, List<HashKey> roots, boolean ignoreNoOp) {
-		Set<HashKey> traversed = new ConcurrentSkipListSet<>();
-		Set<HashKey> frontier = new ConcurrentSkipListSet<>();
-		Set<HashKey> next = new ConcurrentSkipListSet<>();
-		Map<HashKey, String> labels = new ConcurrentSkipListMap<>();
-		Function<HashKey, String> labelFor = h -> labels.computeIfAbsent(h, k -> k.b64Encoded().substring(0, 6));
-		frontier.addAll(roots);
-
-		while (!frontier.isEmpty()) {
-			frontier.forEach(h -> {
-				traversed.add(h);
-				DagRecord entry = create.selectFrom(DAG).where(DAG.HASH.eq(h.bytes())).fetchOne();
-				Result<Record1<byte[]>> links = null;
-				if (entry != null) {
-					links = create.select(LINK.HASH).from(LINK).where(LINK.NODE.eq(h.bytes())).fetch();
-					decorate(create, h, entry, labelFor, links, traversed, ignoreNoOp, next);
-				}
-			});
-			frontier.clear();
-			frontier.addAll(next);
-			next.clear();
-		}
-	}
-
 	private static void decorate(   DSLContext create, HashKey h, DagRecord entry, Function<HashKey, String> labelFor,
 									Result<Record1<byte[]>> links, Set<HashKey> traversed, boolean ignoreNoOps,
 									Set<HashKey> next) {
@@ -173,7 +149,7 @@ public class DagViz {
 
 		Record3<Integer, byte[], Integer> info = create
 				.select(CONFLICTSET.CARDINALITY, CONFLICTSET.PREFERRED, CONFLICTSET.COUNTER).from(CONFLICTSET).join(UNFINALIZED)
-				.on(UNFINALIZED.CONFLICTSET.eq(CONFLICTSET.NODE)).where(DAG.HASH.eq(h.bytes())).fetchOne();
+				.on(UNFINALIZED.CONFLICTSET.eq(CONFLICTSET.NODE)).where(DAG.KEY.eq(h.bytes())).fetchOne();
 		int targetRound = -1;
 		if (unqueried) {
 			targetRound = create.select(UNQUERIED.TARGETROUND).from(UNQUERIED).where(UNQUERIED.HASH.eq(h.bytes()))
@@ -207,7 +183,7 @@ public class DagViz {
 
 		Record3<Integer, byte[], Integer> info = create
 				.select(CONFLICTSET.CARDINALITY, CONFLICTSET.PREFERRED, CONFLICTSET.COUNTER).from(CONFLICTSET).join(DAG)
-				.on(DAG.CONFLICTSET.eq(CONFLICTSET.NODE)).where(DAG.HASH.eq(h.bytes())).fetchOne();
+				.on(DAG.CONFLICTSET.eq(CONFLICTSET.NODE)).where(DAG.KEY.eq(h.bytes())).fetchOne();
 		int targetRound = -1;
 		if (unqueried) {
 			targetRound = create.select(UNQUERIED.TARGETROUND).from(UNQUERIED).where(UNQUERIED.HASH.eq(h.bytes()))
