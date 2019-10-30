@@ -20,10 +20,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -158,6 +162,7 @@ public class Dag {
     }
 
     private final AvalancheParameters parameters;
+    private final Lock                gcLock = new ReentrantLock();
 
     public Dag(AvalancheParameters parameters) {
         this.parameters = parameters;
@@ -275,27 +280,29 @@ public class Dag {
     }
 
     public Boolean isStronglyPreferred(HASH key, DSLContext create) {
-        return isStronglyPreferred(Collections.singletonList(key), create).get(0);
+        return isStronglyPreferred(Collections.singletonList(key), create).get(new HashKey(key));
     }
 
     /**
-     * Query whether a node is strongly prefered by the current state of the DAG. A
-     * node is strongly preferred if it is the preferred node of its conflict set
-     * and every parent of the node is also the preferred node of its conflict set.
+     * Query whether the list of keys is strongly prefered by the current state of
+     * the DAG. A node is strongly preferred if it is the preferred node of its
+     * conflict set and every parent of the node is also the preferred node of its
+     * conflict set.
      * <p>
      * Because we optimize by lazily fetching DAG nodes, any given node may not have
      * all its parents in the DAG state. Consequently if there are dangling
      * references of the node, then the node cannot be judged preferred. Finalized
      * nodes are considered to stand in for any parents, and thus cut off any
-     * further querying past these finalized parents
+     * further querying past these finalized parents.
      * 
-     * @param node
-     * @return true if the corresponding node is strongly preferred, false if null
-     *         or not strongly preferred
+     * @param keys - list o' hashes to test
+     * @return List of Boolean results of the query, True if the corresponding node
+     *         is strongly preferred, False if exists but is not strongly preferred
+     *         and NULL if the txn is unknown
      */
-    public List<Boolean> isStronglyPreferred(List<HASH> keys, DSLContext create) {
+    public Map<HashKey, Boolean> isStronglyPreferred(List<HASH> keys, DSLContext create) {
         if (keys.isEmpty()) {
-            return Collections.emptyList();
+            return Collections.emptyMap();
         }
         long now = System.currentTimeMillis();
         Table<Record> queried = DSL.table("queried");
@@ -323,15 +330,22 @@ public class Dag {
                                         .and(CONFLICTSET.PREFERRED.eq(child.field(UNFINALIZED.HASH)))
                                         .asField();
 
-        List<Boolean> result = create.select(DSL.when(UNFINALIZED.HASH.isNull(), DSL.inline((Boolean) null))
-                                                .when(closureCount.eq(accepted), true)
-                                                .otherwise(false))
-                                     .from(queried)
-                                     .leftOuterJoin(UNFINALIZED)
-                                     .on(UNFINALIZED.HASH.eq(queriedHash))
-                                     .stream()
-                                     .map(r -> r.value1())
-                                     .collect(Collectors.toList());
+        Map<HashKey, Boolean> result = new HashMap<>();
+        create.select(queriedHash,
+                      DSL.when(DAG.KEY.isNotNull(), true)
+                         .when(UNFINALIZED.HASH.isNull().and(DAG.KEY.isNull()), DSL.inline((Boolean) null))
+                         .when(closureCount.eq(accepted), true)
+                         .otherwise(false))
+              .from(queried)
+              .leftOuterJoin(UNFINALIZED)
+              .on(UNFINALIZED.HASH.eq(queriedHash))
+              .leftOuterJoin(DAG)
+              .on(DAG.KEY.eq(queriedHash))
+              .stream()
+              .forEach(r -> {
+                  result.put(new HashKey(r.value1()), r.value2());
+              });
+
         create.delete(queried).execute();
         log.debug("isStrongly preferred: {} in {} ms", keys.size(), System.currentTimeMillis() - now);
         return result;
@@ -363,63 +377,69 @@ public class Dag {
      * @param entry
      */
     public void prefer(List<HASH> entries, DSLContext create) {
-        long start = System.currentTimeMillis();
-        create.execute("create cached local temporary table if not exists TO_PREFER(HASH binary(32))");
-        create.execute("create cached local temporary table if not exists PREFERRED(PARENT binary(32), CHILD binary(32), CONFLICT_SET binary(32), CONFLICT_SET_COUNTER INT, CONFIDENCE INT, CS_PREFERRED binary(32), PREFERRED_CONFIDENCE INT, LAST binary(32))");
+        final Lock lock = gcLock;
+        lock.lock();
+        try {
+            long start = System.currentTimeMillis();
+            create.execute("create cached local temporary table if not exists TO_PREFER(HASH binary(32))");
+            create.execute("create cached local temporary table if not exists PREFERRED(PARENT binary(32), CHILD binary(32), CONFLICT_SET binary(32), CONFLICT_SET_COUNTER INT, CONFIDENCE INT, CS_PREFERRED binary(32), PREFERRED_CONFIDENCE INT, LAST binary(32))");
 
-        Table<Record> toPrefer = DSL.table("TO_PREFER");
-        Field<byte[]> toPreferHash = DSL.field("HASH", byte[].class, toPrefer);
-        BatchBindStep batch = create.batch(create.insertInto(toPrefer, toPreferHash).values((byte[]) null));
-        entries.forEach(e -> batch.bind(e.bytes()));
-        batch.execute();
+            Table<Record> toPrefer = DSL.table("TO_PREFER");
+            Field<byte[]> toPreferHash = DSL.field("HASH", byte[].class, toPrefer);
+            BatchBindStep batch = create.batch(create.insertInto(toPrefer, toPreferHash).values((byte[]) null));
+            entries.forEach(e -> batch.bind(e.bytes()));
+            batch.execute();
 
-        Unfinalized preferred = UNFINALIZED.as("preferred");
+            Unfinalized preferred = UNFINALIZED.as("preferred");
 
-        Table<Record> p = DSL.table("PREFERRED");
-        Field<byte[]> pParent = DSL.field("PARENT", byte[].class, p);
-        Field<byte[]> pChild = DSL.field("CHILD", byte[].class, p);
-        Field<byte[]> pCs = DSL.field("CONFLICT_SET", byte[].class, p);
-        Field<Integer> pConfidence = DSL.field("CONFIDENCE", Integer.class, p);
-        Field<Integer> pCsCounter = DSL.field("CONFLICT_SET_COUNTER", Integer.class, p);
-        Field<byte[]> pPreferred = DSL.field("CS_PREFERRED", byte[].class, p);
-        Field<Integer> pPreferredConfidence = DSL.field("PREFERRED_CONFIDENCE", Integer.class, p);
-        Field<byte[]> pLast = DSL.field("LAST", byte[].class, p);
+            Table<Record> p = DSL.table("PREFERRED");
+            Field<byte[]> pParent = DSL.field("PARENT", byte[].class, p);
+            Field<byte[]> pChild = DSL.field("CHILD", byte[].class, p);
+            Field<byte[]> pCs = DSL.field("CONFLICT_SET", byte[].class, p);
+            Field<Integer> pConfidence = DSL.field("CONFIDENCE", Integer.class, p);
+            Field<Integer> pCsCounter = DSL.field("CONFLICT_SET_COUNTER", Integer.class, p);
+            Field<byte[]> pPreferred = DSL.field("CS_PREFERRED", byte[].class, p);
+            Field<Integer> pPreferredConfidence = DSL.field("PREFERRED_CONFIDENCE", Integer.class, p);
+            Field<byte[]> pLast = DSL.field("LAST", byte[].class, p);
 
-        int updated = create.mergeInto(p, pParent, pChild, pCs, pCsCounter, pConfidence, pPreferred,
-                                       pPreferredConfidence, pLast)
-                            .key(pParent, pChild)
-                            .select(create.select(CLOSURE.PARENT, CLOSURE.CHILD, CONFLICTSET.NODE, CONFLICTSET.COUNTER,
-                                                  UNFINALIZED.CONFIDENCE, preferred.field(UNFINALIZED.HASH),
-                                                  preferred.field(UNFINALIZED.CONFIDENCE), CONFLICTSET.LAST)
-                                          .from(CLOSURE)
-                                          .join(UNFINALIZED)
-                                          .on(UNFINALIZED.HASH.eq(CLOSURE.CHILD))
-                                          .join(CONFLICTSET)
-                                          .on(CONFLICTSET.NODE.eq(UNFINALIZED.CONFLICTSET))
-                                          .join(preferred)
-                                          .on(preferred.field(UNFINALIZED.HASH).eq(CONFLICTSET.PREFERRED))
-                                          .join(toPrefer)
-                                          .on(DSL.field("TO_PREFER.HASH", byte[].class, toPrefer).eq(CLOSURE.PARENT)))
-                            .execute();
+            int updated = create.mergeInto(p, pParent, pChild, pCs, pCsCounter, pConfidence, pPreferred,
+                                           pPreferredConfidence, pLast)
+                                .key(pParent, pChild)
+                                .select(create.select(CLOSURE.PARENT, CLOSURE.CHILD, CONFLICTSET.NODE,
+                                                      CONFLICTSET.COUNTER, UNFINALIZED.CONFIDENCE,
+                                                      preferred.field(UNFINALIZED.HASH),
+                                                      preferred.field(UNFINALIZED.CONFIDENCE), CONFLICTSET.LAST)
+                                              .from(CLOSURE)
+                                              .join(UNFINALIZED)
+                                              .on(UNFINALIZED.HASH.eq(CLOSURE.CHILD))
+                                              .join(CONFLICTSET)
+                                              .on(CONFLICTSET.NODE.eq(UNFINALIZED.CONFLICTSET))
+                                              .join(preferred)
+                                              .on(preferred.field(UNFINALIZED.HASH).eq(CONFLICTSET.PREFERRED))
+                                              .join(toPrefer)
+                                              .on(DSL.field("TO_PREFER.HASH", byte[].class, toPrefer)
+                                                     .eq(CLOSURE.PARENT)))
+                                .execute();
 
 //		System.out.println("before \n" + create.selectFrom(p).fetch());
 
-        create.update(UNFINALIZED)
-              .set(UNFINALIZED.CHIT, DSL.inline(1))
-              .where(UNFINALIZED.HASH.in(create.select(toPreferHash).from(toPrefer)))
-              .execute();
-        create.update(UNFINALIZED)
-              .set(UNFINALIZED.CONFIDENCE, UNFINALIZED.CONFIDENCE.plus(DSL.inline(1)))
-              .where(UNFINALIZED.HASH.in(create.selectDistinct(pChild).from(p)))
-              .execute();
-        create.mergeInto(CONFLICTSET, CONFLICTSET.NODE, CONFLICTSET.LAST, CONFLICTSET.PREFERRED, CONFLICTSET.COUNTER)
-              .key(CONFLICTSET.NODE)
-              .select(create.select(pCs, pChild,
-                                    DSL.when(pConfidence.plus(DSL.inline(1)).gt(pPreferredConfidence), pChild)
-                                       .otherwise(pPreferred),
-                                    DSL.when(pChild.eq(pLast), pCsCounter.plus(1)).otherwise(DSL.inline(0)))
-                            .from(p))
-              .execute();
+            create.update(UNFINALIZED)
+                  .set(UNFINALIZED.CHIT, DSL.inline(1))
+                  .where(UNFINALIZED.HASH.in(create.select(toPreferHash).from(toPrefer)))
+                  .execute();
+            create.update(UNFINALIZED)
+                  .set(UNFINALIZED.CONFIDENCE, UNFINALIZED.CONFIDENCE.plus(DSL.inline(1)))
+                  .where(UNFINALIZED.HASH.in(create.selectDistinct(pChild).from(p)))
+                  .execute();
+            create.mergeInto(CONFLICTSET, CONFLICTSET.NODE, CONFLICTSET.LAST, CONFLICTSET.PREFERRED,
+                             CONFLICTSET.COUNTER)
+                  .key(CONFLICTSET.NODE)
+                  .select(create.select(pCs, pChild,
+                                        DSL.when(pConfidence.plus(DSL.inline(1)).gt(pPreferredConfidence), pChild)
+                                           .otherwise(pPreferred),
+                                        DSL.when(pChild.eq(pLast), pCsCounter.plus(1)).otherwise(DSL.inline(0)))
+                                .from(p))
+                  .execute();
 
 //		System.out.println("after \n" + create
 //				.select(CLOSURE.CHILD, CONFLICTSET.NODE, CONFLICTSET.COUNTER, UNFINALIZED.CONFIDENCE,
@@ -428,11 +448,14 @@ public class Dag {
 //				.on(CONFLICTSET.NODE.eq(UNFINALIZED.CONFLICTSET)).join(preferred)
 //				.on(preferred.field(UNFINALIZED.HASH).eq(CONFLICTSET.PREFERRED)).join(toPrefer)
 //				.on(DSL.field("TO_PREFER.HASH", byte[].class, toPrefer).eq(CLOSURE.PARENT)).fetch());
-        if (updated != 0) {
-            log.trace("Preferred {}:{} in {} ms", updated, entries.size(), System.currentTimeMillis() - start);
+            if (updated != 0) {
+                log.trace("Preferred {}:{} in {} ms", updated, entries.size(), System.currentTimeMillis() - start);
+            }
+            create.deleteFrom(p).execute();
+            create.deleteFrom(toPrefer).execute();
+        } finally {
+            lock.unlock();
         }
-        create.deleteFrom(p).execute();
-        create.deleteFrom(toPrefer).execute();
     }
 
     public void put(List<DagInsert> inserts, DSLContext context) {
@@ -648,23 +671,30 @@ public class Dag {
                                               .on((DSL.field("ALL_FINALIZED.HASH", byte[].class).eq(UNFINALIZED.HASH))))
                                .execute();
 
-        context.deleteFrom(CONFLICTSET)
-               .where(CONFLICTSET.NODE.in(context.select(UNFINALIZED.CONFLICTSET)
-                                                 .from(UNFINALIZED)
-                                                 .join(allFinalized)
-                                                 .on(UNFINALIZED.HASH.eq((DSL.field("ALL_FINALIZED.HASH",
-                                                                                    byte[].class))))))
-               .execute();
-        Closure c = CLOSURE.as("c");
-        int closure = context.deleteFrom(CLOSURE)
+        final Lock lock = gcLock;
+        lock.lock();
+        int closure;
+        try {
+            context.deleteFrom(CONFLICTSET)
+                   .where(CONFLICTSET.NODE.in(context.select(UNFINALIZED.CONFLICTSET)
+                                                     .from(UNFINALIZED)
+                                                     .join(allFinalized)
+                                                     .on(UNFINALIZED.HASH.eq((DSL.field("ALL_FINALIZED.HASH",
+                                                                                        byte[].class))))))
+                   .execute();
+            Closure c = CLOSURE.as("c");
+            closure = context.deleteFrom(CLOSURE)
                              .where(CLOSURE.CHILD.in(context.selectDistinct(c.field(CLOSURE.CHILD))
                                                             .from(c)
                                                             .join(allFinalized)
                                                             .on(c.field(CLOSURE.PARENT).eq(allFinalizedHash))))
                              .execute();
-        context.deleteFrom(UNFINALIZED)
-               .where(UNFINALIZED.HASH.in(context.select(allFinalizedHash).from(allFinalized)))
-               .execute();
+            context.deleteFrom(UNFINALIZED)
+                   .where(UNFINALIZED.HASH.in(context.select(allFinalizedHash).from(allFinalized)))
+                   .execute();
+        } finally {
+            lock.unlock();
+        }
 
         FinalizationData data = new FinalizationData();
         context.select(allFinalizedHash)
@@ -679,13 +709,36 @@ public class Dag {
             log.trace("Failed to finalized {} in {} ms", keys.size(), System.currentTimeMillis() - start);
         }
 
-        context.delete(toQuery).execute();
-        context.delete(allFinalized).execute();
+        context.deleteFrom(toQuery).execute();
+        context.deleteFrom(allFinalized).execute();
         return data;
     }
 
     Entry entryFrom(byte[] bytes) {
         return new Entry(EntryType.DAG, ByteBuffer.wrap(bytes));
+    }
+
+    /** for testing **/
+    void finalize(HASH txn, DSLContext context) {
+
+        context.insertInto(DAG, DAG.KEY, DAG.DATA, DAG.LINKS)
+               .select(context.select(UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
+                              .from(UNFINALIZED)
+                              .where((UNFINALIZED.HASH.eq(txn.bytes()))))
+               .execute();
+
+        context.deleteFrom(CONFLICTSET)
+               .where(CONFLICTSET.NODE.in(context.select(UNFINALIZED.CONFLICTSET)
+                                                 .from(UNFINALIZED)
+                                                 .where((UNFINALIZED.HASH.eq(txn.bytes())))))
+               .execute();
+        Closure c = CLOSURE.as("c");
+        context.deleteFrom(CLOSURE)
+               .where(CLOSURE.CHILD.in(context.selectDistinct(c.field(CLOSURE.CHILD))
+                                              .from(c)
+                                              .where(c.field(CLOSURE.PARENT).eq(txn.bytes()))))
+               .execute();
+        context.deleteFrom(UNFINALIZED).where(UNFINALIZED.HASH.eq(txn.bytes())).execute();
     }
 
     Stream<HASH> frontierSample(DSLContext create) {

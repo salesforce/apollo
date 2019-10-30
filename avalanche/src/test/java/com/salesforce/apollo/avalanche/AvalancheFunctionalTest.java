@@ -135,8 +135,8 @@ public class AvalancheFunctionalTest {
             // Avalanche implementation parameters
             aParams.queryBatchSize = 40;
             aParams.insertBatchSize = 10;
-            aParams.preferBatchSize = 40;
-            aParams.finalizeBatchSize = 40;
+            aParams.preferBatchSize = 10;
+            aParams.finalizeBatchSize = 10;
             aParams.noOpsPerRound = 1;
             aParams.maxNoOpParents = 100;
             aParams.maxActiveQueries = 100;
@@ -149,7 +149,7 @@ public class AvalancheFunctionalTest {
             aParams.gamma = 20;
 
             aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
-                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
+                    + ";LOCK_MODE=1;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
                 frist.set(false);
                 aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
@@ -233,7 +233,7 @@ public class AvalancheFunctionalTest {
                        .orElse(0) / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
+//        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()

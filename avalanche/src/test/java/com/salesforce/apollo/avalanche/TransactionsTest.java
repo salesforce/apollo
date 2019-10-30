@@ -280,6 +280,9 @@ public class TransactionsTest {
         assertNotNull(finalized);
         assertEquals(143, finalized.finalized.size());
         assertEquals(0, finalized.deleted.size());
+        for (HashKey key : finalized.finalized) {
+            assertTrue("not finalized: " + key, dag.isFinalized(key.toHash(), create));
+        }
     }
 
     @Test
@@ -361,8 +364,7 @@ public class TransactionsTest {
         ordered.add(new HashKey(key));
 
         HASH zero = new HASH(new byte[32]);
-        assertNull("Not exist returned true: ",
-                   create.transactionResult(config -> dag.isStronglyPreferred(zero, DSL.using(config))));
+        assertNull("Not exist returned true: ", dag.isStronglyPreferred(zero, create));
 
         byte[] o = new byte[32];
         Arrays.fill(o, (byte) 1);
@@ -370,9 +372,7 @@ public class TransactionsTest {
         assertNull("Not exist returned true: ",
                    create.transactionResult(config -> dag.isStronglyPreferred(one, DSL.using(config))));
         assertArrayEquals("Aggregate failed: ", new Boolean[] { null, null },
-                          create.transactionResult(config -> dag.isStronglyPreferred(Arrays.asList(zero, one),
-                                                                                     DSL.using(config)))
-                                .toArray(new Boolean[2]));
+                          dag.isStronglyPreferred(Arrays.asList(zero, one), create).toArray(new Boolean[2]));
 
         // All are strongly preferred
         for (int i = 0; i < ordered.size(); i++) {
@@ -390,14 +390,12 @@ public class TransactionsTest {
         ordered.add(new HashKey(key));
 
         assertFalse(String.format("node 4 is strongly preferred: " + ordered.get(4)),
-                    create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(4).toHash(),
-                                                                               DSL.using(config))));
+                    dag.isStronglyPreferred(ordered.get(4).toHash(), create));
 
         for (int i = 0; i < 4; i++) {
             int it = i;
             assertTrue(String.format("node %s is not strongly preferred", i),
-                       create.transactionResult(config -> dag.isStronglyPreferred(ordered.get(it).toHash(),
-                                                                                  DSL.using(config))));
+                       dag.isStronglyPreferred(ordered.get(it).toHash(), create));
         }
 
         entry = new DagEntry();
@@ -413,12 +411,14 @@ public class TransactionsTest {
                                                                                DSL.using(config))));
 
         Boolean[] expected = new Boolean[] { true, true, true, true, false, false };
+        List<HASH> all = ordered.stream().map(e -> e.toHash()).collect(Collectors.toList());
         assertArrayEquals("Aggregate failed: ", expected,
-                          create.transactionResult(config -> dag.isStronglyPreferred(ordered.stream()
-                                                                                            .map(e -> e.toHash())
-                                                                                            .collect(Collectors.toList()),
-                                                                                     DSL.using(config)))
-                                .toArray(new Boolean[ordered.size()]));
+                          dag.isStronglyPreferred(all, create).toArray(new Boolean[ordered.size()]));
+        dag.finalize(rootKey, create);
+        assertTrue(dag.isFinalized(rootKey, create));
+        assertTrue(dag.isStronglyPreferred(rootKey, create));
+        assertArrayEquals("Aggregate failed: ", expected,
+                          dag.isStronglyPreferred(all, create).toArray(new Boolean[ordered.size()]));
     }
 
     @Test
@@ -463,12 +463,7 @@ public class TransactionsTest {
         ordered.add(new HashKey(rootKey));
 
         // Finalize ye root
-        create.insertInto(DAG, DAG.KEY, DAG.LINKS)
-              .select(create.select(UNFINALIZED.HASH, UNFINALIZED.LINKS)
-                            .from(UNFINALIZED)
-                            .where(UNFINALIZED.HASH.eq(rootKey.bytes())))
-              .execute();
-        create.deleteFrom(UNFINALIZED).where(UNFINALIZED.HASH.eq(rootKey.bytes())).execute();
+        dag.finalize(rootKey, create);
         assertTrue(dag.isFinalized(rootKey, create));
 
         // 1 elegible parent, the root

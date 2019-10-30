@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.*;
 import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
 import static com.salesforce.apollo.dagwood.schema.Tables.PROCESSORS;
+import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
 import static com.salesforce.apollo.protocols.Conversion.manifestDag;
 import static com.salesforce.apollo.protocols.Conversion.serialize;
@@ -173,14 +173,23 @@ public class Avalanche {
                 return new QueryResult(results, new ArrayList<>());
             }
             long now = System.currentTimeMillis();
-            QueryResult result = new QueryResult(
-                    queryPool.transactionResult(config -> dag.isStronglyPreferred(transactions, DSL.using(config))),
-                    queryPool.transactionResult(config -> dag.getEntries(want, parameters.queryBatchSize,
-                                                                         DSL.using(config))));
-            assert result.getResult().size() == transactions.size() : "on query results " + result.getResult().size()
-                    + " != " + transactions.size();
-            log.debug("onquery {} txn in {} ms", transactions.size(), System.currentTimeMillis() - now);
-            return result;
+            Map<HashKey, Boolean> queried = queryPool.transactionResult(config -> dag.isStronglyPreferred(transactions,
+                                                                                                          DSL.using(config)));
+            assert queried.size() == transactions.size() : "on query results " + queried.size() + " != "
+                    + transactions.size();
+
+            List<HashKey> unknown = new ArrayList<>();
+            List<Boolean> r = queried.entrySet().stream().peek(e -> {
+                if (e.getValue() == null) {
+                    unknown.add(e.getKey());
+                }
+            }).map(e -> e.getValue() == null ? false : e.getValue()).collect(Collectors.toList());
+
+            assert r.size() == transactions.size() : "on query results " + r.size() + " != " + transactions.size();
+
+            log.debug("onquery {} txn in {} ms unknown: {}", transactions.size(), System.currentTimeMillis() - now,
+                      unknown.size());
+            return new QueryResult(r, Collections.emptyList());
         }
 
         public List<Entry> requestDAG(List<HASH> want) {
@@ -854,7 +863,11 @@ public class Avalanche {
                         try {
                             result.get();
                         } catch (ExecutionException e) {
-                            log.debug("exception querying {}", batch, e.getCause());
+                            if (log.isDebugEnabled()) {
+                                log.debug("exception querying {}",
+                                          batch.stream().map(h -> new HashKey(h)).collect(Collectors.toList()),
+                                          e.getCause());
+                            }
                         }
                     }
                 } catch (InterruptedException e) {
