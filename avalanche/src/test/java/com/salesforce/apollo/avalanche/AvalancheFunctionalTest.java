@@ -52,7 +52,6 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
-import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -134,8 +133,8 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.queryBatchSize = 40;
-            aParams.insertBatchSize = 10;
-            aParams.preferBatchSize = 10;
+            aParams.insertBatchSize = 1;
+            aParams.preferBatchSize = 40;
             aParams.finalizeBatchSize = 10;
             aParams.noOpsPerRound = 1;
             aParams.maxNoOpParents = 100;

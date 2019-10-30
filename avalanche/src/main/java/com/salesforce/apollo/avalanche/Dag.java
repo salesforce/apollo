@@ -684,7 +684,7 @@ public class Dag {
                    .execute();
             Closure c = CLOSURE.as("c");
             closure = context.deleteFrom(CLOSURE)
-                             .where(CLOSURE.CHILD.in(context.selectDistinct(c.field(CLOSURE.CHILD))
+                             .where(CLOSURE.CHILD.in(context.select(c.field(CLOSURE.CHILD))
                                                             .from(c)
                                                             .join(allFinalized)
                                                             .on(c.field(CLOSURE.PARENT).eq(allFinalizedHash))))
@@ -759,7 +759,7 @@ public class Dag {
         Closure p = CLOSURE.as("p");
         Closure c = CLOSURE.as("c");
 
-        inserts.forEach(insert -> {
+        for (DagInsert insert : inserts) {
             HASH conflictSet = insert.conflictSet;
             conflictSet = insert.dagEntry.getLinks() == null ? new HASH(GENESIS_CONFLICT_SET)
                                 : conflictSet == null ? insert.key.toHash() : conflictSet;
@@ -797,19 +797,14 @@ public class Dag {
                                                                                           c.field(CLOSURE.CHILD),
                                                                                           DSL.inline(true))
                                                                                   .from(p, c)
-                                                                                  .where(p.CHILD.eq(insert.key.bytes()))
-                                                                                  .and(c.PARENT.eq((byte[]) null))));
+                                                                                  .where(p.field(CLOSURE.CHILD)
+                                                                                          .eq((byte[]) null))
+                                                                                  .and(c.field(CLOSURE.PARENT)
+                                                                                        .eq((byte[]) null))
+                                                                                  .and(DSL.notExists(context.selectFrom(DAG)
+                                                                                                            .where(DAG.KEY.eq(c.field(CLOSURE.CHILD)))))));
                         insert.dagEntry.getLinks().forEach(link -> batch.bind(insert.key.bytes(), link.bytes()));
                         batch.execute();
-
-                        // remove any finalized parents from the closure
-                        context.deleteFrom(CLOSURE)
-                               .where(CLOSURE.PARENT.eq(insert.key.bytes())
-                                                    .and(CLOSURE.CHILD.in(context.select(DAG.KEY)
-                                                                                 .from(DAG)
-                                                                                 .join(CLOSURE)
-                                                                                 .on(DAG.KEY.eq(CLOSURE.CHILD)))))
-                               .execute();
                     }
                     if (context.fetchExists(CONFLICTSET, CONFLICTSET.NODE.eq(conflictSet.bytes()))) {
                         context.update(CONFLICTSET)
@@ -833,6 +828,7 @@ public class Dag {
                 }
             }
             log.trace("inserted: {}", insert.key);
-        });
+        }
+        ;
     }
 }
