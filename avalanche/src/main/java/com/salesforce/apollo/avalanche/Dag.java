@@ -483,7 +483,7 @@ public class Dag {
                                                    .and(DSL.notExists(context.selectFrom(DAG)
                                                                              .where(DAG.KEY.eq(c.field(CLOSURE.CHILD))))))
                                     .keepStatement(true);
-        Query updateConfidence = context.update(DAG)
+        Query updateConfidence = context.update(UNFINALIZED)
                                         .set(UNFINALIZED.CONFIDENCE,
                                              context.select(DSL.cast(DSL.sum(UNFINALIZED.CHIT), Integer.class))
                                                     .from(UNFINALIZED)

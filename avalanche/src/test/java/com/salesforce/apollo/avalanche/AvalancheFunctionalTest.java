@@ -133,12 +133,12 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.queryBatchSize = 40;
-            aParams.insertBatchSize = 4;
+            aParams.insertBatchSize = 20;
             aParams.preferBatchSize = 40;
-            aParams.finalizeBatchSize = 10;
+            aParams.finalizeBatchSize = 40;
             aParams.noOpsPerRound = 1;
             aParams.maxNoOpParents = 100;
-            aParams.maxActiveQueries = 100;
+            aParams.maxActiveQueries = 200;
 
             // # of firefly rounds per avalanche round
             aParams.epsilon = 1;
@@ -147,11 +147,14 @@ public class AvalancheFunctionalTest {
             // # of Avalanche queries per FF round
             aParams.gamma = 20;
 
-            aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
-                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
+//            aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
+//                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
+
+            aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
+                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
                 frist.set(false);
-                aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
+//                aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
                 return new Avalanche(view, comm, aParams, avaMetrics);
             }
             return new Avalanche(view, comm, aParams);
@@ -204,7 +207,7 @@ public class AvalancheFunctionalTest {
             transactioneers.add(new Transactioneer(a));
         }
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 400, txnScheduler));
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 600, txnScheduler));
 
         boolean finalized = Utils.waitForCondition(600_000, 10_000, () -> {
             return transactioneers.stream()
@@ -232,7 +235,8 @@ public class AvalancheFunctionalTest {
                        .orElse(0) / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-//        FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(), true), new File("smoke.dot"));
+        // FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(),
+        // true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
         System.out.println(master.getDag()
