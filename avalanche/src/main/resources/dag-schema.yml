@@ -91,14 +91,6 @@ databaseChangeLog:
       -  createIndex:
             columns:
             -  column:
-                  name: noOp
-                  type: BOOLEAN
-            indexName: idx_unfinalized_noOp
-            tableName: unfinalized
-            unique: false
-      -  createIndex:
-            columns:
-            -  column:
                   name: conflictSet
                   type: BINARY(32)
             indexName: idx_unfinalized_conflictSet
@@ -112,15 +104,19 @@ databaseChangeLog:
                   type: BINARY(32)
                   autoIncrement: false
                   constraints:
-                     primaryKey: true
+                     nullable: false
             -  column:
                   name: child
                   type: BINARY(32)
                   constraints:
-                     primaryKey: true
+                     nullable: false
             -  column:
                   name: closure
                   type: BOOLEAN
+      -  addPrimaryKey: 
+            columnNames: parent, child
+            constraintName: pk_closure_parent_child
+            tableName: closure
       -  createIndex:
             columns:
             -  column:
@@ -202,10 +198,6 @@ databaseChangeLog:
             -  column:
                   name: counter
                   type: INT
-      -  addUniqueConstraint:
-            tableName: conflictSet
-            columnNames: node
-            constraintName: constraint_set_unique
       -  addDefaultValue:
             columnDataType: INT
             columnName: cardinality
