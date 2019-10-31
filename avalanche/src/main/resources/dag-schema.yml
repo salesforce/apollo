@@ -120,14 +120,6 @@ databaseChangeLog:
       -  createIndex:
             columns:
             -  column:
-                  name: parent
-                  type: BINARY(32)
-            indexName: idx_closure_parent
-            tableName: closure
-            unique: false
-      -  createIndex:
-            columns:
-            -  column:
                   name: child
                   type: BINARY(32)
             indexName: idx_closure_child
