@@ -30,8 +30,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.avro.Entry;
-import com.salesforce.apollo.avro.EntryType;
+import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Member;
@@ -51,74 +50,85 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class GhostTest {
 
-	private static final RootCertificate ca = getCa();
-	private static Map<UUID, CertWithKey> certs;
-	private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate     ca         = getCa();
+    private static Map<UUID, CertWithKey>    certs;
+    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-	@BeforeClass
-	public static void beforeClass() {
-		certs = IntStream.range(1, 101).parallel().mapToObj(i -> getMember(i))
-				.collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
-	}
+    @BeforeClass
+    public static void beforeClass() {
+        certs = IntStream.range(1, 101)
+                         .parallel()
+                         .mapToObj(i -> getMember(i))
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+    }
 
-	@Test
-	public void smoke() {
-		Random entropy = new Random(0x666);
+    @Test
+    public void smoke() {
+        Random entropy = new Random(0x666);
 
-		List<X509Certificate> seeds = new ArrayList<>();
-		List<Node> members = certs.values().parallelStream().map(cert -> new Node(cert, parameters))
-				.collect(Collectors.toList());
-		MetricRegistry registry = new MetricRegistry();
-		com.salesforce.apollo.fireflies.communications.FfLocalCommSim ffComms = new com.salesforce.apollo.fireflies.communications.FfLocalCommSim(
-				new DropWizardStatsPlugin(registry));
-		assertEquals(certs.size(), members.size());
+        List<X509Certificate> seeds = new ArrayList<>();
+        List<Node> members = certs.values()
+                                  .parallelStream()
+                                  .map(cert -> new Node(cert, parameters))
+                                  .collect(Collectors.toList());
+        MetricRegistry registry = new MetricRegistry();
+        com.salesforce.apollo.fireflies.communications.FfLocalCommSim ffComms = new com.salesforce.apollo.fireflies.communications.FfLocalCommSim(
+                new DropWizardStatsPlugin(registry));
+        assertEquals(certs.size(), members.size());
 
-		while (seeds.size() < parameters.toleranceLevel + 1) {
-			CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-			if (!seeds.contains(cert.getCertificate())) {
-				seeds.add(cert.getCertificate());
-			}
-		}
+        while (seeds.size() < parameters.toleranceLevel + 1) {
+            CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
+            if (!seeds.contains(cert.getCertificate())) {
+                seeds.add(cert.getCertificate());
+            }
+        }
 
-		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-		List<View> views = members.stream().map(node -> new View(node, ffComms, seeds, scheduler))
-				.collect(Collectors.toList());
+        List<View> views = members.stream()
+                                  .map(node -> new View(node, ffComms, seeds, scheduler))
+                                  .collect(Collectors.toList());
 
-		long then = System.currentTimeMillis();
-		views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
+        long then = System.currentTimeMillis();
+        views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
 
-		Utils.waitForCondition(15_000, 1_000, () -> {
-			return views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
-					.filter(view -> view != null).count() == 0;
-		});
+        Utils.waitForCondition(15_000, 1_000, () -> {
+            return views.stream()
+                        .map(view -> view.getLive().size() != views.size() ? view : null)
+                        .filter(view -> view != null)
+                        .count() == 0;
+        });
 
-		System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-				+ views.size() + " members");
+        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+                + views.size() + " members");
 
-		GhostLocalCommSim communications = new GhostLocalCommSim();
-		List<Ghost> ghosties = views.stream()
-				.map(view -> new Ghost(new GhostParameters(), communications, view, new MemoryStore()))
-				.collect(Collectors.toList());
-		ghosties.forEach(e -> e.getService().start());
-		assertEquals("Not all nodes joined the cluster", ghosties.size(), ghosties.parallelStream()
-				.map(g -> Utils.waitForCondition(5_000, () -> g.joined())).filter(e -> e).count());
-		int rounds = 3;
-		Map<HashKey, Entry> stored = new HashMap<>();
-		for (int i = 0; i < rounds; i++) {
-			for (Ghost ghost : ghosties) {
-				Entry entry = new Entry(EntryType.DAG,
-						ByteBuffer.wrap(String.format("Member: %s round: %s", ghost.getNode().getId(), i).getBytes()));
-				stored.put(ghost.putEntry(entry), entry);
-			}
-		}
+        GhostLocalCommSim communications = new GhostLocalCommSim();
+        List<Ghost> ghosties = views.stream()
+                                    .map(view -> new Ghost(new GhostParameters(), communications, view,
+                                            new MemoryStore()))
+                                    .collect(Collectors.toList());
+        ghosties.forEach(e -> e.getService().start());
+        assertEquals("Not all nodes joined the cluster", ghosties.size(),
+                     ghosties.parallelStream()
+                             .map(g -> Utils.waitForCondition(5_000, () -> g.joined()))
+                             .filter(e -> e)
+                             .count());
+        int rounds = 3;
+        Map<HashKey, DagEntry> stored = new HashMap<>();
+        for (int i = 0; i < rounds; i++) {
+            for (Ghost ghost : ghosties) {
+                DagEntry entry = new DagEntry(null, null,
+                        ByteBuffer.wrap(String.format("Member: %s round: %s", ghost.getNode().getId(), i).getBytes()));
+                stored.put(ghost.putDagEntry(entry), entry);
+            }
+        }
 
-		for (java.util.Map.Entry<HashKey, Entry> entry : stored.entrySet()) {
-			for (Ghost ghost : ghosties) {
-				Entry found = ghost.getEntry(entry.getKey());
-				assertNotNull(found);
-				assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
-			}
-		}
-	}
+        for (java.util.Map.Entry<HashKey, DagEntry> entry : stored.entrySet()) {
+            for (Ghost ghost : ghosties) {
+                DagEntry found = ghost.getDagEntry(entry.getKey());
+                assertNotNull(found);
+                assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
+            }
+        }
+    }
 }

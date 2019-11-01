@@ -111,7 +111,7 @@ public class TransactionsTest {
         dag = new Dag(parameters);
         root = new DagEntry();
         root.setData(ByteBuffer.wrap("Ye root".getBytes()));
-        rootKey = dag.putDagEntry(root, serialize(root), null, create, false, 0);
+        rootKey = dag.putDagEntry(root, null, create, false, 0);
         assertNotNull(rootKey);
     }
 
@@ -343,23 +343,23 @@ public class TransactionsTest {
         ordered.add(new HashKey(rootKey));
 
         DagEntry entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 1).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 1).getBytes()));
         entry.setLinks(asList(rootKey));
-        HASH key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        HASH key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 2).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 2).getBytes()));
         entry.setLinks(asList(key));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 3).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 3).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -383,9 +383,9 @@ public class TransactionsTest {
         }
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 4).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 4).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), ordered.get(3).toHash(), create, false, 0);
+        key = dag.putDagEntry(entry, ordered.get(3).toHash(), create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -399,9 +399,9 @@ public class TransactionsTest {
         }
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 5).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 5).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(4).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -475,9 +475,9 @@ public class TransactionsTest {
         assertTrue(sampled.contains(ordered.get(0)));
 
         DagEntry entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 1).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 1).getBytes()));
         entry.setLinks(asList(rootKey));
-        HASH key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        HASH key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -489,9 +489,9 @@ public class TransactionsTest {
         assertTrue(sampled.contains(ordered.get(1)));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 2).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 2).getBytes()));
         entry.setLinks(asList(key));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -504,23 +504,23 @@ public class TransactionsTest {
         assertTrue(sampled.contains(ordered.get(2)));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 3).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 3).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 4).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 4).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), ordered.get(3).toHash(), create, false, 0);
+        key = dag.putDagEntry(entry, ordered.get(3).toHash(), create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 5).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 5).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(3).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -537,9 +537,9 @@ public class TransactionsTest {
 
         // Add a new node to the frontier
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 6).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 6).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(5).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -565,37 +565,37 @@ public class TransactionsTest {
         ordered.add(new HashKey(rootKey));
 
         DagEntry entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 1).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 1).getBytes()));
         entry.setLinks(asList(rootKey));
-        HASH key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        HASH key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 2).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 2).getBytes()));
         entry.setLinks(asList(key));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 3).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 3).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 4).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 4).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), ordered.get(3).toHash(), create, false, 0);
+        key = dag.putDagEntry(entry, ordered.get(3).toHash(), create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 5).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 5).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(3).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -610,9 +610,9 @@ public class TransactionsTest {
 
         // Add a new node to the frontier
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 6).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 6).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(5).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -639,38 +639,38 @@ public class TransactionsTest {
         ordered.add(rootHashKey);
 
         DagEntry entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 1).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 1).getBytes()));
         entry.setLinks(asList(rootKey));
-        HASH key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        HASH key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 2).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 2).getBytes()));
         entry.setLinks(asList(key));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         // Nodes 3, 4 conflict. 3 is the preference initially
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 3).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 3).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 4).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 4).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), ordered.get(3).toHash(), create, false, 0);
+        key = dag.putDagEntry(entry, ordered.get(3).toHash(), create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 5).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 5).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(4).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -770,9 +770,9 @@ public class TransactionsTest {
                                                                                DSL.using(config))));
 
         entry = new DagEntry();
-        entry.setData(ByteBuffer.wrap(String.format("Entry: %s", 6).getBytes()));
+        entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 6).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(5).toHash()));
-        key = dag.putDagEntry(entry, serialize(entry), null, create, false, 0);
+        key = dag.putDagEntry(entry, null, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
 
@@ -832,7 +832,7 @@ public class TransactionsTest {
         DagEntry entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(contents.getBytes()));
         entry.setLinks(links);
-        HASH key = dag.putDagEntry(entry, serialize(entry), conflictSet, create, false, 0);
+        HASH key = dag.putDagEntry(entry, conflictSet, create, false, 0);
         stored.put(new HashKey(key), entry);
         ordered.add(new HashKey(key));
         return key;

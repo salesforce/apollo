@@ -8,7 +8,7 @@ package com.salesforce.apollo.protocols;
 
 import java.util.List;
 
-import com.salesforce.apollo.avro.Entry;
+import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.Interval;
 
@@ -17,9 +17,9 @@ import com.salesforce.apollo.avro.Interval;
  * @since 220
  */
 public interface SpaceGhost {
-	Entry get(HASH key) throws org.apache.avro.AvroRemoteException;
+    DagEntry get(HASH key) throws org.apache.avro.AvroRemoteException;
 
-	List<Entry> intervals(List<Interval> intervals, List<HASH> have);
+    List<DagEntry> intervals(List<Interval> intervals, List<HASH> have);
 
-	void put(Entry entry);
+    void put(DagEntry entry);
 }

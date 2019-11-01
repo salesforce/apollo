@@ -18,7 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.avro.Entry;
+import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.QueryResult;
 import com.salesforce.apollo.fireflies.Member;
@@ -30,9 +30,9 @@ import com.salesforce.apollo.protocols.Avalanche;
  * @since 220
  */
 public class AvalancheClientCommunications extends CommonClientCommunications implements Avalanche {
-    private static final Logger log = LoggerFactory.getLogger(AvalancheClientCommunications.class);
-    private final Apollo client;
-    private final Transceiver transceiver;
+    private static final Logger     log = LoggerFactory.getLogger(AvalancheClientCommunications.class);
+    private final Apollo            client;
+    private final Transceiver       transceiver;
     private final SpecificRequestor requestor;
 
     public AvalancheClientCommunications(Transceiver transceiver, Member member) throws AvroRemoteException {
@@ -61,7 +61,7 @@ public class AvalancheClientCommunications extends CommonClientCommunications im
     }
 
     @Override
-    public List<Entry> requestDAG(List<HASH> want) throws AvroRemoteException {
+    public List<DagEntry> requestDAG(List<HASH> want) throws AvroRemoteException {
         return client.requestDAG(want);
     }
 

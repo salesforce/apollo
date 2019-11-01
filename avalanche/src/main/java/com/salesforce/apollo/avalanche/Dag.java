@@ -13,6 +13,7 @@ import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static com.salesforce.apollo.dagwood.schema.Tables.UNQUERIED;
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
 import static com.salesforce.apollo.protocols.Conversion.manifestDag;
+import static com.salesforce.apollo.protocols.Conversion.serialize;
 
 import java.nio.ByteBuffer;
 import java.sql.Connection;
@@ -47,12 +48,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.Entry;
-import com.salesforce.apollo.avro.EntryType;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.dagwood.schema.tables.Closure;
 import com.salesforce.apollo.dagwood.schema.tables.Unfinalized;
-import com.salesforce.apollo.dagwood.schema.tables.records.DagRecord;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -64,12 +62,12 @@ public class Dag {
     public static class DagInsert {
         public final HASH     conflictSet;
         public final DagEntry dagEntry;
-        public final Entry    entry;
         public final HashKey  key;
+        public final byte[]   entry;
         public final boolean  noOp;
         public final int      targetRound;
 
-        public DagInsert(HASH key, DagEntry dagEntry, Entry entry, HASH conflictSet, boolean noOp, int targetRound) {
+        public DagInsert(HASH key, DagEntry dagEntry, byte[] entry, HASH conflictSet, boolean noOp, int targetRound) {
             this.key = new HashKey(key);
             this.dagEntry = dagEntry;
             this.entry = entry;
@@ -85,10 +83,10 @@ public class Dag {
     }
 
     public static class KeyAndEntry {
-        public final Entry  entry;
-        public final byte[] key;
+        public final DagEntry entry;
+        public final byte[]   key;
 
-        public KeyAndEntry(byte[] key, Entry entry) {
+        public KeyAndEntry(byte[] key, DagEntry entry) {
             this.key = key;
             this.entry = entry;
         }
@@ -190,11 +188,17 @@ public class Dag {
      * @return null if no entry is found, otherwise the DagEntry matching the key
      */
     public DagEntry getDagEntry(HASH key, DSLContext create) {
-        DagRecord entry = create.selectFrom(DAG).where(DAG.KEY.eq(key.bytes())).fetchOne();
+        Record1<byte[]> entry = create.select(DAG.DATA).from(DAG).where(DAG.KEY.eq(key.bytes())).fetchOne();
+        if (entry == null) {
+            entry = create.select(UNFINALIZED.DATA)
+                          .from(UNFINALIZED)
+                          .where(UNFINALIZED.HASH.eq(key.bytes()))
+                          .fetchOne();
+        }
         if (entry == null) {
             return null;
         }
-        return manifestDag(new Entry(EntryType.DAG, ByteBuffer.wrap(entry.getData())));
+        return manifestDag(entry.value1());
     }
 
     /**
@@ -202,7 +206,7 @@ public class Dag {
      * @param limit
      * @return the list of existing entries from the list, up to the limit provided
      */
-    public List<Entry> getEntries(List<HASH> want, int limit, DSLContext create) {
+    public List<DagEntry> getEntries(List<HASH> want, int limit, DSLContext create) {
         if (want.isEmpty()) {
             return Collections.emptyList();
         }
@@ -214,7 +218,7 @@ public class Dag {
         want.forEach(e -> batch.bind(e.bytes()));
         try {
             batch.execute();
-            List<Entry> retrieved;
+            List<DagEntry> retrieved;
             retrieved = create.select(DAG.DATA)
                               .from(DAG)
                               .join(wanted)
@@ -222,7 +226,7 @@ public class Dag {
                               .limit(limit)
                               .fetch()
                               .stream()
-                              .map(r -> entryFrom((byte[]) r.get(0)))
+                              .map(r -> manifestDag(r.value1()))
                               .collect(Collectors.toList());
             create.delete(wanted);
             return retrieved;
@@ -516,8 +520,8 @@ public class Dag {
         }
     }
 
-    public HASH putDagEntry(DagEntry dagEntry, Entry entry, HASH conflictSet, DSLContext create, boolean noOp,
-                            int targetRound) {
+    public HASH putDagEntry(DagEntry dagEntry, HASH conflictSet, DSLContext create, boolean noOp, int targetRound) {
+        byte[] entry = serialize(dagEntry);
         HASH hash = new HASH(hashOf(entry));
         put(Collections.singletonList(new DagInsert(hash, dagEntry, entry, conflictSet, noOp, targetRound)), create);
         return hash;
@@ -733,10 +737,6 @@ public class Dag {
         return data;
     }
 
-    Entry entryFrom(byte[] bytes) {
-        return new Entry(EntryType.DAG, ByteBuffer.wrap(bytes));
-    }
-
     /** for testing **/
     void finalize(HASH txn, DSLContext context) {
 
@@ -796,7 +796,7 @@ public class Dag {
                         links = linkBuf.array();
                     }
                     dagInsert.bind(1, insert.key.bytes())
-                             .bind(2, insert.entry.getData().array())
+                             .bind(2, insert.entry)
                              .bind(3, insert.noOp)
                              .bind(4, conflictSet.bytes())
                              .bind(5, links)

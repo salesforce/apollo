@@ -86,34 +86,6 @@ protocol Apollo {
         array<Signed> accusations;
     }
 
-    enum EntryType {
-        DAG,
-        BLOCK,
-        TREE,
-        LIST,
-        COMMIT
-    }
-
-    record Entry {
-        EntryType type;
-        bytes data;
-    }
-
-    record Block {
-        bytes data;
-    }
-
-    record TREE {
-        array<string> names;
-        array<int> sizes;
-        bytes data;
-    }
-
-    record List {
-        array<int> sizes;
-        bytes data;
-    }
-
     record DagEntry {
         union { null, HASH } description;
         union { null, array<HASH> } links;
@@ -132,7 +104,7 @@ protocol Apollo {
 
     record QueryResult {
         array<boolean> result;
-        array<Entry> entries;
+        array<DagEntry> entries;
     }
 
     /*
@@ -149,13 +121,13 @@ protocol Apollo {
     /*
      * Ghost API
      */
-    union { null, Entry } get ( HASH key );
-    void put ( Entry entry ) oneway;
+    union { null, DagEntry } get ( HASH key );
+    void put ( DagEntry entry ) oneway;
 
     /**
 	 * Ghost interval gossip
 	 */
-    array<Entry> intervals ( array<Interval> intervals, array<HASH> have );
+    array<DagEntry> intervals ( array<Interval> intervals, array<HASH> have );
 
     /**
      * Avalanche query
@@ -165,5 +137,5 @@ protocol Apollo {
     /**
      * Avalanche lazy DAG update gossip
      */
-    array<Entry> requestDAG ( array<HASH> want );
+    array<DagEntry> requestDAG ( array<HASH> want );
 }

@@ -60,8 +60,6 @@ import com.salesforce.apollo.avalanche.Dag.FinalizationData;
 import com.salesforce.apollo.avalanche.communications.AvalancheClientCommunications;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
 import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.Entry;
-import com.salesforce.apollo.avro.EntryType;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.QueryResult;
 import com.salesforce.apollo.fireflies.Member;
@@ -101,9 +99,8 @@ public class Avalanche {
             int r = round.get() + rounds2Flood;
             ForkJoinPool.commonPool().execute(() -> {
                 messages.forEach(message -> {
-                    Entry entry = new Entry(EntryType.DAG, ByteBuffer.wrap(message.content));
-                    DagEntry dagEntry = manifestDag(entry);
-                    insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
+                    DagEntry dagEntry = manifestDag(message.content);
+                    insertions.add(new DagInsert(new HASH(hashOf(message.content)), dagEntry, message.content, null,
                             dagEntry.getDescription() == null, r));
                 });
             });
@@ -192,7 +189,7 @@ public class Avalanche {
             return new QueryResult(r, Collections.emptyList());
         }
 
-        public List<Entry> requestDAG(List<HASH> want) {
+        public List<DagEntry> requestDAG(List<HASH> want) {
             if (!running.get()) {
                 return new ArrayList<>();
             }
@@ -356,7 +353,7 @@ public class Avalanche {
         dagEntry.setDescription(WellKnownDescriptions.GENESIS.toHash());
         dagEntry.setData(ByteBuffer.wrap("Genesis".getBytes()));
         // genesis has no parents
-        Entry entry = serialize(dagEntry);
+        byte[] entry = serialize(dagEntry);
         byte[] hash = hashOf(entry);
         insertions.add(new DagInsert(new HASH(hash), dagEntry, entry, WellKnownDescriptions.GENESIS.toHash(), false,
                 round.get() + rounds2Flood));
@@ -383,7 +380,7 @@ public class Avalanche {
                 log.trace("No DAG holes on: {}", view.getNode().getId());
                 return;
             }
-            List<Entry> received;
+            List<DagEntry> received;
             AvalancheClientCommunications connection = null;
             try {
                 connection = comm.connectToNode(successor, view.getNode());
@@ -401,8 +398,8 @@ public class Avalanche {
                 }
             }
             log.trace("wanted {} received {} entries", wanted.size(), received.size());
-            received.forEach(entry -> {
-                DagEntry dagEntry = manifestDag(entry);
+            received.forEach(dagEntry -> {
+                byte[] entry = serialize(dagEntry);
                 insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
                         dagEntry.getDescription() == null, round.get() + rounds2Flood));
             });
@@ -442,8 +439,8 @@ public class Avalanche {
      * 
      * @param entry
      */
-    void flood(Entry entry) {
-        view.publish(AVALANCHE_TRANSACTION_CHANNEL, entry.getData().array());
+    void flood(byte[] entry) {
+        view.publish(AVALANCHE_TRANSACTION_CHANNEL, entry);
     }
 
     /**
@@ -471,7 +468,7 @@ public class Avalanche {
             getEntropy().nextBytes(dummy);
             dagEntry.setData(ByteBuffer.wrap(dummy));
             dagEntry.setLinks(parents.stream().map(e -> e.toHash()).collect(Collectors.toList()));
-            Entry entry = serialize(dagEntry);
+            byte[] entry = serialize(dagEntry);
             insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null, true,
                     round.get() + rounds2Flood));
             flood(entry);
@@ -529,7 +526,7 @@ public class Avalanche {
         if (connection == null) {
             return;
         }
-        List<Entry> requested;
+        List<DagEntry> requested;
         try {
             requested = connection.requestDAG(want);
         } catch (AvroRemoteException e) {
@@ -539,8 +536,8 @@ public class Avalanche {
         if (requested.isEmpty()) {
             return;
         }
-        requested.forEach(entry -> {
-            DagEntry dagEntry = manifestDag(entry);
+        requested.forEach(dagEntry -> {
+            byte[] entry = serialize(dagEntry);
             insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
                     dagEntry.getDescription() == null, round.get()));
         });
@@ -829,8 +826,8 @@ public class Avalanche {
                 log.trace("wanted {} received {} entries", wanted.size(), result.getEntries().size());
             }
 
-            result.getEntries().forEach(entry -> {
-                DagEntry dagEntry = manifestDag(entry);
+            result.getEntries().forEach(dagEntry -> {
+                byte[] entry = serialize(dagEntry);
                 insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
                         dagEntry.getDescription() == null, round.get()));
             });
@@ -1019,7 +1016,7 @@ public class Avalanche {
             dagEntry.setDescription(description);
             dagEntry.setData(ByteBuffer.wrap(data));
             dagEntry.setLinks(parents.stream().map(e -> e.toHash()).collect(Collectors.toList()));
-            Entry entry = serialize(dagEntry);
+            byte[] entry = serialize(dagEntry);
             hash = hashOf(entry);
             insertions.add(new DagInsert(new HASH(hash), dagEntry, entry, null, false, round.get() + rounds2Flood));
             flood(entry);

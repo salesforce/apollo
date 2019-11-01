@@ -11,7 +11,7 @@ import java.util.List;
 import org.apache.avro.AvroRemoteException;
 
 import com.salesforce.apollo.avalanche.Avalanche.Service;
-import com.salesforce.apollo.avro.Entry;
+import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.QueryResult;
 import com.salesforce.apollo.protocols.Avalanche;
@@ -33,7 +33,7 @@ public class AvalancheServerCommunications implements Avalanche {
     }
 
     @Override
-    public List<Entry> requestDAG(List<HASH> want) throws AvroRemoteException {
+    public List<DagEntry> requestDAG(List<HASH> want) throws AvroRemoteException {
         return avalanche.requestDAG(want);
     }
 }

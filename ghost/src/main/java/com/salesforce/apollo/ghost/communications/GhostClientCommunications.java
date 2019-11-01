@@ -16,7 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.avro.Entry;
+import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.Interval;
 import com.salesforce.apollo.fireflies.Member;
@@ -52,17 +52,17 @@ public class GhostClientCommunications extends CommonClientCommunications implem
 	}
 
 	@Override
-	public Entry get(HASH entry) throws AvroRemoteException {
-		return client.get(entry);
+	public DagEntry get(HASH DagEntry) throws AvroRemoteException {
+		return client.get(DagEntry);
 	}
 
 	@Override
-	public List<Entry> intervals(List<Interval> intervals, List<HASH> have) {
+	public List<DagEntry> intervals(List<Interval> intervals, List<HASH> have) {
 		return client.intervals(intervals, have);
 	}
 
 	@Override
-	public void put(Entry value) {
+	public void put(DagEntry value) {
 		client.put(value);
 	}
 
