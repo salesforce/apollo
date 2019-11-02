@@ -572,6 +572,7 @@ public class TransactionsTest {
 
         // Add a new node to the frontier
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 6).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(5).toHash()));
         key = dag.insert(entry, 0, create);
@@ -600,6 +601,7 @@ public class TransactionsTest {
         ordered.add(rootKey);
 
         DagEntry entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 1).getBytes()));
         entry.setLinks(asList(rootKey.toHash()));
         HashKey key = dag.insert(entry, 0, create);
@@ -607,6 +609,7 @@ public class TransactionsTest {
         ordered.add(key);
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 2).getBytes()));
         entry.setLinks(asList(key.toHash()));
         key = dag.insert(entry, 0, create);
@@ -615,6 +618,7 @@ public class TransactionsTest {
 
         // Nodes 3, 4 conflict. 3 is the preference initially
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 3).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
         key = dag.insert(entry, 0, create);
@@ -622,6 +626,7 @@ public class TransactionsTest {
         ordered.add(key);
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 4).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
         key = dag.insert(entry, ordered.get(3), 0, create);
@@ -629,6 +634,7 @@ public class TransactionsTest {
         ordered.add(key);
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 5).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(4).toHash()));
         key = dag.insert(entry, 0, create);
@@ -637,12 +643,7 @@ public class TransactionsTest {
 
 //		dumpClosure(ordered, create);
         for (HashKey e : ordered) {
-            assertEquals(Integer.valueOf(0),
-                         create.select(UNFINALIZED.CONFIDENCE)
-                               .from(UNFINALIZED)
-                               .where(UNFINALIZED.HASH.eq(e.bytes()))
-                               .fetchOne()
-                               .value1());
+            assertEquals(0, dag.get(e).getConfidence());
         }
 
         dag.prefer(ordered.get(3));
@@ -651,30 +652,11 @@ public class TransactionsTest {
         assertFalse(String.format("node 4 is strongly preferred: ") + ordered.get(4),
                     dag.isStronglyPreferred(ordered.get(4), create));
 
-        assertEquals(Integer.valueOf(1),
-                     create.select(UNFINALIZED.CHIT)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(3).bytes()))
-                           .fetchOne()
-                           .value1());
-        assertEquals(Integer.valueOf(1),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(0).bytes()))
-                           .fetchOne()
-                           .value1());
-        assertEquals(Integer.valueOf(1),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(2).bytes()))
-                           .fetchOne()
-                           .value1());
-        assertEquals(Integer.valueOf(0),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(4).bytes()))
-                           .fetchOne()
-                           .value1());
+        assertTrue(dag.get(ordered.get(3)).getChit());
+        assertEquals(1, dag.get(ordered.get(0)).getConfidence());
+        assertEquals(1, dag.get(ordered.get(2)).getConfidence());
+        assertEquals(0, dag.get(ordered.get(4)).getConfidence());
+
         assertTrue(String.format("node 0 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(0), create));
         assertTrue(String.format("node 1 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(1), create));
         assertTrue(String.format("node 2 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(2), create));
@@ -683,43 +665,18 @@ public class TransactionsTest {
 
         dag.prefer(ordered.get(4));
 
-        assertEquals(Integer.valueOf(1),
-                     create.select(UNFINALIZED.CHIT)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(4).bytes()))
-                           .fetchOne()
-                           .value1());
+        assertTrue(dag.get(ordered.get(4)).getChit());
+        assertEquals(2, dag.get(ordered.get(0)).getConfidence());
+        assertEquals(2, dag.get(ordered.get(2)).getConfidence());
+        assertEquals(1, dag.get(ordered.get(3)).getConfidence());
+        assertEquals(1, dag.get(ordered.get(4)).getConfidence());
 
-        assertEquals(Integer.valueOf(2),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(0).bytes()))
-                           .fetchOne()
-                           .value1());
-        assertEquals(Integer.valueOf(2),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(2).bytes()))
-                           .fetchOne()
-                           .value1());
-        assertEquals(Integer.valueOf(1),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(3).bytes()))
-                           .fetchOne()
-                           .value1());
-        assertEquals(Integer.valueOf(1),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(4).bytes()))
-                           .fetchOne()
-                           .value1());
-
-        assertTrue(String.format("node 3 is not strongly preferred " + ordered.get(3)),
+        assertFalse(String.format("node 3 is strongly preferred " + ordered.get(3)),
                    dag.isStronglyPreferred(ordered.get(3), create));
-        assertFalse(String.format("node 4 is strongly preferred"), dag.isStronglyPreferred(ordered.get(4), create));
+        assertTrue(String.format("node 4 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(4), create));
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 6).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(5).toHash()));
         key = dag.insert(entry, 0, create);
@@ -728,37 +685,11 @@ public class TransactionsTest {
 
         dag.prefer(ordered.get(5));
 
-        assertEquals(Integer.valueOf(1),
-                     create.select(UNFINALIZED.CHIT)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(4).bytes()))
-                           .fetchOne()
-                           .value1());
-
-        assertEquals(Integer.valueOf(3),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(0).bytes()))
-                           .fetchOne()
-                           .value1());
-        assertEquals(Integer.valueOf(3),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(2).bytes()))
-                           .fetchOne()
-                           .value1());
-        assertEquals(Integer.valueOf(1),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(3).bytes()))
-                           .fetchOne()
-                           .value1());
-        assertEquals(Integer.valueOf(2),
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(ordered.get(4).bytes()))
-                           .fetchOne()
-                           .value1());
+        assertTrue(dag.get(ordered.get(4)).getChit());
+        assertEquals(3, dag.get(ordered.get(0)).getConfidence());
+        assertEquals(3, dag.get(ordered.get(2)).getConfidence());
+        assertEquals(1, dag.get(ordered.get(3)).getConfidence());
+        assertEquals(2, dag.get(ordered.get(4)).getConfidence());
 
         assertFalse(String.format("node 3 is strongly preferred " + ordered.get(3)),
                     dag.isStronglyPreferred(ordered.get(3), create));

@@ -61,6 +61,7 @@ public class WorkingSet {
         private final Set<Node>   closure;
         private volatile int      confidence = 0;
         private final ConflictSet conflictSet;
+        private final Set<Node>   dependents = new TreeSet<>();
         private volatile boolean  finalized  = false;
         private final Set<Node>   links;
 
@@ -73,15 +74,19 @@ public class WorkingSet {
             for (Node node : links) {
                 assert !node.isNoOp() : "Cannot have NoOps as parent links";
                 node.addDependent(this);
-                closure.addAll(node.closure());
+                node.addClosureTo(closure);
             }
         }
 
         @Override
         public void addClosureTo(Set<Node> closureSet) {
-            closure.add(this);
-            closure.addAll(links);
-            closure.addAll(closureSet);
+            closureSet.addAll(links);
+            closureSet.addAll(closure);
+        }
+
+        @Override
+        public void addDependent(Node node) {
+            dependents.add(node);
         }
 
         @Override
@@ -94,6 +99,10 @@ public class WorkingSet {
             final boolean wasFinalized = finalized;
             finalized = true;
             return wasFinalized;
+        }
+
+        public boolean getChit() {
+            return chit;
         }
 
         @Override
@@ -177,13 +186,18 @@ public class WorkingSet {
 
         @Override
         public void replace(UnknownNode unknownNode, Node replacement) {
-            closure.remove(unknownNode);
-            replacement.addClosureTo(closure);
+            if (links.remove(unknownNode)) {
+                links.add(replacement);
+                replacement.addDependent(this);
+                replacement.addClosureTo(closure);
+            }
+
         }
 
         @Override
         public void snip() {
             dependents.forEach(node -> {
+                node.snip(Collections.singletonList(this));
                 node.snip(links);
                 node.snip(closure);
             });
@@ -238,9 +252,8 @@ public class WorkingSet {
     }
 
     public static abstract class Node implements Comparable<Node> {
-        protected final Set<Node> dependents = new TreeSet<>();
-        protected final long      discovered;
-        protected final HashKey   key;
+        protected final long    discovered;
+        protected final HashKey key;
 
         public Node(HashKey key, long discovered) {
             this.key = key;
@@ -249,9 +262,7 @@ public class WorkingSet {
 
         public abstract void addClosureTo(Set<Node> closure);
 
-        public void addDependent(Node node) {
-            dependents.add(this);
-        }
+        abstract public void addDependent(Node node);
 
         abstract public Set<Node> closure();
 
@@ -261,6 +272,10 @@ public class WorkingSet {
         }
 
         public abstract boolean finalized();
+
+        public boolean getChit() {
+            return false;
+        }
 
         abstract public int getConfidence();
 
@@ -344,6 +359,11 @@ public class WorkingSet {
         }
 
         @Override
+        public void addDependent(Node node) {
+            throw new IllegalStateException("No ops cannot be parents");
+        }
+
+        @Override
         public Set<Node> closure() {
             return closure;
         }
@@ -351,6 +371,10 @@ public class WorkingSet {
         @Override
         public boolean finalized() {
             throw new IllegalStateException("No op nodes cannot be finalized");
+        }
+
+        public boolean getChit() {
+            return chit;
         }
 
         @Override
@@ -417,7 +441,7 @@ public class WorkingSet {
         }
     }
 
-    public static class UnknownNode extends Node {
+    public class UnknownNode extends Node {
 
         private final Set<Node>  dependencies = new ConcurrentSkipListSet<>();
         private volatile boolean finalized;
@@ -473,6 +497,14 @@ public class WorkingSet {
 
         public void replaceWith(Node replacement) {
             dependencies.forEach(node -> node.replace(this, replacement));
+        }
+
+        @Override
+        public void snip() {
+            dependencies.forEach(node -> {
+                node.snip(Collections.singletonList(this));
+            });
+            unfinalized.remove(key);
         }
 
         @Override
@@ -725,6 +757,11 @@ public class WorkingSet {
                                                  .where((UNFINALIZED.HASH.eq(key.bytes())))))
                .execute();
         context.deleteFrom(UNFINALIZED).where(UNFINALIZED.HASH.eq(key.bytes())).execute();
+    }
+
+    /** for testing **/
+    Node get(HashKey key) {
+        return unfinalized.get(key);
     }
 
     void insert(HashKey key, byte[] entry, List<HASH> yeLinks, DSLContext context) {
