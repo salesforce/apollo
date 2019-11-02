@@ -21,7 +21,7 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.avalanche" level="TRACE"
+    <logger name="com.salesforce.apollo.avalanche" level="INFO"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

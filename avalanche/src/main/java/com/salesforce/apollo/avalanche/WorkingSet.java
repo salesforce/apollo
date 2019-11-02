@@ -132,7 +132,7 @@ public class WorkingSet {
         @Override
         public boolean isPreferred() {
             final boolean current = finalized;
-            return !current && conflictSet.getPreferred().equals(this);
+            return current || conflictSet.getPreferred().equals(this);
         }
 
         @Override
@@ -428,7 +428,7 @@ public class WorkingSet {
         @Override
         public boolean isStronglyPreferred() {
             for (Node node : closure) {
-                if (!node.isStronglyPreferred()) {
+                if (!node.isPreferred()) {
                     return false;
                 }
             }
@@ -790,7 +790,8 @@ public class WorkingSet {
         });
         batch.execute();
 
-        int finalized = context.insertInto(DAG, DAG.KEY, DAG.DATA, DAG.LINKS)
+        int finalized = context.mergeInto(DAG, DAG.KEY, DAG.DATA, DAG.LINKS)
+                               .key(DAG.KEY)
                                .select(context.select(UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
                                               .from(UNFINALIZED)
                                               .join(allFinalized)
@@ -803,7 +804,9 @@ public class WorkingSet {
 
         context.deleteFrom(allFinalized).execute();
 
-        assert finalized == finalizedSet.size() : "Finalization differs " + finalized + " != " + finalizedSet.size();
+        if (finalized != finalizedSet.size()) {
+            System.out.println("Finalization differs " + finalized + " != " + finalizedSet.size());
+        }
 
         FinalizationData data = new FinalizationData();
         finalizedSet.forEach(node -> {

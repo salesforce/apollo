@@ -7,7 +7,6 @@
 package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
-import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
 import static org.junit.Assert.assertEquals;
@@ -39,6 +38,8 @@ import org.junit.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
+import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
 import com.salesforce.apollo.avalanche.communications.AvalancheLocalCommSim;
 import com.salesforce.apollo.avro.HASH;
@@ -134,8 +135,8 @@ public class AvalancheFunctionalTest {
             // Avalanche implementation parameters
             aParams.queryBatchSize = 40;
             aParams.insertBatchSize = 20;
-            aParams.preferBatchSize = 40;
-            aParams.finalizeBatchSize = 40;
+            aParams.preferBatchSize = 100;
+            aParams.finalizeBatchSize = 100;
             aParams.noOpsPerRound = 1;
             aParams.maxNoOpParents = 100;
             aParams.maxActiveQueries = 200;
@@ -145,7 +146,7 @@ public class AvalancheFunctionalTest {
             // # of FF rounds per NoOp generation
             aParams.delta = 1;
             // # of Avalanche queries per FF round
-            aParams.gamma = 1;
+            aParams.gamma = 20;
 
 //            aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
 //                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
@@ -161,7 +162,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 1600;
+        int target = 20;
         Duration ffRound = Duration.ofMillis(500);
 
         views.forEach(view -> view.getService().start(ffRound));
@@ -209,7 +210,7 @@ public class AvalancheFunctionalTest {
 
         transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 600, txnScheduler));
 
-        boolean finalized = Utils.waitForCondition(600_000, 10_000, () -> {
+        boolean finalized = Utils.waitForCondition(30_000, 10_000, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= target)
@@ -263,25 +264,25 @@ public class AvalancheFunctionalTest {
     private void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
         System.out.println("    Rounds: " + node.getRoundCounter());
+
         Integer finalized = node.getDslContext().selectCount().from(DAG).fetchOne().value1();
-        Integer unfinalizedUser = node.getDslContext()
-                                      .selectCount()
-                                      .from(UNFINALIZED)
-                                      .where(UNFINALIZED.NOOP.isFalse())
-                                      .fetchOne()
-                                      .value1();
+        Integer unfinalizedUser = node.getDag()
+                                      .getUnfinalized()
+                                      .values()
+                                      .stream()
+                                      .filter(n -> n instanceof KnownNode)
+                                      .mapToInt(n -> n.isFinalized() ? 0 : 1)
+                                      .sum();
+        long unqueried = node.getDag()
+                             .getUnqueried()
+                             .stream()
+                             .map(key -> node.getDag().get(key))
+                             .filter(n -> n instanceof KnownNode)
+                             .count();
+
         System.out.println("    User txns finalized: " + finalized + " unfinalized: " + unfinalizedUser + " unqueried: "
-                + node.getDslContext()
-                      .selectCount()
-                      .from(UNFINALIZED)
-                      .where(UNFINALIZED.NOOP.isTrue())
-                      .fetchOne()
-                      .value1());
-        System.out.println("    No Op txns: " + node.getDslContext()
-                                                    .selectCount()
-                                                    .from(UNFINALIZED)
-                                                    .where(UNFINALIZED.NOOP.isTrue())
-                                                    .fetchOne()
-                                                    .value1());
+                + unqueried);
+        System.out.println("    No Op txns: "
+                + node.getDag().getUnfinalized().values().stream().filter(n -> n instanceof NoOpNode).count());
     }
 }
