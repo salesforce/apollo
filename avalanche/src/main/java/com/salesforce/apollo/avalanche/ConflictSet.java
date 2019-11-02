@@ -22,7 +22,10 @@ public class ConflictSet {
 
     public ConflictSet(Node frist) {
         last = preferred = frist;
-        cardinality = 1;
+    }
+
+    public void incCardinality() {
+        cardinality++;
     }
 
     public void clearCounter() {

@@ -15,7 +15,6 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
@@ -140,29 +139,14 @@ public class TransactionsTest {
                 last = newDagEntry("entry: " + i, ordered, stored, Arrays.asList(last));
             }
 
-            for (int i = ordered.size() - 1; i >= 3; i--) {
+            for (int i = ordered.size() - 1; i >= 4; i--) {
                 dag.prefer(ordered.get(i));
                 create.transaction(config -> dag.tryFinalize(ordered, create));
             }
 
-            assertEquals(parameters.beta2,
-                         create.select(CONFLICTSET.COUNTER)
-                               .from(CONFLICTSET)
-                               .join(UNFINALIZED)
-                               .on(UNFINALIZED.HASH.eq(CONFLICTSET.PREFERRED))
-                               .and(UNFINALIZED.HASH.eq(firstCommit.bytes()))
-                               .fetchOne()
-                               .value1()
-                               .intValue());
-            assertEquals(parameters.beta2,
-                         create.select(CONFLICTSET.COUNTER)
-                               .from(CONFLICTSET)
-                               .join(UNFINALIZED)
-                               .on(UNFINALIZED.HASH.eq(CONFLICTSET.PREFERRED))
-                               .and(UNFINALIZED.HASH.eq(secondCommit.bytes()))
-                               .fetchOne()
-                               .value1()
-                               .intValue());
+            assertEquals(parameters.beta2 - 1, dag.get(firstCommit).getConflictSet().getCounter());
+            assertEquals(parameters.beta2 - 1, dag.get(secondCommit).getConflictSet().getCounter());
+
             assertFalse(dag.isFinalized(rootKey, create));
             assertFalse(dag.isFinalized(firstCommit, create));
             assertFalse(dag.isFinalized(secondCommit, create));
@@ -195,11 +179,11 @@ public class TransactionsTest {
         HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
         last = secondCommit;
 
-        for (int i = 0; i < parameters.beta1; i++) {
+        for (int i = 0; i < parameters.beta1 - 2; i++) {
             last = newDagEntry("entry: " + i, ordered, stored, Arrays.asList(last));
         }
 
-        for (int i = ordered.size() - 1; i >= 3; i--) {
+        for (int i = ordered.size() - 1; i >= 2; i--) {
             dag.prefer(ordered.get(i));
             create.transaction(config -> dag.tryFinalize(ordered, DSL.using(config)));
 
@@ -207,21 +191,8 @@ public class TransactionsTest {
             assertFalse(dag.isFinalized(secondCommit, create));
         }
 
-        assertEquals(parameters.beta1,
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(firstCommit.bytes()))
-                           .fetchOne()
-                           .value1()
-                           .intValue());
-
-        assertEquals(parameters.beta1,
-                     create.select(UNFINALIZED.CONFIDENCE)
-                           .from(UNFINALIZED)
-                           .where(UNFINALIZED.HASH.eq(secondCommit.bytes()))
-                           .fetchOne()
-                           .value1()
-                           .intValue());
+        assertEquals(parameters.beta1 - 1, dag.get(firstCommit).getConflictSet().getCounter());
+        assertEquals(parameters.beta1 - 1, dag.get(secondCommit).getConflictSet().getCounter());
 
         dag.prefer(ordered.get(3));
         create.transaction(config -> dag.tryFinalize(ordered, DSL.using(config)));
@@ -281,9 +252,7 @@ public class TransactionsTest {
         ordered.add(new HashKey(secondCommit.bytes()));
         last = secondCommit;
 
-        TreeSet<HashKey> frontier = dag.getNeglectedFrontier(create)
-                                       .stream()
-                                       .collect(Collectors.toCollection(TreeSet::new));
+        TreeSet<HashKey> frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(3, frontier.size());
 
@@ -292,7 +261,7 @@ public class TransactionsTest {
         HashKey userTxn = newDagEntry("Ye test transaction", ordered, stored, dag.sampleParents(entropy, create));
         ordered.add(new HashKey(userTxn.bytes()));
 
-        frontier = dag.getNeglectedFrontier(create).stream().collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(4, frontier.size());
 
@@ -302,7 +271,7 @@ public class TransactionsTest {
         last = userTxn;
         last = newDagEntree("entry: " + 0, ordered, stored, Arrays.asList(last));
 
-        frontier = dag.getNeglectedFrontier(create).stream().collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(5, frontier.size());
 
@@ -318,6 +287,7 @@ public class TransactionsTest {
         ordered.add(rootKey);
 
         DagEntry entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 1).getBytes()));
         entry.setLinks(asList(rootKey.toHash()));
         HashKey key = dag.insert(entry, 0, create);
@@ -325,6 +295,7 @@ public class TransactionsTest {
         ordered.add(key);
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 2).getBytes()));
         entry.setLinks(asList(key.toHash()));
         key = dag.insert(entry, 0, create);
@@ -332,6 +303,7 @@ public class TransactionsTest {
         ordered.add(key);
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 3).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
         key = dag.insert(entry, 0, create);
@@ -339,14 +311,13 @@ public class TransactionsTest {
         ordered.add(key);
 
         HashKey zero = new HashKey(new byte[32]);
-        assertNull("Not exist returned true: ", dag.isStronglyPreferred(zero, create));
+        assertFalse("Not exist returned true: ", dag.isStronglyPreferred(zero, create));
 
-        @SuppressWarnings("unused")
         byte[] o = new byte[32];
         Arrays.fill(o, (byte) 1);
         HashKey one = new HashKey(o);
-        assertNull("Not exist returned true: ", dag.isStronglyPreferred(one, create));
-        assertArrayEquals("Aggregate failed: ", new Boolean[] { null, null },
+        assertFalse("Not exist returned true: ", dag.isStronglyPreferred(one, create));
+        assertArrayEquals("Aggregate failed: ", new Boolean[] { false, false },
                           dag.isStronglyPreferred(Arrays.asList(zero, one), create).toArray(new Boolean[2]));
 
         // All are strongly preferred
@@ -356,11 +327,15 @@ public class TransactionsTest {
         }
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 4).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
         key = dag.insert(entry, ordered.get(3), 0, create);
         stored.put(key, entry);
         ordered.add(key);
+
+        assertTrue(String.format("node 3 is not strongly preferred: " + ordered.get(4)),
+                   dag.isStronglyPreferred(ordered.get(3), create));
 
         assertFalse(String.format("node 4 is strongly preferred: " + ordered.get(4)),
                     dag.isStronglyPreferred(ordered.get(4), create));
@@ -441,6 +416,7 @@ public class TransactionsTest {
         assertTrue(sampled.contains(ordered.get(0)));
 
         DagEntry entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 1).getBytes()));
         entry.setLinks(asList(rootKey.toHash()));
         HashKey key = dag.insert(entry, 0, create);
@@ -452,6 +428,7 @@ public class TransactionsTest {
         assertTrue(sampled.contains(ordered.get(1)));
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 2).getBytes()));
         entry.setLinks(asList(key.toHash()));
         key = dag.insert(entry, 0, create);
@@ -464,6 +441,7 @@ public class TransactionsTest {
         assertTrue(sampled.contains(ordered.get(2)));
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 3).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
         key = dag.insert(entry, 0, create);
@@ -471,6 +449,7 @@ public class TransactionsTest {
         ordered.add(key);
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 4).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(2).toHash()));
         key = dag.insert(entry, ordered.get(3), 0, create);
@@ -478,6 +457,7 @@ public class TransactionsTest {
         ordered.add(key);
 
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 5).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(3).toHash()));
         key = dag.insert(entry, 0, create);
@@ -485,15 +465,15 @@ public class TransactionsTest {
         ordered.add(key);
 
         sampled = dag.sampleParents(entropy, create).stream().collect(Collectors.toCollection(TreeSet::new));
-        assertEquals(4, sampled.size());
+        assertEquals(3, sampled.size());
 
         assertTrue(sampled.contains(ordered.get(1)));
         assertTrue(sampled.contains(ordered.get(2)));
-        assertTrue(sampled.contains(ordered.get(3)));
         assertTrue(sampled.contains(ordered.get(5)));
 
         // Add a new node to the frontier
         entry = new DagEntry();
+        entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", 6).getBytes()));
         entry.setLinks(asList(ordered.get(1).toHash(), ordered.get(5).toHash()));
         key = dag.insert(entry, 0, create);
@@ -502,11 +482,10 @@ public class TransactionsTest {
 
         sampled = dag.sampleParents(entropy, create).stream().collect(Collectors.toCollection(TreeSet::new));
 
-        assertEquals(5, sampled.size());
+        assertEquals(4, sampled.size());
 
         assertTrue(sampled.contains(ordered.get(1)));
         assertTrue(sampled.contains(ordered.get(2)));
-        assertTrue(sampled.contains(ordered.get(3)));
         assertTrue(sampled.contains(ordered.get(5)));
         assertTrue(sampled.contains(ordered.get(6)));
     }
@@ -577,7 +556,7 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.singularFrontierSample(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(5, frontier.size());
 
@@ -585,7 +564,7 @@ public class TransactionsTest {
         dag.prefer(ordered.get(6));
         frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
 
-        assertEquals(5, frontier.size());
+        assertEquals(6, frontier.size());
 
         assertTrue(frontier.contains(ordered.get(3)));
         assertFalse(frontier.contains(ordered.get(4)));
@@ -669,9 +648,9 @@ public class TransactionsTest {
         assertEquals(1, dag.get(ordered.get(3)).getConfidence());
         assertEquals(1, dag.get(ordered.get(4)).getConfidence());
 
-        assertFalse(String.format("node 3 is strongly preferred " + ordered.get(3)),
-                    dag.isStronglyPreferred(ordered.get(3), create));
-        assertTrue(String.format("node 4 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(4), create));
+        assertTrue(String.format("node 3 is not strongly preferred " + ordered.get(3)),
+                   dag.isStronglyPreferred(ordered.get(3), create));
+        assertFalse(String.format("node 4 is strongly preferred"), dag.isStronglyPreferred(ordered.get(4), create));
 
         entry = new DagEntry();
         entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());

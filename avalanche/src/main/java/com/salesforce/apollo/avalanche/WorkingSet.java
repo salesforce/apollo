@@ -67,7 +67,8 @@ public class WorkingSet {
 
         public KnownNode(HashKey key, Set<Node> links, HashKey cs, long discovered) {
             super(key, discovered);
-            this.conflictSet = conflictSets.computeIfAbsent(cs, k -> new ConflictSet(this));
+            conflictSet = conflictSets.computeIfAbsent(cs, k -> new ConflictSet(this));
+            conflictSet.incCardinality();
             this.links = links;
             this.closure = new TreeSet<>();
 
@@ -571,11 +572,6 @@ public class WorkingSet {
 
     public NavigableMap<HashKey, ConflictSet> getConflictSets() {
         return conflictSets;
-    }
-
-    public List<HashKey> getNeglectedFrontier(DSLContext create) {
-        // TODO Auto-generated method stub
-        return null;
     }
 
     public AvalancheParameters getParameters() {
