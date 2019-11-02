@@ -76,7 +76,6 @@ public class WorkingSet {
                 node.addDependent(this);
                 closure.addAll(node.closure());
             }
-            unfinalized.put(key, this);
         }
 
         @Override
@@ -195,7 +194,7 @@ public class WorkingSet {
         }
     }
 
-    public abstract class Node implements Comparable<Node> {
+    public static abstract class Node implements Comparable<Node> {
         protected final Set<Node> dependents = new TreeSet<>();
         protected final long      discovered;
         protected final HashKey   key;
@@ -262,7 +261,7 @@ public class WorkingSet {
         abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
     }
 
-    public class NoOpNode extends Node {
+    public static class NoOpNode extends Node {
         private volatile boolean chit = false;
         private final Set<Node>  closure;
 
@@ -345,7 +344,7 @@ public class WorkingSet {
         }
     }
 
-    public class UnknownNode extends Node {
+    public static class UnknownNode extends Node {
 
         private final Set<Node>  dependencies = new ConcurrentSkipListSet<>();
         private volatile boolean finalized;
