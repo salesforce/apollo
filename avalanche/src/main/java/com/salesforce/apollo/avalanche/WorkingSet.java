@@ -219,6 +219,9 @@ public class WorkingSet {
 
         @Override
         public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
+            if (!visited.add(this)) {
+                return finalized;
+            }
             final boolean isFinalized = finalized;
             if (isFinalized) {
                 return true;
@@ -226,12 +229,11 @@ public class WorkingSet {
             final int currentConfidence = confidence;
             if (currentConfidence >= parameters.beta1 && conflictSet.getCardinality() == 1
                     && conflictSet.getPreferred().equals(this)) {
-                if (links.stream().map(node -> {
-                    if (visited.add(node)) {
-                        return node.tryFinalize(finalizedSet, visited);
-                    }
-                    return node.isFinalized();
-                }).filter(success -> success).count() == links.size()) {
+                if (links.stream()
+                         .map(node -> node.tryFinalize(finalizedSet, visited))
+                         .filter(success -> success)
+                         .count() == links.size()) {
+                    finalizedSet.add(this);
                     finalized = true;
                     return true;
                 }
@@ -246,6 +248,7 @@ public class WorkingSet {
                 finalizedSet.addAll(closure);
                 return true;
             } else {
+                links.forEach(node -> node.tryFinalize(finalizedSet, visited));
                 return false;
             }
         }
@@ -727,6 +730,10 @@ public class WorkingSet {
         FinalizationData data = new FinalizationData();
         finalizedSet.forEach(node -> data.finalized.add(node.getKey()));
         return data;
+    }
+
+    public FinalizationData tryFinalize(HashKey key, DSLContext context) {
+        return tryFinalize(Collections.singletonList(key), context);
     }
 
     public List<HashKey> unfinalizedSingular(Random entropy) {

@@ -7,9 +7,6 @@
 
 package com.salesforce.apollo.avalanche;
 
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
 
 /**
@@ -18,55 +15,50 @@ import com.salesforce.apollo.avalanche.WorkingSet.Node;
  *
  */
 public class ConflictSet {
-    private final AtomicInteger         cardinality = new AtomicInteger(1);
-    private final AtomicInteger         counter     = new AtomicInteger(0);
-    private final AtomicReference<Node> last        = new AtomicReference<>();
-    private final AtomicReference<Node> preferred   = new AtomicReference<>();
+    private volatile int  cardinality = 0;
+    private volatile int  counter     = 0;
+    private volatile Node last;
+    private volatile Node preferred;
 
     public ConflictSet(Node frist) {
-        last.set(frist);
-        preferred.set(frist);
+        last = preferred = frist;
+        cardinality = 1;
     }
 
     public void clearCounter() {
-        counter.set(0);
+        counter = 0;
     }
 
     public int getCardinality() {
-        return cardinality.get();
+        final int current = cardinality;
+        return current;
     }
 
     public int getCounter() {
-        return counter.get();
+        final int current = counter;
+        return current;
     }
 
     public Node getLast() {
-        return last.get();
+        final Node current = last;
+        return current;
     }
 
     public Node getPreferred() {
-        return preferred.get();
+        final Node current = preferred;
+        return current;
     }
 
-    public void incrementCardinality() {
-        cardinality.incrementAndGet();
-    }
+    public void prefer(Node node) {
+        final Node currentLast = last;
+        final Node currentPreferred = preferred;
 
-    public void incrementCounter() {
-        counter.incrementAndGet();
-    }
-
-    public int prefer(Node node) {
-        last.set(node);
-        preferred.set(node);
-        return counter.incrementAndGet();
-    }
-
-    public void setLast(Node n) {
-        last.set(n);
-    }
-
-    public void setPreferred(Node n) {
-        preferred.set(n);
+        last = node;
+        if (currentPreferred.getConfidence() < node.getConfidence()) {
+            preferred = node;
+        }
+        if (currentLast.equals(node)) {
+            counter++;
+        }
     }
 }
