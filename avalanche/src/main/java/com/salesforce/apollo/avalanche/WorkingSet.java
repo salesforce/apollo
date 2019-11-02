@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.NavigableMap;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
@@ -27,9 +28,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.jooq.BatchBindStep;
 import org.jooq.DSLContext;
@@ -111,6 +110,50 @@ public class WorkingSet {
         public boolean isFinalized() {
             final boolean isFinalized = finalized;
             return isFinalized;
+        }
+
+        @Override
+        public boolean isPreferred() {
+            final boolean current = finalized;
+            return !current && conflictSet.getPreferred().equals(this);
+        }
+
+        @Override
+        public boolean isPreferred(int maxConfidence) {
+            final int current = confidence;
+            return current <= maxConfidence && conflictSet.getPreferred().equals(this);
+        }
+
+        @Override
+        public boolean isPreferredAndSingular(int maximumConfidence) {
+            final boolean current = finalized;
+            final int conf = confidence;
+            return !current && conf <= maximumConfidence && conflictSet.getPreferred().equals(this)
+                    && conflictSet.getCardinality() == 1;
+        }
+
+        @Override
+        public boolean isStronglyPreferred() {
+            if (conflictSet.getPreferred().equals(this)) {
+                for (Node node : links) {
+                    if (!node.isPreferred()) {
+                        return false;
+                    }
+                }
+                for (Node node : closure) {
+                    if (!node.isPreferred()) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public boolean isUnfinalizedSingular() {
+            final boolean current = finalized;
+            return !current && conflictSet.getCardinality() == 1 && conflictSet.getPreferred().equals(this);
         }
 
         @Override
@@ -239,6 +282,26 @@ public class WorkingSet {
             return false;
         }
 
+        public boolean isPreferred() {
+            return false;
+        }
+
+        public boolean isPreferred(int maxConfidence) {
+            return false;
+        }
+
+        public boolean isPreferredAndSingular(int maximumConfidence) {
+            return false;
+        }
+
+        public boolean isStronglyPreferred() {
+            return false;
+        }
+
+        public boolean isUnfinalizedSingular() {
+            return false;
+        }
+
         abstract public void markFinalized();
 
         public void markPreferred() {
@@ -302,6 +365,16 @@ public class WorkingSet {
 
         @Override
         public boolean isNoOp() {
+            return true;
+        }
+
+        @Override
+        public boolean isStronglyPreferred() {
+            for (Node node : closure) {
+                if (!node.isStronglyPreferred()) {
+                    return false;
+                }
+            }
             return true;
         }
 
@@ -412,18 +485,31 @@ public class WorkingSet {
     private final NavigableMap<HashKey, ConflictSet> conflictSets         = new ConcurrentSkipListMap<>();
     private final AvalancheParameters                parameters;
     private final NavigableMap<HashKey, Node>        unfinalized          = new ConcurrentSkipListMap<>();
-
-    private final Set<Node> unknown = new ConcurrentSkipListSet<>();
-
-    private final BlockingDeque<HashKey> unqueried = new LinkedBlockingDeque<>();
+    private final Set<Node>                          unknown              = new ConcurrentSkipListSet<>();
+    private final BlockingDeque<HashKey>             unqueried            = new LinkedBlockingDeque<>();
 
     public WorkingSet(AvalancheParameters parameters) {
         this.parameters = parameters;
     }
 
-    public Stream<HashKey> frontierSample(DSLContext create) {
-        // TODO Auto-generated method stub
-        return null;
+    public List<HashKey> finalized(DSLContext context) {
+        return context.select(DAG.KEY)
+                      .from(DAG)
+                      .orderBy(DSL.rand())
+                      .limit(6)
+                      .stream()
+                      .map(r -> new HashKey(r.value1()))
+                      .collect(Collectors.toList());
+    }
+
+    public List<HashKey> frontier(Random entropy) {
+        List<HashKey> sample = unfinalized.values()
+                                          .parallelStream()
+                                          .filter(node -> node.isPreferred(parameters.beta1 / 1))
+                                          .map(node -> node.getKey())
+                                          .collect(Collectors.toList());
+        Collections.shuffle(sample, entropy);
+        return sample;
     }
 
     public DagEntry get(HashKey key, DSLContext create) {
@@ -448,13 +534,29 @@ public class WorkingSet {
         return node.getConflictSet();
     }
 
-    public Stream<HashKey> getNeglectedFrontier(DSLContext create) {
+    public NavigableMap<HashKey, ConflictSet> getConflictSets() {
+        return conflictSets;
+    }
+
+    public List<HashKey> getNeglectedFrontier(DSLContext create) {
         // TODO Auto-generated method stub
         return null;
     }
 
+    public AvalancheParameters getParameters() {
+        return parameters;
+    }
+
+    public NavigableMap<HashKey, Node> getUnfinalized() {
+        return unfinalized;
+    }
+
     public Set<Node> getUnknown() {
         return unknown;
+    }
+
+    public BlockingDeque<HashKey> getUnqueried() {
+        return unqueried;
     }
 
     public HashKey insert(DagEntry entry, HashKey conflictSet, long discovered, DSLContext context) {
@@ -474,14 +576,15 @@ public class WorkingSet {
         return context.fetchExists(DAG, DAG.KEY.eq(key.bytes()));
     }
 
-    public boolean isStronglyPreferred(HashKey hashKey, DSLContext using) {
-        // TODO Auto-generated method stub
-        return false;
+    public boolean isStronglyPreferred(HashKey key, DSLContext context) {
+        return isStronglyPreferred(Collections.singletonList(key), context).get(0);
     }
 
-    public List<HashKey> isStronglyPreferred(List<HashKey> asList, DSLContext create) {
-        // TODO Auto-generated method stub
-        return null;
+    public List<Boolean> isStronglyPreferred(List<HashKey> keys, DSLContext context) {
+        return keys.parallelStream().map(key -> {
+            Node node = unfinalized.get(key);
+            return node != null ? node.isStronglyPreferred() : isFinalized(key, context);
+        }).collect(Collectors.toList());
     }
 
     public void prefer(Collection<HashKey> keys) {
@@ -490,6 +593,16 @@ public class WorkingSet {
 
     public void prefer(HashKey key) {
         prefer(Collections.singletonList(key));
+    }
+
+    public List<HashKey> preferred(Random entropy) {
+        List<HashKey> sample = unfinalized.values()
+                                          .parallelStream()
+                                          .filter(node -> node.isPreferred())
+                                          .map(node -> node.getKey())
+                                          .collect(Collectors.toList());
+        Collections.shuffle(sample, entropy);
+        return sample;
     }
 
     public List<HASH> query(int maxSize) {
@@ -509,18 +622,38 @@ public class WorkingSet {
         return query;
     }
 
-    public int sampleParents(Collection<HashKey> collector, DSLContext context) {
-        return 0;
+    public int sampleParents(Collection<HashKey> collector, Random entropy, DSLContext context) {
+        List<HashKey> sample = singularFrontierSample(entropy);
+        if (sample.isEmpty()) {
+            sample = frontier(entropy);
+        }
+        if (sample.isEmpty()) {
+            sample = unfinalizedSingular(entropy);
+        }
+        if (sample.isEmpty()) {
+            sample = preferred(entropy);
+        }
+        if (sample.isEmpty()) {
+            sample = finalized(context);
+        }
+        sample.forEach(e -> collector.add(e));
+        return sample.size();
     }
 
-    public List<HashKey> sampleParents(DSLContext context) {
+    public List<HashKey> sampleParents(Random random, DSLContext context) {
         List<HashKey> collector = new ArrayList<>();
-        sampleParents(collector, context);
+        sampleParents(collector, random, context);
         return collector;
     }
 
-    public List<Node> select(Predicate<Node> selector) {
-        return unfinalized.values().parallelStream().filter(node -> selector.test(node)).collect(Collectors.toList());
+    public List<HashKey> singularFrontierSample(Random entropy) {
+        List<HashKey> sample = unfinalized.values()
+                                          .parallelStream()
+                                          .filter(node -> node.isPreferredAndSingular(parameters.beta1 / 1))
+                                          .map(node -> node.getKey())
+                                          .collect(Collectors.toList());
+        Collections.shuffle(sample, entropy);
+        return sample;
     }
 
     public FinalizationData tryFinalize(Collection<HashKey> keys, DSLContext context) {
@@ -562,6 +695,16 @@ public class WorkingSet {
         FinalizationData data = new FinalizationData();
         finalizedSet.forEach(node -> data.finalized.add(node.getKey()));
         return data;
+    }
+
+    public List<HashKey> unfinalizedSingular(Random entropy) {
+        List<HashKey> sample = unfinalized.values()
+                                          .parallelStream()
+                                          .filter(node -> node.isUnfinalizedSingular())
+                                          .map(node -> node.getKey())
+                                          .collect(Collectors.toList());
+        Collections.shuffle(sample, entropy);
+        return sample;
     }
 
     /** for testing **/
