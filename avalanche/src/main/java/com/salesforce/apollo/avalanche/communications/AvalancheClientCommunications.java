@@ -56,8 +56,8 @@ public class AvalancheClientCommunications extends CommonClientCommunications im
     }
 
     @Override
-    public QueryResult query(List<HASH> transactions, List<HASH> want) throws AvroRemoteException {
-        return client.query(transactions, want);
+    public QueryResult query(List<DagEntry> transactions) throws AvroRemoteException {
+        return client.query(transactions);
     }
 
     @Override

@@ -98,7 +98,7 @@ public class TestMtls {
             }
 
             @Override
-            public QueryResult query(List<HASH> transactions, List<HASH> want) {
+            public QueryResult query(List<DagEntry> transactions) {
                 // TODO Auto-generated method stub
                 return null;
             }

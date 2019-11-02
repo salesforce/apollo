@@ -11,6 +11,7 @@ import org.jooq.DSLContext;
 
 import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * Restricted API on the DAG
@@ -18,20 +19,20 @@ import com.salesforce.apollo.avro.HASH;
  * @author hhildebrand
  */
 public class DagDao {
-    private final Dag dag;
+    private final WorkingSet dag;
     private final DSLContext context;
 
-    public DagDao(Dag dag, DSLContext context) {
+    public DagDao(WorkingSet dag, DSLContext context) {
         this.dag = dag;
         this.context = context;
     }
 
     public DagEntry get(HASH key) {
-        return dag.getDagEntry(key, context);
+        return dag.get(new HashKey(key), context);
     }
 
     public Boolean isFinalized(HASH hash) {
-        return dag.isFinalized(hash, context);
+        return dag.isFinalized(new HashKey(hash), context);
     }
 
 }

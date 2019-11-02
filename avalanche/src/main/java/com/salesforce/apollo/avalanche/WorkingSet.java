@@ -56,7 +56,7 @@ public class WorkingSet {
     }
 
     public class KnownNode extends Node {
-
+        private final DagEntry    entry;
         private volatile boolean  chit       = false;
         private final Set<Node>   closure;
         private volatile int      confidence = 0;
@@ -65,8 +65,9 @@ public class WorkingSet {
         private volatile boolean  finalized  = false;
         private final Set<Node>   links;
 
-        public KnownNode(HashKey key, Set<Node> links, HashKey cs, long discovered) {
+        public KnownNode(HashKey key, DagEntry entry, Set<Node> links, HashKey cs, long discovered) {
             super(key, discovered);
+            this.entry = entry;
             conflictSet = conflictSets.computeIfAbsent(cs, k -> new ConflictSet(k, this));
             conflictSet.add(this);
             this.links = links;
@@ -259,6 +260,11 @@ public class WorkingSet {
                 return false;
             }
         }
+
+        @Override
+        public DagEntry getDagEntry() {
+            return entry;
+        }
     }
 
     public static abstract class Node implements Comparable<Node> {
@@ -294,6 +300,8 @@ public class WorkingSet {
         public ConflictSet getConflictSet() {
             return null;
         }
+
+        abstract public DagEntry getDagEntry();
 
         public long getDiscovered() {
             return discovered;
@@ -354,9 +362,11 @@ public class WorkingSet {
     public static class NoOpNode extends Node {
         private volatile boolean chit = false;
         private final Set<Node>  closure;
+        private final DagEntry   entry;
 
-        public NoOpNode(HashKey key, Set<Node> links, long discovered) {
+        public NoOpNode(HashKey key, DagEntry entry, Set<Node> links, long discovered) {
             super(key, discovered);
+            this.entry = entry;
             closure = new TreeSet<>();
             links.forEach(node -> {
                 if (closure.add(node)) {
@@ -398,6 +408,11 @@ public class WorkingSet {
         @Override
         public int getConfidence() {
             return 0;
+        }
+
+        @Override
+        public DagEntry getDagEntry() {
+            return entry;
         }
 
         @Override
@@ -470,7 +485,6 @@ public class WorkingSet {
 
         @Override
         public void addClosureTo(Set<Node> closure) {
-            throw new IllegalStateException("Unknown nodes are not replacements");
         }
 
         @Override
@@ -497,6 +511,12 @@ public class WorkingSet {
         @Override
         public int getConfidence() {
             return 0;
+        }
+
+        @Override
+        public DagEntry getDagEntry() {
+            // TODO Auto-generated method stub
+            return null;
         }
 
         @Override
@@ -594,6 +614,10 @@ public class WorkingSet {
         return conflictSets;
     }
 
+    public List<DagEntry> getEntries(List<HASH> want, int queryBatchSize, DSLContext queryPool) {
+        throw new IllegalStateException("Unknown nodes cannot be queried");
+    }
+
     public AvalancheParameters getParameters() {
         return parameters;
     }
@@ -602,12 +626,24 @@ public class WorkingSet {
         return unfinalized;
     }
 
+    public List<DagEntry> getUnfinalized(List<HashKey> keys) {
+        return keys.stream()
+                   .map(key -> unfinalized.get(key))
+                   .filter(e -> e != null)
+                   .map(node -> node.getDagEntry())
+                   .collect(Collectors.toList());
+    }
+
     public Set<Node> getUnknown() {
         return unknown;
     }
 
     public BlockingDeque<HashKey> getUnqueried() {
         return unqueried;
+    }
+
+    public List<HashKey> getWanted(int max) {
+        return Collections.emptyList();
     }
 
     public HashKey insert(DagEntry entry, HashKey conflictSet, long discovered, DSLContext context) {
@@ -638,6 +674,14 @@ public class WorkingSet {
         }).collect(Collectors.toList());
     }
 
+    public List<Boolean> isStronglyPreferredTxns(List<DagEntry> txns, DSLContext context) {
+        return isStronglyPreferred(txns.stream()
+                                       .map(txn -> insert(txn, System.currentTimeMillis(), context))
+                                       .collect(Collectors.toList()),
+                                   context);
+
+    }
+
     public void prefer(Collection<HashKey> keys) {
         keys.stream().map(key -> unfinalized.get(key)).filter(node -> node != null).forEach(node -> node.prefer());
     }
@@ -656,8 +700,8 @@ public class WorkingSet {
         return sample;
     }
 
-    public List<HASH> query(int maxSize) {
-        List<HASH> query = new ArrayList<>();
+    public List<HashKey> query(int maxSize) {
+        List<HashKey> query = new ArrayList<>();
         for (int i = 0; i < maxSize; i++) {
             HashKey key;
             try {
@@ -668,9 +712,24 @@ public class WorkingSet {
             if (key == null) {
                 break;
             }
-            query.add(key.toHash());
+            query.add(key);
         }
         return query;
+    }
+
+    public int sampleNoOpParents(Collection<HashKey> collector, Random entropy, DSLContext context) {
+        List<HashKey> sample = singularFrontier(entropy);
+        if (sample.isEmpty()) {
+            sample = frontier(entropy);
+        }
+        if (sample.isEmpty()) {
+            sample = unfinalizedSingular(entropy);
+        }
+        if (sample.isEmpty()) {
+            sample = preferred(entropy);
+        }
+        sample.forEach(e -> collector.add(e));
+        return sample.size();
     }
 
     public int sampleParents(Collection<HashKey> collector, Random entropy, DSLContext context) {
@@ -725,24 +784,27 @@ public class WorkingSet {
 
         BatchBindStep batch = context.batch(context.insertInto(allFinalized, allFinalizedHash).values((byte[]) null));
         finalizedSet.forEach(node -> {
-            HashKey key = node.getKey();
+            final HashKey key = node.getKey();
             unqueried.remove(key);
             batch.bind(key.bytes());
         });
         batch.execute();
 
-        context.insertInto(DAG, DAG.KEY, DAG.DATA, DAG.LINKS)
-               .select(context.select(UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
-                              .from(UNFINALIZED)
-                              .join(allFinalized)
-                              .on((DSL.field("FINALIZED.HASH", byte[].class).eq(UNFINALIZED.HASH))))
-               .execute();
+        int finalized = context.insertInto(DAG, DAG.KEY, DAG.DATA, DAG.LINKS)
+                               .select(context.select(UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
+                                              .from(UNFINALIZED)
+                                              .join(allFinalized)
+                                              .on((DSL.field("FINALIZED.HASH", byte[].class).eq(UNFINALIZED.HASH))))
+                               .execute();
 
         context.deleteFrom(UNFINALIZED)
                .where(UNFINALIZED.HASH.in(context.select(allFinalizedHash).from(allFinalized)))
                .execute();
 
         context.deleteFrom(allFinalized).execute();
+
+        assert finalized == finalizedSet.size() : "Finalization differs " + finalized + " != " + finalizedSet.size();
+
         FinalizationData data = new FinalizationData();
         finalizedSet.forEach(node -> {
             final ConflictSet conflictSet = node.getConflictSet();
@@ -754,7 +816,6 @@ public class WorkingSet {
             final HashKey key = node.getKey();
             data.finalized.add(key);
             unfinalized.remove(key);
-            unqueried.remove(key);
         });
         return data;
     }
@@ -807,7 +868,8 @@ public class WorkingSet {
             }
             links = linkBuf.array();
         }
-        context.insertInto(UNFINALIZED, UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
+        context.mergeInto(UNFINALIZED, UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
+               .key(UNFINALIZED.HASH)
                .values(key.bytes(), entry, links)
                .execute();
     }
@@ -849,8 +911,8 @@ public class WorkingSet {
     }
 
     Node nodeFor(HashKey k, DagEntry entry, boolean noOp, long discovered, HashKey cs, DSLContext context) {
-        return noOp ? new NoOpNode(k, linksOf(entry, discovered, context), discovered)
-                : new KnownNode(k, linksOf(entry, discovered, context), cs, discovered);
+        return noOp ? new NoOpNode(k, entry, linksOf(entry, discovered, context), discovered)
+                : new KnownNode(k, entry, linksOf(entry, discovered, context), cs, discovered);
     }
 
     Node resolve(HashKey key, long discovered, DSLContext context) {

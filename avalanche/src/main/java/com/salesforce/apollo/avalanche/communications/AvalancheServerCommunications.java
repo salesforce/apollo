@@ -28,8 +28,8 @@ public class AvalancheServerCommunications implements Avalanche {
     }
 
     @Override
-    public QueryResult query(List<HASH> transactions, List<HASH> want) throws AvroRemoteException {
-        return avalanche.onQuery(transactions, want);
+    public QueryResult query(List<DagEntry> transactions) throws AvroRemoteException {
+        return avalanche.onQuery(transactions);
     }
 
     @Override

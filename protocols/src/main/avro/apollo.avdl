@@ -104,7 +104,6 @@ protocol Apollo {
 
     record QueryResult {
         array<boolean> result;
-        array<DagEntry> entries;
     }
 
     /*
@@ -132,7 +131,7 @@ protocol Apollo {
     /**
      * Avalanche query
      */
-    QueryResult query ( array<HASH> transactions, array<HASH> want );
+    QueryResult query ( array<DagEntry> transactions );
 
     /**
      * Avalanche lazy DAG update gossip

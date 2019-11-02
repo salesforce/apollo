@@ -20,7 +20,7 @@ import com.salesforce.apollo.avro.QueryResult;
  */
 public interface Avalanche {
 
-    QueryResult query(List<HASH> transactions, List<HASH> want) throws AvroRemoteException;
+    QueryResult query(List<DagEntry> transactions) throws AvroRemoteException;
 
     List<DagEntry> requestDAG(List<HASH> want) throws AvroRemoteException;
 

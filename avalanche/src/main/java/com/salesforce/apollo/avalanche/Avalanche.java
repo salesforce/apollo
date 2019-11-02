@@ -6,12 +6,7 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
 import static com.salesforce.apollo.dagwood.schema.Tables.PROCESSORS;
-import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
-import static com.salesforce.apollo.protocols.Conversion.hashOf;
-import static com.salesforce.apollo.protocols.Conversion.manifestDag;
-import static com.salesforce.apollo.protocols.Conversion.serialize;
 
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
@@ -55,8 +50,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesforce.apollo.avalanche.Dag.DagInsert;
-import com.salesforce.apollo.avalanche.Dag.FinalizationData;
+import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.communications.AvalancheClientCommunications;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
 import com.salesforce.apollo.avro.DagEntry;
@@ -67,7 +61,6 @@ import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.RandomMemberGenerator;
 import com.salesforce.apollo.fireflies.Ring;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.View.MessageChannelHandler;
 import com.salesforce.apollo.protocols.HashKey;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -89,22 +82,7 @@ import liquibase.resource.ClassLoaderResourceAccessor;
  */
 public class Avalanche {
 
-    public class Listener implements MessageChannelHandler {
-
-        @Override
-        public void message(List<Msg> messages) {
-            if (!running.get()) {
-                return;
-            }
-            int r = round.get() + rounds2Flood;
-            ForkJoinPool.commonPool().execute(() -> {
-                messages.forEach(message -> {
-                    DagEntry dagEntry = manifestDag(message.content);
-                    insertions.add(new DagInsert(new HASH(hashOf(message.content)), dagEntry, message.content, null,
-                            dagEntry.getDescription() == null, r));
-                });
-            });
-        }
+    public class Listener {
 
         public void round() {
             int r = round.incrementAndGet();
@@ -163,30 +141,20 @@ public class Avalanche {
 
     public class Service {
 
-        public QueryResult onQuery(List<HASH> transactions, List<HASH> want) {
+        public QueryResult onQuery(List<DagEntry> transactions) {
             if (!running.get()) {
                 ArrayList<Boolean> results = new ArrayList<>();
                 Collections.fill(results, false);
-                return new QueryResult(results, new ArrayList<>());
+                return new QueryResult(results);
             }
             long now = System.currentTimeMillis();
-            Map<HashKey, Boolean> queried = queryPool.transactionResult(config -> dag.isStronglyPreferred(transactions,
-                                                                                                          DSL.using(config)));
+            List<Boolean> queried = queryPool.transactionResult(config -> dag.isStronglyPreferredTxns(transactions,
+                                                                                                      DSL.using(config)));
             assert queried.size() == transactions.size() : "on query results " + queried.size() + " != "
                     + transactions.size();
 
-            List<HashKey> unknown = new ArrayList<>();
-            List<Boolean> r = queried.entrySet().stream().peek(e -> {
-                if (e.getValue() == null) {
-                    unknown.add(e.getKey());
-                }
-            }).map(e -> e.getValue() == null ? false : e.getValue()).collect(Collectors.toList());
-
-            assert r.size() == transactions.size() : "on query results " + r.size() + " != " + transactions.size();
-
-            log.debug("onquery {} txn in {} ms unknown: {}", transactions.size(), System.currentTimeMillis() - now,
-                      unknown.size());
-            return new QueryResult(r, Collections.emptyList());
+            log.debug("onquery {} txn in {} ms", transactions.size(), System.currentTimeMillis() - now);
+            return new QueryResult(queried);
         }
 
         public List<DagEntry> requestDAG(List<HASH> want) {
@@ -196,8 +164,6 @@ public class Avalanche {
             return dag.getEntries(want, parameters.queryBatchSize, queryPool);
         }
     }
-
-    public static final int AVALANCHE_TRANSACTION_CHANNEL = 2;
 
     private static final String DAG_SCHEMA_YML = "dag-schema.yml";
     private final static Logger log            = LoggerFactory.getLogger(Avalanche.class);
@@ -234,25 +200,23 @@ public class Avalanche {
     }
 
     private final AvalancheCommunications                    comm;
-    private final Dag                                        dag;
-    private final BlockingDeque<HASH>                        finalizing          = new LinkedBlockingDeque<>();
-    private final BlockingDeque<DagInsert>                   insertions          = new LinkedBlockingDeque<>();
+    private final WorkingSet                                 dag;
+    private final BlockingDeque<HashKey>                     finalizing          = new LinkedBlockingDeque<>();
     private final Listener                                   listener            = new Listener();
     private final AvaMetrics                                 metrics;
     private final DSLContext                                 noOpContext;
-    private final Deque<HASH>                                noOpParentSample    = new LinkedBlockingDeque<>();
+    private final Deque<HashKey>                             noOpParentSample    = new LinkedBlockingDeque<>();
     private volatile Thread                                  noOpThread;
     private final AvalancheParameters                        parameters;
-    private final Deque<HASH>                                parentSample        = new LinkedBlockingDeque<>();
+    private final Deque<HashKey>                             parentSample        = new LinkedBlockingDeque<>();
     private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentSkipListMap<>();
-    private final BlockingDeque<HASH>                        preferings          = new LinkedBlockingDeque<>();
+    private final BlockingDeque<HashKey>                     preferings          = new LinkedBlockingDeque<>();
     private final Map<HashKey, EntryProcessor>               processors          = new ConcurrentSkipListMap<>();
     private final DSLContext                                 queryPool;
     private volatile Thread                                  queryThread;
     private final int                                        required;
     private final AtomicInteger                              round               = new AtomicInteger();
     private final DSLContext                                 roundContext;
-    private final int                                        rounds2Flood;
     private final AtomicBoolean                              running             = new AtomicBoolean();
     private final RandomMemberGenerator                      sampler;
     private final Service                                    service             = new Service();
@@ -315,9 +279,8 @@ public class Avalanche {
         }
 
         loadSchema(parameters.dbConnect);
-        this.dag = new Dag(parameters);
+        this.dag = new WorkingSet(parameters);
 
-        view.register(AVALANCHE_TRANSACTION_CHANNEL, listener);
         view.registerRoundListener(() -> listener.round());
 
         sampler = new RandomMemberGenerator(view);
@@ -331,7 +294,6 @@ public class Avalanche {
         }
 
         initializeProcessors(loader);
-        rounds2Flood = view.getNode().getParameters().toleranceLevel * view.getDiameter() + 1;
     }
 
     /**
@@ -353,12 +315,10 @@ public class Avalanche {
         dagEntry.setDescription(WellKnownDescriptions.GENESIS.toHash());
         dagEntry.setData(ByteBuffer.wrap("Genesis".getBytes()));
         // genesis has no parents
-        byte[] entry = serialize(dagEntry);
-        byte[] hash = hashOf(entry);
-        insertions.add(new DagInsert(new HASH(hash), dagEntry, entry, WellKnownDescriptions.GENESIS.toHash(), false,
-                round.get() + rounds2Flood));
-        flood(entry);
-        HashKey key = new HashKey(hash);
+        HashKey key = submitPool.transactionResult(config -> dag.insert(dagEntry,
+                                                                        new HashKey(
+                                                                                WellKnownDescriptions.GENESIS.toHash()),
+                                                                        System.currentTimeMillis(), DSL.using(config)));
         pendingTransactions.put(key, new PendingTransaction(futureSailor,
                 scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
         return futureSailor;
@@ -374,8 +334,7 @@ public class Avalanche {
             if (successor == null) {
                 break;
             }
-            List<HASH> wanted = roundContext.transactionResult(config -> dag.getWanted(parameters.queryBatchSize,
-                                                                                       DSL.using(config)));
+            List<HashKey> wanted = roundContext.transactionResult(config -> dag.getWanted(parameters.queryBatchSize));
             if (wanted.isEmpty()) {
                 log.trace("No DAG holes on: {}", view.getNode().getId());
                 return;
@@ -388,7 +347,7 @@ public class Avalanche {
                     log.debug("Cannot connect wth {} for DAG gossip", successor);
                     return;
                 }
-                received = connection.requestDAG(wanted);
+                received = connection.requestDAG(wanted.stream().map(e -> e.toHash()).collect(Collectors.toList()));
             } catch (AvroRemoteException e) {
                 log.debug("comm error in DAG gossip with {}: {}", successor, e);
                 return;
@@ -398,10 +357,11 @@ public class Avalanche {
                 }
             }
             log.trace("wanted {} received {} entries", wanted.size(), received.size());
-            received.forEach(dagEntry -> {
-                byte[] entry = serialize(dagEntry);
-                insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
-                        dagEntry.getDescription() == null, round.get() + rounds2Flood));
+            submitPool.transaction(config -> {
+                DSLContext context = DSL.using(config);
+                received.forEach(dagEntry -> {
+                    dag.insert(dagEntry, System.currentTimeMillis(), context);
+                });
             });
         }
 
@@ -435,15 +395,6 @@ public class Avalanche {
     }
 
     /**
-     * Broadcast the entry to all members
-     * 
-     * @param entry
-     */
-    void flood(byte[] entry) {
-        view.publish(AVALANCHE_TRANSACTION_CHANNEL, entry);
-    }
-
-    /**
      * Periodically issue no op transactions for the neglected noOp transactions
      */
     void generateNoOpTxns() {
@@ -458,7 +409,7 @@ public class Avalanche {
                 if (noOpParentSample.peek() == null) {
                     break;
                 }
-                parents.add(new HashKey(noOpParentSample.removeFirst()));
+                parents.add(noOpParentSample.removeFirst());
             }
             if (parents.isEmpty()) {
                 return;
@@ -468,17 +419,14 @@ public class Avalanche {
             getEntropy().nextBytes(dummy);
             dagEntry.setData(ByteBuffer.wrap(dummy));
             dagEntry.setLinks(parents.stream().map(e -> e.toHash()).collect(Collectors.toList()));
-            byte[] entry = serialize(dagEntry);
-            insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null, true,
-                    round.get() + rounds2Flood));
-            flood(entry);
+            noOpContext.transaction(config -> dag.insert(dagEntry, System.currentTimeMillis(), DSL.using(config)));
             if (log.isTraceEnabled()) {
                 log.trace("noOp transaction {}", parents);
             }
         }
     }
 
-    public Dag getDag() {
+    public WorkingSet getDag() {
         return dag;
     }
 
@@ -520,15 +468,14 @@ public class Avalanche {
             return;
         }
 
-        List<HASH> want = roundContext.transactionResult(config -> dag.getWanted(parameters.queryBatchSize,
-                                                                                 DSL.using(config)));
+        List<HashKey> want = dag.getWanted(parameters.queryBatchSize);
         AvalancheClientCommunications connection = comm.connectToNode(next, getNode());
         if (connection == null) {
             return;
         }
         List<DagEntry> requested;
         try {
-            requested = connection.requestDAG(want);
+            requested = connection.requestDAG(want.stream().map(e -> e.toHash()).collect(Collectors.toList()));
         } catch (AvroRemoteException e) {
             log.info("error getting wanted from {} ", next);
             return;
@@ -536,10 +483,11 @@ public class Avalanche {
         if (requested.isEmpty()) {
             return;
         }
-        requested.forEach(dagEntry -> {
-            byte[] entry = serialize(dagEntry);
-            insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
-                    dagEntry.getDescription() == null, round.get()));
+        submitPool.transaction(config -> {
+            DSLContext context = DSL.using(config);
+            requested.forEach(dagEntry -> {
+                dag.insert(dagEntry, System.currentTimeMillis(), context);
+            });
         });
     }
 
@@ -558,44 +506,17 @@ public class Avalanche {
         });
     }
 
-    private void insertLoop() {
-        DSLContext context;
-        try {
-            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
-        } catch (SQLException e) {
-            throw new IllegalStateException("unable to create jdbc connection", e);
-        }
-        try {
-            while (running.get()) {
-                try {
-                    if (!running.get()) {
-                        return;
-                    }
-                    nextInserts(context);
-                } catch (Throwable e) {
-                    if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
-                        log.info("insertions rolled back: {}", e);
-                    } else {
-                        log.error("inserts failed", e);
-                    }
-                }
-            }
-        } finally {
-            context.close();
-        }
-    }
-
-    private List<byte[]> nextFinalizations(int batch) {
-        List<byte[]> next = new ArrayList<>();
+    private List<HashKey> nextFinalizations(int batch) {
+        List<HashKey> next = new ArrayList<>();
         for (int i = 0; i < batch; i++) {
-            HASH key;
+            HashKey key;
             try {
                 key = i == 0 ? finalizing.poll(1, TimeUnit.SECONDS) : finalizing.poll(200, TimeUnit.MICROSECONDS);
             } catch (InterruptedException e) {
                 break;
             }
             if (key != null) {
-                next.add(key.bytes());
+                next.add(key);
             } else {
                 break;
             }
@@ -604,7 +525,7 @@ public class Avalanche {
     }
 
     private void nextFinalized(DSLContext context) {
-        List<byte[]> batch = nextFinalizations(parameters.finalizeBatchSize);
+        List<HashKey> batch = nextFinalizations(parameters.finalizeBatchSize);
         if (batch.isEmpty()) {
             return;
         }
@@ -638,50 +559,10 @@ public class Avalanche {
         });
     }
 
-    private List<DagInsert> nextInsertions() {
-        List<DagInsert> next = new ArrayList<>();
-        for (int i = 0; i < parameters.insertBatchSize; i++) {
-            DagInsert insert;
-            try {
-                insert = i == 0 ? insertions.poll(1, TimeUnit.SECONDS) : insertions.poll(200, TimeUnit.MICROSECONDS);
-            } catch (InterruptedException e) {
-                break;
-            }
-            if (insert != null) {
-                next.add(insert);
-            } else {
-                break;
-            }
-        }
-        return next;
-    }
-
-    private void nextInserts(DSLContext context) {
-        List<DagInsert> next = nextInsertions();
-        if (next.isEmpty()) {
-            return;
-        }
-        if (metrics != null) {
-            metrics.getInputBacklog().set(insertions.size());
-        }
-        log.trace("Insertions: {}", next.size());
-        Context timer = metrics == null ? null : metrics.getInputTimer().time();
-        context.transaction(config -> {
-            dag.put(next, DSL.using(config));
-        });
-
-        if (timer != null) {
-            timer.close();
-        }
-        if (metrics != null) {
-            metrics.getInputRate().mark(next.size());
-        }
-    }
-
-    private List<HASH> nextPreferences(int batch) {
-        List<HASH> next = new ArrayList<>();
+    private List<HashKey> nextPreferences(int batch) {
+        List<HashKey> next = new ArrayList<>();
         for (int i = 0; i < batch; i++) {
-            HASH key;
+            HashKey key;
             try {
                 key = i == 0 ? preferings.poll(1, TimeUnit.SECONDS) : preferings.poll(200, TimeUnit.MICROSECONDS);
             } catch (InterruptedException e) {
@@ -697,13 +578,13 @@ public class Avalanche {
     }
 
     private void nextPreferred(DSLContext context) {
-        List<HASH> batch = nextPreferences(parameters.preferBatchSize);
+        List<HashKey> batch = nextPreferences(parameters.preferBatchSize);
         if (!batch.isEmpty()) {
             if (metrics != null) {
                 metrics.getPreferBacklog().set(preferings.size());
             }
             Context timer = metrics == null ? null : metrics.getPreferTimer().time();
-            context.transaction(config -> dag.prefer(batch, DSL.using(config)));
+            dag.prefer(batch);
             if (timer != null) {
                 timer.close();
             }
@@ -750,22 +631,23 @@ public class Avalanche {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
         Context timer = metrics == null ? null : metrics.getQueryTimer().time();
-        List<HASH> unqueried = dag.query(parameters.queryBatchSize, roundContext, round.get());
+        List<HashKey> unqueried = dag.query(parameters.queryBatchSize);
         if (unqueried.isEmpty()) {
             if (timer != null) {
                 timer.close();
             }
             return 0;
         }
+        List<DagEntry> query = dag.getUnfinalized(unqueried);
         long retrieveTime = System.currentTimeMillis() - now;
         Collection<Member> sample = sampler.sample(parameters.k);
         now = System.currentTimeMillis();
-        List<Boolean> results = query(unqueried, sample);
+        List<Boolean> results = query(query, sample);
         if (timer != null) {
             timer.close();
         }
         if (metrics != null) {
-            metrics.getQueryRate().mark(unqueried.size());
+            metrics.getQueryRate().mark(query.size());
         }
         long sampleTime = System.currentTimeMillis() - now;
         for (int i = 0; i < results.size(); i++) {
@@ -789,16 +671,12 @@ public class Avalanche {
      *         transaction batch, or NULL if there could not be a determination
      *         (such as comm failure) of the query for that member
      */
-    List<Boolean> query(List<HASH> batch, Collection<Member> sample) {
+    List<Boolean> query(List<DagEntry> batch, Collection<Member> sample) {
         long now = System.currentTimeMillis();
         AtomicInteger[] votes = new AtomicInteger[batch.size()];
         for (int i = 0; i < votes.length; i++) {
             votes[i] = new AtomicInteger();
         }
-        // List<HASH> wanted = dag.getWanted(parameters.limit, roundPool);
-        List<HASH> wanted = Collections.emptyList();
-
-        log.debug("get wanted {} in {} ms", wanted.size(), System.currentTimeMillis() - now);
 
         CompletionService<Boolean> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
         List<Future<Boolean>> futures;
@@ -810,7 +688,7 @@ public class Avalanche {
                 return false;
             }
             try {
-                result = connection.query(batch, wanted);
+                result = connection.query(batch);
             } catch (AvroRemoteException e) {
                 log.debug("Error querying {} for {}", m, batch, e);
                 return false;
@@ -818,19 +696,8 @@ public class Avalanche {
                 connection.close();
             }
             if (log.isTraceEnabled()) {
-                log.trace("queried: {} for: {} result: {}", m,
-                          batch.stream().map(e -> new HashKey(e)).collect(Collectors.toList()), result.getResult());
+                log.trace("queried: {} for: {} result: {}", m, batch.size(), result.getResult());
             }
-
-            if (!wanted.isEmpty()) {
-                log.trace("wanted {} received {} entries", wanted.size(), result.getEntries().size());
-            }
-
-            result.getEntries().forEach(dagEntry -> {
-                byte[] entry = serialize(dagEntry);
-                insertions.add(new DagInsert(new HASH(hashOf(entry)), dagEntry, entry, null,
-                        dagEntry.getDescription() == null, round.get()));
-            });
             if (result.getResult().isEmpty()) {
                 return false;
             }
@@ -843,10 +710,6 @@ public class Avalanche {
         })).collect(Collectors.toList());
 
         long remainingTimout = parameters.unit.toMillis(parameters.timeout);
-
-        roundContext.transaction(config -> {
-            dag.markQueried(batch.stream().map(k -> k.bytes()).collect(Collectors.toList()), DSL.using(config));
-        });
 
         AtomicInteger responded = new AtomicInteger();
         try {
@@ -861,9 +724,7 @@ public class Avalanche {
                             result.get();
                         } catch (ExecutionException e) {
                             if (log.isDebugEnabled()) {
-                                log.debug("exception querying {}",
-                                          batch.stream().map(h -> new HashKey(h)).collect(Collectors.toList()),
-                                          e.getCause());
+                                log.debug("exception querying {}", batch.size(), e.getCause());
                             }
                         }
                     }
@@ -904,36 +765,9 @@ public class Avalanche {
         }
     }
 
-    /**
-     * 
-     */
     void sampleNoOpParents() {
         Context timer = metrics == null ? null : metrics.getNoOpTimer().time();
-
-        dag.getNeglectedFrontier(noOpContext).forEach(e -> noOpParentSample.add(e));
-        // dag.getNeglected(noOpContext).forEach(e -> noOpParentSample.add(e));
-
-        if (noOpParentSample.isEmpty()) {
-            // if still none, select any nodes that are not finalized
-            noOpContext.select(UNFINALIZED.HASH)
-                       .from(UNFINALIZED)
-                       .where(UNFINALIZED.NOOP.isFalse())
-                       .orderBy(DSL.rand())
-                       .stream()
-                       .map(r -> new HASH(r.value1()))
-                       .forEach(h -> parentSample.add(h));
-        }
-
-        if (noOpParentSample.isEmpty()) {
-            // If still none, select any finalized node
-            noOpContext.select(DAG.KEY)
-                       .from(DAG)
-                       .orderBy(DSL.rand())
-                       .limit(100)
-                       .stream()
-                       .map(r -> new HASH(r.value1()))
-                       .forEach(h -> parentSample.add(h));
-        }
+        dag.sampleNoOpParents(noOpParentSample, getEntropy(), noOpContext);
         if (timer != null) {
             timer.close();
         }
@@ -943,7 +777,7 @@ public class Avalanche {
         Context timer = metrics == null ? null : metrics.getParentSampleTimer().time();
         int sampleCount = 0;
         try {
-            sampleCount = dag.sampleParents(parentSample, submitPool);
+            sampleCount = dag.sampleParents(parentSample, getEntropy(), submitPool);
         } finally {
             if (timer != null) {
                 timer.close();
@@ -965,7 +799,6 @@ public class Avalanche {
             t.setDaemon(true);
             return t;
         });
-        mutator.execute(() -> insertLoop());
         mutator.execute(() -> finalizationLoop());
         mutator.execute(() -> preferLoop());
         comm.start();
@@ -997,11 +830,11 @@ public class Avalanche {
         }
         TreeSet<HashKey> parents = new TreeSet<>();
         while (parents.size() < parameters.parentCount) {
-            HASH parent = parentSample.poll();
+            HashKey parent = parentSample.poll();
             if (parent == null) {
                 break;
             }
-            parents.add(new HashKey(parent));
+            parents.add(parent);
         }
         if (parents.isEmpty()) {
             if (future != null) {
@@ -1010,31 +843,26 @@ public class Avalanche {
             return null;
         }
         Context timer = metrics == null ? null : metrics.getSubmissionTimer().time();
-        byte[] hash;
         try {
             DagEntry dagEntry = new DagEntry();
             dagEntry.setDescription(description);
             dagEntry.setData(ByteBuffer.wrap(data));
             dagEntry.setLinks(parents.stream().map(e -> e.toHash()).collect(Collectors.toList()));
-            byte[] entry = serialize(dagEntry);
-            hash = hashOf(entry);
-            insertions.add(new DagInsert(new HASH(hash), dagEntry, entry, null, false, round.get() + rounds2Flood));
-            flood(entry);
+            HashKey key = submitPool.transactionResult(config -> dag.insert(dagEntry, System.currentTimeMillis(),
+                                                                            DSL.using(config)));
             if (future != null) {
-                pendingTransactions.put(new HashKey(hash),
-                                        new PendingTransaction(future,
-                                                scheduler.schedule(() -> timeout(new HashKey(hash)), timeout.toMillis(),
-                                                                   TimeUnit.MILLISECONDS)));
+                pendingTransactions.put(key, new PendingTransaction(future,
+                        scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
             }
             if (metrics != null) {
                 metrics.getSubmissionRate().mark();
             }
+            return key.toHash();
         } finally {
             if (timer != null) {
                 timer.close();
             }
         }
-        return new HASH(hash);
     }
 
     /**

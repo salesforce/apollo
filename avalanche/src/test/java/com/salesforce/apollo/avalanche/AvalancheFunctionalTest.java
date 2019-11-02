@@ -125,7 +125,7 @@ public class AvalancheFunctionalTest {
             AvalancheParameters aParams = new AvalancheParameters();
             // Avalanche protocol parameters
             aParams.alpha = 0.6;
-            aParams.k = 3;
+            aParams.k = 10;
             aParams.beta1 = 3;
             aParams.beta2 = 5;
             // parent selection target for avalanche dag voting
@@ -145,13 +145,13 @@ public class AvalancheFunctionalTest {
             // # of FF rounds per NoOp generation
             aParams.delta = 1;
             // # of Avalanche queries per FF round
-            aParams.gamma = 20;
+            aParams.gamma = 1;
 
 //            aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
 //                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
-                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
+                    + ";LOCK_MODE=3;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
                 frist.set(false);
 //                aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
@@ -239,11 +239,7 @@ public class AvalancheFunctionalTest {
         // true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
-        System.out.println(master.getDag()
-                                 .getWanted(Integer.MAX_VALUE, master.getDslContext())
-                                 .stream()
-                                 .map(e -> new HashKey(e))
-                                 .collect(Collectors.toList()));
+        System.out.println(master.getDag().getWanted(Integer.MAX_VALUE));
         System.out.println();
         System.out.println("Node 0 Metrics");
         ConsoleReporter.forRegistry(node0Registry)
