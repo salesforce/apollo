@@ -29,6 +29,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.jooq.BatchBindStep;
 import org.jooq.DSLContext;
@@ -421,6 +422,11 @@ public class WorkingSet {
         this.parameters = parameters;
     }
 
+    public Stream<HashKey> frontierSample(DSLContext create) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
     public DagEntry get(HashKey key, DSLContext create) {
         Record1<byte[]> entry = create.select(UNFINALIZED.DATA)
                                       .from(UNFINALIZED)
@@ -441,6 +447,11 @@ public class WorkingSet {
             return null;
         }
         return node.getConflictSet();
+    }
+
+    public Stream<HashKey> getNeglectedFrontier(DSLContext create) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     public Set<Node> getUnknown() {

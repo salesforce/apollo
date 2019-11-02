@@ -30,7 +30,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
 import org.jooq.ConnectionProvider;
@@ -72,8 +71,8 @@ public class TransactionsTest {
         });
     }
 
-    private String              connection_url;
     private Connection          connection;
+    private String              connection_url;
     private DSLContext          create;
     private WorkingSet          dag;
     private AvalancheParameters parameters;
@@ -280,9 +279,7 @@ public class TransactionsTest {
         ordered.add(new HashKey(secondCommit.bytes()));
         last = secondCommit;
 
-        TreeSet<HashKey> frontier = dag.getNeglectedFrontier(create)
-                                       .map(e -> new HashKey(e))
-                                       .collect(Collectors.toCollection(TreeSet::new));
+        TreeSet<HashKey> frontier = dag.getNeglectedFrontier(create).collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(3, frontier.size());
 
@@ -292,9 +289,7 @@ public class TransactionsTest {
                                       dag.sampleParents(create).stream().collect(Collectors.toList()));
         ordered.add(new HashKey(userTxn.bytes()));
 
-        frontier = dag.getNeglectedFrontier(create)
-                      .map(e -> new HashKey(e))
-                      .collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.getNeglectedFrontier(create).collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(4, frontier.size());
 
@@ -304,9 +299,7 @@ public class TransactionsTest {
         last = userTxn;
         last = newDagEntree("entry: " + 0, ordered, stored, Arrays.asList(last));
 
-        frontier = dag.getNeglectedFrontier(create)
-                      .map(e -> new HashKey(e))
-                      .collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.getNeglectedFrontier(create).collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(5, frontier.size());
 
@@ -556,7 +549,7 @@ public class TransactionsTest {
         ordered.add(key);
 
         Set<HashKey> frontier = dag.frontierSample(create)
-                                   .map(r -> new HashKey(r))
+
                                    .collect(Collectors.toCollection(TreeSet::new));
         assertEquals(5, frontier.size());
 
@@ -572,13 +565,13 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        frontier = dag.frontierSample(create).map(r -> new HashKey(r)).collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.frontierSample(create).collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(6, frontier.size());
 
         // prefer node 6, raising the confidence of nodes 3, 2, 1 and 0
         dag.prefer(ordered.get(6));
-        frontier = dag.frontierSample(create).map(r -> new HashKey(r)).collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.frontierSample(create).collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(6, frontier.size());
 
@@ -771,7 +764,7 @@ public class TransactionsTest {
                         HashKey conflictSet) {
         DagEntry entry = new DagEntry();
         entry.setData(ByteBuffer.wrap(contents.getBytes()));
-        entry.setLinks(links.stream().map(e -> e).collect(Collectors.toList()));
+        entry.setLinks(links.stream().map(e -> e.toHash()).collect(Collectors.toList()));
         HashKey key = dag.insert(entry, conflictSet, 0, create);
         stored.put(key, entry);
         ordered.add(key);
