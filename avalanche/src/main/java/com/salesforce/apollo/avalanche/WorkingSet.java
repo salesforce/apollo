@@ -67,8 +67,8 @@ public class WorkingSet {
 
         public KnownNode(HashKey key, Set<Node> links, HashKey cs, long discovered) {
             super(key, discovered);
-            conflictSet = conflictSets.computeIfAbsent(cs, k -> new ConflictSet(this));
-            conflictSet.incCardinality();
+            conflictSet = conflictSets.computeIfAbsent(cs, k -> new ConflictSet(k, this));
+            conflictSet.add(this);
             this.links = links;
             this.closure = new TreeSet<>();
 
@@ -93,6 +93,12 @@ public class WorkingSet {
         @Override
         public Set<Node> closure() {
             return closure;
+        }
+
+        @Override
+        public void delete() {
+            // TODO Auto-generated method stub
+
         }
 
         @Override
@@ -275,6 +281,8 @@ public class WorkingSet {
             return getKey().compareTo(o.getKey());
         }
 
+        abstract public void delete();
+
         public abstract boolean finalized();
 
         public boolean getChit() {
@@ -373,6 +381,12 @@ public class WorkingSet {
         }
 
         @Override
+        public void delete() {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
         public boolean finalized() {
             throw new IllegalStateException("No op nodes cannot be finalized");
         }
@@ -467,6 +481,12 @@ public class WorkingSet {
         @Override
         public Set<Node> closure() {
             return Collections.emptySet();
+        }
+
+        @Override
+        public void delete() {
+            // TODO Auto-generated method stub
+
         }
 
         @Override
@@ -654,7 +674,7 @@ public class WorkingSet {
     }
 
     public int sampleParents(Collection<HashKey> collector, Random entropy, DSLContext context) {
-        List<HashKey> sample = singularFrontierSample(entropy);
+        List<HashKey> sample = singularFrontier(entropy);
         if (sample.isEmpty()) {
             sample = frontier(entropy);
         }
@@ -677,7 +697,7 @@ public class WorkingSet {
         return collector;
     }
 
-    public List<HashKey> singularFrontierSample(Random entropy) {
+    public List<HashKey> singularFrontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .parallelStream()
                                           .filter(node -> node.isPreferredAndSingular(parameters.beta1 / 1))
@@ -724,7 +744,18 @@ public class WorkingSet {
 
         context.deleteFrom(allFinalized).execute();
         FinalizationData data = new FinalizationData();
-        finalizedSet.forEach(node -> data.finalized.add(node.getKey()));
+        finalizedSet.forEach(node -> {
+            final ConflictSet conflictSet = node.getConflictSet();
+            conflictSets.remove(conflictSet.getKey());
+            conflictSet.getLosers().forEach(loser -> {
+                data.deleted.add(loser.getKey());
+                loser.delete();
+            });
+            final HashKey key = node.getKey();
+            data.finalized.add(key);
+            unfinalized.remove(key);
+            unqueried.remove(key);
+        });
         return data;
     }
 

@@ -556,7 +556,7 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        frontier = dag.singularFrontierSample(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.singularFrontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(5, frontier.size());
 

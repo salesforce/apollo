@@ -7,7 +7,12 @@
 
 package com.salesforce.apollo.avalanche;
 
+import java.util.Collection;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
+
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * 
@@ -15,17 +20,19 @@ import com.salesforce.apollo.avalanche.WorkingSet.Node;
  *
  */
 public class ConflictSet {
-    private volatile int  cardinality = 0;
-    private volatile int  counter     = 0;
+    private Set<Node>     conflicts = new ConcurrentSkipListSet<>();
+    private volatile int  counter   = 0;
+    private final HashKey key;
     private volatile Node last;
     private volatile Node preferred;
 
-    public ConflictSet(Node frist) {
+    public ConflictSet(HashKey key, Node frist) {
+        this.key = key;
         last = preferred = frist;
     }
 
-    public void incCardinality() {
-        cardinality++;
+    public void add(Node conflict) {
+        conflicts.add(conflict);
     }
 
     public void clearCounter() {
@@ -33,8 +40,7 @@ public class ConflictSet {
     }
 
     public int getCardinality() {
-        final int current = cardinality;
-        return current;
+        return conflicts.size();
     }
 
     public int getCounter() {
@@ -42,9 +48,18 @@ public class ConflictSet {
         return current;
     }
 
+    public HashKey getKey() {
+        return key;
+    }
+
     public Node getLast() {
         final Node current = last;
         return current;
+    }
+
+    public Collection<Node> getLosers() {
+        conflicts.remove(getPreferred());
+        return conflicts;
     }
 
     public Node getPreferred() {
