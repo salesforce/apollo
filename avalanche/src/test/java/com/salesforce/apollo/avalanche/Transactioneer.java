@@ -67,7 +67,7 @@ public class Transactioneer {
                 addTransaction(txnWait, scheduler);
                 addTransaction(txnWait, scheduler);
             }
-        }, 50, 15, TimeUnit.MILLISECONDS);
+        }, 50, 20, TimeUnit.MILLISECONDS);
         futureSailor = scheduler.scheduleWithFixedDelay(() -> {
             for (int i = 0; i < outstanding.size(); i++) {
                 try {

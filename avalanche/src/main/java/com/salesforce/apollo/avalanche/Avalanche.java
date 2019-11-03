@@ -727,7 +727,7 @@ public class Avalanche {
             while (running.get()) {
                 round();
                 try {
-                    Thread.sleep(2 - getEntropy().nextInt(2));
+                    Thread.sleep(10 - getEntropy().nextInt(10));
                 } catch (InterruptedException e) {
                 }
             }

@@ -7,7 +7,6 @@
 
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.CONFLICTSET;
 import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
 import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
@@ -854,12 +853,6 @@ public class WorkingSet {
                .select(context.select(UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
                               .from(UNFINALIZED)
                               .where((UNFINALIZED.HASH.eq(key.bytes()))))
-               .execute();
-
-        context.deleteFrom(CONFLICTSET)
-               .where(CONFLICTSET.NODE.in(context.select(UNFINALIZED.CONFLICTSET)
-                                                 .from(UNFINALIZED)
-                                                 .where((UNFINALIZED.HASH.eq(key.bytes())))))
                .execute();
         context.deleteFrom(UNFINALIZED).where(UNFINALIZED.HASH.eq(key.bytes())).execute();
     }

@@ -6,10 +6,7 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.CLOSURE;
-import static com.salesforce.apollo.dagwood.schema.Tables.CONFLICTSET;
 import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
-import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -34,7 +31,6 @@ import java.util.stream.Collectors;
 
 import org.jooq.ConnectionProvider;
 import org.jooq.DSLContext;
-import org.jooq.Record2;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.jooq.impl.DefaultConnectionProvider;
@@ -51,25 +47,6 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 222
  */
 public class TransactionsTest {
-
-    public static void dumpClosure(List<HashKey> nodes, DSLContext create) {
-        nodes.forEach(k -> {
-            System.out.println();
-            Record2<Integer, Integer> node = create.select(UNFINALIZED.CHIT, UNFINALIZED.CONFIDENCE)
-                                                   .from(UNFINALIZED)
-                                                   .where(UNFINALIZED.HASH.eq(k.bytes()))
-                                                   .fetchOne();
-            System.out.println(String.format("%s : %s : %s", k, node.value1(), node.value2()));
-            create.select(CLOSURE.CHILD)
-                  .from(CLOSURE)
-                  .where(CLOSURE.PARENT.eq(DSL.inline(k.bytes())))
-                  .and(CLOSURE.CLOSURE_.isTrue())
-                  .stream()
-                  .forEach(r -> {
-                      System.out.println(String.format("   -> %s", new HashKey(r.value1())));
-                  });
-        });
-    }
 
     private Connection          connection;
     private String              connection_url;
@@ -102,8 +79,6 @@ public class TransactionsTest {
         connection.setAutoCommit(false);
         ConnectionProvider provider = new DefaultConnectionProvider(connection);
         create = DSL.using(provider, SQLDialect.H2);
-        create.deleteFrom(CLOSURE).execute();
-        create.deleteFrom(CONFLICTSET).execute();
         create.deleteFrom(DAG).execute();
         parameters = new AvalancheParameters();
         dag = new WorkingSet(parameters);

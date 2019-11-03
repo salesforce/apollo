@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.CLOSURE;
-import static com.salesforce.apollo.dagwood.schema.Tables.CONFLICTSET;
 import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
 import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static org.junit.Assert.assertArrayEquals;
@@ -77,8 +75,6 @@ public class DagTest {
         ConnectionProvider provider = new DefaultConnectionProvider(connection);
         create = DSL.using(provider, SQLDialect.H2);
         create.deleteFrom(DAG).execute();
-        create.deleteFrom(CLOSURE).execute();
-        create.deleteFrom(CONFLICTSET).execute();
         entropy = new Random(0x666);
         workingSet = new WorkingSet(new AvalancheParameters());
         root = new DagEntry();
