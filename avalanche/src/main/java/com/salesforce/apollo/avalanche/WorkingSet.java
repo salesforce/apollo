@@ -26,6 +26,7 @@ import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -37,7 +38,10 @@ import org.jooq.Record;
 import org.jooq.Record1;
 import org.jooq.Table;
 import org.jooq.impl.DSL;
+import org.slf4j.LoggerFactory;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.protocols.HashKey;
@@ -61,7 +65,7 @@ public class WorkingSet {
         private final Set<Node>   closure;
         private volatile int      confidence = 0;
         private final ConflictSet conflictSet;
-        private final Set<Node>   dependents = new TreeSet<>();
+        private final Set<Node>   dependents = new ConcurrentSkipListSet<>();
         private volatile boolean  finalized  = false;
         private final Set<Node>   links;
 
@@ -298,7 +302,7 @@ public class WorkingSet {
         abstract public int getConfidence();
 
         public ConflictSet getConflictSet() {
-            return null;
+            throw new IllegalStateException(getClass().getSimpleName() + " do not have conflict sets");
         }
 
         abstract public DagEntry getDagEntry();
@@ -563,9 +567,14 @@ public class WorkingSet {
     private final NavigableMap<HashKey, Node>        unfinalized          = new ConcurrentSkipListMap<>();
     private final Set<Node>                          unknown              = new ConcurrentSkipListSet<>();
     private final BlockingDeque<HashKey>             unqueried            = new LinkedBlockingDeque<>();
+    private final Cache<HashKey, Boolean>            finalizedCache;
 
     public WorkingSet(AvalancheParameters parameters) {
         this.parameters = parameters;
+        CacheBuilder<?, ?> builder = CacheBuilder.newBuilder();
+        @SuppressWarnings("unchecked")
+        CacheBuilder<HashKey, Boolean> cacheBuilder = (CacheBuilder<HashKey, Boolean>) builder;
+        finalizedCache = cacheBuilder.build();
     }
 
     public List<HashKey> finalized(DSLContext context) {
@@ -580,8 +589,8 @@ public class WorkingSet {
 
     public List<HashKey> frontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
-                                          .parallelStream()
-                                          .filter(node -> node.isPreferred(parameters.beta1 / 1))
+                                          .stream()
+                                          .filter(node -> node.isPreferred(parameters.beta1 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);
@@ -660,7 +669,12 @@ public class WorkingSet {
     }
 
     public boolean isFinalized(HashKey key, DSLContext context) {
-        return context.fetchExists(DAG, DAG.KEY.eq(key.bytes()));
+        try {
+            return finalizedCache.get(key, () -> context.fetchExists(DAG, DAG.KEY.eq(key.bytes())));
+        } catch (ExecutionException e) {
+            LoggerFactory.getLogger(WorkingSet.class).error("unable to query DAG", e);
+            return false;
+        }
     }
 
     public boolean isStronglyPreferred(HashKey key, DSLContext context) {
@@ -668,18 +682,10 @@ public class WorkingSet {
     }
 
     public List<Boolean> isStronglyPreferred(List<HashKey> keys, DSLContext context) {
-        return keys.parallelStream().map(key -> {
+        return keys.stream().map(key -> {
             Node node = unfinalized.get(key);
             return node != null ? node.isStronglyPreferred() : isFinalized(key, context);
         }).collect(Collectors.toList());
-    }
-
-    public List<Boolean> isStronglyPreferredTxns(List<DagEntry> txns, DSLContext context) {
-        return isStronglyPreferred(txns.stream()
-                                       .map(txn -> insert(txn, System.currentTimeMillis(), context))
-                                       .collect(Collectors.toList()),
-                                   context);
-
     }
 
     public void prefer(Collection<HashKey> keys) {
@@ -692,7 +698,7 @@ public class WorkingSet {
 
     public List<HashKey> preferred(Random entropy) {
         List<HashKey> sample = unfinalized.values()
-                                          .parallelStream()
+                                          .stream()
                                           .filter(node -> node.isPreferred())
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -758,7 +764,7 @@ public class WorkingSet {
 
     public List<HashKey> singularFrontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
-                                          .parallelStream()
+                                          .stream()
                                           .filter(node -> node.isPreferredAndSingular(parameters.beta1 / 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -785,6 +791,7 @@ public class WorkingSet {
         BatchBindStep batch = context.batch(context.insertInto(allFinalized, allFinalizedHash).values((byte[]) null));
         finalizedSet.forEach(node -> {
             final HashKey key = node.getKey();
+            finalizedCache.put(key, true);
             unqueried.remove(key);
             batch.bind(key.bytes());
         });
@@ -809,7 +816,7 @@ public class WorkingSet {
         }
 
         FinalizationData data = new FinalizationData();
-        finalizedSet.forEach(node -> {
+        finalizedSet.stream().filter(node -> node instanceof KnownNode).forEach(node -> {
             final ConflictSet conflictSet = node.getConflictSet();
             conflictSets.remove(conflictSet.getKey());
             conflictSet.getLosers().forEach(loser -> {
@@ -829,7 +836,7 @@ public class WorkingSet {
 
     public List<HashKey> unfinalizedSingular(Random entropy) {
         List<HashKey> sample = unfinalized.values()
-                                          .parallelStream()
+                                          .stream()
                                           .filter(node -> node.isUnfinalizedSingular())
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -891,8 +898,12 @@ public class WorkingSet {
                 return v;
             }
 
-            if (context.fetchExists(DAG, DAG.KEY.eq(k.bytes()))) {
-                return null;
+            try {
+                if (finalizedCache.get(k, () -> context.fetchExists(DAG, DAG.KEY.eq(k.bytes())))) {
+                    return null;
+                }
+            } catch (ExecutionException e) {
+                LoggerFactory.getLogger(WorkingSet.class).error("unable query DAG", e.getCause());
             }
 
             Node node = nodeFor(k, entry, noOp, discovered, cs, context);
@@ -910,7 +921,7 @@ public class WorkingSet {
                        .map(link -> new HashKey(link))
                        .map(link -> resolve(link, discovered, context))
                        .filter(node -> node != null)
-                       .collect(Collectors.toCollection(TreeSet::new));
+                       .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
     }
 
     Node nodeFor(HashKey k, DagEntry entry, boolean noOp, long discovered, HashKey cs, DSLContext context) {
@@ -919,10 +930,14 @@ public class WorkingSet {
     }
 
     Node resolve(HashKey key, long discovered, DSLContext context) {
-        if (context.fetchExists(DAG, DAG.KEY.eq(key.bytes()))) {
-            return null;
-        }
         return unfinalized.computeIfAbsent(key, k -> {
+            try {
+                if (finalizedCache.get(key, () -> context.fetchExists(DAG, DAG.KEY.eq(key.bytes())))) {
+                    return null;
+                }
+            } catch (ExecutionException e) {
+                LoggerFactory.getLogger(WorkingSet.class).error("error in finalization cache lookup", e.getCause());
+            }
             Node node = new UnknownNode(k, discovered);
             unknown.add(node);
             return node;

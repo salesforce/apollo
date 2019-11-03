@@ -134,25 +134,19 @@ public class AvalancheFunctionalTest {
 
             // Avalanche implementation parameters
             aParams.queryBatchSize = 40;
-            aParams.insertBatchSize = 20;
-            aParams.preferBatchSize = 100;
-            aParams.finalizeBatchSize = 100;
+            aParams.finalizeBatchSize = 400;
             aParams.noOpsPerRound = 1;
             aParams.maxNoOpParents = 100;
             aParams.maxActiveQueries = 200;
 
             // # of firefly rounds per avalanche round
             aParams.epsilon = 1;
-            // # of FF rounds per NoOp generation
-            aParams.delta = 1;
-            // # of Avalanche queries per FF round
-            aParams.gamma = 20;
 
 //            aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
 //                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
-                    + ";LOCK_MODE=3;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
+                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
                 frist.set(false);
 //                aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
@@ -162,7 +156,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 20;
+        int target = 3_200;
         Duration ffRound = Duration.ofMillis(500);
 
         views.forEach(view -> view.getService().start(ffRound));
@@ -204,13 +198,13 @@ public class AvalancheFunctionalTest {
         HASH k = genesisKey.toHash();
         for (Avalanche a : nodes) {
             assertTrue("Failed to finalize genesis on: " + a.getNode().getId(),
-                       Utils.waitForCondition(60_000, () -> a.getDagDao().isFinalized(k)));
+                       Utils.waitForCondition(10_000, () -> a.getDagDao().isFinalized(k)));
             transactioneers.add(new Transactioneer(a));
         }
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 600, txnScheduler));
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 800, txnScheduler));
 
-        boolean finalized = Utils.waitForCondition(30_000, 10_000, () -> {
+        boolean finalized = Utils.waitForCondition(120_000, 1_000, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= target)

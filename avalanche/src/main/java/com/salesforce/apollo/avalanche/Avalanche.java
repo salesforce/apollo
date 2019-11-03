@@ -29,8 +29,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -90,20 +88,6 @@ public class Avalanche {
                 return;
             }
 
-            if (r % parameters.epsilon == 0) {
-                Thread currentQT = queryThread;
-                if (currentQT != null) {
-                    log.info("Already querying txns");
-                } else {
-                    queryThread = new Thread(() -> {
-                        Avalanche.this.round();
-                        queryThread = null;
-                    }, "Query[" + view.getNode().getId() + "]");
-                    queryThread.setDaemon(true);
-                    queryThread.start();
-                }
-            }
-
             if (r % parameters.delta == 0) {
                 Thread currentNoOp = noOpThread;
                 if (currentNoOp != null) {
@@ -148,8 +132,13 @@ public class Avalanche {
                 return new QueryResult(results);
             }
             long now = System.currentTimeMillis();
-            List<Boolean> queried = queryPool.transactionResult(config -> dag.isStronglyPreferredTxns(transactions,
-                                                                                                      DSL.using(config)));
+            List<HashKey> toQuery = queryPool.transactionResult(config -> {
+                DSLContext context = DSL.using(config);
+                return transactions.stream()
+                                   .map(txn -> dag.insert(txn, System.currentTimeMillis(), context))
+                                   .collect(Collectors.toList());
+            });
+            List<Boolean> queried = dag.isStronglyPreferred(toQuery, queryPool);
             assert queried.size() == transactions.size() : "on query results " + queried.size() + " != "
                     + transactions.size();
 
@@ -210,10 +199,8 @@ public class Avalanche {
     private final AvalancheParameters                        parameters;
     private final Deque<HashKey>                             parentSample        = new LinkedBlockingDeque<>();
     private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentSkipListMap<>();
-    private final BlockingDeque<HashKey>                     preferings          = new LinkedBlockingDeque<>();
     private final Map<HashKey, EntryProcessor>               processors          = new ConcurrentSkipListMap<>();
     private final DSLContext                                 queryPool;
-    private volatile Thread                                  queryThread;
     private final int                                        required;
     private final AtomicInteger                              round               = new AtomicInteger();
     private final DSLContext                                 roundContext;
@@ -252,8 +239,9 @@ public class Avalanche {
         queryPool = DSL.using(new HikariDataSource(queryConfig), SQLDialect.H2);
 
         try {
-            roundContext = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD),
-                                     SQLDialect.H2);
+            Connection connection = DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD);
+            connection.setAutoCommit(false);
+            roundContext = DSL.using(connection, SQLDialect.H2);
         } catch (SQLException e) {
             throw new IllegalStateException("Cannot obtain jdbc connection", e);
         }
@@ -272,8 +260,9 @@ public class Avalanche {
         submitPool = DSL.using(new HikariDataSource(submitConfig), SQLDialect.H2);
 
         try {
-            noOpContext = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD),
-                                    SQLDialect.H2);
+            Connection connection = DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD);
+            connection.setAutoCommit(false);
+            noOpContext = DSL.using(connection, SQLDialect.H2);
         } catch (SQLException e) {
             throw new IllegalStateException("unable to create jdbc connection", e);
         }
@@ -370,7 +359,9 @@ public class Avalanche {
     private void finalizationLoop() {
         DSLContext context;
         try {
-            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
+            final Connection connection = DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD);
+            connection.setAutoCommit(false);
+            context = DSL.using(connection, SQLDialect.H2);
         } catch (SQLException e) {
             throw new IllegalStateException("unable to create jdbc connection", e);
         }
@@ -559,69 +550,6 @@ public class Avalanche {
         });
     }
 
-    private List<HashKey> nextPreferences(int batch) {
-        List<HashKey> next = new ArrayList<>();
-        for (int i = 0; i < batch; i++) {
-            HashKey key;
-            try {
-                key = i == 0 ? preferings.poll(1, TimeUnit.SECONDS) : preferings.poll(200, TimeUnit.MICROSECONDS);
-            } catch (InterruptedException e) {
-                break;
-            }
-            if (key != null) {
-                next.add(key);
-            } else {
-                break;
-            }
-        }
-        return next;
-    }
-
-    private void nextPreferred(DSLContext context) {
-        List<HashKey> batch = nextPreferences(parameters.preferBatchSize);
-        if (!batch.isEmpty()) {
-            if (metrics != null) {
-                metrics.getPreferBacklog().set(preferings.size());
-            }
-            Context timer = metrics == null ? null : metrics.getPreferTimer().time();
-            dag.prefer(batch);
-            if (timer != null) {
-                timer.close();
-            }
-            if (metrics != null) {
-                metrics.getPreferRate().mark(batch.size());
-            }
-            finalizing.addAll(batch);
-        }
-    }
-
-    private void preferLoop() {
-        DSLContext context;
-        try {
-            context = DSL.using(DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD), SQLDialect.H2);
-        } catch (SQLException e) {
-            throw new IllegalStateException("unable to create jdbc connection", e);
-        }
-        try {
-            while (running.get()) {
-                try {
-                    if (!running.get()) {
-                        return;
-                    }
-                    nextPreferred(context);
-                } catch (Throwable e) {
-                    if (e.getCause() instanceof JdbcSQLTransactionRollbackException) {
-                        log.info("mutator rolled back: {}", e);
-                    } else {
-                        log.error("preferences failed", e);
-                    }
-                }
-            }
-        } finally {
-            context.close();
-        }
-    }
-
     /**
      * Query a random sample of ye members for their votes on the next batch of
      * unqueried transactions for this node, determine confidence from the results
@@ -650,14 +578,16 @@ public class Avalanche {
             metrics.getQueryRate().mark(query.size());
         }
         long sampleTime = System.currentTimeMillis() - now;
+        List<HashKey> preferings = new ArrayList<>();
         for (int i = 0; i < results.size(); i++) {
-            Boolean result = results.get(i);
-            if (result != null && result) {
+            if (results.get(i)) {
                 preferings.add(unqueried.get(i));
             }
         }
+        dag.prefer(preferings);
         log.trace("querying {} txns in {} ms ({} Query) ({} Sample)}", unqueried.size(),
                   System.currentTimeMillis() - start, retrieveTime, sampleTime);
+        finalizing.addAll(preferings);
         return results.size();
     }
 
@@ -793,14 +723,22 @@ public class Avalanche {
         if (!running.compareAndSet(false, true)) {
             return;
         }
-        AtomicInteger mT = new AtomicInteger();
-        ExecutorService mutator = Executors.newFixedThreadPool(3, r -> {
-            Thread t = new Thread(r, "DAG Mutator[" + view.getNode().getId() + ":" + mT.incrementAndGet() + "]");
-            t.setDaemon(true);
-            return t;
-        });
-        mutator.execute(() -> finalizationLoop());
-        mutator.execute(() -> preferLoop());
+        Thread queryThread = new Thread(() -> {
+            while (running.get()) {
+                round();
+                try {
+                    Thread.sleep(2 - getEntropy().nextInt(2));
+                } catch (InterruptedException e) {
+                }
+            }
+        }, "Query[" + view.getNode().getId() + "]");
+        queryThread.setDaemon(true);
+        queryThread.start();
+
+        Thread finalizerThread = new Thread(() -> finalizationLoop(), "Finalizer[" + view.getNode().getId() + "]");
+        finalizerThread.setDaemon(true);
+        finalizerThread.start();
+
         comm.start();
     }
 
