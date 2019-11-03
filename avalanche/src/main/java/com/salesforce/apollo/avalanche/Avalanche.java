@@ -132,13 +132,10 @@ public class Avalanche {
                 return new QueryResult(results);
             }
             long now = System.currentTimeMillis();
-            List<HashKey> toQuery = queryPool.transactionResult(config -> {
-                DSLContext context = DSL.using(config);
-                return transactions.stream()
-                                   .map(txn -> dag.insert(txn, System.currentTimeMillis(), context))
-                                   .collect(Collectors.toList());
-            });
-            List<Boolean> queried = dag.isStronglyPreferred(toQuery, queryPool);
+            List<Boolean> queried = dag.isStronglyPreferred(queryPool.transactionResult(config -> dag.insert(transactions,
+                                                                                                             System.currentTimeMillis(),
+                                                                                                             DSL.using(config))),
+                                                            queryPool);
             assert queried.size() == transactions.size() : "on query results " + queried.size() + " != "
                     + transactions.size();
 

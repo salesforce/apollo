@@ -59,12 +59,12 @@ public class WorkingSet {
     }
 
     public class KnownNode extends Node {
-        private final DagEntry    entry;
         private volatile boolean  chit       = false;
         private final Set<Node>   closure;
         private volatile int      confidence = 0;
         private final ConflictSet conflictSet;
         private final Set<Node>   dependents = new ConcurrentSkipListSet<>();
+        private final DagEntry    entry;
         private volatile boolean  finalized  = false;
         private final Set<Node>   links;
 
@@ -124,6 +124,11 @@ public class WorkingSet {
         @Override
         public ConflictSet getConflictSet() {
             return conflictSet;
+        }
+
+        @Override
+        public DagEntry getDagEntry() {
+            return entry;
         }
 
         @Override
@@ -262,11 +267,6 @@ public class WorkingSet {
                 links.forEach(node -> node.tryFinalize(finalizedSet, visited));
                 return false;
             }
-        }
-
-        @Override
-        public DagEntry getDagEntry() {
-            return entry;
         }
     }
 
@@ -562,11 +562,11 @@ public class WorkingSet {
 
     public static final HashKey                      GENESIS_CONFLICT_SET = new HashKey(new byte[32]);
     private final NavigableMap<HashKey, ConflictSet> conflictSets         = new ConcurrentSkipListMap<>();
+    private final Cache<HashKey, Boolean>            finalizedCache;
     private final AvalancheParameters                parameters;
     private final NavigableMap<HashKey, Node>        unfinalized          = new ConcurrentSkipListMap<>();
     private final Set<Node>                          unknown              = new ConcurrentSkipListSet<>();
     private final BlockingDeque<HashKey>             unqueried            = new LinkedBlockingDeque<>();
-    private final Cache<HashKey, Boolean>            finalizedCache;
 
     public WorkingSet(AvalancheParameters parameters) {
         this.parameters = parameters;
@@ -665,6 +665,10 @@ public class WorkingSet {
 
     public HashKey insert(DagEntry entry, long discovered, DSLContext context) {
         return insert(entry, null, discovered, context);
+    }
+
+    public List<HashKey> insert(List<DagEntry> entries, long discovered, DSLContext context) {
+        return entries.stream().map(entry -> insert(entry, discovered, context)).collect(Collectors.toList());
     }
 
     public boolean isFinalized(HashKey key, DSLContext context) {
@@ -871,6 +875,7 @@ public class WorkingSet {
             }
             links = linkBuf.array();
         }
+
         context.mergeInto(UNFINALIZED, UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
                .key(UNFINALIZED.HASH)
                .values(key.bytes(), entry, links)
