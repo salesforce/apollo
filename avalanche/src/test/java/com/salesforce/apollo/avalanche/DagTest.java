@@ -80,13 +80,13 @@ public class DagTest {
         root = new DagEntry();
         root.setDescription(WellKnownDescriptions.GENESIS.toHash());
         root.setData(ByteBuffer.wrap("Ye root".getBytes()));
-        rootKey = workingSet.insert(root, 0, create);
+        rootKey = workingSet.insert(root, 0);
         assertNotNull(rootKey);
     }
 
     @Test
     public void smoke() throws Exception {
-        DagEntry testRoot = workingSet.get(rootKey, create);
+        DagEntry testRoot = workingSet.getDagEntry(rootKey);
         assertNotNull(testRoot);
         testRoot.setDescription(WellKnownDescriptions.GENESIS.toHash());
         assertNotNull(testRoot);
@@ -104,7 +104,7 @@ public class DagTest {
             entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
             entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", i).getBytes()));
             entry.setLinks(randomLinksTo(stored));
-            HashKey key = workingSet.insert(entry, 0, create);
+            HashKey key = workingSet.insert(entry, 0);
             stored.put(key, entry);
             ordered.add(key);
         }
@@ -115,7 +115,7 @@ public class DagTest {
 
         for (HashKey key : ordered) {
             assertEquals(1, workingSet.getConflictSet(key).getCardinality());
-            DagEntry found = workingSet.get(key, create);
+            DagEntry found = workingSet.getDagEntry(key);
             assertNotNull("Not found: " + key, found);
             DagEntry original = stored.get(key);
             assertArrayEquals(original.getData().array(), found.getData().array());

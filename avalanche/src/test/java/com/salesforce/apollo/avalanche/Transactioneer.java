@@ -25,15 +25,17 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 222
  */
 public class Transactioneer {
-    private final AtomicInteger counter = new AtomicInteger();
-    private final AtomicInteger failed = new AtomicInteger();
-    private volatile ScheduledFuture<?> futureSailor;
-    private final Avalanche node;
+    private final AtomicInteger                    counter     = new AtomicInteger();
+    private final AtomicInteger                    failed      = new AtomicInteger();
+    private volatile ScheduledFuture<?>            futureSailor;
+    private final Avalanche                        node;
     private final List<CompletableFuture<HashKey>> outstanding = new CopyOnWriteArrayList<>();
-    private final AtomicInteger success = new AtomicInteger();
+    private final AtomicInteger                    success     = new AtomicInteger();
+    private final AtomicInteger                    limit       = new AtomicInteger();
 
-    public Transactioneer(Avalanche node) {
+    public Transactioneer(Avalanche node, int limit) {
         this.node = node;
+        this.limit.set(limit);
     }
 
     public int getFailed() {
@@ -64,10 +66,14 @@ public class Transactioneer {
     public void transact(Duration txnWait, int maintain, ScheduledExecutorService scheduler) {
         scheduler.scheduleWithFixedDelay(() -> {
             if (outstanding.size() < maintain) {
-                addTransaction(txnWait, scheduler);
-                addTransaction(txnWait, scheduler);
+                if (limit.decrementAndGet() > 0) {
+                    addTransaction(txnWait, scheduler);
+                }
+                if (limit.decrementAndGet() > 0) {
+                    addTransaction(txnWait, scheduler);
+                }
             }
-        }, 50, 15, TimeUnit.MILLISECONDS);
+        }, 50, 5, TimeUnit.MILLISECONDS);
         futureSailor = scheduler.scheduleWithFixedDelay(() -> {
             for (int i = 0; i < outstanding.size(); i++) {
                 try {
@@ -78,7 +84,8 @@ public class Transactioneer {
                     } else {
                         failed.incrementAndGet();
                     }
-                } catch (TimeoutException | InterruptedException e) {} catch (ExecutionException e) {
+                } catch (TimeoutException | InterruptedException e) {
+                } catch (ExecutionException e) {
                     e.getCause().printStackTrace();
                 }
             }
@@ -86,9 +93,7 @@ public class Transactioneer {
     }
 
     private void addTransaction(Duration txnWait, ScheduledExecutorService scheduler) {
-        outstanding.add(node.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
-                                               ("transaction for: " + node.getNode().getId() + " : "
-                                                       + counter.incrementAndGet()).getBytes(),
-                                               txnWait, scheduler));
+        outstanding.add(node.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), ("transaction for: "
+                + node.getNode().getId() + " : " + counter.incrementAndGet()).getBytes(), txnWait, scheduler));
     }
 }

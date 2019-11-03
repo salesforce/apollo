@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
 import static org.junit.Assert.assertEquals;
@@ -67,7 +66,7 @@ public class AvalancheFunctionalTest {
 
     @BeforeClass
     public static void beforeClass() {
-        certs = IntStream.range(1, 12)
+        certs = IntStream.range(1, 11)
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
@@ -145,8 +144,7 @@ public class AvalancheFunctionalTest {
 //            aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
 //                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
 
-            aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement()
-                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
+            aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement() + ";MULTI_THREADED=1;MVCC=TRUE";
             if (frist.get()) {
                 frist.set(false);
 //                aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
@@ -156,8 +154,9 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 3_200;
+        int target = 1_600;
         Duration ffRound = Duration.ofMillis(500);
+        int outstanding = 100;
 
         views.forEach(view -> view.getService().start(ffRound));
 
@@ -193,18 +192,22 @@ public class AvalancheFunctionalTest {
         System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
 
+        seed(nodes);
+
         long now = System.currentTimeMillis();
-        List<Transactioneer> transactioneers = new ArrayList<>();
         HASH k = genesisKey.toHash();
         for (Avalanche a : nodes) {
             assertTrue("Failed to finalize genesis on: " + a.getNode().getId(),
                        Utils.waitForCondition(10_000, () -> a.getDagDao().isFinalized(k)));
-            transactioneers.add(new Transactioneer(a));
         }
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 800, txnScheduler));
+        List<Transactioneer> transactioneers = nodes.stream()
+                                                    .map(a -> new Transactioneer(a, 70_000))
+                                                    .collect(Collectors.toList());
 
-        boolean finalized = Utils.waitForCondition(120_000, 1_000, () -> {
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, txnScheduler));
+
+        boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= target)
@@ -224,10 +227,7 @@ public class AvalancheFunctionalTest {
                 + transactioneers.stream().mapToInt(e -> e.getSuccess()).sum() / (duration / 1000));
 
         System.out.println("Max tps per node: "
-                + nodes.stream()
-                       .mapToInt(n -> n.getDslContext().selectCount().from(DAG).fetchOne().value1())
-                       .max()
-                       .orElse(0) / (duration / 1000));
+                + nodes.stream().mapToInt(n -> n.getDag().getFinalized().size()).max().orElse(0) / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
         // FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(),
@@ -255,11 +255,30 @@ public class AvalancheFunctionalTest {
         });
     }
 
+    private void seed(List<Avalanche> nodes) {
+        long then = System.currentTimeMillis();
+        List<Transactioneer> transactioneers = nodes.stream()
+                                                    .map(a -> new Transactioneer(a, 5))
+                                                    .collect(Collectors.toList());
+
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 2, scheduler));
+
+        boolean seeded = Utils.waitForCondition(10_000, 500, () -> {
+            return transactioneers.stream()
+                                  .mapToInt(t -> t.getSuccess())
+                                  .filter(s -> s >= 2)
+                                  .count() == transactioneers.size();
+        });
+
+        assertTrue("could not seed initial txn set", seeded);
+        System.out.println("seeded initial txns in " + (System.currentTimeMillis() - then) + " ms");
+    }
+
     private void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
         System.out.println("    Rounds: " + node.getRoundCounter());
 
-        Integer finalized = node.getDslContext().selectCount().from(DAG).fetchOne().value1();
+        Integer finalized = node.getDag().getFinalized().size();
         Integer unfinalizedUser = node.getDag()
                                       .getUnfinalized()
                                       .values()

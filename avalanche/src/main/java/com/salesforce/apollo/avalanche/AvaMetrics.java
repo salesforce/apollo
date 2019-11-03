@@ -7,9 +7,6 @@
 
 package com.salesforce.apollo.avalanche;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
-import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
@@ -18,65 +15,44 @@ import com.codahale.metrics.Timer;
  * @author hhildebrand
  */
 public class AvaMetrics {
-    private final AtomicInteger finalizerBacklog = new AtomicInteger();
-    private final Meter         finalizerRate;
-    private final Timer         finalizeTimer;
-    private final AtomicInteger inputBacklog     = new AtomicInteger();
-    private final Meter         inputRate;
-    private final Timer         inputTimer;
-    private final Timer         noOpTimer;
-    private final Meter         parentSampleRate;
-    private final Timer         parentSampleTimer;
-    private final AtomicInteger preferBacklog    = new AtomicInteger();
-    private final Meter         preferRate;
-    private final Timer         preferTimer;
-    private final Meter         queryRate;
-    private final Timer         queryTimer;
-    private final Meter         submissionRate;
-    private final Timer         submissionTimer;
+    private final Meter finalizerRate;
+    private final Timer finalizeTimer;
+    private final Meter inboundQueryRate;
+    private final Timer inboundQueryTimer;
+    private final Meter inputRate;
+    private final Timer noOpTimer;
+    private final Meter parentSampleRate;
+    private final Timer parentSampleTimer;
+    private final Meter preferRate;
+    private final Timer preferTimer;
+    private final Meter queryRate;
+    private final Timer queryTimer;
+    private final Meter submissionRate;
+
+    private final Timer submissionTimer;
 
     public AvaMetrics(MetricRegistry registry) {
         submissionTimer = registry.timer("Txn submission duration");
         submissionRate = registry.meter("Txn submission rate");
 
-        inputTimer = registry.timer("Input batch duration");
         inputRate = registry.meter("Input rate");
-        registry.gauge("Input backlog", () -> new Gauge<>() {
-            @Override
-            public Object getValue() {
-                return inputBacklog.get();
-            }
-        });
 
         preferTimer = registry.timer("Prefer batch duration");
         preferRate = registry.meter("Prefer rate");
-        registry.gauge("Prefer backlog", () -> new Gauge<>() {
-            @Override
-            public Object getValue() {
-                return preferBacklog.get();
-            }
-        });
 
         finalizeTimer = registry.timer("Finalize batch duration");
         finalizerRate = registry.meter("Finalize rate");
-        registry.gauge("Finalize backlog", () -> new Gauge<>() {
-            @Override
-            public Object getValue() {
-                return finalizerBacklog.get();
-            }
-        });
 
         queryTimer = registry.timer("Query batch duration");
         queryRate = registry.meter("Query rate");
+
+        inboundQueryTimer = registry.timer("Inbound query batch duration");
+        inboundQueryRate = registry.meter("Inbound query rate");
 
         noOpTimer = registry.timer("NoOp txn generation duration");
 
         parentSampleTimer = registry.timer("Parent sample duration");
         parentSampleRate = registry.meter("Parent sample rate");
-    }
-
-    public AtomicInteger getFinalizerBacklog() {
-        return finalizerBacklog;
     }
 
     /**
@@ -95,8 +71,12 @@ public class AvaMetrics {
         return finalizeTimer;
     }
 
-    public AtomicInteger getInputBacklog() {
-        return inputBacklog;
+    public Meter getInboundQueryRate() {
+        return inboundQueryRate;
+    }
+
+    public Timer getInboundQueryTimer() {
+        return inboundQueryTimer;
     }
 
     /**
@@ -105,14 +85,6 @@ public class AvaMetrics {
 
     public Meter getInputRate() {
         return inputRate;
-    }
-
-    /**
-     * @return the inputTimer
-     */
-
-    public Timer getInputTimer() {
-        return inputTimer;
     }
 
     /**
@@ -135,10 +107,6 @@ public class AvaMetrics {
      */
     public Timer getParentSampleTimer() {
         return parentSampleTimer;
-    }
-
-    public AtomicInteger getPreferBacklog() {
-        return preferBacklog;
     }
 
     /**

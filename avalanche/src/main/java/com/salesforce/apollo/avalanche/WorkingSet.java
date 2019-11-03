@@ -7,17 +7,14 @@
 
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
-import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
-import static com.salesforce.apollo.protocols.Conversion.manifestDag;
 import static com.salesforce.apollo.protocols.Conversion.serialize;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
@@ -25,22 +22,12 @@ import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import org.jooq.BatchBindStep;
-import org.jooq.DSLContext;
-import org.jooq.Field;
-import org.jooq.Record;
-import org.jooq.Record1;
-import org.jooq.Table;
-import org.jooq.impl.DSL;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.protocols.HashKey;
@@ -74,7 +61,7 @@ public class WorkingSet {
             conflictSet = conflictSets.computeIfAbsent(cs, k -> new ConflictSet(k, this));
             conflictSet.add(this);
             this.links = links;
-            this.closure = new TreeSet<>();
+            this.closure = new ConcurrentSkipListSet<>();
 
             for (Node node : links) {
                 assert !node.isNoOp() : "Cannot have NoOps as parent links";
@@ -212,14 +199,20 @@ public class WorkingSet {
 
         @Override
         public void snip() {
-            dependents.forEach(node -> {
+            TreeSet<Node> deps = new TreeSet<>();
+            deps.addAll(dependents);
+            dependents.clear();
+            TreeSet<Node> close = new TreeSet<>();
+            close.addAll(closure);
+            closure.clear();
+            deps.forEach(node -> {
                 node.snip(Collections.singletonList(this));
                 node.snip(links);
-                node.snip(closure);
+                node.snip(close);
             });
-            dependents.clear();
+            links.clear();
+            close.forEach(node -> node.snip());
             unfinalized.remove(key);
-            closure().forEach(node -> node.snip());
         }
 
         @Override
@@ -551,6 +544,7 @@ public class WorkingSet {
             dependencies.forEach(node -> {
                 node.snip(Collections.singletonList(this));
             });
+            dependencies.clear();
             unfinalized.remove(key);
         }
 
@@ -560,30 +554,20 @@ public class WorkingSet {
         }
     }
 
-    public static final HashKey                      GENESIS_CONFLICT_SET = new HashKey(new byte[32]);
-    private final NavigableMap<HashKey, ConflictSet> conflictSets         = new ConcurrentSkipListMap<>();
-    private final Cache<HashKey, Boolean>            finalizedCache;
-    private final AvalancheParameters                parameters;
-    private final NavigableMap<HashKey, Node>        unfinalized          = new ConcurrentSkipListMap<>();
-    private final Set<Node>                          unknown              = new ConcurrentSkipListSet<>();
-    private final BlockingDeque<HashKey>             unqueried            = new LinkedBlockingDeque<>();
+    public static final HashKey                            GENESIS_CONFLICT_SET = new HashKey(new byte[32]);
+    private final NavigableMap<HashKey, ConflictSet>       conflictSets         = new ConcurrentSkipListMap<>();
+    private final ConcurrentSkipListMap<HashKey, DagEntry> finalized            = new ConcurrentSkipListMap<>();
+    private final AvalancheParameters                      parameters;
+    private final NavigableMap<HashKey, Node>              unfinalized          = new ConcurrentSkipListMap<>();
+    private final Set<Node>                                unknown              = new ConcurrentSkipListSet<>();
+    private final BlockingDeque<HashKey>                   unqueried            = new LinkedBlockingDeque<>();
 
     public WorkingSet(AvalancheParameters parameters) {
         this.parameters = parameters;
-        CacheBuilder<?, ?> builder = CacheBuilder.newBuilder();
-        @SuppressWarnings("unchecked")
-        CacheBuilder<HashKey, Boolean> cacheBuilder = (CacheBuilder<HashKey, Boolean>) builder;
-        finalizedCache = cacheBuilder.build();
     }
 
-    public List<HashKey> finalized(DSLContext context) {
-        return context.select(DAG.KEY)
-                      .from(DAG)
-                      .orderBy(DSL.rand())
-                      .limit(6)
-                      .stream()
-                      .map(r -> new HashKey(r.value1()))
-                      .collect(Collectors.toList());
+    public Set<HashKey> finalized() {
+        return finalized.keySet();
     }
 
     public List<HashKey> frontier(Random entropy) {
@@ -596,18 +580,12 @@ public class WorkingSet {
         return sample;
     }
 
-    public DagEntry get(HashKey key, DSLContext create) {
-        Record1<byte[]> entry = create.select(UNFINALIZED.DATA)
-                                      .from(UNFINALIZED)
-                                      .where(UNFINALIZED.HASH.eq(key.bytes()))
-                                      .fetchOne();
-        if (entry == null) {
-            entry = create.select(DAG.DATA).from(DAG).where(DAG.KEY.eq(key.bytes())).fetchOne();
+    public DagEntry getDagEntry(HashKey key) {
+        final Node node = unfinalized.get(key);
+        if (node != null) {
+            return node.getDagEntry();
         }
-        if (entry == null) {
-            return null;
-        }
-        return manifestDag(entry.value1());
+        return finalized.get(key);
     }
 
     public ConflictSet getConflictSet(HashKey key) {
@@ -622,8 +600,12 @@ public class WorkingSet {
         return conflictSets;
     }
 
-    public List<DagEntry> getEntries(List<HASH> want, int queryBatchSize, DSLContext queryPool) {
+    public List<DagEntry> getEntries(List<HASH> want, int queryBatchSize) {
         throw new IllegalStateException("Unknown nodes cannot be queried");
+    }
+
+    public Map<HashKey, DagEntry> getFinalized() {
+        return finalized;
     }
 
     public AvalancheParameters getParameters() {
@@ -654,40 +636,35 @@ public class WorkingSet {
         return Collections.emptyList();
     }
 
-    public HashKey insert(DagEntry entry, HashKey conflictSet, long discovered, DSLContext context) {
+    public HashKey insert(DagEntry entry, HashKey conflictSet, long discovered) {
         byte[] serialized = serialize(entry);
         HashKey key = new HashKey(hashOf(serialized));
         conflictSet = (entry.getLinks() == null || entry.getLinks().isEmpty()) ? GENESIS_CONFLICT_SET
                        : conflictSet == null ? key : conflictSet;
-        insert(key, entry, serialized, entry.getDescription() == null, discovered, conflictSet, context);
+        insert(key, entry, serialized, entry.getDescription() == null, discovered, conflictSet);
         return key;
     }
 
-    public HashKey insert(DagEntry entry, long discovered, DSLContext context) {
-        return insert(entry, null, discovered, context);
+    public HashKey insert(DagEntry entry, long discovered) {
+        return insert(entry, null, discovered);
     }
 
-    public List<HashKey> insert(List<DagEntry> entries, long discovered, DSLContext context) {
-        return entries.stream().map(entry -> insert(entry, discovered, context)).collect(Collectors.toList());
+    public List<HashKey> insert(List<DagEntry> entries, long discovered) {
+        return entries.stream().map(entry -> insert(entry, discovered)).collect(Collectors.toList());
     }
 
-    public boolean isFinalized(HashKey key, DSLContext context) {
-        try {
-            return finalizedCache.get(key, () -> context.fetchExists(DAG, DAG.KEY.eq(key.bytes())));
-        } catch (ExecutionException e) {
-            LoggerFactory.getLogger(WorkingSet.class).error("unable to query DAG", e);
-            return false;
-        }
+    public boolean isFinalized(HashKey key) {
+        return finalized.containsKey(key);
     }
 
-    public boolean isStronglyPreferred(HashKey key, DSLContext context) {
-        return isStronglyPreferred(Collections.singletonList(key), context).get(0);
+    public boolean isStronglyPreferred(HashKey key) {
+        return isStronglyPreferred(Collections.singletonList(key)).get(0);
     }
 
-    public List<Boolean> isStronglyPreferred(List<HashKey> keys, DSLContext context) {
+    public List<Boolean> isStronglyPreferred(List<HashKey> keys) {
         return keys.stream().map(key -> {
             Node node = unfinalized.get(key);
-            return node != null ? node.isStronglyPreferred() : isFinalized(key, context);
+            return node != null ? node.isStronglyPreferred() : isFinalized(key);
         }).collect(Collectors.toList());
     }
 
@@ -726,7 +703,7 @@ public class WorkingSet {
         return query;
     }
 
-    public int sampleNoOpParents(Collection<HashKey> collector, Random entropy, DSLContext context) {
+    public int sampleNoOpParents(Collection<HashKey> collector, Random entropy) {
         List<HashKey> sample = singularFrontier(entropy);
         if (sample.isEmpty()) {
             sample = frontier(entropy);
@@ -741,7 +718,7 @@ public class WorkingSet {
         return sample.size();
     }
 
-    public int sampleParents(Collection<HashKey> collector, Random entropy, DSLContext context) {
+    public int sampleParents(Collection<HashKey> collector, Random entropy) {
         List<HashKey> sample = singularFrontier(entropy);
         if (sample.isEmpty()) {
             sample = frontier(entropy);
@@ -753,15 +730,15 @@ public class WorkingSet {
             sample = preferred(entropy);
         }
         if (sample.isEmpty()) {
-            sample = finalized(context);
+            sample = new ArrayList<>(finalized());
         }
         sample.forEach(e -> collector.add(e));
         return sample.size();
     }
 
-    public List<HashKey> sampleParents(Random random, DSLContext context) {
+    public List<HashKey> sampleParents(Random random) {
         List<HashKey> collector = new ArrayList<>();
-        sampleParents(collector, random, context);
+        sampleParents(collector, random);
         return collector;
     }
 
@@ -775,7 +752,7 @@ public class WorkingSet {
         return sample;
     }
 
-    public FinalizationData tryFinalize(Collection<HashKey> keys, DSLContext context) {
+    public FinalizationData tryFinalize(Collection<HashKey> keys) {
         Set<Node> finalizedSet = new TreeSet<>();
         Set<Node> visited = new TreeSet<>();
         keys.stream()
@@ -787,54 +764,15 @@ public class WorkingSet {
             return new FinalizationData();
         }
 
-        Table<Record> allFinalized = DSL.table("FINALIZED");
-        Field<byte[]> allFinalizedHash = DSL.field("HASH", byte[].class, allFinalized);
-        context.execute("create cached local temporary table if not exists  FINALIZED(HASH binary(32) unique)");
-
-        BatchBindStep batch = context.batch(context.insertInto(allFinalized, allFinalizedHash).values((byte[]) null));
-        finalizedSet.forEach(node -> {
-            final HashKey key = node.getKey();
-            finalizedCache.put(key, true);
-            unqueried.remove(key);
-            batch.bind(key.bytes());
-        });
-        batch.execute();
-
-        int finalized = context.mergeInto(DAG, DAG.KEY, DAG.DATA, DAG.LINKS)
-                               .key(DAG.KEY)
-                               .select(context.select(UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
-                                              .from(UNFINALIZED)
-                                              .join(allFinalized)
-                                              .on((DSL.field("FINALIZED.HASH", byte[].class).eq(UNFINALIZED.HASH))))
-                               .execute();
-
-        context.deleteFrom(UNFINALIZED)
-               .where(UNFINALIZED.HASH.in(context.select(allFinalizedHash).from(allFinalized)))
-               .execute();
-
-        context.deleteFrom(allFinalized).execute();
-
-        if (finalized != finalizedSet.size()) {
-            System.out.println("Finalization differs " + finalized + " != " + finalizedSet.size());
-        }
-
         FinalizationData data = new FinalizationData();
         finalizedSet.stream().filter(node -> node instanceof KnownNode).forEach(node -> {
-            final ConflictSet conflictSet = node.getConflictSet();
-            conflictSets.remove(conflictSet.getKey());
-            conflictSet.getLosers().forEach(loser -> {
-                data.deleted.add(loser.getKey());
-                loser.delete();
-            });
-            final HashKey key = node.getKey();
-            data.finalized.add(key);
-            unfinalized.remove(key);
+            finalize(node, data);
         });
         return data;
     }
 
-    public FinalizationData tryFinalize(HashKey key, DSLContext context) {
-        return tryFinalize(Collections.singletonList(key), context);
+    public FinalizationData tryFinalize(HashKey key) {
+        return tryFinalize(Collections.singletonList(key));
     }
 
     public List<HashKey> unfinalizedSingular(Random entropy) {
@@ -848,17 +786,28 @@ public class WorkingSet {
     }
 
     /** for testing **/
-    void finalize(HashKey key, DSLContext context) {
+    void finalize(HashKey key) {
         Node node = unfinalized.remove(key);
-        if (node != null) {
-            node.snip();
+        if (node == null) {
+            return;
         }
-        context.insertInto(DAG, DAG.KEY, DAG.DATA, DAG.LINKS)
-               .select(context.select(UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
-                              .from(UNFINALIZED)
-                              .where((UNFINALIZED.HASH.eq(key.bytes()))))
-               .execute();
-        context.deleteFrom(UNFINALIZED).where(UNFINALIZED.HASH.eq(key.bytes())).execute();
+        finalize(node, new FinalizationData());
+    }
+
+    void finalize(Node node, FinalizationData data) {
+        HashKey key = node.getKey();
+        finalized.put(key, node.getDagEntry());
+        unqueried.remove(key);
+        unfinalized.remove(key);
+        node.snip();
+        final ConflictSet conflictSet = node.getConflictSet();
+        conflictSets.remove(conflictSet.getKey());
+        conflictSet.getLosers().forEach(loser -> {
+            data.deleted.add(loser.getKey());
+            loser.delete();
+        });
+        data.finalized.add(key);
+        unfinalized.remove(key);
     }
 
     /** for testing **/
@@ -866,75 +815,47 @@ public class WorkingSet {
         return unfinalized.get(key);
     }
 
-    void insert(HashKey key, byte[] entry, List<HASH> yeLinks, DSLContext context) {
-        byte[] links = null;
-        if (yeLinks != null) {
-            ByteBuffer linkBuf = ByteBuffer.allocate(32 * yeLinks.size());
-            for (HASH hash : yeLinks) {
-                linkBuf.put(hash.bytes());
-            }
-            links = linkBuf.array();
-        }
-
-        context.mergeInto(UNFINALIZED, UNFINALIZED.HASH, UNFINALIZED.DATA, UNFINALIZED.LINKS)
-               .key(UNFINALIZED.HASH)
-               .values(key.bytes(), entry, links)
-               .execute();
-    }
-
-    void insert(HashKey key, DagEntry entry, byte[] serialized, boolean noOp, long discovered, HashKey cs,
-                DSLContext context) {
+    void insert(HashKey key, DagEntry entry, byte[] serialized, boolean noOp, long discovered, HashKey cs) {
+        LoggerFactory.getLogger(WorkingSet.class).trace("inserting: {}", key);
         unfinalized.compute(key, (k, v) -> {
             if (v != null) {
                 if (v instanceof UnknownNode) {
-                    Node replacement = nodeFor(k, entry, noOp, discovered, cs, context);
+                    Node replacement = nodeFor(k, entry, noOp, discovered, cs);
                     ((UnknownNode) v).replaceWith(replacement);
-                    insert(key, serialize(entry), entry.getLinks(), context);
                     unqueried.add(k);
                     return replacement;
                 }
                 return v;
             }
 
-            try {
-                if (finalizedCache.get(k, () -> context.fetchExists(DAG, DAG.KEY.eq(k.bytes())))) {
-                    return null;
-                }
-            } catch (ExecutionException e) {
-                LoggerFactory.getLogger(WorkingSet.class).error("unable query DAG", e.getCause());
+            if (finalized.containsKey(key)) {
+                return null;
             }
-
-            Node node = nodeFor(k, entry, noOp, discovered, cs, context);
-
-            insert(key, serialize(entry), entry.getLinks(), context);
+            Node node = nodeFor(k, entry, noOp, discovered, cs);
             unqueried.add(k);
             return node;
         });
     }
 
-    Set<Node> linksOf(DagEntry entry, long discovered, DSLContext context) {
+    Set<Node> linksOf(DagEntry entry, long discovered) {
         List<HASH> links = entry.getLinks();
         return links == null ? Collections.emptySet()
                 : links.stream()
                        .map(link -> new HashKey(link))
-                       .map(link -> resolve(link, discovered, context))
+                       .map(link -> resolve(link, discovered))
                        .filter(node -> node != null)
                        .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
     }
 
-    Node nodeFor(HashKey k, DagEntry entry, boolean noOp, long discovered, HashKey cs, DSLContext context) {
-        return noOp ? new NoOpNode(k, entry, linksOf(entry, discovered, context), discovered)
-                : new KnownNode(k, entry, linksOf(entry, discovered, context), cs, discovered);
+    Node nodeFor(HashKey k, DagEntry entry, boolean noOp, long discovered, HashKey cs) {
+        return noOp ? new NoOpNode(k, entry, linksOf(entry, discovered), discovered)
+                : new KnownNode(k, entry, linksOf(entry, discovered), cs, discovered);
     }
 
-    Node resolve(HashKey key, long discovered, DSLContext context) {
+    Node resolve(HashKey key, long discovered) {
         return unfinalized.computeIfAbsent(key, k -> {
-            try {
-                if (finalizedCache.get(key, () -> context.fetchExists(DAG, DAG.KEY.eq(key.bytes())))) {
-                    return null;
-                }
-            } catch (ExecutionException e) {
-                LoggerFactory.getLogger(WorkingSet.class).error("error in finalization cache lookup", e.getCause());
+            if (finalized.containsKey(key)) {
+                return null;
             }
             Node node = new UnknownNode(k, discovered);
             unknown.add(node);

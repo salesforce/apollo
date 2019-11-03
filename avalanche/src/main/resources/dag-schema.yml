@@ -15,44 +15,36 @@ databaseChangeLog:
             -  column:
                   name: key
                   type: BINARY(32)
-                  autoIncrement: false
                   constraints:
-                     primaryKey: true
+                     nullable: false
             -  column:
                   name: data
                   type: BINARY
             -  column:
                   name: links
                   type: BINARY
-      -  addUniqueConstraint:
-            tableName: dag
+      -  addPrimaryKey: 
             columnNames: key
-            constraintName: dag_unique_key
-            deferrable: false
-            disabled: false
-            initiallyDeferred: false
+            constraintName: pk_dag_key
+            tableName: dag
       -  createTable:
             tableName: unfinalized
             columns:
             -  column:
                   name: hash
                   type: BINARY(32)
-                  autoIncrement: false
                   constraints:
-                     primaryKey: true
+                     nullable: false
             -  column:
                   name: data
                   type: BINARY
             -  column:
                   name: links
                   type: BINARY
-      -  addUniqueConstraint:
-            tableName: unfinalized
+      -  addPrimaryKey: 
             columnNames: hash
-            constraintName: unfinalized_unique_hash
-            deferrable: false
-            disabled: false
-            initiallyDeferred: false
+            constraintName: pk_unfinalized_hash
+            tableName: unfinalized
       -  createTable:
             tableName: processors
             columns:
