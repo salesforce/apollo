@@ -9,7 +9,7 @@ package com.salesforce.apollo.avalanche;
 
 import java.util.Collection;
 import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
 import com.salesforce.apollo.protocols.HashKey;
@@ -20,7 +20,7 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class ConflictSet {
-    private Set<Node>     conflicts = new ConcurrentSkipListSet<>();
+    private Set<Node>     conflicts = ConcurrentHashMap.newKeySet();
     private volatile int  counter   = 0;
     private final HashKey key;
     private volatile Node last;
@@ -75,7 +75,7 @@ public class ConflictSet {
         if (currentPreferred.getConfidence() < node.getConfidence()) {
             preferred = node;
         }
-        if (currentLast.equals(node)) {
+        if (currentLast == node) {
             counter++;
         }
     }

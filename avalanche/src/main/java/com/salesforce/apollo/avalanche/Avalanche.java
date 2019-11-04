@@ -182,6 +182,7 @@ public class Avalanche {
     private final Service                                    service             = new Service();
     private final View                                       view;
     private final ExecutorService                            finalizer;
+    private final AtomicBoolean                              generateNoOps       = new AtomicBoolean();
 
     public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p) {
         this(view, communications, p, null, null);
@@ -201,7 +202,12 @@ public class Avalanche {
         loadSchema(parameters.dbConnect);
         this.dag = new WorkingSet(parameters);
 
-        view.registerRoundListener(() -> round.incrementAndGet());
+        view.registerRoundListener(() -> {
+            round.incrementAndGet();
+            if (round.get() % parameters.delta == 0) {
+                generateNoOps.set(true);
+            }
+        });
 
         sampler = new RandomMemberGenerator(view);
         required = (int) (parameters.k * parameters.alpha);
@@ -439,9 +445,12 @@ public class Avalanche {
         }
         long sampleTime = System.currentTimeMillis() - now;
         List<HashKey> preferings = new ArrayList<>();
+        int falseCount = 0;
         for (int i = 0; i < results.size(); i++) {
             if (results.get(i)) {
                 preferings.add(unqueried.get(i));
+            } else {
+                falseCount++;
             }
         }
         finalizer.execute(() -> {
@@ -451,6 +460,10 @@ public class Avalanche {
             }
         });
 
+        if (falseCount > 0) {
+            log.info("querying {} txns in {} ms failures: {}", unqueried.size(), System.currentTimeMillis() - start,
+                     falseCount);
+        }
         log.trace("querying {} txns in {} ms ({} Query) ({} Sample)", unqueried.size(),
                   System.currentTimeMillis() - start, retrieveTime, sampleTime);
         return results.size();
@@ -593,7 +606,7 @@ public class Avalanche {
         log.trace("Performing round");
         try {
             query();
-            if (round.get() % parameters.delta == 0) {
+            if (generateNoOps.compareAndSet(true, false)) {
                 generateNoOpTxns();
             } else {
                 Thread.sleep(1);

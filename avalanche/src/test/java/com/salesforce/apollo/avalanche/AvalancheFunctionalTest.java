@@ -129,17 +129,17 @@ public class AvalancheFunctionalTest {
             aParams.beta1 = 3;
             aParams.beta2 = 5;
             // parent selection target for avalanche dag voting
-            aParams.parentCount = 3;
+            aParams.parentCount = 10;
 
             // Avalanche implementation parameters
             aParams.queryBatchSize = 40;
             aParams.finalizeBatchSize = 400;
             aParams.noOpsPerRound = 1;
-            aParams.maxNoOpParents = 100;
+            aParams.maxNoOpParents = 10;
             aParams.maxActiveQueries = 200;
 
-            // # of firefly rounds per avalanche round
-            aParams.epsilon = 1;
+            // # of firefly rounds per noOp generation round
+            aParams.delta = 5;
 
 //            aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
 //                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
@@ -154,9 +154,10 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 1_600;
+        int target = 25_600;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 100;
+        int runtime = (int) Duration.ofSeconds(120).toMillis();
 
         views.forEach(view -> view.getService().start(ffRound));
 
@@ -207,7 +208,7 @@ public class AvalancheFunctionalTest {
 
         transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, txnScheduler));
 
-        boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
+        boolean finalized = Utils.waitForCondition(runtime, 1_000, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= target)
@@ -249,10 +250,10 @@ public class AvalancheFunctionalTest {
                        .convertDurationsTo(TimeUnit.MILLISECONDS)
                        .build()
                        .report();
-        assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
         transactioneers.forEach(t -> {
             System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
         });
+        assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
     }
 
     private void seed(List<Avalanche> nodes) {

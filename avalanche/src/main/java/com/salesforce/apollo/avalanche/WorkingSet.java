@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import org.slf4j.LoggerFactory;
@@ -66,7 +67,7 @@ public class WorkingSet {
             for (Node node : links) {
                 assert !node.isNoOp() : "Cannot have NoOps as parent links";
                 node.addDependent(this);
-                node.addClosureTo(closure);
+                closure.addAll(node.closure());
             }
         }
 
@@ -127,7 +128,12 @@ public class WorkingSet {
         @Override
         public boolean isPreferred() {
             final boolean current = finalized;
-            return current || conflictSet.getPreferred().equals(this);
+            final boolean preferred = conflictSet.getPreferred() == this;
+            if (!preferred) {
+                System.out.println("Not preferred conflict: " + System.identityHashCode(conflictSet.getPreferred())
+                        + " != " + System.identityHashCode(this));
+            }
+            return current || preferred;
         }
 
         @Override
@@ -140,7 +146,7 @@ public class WorkingSet {
         public boolean isPreferredAndSingular(int maximumConfidence) {
             final boolean current = finalized;
             final int conf = confidence;
-            return !current && conf <= maximumConfidence && conflictSet.getPreferred().equals(this)
+            return !current && conf <= maximumConfidence && conflictSet.getPreferred() == this
                     && conflictSet.getCardinality() == 1;
         }
 
@@ -165,7 +171,7 @@ public class WorkingSet {
         @Override
         public boolean isUnfinalizedSingular() {
             final boolean current = finalized;
-            return !current && conflictSet.getCardinality() == 1 && conflictSet.getPreferred().equals(this);
+            return !current && conflictSet.getCardinality() == 1 && conflictSet.getPreferred() == this;
         }
 
         @Override
@@ -237,7 +243,7 @@ public class WorkingSet {
             }
             final int currentConfidence = confidence;
             if (currentConfidence >= parameters.beta1 && conflictSet.getCardinality() == 1
-                    && conflictSet.getPreferred().equals(this)) {
+                    && conflictSet.getPreferred() == this) {
                 if (links.stream()
                          .map(node -> node.tryFinalize(finalizedSet, visited))
                          .filter(success -> success)
@@ -248,7 +254,7 @@ public class WorkingSet {
                 }
                 final boolean current = finalized;
                 return current;
-            } else if (conflictSet.getCounter() >= parameters.beta2 && conflictSet.getPreferred().equals(this)) {
+            } else if (conflictSet.getCounter() >= parameters.beta2 && conflictSet.getPreferred() == this) {
                 finalized = true;
                 links.forEach(node -> node.markFinalized());
                 closure.forEach(node -> node.markFinalized());
@@ -330,6 +336,10 @@ public class WorkingSet {
         }
 
         public boolean isUnfinalizedSingular() {
+            return false;
+        }
+
+        public boolean isUnknown() {
             return false;
         }
 
@@ -520,6 +530,21 @@ public class WorkingSet {
             return finalized;
         }
 
+        public boolean isPreferred() {
+            System.out.println("failed to prefer because unknown in closure");
+            return false;
+        }
+
+        public boolean isStronglyPreferred() {
+            System.out.println("failed to prefer because querying unknown");
+            return false;
+        }
+
+        @Override
+        public boolean isUnknown() {
+            return true;
+        }
+
         @Override
         public void markFinalized() {
             finalized = true;
@@ -557,10 +582,12 @@ public class WorkingSet {
     public static final HashKey                            GENESIS_CONFLICT_SET = new HashKey(new byte[32]);
     private final NavigableMap<HashKey, ConflictSet>       conflictSets         = new ConcurrentSkipListMap<>();
     private final ConcurrentSkipListMap<HashKey, DagEntry> finalized            = new ConcurrentSkipListMap<>();
+    private final ReentrantLock                            lock                 = new ReentrantLock();
     private final AvalancheParameters                      parameters;
     private final NavigableMap<HashKey, Node>              unfinalized          = new ConcurrentSkipListMap<>();
     private final Set<Node>                                unknown              = new ConcurrentSkipListSet<>();
-    private final BlockingDeque<HashKey>                   unqueried            = new LinkedBlockingDeque<>();
+
+    private final BlockingDeque<HashKey> unqueried = new LinkedBlockingDeque<>();
 
     public WorkingSet(AvalancheParameters parameters) {
         this.parameters = parameters;
@@ -580,14 +607,6 @@ public class WorkingSet {
         return sample;
     }
 
-    public DagEntry getDagEntry(HashKey key) {
-        final Node node = unfinalized.get(key);
-        if (node != null) {
-            return node.getDagEntry();
-        }
-        return finalized.get(key);
-    }
-
     public ConflictSet getConflictSet(HashKey key) {
         Node node = unfinalized.get(key);
         if (node == null) {
@@ -598,6 +617,14 @@ public class WorkingSet {
 
     public NavigableMap<HashKey, ConflictSet> getConflictSets() {
         return conflictSets;
+    }
+
+    public DagEntry getDagEntry(HashKey key) {
+        final Node node = unfinalized.get(key);
+        if (node != null) {
+            return node.getDagEntry();
+        }
+        return finalized.get(key);
     }
 
     public List<DagEntry> getEntries(List<HASH> want, int queryBatchSize) {
@@ -817,24 +844,30 @@ public class WorkingSet {
 
     void insert(HashKey key, DagEntry entry, byte[] serialized, boolean noOp, long discovered, HashKey cs) {
         LoggerFactory.getLogger(WorkingSet.class).trace("inserting: {}", key);
-        unfinalized.compute(key, (k, v) -> {
-            if (v != null) {
-                if (v instanceof UnknownNode) {
-                    Node replacement = nodeFor(k, entry, noOp, discovered, cs);
-                    ((UnknownNode) v).replaceWith(replacement);
-                    unqueried.add(k);
-                    return replacement;
+        lock.lock(); // sux, but without this, we get dup's which is teh bad.
+        try {
+            final Node found = unfinalized.computeIfAbsent(key, k -> {
+                if (finalized.containsKey(key)) {
+                    return null;
                 }
-                return v;
+                Node node = nodeFor(k, entry, noOp, discovered, cs);
+                unqueried.add(k);
+                return node;
+            });
+            if (found != null && found.isUnknown()) {
+                unfinalized.computeIfPresent(key, (k, v) -> {
+                    if (v.isUnknown()) {
+                        Node replacement = nodeFor(k, entry, noOp, discovered, cs);
+                        ((UnknownNode) v).replaceWith(replacement);
+                        unqueried.add(k);
+                        return replacement;
+                    }
+                    return v;
+                });
             }
-
-            if (finalized.containsKey(key)) {
-                return null;
-            }
-            Node node = nodeFor(k, entry, noOp, discovered, cs);
-            unqueried.add(k);
-            return node;
-        });
+        } finally {
+            lock.unlock();
+        }
     }
 
     Set<Node> linksOf(DagEntry entry, long discovered) {
