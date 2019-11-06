@@ -102,8 +102,13 @@ protocol Apollo {
         array<HASH> interval;
     }
 
+    record Vote {
+        union { boolean, null } vote;
+    }
+
     record QueryResult {
-        array<boolean> result;
+        array<Vote> result;
+        array<bytes> wanted;
     }
 
     /*
@@ -131,10 +136,10 @@ protocol Apollo {
     /**
      * Avalanche query
      */
-    QueryResult query ( array<DagEntry> transactions );
+    QueryResult query ( array<bytes> transactions, array<HASH> wanted );
 
     /**
      * Avalanche lazy DAG update gossip
      */
-    array<DagEntry> requestDAG ( array<HASH> want );
+    array<bytes> requestDAG ( array<HASH> want );
 }

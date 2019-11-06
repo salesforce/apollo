@@ -7,6 +7,7 @@
 package com.salesforce.apollo.avalanche.communications;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 import org.apache.avro.AvroRemoteException;
@@ -18,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.QueryResult;
 import com.salesforce.apollo.fireflies.Member;
@@ -56,12 +56,12 @@ public class AvalancheClientCommunications extends CommonClientCommunications im
     }
 
     @Override
-    public QueryResult query(List<DagEntry> transactions) throws AvroRemoteException {
-        return client.query(transactions);
+    public QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) throws AvroRemoteException {
+        return client.query(transactions, wanted);
     }
 
     @Override
-    public List<DagEntry> requestDAG(List<HASH> want) throws AvroRemoteException {
+    public List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException {
         return client.requestDAG(want);
     }
 

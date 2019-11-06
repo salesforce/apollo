@@ -66,7 +66,7 @@ public class AvalancheFunctionalTest {
 
     @BeforeClass
     public static void beforeClass() {
-        certs = IntStream.range(1, 11)
+        certs = IntStream.range(1, 12)
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
@@ -123,6 +123,10 @@ public class AvalancheFunctionalTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
+            aParams.dagWood.index = new File("target/cluster/" + view.getNode().getId() + ".index");
+            aParams.dagWood.store = new File("target/cluster/" + view.getNode().getId() + ".store");
+            aParams.dagWood.maxCache = 50_000;
+
             // Avalanche protocol parameters
             aParams.alpha = 0.6;
             aParams.k = 10;
@@ -132,9 +136,8 @@ public class AvalancheFunctionalTest {
             aParams.parentCount = 10;
 
             // Avalanche implementation parameters
-            aParams.queryBatchSize = 40;
-            aParams.finalizeBatchSize = 400;
-            aParams.noOpsPerRound = 1;
+            aParams.queryBatchSize = 40; 
+            aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
             aParams.maxActiveQueries = 200;
 
@@ -154,10 +157,10 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 25_600;
+        int target = 200;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 100;
-        int runtime = (int) Duration.ofSeconds(120).toMillis();
+        int runtime = (int) Duration.ofSeconds(30).toMillis();
 
         views.forEach(view -> view.getService().start(ffRound));
 
@@ -203,7 +206,7 @@ public class AvalancheFunctionalTest {
         }
 
         List<Transactioneer> transactioneers = nodes.stream()
-                                                    .map(a -> new Transactioneer(a, 70_000))
+                                                    .map(a -> new Transactioneer(a, 700_000))
                                                     .collect(Collectors.toList());
 
         transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, txnScheduler));
@@ -235,7 +238,7 @@ public class AvalancheFunctionalTest {
         // true), new File("smoke.dot"));
 
         System.out.println("wanted: ");
-        System.out.println(master.getDag().getWanted(Integer.MAX_VALUE));
+        System.out.println(master.getDag().getWanted());
         System.out.println();
         System.out.println("Node 0 Metrics");
         ConsoleReporter.forRegistry(node0Registry)

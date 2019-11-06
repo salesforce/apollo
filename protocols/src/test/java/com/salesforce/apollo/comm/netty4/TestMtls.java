@@ -10,6 +10,7 @@ package com.salesforce.apollo.comm.netty4;
 import static org.junit.Assert.assertEquals;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.function.Function;
@@ -98,13 +99,13 @@ public class TestMtls {
             }
 
             @Override
-            public QueryResult query(List<DagEntry> transactions) {
+            public QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) {
                 // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
-            public List<DagEntry> requestDAG(List<HASH> want) {
+            public List<ByteBuffer> requestDAG(List<HASH> want) {
                 // TODO Auto-generated method stub
                 return null;
             }

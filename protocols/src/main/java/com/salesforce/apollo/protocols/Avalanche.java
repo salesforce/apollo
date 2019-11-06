@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.protocols;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 
 import org.apache.avro.AvroRemoteException;
 
-import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.QueryResult;
 
@@ -20,8 +20,8 @@ import com.salesforce.apollo.avro.QueryResult;
  */
 public interface Avalanche {
 
-    QueryResult query(List<DagEntry> transactions) throws AvroRemoteException;
+    QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) throws AvroRemoteException;
 
-    List<DagEntry> requestDAG(List<HASH> want) throws AvroRemoteException;
+    List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException;
 
 }

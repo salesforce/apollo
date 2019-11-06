@@ -15,21 +15,28 @@ import com.codahale.metrics.Timer;
  * @author hhildebrand
  */
 public class AvaMetrics {
+    private final Meter failedTxnQueryRate;
     private final Meter finalizerRate;
     private final Timer finalizeTimer;
     private final Meter inboundQueryRate;
     private final Timer inboundQueryTimer;
+    private final Meter inboundQueryUnknownRate;
     private final Meter inputRate;
     private final Timer noOpTimer;
     private final Meter parentSampleRate;
     private final Timer parentSampleTimer;
     private final Meter preferRate;
     private final Timer preferTimer;
+    private final Meter queryInvalidRate;
     private final Meter queryRate;
     private final Timer queryTimer;
+    private final Meter resampledRate;
+    private final Meter satisfiedRate;
     private final Meter submissionRate;
-
     private final Timer submissionTimer;
+    private final Meter unknownLinkRate;
+    private final Meter unknownReplacementRate;
+    private final Meter wantedRate;
 
     public AvaMetrics(MetricRegistry registry) {
         submissionTimer = registry.timer("Txn submission duration");
@@ -45,14 +52,32 @@ public class AvaMetrics {
 
         queryTimer = registry.timer("Query batch duration");
         queryRate = registry.meter("Query rate");
+        queryInvalidRate = registry.meter("Query invalid rate");
 
         inboundQueryTimer = registry.timer("Inbound query batch duration");
         inboundQueryRate = registry.meter("Inbound query rate");
+        inboundQueryUnknownRate = registry.meter("Inbound query unknown rate");
 
         noOpTimer = registry.timer("NoOp txn generation duration");
 
         parentSampleTimer = registry.timer("Parent sample duration");
         parentSampleRate = registry.meter("Parent sample rate");
+
+        unknownReplacementRate = registry.meter("Unknown replacement rate");
+
+        unknownLinkRate = registry.meter("Unknown link rate");
+
+        wantedRate = registry.meter("Wanted rate");
+
+        satisfiedRate = registry.meter("Satisfied rate");
+
+        failedTxnQueryRate = registry.meter("Failed txn query rate");
+
+        resampledRate = registry.meter("Resampled rate");
+    }
+
+    public Meter getFailedTxnQueryRate() {
+        return failedTxnQueryRate;
     }
 
     /**
@@ -77,6 +102,10 @@ public class AvaMetrics {
 
     public Timer getInboundQueryTimer() {
         return inboundQueryTimer;
+    }
+
+    public Meter getInboundQueryUnknownRate() {
+        return inboundQueryUnknownRate;
     }
 
     /**
@@ -125,6 +154,10 @@ public class AvaMetrics {
         return preferTimer;
     }
 
+    public Meter getQueryInvalidRate() {
+        return queryInvalidRate;
+    }
+
     /**
      * @return the queryRate
      */
@@ -141,6 +174,14 @@ public class AvaMetrics {
         return queryTimer;
     }
 
+    public Meter getResampledRate() {
+        return resampledRate;
+    }
+
+    public Meter getSatisfiedRate() {
+        return satisfiedRate;
+    }
+
     /**
      * @return the submissionRate
      */
@@ -155,6 +196,18 @@ public class AvaMetrics {
 
     public Timer getSubmissionTimer() {
         return submissionTimer;
+    }
+
+    public Meter getUnknownLinkRate() {
+        return unknownLinkRate;
+    }
+
+    public Meter getUnknownReplacementRate() {
+        return unknownReplacementRate;
+    }
+
+    public Meter getWantedRate() {
+        return wantedRate;
     }
 
 }

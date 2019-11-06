@@ -8,6 +8,8 @@ package com.salesforce.apollo.avalanche;
 
 import java.util.concurrent.TimeUnit;
 
+import com.salesforce.apollo.avalanche.DagWood.DagWoodParameters;
+
 /**
  * @author hal.hildebrand
  * @since 220
@@ -18,47 +20,49 @@ public class AvalancheParameters {
     /**
      * The percentage of k members that need to vote for a txn to be preferred
      */
-    public double alpha             = 0.9;
+    public double            alpha             = 0.9;
     /**
      * The confidence value for a transaction for early finalization
      */
-    public int    beta1             = 11;
+    public int               beta1             = 11;
     /**
      * The consecutive counter - i.e. "votes" - for a transaction for finalization
      */
-    public int    beta2             = 150;
+    public int               beta2             = 150;
+    public DagWoodParameters dagWood           = new DagWoodParameters();
     /**
      * The JDBC connection URL
      */
-    public String dbConnect         = DEFAULT_CONNECTION;
+    public String            dbConnect         = DEFAULT_CONNECTION;
     /**
      * The number of FF rounds per NoOp generation round
      */
-    public int    delta             = 1;
+    public int               delta             = 1;
     /**
      * The number of FF rounds per Avalanche round
      */
-    public int    epsilon           = 1;
-    public int    finalizeBatchSize = 40;
+    public int               epsilon           = 1;
+    public int               finalizeBatchSize = 40;
+    /**
+     * The number of frontier keys to keep on hand
+     */
+    public int frontier = 200;
     /**
      * The number of queries per FF round
      */
-    public int    gamma             = 20;
+    public int               gamma             = 20;
+
     /**
      * The number of members to sample for a vote
      */
-    public int    k                 = 10;
-    /**
-     * The limit on the Avalanche query batch size
-     */
-    public int    queryBatchSize    = 40;
-
-    public int maxNoOpParents = 100;
+    public int               k                 = 10;
 
     /**
      * Max JDBC connections in pool
      */
     public int maxActiveQueries = 100;
+
+    public int maxNoOpParents = 100;
 
     public int noOpsPerRound = 1;
 
@@ -66,6 +70,11 @@ public class AvalancheParameters {
      * The number of parents we desire for new txns
      */
     public int parentCount = 3;
+
+    /**
+     * The limit on the Avalanche query batch size
+     */
+    public int queryBatchSize = 40;
 
     /**
      * Query timeout
