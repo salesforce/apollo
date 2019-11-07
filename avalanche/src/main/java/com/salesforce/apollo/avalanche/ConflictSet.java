@@ -11,6 +11,7 @@ import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -20,18 +21,18 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class ConflictSet {
-    private Set<Node>     conflicts = ConcurrentHashMap.newKeySet();
+    private Set<KnownNode>     conflicts = ConcurrentHashMap.newKeySet();
     private volatile int  counter   = 0;
     private final HashKey key;
-    private volatile Node last;
-    private volatile Node preferred;
+    private volatile KnownNode last;
+    private volatile KnownNode preferred;
 
-    public ConflictSet(HashKey key, Node frist) {
+    public ConflictSet(HashKey key, KnownNode frist) {
         this.key = key;
         last = preferred = frist;
     }
 
-    public void add(Node conflict) {
+    public void add(KnownNode conflict) {
         if (!conflicts.isEmpty()) {
             boolean f = false;
             for (Node node : conflicts) {
@@ -61,12 +62,12 @@ public class ConflictSet {
         return key;
     }
 
-    public Node getLast() {
-        final Node current = last;
+    public KnownNode getLast() {
+        final KnownNode current = last;
         return current;
     }
 
-    public Collection<Node> getLosers() {
+    public Collection<KnownNode> getLosers() {
         conflicts.remove(getPreferred());
         return conflicts;
     }
@@ -76,13 +77,15 @@ public class ConflictSet {
         return current;
     }
 
-    public void prefer(Node node) {
-        final Node currentLast = last;
-        final Node currentPreferred = preferred;
+    public void prefer(KnownNode node) {
+        final KnownNode currentLast = last;
+        final KnownNode currentPreferred = preferred;
 
         last = node;
         if (currentPreferred.getConfidence() < node.getConfidence()) {
             preferred = node;
+            currentPreferred.invalidateCachedIsp();
+            preferred.invalidateCachedIsp();
         }
         if (currentLast == node) {
             counter++;

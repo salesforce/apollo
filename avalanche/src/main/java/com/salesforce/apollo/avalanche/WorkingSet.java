@@ -25,11 +25,12 @@ import java.util.Stack;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap; 
-import java.util.concurrent.ConcurrentSkipListSet; 
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -87,10 +88,10 @@ public class WorkingSet {
     }
 
     public class KnownNode extends MaterializedNode {
-        private volatile int      confidence = 0;
-        private final ConflictSet conflictSet;
-        private final Set<Node>   dependents = new ConcurrentSkipListSet<>();
-        private volatile boolean  finalized  = false;
+        private volatile int                confidence = 0;
+        private final ConflictSet           conflictSet;
+        private final Set<MaterializedNode> dependents = ConcurrentHashMap.newKeySet();
+        private volatile boolean            finalized  = false;
 
         public KnownNode(HashKey key, byte[] entry, Set<Node> links, HashKey cs, long discovered) {
             super(key, entry, links, discovered);
@@ -99,12 +100,7 @@ public class WorkingSet {
         }
 
         @Override
-        public String toString() {
-            return "Known [" + key + "]";
-        }
-
-        @Override
-        public void addDependent(Node node) {
+        public void addDependent(MaterializedNode node) {
             dependents.add(node);
         }
 
@@ -115,7 +111,7 @@ public class WorkingSet {
         }
 
         @Override
-        public Collection<Node> dependents() {
+        public Collection<MaterializedNode> dependents() {
             return dependents;
         }
 
@@ -146,7 +142,7 @@ public class WorkingSet {
         }
 
         @Override
-        public Boolean isPreferred() {
+        public Boolean calculateIsPreferred() {
             final boolean current = finalized;
             if (current) {
                 return true;
@@ -179,11 +175,15 @@ public class WorkingSet {
             if (current) {
                 return true;
             }
+            return super.isStronglyPreferred();
+        }
+
+        @Override
+        public Boolean calculateIsStronglyPreferred() {
             if (conflictSet.getPreferred() != this) {
-                log.info("not strongly preferred in conflict set");
                 return false;
             }
-            return traverseClosure(node -> node.isPreferred());
+            return super.calculateIsStronglyPreferred();
         }
 
         @Override
@@ -203,16 +203,6 @@ public class WorkingSet {
             conflictSet.prefer(this);
         }
 
-        @Override
-        public void prefer() {
-            chit = true;
-            markPreferred();
-            traverseClosure(node -> {
-                node.markPreferred();
-                return true;
-            });
-        }
-
         public void replace(UnknownNode node) {
             node.replaceWith(this);
             confidence = sumChits();
@@ -225,6 +215,11 @@ public class WorkingSet {
                 node.snip(this);
             });
             super.snip();
+        }
+
+        @Override
+        public String toString() {
+            return "Known [" + key + "]";
         }
 
         @Override
@@ -263,10 +258,18 @@ public class WorkingSet {
                 return false;
             }
         }
+
+        @Override
+        public void invalidateCachedIsp() {
+            super.invalidateCachedIsp();
+            dependents.forEach(node -> node.invalidateCachedIsp());
+        }
     }
 
     abstract public static class MaterializedNode extends Node {
-        protected volatile boolean chit = false;
+        private volatile boolean   cachedSP            = false;
+        protected volatile boolean chit                = false;
+        private volatile Boolean   isStronglyPreferred = null;
         protected final Set<Node>  links;
         private final byte[]       entry;
 
@@ -276,13 +279,30 @@ public class WorkingSet {
             this.links = links;
         }
 
+        public void invalidateCachedIsp() {
+            cachedSP = false;
+            isStronglyPreferred = null;
+        }
+
+        abstract public void addDependent(MaterializedNode node);
+
         @Override
         public void delete() {
             // TODO Auto-generated method stub
 
         }
 
-        public abstract Collection<Node> dependents();
+        @Override
+        public void prefer() {
+            chit = true;
+            markPreferred();
+            traverseClosure(node -> {
+                node.markPreferred();
+                return true;
+            });
+        }
+
+        public abstract Collection<MaterializedNode> dependents();
 
         @Override
         public boolean getChit() {
@@ -300,17 +320,15 @@ public class WorkingSet {
         }
 
         @Override
-        public void replace(UnknownNode unknownNode, Node replacement) {
-            if (links.remove(unknownNode)) {
-                links.add(replacement);
-                replacement.addDependent(this);
-            }
-
+        public Set<Node> links() {
+            return links;
         }
 
         @Override
-        public Set<Node> links() {
-            return links;
+        public void replace(UnknownNode unknownNode, Node replacement) {
+            links.remove(unknownNode);
+            links.add(replacement);
+            replacement.addDependent(this);
         }
 
         @Override
@@ -320,6 +338,44 @@ public class WorkingSet {
                 return true;
             });
             links.clear();
+        }
+
+        @Override
+        public Boolean isPreferred() {
+            boolean current = cachedSP;
+            if (current) {
+                Boolean currentIsp = isStronglyPreferred;
+                return currentIsp;
+            }
+            return calculateIsPreferred();
+        }
+
+        protected abstract Boolean calculateIsPreferred();
+
+        @Override
+        public Boolean isStronglyPreferred() {
+            boolean current = cachedSP;
+            if (current) {
+                Boolean currentIsp = isStronglyPreferred;
+                return currentIsp;
+            }
+            synchronized (this) {
+                Boolean stronglyPreferred = calculateIsStronglyPreferred();
+                isStronglyPreferred = stronglyPreferred;
+                cachedSP = true;
+                return stronglyPreferred;
+            }
+        }
+
+        public Boolean calculateIsStronglyPreferred() {
+            return traverseClosure(node -> node.isPreferred(), node -> markStronglyPreferred());
+        }
+
+        private void markStronglyPreferred() {
+            synchronized (this) {
+                isStronglyPreferred = true;
+                cachedSP = true;
+            }
         }
 
         @Override
@@ -334,7 +390,7 @@ public class WorkingSet {
         }
     }
 
-    public static abstract class Node   {
+    public static abstract class Node {
         protected final long    discovered;
         protected final HashKey key;
 
@@ -343,14 +399,13 @@ public class WorkingSet {
             this.discovered = discovered;
         }
 
-        abstract public void addDependent(Node node);
- 
-
         abstract public void delete();
 
         public boolean getChit() {
             return false;
         }
+
+        abstract public void addDependent(MaterializedNode node);
 
         abstract public int getConfidence();
 
@@ -425,31 +480,37 @@ public class WorkingSet {
             return 0;
         }
 
-        abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
+        public Boolean traverseClosure(Function<Node, Boolean> p) {
+            return traverseClosure(p, null);
+        }
 
-        Boolean traverseClosure(Function<Node, Boolean> p) {
+        public Boolean traverseClosure(Function<Node, Boolean> p, Consumer<Node> post) {
+            return traverseClosure(p, post, new HashSet<>());
+        }
 
-            Set<Node> visited = new HashSet<>(1024);
-            Set<Node> frontier = new HashSet<>(100);
-            frontier.addAll(links());
-            while (!frontier.isEmpty()) {
-                Set<Node> next = new HashSet<>();
-                for (Node node : frontier) {
-                    if (visited.add(node)) {
-                        Boolean test = p.apply(node);
-                        if (test == null) {
-                            return null;
-                        } else if (test) {
-                            next.addAll(node.links());
-                        } else {
-                            return false;
-                        }
+        public Boolean traverseClosure(Function<Node, Boolean> p, Consumer<Node> post, Set<Node> visited) {
+            Stack<Node> stack = new Stack<>();
+            stack.push(this);
+
+            for (Node node : links()) {
+                if (visited.add(node)) {
+                    Boolean result = p.apply(node);
+                    if (result == null) {
+                        return null;
                     }
+                    if (!result) {
+                        return false;
+                    }
+                    node.traverseClosure(p, post, visited);
                 }
-                frontier = next;
+            }
+            if (post != null) {
+                post.accept(this);
             }
             return true;
         }
+
+        abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
     }
 
     public static class NoOpNode extends MaterializedNode {
@@ -459,13 +520,8 @@ public class WorkingSet {
         }
 
         @Override
-        public void addDependent(Node node) {
+        public void addDependent(MaterializedNode node) {
             throw new IllegalStateException("No ops cannot be parents");
-        }
-
-        @Override
-        public String toString() {
-            return "NoOp [" + key + "]";
         }
 
         @Override
@@ -475,7 +531,7 @@ public class WorkingSet {
         }
 
         @Override
-        public Collection<Node> dependents() {
+        public Collection<MaterializedNode> dependents() {
             return Collections.emptySet();
         }
 
@@ -490,6 +546,11 @@ public class WorkingSet {
         }
 
         @Override
+        protected Boolean calculateIsPreferred() {
+            throw new IllegalStateException("Should never query NoOp in closure");
+        }
+
+        @Override
         public boolean isFinalized() {
             return false;
         }
@@ -497,16 +558,6 @@ public class WorkingSet {
         @Override
         public boolean isNoOp() {
             return true;
-        }
-
-        @Override
-        public Boolean isPreferred() {
-            throw new IllegalStateException("Should never query NoOp in closure");
-        }
-
-        @Override
-        public Boolean isStronglyPreferred() {
-            return traverseClosure(node -> node.isPreferred());
         }
 
         @Override
@@ -520,20 +571,6 @@ public class WorkingSet {
         }
 
         @Override
-        public void markPreferred() {
-            throw new IllegalStateException("NoOps cannot be parents");
-        }
-
-        @Override
-        public void prefer() {
-            chit = true;
-            traverseClosure(node -> {
-                node.markPreferred();
-                return true;
-            });
-        }
-
-        @Override
         public void replace(UnknownNode node) {
             // no dependents
         }
@@ -543,16 +580,17 @@ public class WorkingSet {
             links.remove(unknownNode);
             links.add(replacement);
         }
+
+        @Override
+        public String toString() {
+            return "NoOp [" + key + "]";
+        }
     }
 
     public class UnknownNode extends Node {
 
-        @Override
-        public String toString() {
-            return "Unknown [" + key + "]";
-        }
+        private final Set<MaterializedNode> dependencies = ConcurrentHashMap.newKeySet();
 
-        private final Set<Node>  dependencies = ConcurrentHashMap.newKeySet();
         private volatile boolean finalized;
 
         public UnknownNode(HashKey key, long discovered) {
@@ -560,7 +598,7 @@ public class WorkingSet {
         }
 
         @Override
-        public void addDependent(Node node) {
+        public void addDependent(MaterializedNode node) {
             dependencies.add(node);
         }
 
@@ -651,6 +689,11 @@ public class WorkingSet {
         @Override
         public void snip(Node node) {
             throw new IllegalStateException("Unknown nodes should never be dependents");
+        }
+
+        @Override
+        public String toString() {
+            return "Unknown [" + key + "]";
         }
 
         @Override
@@ -809,15 +852,9 @@ public class WorkingSet {
 
     public List<Boolean> isStronglyPreferred(List<HashKey> keys) {
         return keys.stream().map((Function<? super HashKey, ? extends Boolean>) key -> {
-            lock.lock();
-            Node node;
-            try {
-                node = unfinalized.get(key);
-                if (node == null) {
-                    return finalized.cacheContainsKey(key.bytes()) ? true : null;
-                }
-            } finally {
-                lock.unlock();
+            Node node = unfinalized.get(key);
+            if (node == null) {
+                return finalized.cacheContainsKey(key.bytes()) ? true : null;
             }
             return node.isStronglyPreferred();
 
