@@ -7,7 +7,6 @@
 package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.dagwood.schema.Tables.PROCESSORS;
-import static com.salesforce.apollo.protocols.Conversion.serialize;
 
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
@@ -104,34 +103,31 @@ public class Avalanche {
             if (!running.get()) {
                 ArrayList<Vote> results = new ArrayList<>();
                 for (int i = 0; i < transactions.size(); i++) {
-                    results.add(INVALID);
+                    results.add(Vote.UNKNOWN);
+                    if (metrics != null) {
+                        metrics.getInboundQueryUnknownRate().mark();
+                    }
                 }
-                ;
                 return new QueryResult(results, Collections.emptyList());
             }
             long now = System.currentTimeMillis();
             Context timer = metrics == null ? null : metrics.getInboundQueryTimer().time();
 
             final List<HashKey> inserted = dag.insertSerialized(transactions, System.currentTimeMillis());
-            if (metrics != null) {
-                metrics.getInputRate().mark(inserted.size());
-            }
             List<Boolean> stronglyPreferred = dag.isStronglyPreferred(inserted);
             log.trace("onquery {} txn in {} ms", stronglyPreferred, System.currentTimeMillis() - now);
             List<Vote> queried = stronglyPreferred.stream().map(r -> {
                 if (r == null) {
                     if (metrics != null) {
-                        metrics.getInboundQueryRate().mark();
+                        metrics.getInboundQueryUnknownRate().mark();
                     }
-                    return INVALID;
+                    return Vote.UNKNOWN;
                 } else if (r) {
-                    return YES;
+                    return Vote.TRUE;
                 } else {
-                    return NO;
+                    return Vote.FALSE;
                 }
             }).collect(Collectors.toList());
-
-            assert !queried.stream().anyMatch(e -> e == null) : "null in query results";
 
             if (timer != null) {
                 timer.close();
@@ -141,27 +137,26 @@ public class Avalanche {
                     + transactions.size();
 
             return new QueryResult(queried,
-                    dag.getSerializedEntries(wanted.stream().map(e -> new HashKey(e)).collect(Collectors.toList())));
+                    dag.getQuerySerializedEntries(wanted.stream()
+                                                        .map(e -> new HashKey(e))
+                                                        .collect(Collectors.toList())));
         }
 
         public List<ByteBuffer> requestDAG(List<HASH> want) {
             if (!running.get()) {
                 return new ArrayList<>();
             }
-            return dag.getUnfinalized(want.stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
+            return dag.getEntries(want.stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
         }
     }
 
-    private static final int AVALANCHE_TXN_FLOOD_CHANNEL = 2;
-    private static final String DAG_SCHEMA_YML = "dag-schema.yml";
-    private static final Vote INVALID = new Vote(null);
+    private static final int    AVALANCHE_TXN_FLOOD_CHANNEL = 2;
+    private static final String DAG_SCHEMA_YML              = "dag-schema.yml";
 
-    private final static Logger log            = LoggerFactory.getLogger(Avalanche.class);
+    private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
 
-    private static final Vote NO      = new Vote(false);
-    private static final String PASSWORD       = "";
-    private static final String USER_NAME      = "Apollo";
-    private static final Vote YES     = new Vote(true);
+    private static final String PASSWORD  = "";
+    private static final String USER_NAME = "Apollo";
 
     public static void loadSchema(String dbConnect) {
         Connection connection;
@@ -196,7 +191,7 @@ public class Avalanche {
     private final WorkingSet                                 dag;
     private final ExecutorService                            finalizer;
     @SuppressWarnings("unused")
-    private final RingBuffer<HashKey> frontier;
+    private final RingBuffer<HashKey>                        frontier;
     private final AtomicBoolean                              generateNoOps       = new AtomicBoolean();
     private final int                                        invalidThreshold;
     private final AvaMetrics                                 metrics;
@@ -245,7 +240,6 @@ public class Avalanche {
         sampler = new RandomMemberGenerator(view);
         required = (int) (parameters.k * parameters.alpha);
         invalidThreshold = parameters.k - required - 1;
-        log.info("invalid threshold: {}", invalidThreshold);
 
         ClassLoader loader = resolver;
         if (resolver == null) {
@@ -288,7 +282,7 @@ public class Avalanche {
                                  System.currentTimeMillis());
         pendingTransactions.put(key, new PendingTransaction(futureSailor,
                 scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
-        view.publish(AVALANCHE_TXN_FLOOD_CHANNEL, serialize(dagEntry));
+        flood(dagEntry);
         return futureSailor;
     }
 
@@ -387,7 +381,7 @@ public class Avalanche {
                 metrics.getSubmissionRate().mark();
                 metrics.getInputRate().mark();
             }
-            view.publish(AVALANCHE_TXN_FLOOD_CHANNEL, serialize(dagEntry));
+            flood(dagEntry);
             return key.toHash();
         } finally {
             if (timer != null) {
@@ -440,6 +434,10 @@ public class Avalanche {
         });
         log.debug("Finalizing: {}, deleting: {} in {} ms", finalized.finalized.size(), finalized.deleted.size(),
                   System.currentTimeMillis() - then);
+    }
+
+    void flood(DagEntry dagEntry) {
+//        view.publish(AVALANCHE_TXN_FLOOD_CHANNEL, serialize(dagEntry));
     }
 
     /**
@@ -515,7 +513,7 @@ public class Avalanche {
             }
             return 0;
         }
-        List<ByteBuffer> query = dag.getUnfinalized(unqueried);
+        List<ByteBuffer> query = dag.getQuerySerializedEntries(unqueried);
         List<Boolean> results = query(query, sample);
         if (timer != null) {
             timer.close();
@@ -538,6 +536,9 @@ public class Avalanche {
             } else if (result) {
                 preferings.add(key);
             } else {
+                if (metrics != null) {
+                    metrics.getFailedTxnQueryRate().mark();
+                }
                 unpreferings.add(key);
             }
         }
@@ -609,18 +610,19 @@ public class Avalanche {
             if (result.getResult().isEmpty()) {
                 for (int i = 0; i < batch.size(); i++) {
                     invalid[i].incrementAndGet();
-                    if (metrics != null) {
-                        metrics.getQueryInvalidRate().mark();
-                    }
                 }
                 return false;
             }
             for (int i = 0; i < batch.size(); i++) {
-                final Vote vote = result.getResult().get(i);
-                if (vote.getVote() == null) {
-                    invalid[i].incrementAndGet();
-                } else if (vote.getVote()) {
+                switch (result.getResult().get(i)) {
+                case FALSE:
+                    break;
+                case TRUE:
                     votes[i].incrementAndGet();
+                    break;
+                case UNKNOWN:
+                    invalid[i].incrementAndGet();
+                    break;
                 }
             }
             return true;
@@ -655,14 +657,9 @@ public class Avalanche {
         List<Boolean> queryResults = new ArrayList<>();
         for (int i = 0; i < batch.size(); i++) {
             if ((invalidThreshold <= invalid[i].get())) {
-                log.trace("valid threshold not reached: {}", invalid[i].get());
                 queryResults.add(null);
             } else {
-                boolean vote = votes[i].get() >= required;
-                if (!vote) {
-                    log.info("no vote, invalid: {}", invalid[i].get());
-                }
-                queryResults.add(vote);
+                queryResults.add(votes[i].get() >= required);
             }
         }
 
@@ -728,43 +725,41 @@ public class Avalanche {
     }
 
     private void getWanted() {
-        for (int i = 0; i < view.getParameters().toleranceLevel + 1; i++) {
-            List<HashKey> want = dag.getWanted(parameters.queryBatchSize);
-            if (want.isEmpty()) {
-                break;
-            }
-
-            if (metrics != null) {
-                metrics.getWantedRate().mark(want.size());
-            }
-
-            Member next = sampler.next();
-            if (next == null) {
-                return;
-            }
-
-            AvalancheClientCommunications connection = comm.connectToNode(next, getNode());
-            if (connection == null) {
-                return;
-            }
-
-            List<ByteBuffer> requested;
-            try {
-                requested = connection.requestDAG(want.stream().map(e -> e.toHash()).collect(Collectors.toList()));
-            } catch (AvroRemoteException e) {
-                log.info("error getting wanted from {} ", next);
-                return;
-            }
-
-            if (metrics != null) {
-                metrics.getSatisfiedRate().mark(requested.size());
-            }
-
-            if (requested.isEmpty()) {
-                return;
-            }
-            dag.insertSerialized(requested, System.currentTimeMillis());
+        List<HashKey> want = dag.getWanted(getEntropy());
+        if (want.isEmpty()) {
+            return;
         }
+
+        if (metrics != null) {
+            metrics.getWantedRate().mark(want.size());
+        }
+
+        Member next = sampler.next();
+        if (next == null) {
+            return;
+        }
+
+        AvalancheClientCommunications connection = comm.connectToNode(next, getNode());
+        if (connection == null) {
+            return;
+        }
+
+        List<ByteBuffer> requested;
+        try {
+            requested = connection.requestDAG(want.stream().map(e -> e.toHash()).collect(Collectors.toList()));
+        } catch (AvroRemoteException e) {
+            log.info("error getting wanted from {} ", next);
+            return;
+        }
+
+        if (metrics != null) {
+            metrics.getSatisfiedRate().mark(requested.size());
+        }
+
+        if (requested.isEmpty()) {
+            return;
+        }
+        dag.insertSerialized(requested, System.currentTimeMillis());
     }
 
     private void initializeProcessors(ClassLoader resolver) {

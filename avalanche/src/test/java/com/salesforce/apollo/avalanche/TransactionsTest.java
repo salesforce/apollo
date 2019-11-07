@@ -12,8 +12,10 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.io.File;
 import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -26,6 +28,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
@@ -67,11 +70,11 @@ public class TransactionsTest {
                 connection.close();
             } catch (SQLException e) {
             }
-        }
+        } 
     }
 
     @Before
-    public void before() throws SQLException {
+    public void before() throws Exception {
         entropy = new Random(0x1638);
         connection_url = "jdbc:h2:mem:test-" + (Math.random() * 100);
         Avalanche.loadSchema(connection_url);
@@ -81,7 +84,9 @@ public class TransactionsTest {
         create = DSL.using(provider, SQLDialect.H2);
         create.deleteFrom(DAG).execute();
         parameters = new AvalancheParameters();
-        dag = new WorkingSet(parameters);
+        parameters.dagWood.store = new File("target/" + UUID.randomUUID());
+        parameters.dagWood.store.deleteOnExit();
+        dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
         root = new DagEntry();
         root.setDescription(WellKnownDescriptions.GENESIS.toHash());
         root.setData(ByteBuffer.wrap("Ye root".getBytes()));
@@ -286,13 +291,13 @@ public class TransactionsTest {
         ordered.add(key);
 
         HashKey zero = new HashKey(new byte[32]);
-        assertFalse("Not exist returned true: ", dag.isStronglyPreferred(zero));
+        assertNull("Not exist returned true: ", dag.isStronglyPreferred(zero));
 
         byte[] o = new byte[32];
         Arrays.fill(o, (byte) 1);
         HashKey one = new HashKey(o);
-        assertFalse("Not exist returned true: ", dag.isStronglyPreferred(one));
-        assertArrayEquals("Aggregate failed: ", new Boolean[] { false, false },
+        assertNull("Not exist returned true: ", dag.isStronglyPreferred(one));
+        assertArrayEquals("Aggregate failed: ", new Boolean[] { null, null },
                           dag.isStronglyPreferred(Arrays.asList(zero, one)).toArray(new Boolean[2]));
 
         // All are strongly preferred
@@ -317,8 +322,7 @@ public class TransactionsTest {
 
         for (int i = 0; i < 4; i++) {
             int it = i;
-            assertTrue(String.format("node %s is not strongly preferred", i),
-                       dag.isStronglyPreferred(ordered.get(it)));
+            assertTrue(String.format("node %s is not strongly preferred", i), dag.isStronglyPreferred(ordered.get(it)));
         }
 
         entry = new DagEntry();
@@ -384,9 +388,7 @@ public class TransactionsTest {
         assertTrue(dag.isFinalized(rootKey));
 
         // 1 elegible parent, the root
-        Set<HashKey> sampled = dag.sampleParents(entropy)
-                                  .stream()
-                                  .collect(Collectors.toCollection(TreeSet::new));
+        Set<HashKey> sampled = dag.sampleParents(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
         assertEquals(1, sampled.size());
         assertTrue(sampled.contains(ordered.get(0)));
 

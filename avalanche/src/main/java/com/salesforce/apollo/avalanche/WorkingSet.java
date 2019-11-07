@@ -15,18 +15,22 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
+import java.util.Stack;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap; 
+import java.util.concurrent.ConcurrentSkipListSet; 
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -43,50 +47,65 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class WorkingSet {
+    public static class DagInsert {
+        public final HashKey  conflictSet;
+        public final DagEntry dagEntry;
+        public final byte[]   entry;
+        public final HashKey  key;
+        public final boolean  noOp;
+
+        public DagInsert(HashKey key, DagEntry dagEntry, byte[] entry, HashKey conflictSet, boolean noOp) {
+            this.key = key;
+            this.dagEntry = dagEntry;
+            this.entry = entry;
+            this.conflictSet = conflictSet;
+            this.noOp = noOp;
+        }
+
+        public void topologicalSort(Map<HashKey, DagInsert> set, Set<DagInsert> visited, Stack<DagInsert> stack) {
+            if (!visited.add(this)) {
+                return;
+            }
+
+            if (dagEntry.getLinks() == null) {
+                return;
+            }
+
+            dagEntry.getLinks().forEach(link -> {
+                DagInsert n = set.get(new HashKey(link.bytes()));
+                if (n != null && !visited.contains(n)) {
+                    n.topologicalSort(set, visited, stack);
+                }
+            });
+            stack.push(this);
+        }
+    }
+
     public static class FinalizationData {
         public final Set<HashKey> deleted   = new TreeSet<>();
         public final Set<HashKey> finalized = new TreeSet<>();
     }
 
-    public class KnownNode extends Node {
-        private volatile boolean  chit       = false;
-        private final Set<Node>   closure;
+    public class KnownNode extends MaterializedNode {
         private volatile int      confidence = 0;
         private final ConflictSet conflictSet;
         private final Set<Node>   dependents = new ConcurrentSkipListSet<>();
-        private final byte[]      entry;
         private volatile boolean  finalized  = false;
-        private final Set<Node>   links;
 
         public KnownNode(HashKey key, byte[] entry, Set<Node> links, HashKey cs, long discovered) {
-            super(key, discovered);
-            this.entry = entry;
+            super(key, entry, links, discovered);
             conflictSet = conflictSets.computeIfAbsent(cs, k -> new ConflictSet(k, this));
             conflictSet.add(this);
-            this.links = links;
-            this.closure = new ConcurrentSkipListSet<>();
-
-            for (Node node : links) {
-                assert !node.isNoOp() : "Cannot have NoOps as parent links";
-                node.addDependent(this);
-                closure.addAll(node.closure());
-            }
         }
 
         @Override
-        public void addClosureTo(Set<Node> closureSet) {
-            closureSet.addAll(links);
-            closureSet.addAll(closure);
+        public String toString() {
+            return "Known [" + key + "]";
         }
 
         @Override
         public void addDependent(Node node) {
             dependents.add(node);
-        }
-
-        @Override
-        public Set<Node> closure() {
-            return closure;
         }
 
         @Override
@@ -96,10 +115,8 @@ public class WorkingSet {
         }
 
         @Override
-        public boolean finalized() {
-            final boolean wasFinalized = finalized;
-            finalized = true;
-            return wasFinalized;
+        public Collection<Node> dependents() {
+            return dependents;
         }
 
         @Override
@@ -118,8 +135,8 @@ public class WorkingSet {
         }
 
         @Override
-        public byte[] getEntry() {
-            return entry;
+        public boolean isComplete() {
+            return traverseClosure(node -> !node.isUnknown());
         }
 
         @Override
@@ -158,33 +175,15 @@ public class WorkingSet {
 
         @Override
         public Boolean isStronglyPreferred() {
-            if (conflictSet.getPreferred() == this) {
-                for (Node node : links) {
-                    final Boolean preferred = node.isPreferred();
-                    if (preferred == null) {
-                        log.trace("Known not strongly prefered in links due to unknown");
-                        return null; // we can't make a decision, delay
-                    }
-                    if (!preferred) {
-                        log.info("Known not strongly prefered in links");
-                        return false;
-                    }
-                }
-                for (Node node : closure) {
-                    final Boolean preferred = node.isPreferred();
-                    if (preferred == null) {
-                        log.trace("Known not strongly prefered in closure due to unknown");
-                        return null; // we can't make a decision, delay
-                    }
-                    if (!preferred) {
-                        log.info("Known not strongly prefered in closure");
-                        return false;
-                    }
-                }
+            final boolean current = finalized;
+            if (current) {
                 return true;
             }
-            log.info("not strongly preferred in conflict set");
-            return false;
+            if (conflictSet.getPreferred() != this) {
+                log.info("not strongly preferred in conflict set");
+                return false;
+            }
+            return traverseClosure(node -> node.isPreferred());
         }
 
         @Override
@@ -208,61 +207,38 @@ public class WorkingSet {
         public void prefer() {
             chit = true;
             markPreferred();
-            links.forEach(node -> node.markPreferred());
-            closure.forEach(node -> node.markPreferred());
+            traverseClosure(node -> {
+                node.markPreferred();
+                return true;
+            });
         }
 
-        @Override
-        public void replace(UnknownNode unknownNode, Node replacement) {
-            if (links.remove(unknownNode)) {
-                links.add(replacement);
-                replacement.addDependent(this);
-                replacement.addClosureTo(closure);
-            }
-
+        public void replace(UnknownNode node) {
+            node.replaceWith(this);
+            confidence = sumChits();
         }
 
         @Override
         public void snip() {
-            TreeSet<Node> deps = new TreeSet<>();
-            deps.addAll(dependents);
-            dependents.clear();
-            TreeSet<Node> close = new TreeSet<>();
-            close.addAll(closure);
-            closure.clear();
-            deps.forEach(node -> {
-                node.snip(Collections.singletonList(this));
-                node.snip(links);
-                node.snip(close);
-            });
-            links.clear();
-            close.forEach(node -> node.snip());
             unfinalized.remove(key);
-        }
-
-        @Override
-        public void snip(Collection<Node> nodes) {
-            links.removeAll(nodes);
-            closure.removeAll(nodes);
-        }
-
-        @Override
-        public int sumChits() {
-            return dependents.stream().mapToInt(node -> node.sumChits()).sum() + (chit ? 1 : 0);
+            dependents.forEach(node -> {
+                node.snip(this);
+            });
+            super.snip();
         }
 
         @Override
         public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
-            if (!visited.add(this)) {
-                return finalized;
-            }
             final boolean isFinalized = finalized;
+            if (!visited.add(this)) {
+                return isFinalized;
+            }
             if (isFinalized) {
                 return true;
             }
             final int currentConfidence = confidence;
-            if (currentConfidence >= parameters.beta1 && conflictSet.getCardinality() == 1
-                    && conflictSet.getPreferred() == this) {
+            final boolean preferred = conflictSet.getPreferred() == this;
+            if (currentConfidence >= parameters.beta1 && conflictSet.getCardinality() == 1 && preferred) {
                 if (links.stream()
                          .map(node -> node.tryFinalize(finalizedSet, visited))
                          .filter(success -> success)
@@ -273,13 +249,14 @@ public class WorkingSet {
                 }
                 final boolean current = finalized;
                 return current;
-            } else if (conflictSet.getCounter() >= parameters.beta2 && conflictSet.getPreferred() == this) {
+            } else if (conflictSet.getCounter() >= parameters.beta2 && preferred) {
                 finalized = true;
-                links.forEach(node -> node.markFinalized());
-                closure.forEach(node -> node.markFinalized());
                 finalizedSet.add(this);
-                finalizedSet.addAll(links);
-                finalizedSet.addAll(closure);
+                traverseClosure(node -> {
+                    node.markFinalized();
+                    finalizedSet.add(node);
+                    return true;
+                });
                 return true;
             } else {
                 links.forEach(node -> node.tryFinalize(finalizedSet, visited));
@@ -288,7 +265,76 @@ public class WorkingSet {
         }
     }
 
-    public static abstract class Node implements Comparable<Node> {
+    abstract public static class MaterializedNode extends Node {
+        protected volatile boolean chit = false;
+        protected final Set<Node>  links;
+        private final byte[]       entry;
+
+        public MaterializedNode(HashKey key, byte[] entry, Set<Node> links, long discovered) {
+            super(key, discovered);
+            this.entry = entry;
+            this.links = links;
+        }
+
+        @Override
+        public void delete() {
+            // TODO Auto-generated method stub
+
+        }
+
+        public abstract Collection<Node> dependents();
+
+        @Override
+        public boolean getChit() {
+            return chit;
+        }
+
+        @Override
+        public byte[] getEntry() {
+            return entry;
+        }
+
+        @Override
+        public boolean isComplete() {
+            return traverseClosure(node -> !node.isUnknown());
+        }
+
+        @Override
+        public void replace(UnknownNode unknownNode, Node replacement) {
+            if (links.remove(unknownNode)) {
+                links.add(replacement);
+                replacement.addDependent(this);
+            }
+
+        }
+
+        @Override
+        public Set<Node> links() {
+            return links;
+        }
+
+        @Override
+        public void snip() {
+            traverseClosure(node -> {
+                node.snip();
+                return true;
+            });
+            links.clear();
+        }
+
+        @Override
+        public int sumChits() {
+            return dependents().stream().mapToInt(node -> node.sumChits()).sum() + (chit ? 1 : 0);
+        }
+
+        @Override
+        public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
+            links.forEach(node -> node.tryFinalize(finalizedSet, visited));
+            return true;
+        }
+    }
+
+    public static abstract class Node   {
         protected final long    discovered;
         protected final HashKey key;
 
@@ -297,20 +343,10 @@ public class WorkingSet {
             this.discovered = discovered;
         }
 
-        public abstract void addClosureTo(Set<Node> closure);
-
         abstract public void addDependent(Node node);
-
-        abstract public Set<Node> closure();
-
-        @Override
-        public int compareTo(Node o) {
-            return getKey().compareTo(o.getKey());
-        }
+ 
 
         abstract public void delete();
-
-        public abstract boolean finalized();
 
         public boolean getChit() {
             return false;
@@ -326,9 +362,13 @@ public class WorkingSet {
             return discovered;
         }
 
+        abstract public byte[] getEntry();
+
         public HashKey getKey() {
             return key;
         }
+
+        abstract public boolean isComplete();
 
         abstract public boolean isFinalized();
 
@@ -360,6 +400,10 @@ public class WorkingSet {
             return false;
         }
 
+        public Set<Node> links() {
+            return Collections.emptySet();
+        }
+
         abstract public void markFinalized();
 
         public void markPreferred() {
@@ -367,12 +411,14 @@ public class WorkingSet {
 
         abstract public void prefer();
 
+        abstract public void replace(UnknownNode node);
+
         public abstract void replace(UnknownNode unknownNode, Node replacement);
 
-        public void snip() {
-        }
+        abstract public void snip();
 
-        public void snip(Collection<Node> nodes) {
+        public void snip(Node node) {
+            links().remove(node);
         }
 
         public int sumChits() {
@@ -381,28 +427,35 @@ public class WorkingSet {
 
         abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
 
-        protected abstract byte[] getEntry();
+        Boolean traverseClosure(Function<Node, Boolean> p) {
+
+            Set<Node> visited = new HashSet<>(1024);
+            Set<Node> frontier = new HashSet<>(100);
+            frontier.addAll(links());
+            while (!frontier.isEmpty()) {
+                Set<Node> next = new HashSet<>();
+                for (Node node : frontier) {
+                    if (visited.add(node)) {
+                        Boolean test = p.apply(node);
+                        if (test == null) {
+                            return null;
+                        } else if (test) {
+                            next.addAll(node.links());
+                        } else {
+                            return false;
+                        }
+                    }
+                }
+                frontier = next;
+            }
+            return true;
+        }
     }
 
-    public static class NoOpNode extends Node {
-        private volatile boolean chit = false;
-        private final Set<Node>  closure;
-        private final byte[]     entry;
+    public static class NoOpNode extends MaterializedNode {
 
         public NoOpNode(HashKey key, byte[] entry, Set<Node> links, long discovered) {
-            super(key, discovered);
-            this.entry = entry;
-            closure = new TreeSet<>();
-            links.forEach(node -> {
-                if (closure.add(node)) {
-                    closure.addAll(node.closure());
-                }
-            });
-        }
-
-        @Override
-        public void addClosureTo(Set<Node> closure) {
-            throw new IllegalStateException("NoOps can never be parents");
+            super(key, entry, links, discovered);
         }
 
         @Override
@@ -411,8 +464,8 @@ public class WorkingSet {
         }
 
         @Override
-        public Set<Node> closure() {
-            return closure;
+        public String toString() {
+            return "NoOp [" + key + "]";
         }
 
         @Override
@@ -422,13 +475,8 @@ public class WorkingSet {
         }
 
         @Override
-        public boolean finalized() {
-            throw new IllegalStateException("No op nodes cannot be finalized");
-        }
-
-        @Override
-        public boolean getChit() {
-            return chit;
+        public Collection<Node> dependents() {
+            return Collections.emptySet();
         }
 
         @Override
@@ -437,8 +485,8 @@ public class WorkingSet {
         }
 
         @Override
-        public byte[] getEntry() {
-            return entry;
+        public boolean isComplete() {
+            return traverseClosure(node -> !node.isUnknown());
         }
 
         @Override
@@ -458,18 +506,12 @@ public class WorkingSet {
 
         @Override
         public Boolean isStronglyPreferred() {
-            for (Node node : closure) {
-                final Boolean preferred = node.isPreferred();
-                if (preferred == null) {
-                    log.trace("No op not strongly prefered due to unknown in closure");
-                    return null;
-                }
-                if (!preferred) {
-                    log.info("No op not strongly prefered in closure");
-                    return false;
-                }
-            }
-            return true;
+            return traverseClosure(node -> node.isPreferred());
+        }
+
+        @Override
+        public Set<Node> links() {
+            return links;
         }
 
         @Override
@@ -485,35 +527,32 @@ public class WorkingSet {
         @Override
         public void prefer() {
             chit = true;
-            closure.forEach(node -> node.markPreferred());
+            traverseClosure(node -> {
+                node.markPreferred();
+                return true;
+            });
+        }
+
+        @Override
+        public void replace(UnknownNode node) {
+            // no dependents
         }
 
         @Override
         public void replace(UnknownNode unknownNode, Node replacement) {
-            closure.remove(unknownNode);
-            replacement.addClosureTo(closure);
-        }
-
-        @Override
-        public void snip(Collection<Node> nodes) {
-            closure.removeAll(nodes);
-        }
-
-        @Override
-        public int sumChits() {
-            return chit ? 1 : 0;
-        }
-
-        @Override
-        public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
-            closure.forEach(node -> node.tryFinalize(finalizedSet, visited));
-            return false;
+            links.remove(unknownNode);
+            links.add(replacement);
         }
     }
 
     public class UnknownNode extends Node {
 
-        private final Set<Node>  dependencies = new ConcurrentSkipListSet<>();
+        @Override
+        public String toString() {
+            return "Unknown [" + key + "]";
+        }
+
+        private final Set<Node>  dependencies = ConcurrentHashMap.newKeySet();
         private volatile boolean finalized;
 
         public UnknownNode(HashKey key, long discovered) {
@@ -521,17 +560,8 @@ public class WorkingSet {
         }
 
         @Override
-        public void addClosureTo(Set<Node> closure) {
-        }
-
-        @Override
         public void addDependent(Node node) {
             dependencies.add(node);
-        }
-
-        @Override
-        public Set<Node> closure() {
-            return Collections.emptySet();
         }
 
         @Override
@@ -541,19 +571,18 @@ public class WorkingSet {
         }
 
         @Override
-        public boolean finalized() {
-            return false;
-        }
-
-        @Override
         public int getConfidence() {
             return 0;
         }
 
         @Override
         public byte[] getEntry() {
-            // TODO Auto-generated method stub
             return null;
+        }
+
+        @Override
+        public boolean isComplete() {
+            return false;
         }
 
         @Override
@@ -563,13 +592,21 @@ public class WorkingSet {
 
         @Override
         public Boolean isPreferred() {
+            boolean current = finalized;
+            if (current) {
+                return true;
+            }
             log.trace("failed to prefer because unknown in closure");
             return null;
         }
 
         @Override
         public Boolean isStronglyPreferred() {
-            log.trace("failed to prefer because querying unknown");
+            boolean current = finalized;
+            if (current) {
+                return true;
+            }
+            log.info("failed to prefer because querying unknown");
             return null;
         }
 
@@ -589,6 +626,11 @@ public class WorkingSet {
         }
 
         @Override
+        public void replace(UnknownNode node) {
+            throw new IllegalStateException("Unknown nodes cannot be replaced!");
+        }
+
+        @Override
         public void replace(UnknownNode unknownNode, Node replacement) {
             throw new IllegalStateException("Unknown nodes do not have children");
         }
@@ -600,11 +642,15 @@ public class WorkingSet {
 
         @Override
         public void snip() {
-            dependencies.forEach(node -> {
-                node.snip(Collections.singletonList(this));
-            });
-            dependencies.clear();
             unfinalized.remove(key);
+            dependencies.forEach(node -> {
+                node.snip(this);
+            });
+        }
+
+        @Override
+        public void snip(Node node) {
+            throw new IllegalStateException("Unknown nodes should never be dependents");
         }
 
         @Override
@@ -618,7 +664,7 @@ public class WorkingSet {
     public static Logger                             log          = LoggerFactory.getLogger(WorkingSet.class);
     private final NavigableMap<HashKey, ConflictSet> conflictSets = new ConcurrentSkipListMap<>();
     private final DagWood                            finalized;
-    private final ReentrantLock                      lock         = new ReentrantLock();
+    private final ReentrantLock                      lock         = new ReentrantLock(true);
     private final AvaMetrics                         metrics;
     private final AvalancheParameters                parameters;
     private final NavigableMap<HashKey, Node>        unfinalized  = new ConcurrentSkipListMap<>();
@@ -665,8 +711,15 @@ public class WorkingSet {
         return manifestDag(finalized.get(key.bytes()));
     }
 
-    public List<DagEntry> getEntries(List<HASH> want, int queryBatchSize) {
-        throw new IllegalStateException("Unknown nodes cannot be queried");
+    public List<ByteBuffer> getEntries(List<HashKey> collect) {
+        return collect.stream().map(key -> {
+            Node n = unfinalized.get(key);
+            if (n == null) {
+                byte[] entry = finalized.get(key.bytes());
+                return entry == null ? null : entry;
+            }
+            return n.getEntry();
+        }).filter(n -> n != null).map(e -> ByteBuffer.wrap(e)).collect(Collectors.toList());
     }
 
     public DagWood getFinalized() {
@@ -677,31 +730,18 @@ public class WorkingSet {
         return parameters;
     }
 
-    public List<ByteBuffer> getSerializedEntries(List<HashKey> keys) {
-        return keys.stream().map(key -> {
-            Node node = unfinalized.get(key);
-            if (node != null) {
-                return node.isUnknown() ? null : ByteBuffer.wrap(node.getEntry());
+    public List<ByteBuffer> getQuerySerializedEntries(List<HashKey> keys) {
+        return keys.stream().map(key -> unfinalized.get(key)).filter(node -> node != null).filter(node -> {
+            if (node.isComplete()) {
+                return true;
             }
-            byte[] entry = finalized.get(key.bytes());
-            if (entry != null) {
-                return ByteBuffer.wrap(entry);
-            }
-            return null;
-        }).filter(e -> e != null).collect(Collectors.toList());
+            unqueried.add(node.getKey());
+            return false;
+        }).map(node -> ByteBuffer.wrap(node.getEntry())).collect(Collectors.toList());
     }
 
     public NavigableMap<HashKey, Node> getUnfinalized() {
         return unfinalized;
-    }
-
-    public List<ByteBuffer> getUnfinalized(List<HashKey> keys) {
-        return keys.stream()
-                   .map(key -> unfinalized.get(key))
-                   .filter(e -> e != null)
-                   .filter(e -> !e.isUnknown())
-                   .map(node -> ByteBuffer.wrap(node.getEntry()))
-                   .collect(Collectors.toList());
     }
 
     public Set<HashKey> getUnknown() {
@@ -712,20 +752,13 @@ public class WorkingSet {
         return unqueried;
     }
 
-    public Set<HashKey> getWanted() { 
+    public Set<HashKey> getWanted() {
         return unknown;
     }
 
-    public List<HashKey> getWanted(int max) {
-        List<HashKey> wanted = new ArrayList<>(max);
-        Iterator<HashKey> available = unknown.iterator();
-        for (int i = 0; i < max; i++) {
-            if (available.hasNext()) {
-                wanted.add(available.next());
-            } else {
-                break;
-            }
-        }
+    public List<HashKey> getWanted(Random entropy) {
+        List<HashKey> wanted = new ArrayList<>(unknown);
+        Collections.shuffle(wanted, entropy);
         return wanted;
     }
 
@@ -770,31 +803,26 @@ public class WorkingSet {
         return finalized.containsKey(key.bytes());
     }
 
-    public boolean isStronglyPreferred(HashKey key) {
+    public Boolean isStronglyPreferred(HashKey key) {
         return isStronglyPreferred(Collections.singletonList(key)).get(0);
     }
 
     public List<Boolean> isStronglyPreferred(List<HashKey> keys) {
-        return keys.stream().map(key -> {
-            Node node = unfinalized.get(key);
-            if (node == null) {
-                if (finalized.cacheContainsKey(key.bytes())) {
-                    return true;
+        return keys.stream().map((Function<? super HashKey, ? extends Boolean>) key -> {
+            lock.lock();
+            Node node;
+            try {
+                node = unfinalized.get(key);
+                if (node == null) {
+                    return finalized.cacheContainsKey(key.bytes()) ? true : null;
                 }
-                unknown.add(key);
-                log.trace("Not strongly preferred because completely unknown: " + key);
-                return null;
+            } finally {
+                lock.unlock();
             }
-            Boolean stronglyPreferred = node.isStronglyPreferred();
-            if (stronglyPreferred == null) {
-                log.trace("Invalid by test: {}", key);
-                return null;
-            }
-            if (!stronglyPreferred) {
-                log.trace("not strongly preferred by test: {}", key);
-            }
-            return stronglyPreferred;
+            return node.isStronglyPreferred();
+
         }).collect(Collectors.toList());
+
     }
 
     public void prefer(Collection<HashKey> keys) {
@@ -888,8 +916,8 @@ public class WorkingSet {
     }
 
     public FinalizationData tryFinalize(Collection<HashKey> keys) {
-        Set<Node> finalizedSet = new TreeSet<>();
-        Set<Node> visited = new TreeSet<>();
+        Set<Node> finalizedSet = new HashSet<>();
+        Set<Node> visited = new HashSet<>();
         keys.stream()
             .map(key -> unfinalized.get(key))
             .filter(node -> node != null)
@@ -900,9 +928,14 @@ public class WorkingSet {
         }
 
         FinalizationData data = new FinalizationData();
-        finalizedSet.stream().filter(node -> node instanceof KnownNode).forEach(node -> {
-            finalize(node, data);
-        });
+        lock.lock();
+        try {
+            finalizedSet.stream().forEach(node -> {
+                finalize(node, data);
+            });
+        } finally {
+            lock.unlock();
+        }
         return data;
     }
 
@@ -922,7 +955,7 @@ public class WorkingSet {
 
     /** for testing **/
     void finalize(HashKey key) {
-        Node node = unfinalized.remove(key);
+        Node node = unfinalized.get(key);
         if (node == null) {
             return;
         }
@@ -931,19 +964,21 @@ public class WorkingSet {
 
     void finalize(Node node, FinalizationData data) {
         HashKey key = node.getKey();
-        finalized.put(key.bytes(), node.getEntry());
-//        db.commit();
-        unqueried.remove(key);
-        unfinalized.remove(key);
-        node.snip();
+        final ReentrantLock l = lock;
+        l.lock();
         final ConflictSet conflictSet = node.getConflictSet();
-        conflictSets.remove(conflictSet.getKey());
+        try {
+            conflictSets.remove(conflictSet.getKey());
+            finalized.put(key.bytes(), node.getEntry());
+            node.snip();
+        } finally {
+            l.unlock();
+        }
         conflictSet.getLosers().forEach(loser -> {
             data.deleted.add(loser.getKey());
             loser.delete();
         });
         data.finalized.add(key);
-        unfinalized.remove(key);
     }
 
     /** for testing **/
@@ -953,33 +988,42 @@ public class WorkingSet {
 
     void insert(HashKey key, DagEntry entry, byte[] serialized, boolean noOp, long discovered, HashKey cs) {
         log.trace("inserting: {}", key);
-        lock.lock(); // sux, but without this, we get dup's which is teh bad.
+        final ReentrantLock l = lock;
+        l.lock(); // sux, but without this, we get dup's which is teh bad.
         try {
-            final Node found = unfinalized.computeIfAbsent(key, k -> {
-                if (finalized.cacheContainsKey(key.bytes())) {
-                    return null;
+            final Node found = unfinalized.get(key);
+            if (found == null) {
+                if (finalized.containsKey(key.bytes())) {
+                    return;
                 }
-                Node node = nodeFor(k, serialized, entry, noOp, discovered, cs);
-                unqueried.add(k);
-                return node;
-            });
-            if (found != null && found.isUnknown()) {
-                unfinalized.computeIfPresent(key, (k, v) -> {
-                    if (v.isUnknown()) {
-                        Node replacement = nodeFor(k, serialized, entry, noOp, discovered, cs);
-                        ((UnknownNode) v).replaceWith(replacement);
-                        unqueried.add(k);
-                        unknown.remove(k);
-                        if (metrics != null) {
-                            metrics.getUnknownReplacementRate().mark();
-                        }
-                        return replacement;
+                Node node = nodeFor(key, serialized, entry, noOp, discovered, cs);
+                unfinalized.put(key, node);
+                unqueried.add(key);
+                if (unknown.remove(key)) {
+                    if (metrics != null) {
+                        metrics.getUnknownReplacementRate().mark();
+                        metrics.getUnknown().decrementAndGet();
                     }
-                    return v;
-                });
+                }
+                if (metrics != null) {
+                    metrics.getInputRate().mark();
+                }
+                return;
+
+            }
+            if (found.isUnknown()) {
+                Node replacement = nodeFor(key, serialized, entry, noOp, discovered, cs);
+                unfinalized.put(key, replacement);
+                replacement.replace(((UnknownNode) found));
+                unqueried.add(key);
+                unknown.remove(key);
+                if (metrics != null) {
+                    metrics.getUnknownReplacementRate().mark();
+                    metrics.getUnknown().decrementAndGet();
+                }
             }
         } finally {
-            lock.unlock();
+            l.unlock();
         }
     }
 
@@ -990,7 +1034,7 @@ public class WorkingSet {
                        .map(link -> new HashKey(link))
                        .map(link -> resolve(link, discovered))
                        .filter(node -> node != null)
-                       .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
+                       .collect(Collectors.toCollection(() -> ConcurrentHashMap.newKeySet()));
     }
 
     Node nodeFor(HashKey k, byte[] entry, DagEntry dagEntry, boolean noOp, long discovered, HashKey cs) {
@@ -999,16 +1043,19 @@ public class WorkingSet {
     }
 
     Node resolve(HashKey key, long discovered) {
-        return unfinalized.computeIfAbsent(key, k -> {
-            if (finalized.cacheContainsKey(key.bytes())) {
+        Node exist = unfinalized.get(key);
+        if (exist == null) {
+            if (finalized.containsKey(key.bytes())) {
                 return null;
             }
-            Node node = new UnknownNode(k, discovered);
+            exist = new UnknownNode(key, discovered);
+            unfinalized.put(key, exist);
             if (metrics != null) {
                 metrics.getUnknownLinkRate().mark();
+                metrics.getUnknown().incrementAndGet();
             }
             unknown.add(key);
-            return node;
-        });
+        }
+        return exist;
     }
 }

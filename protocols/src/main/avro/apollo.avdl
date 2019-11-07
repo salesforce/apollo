@@ -102,9 +102,9 @@ protocol Apollo {
         array<HASH> interval;
     }
 
-    record Vote {
-        union { boolean, null } vote;
-    }
+    enum Vote {
+        TRUE, FALSE, UNKNOWN 
+    } 
 
     record QueryResult {
         array<Vote> result;

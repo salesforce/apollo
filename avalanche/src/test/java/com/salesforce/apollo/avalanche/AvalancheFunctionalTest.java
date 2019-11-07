@@ -122,8 +122,7 @@ public class AvalancheFunctionalTest {
         AtomicInteger index = new AtomicInteger(0);
         AtomicBoolean frist = new AtomicBoolean(true);
         List<Avalanche> nodes = views.stream().map(view -> {
-            AvalancheParameters aParams = new AvalancheParameters();
-            aParams.dagWood.index = new File("target/cluster/" + view.getNode().getId() + ".index");
+            AvalancheParameters aParams = new AvalancheParameters(); 
             aParams.dagWood.store = new File("target/cluster/" + view.getNode().getId() + ".store");
             aParams.dagWood.maxCache = 50_000;
 
@@ -157,10 +156,10 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 200;
+        int target = 400;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 100;
-        int runtime = (int) Duration.ofSeconds(30).toMillis();
+        int runtime = (int) Duration.ofSeconds(120).toMillis();
 
         views.forEach(view -> view.getService().start(ffRound));
 

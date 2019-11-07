@@ -32,6 +32,15 @@ public class ConflictSet {
     }
 
     public void add(Node conflict) {
+        if (!conflicts.isEmpty()) {
+            boolean f = false;
+            for (Node node : conflicts) {
+                if (node.isFinalized()) {
+                    f = true;
+                }
+            }
+            System.out.println("Dup detected, previous finalized: " + f);
+        }
         conflicts.add(conflict);
     }
 
