@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -127,12 +128,6 @@ public class WorkingSet {
         }
 
         @Override
-        public void delete() {
-            // TODO Auto-generated method stub
-
-        }
-
-        @Override
         public Collection<MaterializedNode> dependents() {
             return dependents;
         }
@@ -150,11 +145,6 @@ public class WorkingSet {
         @Override
         public ConflictSet getConflictSet() {
             return conflictSet;
-        }
-
-        @Override
-        public boolean isComplete() {
-            return traverseClosure(node -> !node.isUnknown());
         }
 
         @Override
@@ -209,15 +199,6 @@ public class WorkingSet {
         }
 
         @Override
-        public void snip() {
-            unfinalized.remove(key);
-            dependents.forEach(node -> {
-                node.snip(this);
-            });
-            super.snip();
-        }
-
-        @Override
         public String toString() {
             return "Known [" + key + "]";
         }
@@ -262,39 +243,33 @@ public class WorkingSet {
 
     abstract public class MaterializedNode extends Node {
         protected volatile boolean chit = false;
-        protected final Set<Node>  closure;
         protected final Set<Node>  links;
         private final byte[]       entry;
+        private volatile Result    isStronglyPreferred;
 
         public MaterializedNode(HashKey key, byte[] entry, Set<Node> links, long discovered) {
             super(key, discovered);
             this.entry = entry;
             this.links = links;
-            closure = new HashSet<>();
-            links.forEach(e -> {
-                closure.addAll(e.links());
-                closure.addAll(e.closure());
-            });
         }
 
         abstract public void addDependent(MaterializedNode node);
 
         public Boolean calculateIsStronglyPreferred() {
-            return traverseClosure(node -> node.isPreferred());
+            final Boolean test = traverseClosure(node -> node.isPreferred(), node -> node.markStronglyPreferred());
+            synchronized (this) {
+                if (test == null) {
+                    isStronglyPreferred = Result.UNKNOWN;
+                } else {
+                    isStronglyPreferred = test ? Result.TRUE : Result.FALSE;
+                }
+            }
+            return test;
         }
 
-        @Override
-        public Collection<? extends Node> closure() {
-            return closure;
+        public Collection<MaterializedNode> dependents() {
+            return Collections.emptySet();
         }
-
-        @Override
-        public void delete() {
-            // TODO Auto-generated method stub
-
-        }
-
-        public abstract Collection<MaterializedNode> dependents();
 
         @Override
         public boolean getChit() {
@@ -306,6 +281,13 @@ public class WorkingSet {
             return entry;
         }
 
+        public void invalidate() {
+            synchronized (this) {
+                isStronglyPreferred = null;
+            }
+            dependents().forEach(e -> e.invalidate());
+        }
+
         @Override
         public boolean isComplete() {
             return traverseClosure(node -> !node.isUnknown());
@@ -313,17 +295,35 @@ public class WorkingSet {
 
         @Override
         public Boolean isPreferred() {
+            synchronized (this) {
+                final Result test = isStronglyPreferred;
+                if (test != null) {
+                    return test.value();
+                }
+            }
             return calculateIsPreferred();
         }
 
         @Override
         public Boolean isStronglyPreferred() {
+            synchronized (this) {
+                final Result test = isStronglyPreferred;
+                if (test != null) {
+                    return test.value();
+                }
+            }
             return calculateIsStronglyPreferred();
         }
 
         @Override
         public Set<Node> links() {
             return links;
+        }
+
+        public void markStronglyPreferred() {
+            synchronized (this) {
+                isStronglyPreferred = Result.TRUE;
+            }
         }
 
         @Override
@@ -342,32 +342,56 @@ public class WorkingSet {
                 links.add(replacement);
                 replacement.addDependent(this);
             }
-            closure.remove(unknownNode);
-            closure.addAll(replacement.links());
-            closure.addAll(replacement.closure());
-            dependents().forEach(e -> e.replace(unknownNode, replacement));
         }
 
         @Override
         public void snip() {
+            dependents().forEach(e -> e.snip(this));
             traverseClosure(node -> {
                 node.snip();
                 return true;
             });
+            dependents().clear();
             links.clear();
-            closure.clear();
         }
 
         @Override
         public void snip(Node node) {
             links.remove(node);
-            closure.removeAll(node.links());
-            closure.removeAll(node.closure());
         }
 
         @Override
         public int sumChits() {
             return dependents().stream().mapToInt(node -> node.sumChits()).sum() + (chit ? 1 : 0);
+        }
+
+        public Boolean traverseClosure(Function<Node, Boolean> p) {
+            return traverseClosure(p, null);
+        }
+
+        public Boolean traverseClosure(Function<Node, Boolean> p, Consumer<Node> post) {
+            Stack<Node> stack = new Stack<>();
+            stack.push(this);
+            Set<Node> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+            while (!stack.isEmpty()) {
+                final Node node = stack.pop();
+                for (Node e : node.links()) {
+                    if (visited.add(e)) {
+                        Boolean result = p.apply(e);
+                        if (result == null) {
+                            return null;
+                        }
+                        if (!result) {
+                            return false;
+                        }
+                        stack.push(e);
+                    }
+                }
+                if (post != null) {
+                    post.accept(node);
+                }
+            }
+            return true;
         }
 
         @Override
@@ -389,12 +413,6 @@ public class WorkingSet {
         }
 
         abstract public void addDependent(MaterializedNode node);
-
-        public Collection<? extends Node> closure() {
-            return Collections.emptySet();
-        }
-
-        abstract public void delete();
 
         public boolean getChit() {
             return false;
@@ -457,6 +475,9 @@ public class WorkingSet {
         public void markPreferred() {
         }
 
+        public void markStronglyPreferred() {
+        }
+
         abstract public void prefer();
 
         abstract public void replace(UnknownNode node);
@@ -471,37 +492,6 @@ public class WorkingSet {
 
         public int sumChits() {
             return 0;
-        }
-
-        public Boolean traverseClosure(Function<Node, Boolean> p) {
-            return traverseClosure(p, null);
-        }
-
-        public Boolean traverseClosure(Function<Node, Boolean> p, Consumer<Node> post) {
-            for (Node node : links()) {
-                Boolean result = p.apply(node);
-                if (result == null) {
-                    return null;
-                }
-                if (!result) {
-                    return false;
-                }
-            }
-            for (Node node : closure()) {
-                Boolean result = p.apply(node);
-                if (result == null) {
-                    return null;
-                }
-                if (!result) {
-                    return false;
-                }
-            }
-            if (post != null) {
-                links().forEach(node -> post.accept(node));
-                closure().forEach(node -> post.accept(node));
-                post.accept(this);
-            }
-            return true;
         }
 
         abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
@@ -519,24 +509,8 @@ public class WorkingSet {
         }
 
         @Override
-        public void delete() {
-            // TODO Auto-generated method stub
-
-        }
-
-        @Override
-        public Collection<MaterializedNode> dependents() {
-            return Collections.emptySet();
-        }
-
-        @Override
         public int getConfidence() {
             return 0;
-        }
-
-        @Override
-        public boolean isComplete() {
-            return traverseClosure(node -> !node.isUnknown());
         }
 
         @Override
@@ -588,12 +562,6 @@ public class WorkingSet {
         @Override
         public void addDependent(MaterializedNode node) {
             dependencies.add(node);
-        }
-
-        @Override
-        public void delete() {
-            // TODO Auto-generated method stub
-
         }
 
         @Override
@@ -665,12 +633,12 @@ public class WorkingSet {
             log.trace("replacing: " + replacement.getKey());
             dependencies.forEach(node -> {
                 node.replace(this, replacement);
+                node.invalidate();
             });
         }
 
         @Override
         public void snip() {
-            unfinalized.remove(key);
             dependencies.forEach(node -> {
                 node.snip(this);
             });
@@ -690,6 +658,32 @@ public class WorkingSet {
         public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
             return finalized;
         }
+    }
+
+    private static enum Result {
+        FALSE {
+
+            @Override
+            Boolean value() {
+                return Boolean.FALSE;
+            }
+        },
+        TRUE {
+
+            @Override
+            Boolean value() {
+                return Boolean.TRUE;
+            }
+        },
+        UNKNOWN {
+
+            @Override
+            Boolean value() {
+                return null;
+            }
+        };
+
+        abstract Boolean value();
     }
 
     public static final HashKey GENESIS_CONFLICT_SET = new HashKey(new byte[32]);
@@ -774,11 +768,13 @@ public class WorkingSet {
     }
 
     public List<ByteBuffer> getQuerySerializedEntries(List<HashKey> keys) {
-        return keys.stream()
-                   .map(key -> unfinalized.get(key))
-                   .filter(e -> !e.isUnknown())
-                   .map(node -> ByteBuffer.wrap(node.getEntry()))
-                   .collect(Collectors.toList());
+        return keys.stream().map(key -> unfinalized.get(key)).filter(node -> node != null).filter(node -> {
+            if (node.isComplete()) {
+                return true;
+            }
+            unqueried.add(node.getKey());
+            return false;
+        }).map(node -> ByteBuffer.wrap(node.getEntry())).collect(Collectors.toList());
     }
 
     public NavigableMap<HashKey, Node> getUnfinalized() {
@@ -1015,15 +1011,16 @@ public class WorkingSet {
         l.lock();
         final ConflictSet conflictSet = node.getConflictSet();
         try {
-            conflictSets.remove(conflictSet.getKey());
             finalized.put(key.bytes(), node.getEntry());
+            unfinalized.remove(key);
+            conflictSets.remove(conflictSet.getKey());
             node.snip();
         } finally {
             l.unlock();
         }
         conflictSet.getLosers().forEach(loser -> {
             data.deleted.add(loser.getKey());
-            loser.delete();
+            loser.snip();
         });
         data.finalized.add(key);
     }

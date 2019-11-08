@@ -22,8 +22,8 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class ConflictSet {
     private Set<KnownNode>     conflicts = ConcurrentHashMap.newKeySet();
-    private volatile int  counter   = 0;
-    private final HashKey key;
+    private volatile int       counter   = 0;
+    private final HashKey      key;
     private volatile KnownNode last;
     private volatile KnownNode preferred;
 
@@ -84,6 +84,8 @@ public class ConflictSet {
         last = node;
         if (currentPreferred.getConfidence() < node.getConfidence()) {
             preferred = node;
+            preferred.invalidate();
+            currentPreferred.invalidate();
         }
         if (currentLast == node) {
             counter++;

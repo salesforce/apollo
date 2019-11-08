@@ -159,7 +159,7 @@ public class AvalancheFunctionalTest {
         int target = 2400;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 100;
-        int runtime = (int) Duration.ofSeconds(120).toMillis();
+        int runtime = (int) Duration.ofSeconds(60).toMillis();
 
         views.forEach(view -> view.getService().start(ffRound));
 
