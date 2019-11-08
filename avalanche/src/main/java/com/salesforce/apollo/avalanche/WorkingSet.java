@@ -284,6 +284,11 @@ public class WorkingSet {
         }
 
         @Override
+        public Collection<? extends Node> closure() {
+            return closure;
+        }
+
+        @Override
         public void delete() {
             // TODO Auto-generated method stub
 
@@ -333,9 +338,14 @@ public class WorkingSet {
 
         @Override
         public void replace(UnknownNode unknownNode, Node replacement) {
-            links.remove(unknownNode);
-            links.add(replacement);
-            replacement.addDependent(this);
+            if (links.remove(unknownNode)) {
+                links.add(replacement);
+                replacement.addDependent(this);
+            }
+            closure.remove(unknownNode);
+            closure.addAll(replacement.links());
+            closure.addAll(replacement.closure());
+            dependents().forEach(e -> e.replace(unknownNode, replacement));
         }
 
         @Override
@@ -345,6 +355,7 @@ public class WorkingSet {
                 return true;
             });
             links.clear();
+            closure.clear();
         }
 
         @Override
@@ -763,13 +774,11 @@ public class WorkingSet {
     }
 
     public List<ByteBuffer> getQuerySerializedEntries(List<HashKey> keys) {
-        return keys.stream().map(key -> unfinalized.get(key)).filter(node -> node != null).filter(node -> {
-            if (node.isComplete()) {
-                return true;
-            }
-            unqueried.add(node.getKey());
-            return false;
-        }).map(node -> ByteBuffer.wrap(node.getEntry())).collect(Collectors.toList());
+        return keys.stream()
+                   .map(key -> unfinalized.get(key))
+                   .filter(e -> !e.isUnknown())
+                   .map(node -> ByteBuffer.wrap(node.getEntry()))
+                   .collect(Collectors.toList());
     }
 
     public NavigableMap<HashKey, Node> getUnfinalized() {

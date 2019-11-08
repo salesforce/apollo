@@ -675,7 +675,6 @@ public class Avalanche {
     }
 
     void round() {
-        log.trace("Performing round");
         try {
             query();
             if (generateNoOps.compareAndSet(true, false)) {
