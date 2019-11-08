@@ -27,7 +27,7 @@ import com.google.common.collect.Sets;
 public class DagWood {
 
     public static class DagWoodParameters {
- 
+
         public long maxCache = 50_000;
         public File store    = new File("dagwood.store");
 

@@ -25,7 +25,6 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -91,7 +90,7 @@ public class WorkingSet {
     public class KnownNode extends MaterializedNode {
         private volatile int                confidence = 0;
         private final ConflictSet           conflictSet;
-        private final Set<MaterializedNode> dependents = ConcurrentHashMap.newKeySet();
+        private final Set<MaterializedNode> dependents = Collections.newSetFromMap(new IdentityHashMap<>());
         private volatile boolean            finalized  = false;
 
         public KnownNode(HashKey key, byte[] entry, Set<Node> links, HashKey cs, long discovered) {
@@ -102,7 +101,9 @@ public class WorkingSet {
 
         @Override
         public void addDependent(MaterializedNode node) {
-            dependents.add(node);
+            synchronized (this) {
+                dependents.add(node);
+            }
         }
 
         @Override
@@ -215,13 +216,15 @@ public class WorkingSet {
             final int currentConfidence = confidence;
             final boolean preferred = conflictSet.getPreferred() == this;
             if (currentConfidence >= parameters.beta1 && conflictSet.getCardinality() == 1 && preferred) {
-                if (links.stream()
-                         .map(node -> node.tryFinalize(finalizedSet, visited))
-                         .filter(success -> success)
-                         .count() == links.size()) {
-                    finalizedSet.add(this);
-                    finalized = true;
-                    return true;
+                synchronized (this) {
+                    if (links.stream()
+                             .map(node -> node.tryFinalize(finalizedSet, visited))
+                             .filter(success -> success)
+                             .count() == links.size()) {
+                        finalizedSet.add(this);
+                        finalized = true;
+                        return true;
+                    }
                 }
                 final boolean current = finalized;
                 return current;
@@ -235,7 +238,9 @@ public class WorkingSet {
                 });
                 return true;
             } else {
-                links.forEach(node -> node.tryFinalize(finalizedSet, visited));
+                synchronized (this) {
+                    links.forEach(node -> node.tryFinalize(finalizedSet, visited));
+                }
                 return false;
             }
         }
@@ -257,12 +262,10 @@ public class WorkingSet {
 
         public Boolean calculateIsStronglyPreferred() {
             final Boolean test = traverseClosure(node -> node.isPreferred(), node -> node.markStronglyPreferred());
-            synchronized (this) {
-                if (test == null) {
-                    isStronglyPreferred = Result.UNKNOWN;
-                } else {
-                    isStronglyPreferred = test ? Result.TRUE : Result.FALSE;
-                }
+            if (test == null) {
+                isStronglyPreferred = Result.UNKNOWN;
+            } else {
+                isStronglyPreferred = test ? Result.TRUE : Result.FALSE;
             }
             return test;
         }
@@ -282,9 +285,7 @@ public class WorkingSet {
         }
 
         public void invalidate() {
-            synchronized (this) {
-                isStronglyPreferred = null;
-            }
+            isStronglyPreferred = null;
             dependents().forEach(e -> e.invalidate());
         }
 
@@ -295,22 +296,18 @@ public class WorkingSet {
 
         @Override
         public Boolean isPreferred() {
-            synchronized (this) {
-                final Result test = isStronglyPreferred;
-                if (test != null) {
-                    return test.value();
-                }
+            final Result test = isStronglyPreferred;
+            if (test != null) {
+                return test.value();
             }
             return calculateIsPreferred();
         }
 
         @Override
         public Boolean isStronglyPreferred() {
-            synchronized (this) {
-                final Result test = isStronglyPreferred;
-                if (test != null) {
-                    return test.value();
-                }
+            final Result test = isStronglyPreferred;
+            if (test != null) {
+                return test.value();
             }
             return calculateIsStronglyPreferred();
         }
@@ -321,9 +318,7 @@ public class WorkingSet {
         }
 
         public void markStronglyPreferred() {
-            synchronized (this) {
-                isStronglyPreferred = Result.TRUE;
-            }
+            isStronglyPreferred = Result.TRUE;
         }
 
         @Override
@@ -338,9 +333,11 @@ public class WorkingSet {
 
         @Override
         public void replace(UnknownNode unknownNode, Node replacement) {
-            if (links.remove(unknownNode)) {
-                links.add(replacement);
-                replacement.addDependent(this);
+            synchronized (this) {
+                if (links.remove(unknownNode)) {
+                    links.add(replacement);
+                    replacement.addDependent(this);
+                }
             }
         }
 
@@ -351,40 +348,47 @@ public class WorkingSet {
                 node.snip();
                 return true;
             });
-            dependents().clear();
-            links.clear();
+            synchronized (this) {
+                dependents().clear();
+                links.clear();
+            }
         }
 
         @Override
         public void snip(Node node) {
-            links.remove(node);
+            synchronized (this) {
+                links.remove(node);
+            }
         }
 
-        @Override
         public int sumChits() {
-            return dependents().stream().mapToInt(node -> node.sumChits()).sum() + (chit ? 1 : 0);
+            synchronized (this) {
+                return dependents().stream().mapToInt(node -> node.sumChits()).sum() + (chit ? 1 : 0);
+            }
         }
 
         public Boolean traverseClosure(Function<Node, Boolean> p) {
             return traverseClosure(p, null);
         }
 
-        public Boolean traverseClosure(Function<Node, Boolean> p, Consumer<Node> post) {
+        public Boolean traverseClosure(Function<Node, Boolean> test, Consumer<Node> post) {
             Stack<Node> stack = new Stack<>();
             stack.push(this);
             Set<Node> visited = Collections.newSetFromMap(new IdentityHashMap<>());
             while (!stack.isEmpty()) {
                 final Node node = stack.pop();
-                for (Node e : node.links()) {
-                    if (visited.add(e)) {
-                        Boolean result = p.apply(e);
-                        if (result == null) {
-                            return null;
+                synchronized (node) {
+                    for (Node e : node.links()) {
+                        if (visited.add(e)) {
+                            Boolean result = test.apply(e);
+                            if (result == null) {
+                                return null;
+                            }
+                            if (!result) {
+                                return false;
+                            }
+                            stack.push(e);
                         }
-                        if (!result) {
-                            return false;
-                        }
-                        stack.push(e);
                     }
                 }
                 if (post != null) {
@@ -396,7 +400,9 @@ public class WorkingSet {
 
         @Override
         public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
-            links.forEach(node -> node.tryFinalize(finalizedSet, visited));
+            synchronized (this) {
+                links.forEach(node -> node.tryFinalize(finalizedSet, visited));
+            }
             return true;
         }
 
@@ -486,13 +492,7 @@ public class WorkingSet {
 
         abstract public void snip();
 
-        public void snip(Node node) {
-            links().remove(node);
-        }
-
-        public int sumChits() {
-            return 0;
-        }
+        abstract public void snip(Node node);
 
         abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
     }
@@ -524,11 +524,6 @@ public class WorkingSet {
         }
 
         @Override
-        public Set<Node> links() {
-            return links;
-        }
-
-        @Override
         public void markFinalized() {
             throw new IllegalStateException("NoOps cannot be finalized");
         }
@@ -551,7 +546,7 @@ public class WorkingSet {
 
     public class UnknownNode extends Node {
 
-        private final Set<MaterializedNode> dependencies = ConcurrentHashMap.newKeySet();
+        private final Set<MaterializedNode> dependencies = Collections.newSetFromMap(new IdentityHashMap<>());;
 
         private volatile boolean finalized;
 
@@ -631,17 +626,21 @@ public class WorkingSet {
 
         public void replaceWith(Node replacement) {
             log.trace("replacing: " + replacement.getKey());
-            dependencies.forEach(node -> {
-                node.replace(this, replacement);
-                node.invalidate();
-            });
+            synchronized (this) {
+                dependencies.forEach(node -> {
+                    node.replace(this, replacement);
+                    node.invalidate();
+                });
+            }
         }
 
         @Override
         public void snip() {
-            dependencies.forEach(node -> {
-                node.snip(this);
-            });
+            synchronized (this) {
+                dependencies.forEach(node -> {
+                    node.snip(this);
+                });
+            }
         }
 
         @Override
@@ -687,8 +686,8 @@ public class WorkingSet {
     }
 
     public static final HashKey GENESIS_CONFLICT_SET = new HashKey(new byte[32]);
+    public static Logger        log                  = LoggerFactory.getLogger(WorkingSet.class);
 
-    public static Logger                             log          = LoggerFactory.getLogger(WorkingSet.class);
     private final NavigableMap<HashKey, ConflictSet> conflictSets = new ConcurrentSkipListMap<>();
     private final DagWood                            finalized;
     private final ReentrantLock                      lock         = new ReentrantLock(true);
@@ -970,14 +969,9 @@ public class WorkingSet {
         }
 
         FinalizationData data = new FinalizationData();
-        lock.lock();
-        try {
-            finalizedSet.stream().forEach(node -> {
-                finalize(node, data);
-            });
-        } finally {
-            lock.unlock();
-        }
+        finalizedSet.stream().forEach(node -> {
+            finalize(node, data);
+        });
         return data;
     }
 
@@ -1007,17 +1001,11 @@ public class WorkingSet {
 
     void finalize(Node node, FinalizationData data) {
         HashKey key = node.getKey();
-        final ReentrantLock l = lock;
-        l.lock();
         final ConflictSet conflictSet = node.getConflictSet();
-        try {
-            finalized.put(key.bytes(), node.getEntry());
-            unfinalized.remove(key);
-            conflictSets.remove(conflictSet.getKey());
-            node.snip();
-        } finally {
-            l.unlock();
-        }
+        finalized.put(key.bytes(), node.getEntry());
+        unfinalized.remove(key);
+        conflictSets.remove(conflictSet.getKey());
+        node.snip();
         conflictSet.getLosers().forEach(loser -> {
             data.deleted.add(loser.getKey());
             loser.snip();
@@ -1078,7 +1066,7 @@ public class WorkingSet {
                        .map(link -> new HashKey(link))
                        .map(link -> resolve(link, discovered))
                        .filter(node -> node != null)
-                       .collect(Collectors.toCollection(() -> ConcurrentHashMap.newKeySet()));
+                       .collect(Collectors.toCollection(() -> Collections.newSetFromMap(new IdentityHashMap<>())));
     }
 
     Node nodeFor(HashKey k, byte[] entry, DagEntry dagEntry, boolean noOp, long discovered, HashKey cs) {
