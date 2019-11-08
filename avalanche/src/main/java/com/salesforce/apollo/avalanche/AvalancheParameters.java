@@ -29,6 +29,7 @@ public class AvalancheParameters {
      * The consecutive counter - i.e. "votes" - for a transaction for finalization
      */
     public int               beta2             = 150;
+    public int               cacheRounds       = 10;
     public DagWoodParameters dagWood           = new DagWoodParameters();
     /**
      * The JDBC connection URL
@@ -46,16 +47,17 @@ public class AvalancheParameters {
     /**
      * The number of frontier keys to keep on hand
      */
-    public int frontier = 200;
+    public int               frontier          = 200;
+
     /**
      * The number of queries per FF round
      */
-    public int               gamma             = 20;
+    public int gamma = 20;
 
     /**
      * The number of members to sample for a vote
      */
-    public int               k                 = 10;
+    public int k = 10;
 
     /**
      * Max JDBC connections in pool

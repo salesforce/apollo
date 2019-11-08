@@ -200,12 +200,13 @@ public class Avalanche {
     private final Deque<HashKey>                             parentSample        = new LinkedBlockingDeque<>();
     private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentSkipListMap<>();
     private final Map<HashKey, EntryProcessor>               processors          = new ConcurrentSkipListMap<>();
+    private final RandomMemberGenerator                      querySampler;
     private final int                                        required;
     private final AtomicInteger                              round               = new AtomicInteger();
     private final AtomicBoolean                              running             = new AtomicBoolean();
-    private final RandomMemberGenerator                      sampler;
     private final Service                                    service             = new Service();
     private final View                                       view;
+    private final RandomMemberGenerator                      wantedSampler;
 
     public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p) {
         this(view, communications, p, null, null);
@@ -237,7 +238,8 @@ public class Avalanche {
                                     System.currentTimeMillis());
         });
 
-        sampler = new RandomMemberGenerator(view);
+        querySampler = new RandomMemberGenerator(view);
+        wantedSampler = new RandomMemberGenerator(view);
         required = (int) (parameters.k * parameters.alpha);
         invalidThreshold = parameters.k - required - 1;
 
@@ -313,7 +315,8 @@ public class Avalanche {
 
         int advance = getEntropy().nextInt(50);
         for (int i = 0; i < advance; i++) {
-            sampler.next();
+            querySampler.next();
+            wantedSampler.next();
         }
 
         comm.start();
@@ -499,11 +502,14 @@ public class Avalanche {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
         long retrieveTime = System.currentTimeMillis() - now;
-        Collection<Member> sample = sampler.sample(parameters.k);
+        Collection<Member> sample = querySampler.sample(parameters.k);
         if (sample.isEmpty()) {
             return 0;
         }
-        assert sample.size() >= parameters.k : "not enough members: " + sample.size();
+        if (sample.size() < parameters.k) {
+            log.info("not enough members in sample: {} < {}", sample.size(), parameters.k);
+            return 0;
+        }
         now = System.currentTimeMillis();
         Context timer = metrics == null ? null : metrics.getQueryTimer().time();
         List<HashKey> unqueried = dag.query(parameters.queryBatchSize);
@@ -734,7 +740,7 @@ public class Avalanche {
             metrics.getWantedRate().mark(want.size());
         }
 
-        Member next = sampler.next();
+        Member next = wantedSampler.next();
         if (next == null) {
             return;
         }

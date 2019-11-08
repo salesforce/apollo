@@ -84,8 +84,6 @@ public class ConflictSet {
         last = node;
         if (currentPreferred.getConfidence() < node.getConfidence()) {
             preferred = node;
-            currentPreferred.invalidateCachedIsp();
-            preferred.invalidateCachedIsp();
         }
         if (currentLast == node) {
             counter++;

@@ -105,6 +105,28 @@ public class WorkingSet {
         }
 
         @Override
+        public Boolean calculateIsPreferred() {
+            final boolean current = finalized;
+            if (current) {
+                return true;
+            }
+            final boolean preferred = conflictSet.getPreferred() == this;
+            if (!preferred) {
+                log.info("Not preferred conflict: {}  !=  {}", System.identityHashCode(conflictSet.getPreferred()),
+                         System.identityHashCode(this));
+            }
+            return preferred;
+        }
+
+        @Override
+        public Boolean calculateIsStronglyPreferred() {
+            if (conflictSet.getPreferred() != this) {
+                return false;
+            }
+            return super.calculateIsStronglyPreferred();
+        }
+
+        @Override
         public void delete() {
             // TODO Auto-generated method stub
 
@@ -142,20 +164,6 @@ public class WorkingSet {
         }
 
         @Override
-        public Boolean calculateIsPreferred() {
-            final boolean current = finalized;
-            if (current) {
-                return true;
-            }
-            final boolean preferred = conflictSet.getPreferred() == this;
-            if (!preferred) {
-                log.info("Not preferred conflict: {}  !=  {}", System.identityHashCode(conflictSet.getPreferred()),
-                         System.identityHashCode(this));
-            }
-            return preferred;
-        }
-
-        @Override
         public boolean isPreferred(int maxConfidence) {
             final int current = confidence;
             return current <= maxConfidence && conflictSet.getPreferred() == this;
@@ -176,14 +184,6 @@ public class WorkingSet {
                 return true;
             }
             return super.isStronglyPreferred();
-        }
-
-        @Override
-        public Boolean calculateIsStronglyPreferred() {
-            if (conflictSet.getPreferred() != this) {
-                return false;
-            }
-            return super.calculateIsStronglyPreferred();
         }
 
         @Override
@@ -258,18 +258,11 @@ public class WorkingSet {
                 return false;
             }
         }
-
-        @Override
-        public void invalidateCachedIsp() {
-            super.invalidateCachedIsp();
-            dependents.forEach(node -> node.invalidateCachedIsp());
-        }
     }
 
-    abstract public static class MaterializedNode extends Node {
-        private volatile boolean   cachedSP            = false;
-        protected volatile boolean chit                = false;
-        private volatile Boolean   isStronglyPreferred = null;
+    abstract public class MaterializedNode extends Node {
+        protected volatile boolean chit = false;
+        protected final Set<Node>  closure;
         protected final Set<Node>  links;
         private final byte[]       entry;
 
@@ -277,29 +270,23 @@ public class WorkingSet {
             super(key, discovered);
             this.entry = entry;
             this.links = links;
-        }
-
-        public void invalidateCachedIsp() {
-            cachedSP = false;
-            isStronglyPreferred = null;
+            closure = new HashSet<>();
+            links.forEach(e -> {
+                closure.addAll(e.links());
+                closure.addAll(e.closure());
+            });
         }
 
         abstract public void addDependent(MaterializedNode node);
+
+        public Boolean calculateIsStronglyPreferred() {
+            return traverseClosure(node -> node.isPreferred());
+        }
 
         @Override
         public void delete() {
             // TODO Auto-generated method stub
 
-        }
-
-        @Override
-        public void prefer() {
-            chit = true;
-            markPreferred();
-            traverseClosure(node -> {
-                node.markPreferred();
-                return true;
-            });
         }
 
         public abstract Collection<MaterializedNode> dependents();
@@ -320,8 +307,28 @@ public class WorkingSet {
         }
 
         @Override
+        public Boolean isPreferred() {
+            return calculateIsPreferred();
+        }
+
+        @Override
+        public Boolean isStronglyPreferred() {
+            return calculateIsStronglyPreferred();
+        }
+
+        @Override
         public Set<Node> links() {
             return links;
+        }
+
+        @Override
+        public void prefer() {
+            chit = true;
+            markPreferred();
+            traverseClosure(node -> {
+                node.markPreferred();
+                return true;
+            });
         }
 
         @Override
@@ -341,41 +348,10 @@ public class WorkingSet {
         }
 
         @Override
-        public Boolean isPreferred() {
-            boolean current = cachedSP;
-            if (current) {
-                Boolean currentIsp = isStronglyPreferred;
-                return currentIsp;
-            }
-            return calculateIsPreferred();
-        }
-
-        protected abstract Boolean calculateIsPreferred();
-
-        @Override
-        public Boolean isStronglyPreferred() {
-            boolean current = cachedSP;
-            if (current) {
-                Boolean currentIsp = isStronglyPreferred;
-                return currentIsp;
-            }
-            synchronized (this) {
-                Boolean stronglyPreferred = calculateIsStronglyPreferred();
-                isStronglyPreferred = stronglyPreferred;
-                cachedSP = true;
-                return stronglyPreferred;
-            }
-        }
-
-        public Boolean calculateIsStronglyPreferred() {
-            return traverseClosure(node -> node.isPreferred(), node -> markStronglyPreferred());
-        }
-
-        private void markStronglyPreferred() {
-            synchronized (this) {
-                isStronglyPreferred = true;
-                cachedSP = true;
-            }
+        public void snip(Node node) {
+            links.remove(node);
+            closure.removeAll(node.links());
+            closure.removeAll(node.closure());
         }
 
         @Override
@@ -388,6 +364,8 @@ public class WorkingSet {
             links.forEach(node -> node.tryFinalize(finalizedSet, visited));
             return true;
         }
+
+        protected abstract Boolean calculateIsPreferred();
     }
 
     public static abstract class Node {
@@ -399,13 +377,17 @@ public class WorkingSet {
             this.discovered = discovered;
         }
 
+        abstract public void addDependent(MaterializedNode node);
+
+        public Collection<? extends Node> closure() {
+            return Collections.emptySet();
+        }
+
         abstract public void delete();
 
         public boolean getChit() {
             return false;
         }
-
-        abstract public void addDependent(MaterializedNode node);
 
         abstract public int getConfidence();
 
@@ -485,26 +467,27 @@ public class WorkingSet {
         }
 
         public Boolean traverseClosure(Function<Node, Boolean> p, Consumer<Node> post) {
-            return traverseClosure(p, post, new HashSet<>());
-        }
-
-        public Boolean traverseClosure(Function<Node, Boolean> p, Consumer<Node> post, Set<Node> visited) {
-            Stack<Node> stack = new Stack<>();
-            stack.push(this);
-
             for (Node node : links()) {
-                if (visited.add(node)) {
-                    Boolean result = p.apply(node);
-                    if (result == null) {
-                        return null;
-                    }
-                    if (!result) {
-                        return false;
-                    }
-                    node.traverseClosure(p, post, visited);
+                Boolean result = p.apply(node);
+                if (result == null) {
+                    return null;
+                }
+                if (!result) {
+                    return false;
+                }
+            }
+            for (Node node : closure()) {
+                Boolean result = p.apply(node);
+                if (result == null) {
+                    return null;
+                }
+                if (!result) {
+                    return false;
                 }
             }
             if (post != null) {
+                links().forEach(node -> post.accept(node));
+                closure().forEach(node -> post.accept(node));
                 post.accept(this);
             }
             return true;
@@ -513,7 +496,7 @@ public class WorkingSet {
         abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
     }
 
-    public static class NoOpNode extends MaterializedNode {
+    public class NoOpNode extends MaterializedNode {
 
         public NoOpNode(HashKey key, byte[] entry, Set<Node> links, long discovered) {
             super(key, entry, links, discovered);
@@ -546,11 +529,6 @@ public class WorkingSet {
         }
 
         @Override
-        protected Boolean calculateIsPreferred() {
-            throw new IllegalStateException("Should never query NoOp in closure");
-        }
-
-        @Override
         public boolean isFinalized() {
             return false;
         }
@@ -572,18 +550,17 @@ public class WorkingSet {
 
         @Override
         public void replace(UnknownNode node) {
-            // no dependents
-        }
-
-        @Override
-        public void replace(UnknownNode unknownNode, Node replacement) {
-            links.remove(unknownNode);
-            links.add(replacement);
+            node.replaceWith(this);
         }
 
         @Override
         public String toString() {
             return "NoOp [" + key + "]";
+        }
+
+        @Override
+        protected Boolean calculateIsPreferred() {
+            throw new IllegalStateException("Should never query NoOp in closure");
         }
     }
 
@@ -675,7 +652,9 @@ public class WorkingSet {
 
         public void replaceWith(Node replacement) {
             log.trace("replacing: " + replacement.getKey());
-            dependencies.forEach(node -> node.replace(this, replacement));
+            dependencies.forEach(node -> {
+                node.replace(this, replacement);
+            });
         }
 
         @Override
@@ -720,13 +699,23 @@ public class WorkingSet {
         this.metrics = metrics;
     }
 
-    public Set<byte[]> finalized() {
+    public Collection<byte[]> finalized() {
+        List<byte[]> l = unfinalized.values()
+                                    .stream()
+                                    .filter(node -> node.isFinalized())
+                                    .map(node -> node.getEntry())
+                                    .collect(Collectors.toList());
+        if (!l.isEmpty()) {
+            return l;
+        }
+
         return finalized.keySet();
     }
 
     public List<HashKey> frontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
+                                          .filter(node -> !node.isFinalized())
                                           .filter(node -> node.isPreferred(parameters.beta1 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -903,7 +892,7 @@ public class WorkingSet {
     }
 
     public int sampleNoOpParents(Collection<HashKey> collector, Random entropy) {
-        List<HashKey> sample = singularFrontier(entropy);
+        List<HashKey> sample = singulaNoOprFrontier(entropy);
         if (sample.isEmpty()) {
             sample = frontier(entropy);
         }
@@ -941,11 +930,22 @@ public class WorkingSet {
         return collector;
     }
 
+    public List<HashKey> singulaNoOprFrontier(Random entropy) {
+        List<HashKey> sample = unfinalized.values()
+                                          .stream()
+                                          .filter(node -> !node.isFinalized())
+                                          .filter(node -> node.isPreferredAndSingular(parameters.beta2 / 2 - 1))
+                                          .map(node -> node.getKey())
+                                          .collect(Collectors.toList());
+        Collections.shuffle(sample, entropy);
+        return sample;
+    }
+
     public List<HashKey> singularFrontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
-
-                                          .filter(node -> node.isPreferredAndSingular(parameters.beta1 / 1))
+                                          .filter(node -> !node.isFinalized())
+                                          .filter(node -> node.isPreferredAndSingular(parameters.beta1 / 2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);
@@ -983,6 +983,7 @@ public class WorkingSet {
     public List<HashKey> unfinalizedSingular(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
+                                          .filter(node -> node.isFinalized())
                                           .filter(node -> node.isUnfinalizedSingular())
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
