@@ -16,6 +16,7 @@ import java.io.File;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -25,7 +26,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -120,9 +120,8 @@ public class AvalancheFunctionalTest {
         AvaMetrics avaMetrics = new AvaMetrics(node0Registry);
         AvalancheCommunications comm = new AvalancheLocalCommSim(rpcStats);
         AtomicInteger index = new AtomicInteger(0);
-        AtomicBoolean frist = new AtomicBoolean(true);
         List<Avalanche> nodes = views.stream().map(view -> {
-            AvalancheParameters aParams = new AvalancheParameters(); 
+            AvalancheParameters aParams = new AvalancheParameters();
             aParams.dagWood.store = new File("target/cluster/" + view.getNode().getId() + ".store");
             aParams.dagWood.maxCache = 50_000;
 
@@ -143,23 +142,15 @@ public class AvalancheFunctionalTest {
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
 
-//            aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
-//                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
-
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement() + ";MULTI_THREADED=1;MVCC=TRUE";
-            if (frist.get()) {
-                frist.set(false);
-//                aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
-                return new Avalanche(view, comm, aParams, avaMetrics);
-            }
             return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 6400;
+        int target = 20_000;
         Duration ffRound = Duration.ofMillis(500);
-        int outstanding = 400;
-        int runtime = (int) Duration.ofSeconds(240).toMillis();
+        int outstanding = 200;
+        int runtime = (int) Duration.ofSeconds(600).toMillis();
 
         views.forEach(view -> view.getService().start(ffRound));
 
@@ -208,7 +199,9 @@ public class AvalancheFunctionalTest {
                                                     .map(a -> new Transactioneer(a, 700_000))
                                                     .collect(Collectors.toList());
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, txnScheduler));
+        ArrayList<Transactioneer> startUp = new ArrayList<>(transactioneers);
+        Collections.shuffle(startUp, entropy);
+        transactioneers.parallelStream().forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, txnScheduler));
 
         boolean finalized = Utils.waitForCondition(runtime, 1_000, () -> {
             return transactioneers.stream()
@@ -242,7 +235,7 @@ public class AvalancheFunctionalTest {
         transactioneers.forEach(t -> {
             System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
         });
-        System.out.println(); 
+        System.out.println();
         System.out.println("Global Metrics");
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)
