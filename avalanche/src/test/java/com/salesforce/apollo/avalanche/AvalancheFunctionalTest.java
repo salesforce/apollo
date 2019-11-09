@@ -147,7 +147,7 @@ public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 20_000;
+        int target = 2000;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 200;
         int runtime = (int) Duration.ofSeconds(600).toMillis();

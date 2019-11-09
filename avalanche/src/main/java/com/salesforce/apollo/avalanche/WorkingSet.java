@@ -333,7 +333,7 @@ public class WorkingSet {
         }
 
         @Override
-        public void replace(UnknownNode unknownNode, Node replacement) { 
+        public void replace(UnknownNode unknownNode, Node replacement) {
             synchronized (this) {
                 log.trace("(found) replacing {} with {}", unknownNode.getKey(), replacement.getKey());
                 if (links.remove(unknownNode)) {
@@ -1002,14 +1002,9 @@ public class WorkingSet {
             return new FinalizationData();
         }
         FinalizationData data = new FinalizationData();
-        try {
-            lock.lock();
-            finalizedSet.stream().forEach(node -> {
-                finalize(node, data);
-            });
-        } finally {
-            lock.unlock();
-        }
+        finalizedSet.stream().forEach(node -> {
+            finalize(node, data);
+        });
         return data;
     }
 
