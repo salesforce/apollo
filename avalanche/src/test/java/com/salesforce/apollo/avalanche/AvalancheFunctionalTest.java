@@ -132,16 +132,16 @@ public class AvalancheFunctionalTest {
             aParams.beta1 = 3;
             aParams.beta2 = 5;
             // parent selection target for avalanche dag voting
-            aParams.parentCount = 10;
+            aParams.parentCount = 5;
 
             // Avalanche implementation parameters
-            aParams.queryBatchSize = 40; 
+            aParams.queryBatchSize = 40;
             aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
             aParams.maxActiveQueries = 200;
 
             // # of firefly rounds per noOp generation round
-            aParams.delta = 5;
+            aParams.delta = 1;
 
 //            aParams.dbConnect = "jdbc:h2:file:" + new File(baseDir, "test-" + index.getAndIncrement()).getAbsolutePath()
 //                    + ";LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE;CACHE_SIZE=131072";
@@ -152,14 +152,14 @@ public class AvalancheFunctionalTest {
 //                aParams.dbConnect += ";TRACE_LEVEL_FILE=3";
                 return new Avalanche(view, comm, aParams, avaMetrics);
             }
-            return new Avalanche(view, comm, aParams);
+            return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 2400;
+        int target = 6400;
         Duration ffRound = Duration.ofMillis(500);
-        int outstanding = 100;
-        int runtime = (int) Duration.ofSeconds(60).toMillis();
+        int outstanding = 400;
+        int runtime = (int) Duration.ofSeconds(240).toMillis();
 
         views.forEach(view -> view.getService().start(ffRound));
 
@@ -239,22 +239,23 @@ public class AvalancheFunctionalTest {
         System.out.println("wanted: ");
         System.out.println(master.getDag().getWanted());
         System.out.println();
-        System.out.println("Node 0 Metrics");
+        transactioneers.forEach(t -> {
+            System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
+        });
+        System.out.println(); 
+        System.out.println("Global Metrics");
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)
                        .convertDurationsTo(TimeUnit.MILLISECONDS)
                        .build()
                        .report();
-        System.out.println();
-        System.out.println("Comm Metrics");
-        ConsoleReporter.forRegistry(commRegistry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
-        transactioneers.forEach(t -> {
-            System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
-        });
+//        System.out.println();
+//        System.out.println("Comm Metrics");
+//        ConsoleReporter.forRegistry(commRegistry)
+//                       .convertRatesTo(TimeUnit.SECONDS)
+//                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+//                       .build()
+//                       .report();
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
     }
 

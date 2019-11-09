@@ -29,8 +29,18 @@ import com.salesforce.apollo.avro.Uuid;
  * @since 220
  */
 public final class Conversion {
-    public static final String  SHA_256 = "sha-256";
-    private final static Logger log     = LoggerFactory.getLogger(Conversion.class);
+    public static final String                      SHA_256        = "sha-256";
+    private final static Logger                     log            = LoggerFactory.getLogger(Conversion.class);
+    private static final ThreadLocal<MessageDigest> MESSAGE_DIGEST = ThreadLocal.withInitial(() -> {
+                                                                       try {
+                                                                           return MessageDigest.getInstance(SHA_256);
+                                                                       } catch (NoSuchAlgorithmException e) {
+                                                                           throw new IllegalStateException(
+                                                                                   "Unable to retrieve " + SHA_256
+                                                                                           + " Message Digest instance",
+                                                                                   e);
+                                                                       }
+                                                                   });
 
     public static byte[] bytes(UUID itself) {
         ByteBuffer buff = ByteBuffer.wrap(new byte[16]);
@@ -44,12 +54,8 @@ public final class Conversion {
      * @return the hash value of the entry
      */
     public static byte[] hashOf(byte[] entry) {
-        MessageDigest md;
-        try {
-            md = MessageDigest.getInstance(SHA_256);
-        } catch (NoSuchAlgorithmException e1) {
-            throw new IllegalStateException("Cannot get instance of message digest");
-        }
+        MessageDigest md = MESSAGE_DIGEST.get();
+        md.reset();
         md.update(entry);
         return md.digest();
     }

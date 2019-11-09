@@ -88,12 +88,12 @@ public class WorkingSet {
     }
 
     public class KnownNode extends MaterializedNode {
-        private volatile int                confidence = 0;
-        private final ConflictSet           conflictSet;
-        private final Set<MaterializedNode> dependents = Collections.newSetFromMap(new IdentityHashMap<>());
-        private volatile boolean            finalized  = false;
+        private volatile int                 confidence = 0;
+        private final ConflictSet            conflictSet;
+        private final List<MaterializedNode> dependents = new ArrayList<>();
+        private volatile boolean             finalized  = false;
 
-        public KnownNode(HashKey key, byte[] entry, Set<Node> links, HashKey cs, long discovered) {
+        public KnownNode(HashKey key, byte[] entry, ArrayList<Node> links, HashKey cs, long discovered) {
             super(key, entry, links, discovered);
             conflictSet = conflictSets.computeIfAbsent(cs, k -> new ConflictSet(k, this));
             conflictSet.add(this);
@@ -247,12 +247,12 @@ public class WorkingSet {
     }
 
     abstract public class MaterializedNode extends Node {
-        protected volatile boolean chit = false;
-        protected final Set<Node>  links;
-        private final byte[]       entry;
-        private volatile Result    isStronglyPreferred;
+        protected volatile boolean      chit = false;
+        protected final ArrayList<Node> links;
+        private final byte[]            entry;
+        private volatile Result         isStronglyPreferred;
 
-        public MaterializedNode(HashKey key, byte[] entry, Set<Node> links, long discovered) {
+        public MaterializedNode(HashKey key, byte[] entry, ArrayList<Node> links, long discovered) {
             super(key, discovered);
             this.entry = entry;
             this.links = links;
@@ -313,7 +313,7 @@ public class WorkingSet {
         }
 
         @Override
-        public Set<Node> links() {
+        public List<Node> links() {
             return links;
         }
 
@@ -374,7 +374,8 @@ public class WorkingSet {
         public Boolean traverseClosure(Function<Node, Boolean> test, Consumer<Node> post) {
             Stack<Node> stack = new Stack<>();
             stack.push(this);
-            Set<Node> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+            Set<Node> visited = Collections.newSetFromMap(new IdentityHashMap<>(2048));
+
             while (!stack.isEmpty()) {
                 final Node node = stack.pop();
                 synchronized (node) {
@@ -390,6 +391,7 @@ public class WorkingSet {
                             stack.push(e);
                         }
                     }
+
                 }
                 if (post != null) {
                     post.accept(node);
@@ -472,8 +474,8 @@ public class WorkingSet {
             return false;
         }
 
-        public Set<Node> links() {
-            return Collections.emptySet();
+        public List<Node> links() {
+            return Collections.emptyList();
         }
 
         abstract public void markFinalized();
@@ -481,8 +483,7 @@ public class WorkingSet {
         public void markPreferred() {
         }
 
-        public void markStronglyPreferred() {
-        }
+        abstract public void markStronglyPreferred();
 
         abstract public void prefer();
 
@@ -499,7 +500,7 @@ public class WorkingSet {
 
     public class NoOpNode extends MaterializedNode {
 
-        public NoOpNode(HashKey key, byte[] entry, Set<Node> links, long discovered) {
+        public NoOpNode(HashKey key, byte[] entry, ArrayList<Node> links, long discovered) {
             super(key, entry, links, discovered);
         }
 
@@ -546,7 +547,7 @@ public class WorkingSet {
 
     public class UnknownNode extends Node {
 
-        private final Set<MaterializedNode> dependencies = Collections.newSetFromMap(new IdentityHashMap<>());;
+        private final List<MaterializedNode> dependencies = new ArrayList<>();
 
         private volatile boolean finalized;
 
@@ -607,6 +608,10 @@ public class WorkingSet {
         @Override
         public void markFinalized() {
             finalized = true;
+        }
+
+        @Override
+        public void markStronglyPreferred() {
         }
 
         @Override
@@ -685,8 +690,9 @@ public class WorkingSet {
         abstract Boolean value();
     }
 
-    public static final HashKey GENESIS_CONFLICT_SET = new HashKey(new byte[32]);
-    public static Logger        log                  = LoggerFactory.getLogger(WorkingSet.class);
+    public static final HashKey          GENESIS_CONFLICT_SET = new HashKey(new byte[32]);
+    public static Logger                 log                  = LoggerFactory.getLogger(WorkingSet.class);
+    private static final ArrayList<Node> EMPTY_ARRAY_LIST     = new ArrayList<>();
 
     private final NavigableMap<HashKey, ConflictSet> conflictSets = new ConcurrentSkipListMap<>();
     private final DagWood                            finalized;
@@ -818,9 +824,12 @@ public class WorkingSet {
     public List<HashKey> insertSerialized(List<ByteBuffer> transactions, long discovered) {
         return transactions.stream().map(e -> e.array()).map(t -> {
             HashKey key = new HashKey(hashOf(t));
-            DagEntry entry = manifestDag(t);
-            HashKey conflictSet = (entry.getLinks() == null || entry.getLinks().isEmpty()) ? GENESIS_CONFLICT_SET : key;
-            insert(key, entry, t, entry.getDescription() == null, discovered, conflictSet);
+            if (!unfinalized.containsKey(key)) {
+                DagEntry entry = manifestDag(t);
+                HashKey conflictSet = (entry.getLinks() == null || entry.getLinks().isEmpty()) ? GENESIS_CONFLICT_SET
+                        : key;
+                insert(key, entry, t, entry.getDescription() == null, discovered, conflictSet);
+            }
             return key;
         }).collect(Collectors.toList());
     }
@@ -1059,14 +1068,14 @@ public class WorkingSet {
         }
     }
 
-    Set<Node> linksOf(DagEntry entry, long discovered) {
+    ArrayList<Node> linksOf(DagEntry entry, long discovered) {
         List<HASH> links = entry.getLinks();
-        return links == null ? Collections.emptySet()
+        return links == null ? EMPTY_ARRAY_LIST
                 : links.stream()
                        .map(link -> new HashKey(link))
                        .map(link -> resolve(link, discovered))
                        .filter(node -> node != null)
-                       .collect(Collectors.toCollection(() -> Collections.newSetFromMap(new IdentityHashMap<>())));
+                       .collect(Collectors.toCollection(ArrayList::new));
     }
 
     Node nodeFor(HashKey k, byte[] entry, DagEntry dagEntry, boolean noOp, long discovered, HashKey cs) {
