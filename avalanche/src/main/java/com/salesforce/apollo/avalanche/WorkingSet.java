@@ -429,6 +429,8 @@ public class WorkingSet {
 
         abstract public void addDependent(MaterializedNode node);
 
+        abstract public List<MaterializedNode> dependents();
+
         public boolean getChit() {
             return false;
         }
@@ -503,8 +505,6 @@ public class WorkingSet {
         abstract public void snip(Node node);
 
         abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
-
-        abstract public List<MaterializedNode> dependents();
     }
 
     public class NoOpNode extends MaterializedNode {
@@ -569,6 +569,11 @@ public class WorkingSet {
             synchronized (this) {
                 dependents.add(node);
             }
+        }
+
+        @Override
+        public List<MaterializedNode> dependents() {
+            return dependents;
         }
 
         @Override
@@ -673,11 +678,6 @@ public class WorkingSet {
         public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
             return finalized;
         }
-
-        @Override
-        public List<MaterializedNode> dependents() {
-            return dependents;
-        }
     }
 
     private static enum Result {
@@ -758,6 +758,11 @@ public class WorkingSet {
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);
         return sample;
+    }
+
+    /** for testing **/
+    public Node get(HashKey key) {
+        return unfinalized.get(key);
     }
 
     public ConflictSet getConflictSet(HashKey key) {
@@ -968,22 +973,22 @@ public class WorkingSet {
         return collector;
     }
 
-    public List<HashKey> singularNoOpFrontier(Random entropy) {
+    public List<HashKey> singularFrontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
                                           .filter(node -> !node.isFinalized())
-                                          .filter(node -> node.isPreferredAndSingular(parameters.beta2 - 1))
+                                          .filter(node -> node.isPreferredAndSingular(parameters.beta1 / 2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);
         return sample;
     }
 
-    public List<HashKey> singularFrontier(Random entropy) {
+    public List<HashKey> singularNoOpFrontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
                                           .filter(node -> !node.isFinalized())
-                                          .filter(node -> node.isPreferredAndSingular(parameters.beta1 / 2 - 1))
+                                          .filter(node -> node.isPreferredAndSingular(parameters.beta2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);
@@ -1048,11 +1053,6 @@ public class WorkingSet {
             });
         }
         data.finalized.add(key);
-    }
-
-    /** for testing **/
-    Node get(HashKey key) {
-        return unfinalized.get(key);
     }
 
     void insert(HashKey key, DagEntry entry, byte[] serialized, boolean noOp, long discovered, HashKey cs) {

@@ -507,7 +507,7 @@ public class Avalanche {
             return 0;
         }
         if (sample.size() < parameters.k) {
-            log.info("not enough members in sample: {} < {}", sample.size(), parameters.k);
+            log.trace("not enough members in sample: {} < {}", sample.size(), parameters.k);
             return 0;
         }
         now = System.currentTimeMillis();

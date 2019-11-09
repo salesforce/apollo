@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
-import static com.salesforce.apollo.dagwood.schema.Tables.UNFINALIZED;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -27,6 +25,8 @@ import org.junit.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
+import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -40,7 +40,7 @@ public class TestApollo {
     public static void summarize(List<Apollo> nodes) {
         int finalized = nodes.stream()
                              .map(a -> a.getAvalanche())
-                             .map(n -> n.getDslContext().selectCount().from(DAG).fetchOne().value1())
+                             .map(n -> n.getDag().finalized().size())
                              .reduce(0, (a, b) -> a + b);
         System.out.println("Total finalized : " + finalized);
         System.out.println();
@@ -49,26 +49,26 @@ public class TestApollo {
     public static void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
         System.out.println("    Rounds: " + node.getRoundCounter());
-        Integer finalized = node.getDslContext().selectCount().from(DAG).fetchOne().value1();
-        Integer unfinalizedUser = node.getDslContext()
-                                      .selectCount()
-                                      .from(UNFINALIZED)
-                                      .where(UNFINALIZED.NOOP.isFalse())
-                                      .fetchOne()
-                                      .value1();
+
+        Integer finalized = node.getDag().getFinalized().size();
+        Integer unfinalizedUser = node.getDag()
+                                      .getUnfinalized()
+                                      .values()
+                                      .stream()
+                                      .filter(n -> n instanceof KnownNode)
+                                      .mapToInt(n -> n.isFinalized() ? 0 : 1)
+                                      .sum();
+        long unqueried = node.getDag()
+                             .getUnqueried()
+                             .stream()
+                             .map(key -> node.getDag().get(key))
+                             .filter(n -> n instanceof KnownNode)
+                             .count();
+
         System.out.println("    User txns finalized: " + finalized + " unfinalized: " + unfinalizedUser + " unqueried: "
-                + node.getDslContext()
-                      .selectCount()
-                      .from(UNFINALIZED)
-                      .where(UNFINALIZED.NOOP.isTrue())
-                      .fetchOne()
-                      .value1());
-        System.out.println("    No Op txns: " + node.getDslContext()
-                                                    .selectCount()
-                                                    .from(UNFINALIZED)
-                                                    .where(UNFINALIZED.NOOP.isTrue())
-                                                    .fetchOne()
-                                                    .value1());
+                + unqueried);
+        System.out.println("    No Op txns: "
+                + node.getDag().getUnfinalized().values().stream().filter(n -> n instanceof NoOpNode).count());
     }
 
     @Test
@@ -79,6 +79,9 @@ public class TestApollo {
 
     @Test
     public void smoke() throws Exception {
+        File baseDir = new File(System.getProperty("user.dir"), "target/cluster");
+        Utils.clean(baseDir);
+        baseDir.mkdirs();
         ApolloConfiguration.SimCommunicationsFactory.reset();
         List<Apollo> oracles = new ArrayList<>();
 
@@ -89,6 +92,8 @@ public class TestApollo {
             config.avalanche.beta1 = 3;
             config.avalanche.beta2 = 5;
             config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i;
+            config.avalanche.dagWood.store = new File(baseDir, i + ".store");
+            config.avalanche.dagWood.store.deleteOnExit();
             config.gossipInterval = Duration.ofMillis(100);
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             ApolloConfiguration.FileIdentitySource ks = new ApolloConfiguration.FileIdentitySource();
@@ -159,11 +164,7 @@ public class TestApollo {
         oracles.forEach(node -> summary(node.getAvalanche()));
 
         System.out.println("wanted: ");
-        System.out.println(master.getDag()
-                                 .getWanted(Integer.MAX_VALUE, master.getDslContext())
-                                 .stream()
-                                 .map(e -> new HashKey(e))
-                                 .collect(Collectors.toList()));
+        System.out.println(master.getDag().getWanted().stream().collect(Collectors.toList()));
         System.out.println();
         System.out.println();
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
