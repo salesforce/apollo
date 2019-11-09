@@ -6,7 +6,8 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
+import static com.salesforce.apollo.protocols.Conversion.hashOf;
+import static com.salesforce.apollo.protocols.Conversion.serialize;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -17,9 +18,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.nio.ByteBuffer;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -32,18 +30,15 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
-import org.jooq.ConnectionProvider;
-import org.jooq.DSLContext;
-import org.jooq.SQLDialect;
-import org.jooq.impl.DSL;
-import org.jooq.impl.DefaultConnectionProvider;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
+import com.salesforce.apollo.avalanche.WorkingSet.Node;
 import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * @author hal.hildebrand
@@ -51,40 +46,26 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class TransactionsTest {
 
-    private Connection          connection;
-    private String              connection_url;
-    private DSLContext          create;
+    private static File baseDir;
+
+    @BeforeClass
+    public static void beforeClass() {
+        baseDir = new File(System.getProperty("user.dir"), "target/txn-tst");
+        Utils.clean(baseDir);
+        baseDir.mkdirs();
+    }
+
     private WorkingSet          dag;
     private Random              entropy;
     private AvalancheParameters parameters;
     private DagEntry            root;
     private HashKey             rootKey;
 
-    @After
-    public void after() {
-        if (create != null) {
-            create.close();
-        }
-        if (connection != null) {
-            try {
-                connection.close();
-            } catch (SQLException e) {
-            }
-        } 
-    }
-
     @Before
     public void before() throws Exception {
         entropy = new Random(0x1638);
-        connection_url = "jdbc:h2:mem:test-" + (Math.random() * 100);
-        Avalanche.loadSchema(connection_url);
-        connection = DriverManager.getConnection(connection_url, "apollo", "");
-        connection.setAutoCommit(false);
-        ConnectionProvider provider = new DefaultConnectionProvider(connection);
-        create = DSL.using(provider, SQLDialect.H2);
-        create.deleteFrom(DAG).execute();
         parameters = new AvalancheParameters();
-        parameters.dagWood.store = new File("target/" + UUID.randomUUID());
+        parameters.dagWood.store = new File(baseDir, UUID.randomUUID().toString());
         parameters.dagWood.store.deleteOnExit();
         dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
         root = new DagEntry();
@@ -106,9 +87,6 @@ public class TransactionsTest {
             stored.put(rootKey, root);
             ordered.add(rootKey);
 
-            // create.update(DAG).set(DAG.FINALIZED,
-            // true).where(DAG.HashKey.eq(rootKey.bytes())).execute();
-
             HashKey last = rootKey;
             HashKey firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));
             last = firstCommit;
@@ -121,7 +99,7 @@ public class TransactionsTest {
 
             for (int i = ordered.size() - 1; i >= 4; i--) {
                 dag.prefer(ordered.get(i));
-                create.transaction(config -> dag.tryFinalize(ordered));
+                dag.tryFinalize(ordered.get(i));
             }
 
             assertEquals(parameters.beta2 - 1, dag.get(firstCommit).getConflictSet().getCounter());
@@ -132,7 +110,7 @@ public class TransactionsTest {
             assertFalse(dag.isFinalized(secondCommit));
 
             dag.prefer(ordered.get(ordered.size() - 1));
-            create.transaction(config -> dag.tryFinalize(ordered));
+            dag.tryFinalize(ordered.get(ordered.size() - 1));
             assertTrue(dag.isFinalized(rootKey));
             assertTrue(dag.isFinalized(firstCommit));
             assertTrue(dag.isFinalized(secondCommit));
@@ -165,7 +143,7 @@ public class TransactionsTest {
 
         for (int i = ordered.size() - 1; i >= 2; i--) {
             dag.prefer(ordered.get(i));
-            create.transaction(config -> dag.tryFinalize(ordered));
+            dag.tryFinalize(ordered.get(i));
 
             assertFalse(dag.isFinalized(firstCommit));
             assertFalse(dag.isFinalized(secondCommit));
@@ -175,7 +153,7 @@ public class TransactionsTest {
         assertEquals(parameters.beta1 - 1, dag.get(secondCommit).getConflictSet().getCounter());
 
         dag.prefer(ordered.get(3));
-        create.transaction(config -> dag.tryFinalize(ordered));
+        dag.tryFinalize(ordered.get(3));
 
         assertTrue(dag.isFinalized(rootKey));
         assertTrue(dag.isFinalized(firstCommit));
@@ -199,7 +177,7 @@ public class TransactionsTest {
         for (int i = ordered.size() - 1; i > ordered.size() - parameters.beta1; i--) {
             HashKey key = ordered.get(i);
             dag.prefer(key);
-            finalized = create.transactionResult(config -> dag.tryFinalize(key));
+            finalized = dag.tryFinalize(key);
             assertEquals(0, finalized.finalized.size());
             assertEquals(0, finalized.deleted.size());
         }
@@ -207,7 +185,7 @@ public class TransactionsTest {
         HashKey lastKey = ordered.get(ordered.size() - 1);
         dag.prefer(lastKey);
 
-        finalized = create.transactionResult(config -> dag.tryFinalize(lastKey));
+        finalized = dag.tryFinalize(lastKey);
         assertNotNull(finalized);
         assertEquals(3, finalized.finalized.size());
         assertEquals(0, finalized.deleted.size());
@@ -249,7 +227,7 @@ public class TransactionsTest {
         assertTrue(frontier.contains(userTxn));
 
         last = userTxn;
-        last = newDagEntree("entry: " + 0, ordered, stored, Arrays.asList(last));
+        last = newDagEntry("entry: " + 0, ordered, stored, Arrays.asList(last));
 
         frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
 
@@ -347,6 +325,55 @@ public class TransactionsTest {
     }
 
     @Test
+    public void knownUnknowns() throws Exception {
+        int oldBeta1 = parameters.beta1;
+        int oldBeta2 = parameters.beta2;
+        try {
+            parameters.beta1 = 11;
+            parameters.beta2 = 150;
+            List<HashKey> ordered = new ArrayList<>();
+            Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+            stored.put(rootKey, root);
+            ordered.add(rootKey);
+
+            HashKey last = rootKey;
+            HashKey firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last), false);
+            last = firstCommit;
+            HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last), false);
+            last = secondCommit;
+
+            for (int i = 0; i < parameters.beta2; i++) {
+                last = newDagEntry("entry: " + i, ordered, stored, Arrays.asList(last));
+            }
+
+            for (int i = 2; i < ordered.size() - 1; i++) {
+                final Node node = dag.get(ordered.get(i));
+                assertNotNull("Node " + i + " is not present!", node);
+                assertEquals("Node " + i + " has no dependents", 1, node.dependents().size());
+            }
+
+            for (int i = 3; i < ordered.size() - 1; i++) {
+                dag.prefer(ordered.get(i));
+                dag.tryFinalize(ordered.get(i));
+            }
+
+            for (int i = 0; i < ordered.size(); i++) {
+                assertFalse(dag.isFinalized(ordered.get(i)));
+            }
+
+            dag.prefer(ordered.get(ordered.size() - 1));
+            dag.tryFinalize(ordered.get(ordered.size() - 1));
+
+            for (int i = 3; i < 143; i++) {
+                assertTrue("node " + i + " is not finalized", dag.isFinalized(ordered.get(i)));
+            }
+        } finally {
+            parameters.beta1 = oldBeta1;
+            parameters.beta2 = oldBeta2;
+        }
+    }
+
+    @Test
     public void multipleParents() {
         List<HashKey> ordered = new ArrayList<>();
         Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
@@ -372,7 +399,7 @@ public class TransactionsTest {
         }
 
         dag.prefer(userTxn);
-        create.transaction(config -> dag.tryFinalize(ordered));
+        dag.tryFinalize(userTxn);
         assertTrue(dag.isFinalized(userTxn));
     }
 
@@ -650,21 +677,22 @@ public class TransactionsTest {
         assertTrue(String.format("node 4 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(4)));
     }
 
-    HashKey newDagEntree(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links) {
-        return newDagEntry(contents, ordered, stored, links.stream().map(e -> e).collect(Collectors.toList()), null);
-    }
-
     HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links) {
-        return newDagEntry(contents, ordered, stored, links, null);
+        return newDagEntry(contents, ordered, stored, links, true);
     }
 
     HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links,
-                        HashKey conflictSet) {
+                        boolean store) {
+        return newDagEntry(contents, ordered, stored, links, null, store);
+    }
+
+    HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links,
+                        HashKey conflictSet, boolean store) {
         DagEntry entry = new DagEntry();
         entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
         entry.setData(ByteBuffer.wrap(contents.getBytes()));
         entry.setLinks(links.stream().map(e -> e.toHash()).collect(Collectors.toList()));
-        HashKey key = dag.insert(entry, conflictSet, 0);
+        HashKey key = store ? dag.insert(entry, conflictSet, 0) : new HashKey(hashOf(serialize(entry)));
         stored.put(key, entry);
         ordered.add(key);
         return key;

@@ -113,7 +113,7 @@ public class Avalanche {
             long now = System.currentTimeMillis();
             Context timer = metrics == null ? null : metrics.getInboundQueryTimer().time();
 
-            final List<HashKey> inserted = dag.insertSerialized(transactions, System.currentTimeMillis());
+            final List<HashKey> inserted = dag.insertSerialized(transactions, System.currentTimeMillis()); 
             List<Boolean> stronglyPreferred = dag.isStronglyPreferred(inserted);
             log.trace("onquery {} txn in {} ms", stronglyPreferred, System.currentTimeMillis() - now);
             List<Vote> queried = stronglyPreferred.stream().map(r -> {
