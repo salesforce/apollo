@@ -122,7 +122,7 @@ public class AvalancheFunctionalTest {
         AtomicInteger index = new AtomicInteger(0);
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
-            aParams.dagWood.store = new File("target/cluster/" + view.getNode().getId() + ".store");
+            aParams.dagWood.store = new File(baseDir, view.getNode().getId() + ".store");
             aParams.dagWood.maxCache = 50_000;
 
             // Avalanche protocol parameters
