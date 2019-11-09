@@ -822,7 +822,11 @@ public class WorkingSet {
     }
 
     public List<HashKey> insertSerialized(List<ByteBuffer> transactions, long discovered) {
-        return transactions.stream().map(e -> e.array()).map(t -> {
+        return insertSerializedRaw(transactions.stream().map(e -> e.array()).collect(Collectors.toList()), discovered);
+    }
+
+    public List<HashKey> insertSerializedRaw(List<byte[]> transactions, long discovered) {
+        return transactions.stream().map(t -> {
             HashKey key = new HashKey(hashOf(t));
             if (!unfinalized.containsKey(key)) {
                 DagEntry entry = manifestDag(t);
@@ -830,16 +834,6 @@ public class WorkingSet {
                         : key;
                 insert(key, entry, t, entry.getDescription() == null, discovered, conflictSet);
             }
-            return key;
-        }).collect(Collectors.toList());
-    }
-
-    public List<HashKey> insertSerializedRaw(List<byte[]> transactions, long discovered) {
-        return transactions.stream().map(t -> {
-            HashKey key = new HashKey(hashOf(t));
-            DagEntry entry = manifestDag(t);
-            HashKey conflictSet = (entry.getLinks() == null || entry.getLinks().isEmpty()) ? GENESIS_CONFLICT_SET : key;
-            insert(key, entry, t, entry.getDescription() == null, discovered, conflictSet);
             return key;
         }).collect(Collectors.toList());
     }
