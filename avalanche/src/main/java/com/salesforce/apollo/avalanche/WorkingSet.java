@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -993,6 +994,11 @@ public class WorkingSet {
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);
         return sample;
+    }
+
+    public void traverseAll(BiConsumer<HashKey, DagEntry> p) {
+        unfinalized.entrySet().stream().filter(e -> !e.getValue().isFinalized()).forEach(e -> p.accept(e.getKey(), manifestDag(e.getValue().getEntry())));
+        finalized.keySet().stream().map(e -> new HashKey(e)).forEach(e -> p.accept(e, getDagEntry(e)));
     }
 
     public FinalizationData tryFinalize(Collection<HashKey> keys) {

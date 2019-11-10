@@ -140,14 +140,14 @@ public class AvalancheFunctionalTest {
             aParams.maxActiveQueries = 200;
 
             // # of firefly rounds per noOp generation round
-            aParams.delta = 1;
+            aParams.delta = 3;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement() + ";MULTI_THREADED=1;MVCC=TRUE";
             return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 2000;
+        int target = 800;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 200;
         int runtime = (int) Duration.ofSeconds(600).toMillis();
@@ -162,8 +162,6 @@ public class AvalancheFunctionalTest {
         }));
         nodes.forEach(node -> node.start());
         ScheduledExecutorService txnScheduler = Executors.newScheduledThreadPool(nodes.size());
-        // Profiler profiler = new Profiler();
-        // profiler.startCollecting();
 
         // generate the genesis transaction
         Avalanche master = nodes.get(0);
@@ -179,9 +177,7 @@ public class AvalancheFunctionalTest {
             views.forEach(v -> v.getService().stop());
 
             System.out.println("Rounds: " + master.getRoundCounter());
-            // Graphviz.fromGraph(DagViz.visualize("smoke", master.getDslContext(), false))
-            // .render(Format.PNG)
-            // .toFile(new File("smoke.png"));
+//            Graphviz.fromGraph(DagViz.visualize("smoke", nodes.get(0).getDag(), false)).render(Format.PNG).toFile(new File("smoke.png"));
         }
         System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
@@ -226,9 +222,6 @@ public class AvalancheFunctionalTest {
                 + nodes.stream().mapToInt(n -> n.getDag().getFinalized().size()).max().orElse(0) / (duration / 1000));
         nodes.forEach(node -> summary(node));
 
-        // FileSerializer.serialize(DagViz.visualize("smoke", master.getDslContext(),
-        // true), new File("smoke.dot"));
-
         System.out.println("wanted: ");
         System.out.println(master.getDag().getWanted());
         System.out.println();
@@ -249,6 +242,9 @@ public class AvalancheFunctionalTest {
 //                       .convertDurationsTo(TimeUnit.MILLISECONDS)
 //                       .build()
 //                       .report();
+//        FileSerializer.serialize(DagViz.visualize("smoke", nodes.get(0).getDag(), true), new File("smoke.dot"));
+
+//        Graphviz.fromGraph(DagViz.visualize("smoke", nodes.get(0).getDag(), true)).render(Format.PNG).toFile(new File("smoke.png"));
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
     }
 

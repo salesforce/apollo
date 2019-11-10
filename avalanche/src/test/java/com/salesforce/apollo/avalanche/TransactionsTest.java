@@ -40,6 +40,9 @@ import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import guru.nidi.graphviz.engine.Format;
+import guru.nidi.graphviz.engine.Graphviz;
+
 /**
  * @author hal.hildebrand
  * @since 222
@@ -109,6 +112,9 @@ public class TransactionsTest {
             assertFalse(dag.isFinalized(firstCommit));
             assertFalse(dag.isFinalized(secondCommit));
 
+//            DagViz.dumpClosure(ordered, dag);
+            Graphviz.fromGraph(DagViz.visualize("smoke", dag, false)).render(Format.PNG).toFile(new File("smoke.png"));
+
             dag.prefer(ordered.get(ordered.size() - 1));
             dag.tryFinalize(ordered.get(ordered.size() - 1));
             assertTrue(dag.isFinalized(rootKey));
@@ -127,9 +133,6 @@ public class TransactionsTest {
         Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(rootKey, root);
         ordered.add(rootKey);
-
-        // create.update(DAG).set(DAG.FINALIZED,
-        // true).where(DAG.HashKey.eq(rootKey.bytes())).execute();
 
         HashKey last = rootKey;
         HashKey firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));

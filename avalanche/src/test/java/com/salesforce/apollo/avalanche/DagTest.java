@@ -137,48 +137,6 @@ public class DagTest {
             }
         }
     }
-    
-    public void knownUnknowns() {
-        DagEntry testRoot = workingSet.getDagEntry(rootKey);
-        assertNotNull(testRoot);
-        testRoot.setDescription(WellKnownDescriptions.GENESIS.toHash());
-        assertNotNull(testRoot);
-        assertArrayEquals(root.getData().array(), testRoot.getData().array());
-        assertNull(testRoot.getLinks());
-
-        List<HashKey> ordered = new ArrayList<>();
-        ordered.add(rootKey);
-
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
-        stored.put(rootKey, root);
-
-        for (int i = 0; i < 500; i++) {
-            DagEntry entry = new DagEntry();
-            entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
-            entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", i).getBytes()));
-            entry.setLinks(randomLinksTo(stored));
-            HashKey key = workingSet.insert(entry, 0);
-            stored.put(key, entry);
-            ordered.add(key);
-        }
-        assertEquals(501, stored.size());
-
-        assertEquals(501, workingSet.getUnfinalized().size());
-
-        for (HashKey key : ordered) {
-            assertEquals(1, workingSet.getConflictSet(key).getCardinality());
-            DagEntry found = workingSet.getDagEntry(key);
-            assertNotNull("Not found: " + key, found);
-            DagEntry original = stored.get(key);
-            assertArrayEquals(original.getData().array(), found.getData().array());
-            if (original.getLinks() == null) {
-                assertNull(found.getLinks());
-            } else {
-                assertEquals(original.getLinks().size(), found.getLinks().size());
-            }
-        }
-    
-    }
 
     private List<HASH> randomLinksTo(Map<HashKey, DagEntry> stored) {
         List<HASH> links = new ArrayList<>();

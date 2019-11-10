@@ -43,7 +43,7 @@ public class TestApollo {
     public static void summarize(List<Apollo> nodes) {
         int finalized = nodes.stream()
                              .map(a -> a.getAvalanche())
-                             .map(n -> n.getDag().finalized().size())
+                             .map(n -> n.getDag().getFinalized().size())
                              .reduce(0, (a, b) -> a + b);
         System.out.println("Total finalized : " + finalized);
         System.out.println();
