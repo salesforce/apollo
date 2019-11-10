@@ -38,7 +38,7 @@ public class AvalancheParameters {
     /**
      * The number of FF rounds per NoOp generation round
      */
-    public int               delta             = 1;
+    public int               delta             = 2;
     /**
      * The number of FF rounds per Avalanche round
      */
@@ -64,14 +64,14 @@ public class AvalancheParameters {
      */
     public int maxActiveQueries = 100;
 
-    public int maxNoOpParents = 100;
+    public int maxNoOpParents = 10;
 
-    public int noOpsPerRound = 1;
+    public int noOpsPerRound = 10;
 
     /**
      * The number of parents we desire for new txns
      */
-    public int parentCount = 3;
+    public int parentCount = 5;
 
     /**
      * The limit on the Avalanche query batch size
