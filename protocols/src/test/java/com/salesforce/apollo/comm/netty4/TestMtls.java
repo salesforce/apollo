@@ -10,6 +10,7 @@ package com.salesforce.apollo.comm.netty4;
 import static org.junit.Assert.assertEquals;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.function.Function;
@@ -21,8 +22,8 @@ import org.apache.avro.specific.SpecificData;
 import org.junit.Test;
 
 import com.salesforce.apollo.avro.Apollo;
+import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.Digests;
-import com.salesforce.apollo.avro.Entry;
 import com.salesforce.apollo.avro.Gossip;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.Interval;
@@ -41,80 +42,80 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
  */
 public class TestMtls {
 
-	@Test
-	public void testIt() throws Exception {
-		InetSocketAddress serverAddress = new InetSocketAddress("localhost", Utils.allocatePort());
+    @Test
+    public void testIt() throws Exception {
+        InetSocketAddress serverAddress = new InetSocketAddress("localhost", Utils.allocatePort());
 
-		SelfSignedCertificate ssc = new SelfSignedCertificate();
-		Function<X509Certificate, Responder> responderProvider = certificate -> new SpecificResponder(Apollo.class,
-				service());
-		MtlsServer server = new MtlsServer(serverAddress,
-				SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build(), responderProvider,
-				MtlsServer.defaultBuiilder(), 1, "test", 1);
-		NettyTlsTransceiver transceiver = new NettyTlsTransceiver(serverAddress,
-				SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build(),
-				new NioEventLoopGroup());
+        SelfSignedCertificate ssc = new SelfSignedCertificate();
+        Function<X509Certificate, Responder> responderProvider = certificate -> new SpecificResponder(Apollo.class,
+                service());
+        MtlsServer server = new MtlsServer(serverAddress,
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build(), responderProvider,
+                MtlsServer.defaultBuiilder(), 1, "test", 1);
+        NettyTlsTransceiver transceiver = new NettyTlsTransceiver(serverAddress,
+                SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build(),
+                new NioEventLoopGroup());
 
-		SpecificRequestor requestor = new SpecificRequestor(Apollo.PROTOCOL, transceiver, SpecificData.get());
-		Apollo client = SpecificRequestor.getClient(Apollo.class, requestor);
+        SpecificRequestor requestor = new SpecificRequestor(Apollo.PROTOCOL, transceiver, SpecificData.get());
+        Apollo client = SpecificRequestor.getClient(Apollo.class, requestor);
 
-		assertEquals(110, client.ping(0));
+        assertEquals(110, client.ping(0));
 
-		transceiver.close();
-		server.close();
-	}
+        transceiver.close();
+        server.close();
+    }
 
-	private Apollo service() {
-		return new Apollo() {
+    private Apollo service() {
+        return new Apollo() {
 
-			@Override
-			public Entry get(HASH key) {
-				// TODO Auto-generated method stub
-				return null;
-			}
+            @Override
+            public DagEntry get(HASH key) {
+                // TODO Auto-generated method stub
+                return null;
+            }
 
-			@Override
-			public Gossip gossip(Signed note, int ring, Digests gossip) {
-				// TODO Auto-generated method stub
-				return null;
-			}
+            @Override
+            public Gossip gossip(Signed note, int ring, Digests gossip) {
+                // TODO Auto-generated method stub
+                return null;
+            }
 
-			@Override
-			public List<Entry> intervals(List<Interval> intervals, List<HASH> have) {
-				// TODO Auto-generated method stub
-				return null;
-			}
+            @Override
+            public List<DagEntry> intervals(List<Interval> intervals, List<HASH> have) {
+                // TODO Auto-generated method stub
+                return null;
+            }
 
-			@Override
-			public int ping(int ping) {
-				// TODO Auto-generated method stub
-				return 110;
-			}
+            @Override
+            public int ping(int ping) {
+                // TODO Auto-generated method stub
+                return 110;
+            }
 
-			@Override
-			public void put(Entry entry) {
-				// TODO Auto-generated method stub
+            @Override
+            public void put(DagEntry DagEntry) {
+                // TODO Auto-generated method stub
 
-			}
+            }
 
-			@Override
-			public QueryResult query(List<HASH> transactions, List<HASH> want) {
-				// TODO Auto-generated method stub
-				return null;
-			}
+            @Override
+            public QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) {
+                // TODO Auto-generated method stub
+                return null;
+            }
 
-			@Override
-			public List<Entry> requestDAG(List<HASH> want) {
-				// TODO Auto-generated method stub
-				return null;
-			}
+            @Override
+            public List<ByteBuffer> requestDAG(List<HASH> want) {
+                // TODO Auto-generated method stub
+                return null;
+            }
 
-			@Override
-			public void update(int ring, Update update) {
-				// TODO Auto-generated method stub
+            @Override
+            public void update(int ring, Update update) {
+                // TODO Auto-generated method stub
 
-			}
-		};
-	}
+            }
+        };
+    }
 
 }

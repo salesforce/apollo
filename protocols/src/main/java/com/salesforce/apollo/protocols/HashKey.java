@@ -6,15 +6,10 @@
  */
 package com.salesforce.apollo.protocols;
 
-import static com.salesforce.apollo.protocols.Conversion.SHA_256;
-
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 
-import com.salesforce.apollo.avro.Entry;
 import com.salesforce.apollo.avro.HASH;
 
 /**
@@ -30,10 +25,10 @@ public class HashKey implements Comparable<HashKey> {
 
     static {
         byte[] o = new byte[32];
-        Arrays.fill(o, (byte)0);
+        Arrays.fill(o, (byte) 0);
         ORIGIN = new HashKey(o);
         byte[] l = new byte[32];
-        Arrays.fill(l, (byte)255);
+        Arrays.fill(l, (byte) 255);
         LAST = new HashKey(l);
     }
 
@@ -49,32 +44,18 @@ public class HashKey implements Comparable<HashKey> {
 
     public static int compare(byte[] buffer1, byte[] buffer2) {
         // Short circuit equal case
-        if (buffer1 == buffer2) { return 0; }
+        if (buffer1 == buffer2) {
+            return 0;
+        }
         // Bring WritableComparator code local
         for (int i = 0, j = 0; i < buffer1.length && j < buffer1.length; i++, j++) {
             int a = (buffer1[i] & 0xff);
             int b = (buffer2[j] & 0xff);
-            if (a != b) { return a - b; }
+            if (a != b) {
+                return a - b;
+            }
         }
         return 0;
-    }
-
-    /**
-     * @param entry
-     * @return the hash value of the entry
-     */
-    public static byte[] hashOf(Entry entry) {
-        ByteBuffer buffer = entry.getData();
-        buffer.mark();
-        MessageDigest md;
-        try {
-            md = MessageDigest.getInstance(SHA_256);
-        } catch (NoSuchAlgorithmException e1) {
-            throw new IllegalStateException("Cannot get instance of message digest");
-        }
-        md.update((byte)entry.getType().ordinal());
-        md.update(entry.getData().array());
-        return md.digest();
     }
 
     protected final byte[] itself;
@@ -102,6 +83,23 @@ public class HashKey implements Comparable<HashKey> {
     @Override
     public int compareTo(HashKey o) {
         return compare(itself, o.itself);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        HashKey other = (HashKey) obj;
+        return this.compareTo(other) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+        return new String(itself).hashCode();
     }
 
     public HASH toHash() {

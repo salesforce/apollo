@@ -18,65 +18,78 @@ import com.codahale.metrics.Timer;
  * @author hhildebrand
  */
 public class AvaMetrics {
-    private final AtomicInteger finalizerBacklog = new AtomicInteger();
-    private final Meter finalizerRate;
-    private final Timer finalizeTimer;
-    private final AtomicInteger inputBacklog = new AtomicInteger();
-    private final Meter inputRate;
-    private final Timer inputTimer;
-    private final Timer noOpTimer;
-    private final Meter parentSampleRate;
-    private final Timer parentSampleTimer;
-    private final AtomicInteger preferBacklog = new AtomicInteger();
-    private final Meter preferRate;
-    private final Timer preferTimer;
-    private final Meter queryRate;
-    private final Timer queryTimer;
-    private final Meter submissionRate;
-    private final Timer submissionTimer;
+    private final Meter         failedTxnQueryRate;
+    private final Meter         finalizerRate;
+    private final Timer         finalizeTimer;
+    private final Meter         inboundQueryRate;
+    private final Timer         inboundQueryTimer;
+    private final Meter         inboundQueryUnknownRate;
+    private final Meter         inputRate;
+    private final Timer         noOpTimer;
+    private final Meter         parentSampleRate;
+    private final Timer         parentSampleTimer;
+    private final Meter         preferRate;
+    private final Timer         preferTimer;
+    private final Meter         purgedNoOps;
+    private final Meter         queryRate;
+    private final Timer         queryTimer;
+    private final Meter         resampledRate;
+    private final Meter         satisfiedRate;
+    private final Meter         submissionRate;
+    private final Timer         submissionTimer;
+    private final AtomicInteger unknown = new AtomicInteger();
+    private final Meter         unknownLinkRate;
+    private final Meter         unknownReplacementRate;
+    private final Meter         wantedRate;
 
     public AvaMetrics(MetricRegistry registry) {
         submissionTimer = registry.timer("Txn submission duration");
         submissionRate = registry.meter("Txn submission rate");
 
-        inputTimer = registry.timer("Input batch duration");
         inputRate = registry.meter("Input rate");
-        registry.gauge("Input backlog", () -> new Gauge<>() {
-            @Override
-            public Object getValue() {
-                return inputBacklog.get();
-            }
-        });
 
         preferTimer = registry.timer("Prefer batch duration");
         preferRate = registry.meter("Prefer rate");
-        registry.gauge("Prefer backlog", () -> new Gauge<>() {
-            @Override
-            public Object getValue() {
-                return preferBacklog.get();
-            }
-        });
 
         finalizeTimer = registry.timer("Finalize batch duration");
         finalizerRate = registry.meter("Finalize rate");
-        registry.gauge("Finalize backlog", () -> new Gauge<>() {
-            @Override
-            public Object getValue() {
-                return finalizerBacklog.get();
-            }
-        });
 
         queryTimer = registry.timer("Query batch duration");
         queryRate = registry.meter("Query rate");
+
+        inboundQueryTimer = registry.timer("Inbound query batch duration");
+        inboundQueryRate = registry.meter("Inbound query rate");
+        inboundQueryUnknownRate = registry.meter("Inbound query unknown rate");
 
         noOpTimer = registry.timer("NoOp txn generation duration");
 
         parentSampleTimer = registry.timer("Parent sample duration");
         parentSampleRate = registry.meter("Parent sample rate");
+
+        unknownReplacementRate = registry.meter("Unknown replacement rate");
+
+        unknownLinkRate = registry.meter("Unknown link rate");
+
+        wantedRate = registry.meter("Wanted rate");
+
+        satisfiedRate = registry.meter("Satisfied rate");
+
+        failedTxnQueryRate = registry.meter("Failed txn query rate");
+
+        resampledRate = registry.meter("Resampled rate");
+
+        purgedNoOps = registry.meter("Purged NoOps rate");
+
+        registry.gauge("Unknown", () -> new Gauge<Integer>() {
+            @Override
+            public Integer getValue() {
+                return unknown.get();
+            }
+        });
     }
 
-    public AtomicInteger getFinalizerBacklog() {
-        return finalizerBacklog;
+    public Meter getFailedTxnQueryRate() {
+        return failedTxnQueryRate;
     }
 
     /**
@@ -95,8 +108,16 @@ public class AvaMetrics {
         return finalizeTimer;
     }
 
-    public AtomicInteger getInputBacklog() {
-        return inputBacklog;
+    public Meter getInboundQueryRate() {
+        return inboundQueryRate;
+    }
+
+    public Timer getInboundQueryTimer() {
+        return inboundQueryTimer;
+    }
+
+    public Meter getInboundQueryUnknownRate() {
+        return inboundQueryUnknownRate;
     }
 
     /**
@@ -105,14 +126,6 @@ public class AvaMetrics {
 
     public Meter getInputRate() {
         return inputRate;
-    }
-
-    /**
-     * @return the inputTimer
-     */
-
-    public Timer getInputTimer() {
-        return inputTimer;
     }
 
     /**
@@ -135,10 +148,6 @@ public class AvaMetrics {
      */
     public Timer getParentSampleTimer() {
         return parentSampleTimer;
-    }
-
-    public AtomicInteger getPreferBacklog() {
-        return preferBacklog;
     }
 
     /**
@@ -173,6 +182,14 @@ public class AvaMetrics {
         return queryTimer;
     }
 
+    public Meter getResampledRate() {
+        return resampledRate;
+    }
+
+    public Meter getSatisfiedRate() {
+        return satisfiedRate;
+    }
+
     /**
      * @return the submissionRate
      */
@@ -187,6 +204,26 @@ public class AvaMetrics {
 
     public Timer getSubmissionTimer() {
         return submissionTimer;
+    }
+
+    public AtomicInteger getUnknown() {
+        return unknown;
+    }
+
+    public Meter getUnknownLinkRate() {
+        return unknownLinkRate;
+    }
+
+    public Meter getUnknownReplacementRate() {
+        return unknownReplacementRate;
+    }
+
+    public Meter getWantedRate() {
+        return wantedRate;
+    }
+
+    public Meter purgeNoOps() {
+        return purgedNoOps;
     }
 
 }

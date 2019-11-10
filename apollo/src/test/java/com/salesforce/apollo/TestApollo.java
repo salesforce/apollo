@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
-import static com.salesforce.apollo.dagwood.schema.Tables.UNQUERIED;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -27,6 +25,8 @@ import org.junit.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
+import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -37,126 +37,140 @@ import com.salesforce.apollo.protocols.Utils;
  */
 public class TestApollo {
 
-	public static void summarize(List<Apollo> nodes) {
-		int finalized = nodes
-				.stream().map(a -> a.getAvalanche()).map(n -> n.getDslContext().selectCount().from(DAG)
-						.where(DAG.NOOP.isFalse()).and(DAG.FINALIZED.isTrue()).fetchOne().value1())
-				.reduce(0, (a, b) -> a + b);
-		System.out.println("Total finalized : " + finalized);
-		System.out.println();
-	}
+    public static void summarize(List<Apollo> nodes) {
+        int finalized = nodes.stream()
+                             .map(a -> a.getAvalanche())
+                             .map(n -> n.getDag().getFinalized().size())
+                             .reduce(0, (a, b) -> a + b);
+        System.out.println("Total finalized : " + finalized);
+        System.out.println();
+    }
 
-	public static void summary(Avalanche node) {
-		System.out.println(node.getNode().getId() + " : ");
-		System.out.println("    Rounds: " + node.getRoundCounter());
-		System.out.println("    User txns: "
-				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).fetchOne().value1()
-				+ " finalized: "
-				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isFalse()).and(DAG.FINALIZED.isTrue())
-						.fetchOne().value1()
-				+ " unqueried: " + node.getDslContext().selectCount().from(DAG).join(UNQUERIED)
-						.on(UNQUERIED.HASH.eq(DAG.HASH)).where(DAG.NOOP.isFalse()).fetchOne().value1());
-		System.out.println("    No Op txns: "
-				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isTrue()).fetchOne().value1()
-				+ " finalized: "
-				+ node.getDslContext().selectCount().from(DAG).where(DAG.NOOP.isTrue()).and(DAG.FINALIZED.isTrue())
-						.fetchOne().value1()
-				+ " unqueried: " + node.getDslContext().selectCount().from(DAG).join(UNQUERIED)
-						.on(UNQUERIED.HASH.eq(DAG.HASH)).where(DAG.NOOP.isTrue()).fetchOne().value1());
-	}
+    public static void summary(Avalanche node) {
+        System.out.println(node.getNode().getId() + " : ");
+        System.out.println("    Rounds: " + node.getRoundCounter());
 
-	@Test
-	public void configuration() throws Exception {
-		ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-		mapper.readValue(getClass().getResource("/test.yml"), ApolloConfiguration.class);
-	}
+        Integer finalized = node.getDag().getFinalized().size();
+        Integer unfinalizedUser = node.getDag()
+                                      .getUnfinalized()
+                                      .values()
+                                      .stream()
+                                      .filter(n -> n instanceof KnownNode)
+                                      .mapToInt(n -> n.isFinalized() ? 0 : 1)
+                                      .sum();
+        long unqueried = node.getDag()
+                             .getUnqueried()
+                             .stream()
+                             .map(key -> node.getDag().get(key))
+                             .filter(n -> n instanceof KnownNode)
+                             .count();
 
-	@Test
-	public void smoke() throws Exception {
-		ApolloConfiguration.SimCommunicationsFactory.reset();
-		List<Apollo> oracles = new ArrayList<>();
+        System.out.println("    User txns finalized: " + finalized + " unfinalized: " + unfinalizedUser + " unqueried: "
+                + unqueried);
+        System.out.println("    No Op txns: "
+                + node.getDag().getUnfinalized().values().stream().filter(n -> n instanceof NoOpNode).count());
+    }
 
-		for (int i = 1; i < PregenPopulation.getCardinality() + 1; i++) {
-			ApolloConfiguration config = new ApolloConfiguration(); 
-			config.avalanche.alpha = 0.6;
-			config.avalanche.k = 3;
-			config.avalanche.beta1 = 3;
-			config.avalanche.beta2 = 5;
-			config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i; 
-			config.gossipInterval = Duration.ofMillis(100);
-			config.communications = new ApolloConfiguration.SimCommunicationsFactory();
-			ApolloConfiguration.FileIdentitySource ks = new ApolloConfiguration.FileIdentitySource();
-			ks.store = new File(PregenPopulation.getMemberDir(), PregenPopulation.memberKeystoreFile(i));
-			config.source = ks;
-			oracles.add(new Apollo(config));
-		}
-		long then = System.currentTimeMillis();
+    @Test
+    public void configuration() throws Exception {
+        ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        mapper.readValue(getClass().getResource("/test.yml"), ApolloConfiguration.class);
+    }
 
-		oracles.forEach(oracle -> {
-			try {
-				oracle.start();
-			} catch (Exception e) {
-				throw new IllegalStateException("unable to start oracle", e);
-			}
-		});
+    @Test
+    public void smoke() throws Exception {
+        File baseDir = new File(System.getProperty("user.dir"), "target/cluster");
+        Utils.clean(baseDir);
+        baseDir.mkdirs();
+        ApolloConfiguration.SimCommunicationsFactory.reset();
+        List<Apollo> oracles = new ArrayList<>();
 
-		assertTrue("Did not stabilize the view", Utils.waitForCondition(15_000, 1_000, () -> {
-			return oracles.stream().map(o -> o.getView())
-					.map(view -> view.getLive().size() != oracles.size() ? view : null).filter(view -> view != null)
-					.count() == 0;
-		}));
+        for (int i = 1; i < PregenPopulation.getCardinality() + 1; i++) {
+            ApolloConfiguration config = new ApolloConfiguration();
+            config.avalanche.alpha = 0.6;
+            config.avalanche.k = 3;
+            config.avalanche.beta1 = 3;
+            config.avalanche.beta2 = 5;
+            config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i;
+            config.avalanche.dagWood.store = new File(baseDir, i + ".store");
+            config.avalanche.dagWood.store.deleteOnExit();
+            config.gossipInterval = Duration.ofMillis(100);
+            config.communications = new ApolloConfiguration.SimCommunicationsFactory();
+            ApolloConfiguration.FileIdentitySource ks = new ApolloConfiguration.FileIdentitySource();
+            ks.store = new File(PregenPopulation.getMemberDir(), PregenPopulation.memberKeystoreFile(i));
+            config.source = ks;
+            oracles.add(new Apollo(config));
+        }
+        long then = System.currentTimeMillis();
 
-		System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-				+ oracles.size() + " members");
-		Avalanche master = oracles.get(0).getAvalanche();
-		System.out.println("Start round: " + master.getRoundCounter());
-		ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-		CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
-				scheduler);
-		HashKey genesisKey = null;
-		try {
-			genesisKey = genesis.get(60, TimeUnit.SECONDS);
-		} catch (TimeoutException e) {
-			oracles.forEach(node -> node.stop());
-		}
-		System.out.println("Rounds: " + master.getRoundCounter());
-		assertNotNull(genesisKey);
+        oracles.forEach(oracle -> {
+            try {
+                oracle.start();
+            } catch (Exception e) {
+                throw new IllegalStateException("unable to start oracle", e);
+            }
+        });
 
-		long now = System.currentTimeMillis();
-		List<Transactioneer> transactioneers = new ArrayList<>();
-		HASH k = genesisKey.toHash();
-		for (Apollo o : oracles) {
-			assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
-					Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)));
-			transactioneers.add(new Transactioneer(o.getAvalanche()));
-		}
+        assertTrue("Did not stabilize the view", Utils.waitForCondition(15_000, 1_000, () -> {
+            return oracles.stream()
+                          .map(o -> o.getView())
+                          .map(view -> view.getLive().size() != oracles.size() ? view : null)
+                          .filter(view -> view != null)
+                          .count() == 0;
+        }));
 
-		// # of txns per node
-		int target = 15;
-		transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 20, scheduler));
+        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+                + oracles.size() + " members");
+        Avalanche master = oracles.get(0).getAvalanche();
+        System.out.println("Start round: " + master.getRoundCounter());
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
+                                                                  scheduler);
+        HashKey genesisKey = null;
+        try {
+            genesisKey = genesis.get(60, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            oracles.forEach(node -> node.stop());
+        }
+        System.out.println("Rounds: " + master.getRoundCounter());
+        assertNotNull(genesisKey);
 
-		boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
-			return transactioneers.stream().mapToInt(t -> t.getSuccess()).filter(s -> s >= target)
-					.count() == transactioneers.size();
-		});
+        long now = System.currentTimeMillis();
+        List<Transactioneer> transactioneers = new ArrayList<>();
+        HASH k = genesisKey.toHash();
+        for (Apollo o : oracles) {
+            assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
+                       Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)));
+            transactioneers.add(new Transactioneer(o.getAvalanche()));
+        }
 
-		System.out.println("Completed in " + (System.currentTimeMillis() - now) + " ms");
-		transactioneers.forEach(t -> t.stop());
-		oracles.forEach(node -> node.stop());
-		// System.out.println(profiler.getTop(3));
+        // # of txns per node
+        int target = 15;
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 20, scheduler));
 
-		summarize(oracles);
-		oracles.forEach(node -> summary(node.getAvalanche()));
+        boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
+            return transactioneers.stream()
+                                  .mapToInt(t -> t.getSuccess())
+                                  .filter(s -> s >= target)
+                                  .count() == transactioneers.size();
+        });
 
-		System.out.println("wanted: ");
-		System.out.println(master.getDag().getWanted(Integer.MAX_VALUE, master.getDslContext()).stream()
-				.map(e -> new HashKey(e)).collect(Collectors.toList()));
-		System.out.println();
-		System.out.println();
-		assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
-		transactioneers.forEach(t -> {
-			System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
-		});
+        System.out.println("Completed in " + (System.currentTimeMillis() - now) + " ms");
+        transactioneers.forEach(t -> t.stop());
+        oracles.forEach(node -> node.stop());
+        // System.out.println(profiler.getTop(3));
 
-	}
+        summarize(oracles);
+        oracles.forEach(node -> summary(node.getAvalanche()));
+
+        System.out.println("wanted: ");
+        System.out.println(master.getDag().getWanted().stream().collect(Collectors.toList()));
+        System.out.println();
+        System.out.println();
+        assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
+        transactioneers.forEach(t -> {
+            System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
+        });
+
+    }
 }
