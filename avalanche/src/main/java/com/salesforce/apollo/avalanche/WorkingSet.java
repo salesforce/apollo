@@ -917,6 +917,15 @@ public class WorkingSet {
         return sample;
     }
 
+    public void purgeNoOps() {
+        unfinalized.values().stream().filter(e -> e.isNoOp()).map(e -> (NoOpNode) e).filter(e -> e.links().isEmpty()).forEach(e -> {
+            unfinalized.remove(e.getKey());
+            if (metrics != null) {
+                metrics.purgeNoOps().mark();
+            }
+        });
+    }
+
     public List<HashKey> query(int maxSize) {
         List<HashKey> query = new ArrayList<>();
         for (int i = 0; i < maxSize; i++) {
@@ -997,7 +1006,10 @@ public class WorkingSet {
     }
 
     public void traverseAll(BiConsumer<HashKey, DagEntry> p) {
-        unfinalized.entrySet().stream().filter(e -> !e.getValue().isFinalized()).forEach(e -> p.accept(e.getKey(), manifestDag(e.getValue().getEntry())));
+        unfinalized.entrySet()
+                   .stream()
+                   .filter(e -> !e.getValue().isFinalized())
+                   .forEach(e -> p.accept(e.getKey(), manifestDag(e.getValue().getEntry())));
         finalized.keySet().stream().map(e -> new HashKey(e)).forEach(e -> p.accept(e, getDagEntry(e)));
     }
 

@@ -30,6 +30,7 @@ public class AvaMetrics {
     private final Timer         parentSampleTimer;
     private final Meter         preferRate;
     private final Timer         preferTimer;
+    private final Meter         purgedNoOps;
     private final Meter         queryRate;
     private final Timer         queryTimer;
     private final Meter         resampledRate;
@@ -76,6 +77,8 @@ public class AvaMetrics {
         failedTxnQueryRate = registry.meter("Failed txn query rate");
 
         resampledRate = registry.meter("Resampled rate");
+
+        purgedNoOps = registry.meter("Purged NoOps rate");
 
         registry.gauge("Unknown", () -> new Gauge<Integer>() {
             @Override
@@ -217,6 +220,10 @@ public class AvaMetrics {
 
     public Meter getWantedRate() {
         return wantedRate;
+    }
+
+    public Meter purgeNoOps() {
+        return purgedNoOps;
     }
 
 }

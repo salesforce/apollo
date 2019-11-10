@@ -190,8 +190,7 @@ public class Avalanche {
     private final AvalancheCommunications                    comm;
     private final WorkingSet                                 dag;
     private final ExecutorService                            finalizer;
-    @SuppressWarnings("unused")
-    private final RingBuffer<HashKey>                        frontier;
+    private final int roundsToComplete;
     private final AtomicBoolean                              generateNoOps       = new AtomicBoolean();
     private final int                                        invalidThreshold;
     private final AvaMetrics                                 metrics;
@@ -225,11 +224,15 @@ public class Avalanche {
         comm.initialize(this);
         loadSchema(parameters.dbConnect);
         this.dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), metrics);
+        roundsToComplete = view.getDiameter() * view.getParameters().toleranceLevel + 1;
 
         view.registerRoundListener(() -> {
             round.incrementAndGet();
             if (round.get() % parameters.delta == 0) {
                 generateNoOps.set(true);
+            }
+            if (round.get() % roundsToComplete == 0) {
+                dag.purgeNoOps();
             }
         });
 
@@ -258,7 +261,6 @@ public class Avalanche {
             t.setDaemon(true);
             return t;
         });
-        frontier = new RingBuffer<>(parameters.frontier);
     }
 
     /**
