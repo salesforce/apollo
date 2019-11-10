@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 import org.glassfish.jersey.client.ClientProperties;
 import org.glassfish.jersey.client.JerseyClientBuilder;
-import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 
 import com.salesforce.apollo.avalanche.Avalanche;
@@ -42,8 +42,8 @@ import io.dropwizard.testing.junit.DropwizardAppRule;
  */
 public class BoostrapTest {
 
-    @ClassRule
-    public static final DropwizardAppRule<BootstrapConfiguration> RULE = new DropwizardAppRule<BootstrapConfiguration>(
+    @Rule
+    public final DropwizardAppRule<BootstrapConfiguration> RULE = new DropwizardAppRule<BootstrapConfiguration>(
             BootstrapCA.class, ResourceHelpers.resourceFilePath("bootstrap.yml")) {
 
         @Override
@@ -55,7 +55,7 @@ public class BoostrapTest {
 
     @Test
     public void smoke() throws Exception {
-        File baseDir = new File(System.getProperty("user.dir"), "target/bootstrap");
+        File baseDir = new File("target/bootstrap");
         Utils.clean(baseDir);
         baseDir.mkdirs();
         ApolloConfiguration.SimCommunicationsFactory.reset();

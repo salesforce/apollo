@@ -9,6 +9,7 @@ package com.salesforce.apollo;
 import static org.junit.Assert.assertEquals;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.function.Consumer;
@@ -16,6 +17,8 @@ import java.util.function.Consumer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * A smoke test for the shaded Apollo jar, with example configuration
@@ -56,6 +59,9 @@ public class E2ETest {
 
     @Before
     public void before() throws Exception {
+        File baseDir = new File(System.getProperty("user.dir"), "target/cluster");
+        Utils.clean(baseDir);
+        baseDir.mkdirs();
         String java = System.getProperty("java.home") + "/bin/java";
         ProcessBuilder builder = new ProcessBuilder();
         builder.command(java, "--illegal-access=permit", "-jar", "target/apollo-web.jar", "server", "target/test-classes/server.yml");
