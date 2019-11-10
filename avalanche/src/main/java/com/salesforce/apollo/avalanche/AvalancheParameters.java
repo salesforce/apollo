@@ -29,7 +29,6 @@ public class AvalancheParameters {
      * The consecutive counter - i.e. "votes" - for a transaction for finalization
      */
     public int               beta2             = 150;
-    public int               cacheRounds       = 10;
     public DagWoodParameters dagWood           = new DagWoodParameters();
     /**
      * The JDBC connection URL
@@ -38,16 +37,8 @@ public class AvalancheParameters {
     /**
      * The number of FF rounds per NoOp generation round
      */
-    public int               delta             = 2;
-    /**
-     * The number of FF rounds per Avalanche round
-     */
-    public int               epsilon           = 1;
+    public int               delta             = 1;
     public int               finalizeBatchSize = 40;
-    /**
-     * The number of frontier keys to keep on hand
-     */
-    public int               frontier          = 200;
 
     /**
      * The number of queries per FF round

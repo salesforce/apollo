@@ -140,7 +140,7 @@ public class AvalancheFunctionalTest {
             aParams.maxActiveQueries = 200;
 
             // # of firefly rounds per noOp generation round
-            aParams.delta = 3;
+            aParams.delta = 1;
 
             aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement() + ";MULTI_THREADED=1;MVCC=TRUE";
             return new Avalanche(view, comm, aParams, avaMetrics);

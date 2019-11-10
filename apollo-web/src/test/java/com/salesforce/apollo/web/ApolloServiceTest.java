@@ -11,6 +11,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Base64.Decoder;
@@ -23,8 +24,9 @@ import javax.ws.rs.core.Response;
 
 import org.glassfish.jersey.client.ClientProperties;
 import org.glassfish.jersey.client.JerseyClientBuilder;
-import org.junit.AfterClass;
-import org.junit.ClassRule;
+import org.junit.After;
+import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 
 import com.salesforce.apollo.Apollo;
@@ -45,13 +47,24 @@ import io.dropwizard.testing.junit.DropwizardAppRule;
  */
 public class ApolloServiceTest {
 
+    private static File baseDir;
+
+    private static final Decoder DECODER = Base64.getUrlDecoder();
+
     static {
         ApolloConfiguration.SimCommunicationsFactory.reset();
     }
 
-    @ClassRule
-    public static final DropwizardAppRule<ApolloServiceConfiguration> RULE = new DropwizardAppRule<ApolloServiceConfiguration>(ApolloService.class,
-                                                                                                                               ResourceHelpers.resourceFilePath("server.yml")) {
+    @BeforeClass
+    public static void before() {
+        baseDir = new File(System.getProperty("user.dir"), "target/cluster");
+        Utils.clean(baseDir);
+        baseDir.mkdirs();
+    }
+
+    @Rule
+    public final DropwizardAppRule<ApolloServiceConfiguration> RULE = new DropwizardAppRule<ApolloServiceConfiguration>(
+            ApolloService.class, ResourceHelpers.resourceFilePath("server.yml")) {
 
         @Override
         protected JerseyClientBuilder clientBuilder() {
@@ -59,17 +72,6 @@ public class ApolloServiceTest {
                                         .property(ClientProperties.READ_TIMEOUT, 60_000);
         }
     };
-
-    private static final Decoder DECODER = Base64.getUrlDecoder();
-
-    @AfterClass
-    public static void stop() {
-        try {
-            ((ApolloService)RULE.getApplication()).stop();
-        } catch (Throwable e) {
-            // ignore
-        }
-    }
 
     @Test
     public void smoke() throws Exception {
@@ -82,6 +84,7 @@ public class ApolloServiceTest {
             config.avalanche.beta1 = 3;
             config.avalanche.beta2 = 5;
             config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i;
+            config.avalanche.dagWood.store = new File(baseDir, i + ".store");
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             ApolloConfiguration.ResourceIdentitySource ks = new ApolloConfiguration.ResourceIdentitySource();
             ks.store = PregenPopulation.memberKeystoreResource(i);
@@ -111,33 +114,26 @@ public class ApolloServiceTest {
         System.out.println("View stabilized across " + (oracles.size() + 1) + " members in "
                 + (System.currentTimeMillis() - then) + " millis");
 
-        Response response = client.target(
-                                          String.format("http://localhost:%d/api/genesisBlock/create",
+        Response response = client.target(String.format("http://localhost:%d/api/genesisBlock/create",
                                                         RULE.getLocalPort()))
                                   .request(MediaType.APPLICATION_JSON)
-                                  .post(Entity.json(new String(Base64.getUrlEncoder()
-                                                                     .withoutPadding()
-                                                                     .encode("Hello World".getBytes()))));
+                                  .post(Entity.json(new String(
+                                          Base64.getUrlEncoder().withoutPadding().encode("Hello World".getBytes()))));
         assertEquals(200, response.getStatus());
         Result genesisResult = response.readEntity(Result.class);
         assertNotNull(genesisResult);
         assertFalse(genesisResult.errorMessage, genesisResult.error);
 
-        response = client.target(
-                                 String.format("http://localhost:%d/api/byteTransaction/submit",
-                                               RULE.getLocalPort()))
+        response = client.target(String.format("http://localhost:%d/api/byteTransaction/submit", RULE.getLocalPort()))
                          .request(MediaType.APPLICATION_JSON)
-                         .post(Entity.json(new ByteTransactionApi.ByteTransaction(40_000,
-                                                                                  "Hello World".getBytes())));
+                         .post(Entity.json(new ByteTransactionApi.ByteTransaction(40_000, "Hello World".getBytes())));
 
         assertEquals(200, response.getStatus());
         TransactionResult result = response.readEntity(TransactionResult.class);
         assertNotNull(result);
         assertFalse(result.errorMessage, result.error);
 
-        response = client.target(
-                                 String.format("http://localhost:%d/api/dag/fetch",
-                                               RULE.getLocalPort()))
+        response = client.target(String.format("http://localhost:%d/api/dag/fetch", RULE.getLocalPort()))
                          .request()
                          .post(Entity.text(result.result));
 
@@ -146,9 +142,7 @@ public class ApolloServiceTest {
         assertNotNull(fetched);
         assertEquals("Hello World", new String(DECODER.decode(fetched)));
 
-        response = client.target(
-                                 String.format("http://localhost:%d/api/dag/fetchDagNode",
-                                               RULE.getLocalPort()))
+        response = client.target(String.format("http://localhost:%d/api/dag/fetchDagNode", RULE.getLocalPort()))
                          .request()
                          .post(Entity.text(result.result));
 
@@ -162,23 +156,28 @@ public class ApolloServiceTest {
 
         // Asynchronous transaction case
 
-        response = client.target(
-                                 String.format("http://localhost:%d/api/byteTransaction/submitAsync",
+        response = client.target(String.format("http://localhost:%d/api/byteTransaction/submitAsync",
                                                RULE.getLocalPort()))
                          .request(MediaType.APPLICATION_JSON)
-                         .post(Entity.json(new ByteTransactionApi.ByteTransaction(40_000,
-                                                                                  "Hello World 2".getBytes())));
+                         .post(Entity.json(new ByteTransactionApi.ByteTransaction(40_000, "Hello World 2".getBytes())));
 
         assertEquals(200, response.getStatus());
         String asyncResult = response.readEntity(String.class);
         assertNotNull(asyncResult);
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
-            Response r = client.target(
-                                       String.format("http://localhost:%d/api/dag/queryFinalized",
-                                                     RULE.getLocalPort()))
+            Response r = client.target(String.format("http://localhost:%d/api/dag/queryFinalized", RULE.getLocalPort()))
                                .request()
                                .post(Entity.text(asyncResult));
             return r.getStatus() == 200 && r.readEntity(QueryFinalizedResult.class).isFinalized();
         }));
+    }
+
+    @After
+    public void stop() {
+        try {
+            ((ApolloService) RULE.getApplication()).stop();
+        } catch (Throwable e) {
+            // ignore
+        }
     }
 }
