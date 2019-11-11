@@ -26,7 +26,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -119,7 +118,6 @@ public class AvalancheFunctionalTest {
     public void smoke() throws Exception {
         AvaMetrics avaMetrics = new AvaMetrics(node0Registry);
         AvalancheCommunications comm = new AvalancheLocalCommSim(rpcStats);
-        AtomicInteger index = new AtomicInteger(0);
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
             aParams.dagWood.store = new File(baseDir, view.getNode().getId() + ".store");
