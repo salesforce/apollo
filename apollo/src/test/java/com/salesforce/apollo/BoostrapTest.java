@@ -68,7 +68,6 @@ public class BoostrapTest {
             config.avalanche.k = 6;
             config.avalanche.beta1 = 3;
             config.avalanche.beta2 = 5;
-            config.avalanche.dbConnect = "jdbc:h2:mem:bootstrap-" + i;
             config.avalanche.dagWood.store = new File(baseDir, i + ".store");
             config.avalanche.dagWood.store.deleteOnExit();
             config.gossipInterval = Duration.ofMillis(500);

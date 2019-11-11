@@ -28,8 +28,9 @@ public class DagWood {
 
     public static class DagWoodParameters {
 
-        public long maxCache = 50_000;
-        public File store    = new File("dagwood.store");
+        public long maxCache      = 50_000;
+        public File store         = new File("dagwood.store");
+        public int  expireThreads = 5;
 
     }
 
@@ -39,17 +40,21 @@ public class DagWood {
     private final HTreeMap<byte[], byte[]> cache;
     private final DB                       dbDisk;
     private final DB                       dbMemory;
-    private final DagWoodParameters        parameters;
     private final BTreeMap<byte[], byte[]> wood;
 
-    public DagWood(DagWoodParameters p) {
-        parameters = p;
-        dbMemory = DBMaker.memoryDB().make();
-        dbDisk = DBMaker.fileDB(parameters.store).fileMmapEnable().fileMmapPreclearDisable().cleanerHackEnable().make();
+    public DagWood(DagWoodParameters parameters) {
+        dbMemory = DBMaker.memoryDirectDB().cleanerHackEnable().make();
+        dbDisk = DBMaker.fileDB(parameters.store)
+                        .fileMmapEnable()
+                        .fileMmapPreclearDisable()
+                        .cleanerHackEnable()
+                        .allocateIncrement(512 * 1024 * 1024) // 512MB
+                        .make();
 
         wood = dbDisk.treeMap(STORE)
                      .keySerializer(Serializer.BYTE_ARRAY)
                      .valueSerializer(Serializer.BYTE_ARRAY)
+                     .valuesOutsideNodesEnable()
                      .counterEnable()
                      .create();
 
@@ -57,7 +62,7 @@ public class DagWood {
                         .keySerializer(Serializer.BYTE_ARRAY)
                         .valueSerializer(Serializer.BYTE_ARRAY)
                         .expireAfterCreate()
-                        .expireExecutor(Executors.newScheduledThreadPool(2))
+                        .expireExecutor(Executors.newScheduledThreadPool(parameters.expireThreads))
                         .expireOverflow(wood)
                         .expireMaxSize(parameters.maxCache)
                         .counterEnable()

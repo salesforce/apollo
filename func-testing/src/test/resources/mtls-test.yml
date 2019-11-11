@@ -1,7 +1,6 @@
 apollo:
    gossipInterval: "PT1S"
    avalanche:
-      dbConnect: jdbc:h2:mem:test-1;DB_CLOSE_ON_EXIT=FALSE
    source:
       type: env
       firefliesPort: 1638

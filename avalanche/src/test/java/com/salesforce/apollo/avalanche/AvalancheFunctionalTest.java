@@ -26,7 +26,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -34,9 +33,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Slf4jReporter;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
@@ -119,11 +120,11 @@ public class AvalancheFunctionalTest {
     public void smoke() throws Exception {
         AvaMetrics avaMetrics = new AvaMetrics(node0Registry);
         AvalancheCommunications comm = new AvalancheLocalCommSim(rpcStats);
-        AtomicInteger index = new AtomicInteger(0);
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
             aParams.dagWood.store = new File(baseDir, view.getNode().getId() + ".store");
             aParams.dagWood.maxCache = 50_000;
+            aParams.dagWood.expireThreads = 5;
 
             // Avalanche protocol parameters
             aParams.alpha = 0.6;
@@ -138,19 +139,17 @@ public class AvalancheFunctionalTest {
             aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
             aParams.maxActiveQueries = 200;
-
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
 
-            aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement() + ";MULTI_THREADED=1;MVCC=TRUE";
             return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 800;
+        int target = 200_000;
         Duration ffRound = Duration.ofMillis(500);
-        int outstanding = 200;
-        int runtime = (int) Duration.ofSeconds(600).toMillis();
+        int outstanding = 400;
+        int runtime = (int) Duration.ofSeconds(3600).toMillis();
 
         views.forEach(view -> view.getService().start(ffRound));
 
@@ -183,6 +182,19 @@ public class AvalancheFunctionalTest {
         assertNotNull(genesisKey);
 
         seed(nodes);
+
+        Slf4jReporter.forRegistry(node0Registry)
+                     .outputTo(LoggerFactory.getLogger("func-metrics"))
+                     .convertRatesTo(TimeUnit.SECONDS)
+                     .convertDurationsTo(TimeUnit.MILLISECONDS)
+                     .build()
+                     .start(30, TimeUnit.SECONDS);
+
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .start(30, TimeUnit.SECONDS);
 
         long now = System.currentTimeMillis();
         HASH k = genesisKey.toHash();

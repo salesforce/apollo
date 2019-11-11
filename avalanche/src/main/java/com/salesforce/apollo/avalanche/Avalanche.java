@@ -6,14 +6,9 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.PROCESSORS;
-
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -41,9 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.apache.avro.AvroRemoteException;
-import org.jooq.DSLContext;
-import org.jooq.SQLDialect;
-import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,15 +52,6 @@ import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.RandomMemberGenerator;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.protocols.HashKey;
-
-import liquibase.Contexts;
-import liquibase.Liquibase;
-import liquibase.database.Database;
-import liquibase.database.DatabaseFactory;
-import liquibase.database.jvm.JdbcConnection;
-import liquibase.exception.DatabaseException;
-import liquibase.exception.LiquibaseException;
-import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
  * Implementation of the Avalanche consensus protocol.
@@ -113,7 +96,7 @@ public class Avalanche {
             long now = System.currentTimeMillis();
             Context timer = metrics == null ? null : metrics.getInboundQueryTimer().time();
 
-            final List<HashKey> inserted = dag.insertSerialized(transactions, System.currentTimeMillis()); 
+            final List<HashKey> inserted = dag.insertSerialized(transactions, System.currentTimeMillis());
             List<Boolean> stronglyPreferred = dag.isStronglyPreferred(inserted);
             log.trace("onquery {} txn in {} ms", stronglyPreferred, System.currentTimeMillis() - now);
             List<Vote> queried = stronglyPreferred.stream().map(r -> {
@@ -148,49 +131,13 @@ public class Avalanche {
             }
             return dag.getEntries(want.stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
         }
-    }
-
-    private static final int    AVALANCHE_TXN_FLOOD_CHANNEL = 2;
-    private static final String DAG_SCHEMA_YML              = "dag-schema.yml";
-
+    } 
     private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
-
-    private static final String PASSWORD  = "";
-    private static final String USER_NAME = "Apollo";
-
-    public static void loadSchema(String dbConnect) {
-        Connection connection;
-        try {
-            connection = DriverManager.getConnection(dbConnect, "apollo", PASSWORD);
-        } catch (SQLException e) {
-            throw new IllegalStateException("Cannot get DB Connection: " + dbConnect, e);
-        }
-        Database database;
-        try {
-            database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
-        } catch (DatabaseException e) {
-            throw new IllegalStateException("Unable to get DB factory for: " + dbConnect, e);
-        }
-        database.setLiquibaseSchemaName("public");
-        Liquibase liquibase = new Liquibase(DAG_SCHEMA_YML,
-                new ClassLoaderResourceAccessor(Avalanche.class.getClassLoader()), database);
-        try {
-            liquibase.update((Contexts) null);
-        } catch (LiquibaseException e) {
-            throw new IllegalStateException("Cannot load schema", e);
-        }
-
-        try {
-            connection.commit();
-        } catch (SQLException e) {
-            throw new IllegalStateException("Cannot create trigger", e);
-        }
-    }
 
     private final AvalancheCommunications                    comm;
     private final WorkingSet                                 dag;
     private final ExecutorService                            finalizer;
-    private final int roundsToComplete;
+    private final int                                        roundsToComplete;
     private final AtomicBoolean                              generateNoOps       = new AtomicBoolean();
     private final int                                        invalidThreshold;
     private final AvaMetrics                                 metrics;
@@ -198,6 +145,7 @@ public class Avalanche {
     private final AvalancheParameters                        parameters;
     private final Deque<HashKey>                             parentSample        = new LinkedBlockingDeque<>();
     private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentSkipListMap<>();
+    @SuppressWarnings("unused")
     private final Map<HashKey, EntryProcessor>               processors          = new ConcurrentSkipListMap<>();
     private final RandomMemberGenerator                      querySampler;
     private final int                                        required;
@@ -221,8 +169,7 @@ public class Avalanche {
         parameters = p;
         this.view = view;
         this.comm = communications;
-        comm.initialize(this);
-        loadSchema(parameters.dbConnect);
+        comm.initialize(this); 
         this.dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), metrics);
         roundsToComplete = view.getDiameter() * view.getParameters().toleranceLevel + 1;
 
@@ -234,12 +181,7 @@ public class Avalanche {
             if (round.get() % roundsToComplete == 0) {
                 dag.purgeNoOps();
             }
-        });
-
-        view.register(AVALANCHE_TXN_FLOOD_CHANNEL, txns -> {
-            dag.insertSerializedRaw(txns.stream().map(e -> e.content).collect(Collectors.toList()),
-                                    System.currentTimeMillis());
-        });
+        }); 
 
         querySampler = new RandomMemberGenerator(view);
         wantedSampler = new RandomMemberGenerator(view);
@@ -771,34 +713,9 @@ public class Avalanche {
     }
 
     private void initializeProcessors(ClassLoader resolver) {
-        DSLContext create = null;
-        try {
-            try {
-                final Connection connection = DriverManager.getConnection(parameters.dbConnect, USER_NAME, PASSWORD);
-                connection.setAutoCommit(false);
-                create = DSL.using(connection, SQLDialect.H2);
-            } catch (SQLException e) {
-                throw new IllegalStateException("unable to create jdbc connection", e);
-            }
-            create.transaction(config -> {
-                DSLContext context = DSL.using(config);
-                context.mergeInto(PROCESSORS)
-                       .columns(PROCESSORS.HASH, PROCESSORS.PROCESSORCLASS)
-                       .values(WellKnownDescriptions.GENESIS.toHash().bytes(), "<Genesis Handler>");
-                context.mergeInto(PROCESSORS)
-                       .columns(PROCESSORS.HASH, PROCESSORS.PROCESSORCLASS)
-                       .values(WellKnownDescriptions.BYTE_CONTENT.toHash().bytes(), "<Unconstrainted Byte content>");
-            });
-            create.select(PROCESSORS.HASH, PROCESSORS.PROCESSORCLASS).from(PROCESSORS).stream().forEach(r -> {
-                processors.computeIfAbsent(new HashKey(r.value1()), k -> resolve(r.value2(), resolver));
-            });
-        } finally {
-            if (create != null) {
-                create.close();
-            }
-        }
     }
 
+    @SuppressWarnings("unused")
     private EntryProcessor resolve(String processor, ClassLoader resolver) {
         try {
             return (EntryProcessor) resolver.loadClass(processor).getConstructor(new Class[0]).newInstance();

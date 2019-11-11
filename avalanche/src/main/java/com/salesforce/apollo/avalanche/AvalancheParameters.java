@@ -15,7 +15,6 @@ import com.salesforce.apollo.avalanche.DagWood.DagWoodParameters;
  * @since 220
  */
 public class AvalancheParameters {
-    private static final String DEFAULT_CONNECTION = "jdbc:h2:mem:dagCache;LOCK_MODE=0;EARLY_FILTER=TRUE;MULTI_THREADED=1;MVCC=TRUE";
 
     /**
      * The percentage of k members that need to vote for a txn to be preferred
@@ -30,10 +29,6 @@ public class AvalancheParameters {
      */
     public int               beta2             = 150;
     public DagWoodParameters dagWood           = new DagWoodParameters();
-    /**
-     * The JDBC connection URL
-     */
-    public String            dbConnect         = DEFAULT_CONNECTION;
     /**
      * The number of FF rounds per NoOp generation round
      */

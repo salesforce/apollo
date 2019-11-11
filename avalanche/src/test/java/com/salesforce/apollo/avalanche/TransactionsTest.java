@@ -40,9 +40,6 @@ import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
-import guru.nidi.graphviz.engine.Format;
-import guru.nidi.graphviz.engine.Graphviz;
-
 /**
  * @author hal.hildebrand
  * @since 222
@@ -113,7 +110,7 @@ public class TransactionsTest {
             assertFalse(dag.isFinalized(secondCommit));
 
 //            DagViz.dumpClosure(ordered, dag);
-            Graphviz.fromGraph(DagViz.visualize("smoke", dag, false)).render(Format.PNG).toFile(new File("smoke.png"));
+//            Graphviz.fromGraph(DagViz.visualize("smoke", dag, false)).render(Format.PNG).toFile(new File("smoke.png"));
 
             dag.prefer(ordered.get(ordered.size() - 1));
             dag.tryFinalize(ordered.get(ordered.size() - 1));

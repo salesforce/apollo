@@ -83,7 +83,6 @@ public class ApolloServiceTest {
             config.avalanche.k = 6;
             config.avalanche.beta1 = 3;
             config.avalanche.beta2 = 5;
-            config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i;
             config.avalanche.dagWood.store = new File(baseDir, i + ".store");
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             ApolloConfiguration.ResourceIdentitySource ks = new ApolloConfiguration.ResourceIdentitySource();

@@ -10,7 +10,6 @@ apollo:
       k: 3
       beta1: 3
       beta2: 5
-      dbConnect: jdbc:h2:mem:test-1
       dagWood:
           store: target/cluster/1.store
 logging:
