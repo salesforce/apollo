@@ -33,9 +33,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Slf4jReporter;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
@@ -180,6 +182,19 @@ public class AvalancheFunctionalTest {
         assertNotNull(genesisKey);
 
         seed(nodes);
+
+        Slf4jReporter.forRegistry(node0Registry)
+                     .outputTo(LoggerFactory.getLogger("func-metrics"))
+                     .convertRatesTo(TimeUnit.SECONDS)
+                     .convertDurationsTo(TimeUnit.MILLISECONDS)
+                     .build()
+                     .start(30, TimeUnit.SECONDS);
+
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .start(30, TimeUnit.SECONDS);
 
         long now = System.currentTimeMillis();
         HASH k = genesisKey.toHash();
