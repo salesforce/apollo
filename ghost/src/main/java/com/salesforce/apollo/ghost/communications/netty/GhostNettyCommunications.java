@@ -42,7 +42,7 @@ public class GhostNettyCommunications extends CommonNettyCommunications implemen
 		try {
 			GhostClientCommunications thisOutbound[] = new GhostClientCommunications[1];
 			GhostClientCommunications outbound = new GhostClientCommunications(
-					new NettyTlsTransceiver(to.getGhostEndpoint(), forClient(from).build(), eventGroup) {
+					new NettyTlsTransceiver(to.getGhostEndpoint(), forClient(from).build(), clientGroup) {
 
 						@Override
 						public void close() {

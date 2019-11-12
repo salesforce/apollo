@@ -37,6 +37,7 @@ import com.salesforce.apollo.fireflies.communications.netty.FirefliesNettyCommun
 import com.salesforce.apollo.protocols.Utils;
 
 import io.github.olivierlemasle.ca.RootCertificate;
+import io.netty.channel.nio.NioEventLoopGroup;
 
 /**
  * @author hal.hildebrand
@@ -44,90 +45,111 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class MtlsTest {
 
-	private static final RootCertificate ca = getCa();
-	private static Map<UUID, CertWithKey> certs;
-	private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate     ca         = getCa();
+    private static Map<UUID, CertWithKey>    certs;
+    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-	@BeforeClass
-	public static void beforeClass() {
-		certs = IntStream.range(1, 101).parallel().mapToObj(i -> getMember(i))
-				.collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
-	}
+    @BeforeClass
+    public static void beforeClass() {
+        certs = IntStream.range(1, 101)
+                         .parallel()
+                         .mapToObj(i -> getMember(i))
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+    }
 
-	@Test
-	public void smoke() throws Exception {
-		Random entropy = new Random(0x666);
+    @Test
+    public void smoke() throws Exception {
+        Random entropy = new Random(0x666);
 
-		List<X509Certificate> seeds = new ArrayList<>();
-		List<Node> members = certs.values().parallelStream()
-				.map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
-				.map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-		assertEquals(certs.size(), members.size());
+        List<X509Certificate> seeds = new ArrayList<>();
+        List<Node> members = certs.values()
+                                  .parallelStream()
+                                  .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
+                                  .map(cert -> new Node(cert, parameters))
+                                  .collect(Collectors.toList());
+        assertEquals(certs.size(), members.size());
 
-		while (seeds.size() < parameters.toleranceLevel + 1) {
-			CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-			if (!seeds.contains(cert.getCertificate())) {
-				seeds.add(cert.getCertificate());
-			}
-		}
-		MessageBuffer messageBuffer = mock(MessageBuffer.class);
-		when(messageBuffer.process(any()))
-				.thenReturn(new MessageGossip(Collections.emptyList(), Collections.emptyList()));
+        while (seeds.size() < parameters.toleranceLevel + 1) {
+            CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
+            if (!seeds.contains(cert.getCertificate())) {
+                seeds.add(cert.getCertificate());
+            }
+        }
+        MessageBuffer messageBuffer = mock(MessageBuffer.class);
+        when(messageBuffer.process(any())).thenReturn(new MessageGossip(Collections.emptyList(),
+                Collections.emptyList()));
 
-		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-		List<View> views = members.stream()
-				.map(node -> new View(node, new FirefliesNettyCommunications(), seeds, scheduler))
-				.collect(Collectors.toList());
+        List<View> views = members.stream()
+                                  .map(node -> new View(node,
+                                          new FirefliesNettyCommunications(null, new NioEventLoopGroup(1),
+                                                  new NioEventLoopGroup(1), new NioEventLoopGroup(1)),
+                                          seeds, scheduler))
+                                  .collect(Collectors.toList());
 
-		long then = System.currentTimeMillis();
-		views.forEach(view -> view.getService().start(Duration.ofMillis(1_000)));
+        long then = System.currentTimeMillis();
+        views.forEach(view -> view.getService().start(Duration.ofMillis(1_000)));
 
-		assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 1_000, () -> {
-			return views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
-					.filter(view -> view != null).count() == 0;
-		}));
-		System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-				+ views.size() + " members");
+        assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 1_000, () -> {
+            return views.stream()
+                        .map(view -> view.getLive().size() != views.size() ? view : null)
+                        .filter(view -> view != null)
+                        .count() == 0;
+        }));
+        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+                + views.size() + " members");
 
-		System.out.println("Checking views for consistency");
-		List<View> invalid = views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
-				.filter(view -> view != null).collect(Collectors.toList());
-		assertEquals(invalid.stream().map(view -> {
-			Set<?> difference = Sets.difference(
-					views.stream().map(v -> v.getNode().getId()).collect(Collectors.toSet()), view.getLive().keySet());
-			return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
-		}).collect(Collectors.toList()).toString(), 0, invalid.size());
+        System.out.println("Checking views for consistency");
+        List<View> invalid = views.stream()
+                                  .map(view -> view.getLive().size() != views.size() ? view : null)
+                                  .filter(view -> view != null)
+                                  .collect(Collectors.toList());
+        assertEquals(invalid.stream().map(view -> {
+            Set<?> difference = Sets.difference(views.stream()
+                                                     .map(v -> v.getNode().getId())
+                                                     .collect(Collectors.toSet()),
+                                                view.getLive().keySet());
+            return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
+        }).collect(Collectors.toList()).toString(), 0, invalid.size());
 
-		System.out.println("Stoping views");
-		views.forEach(view -> view.getService().stop());
-		
-		System.out.println("Restarting views");
-		views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
+        System.out.println("Stoping views");
+        views.forEach(view -> view.getService().stop());
 
-		assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 100, () -> {
-			return views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
-					.filter(view -> view != null).count() == 0;
-		}));
-		
-		System.out.println("Stabilized, now sleeping to see if views remain stabilized");
-		Thread.sleep(10_000);
-		assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 100, () -> {
-			return views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
-					.filter(view -> view != null).count() == 0;
-		}));
-		System.out.println("View has stabilized after restart in " + (System.currentTimeMillis() - then) + " Ms");
+        System.out.println("Restarting views");
+        views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
 
-		System.out.println("Checking views for consistency");
-		invalid = views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
-				.filter(view -> view != null).collect(Collectors.toList());
-		assertEquals(invalid.stream().map(view -> {
-			Set<?> difference = Sets.difference(
-					views.stream().map(v -> v.getNode().getId()).collect(Collectors.toSet()), view.getLive().keySet());
-			return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
-		}).collect(Collectors.toList()).toString(), 0, invalid.size());
+        assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 100, () -> {
+            return views.stream()
+                        .map(view -> view.getLive().size() != views.size() ? view : null)
+                        .filter(view -> view != null)
+                        .count() == 0;
+        }));
 
-		System.out.println("Stoping views");
-		views.forEach(view -> view.getService().stop());
-	}
+        System.out.println("Stabilized, now sleeping to see if views remain stabilized");
+        Thread.sleep(10_000);
+        assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 100, () -> {
+            return views.stream()
+                        .map(view -> view.getLive().size() != views.size() ? view : null)
+                        .filter(view -> view != null)
+                        .count() == 0;
+        }));
+        System.out.println("View has stabilized after restart in " + (System.currentTimeMillis() - then) + " Ms");
+
+        System.out.println("Checking views for consistency");
+        invalid = views.stream()
+                       .map(view -> view.getLive().size() != views.size() ? view : null)
+                       .filter(view -> view != null)
+                       .collect(Collectors.toList());
+        assertEquals(invalid.stream().map(view -> {
+            Set<?> difference = Sets.difference(views.stream()
+                                                     .map(v -> v.getNode().getId())
+                                                     .collect(Collectors.toSet()),
+                                                view.getLive().keySet());
+            return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
+        }).collect(Collectors.toList()).toString(), 0, invalid.size());
+
+        System.out.println("Stoping views");
+        views.forEach(view -> view.getService().stop());
+    }
 }

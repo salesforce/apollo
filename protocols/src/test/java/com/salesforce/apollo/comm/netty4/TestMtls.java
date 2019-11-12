@@ -51,7 +51,7 @@ public class TestMtls {
                 service());
         MtlsServer server = new MtlsServer(serverAddress,
                 SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build(), responderProvider,
-                MtlsServer.defaultBuiilder(), 1, "test", 1);
+                MtlsServer.defaultBuiilder(), new NioEventLoopGroup(), new NioEventLoopGroup());
         NettyTlsTransceiver transceiver = new NettyTlsTransceiver(serverAddress,
                 SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build(),
                 new NioEventLoopGroup());

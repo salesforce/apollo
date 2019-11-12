@@ -13,6 +13,7 @@ import java.util.function.Function;
 
 import javax.net.ssl.SSLException;
 
+import org.apache.avro.ipc.RPCPlugin;
 import org.apache.avro.ipc.Responder;
 import org.apache.avro.ipc.specific.SpecificResponder;
 
@@ -35,54 +36,66 @@ import io.netty.handler.ssl.ClientAuth;
  * @since 220
  */
 public class AvalancheNettyCommunications extends CommonNettyCommunications implements AvalancheCommunications {
-	private volatile Avalanche avalanche;
+    private volatile Avalanche avalanche;
+    private final RPCPlugin    stats;
 
-	@Override
-	public AvalancheClientCommunications connectToNode(Member to, Node from) {
-		try {
-			AvalancheClientCommunications thisOutbound[] = new AvalancheClientCommunications[1];
-			AvalancheClientCommunications outbound = new AvalancheClientCommunications(
-					new NettyTlsTransceiver(to.getAvalancheEndpoint(), forClient(from).build(), eventGroup) {
+    public AvalancheNettyCommunications() {
+        this(null);
+    }
 
-						@Override
-						public void close() {
-							openOutbound.remove(thisOutbound[0]);
-							super.close();
-						}
+    public AvalancheNettyCommunications(RPCPlugin stats) {
+        this.stats = stats;
+    }
 
-					}, to);
-			thisOutbound[0] = outbound;
-			openOutbound.add(outbound);
-			return outbound;
-		} catch (Throwable e) {
-			log.debug("Error connecting to {}", to, e);
-			return null;
-		}
-	}
+    @Override
+    public AvalancheClientCommunications connectToNode(Member to, Node from) {
+        try {
+            AvalancheClientCommunications thisOutbound[] = new AvalancheClientCommunications[1];
+            AvalancheClientCommunications outbound = new AvalancheClientCommunications(
+                    new NettyTlsTransceiver(to.getAvalancheEndpoint(), forClient(from).build(), clientGroup) {
 
-	@Override
-	public void initialize(Avalanche avalanche) {
-		this.avalanche = avalanche;
-	}
+                        @Override
+                        public void close() {
+                            openOutbound.remove(thisOutbound[0]);
+                            super.close();
+                        }
 
-	@Override
-	protected MtlsServer newServer() {
-		try {
-			return new MtlsServer(avalanche.getNode().getAvalancheEndpoint(),
-					forServer(avalanche.getNode()).clientAuth(ClientAuth.NONE).build(), provider(), defaultBuiilder(),
-					1, "Ava[" + avalanche.getNode().getId() + "]", avalanche.getNode().getParameters().rings);
-		} catch (SSLException e) {
-			throw new IllegalStateException("Unable to construct SslContext for " + avalanche.getNode().getId());
-		}
-	}
+                    }, to);
+            thisOutbound[0] = outbound;
+            openOutbound.add(outbound);
+            if (stats != null) {
+                outbound.add(stats);
+            }
+            return outbound;
+        } catch (Throwable e) {
+            log.debug("Error connecting to {}", to, e);
+            return null;
+        }
+    }
 
-	private Function<X509Certificate, Responder> provider() {
-		return certificate -> {
-			Service service = avalanche.getService();
-			SpecificResponder responder = new SpecificResponder(Apollo.class,
-					new AvalancheServerCommunications(service));
-			return responder;
-		};
-	}
+    @Override
+    public void initialize(Avalanche avalanche) {
+        this.avalanche = avalanche;
+    }
+
+    @Override
+    protected MtlsServer newServer(Node node) {
+        try {
+            return new MtlsServer(avalanche.getNode().getAvalancheEndpoint(),
+                    forServer(avalanche.getNode()).clientAuth(ClientAuth.NONE).build(), provider(), defaultBuiilder(),
+                    1, "Ava[" + avalanche.getNode().getId() + "]", avalanche.getNode().getParameters().rings);
+        } catch (SSLException e) {
+            throw new IllegalStateException("Unable to construct SslContext for " + avalanche.getNode().getId());
+        }
+    }
+
+    private Function<X509Certificate, Responder> provider() {
+        return certificate -> {
+            Service service = avalanche.getService();
+            SpecificResponder responder = new SpecificResponder(Apollo.class,
+                    new AvalancheServerCommunications(service));
+            return responder;
+        };
+    }
 
 }
