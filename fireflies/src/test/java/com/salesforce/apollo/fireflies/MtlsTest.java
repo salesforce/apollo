@@ -37,7 +37,6 @@ import com.salesforce.apollo.fireflies.communications.netty.FirefliesNettyCommun
 import com.salesforce.apollo.protocols.Utils;
 
 import io.github.olivierlemasle.ca.RootCertificate;
-import io.netty.channel.nio.NioEventLoopGroup;
 
 /**
  * @author hal.hildebrand
@@ -82,10 +81,8 @@ public class MtlsTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         List<View> views = members.stream()
-                                  .map(node -> new View(node,
-                                          new FirefliesNettyCommunications(null, new NioEventLoopGroup(1),
-                                                  new NioEventLoopGroup(1), new NioEventLoopGroup(1)),
-                                          seeds, scheduler))
+                                  .map(node -> new View(node, new FirefliesNettyCommunications(null, 2, 2, 2), seeds,
+                                          scheduler))
                                   .collect(Collectors.toList());
 
         long then = System.currentTimeMillis();

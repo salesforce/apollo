@@ -6,12 +6,9 @@
  */
 package com.salesforce.apollo.avalanche.communications.netty;
 
-import static com.salesforce.apollo.comm.netty4.MtlsServer.defaultBuiilder;
-
+import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.function.Function;
-
-import javax.net.ssl.SSLException;
 
 import org.apache.avro.ipc.RPCPlugin;
 import org.apache.avro.ipc.Responder;
@@ -23,13 +20,14 @@ import com.salesforce.apollo.avalanche.communications.AvalancheClientCommunicati
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
 import com.salesforce.apollo.avalanche.communications.AvalancheServerCommunications;
 import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.comm.netty4.MtlsServer;
 import com.salesforce.apollo.comm.netty4.NettyTlsTransceiver;
 import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.communications.netty.CommonNettyCommunications;
 
+import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContextBuilder;
 
 /**
  * @author hal.hildebrand
@@ -37,14 +35,23 @@ import io.netty.handler.ssl.ClientAuth;
  */
 public class AvalancheNettyCommunications extends CommonNettyCommunications implements AvalancheCommunications {
     private volatile Avalanche avalanche;
-    private final RPCPlugin    stats;
 
-    public AvalancheNettyCommunications() {
-        this(null);
+    public AvalancheNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
+            EventLoopGroup workerGroup) {
+        super(stats, clientGroup, bossGroup, workerGroup);
     }
 
-    public AvalancheNettyCommunications(RPCPlugin stats) {
-        this.stats = stats;
+    public AvalancheNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads) {
+        super(label, clientThreads, bossThreads, workerThreads);
+    }
+
+    public AvalancheNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
+            int workerThreads) {
+        super(label, stats, clientThreads, bossThreads, workerThreads);
+    }
+
+    public AvalancheNettyCommunications(String label) {
+        super(label);
     }
 
     @Override
@@ -68,7 +75,7 @@ public class AvalancheNettyCommunications extends CommonNettyCommunications impl
             }
             return outbound;
         } catch (Throwable e) {
-            log.debug("Error connecting to {}", to, e);
+            log.error("Error connecting to {}", to, e);
             return null;
         }
     }
@@ -79,23 +86,27 @@ public class AvalancheNettyCommunications extends CommonNettyCommunications impl
     }
 
     @Override
-    protected MtlsServer newServer(Node node) {
-        try {
-            return new MtlsServer(avalanche.getNode().getAvalancheEndpoint(),
-                    forServer(avalanche.getNode()).clientAuth(ClientAuth.NONE).build(), provider(), defaultBuiilder(),
-                    1, "Ava[" + avalanche.getNode().getId() + "]", avalanche.getNode().getParameters().rings);
-        } catch (SSLException e) {
-            throw new IllegalStateException("Unable to construct SslContext for " + avalanche.getNode().getId());
-        }
+    protected ClientAuth clientAuth() {
+        return ClientAuth.NONE;
     }
 
-    private Function<X509Certificate, Responder> provider() {
+    @Override
+    protected InetSocketAddress endpoint() {
+        return avalanche.getNode().getAvalancheEndpoint();
+    }
+
+    protected Function<X509Certificate, Responder> provider() {
         return certificate -> {
             Service service = avalanche.getService();
             SpecificResponder responder = new SpecificResponder(Apollo.class,
                     new AvalancheServerCommunications(service));
             return responder;
         };
+    }
+
+    @Override
+    protected SslContextBuilder sslCtxBuilder() {
+        return forServer(avalanche.getNode());
     }
 
 }

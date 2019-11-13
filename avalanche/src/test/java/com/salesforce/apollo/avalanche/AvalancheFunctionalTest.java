@@ -41,7 +41,7 @@ import com.codahale.metrics.Slf4jReporter;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
-import com.salesforce.apollo.avalanche.communications.netty.AvalancheNettyCommunications;
+import com.salesforce.apollo.avalanche.communications.AvalancheLocalCommSim;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
@@ -119,6 +119,7 @@ public class AvalancheFunctionalTest {
     @Test
     public void smoke() throws Exception {
         AvaMetrics avaMetrics = new AvaMetrics(node0Registry);
+        AvalancheCommunications comm = new AvalancheLocalCommSim(rpcStats);
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
             aParams.dagWood.store = new File(baseDir, view.getNode().getId() + ".store");
@@ -141,15 +142,14 @@ public class AvalancheFunctionalTest {
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
 
-            AvalancheCommunications comm = new AvalancheNettyCommunications(rpcStats);
             return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 200;
+        int target = 800;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 200;
-        int runtime = (int) Duration.ofSeconds(60).toMillis();
+        int runtime = (int) Duration.ofSeconds(600).toMillis();
 
         views.forEach(view -> view.getService().start(ffRound));
 

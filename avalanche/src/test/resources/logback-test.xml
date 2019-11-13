@@ -42,12 +42,11 @@
     <logger name="com.salesforce.apollo.avalanche" level="INFO"
         additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger>
-    <logger name="org.jooq.tools.LoggerListener" level="INFO"
-        additivity="false">
+    </logger> 
+    <logger name="io.netty.handler.ssl" level="INFO" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="liquibase" level="WARN" additivity="false">
+    <logger name="io.netty" level="INFO" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
     <logger name="func-metrics" level="INFO" additivity="false">

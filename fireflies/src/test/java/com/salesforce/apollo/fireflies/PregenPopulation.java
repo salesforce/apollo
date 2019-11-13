@@ -61,7 +61,7 @@ public class PregenPopulation {
 
         CertificateAuthority ca = new CertificateAuthority(root);
 
-        int startPort = 65535 - 1;
+        int startPort = 49151 - 1;
         String host = "localhost";
         for (int i = 1; i <= cardinality; i++) {
             int ffPort = startPort--;

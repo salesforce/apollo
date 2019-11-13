@@ -124,7 +124,7 @@ public class BoostrapTest {
         int target = 15;
         transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target * 40, scheduler));
 
-        boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
+        boolean finalized = Utils.waitForCondition(30_000, 1_000, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= target)

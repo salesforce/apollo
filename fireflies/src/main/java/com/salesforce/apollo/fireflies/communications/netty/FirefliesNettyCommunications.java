@@ -38,11 +38,24 @@ public class FirefliesNettyCommunications extends CommonNettyCommunications impl
         return "FF";
     }
 
-    volatile View view; 
+    private volatile View view;
 
     public FirefliesNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
             EventLoopGroup workerGroup) {
         super(stats, clientGroup, bossGroup, workerGroup);
+    }
+
+    public FirefliesNettyCommunications(String label) {
+        super(label);
+    }
+
+    public FirefliesNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads) {
+        super(label, clientThreads, bossThreads, workerThreads);
+    }
+
+    public FirefliesNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
+            int workerThreads) {
+        super(label, stats, clientThreads, bossThreads, workerThreads);
     }
 
     @Override
@@ -92,7 +105,7 @@ public class FirefliesNettyCommunications extends CommonNettyCommunications impl
     protected InetSocketAddress endpoint() {
         return view.getNode().getFirefliesEndpoint();
     }
- 
+
     protected Function<X509Certificate, Responder> provider() {
         return certificate -> {
             SpecificResponder responder = new SpecificResponder(Apollo.class,

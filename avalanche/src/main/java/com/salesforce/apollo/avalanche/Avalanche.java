@@ -445,7 +445,6 @@ public class Avalanche {
     int query() {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        long retrieveTime = System.currentTimeMillis() - now;
         Collection<Member> sample = querySampler.sample(parameters.k);
         if (sample.isEmpty()) {
             return 0;
@@ -464,14 +463,17 @@ public class Avalanche {
             return 0;
         }
         List<ByteBuffer> query = dag.getQuerySerializedEntries(unqueried);
+        long sampleTime = System.currentTimeMillis() - now;
+
+        now = System.currentTimeMillis();
         List<Boolean> results = query(query, sample);
         if (timer != null) {
             timer.close();
         }
+        long retrieveTime = System.currentTimeMillis() - now;
         if (metrics != null) {
             metrics.getQueryRate().mark(query.size());
         }
-        long sampleTime = System.currentTimeMillis() - now;
         List<HashKey> unpreferings = new ArrayList<>();
         List<HashKey> preferings = new ArrayList<>();
         for (int i = 0; i < results.size(); i++) {
@@ -539,7 +541,7 @@ public class Avalanche {
             QueryResult result;
             AvalancheClientCommunications connection = comm.connectToNode(m, getNode());
             if (connection == null) {
-                log.info("No connection querying {} for {}", m, batch);
+                log.info("No connection querying {} for {} queries", m, batch.size());
                 for (int i = 0; i < batch.size(); i++) {
                     invalid[i].incrementAndGet();
                 }

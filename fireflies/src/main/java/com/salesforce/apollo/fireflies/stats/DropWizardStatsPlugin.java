@@ -24,11 +24,11 @@ import com.codahale.metrics.MetricRegistry;
  * @since 220
  */
 public class DropWizardStatsPlugin extends RPCPlugin {
-    ConcurrentMap<RPCContext, Long> activeRpcs = new ConcurrentHashMap<>();
-    private final Map<Message, Histogram> methodTimings = new ConcurrentHashMap<>();
+    ConcurrentMap<RPCContext, Long>       activeRpcs      = new ConcurrentHashMap<>();
+    private final Map<Message, Histogram> methodTimings   = new ConcurrentHashMap<>();
     private final Map<Message, Histogram> receivePayloads = new ConcurrentHashMap<>();
-    private final MetricRegistry registry;
-    private final Map<Message, Histogram> sendPayloads = new ConcurrentHashMap<>();
+    private final MetricRegistry          registry;
+    private final Map<Message, Histogram> sendPayloads    = new ConcurrentHashMap<>();
 
     public DropWizardStatsPlugin(MetricRegistry registry) {
         this.registry = registry;
@@ -77,7 +77,9 @@ public class DropWizardStatsPlugin extends RPCPlugin {
      * Helper to get the size of an RPC payload.
      */
     private int getPayloadSize(List<ByteBuffer> payload) {
-        if (payload == null) { return 0; }
+        if (payload == null) {
+            return 0;
+        }
         return payload.stream().mapToInt(e -> e.remaining()).sum();
     }
 
@@ -85,12 +87,9 @@ public class DropWizardStatsPlugin extends RPCPlugin {
         Message message = context.getMessage();
         if (message == null)
             throw new IllegalArgumentException();
-        Histogram h = methodTimings.get(context.getMessage());
-        if (h == null) {
-            h = registry.histogram(context.getMessage().getName() + " Timing");
-            methodTimings.put(context.getMessage(), h);
-        }
-        h.update(time / 1_000_000);
+        methodTimings.computeIfAbsent(context.getMessage(),
+                                      k -> registry.histogram(context.getMessage().getName() + " Timing"))
+                     .update(time / 1_000_000);
     }
 
 }

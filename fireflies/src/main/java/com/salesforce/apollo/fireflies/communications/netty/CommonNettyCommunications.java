@@ -57,7 +57,9 @@ abstract public class CommonNettyCommunications {
                                 .ciphers(CIPHERS)
                                 // .sslContextProvider(JSSE_PROVIDER)
                                 .keyManager(node.getKeyManagerFactory())
-                                .trustManager(node.getTrustManagerFactory());
+                                .trustManager(node.getTrustManagerFactory())
+                                .sessionCacheSize(100)
+                                .sessionTimeout(10);
     }
 
     public static SslContextBuilder forServer(Node node) {
@@ -65,7 +67,37 @@ abstract public class CommonNettyCommunications {
                                 .protocols(TL_SV1_2)
                                 .ciphers(CIPHERS)
                                 // .sslContextProvider(JSSE_PROVIDER)
-                                .trustManager(node.getTrustManagerFactory());
+                                .trustManager(node.getTrustManagerFactory())
+                                .sessionCacheSize(100)
+                                .sessionTimeout(10);
+    }
+
+    public static NioEventLoopGroup newBossGroup(String label, int threads) {
+        return newGroup(label + " boss", threads);
+    }
+
+    public static NioEventLoopGroup newClientGroup(String label, int threads) {
+        return newGroup(label + " client", threads);
+    }
+
+    public static NioEventLoopGroup newGroup(String label, int threads) {
+        final NioEventLoopGroup nioEventLoopGroup = new NioEventLoopGroup(threads, new ThreadFactory() {
+            volatile int i = 0;
+
+            @Override
+            public Thread newThread(Runnable r) {
+                int thread = i++;
+                Thread t = new Thread(r, label + " [" + thread + "]");
+                t.setDaemon(true);
+                return t;
+            }
+        });
+        nioEventLoopGroup.setIoRatio(100);
+        return nioEventLoopGroup;
+    }
+
+    public static NioEventLoopGroup newWorkerGroup(String label, int threads) {
+        return newGroup(label + " worker", threads);
     }
 
     protected final EventLoopGroup                  bossGroup;
@@ -94,37 +126,8 @@ abstract public class CommonNettyCommunications {
 
     public CommonNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
             int workerThreads) {
-        this(stats, new NioEventLoopGroup(bossThreads, new ThreadFactory() {
-            volatile int i = 0;
-
-            @Override
-            public Thread newThread(Runnable r) {
-                int thread = i++;
-                Thread t = new Thread(r, label + " client [" + thread + "]");
-                t.setDaemon(true);
-                return t;
-            }
-        }), new NioEventLoopGroup(bossThreads, new ThreadFactory() {
-            volatile int i = 0;
-
-            @Override
-            public Thread newThread(Runnable r) {
-                int thread = i++;
-                Thread t = new Thread(r, label + " boss [" + thread + "]");
-                t.setDaemon(true);
-                return t;
-            }
-        }), new NioEventLoopGroup(workerThreads, new ThreadFactory() {
-            volatile int i = 0;
-
-            @Override
-            public Thread newThread(Runnable r) {
-                int thread = i++;
-                Thread t = new Thread(r, label + " worker[" + thread + "]");
-                t.setDaemon(true);
-                return t;
-            }
-        }));
+        this(stats, newClientGroup(label, clientThreads), newBossGroup(label, bossThreads),
+                newWorkerGroup(label, workerThreads));
     }
 
     public void close() {

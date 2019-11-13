@@ -32,6 +32,7 @@ import com.salesforce.apollo.comm.netty4.NettyTransportCodec.NettyFrameDecoder;
 import com.salesforce.apollo.comm.netty4.NettyTransportCodec.NettyFrameEncoder;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
@@ -47,8 +48,6 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.compression.FastLzFrameDecoder;
 import io.netty.handler.codec.compression.FastLzFrameEncoder;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.util.concurrent.Future;
@@ -59,6 +58,8 @@ import io.netty.util.concurrent.GlobalEventExecutor;
  * @author hhildebrand
  */
 public class MtlsServer implements Server {
+    private final static Logger log = LoggerFactory.getLogger(MtlsServer.class);
+
     class AvroHandler extends ChannelInboundHandlerAdapter {
 
         private final NettyTlsTransceiver connectionMetadata = new NettyTlsTransceiver();
@@ -79,7 +80,7 @@ public class MtlsServer implements Server {
                    public void operationComplete(Future<Channel> future) throws Exception {
                        responder = getResponder(getSessionId());
                        if (responder == null) {
-                           LOG.info("No responder, closing");
+                           log.info("No responder, closing");
                            ctx.close();
                            return;
                        }
@@ -107,14 +108,14 @@ public class MtlsServer implements Server {
                     ctx.channel().writeAndFlush(dataPack);
                 }
             } catch (IOException ex) {
-                LOG.warn("unexpected error", ex);
+                log.warn("unexpected error", ex);
                 ctx.close();
             }
         }
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-            LOG.warn("Error caught", cause);
+            log.warn("Error caught", cause);
             ctx.close();
             super.exceptionCaught(ctx, cause);
         }
@@ -128,6 +129,7 @@ public class MtlsServer implements Server {
                             ? (X509Certificate) sslEngine.getSession().getPeerCertificates()[0]
                             : null;
                 } catch (SSLPeerUnverifiedException e) {
+                    log.error("unverified peer", e);
                     return null;
                 }
 
@@ -135,7 +137,7 @@ public class MtlsServer implements Server {
                     responder = responders.get(sessionId, () -> {
                         Responder newResponder = responderProvider.apply(cert);
                         if (stats != null) {
-                            responder.addRPCPlugin(stats);
+                            newResponder.addRPCPlugin(stats);
                         }
                         return newResponder;
                     });
@@ -167,8 +169,6 @@ public class MtlsServer implements Server {
         }
     }
 
-    private static final Logger LOG = LoggerFactory.getLogger(MtlsServer.class.getName());
-
     public static CacheBuilder<String, Responder> defaultBuiilder() {
         CacheBuilder<?, ?> builder = CacheBuilder.from("maximumSize=1000,expireAfterWrite=120s");
         @SuppressWarnings("unchecked")
@@ -187,7 +187,7 @@ public class MtlsServer implements Server {
     public MtlsServer(InetSocketAddress address, SslContext sslCtx,
             Function<X509Certificate, Responder> responderProvider, CacheBuilder<String, Responder> builder,
             EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
-        LOG.debug("Server starting, binding to: {}", address);
+        log.debug("Server starting, binding to: {}", address);
         responders = builder.build();
         this.responderProvider = responderProvider;
 
@@ -195,22 +195,29 @@ public class MtlsServer implements Server {
                                                     .option(ChannelOption.SO_REUSEADDR, true)
                                                     .childOption(ChannelOption.TCP_NODELAY, true)
                                                     .childOption(ChannelOption.SO_KEEPALIVE, true)
+                                                    .childOption(ChannelOption.TCP_NODELAY, true)
+                                                    .childOption(ChannelOption.SO_REUSEADDR, true)
+                                                    .childOption(ChannelOption.SO_KEEPALIVE, true)
+                                                    .childOption(ChannelOption.SO_LINGER, 0)
+                                                    .childOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 30_000)
+                                                    .childOption(ChannelOption.SO_RCVBUF, 1048576)
+                                                    .childOption(ChannelOption.SO_SNDBUF, 1048576)
+                                                    .childOption(ChannelOption.ALLOCATOR,
+                                                                 PooledByteBufAllocator.DEFAULT)
                                                     .group(bossGroup, workerGroup)
                                                     .channel(NioServerSocketChannel.class)
-                                                    // .handler(new LoggingHandler(LogLevel.TRACE))
+//                                                    .handler(new LoggingHandler("server", LogLevel.INFO))
                                                     .childHandler(new ChannelInitializer<SocketChannel>() {
                                                         @Override
                                                         protected void initChannel(SocketChannel ch) throws Exception {
                                                             ChannelPipeline pipeline = ch.pipeline();
+//                                                            pipeline.addLast(new LoggingHandler("server child",
+//                                                                                                LogLevel.INFO));
                                                             SslHandler newHandler = sslCtx.newHandler(ch.alloc());
                                                             pipeline.addLast(newHandler);
                                                             SSLEngine engine = newHandler.engine();
                                                             pipeline.addLast(new FastLzFrameDecoder());
                                                             pipeline.addLast(new FastLzFrameEncoder());
-                                                            if (LOG.isTraceEnabled()) {
-                                                                pipeline.addLast(new LoggingHandler("server",
-                                                                        LogLevel.TRACE));
-                                                            }
                                                             pipeline.addLast(new NettyFrameDecoder());
                                                             pipeline.addLast(new NettyFrameEncoder());
                                                             pipeline.addLast(new AvroHandler(engine));
@@ -223,11 +230,11 @@ public class MtlsServer implements Server {
             throw new IllegalStateException("Binding sync interrupted", e);
         }
         if (!future.isSuccess()) {
-            LOG.error("Server unable to bind to {}", future.cause());
+            log.error("Server unable to bind to {}", future.cause());
             throw new IllegalStateException("Unable to bind server", future.cause());
         }
         channel = future.channel();
-        LOG.debug("Server started, bound: {}", address);
+        log.debug("Server started, bound: {}", address);
     }
 
     @Override
@@ -236,12 +243,12 @@ public class MtlsServer implements Server {
         try {
             future.sync();
         } catch (InterruptedException e) {
-            LOG.error("Failure closing all channels", e);
+            log.error("Failure closing all channels", e);
         }
         try {
             future.get();
         } catch (InterruptedException | ExecutionException e) {
-            LOG.error("Failure closing all channels", e);
+            log.error("Failure closing all channels", e);
         }
         channel.close().awaitUninterruptibly();
         try {
