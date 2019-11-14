@@ -12,6 +12,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.time.Duration;
 
+import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonSubTypes.Type;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -23,6 +24,7 @@ import com.salesforce.apollo.avalanche.communications.netty.AvalancheNettyCommun
 import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
 import com.salesforce.apollo.fireflies.communications.netty.FirefliesNettyCommunications;
+import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 
 /**
@@ -32,9 +34,9 @@ import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 public class ApolloConfiguration {
 
     public interface CommunicationsFactory {
-        AvalancheCommunications avalanche();
+        AvalancheCommunications avalanche(MetricRegistry metrics);
 
-        FirefliesCommunications fireflies();
+        FirefliesCommunications fireflies(MetricRegistry metrics);
     }
 
     public static class FileIdentitySource implements IdentityStoreSource {
@@ -69,15 +71,17 @@ public class ApolloConfiguration {
         public int firefliesWorkerThreads = 10;
 
         @Override
-        public AvalancheCommunications avalanche() {
-            return new AvalancheNettyCommunications("Avalanche", avalancheClientThreads, avalancheBossThreads,
-                    avalancheWorkerThreads);
+        public AvalancheCommunications avalanche(MetricRegistry metrics) {
+            return new AvalancheNettyCommunications("Avalanche",
+                    metrics == null ? null : new DropWizardStatsPlugin(metrics), avalancheClientThreads,
+                    avalancheBossThreads, avalancheWorkerThreads);
         }
 
         @Override
-        public FirefliesCommunications fireflies() {
-            return new FirefliesNettyCommunications("Fireflies", firefliesClientThreads, firefliesBossThreads,
-                    firefliesWorkerThreads);
+        public FirefliesCommunications fireflies(MetricRegistry metrics) {
+            return new FirefliesNettyCommunications("Fireflies",
+                    metrics == null ? null : new DropWizardStatsPlugin(metrics), firefliesClientThreads,
+                    firefliesBossThreads, firefliesWorkerThreads);
         }
 
     }
@@ -113,7 +117,7 @@ public class ApolloConfiguration {
         }
 
         @Override
-        public AvalancheCommunications avalanche() {
+        public AvalancheCommunications avalanche(MetricRegistry metrics) {
             if (AVALANCHE_LOCAL_COMM == null) {
                 throw new IllegalStateException("SimCommunicationsFactory must be reset first");
             }
@@ -121,7 +125,7 @@ public class ApolloConfiguration {
         }
 
         @Override
-        public FirefliesCommunications fireflies() {
+        public FirefliesCommunications fireflies(MetricRegistry metrics) {
             if (FF_LOCAL_COM == null) {
                 throw new IllegalStateException("SimCommunicationsFactory must be reset first");
             }

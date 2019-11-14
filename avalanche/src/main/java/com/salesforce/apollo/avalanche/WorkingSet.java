@@ -783,7 +783,8 @@ public class WorkingSet {
         if (node != null) {
             return manifestDag(node.getEntry());
         }
-        return manifestDag(finalized.get(key.bytes()));
+        byte[] entry = finalized.get(key.bytes());
+        return entry == null ? null : manifestDag(entry);
     }
 
     public List<ByteBuffer> getEntries(List<HashKey> collect) {
@@ -918,12 +919,17 @@ public class WorkingSet {
     }
 
     public void purgeNoOps() {
-        unfinalized.values().stream().filter(e -> e.isNoOp()).map(e -> (NoOpNode) e).filter(e -> e.links().isEmpty()).forEach(e -> {
-            unfinalized.remove(e.getKey());
-            if (metrics != null) {
-                metrics.purgeNoOps().mark();
-            }
-        });
+        unfinalized.values()
+                   .stream()
+                   .filter(e -> e.isNoOp())
+                   .map(e -> (NoOpNode) e)
+                   .filter(e -> e.links().isEmpty())
+                   .forEach(e -> {
+                       unfinalized.remove(e.getKey());
+                       if (metrics != null) {
+                           metrics.purgeNoOps().mark();
+                       }
+                   });
     }
 
     public List<HashKey> query(int maxSize) {

@@ -169,6 +169,11 @@ public class ApolloServiceTest {
                                .post(Entity.text(asyncResult));
             return r.getStatus() == 200 && r.readEntity(QueryFinalizedResult.class).isFinalized();
         }));
+        response = client.target(String.format("http://localhost:%d/metrics?pretty=true",
+                                               RULE.getAdminPort())).request().get();
+
+        assertEquals(200, response.getStatus());
+        System.out.println(response.readEntity(String.class));
     }
 
     @After

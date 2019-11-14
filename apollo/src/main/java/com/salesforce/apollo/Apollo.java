@@ -13,8 +13,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.salesforce.apollo.avalanche.AvaMetrics;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.protocols.Utils;
@@ -39,22 +41,27 @@ public class Apollo {
         }
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         ApolloConfiguration configuraton = mapper.readValue(yaml.openStream(), ApolloConfiguration.class);
-        Apollo apollo = new Apollo(configuraton);
+        Apollo apollo = new Apollo(configuraton, null);
         apollo.start();
     }
 
-    private final Avalanche avalanche;
+    private final Avalanche           avalanche;
     private final ApolloConfiguration configuration;
-    private final AtomicBoolean running = new AtomicBoolean();
-    private final View view;
+    private final AtomicBoolean       running = new AtomicBoolean();
+    private final View                view;
 
-    public Apollo(ApolloConfiguration c) throws SocketException, KeyStoreException {
+    public Apollo(ApolloConfiguration config) throws SocketException, KeyStoreException {
+        this(config, null);
+    }
+
+    public Apollo(ApolloConfiguration c, MetricRegistry metrics) throws SocketException, KeyStoreException {
         configuration = c;
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(configuration.threadPool);
         view = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
                                           ApolloConfiguration.DEFAULT_IDENTITY_ALIAS)
-                       .createView(configuration.communications.fireflies(), scheduler);
-        avalanche = new Avalanche(view, configuration.communications.avalanche(), c.avalanche);
+                       .createView(configuration.communications.fireflies(metrics), scheduler);
+        avalanche = new Avalanche(view, configuration.communications.avalanche(metrics), c.avalanche,
+                metrics == null ? null : new AvaMetrics(metrics));
     }
 
     public Avalanche getAvalanche() {
@@ -66,13 +73,17 @@ public class Apollo {
     }
 
     public void start() {
-        if (!running.compareAndSet(false, true)) { return; }
+        if (!running.compareAndSet(false, true)) {
+            return;
+        }
         view.getService().start(configuration.gossipInterval);
         avalanche.start();
     }
 
     public void stop() {
-        if (!running.compareAndSet(true, false)) { return; }
+        if (!running.compareAndSet(true, false)) {
+            return;
+        }
         view.getService().stop();
         avalanche.stop();
     }

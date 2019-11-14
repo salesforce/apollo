@@ -36,17 +36,19 @@ public class DropWizardStatsPlugin extends RPCPlugin {
 
     @Override
     public void clientReceiveResponse(RPCContext context) {
-        long t = this.activeRpcs.remove(context);
-        publish(context, System.nanoTime() - t);
-        receivePayloads.computeIfAbsent(context.getMessage(),
-                                        m -> registry.histogram(context.getMessage().getName()
-                                                + " Client Response Received Payload Size"))
-                       .update(getPayloadSize(context.getRequestPayload()));
+        Long t = this.activeRpcs.remove(context);
+        if (t != null) {
+            publish(context, System.nanoTime() - t);
+            receivePayloads.computeIfAbsent(context.getMessage(),
+                                            m -> registry.histogram(context.getMessage().getName()
+                                                    + " Client Response Received Payload Size"))
+                           .update(getPayloadSize(context.getRequestPayload()));
+        }
     }
 
     @Override
     public void clientSendRequest(RPCContext context) {
-        Long t = System.nanoTime();
+        Long t = System.nanoTime(); 
         this.activeRpcs.put(context, t);
         sendPayloads.computeIfAbsent(context.getMessage(),
                                      m -> registry.histogram(context.getMessage().getName()
@@ -65,12 +67,14 @@ public class DropWizardStatsPlugin extends RPCPlugin {
 
     @Override
     public void serverSendResponse(RPCContext context) {
-        long t = this.activeRpcs.remove(context);
-        publish(context, System.nanoTime() - t);
-        sendPayloads.computeIfAbsent(context.getMessage(),
-                                     m -> registry.histogram(context.getMessage().getName()
-                                             + " Server Response Sent Payload Size"))
-                    .update(getPayloadSize(context.getResponsePayload()));
+        Long t = this.activeRpcs.remove(context);
+        if (t != null) {
+            publish(context, System.nanoTime() - t);
+            sendPayloads.computeIfAbsent(context.getMessage(),
+                                         m -> registry.histogram(context.getMessage().getName()
+                                                 + " Server Response Sent Payload Size"))
+                        .update(getPayloadSize(context.getResponsePayload()));
+        }
     }
 
     /**
