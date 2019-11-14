@@ -42,7 +42,6 @@ import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
 import com.salesforce.apollo.avalanche.communications.AvalancheLocalCommSim;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Member;
@@ -197,7 +196,7 @@ public class AvalancheFunctionalTest {
                        .start(30, TimeUnit.SECONDS);
 
         long now = System.currentTimeMillis();
-        HASH k = genesisKey.toHash();
+        HashKey k = genesisKey;
         for (Avalanche a : nodes) {
             assertTrue("Failed to finalize genesis on: " + a.getNode().getId(),
                        Utils.waitForCondition(10_000, () -> a.getDagDao().isFinalized(k)));

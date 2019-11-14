@@ -28,7 +28,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import com.salesforce.apollo.avalanche.Avalanche;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.bootstrap.BootstrapCA;
 import com.salesforce.apollo.bootstrap.BootstrapConfiguration;
 import com.salesforce.apollo.protocols.HashKey;
@@ -113,10 +112,10 @@ public class BoostrapTest {
 
         long now = System.currentTimeMillis();
         List<Transactioneer> transactioneers = new ArrayList<>();
-        HASH k = genesisKey.toHash();
+        HashKey key = genesisKey;
         for (Apollo o : oracles) {
             assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
-                       Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)));
+                       Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(key)));
             transactioneers.add(new Transactioneer(o.getAvalanche()));
         }
 

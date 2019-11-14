@@ -1151,4 +1151,8 @@ public class WorkingSet {
         }
         return exist;
     }
+
+    public List<HashKey> allFinalized() { 
+        return finalized.allFinalized();
+    }
 }

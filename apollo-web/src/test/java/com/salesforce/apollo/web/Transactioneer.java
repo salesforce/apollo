@@ -8,6 +8,7 @@
 package com.salesforce.apollo.web;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +35,6 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.codahale.metrics.Timer.Context;
 import com.salesforce.apollo.web.resources.ByteTransactionApi;
-import com.salesforce.apollo.web.resources.DagApi.QueryFinalizedResult;
 
 /**
  * @author hhildebrand
@@ -103,32 +103,41 @@ public class Transactioneer {
         }, duration.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    private boolean query(String key, WebTarget queryEndpoint) {
-        final Response response = queryEndpoint.request().post(Entity.text(key));
+    private Boolean[] query(String[] txns, WebTarget queryEndpoint) {
+        final Response response = queryEndpoint.request(MediaType.APPLICATION_JSON).post(Entity.json(txns));
         if (!(response.getStatus() == 200)) {
-            log.error("Failed querying status of txn #{} response: {}: {}", key, response.getStatus(),
+            log.error("Failed querying status of txns response: {}: {}", response.getStatus(),
                       response.readEntity(String.class));
-            return false;
+            Boolean[] results = new Boolean[txns.length];
+            Arrays.fill(results, Boolean.FALSE);
+            return results;
         }
-        if (response.readEntity(QueryFinalizedResult.class).isFinalized()) {
-            final Context timer = unfinalized.remove(key);
-            timer.stop();
-            finalizations.mark();
-            finalized.add(key);
-            return true;
+        final Boolean[] results = response.readEntity(Boolean[].class);
+        for (int i = 0; i < results.length; i++) {
+            if (results[i]) {
+                String txn = txns[i];
+                final Context timer = unfinalized.remove(txn);
+                timer.stop();
+                finalizations.mark();
+                finalized.add(txn);
+            }
         }
-        return false;
+        return results;
     }
 
     private Runnable queryFinalized(WebTarget queryEndpoint) {
         return () -> {
             log.info("Querying finalized for {}", id);
-            final long txnsFinalized = unfinalized.keySet()
-                                                  .parallelStream()
-                                                  .map(key -> query(key, queryEndpoint))
-                                                  .count();
-            if (txnsFinalized > 0) {
-                log.info("Finalized: {}", txnsFinalized);
+            final List<String> toQuery = unfinalized.keySet().stream().collect(Collectors.toList());
+            final Boolean[] txnsFinalized = query(toQuery.toArray(new String[toQuery.size()]), queryEndpoint);
+            int finalized = 0;
+            for (Boolean r : txnsFinalized) {
+                if (r) {
+                    finalized++;
+                }
+            }
+            if (finalized > 0) {
+                log.info("Finalized: {}", finalized);
             }
         };
     }

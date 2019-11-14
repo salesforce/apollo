@@ -8,6 +8,8 @@
 package com.salesforce.apollo.avalanche;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executors;
 
@@ -18,6 +20,7 @@ import org.mapdb.HTreeMap;
 import org.mapdb.Serializer;
 
 import com.google.common.collect.Sets;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hhildebrand
@@ -28,9 +31,9 @@ public class DagWood {
 
     public static class DagWoodParameters {
 
+        public int  expireThreads = 5;
         public long maxCache      = 50_000;
         public File store         = new File("dagwood.store");
-        public int  expireThreads = 5;
 
     }
 
@@ -70,14 +73,21 @@ public class DagWood {
         dbDisk.getStore().fileLoad();
     }
 
-    public void close() {
-        dbDisk.close();
-        dbMemory.close();
-        wood.close();
+    public List<HashKey> allFinalized() {
+        List<HashKey> all = new ArrayList<>();
+        cache.keySet().forEach(e -> all.add(new HashKey(e)));
+        wood.keySet().forEach(e -> all.add(new HashKey(e)));
+        return all;
     }
 
     public boolean cacheContainsKey(byte[] key) {
         return cache.containsKey(key);
+    }
+
+    public void close() {
+        dbDisk.close();
+        dbMemory.close();
+        wood.close();
     }
 
     public boolean containsKey(byte[] key) {

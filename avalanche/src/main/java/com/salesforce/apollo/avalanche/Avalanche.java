@@ -131,13 +131,13 @@ public class Avalanche {
             }
             return dag.getEntries(want.stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
         }
-    } 
+    }
+
     private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
 
     private final AvalancheCommunications                    comm;
     private final WorkingSet                                 dag;
     private final ExecutorService                            finalizer;
-    private final int                                        roundsToComplete;
     private final AtomicBoolean                              generateNoOps       = new AtomicBoolean();
     private final int                                        invalidThreshold;
     private final AvaMetrics                                 metrics;
@@ -150,6 +150,7 @@ public class Avalanche {
     private final RandomMemberGenerator                      querySampler;
     private final int                                        required;
     private final AtomicInteger                              round               = new AtomicInteger();
+    private final int                                        roundsToComplete;
     private final AtomicBoolean                              running             = new AtomicBoolean();
     private final Service                                    service             = new Service();
     private final View                                       view;
@@ -169,7 +170,7 @@ public class Avalanche {
         parameters = p;
         this.view = view;
         this.comm = communications;
-        comm.initialize(this); 
+        comm.initialize(this);
         this.dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), metrics);
         roundsToComplete = view.getDiameter() * view.getParameters().toleranceLevel + 1;
 
@@ -181,7 +182,7 @@ public class Avalanche {
             if (round.get() % roundsToComplete == 0) {
                 dag.purgeNoOps();
             }
-        }); 
+        });
 
         querySampler = new RandomMemberGenerator(view);
         wantedSampler = new RandomMemberGenerator(view);
@@ -228,7 +229,6 @@ public class Avalanche {
                                  System.currentTimeMillis());
         pendingTransactions.put(key, new PendingTransaction(futureSailor,
                 scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
-        flood(dagEntry);
         return futureSailor;
     }
 
@@ -283,6 +283,10 @@ public class Avalanche {
         pendingTransactions.values().clear();
     }
 
+    public HashKey submitTransaction(HASH description, byte[] data) {
+        return submitTransaction(description, data, null, null, null);
+    }
+
     /**
      * Submit a transaction to the group.
      * 
@@ -291,8 +295,8 @@ public class Avalanche {
      * @param future  - optional future to be notified of finalization
      * @return the HASH of the transaction, null if invalid
      */
-    public HASH submitTransaction(HASH description, byte[] data, Duration timeout, CompletableFuture<HashKey> future,
-                                  ScheduledExecutorService scheduler) {
+    public HashKey submitTransaction(HASH description, byte[] data, Duration timeout, CompletableFuture<HashKey> future,
+                                     ScheduledExecutorService scheduler) {
         if (!running.get()) {
             throw new IllegalStateException("Service is not running");
         }
@@ -328,8 +332,7 @@ public class Avalanche {
                 metrics.getSubmissionRate().mark();
                 metrics.getInputRate().mark();
             }
-            flood(dagEntry);
-            return key.toHash();
+            return key;
         } finally {
             if (timer != null) {
                 timer.close();
@@ -381,10 +384,6 @@ public class Avalanche {
         });
         log.debug("Finalizing: {}, deleting: {} in {} ms", finalized.finalized.size(), finalized.deleted.size(),
                   System.currentTimeMillis() - then);
-    }
-
-    void flood(DagEntry dagEntry) {
-//        view.publish(AVALANCHE_TXN_FLOOD_CHANNEL, serialize(dagEntry));
     }
 
     /**

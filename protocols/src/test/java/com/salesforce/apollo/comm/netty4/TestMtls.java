@@ -58,8 +58,8 @@ public class TestMtls {
 
         SpecificRequestor requestor = new SpecificRequestor(Apollo.PROTOCOL, transceiver, SpecificData.get());
         Apollo client = SpecificRequestor.getClient(Apollo.class, requestor);
-        for (int i = 0; i < 1000000; i++) 
-        assertEquals(110, client.ping(0));
+        for (int i = 0; i < 10000; i++)
+            assertEquals(110, client.ping(0));
 
         transceiver.close();
         server.close();

@@ -19,7 +19,6 @@ import java.util.Base64.Decoder;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
@@ -62,7 +61,7 @@ public class ClusterTesting {
 
         final WebTarget endpoint = client.target(new URL("http", LOAD_BALANCER, 8080, "/").toURI());
 
-        smokeLoad(Duration.ofSeconds(200), endpoint, Duration.ofMillis(100), 200, Duration.ofSeconds(1), 10,
+        smokeLoad(Duration.ofSeconds(120), endpoint, Duration.ofMillis(100), 200, Duration.ofSeconds(1), 10,
                   Duration.ofMillis(20));
     }
 
@@ -115,7 +114,7 @@ public class ClusterTesting {
         MetricRegistry registry = new MetricRegistry();
         Transactioneer t = new Transactioneer(registry);
         final WebTarget submitEndpoint = endpoint.path("api/byteTransaction/submitAsync");
-        final WebTarget queryEndpoint = endpoint.path("api/dag/fetch");
+        final WebTarget queryEndpoint = endpoint.path("api/dag/queryAllFinalized");
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(3);
         ConsoleReporter.forRegistry(registry)
                        .convertRatesTo(TimeUnit.SECONDS)
@@ -134,7 +133,7 @@ public class ClusterTesting {
 
         final long testDuration = System.currentTimeMillis() - then;
 
-        int tps = (int) (t.getFinalized().size() / testDuration);
+        int tps = (int) (t.getFinalized().size() / (testDuration / 1000));
 
         log.info("Finalized {} in {} ms ({} TPS) ({} unfinalized)}", t.getFinalized().size(), testDuration, tps,
                  t.getUnfinalized().size());
@@ -146,16 +145,16 @@ public class ClusterTesting {
                        .convertDurationsTo(TimeUnit.MILLISECONDS)
                        .build()
                        .report();
-        AtomicInteger count = new AtomicInteger();
-        t.getUnfinalized().forEach(txn -> {
-            System.out.print(txn);
-            final int current = count.incrementAndGet();
-            if (current % 8 == 0) {
-                System.out.println();
-            } else {
-                System.out.print(", ");
-            }
-        });
+//        AtomicInteger count = new AtomicInteger();
+//        t.getUnfinalized().forEach(txn -> {
+//            System.out.print(txn);
+//            final int current = count.incrementAndGet();
+//            if (current % 8 == 0) {
+//                System.out.println();
+//            } else {
+//                System.out.print(", ");
+//            }
+//        });
     }
 
     private void smokeSyncApi(WebTarget endpoint) throws Exception {

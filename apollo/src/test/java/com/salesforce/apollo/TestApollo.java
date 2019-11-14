@@ -27,7 +27,6 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -136,7 +135,7 @@ public class TestApollo {
 
         long now = System.currentTimeMillis();
         List<Transactioneer> transactioneers = new ArrayList<>();
-        HASH k = genesisKey.toHash();
+        HashKey k = genesisKey;
         for (Apollo o : oracles) {
             assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
                        Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)));

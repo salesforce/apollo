@@ -7,8 +7,10 @@
 package com.salesforce.apollo.web.resources;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Base64.Encoder;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -35,9 +37,10 @@ public class ByteTransactionApi {
         private static final Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
 
         public String encoded;
-        public int timeoutMillis;
+        public int    timeoutMillis;
 
-        public ByteTransaction() {}
+        public ByteTransaction() {
+        }
 
         public ByteTransaction(int timeoutMillis, byte[] content) {
             this(timeoutMillis, new String(ENCODER.encode(content)));
@@ -52,10 +55,11 @@ public class ByteTransactionApi {
 
     public static class TransactionResult {
         public boolean error;
-        public String errorMessage;
-        public String result;
+        public String  errorMessage;
+        public String  result;
 
-        public TransactionResult() {}
+        public TransactionResult() {
+        }
 
         public TransactionResult(HashKey result) {
             this(new String(Base64.getUrlEncoder().withoutPadding().encode(result.bytes())));
@@ -72,7 +76,7 @@ public class ByteTransactionApi {
         }
     }
 
-    private final Avalanche avalanche;
+    private final Avalanche                avalanche;
     private final ScheduledExecutorService scheduler;
 
     public ByteTransactionApi(Avalanche avalanche, ScheduledExecutorService scheduler) {
@@ -87,18 +91,16 @@ public class ByteTransactionApi {
     @Produces(MediaType.APPLICATION_JSON)
     public TransactionResult submit(ByteTransaction transaction) {
         if (transaction.encoded == null) {
-            throw new WebApplicationException(Response.status(Status.BAD_REQUEST)
-                                                      .entity("Encoded transaction content cannot be null")
-                                                      .build());
+            throw new WebApplicationException(
+                    Response.status(Status.BAD_REQUEST).entity("Encoded transaction content cannot be null").build());
         }
 
         byte[] data;
         try {
             data = Base64.getDecoder().decode(transaction.encoded);
         } catch (IllegalArgumentException e) {
-            throw new WebApplicationException(Response.status(Status.BAD_REQUEST)
-                                                      .entity("Cannot decode B64 url encoded content")
-                                                      .build());
+            throw new WebApplicationException(
+                    Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
         }
 
         CompletableFuture<HashKey> submitted = avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
@@ -119,32 +121,56 @@ public class ByteTransactionApi {
     }
 
     @POST()
+    @Path("submitAll")
+    @Timed
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public String[] submitAll(ByteTransaction[] transactions) {
+        List<String> result = new ArrayList<>();
+        for (ByteTransaction transaction : transactions) {
+            if (transaction.encoded == null) {
+                throw new WebApplicationException(Response.status(Status.BAD_REQUEST)
+                                                          .entity("Encoded transaction content cannot be null")
+                                                          .build());
+            }
+
+            byte[] data;
+            try {
+                data = Base64.getDecoder().decode(transaction.encoded);
+            } catch (IllegalArgumentException e) {
+                throw new WebApplicationException(
+                        Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
+            }
+            result.add(Base64.getUrlEncoder()
+                             .withoutPadding()
+                             .encodeToString(avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
+                                                                         data)
+                                                      .bytes()));
+        }
+        return result.toArray(new String[result.size()]);
+    }
+
+    @POST()
     @Path("submitAsync")
     @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     public String submitAsync(ByteTransaction transaction) {
         if (transaction.encoded == null) {
-            throw new WebApplicationException(Response.status(Status.BAD_REQUEST)
-                                                      .entity("Encoded transaction content cannot be null")
-                                                      .build());
+            throw new WebApplicationException(
+                    Response.status(Status.BAD_REQUEST).entity("Encoded transaction content cannot be null").build());
         }
 
         byte[] data;
         try {
             data = Base64.getDecoder().decode(transaction.encoded);
         } catch (IllegalArgumentException e) {
-            throw new WebApplicationException(Response.status(Status.BAD_REQUEST)
-                                                      .entity("Cannot decode B64 url encoded content")
-                                                      .build());
+            throw new WebApplicationException(
+                    Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
         }
 
         return Base64.getUrlEncoder()
                      .withoutPadding()
-                     .encodeToString(avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
-                                                                      data,
-                                                                      Duration.ofMillis(transaction.timeoutMillis),
-                                                                      null,
-                                                                      scheduler)
+                     .encodeToString(avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), data)
                                               .bytes());
     }
 

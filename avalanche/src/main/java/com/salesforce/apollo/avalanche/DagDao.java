@@ -7,8 +7,9 @@
 
 package com.salesforce.apollo.avalanche;
 
+import java.util.List;
+
 import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -17,18 +18,22 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hhildebrand
  */
 public class DagDao {
-    private final WorkingSet dag; 
+    private final WorkingSet dag;
 
     public DagDao(WorkingSet dag) {
-        this.dag = dag; 
+        this.dag = dag;
     }
 
-    public DagEntry get(HASH key) {
-        return dag.getDagEntry(new HashKey(key));
+    public DagEntry get(HashKey key) {
+        return dag.getDagEntry(key);
     }
 
-    public Boolean isFinalized(HASH hash) {
-        return dag.isFinalized(new HashKey(hash));
+    public Boolean isFinalized(HashKey hash) {
+        return dag.isFinalized(hash);
+    }
+
+    public List<HashKey> allFinalized() {
+        return dag.allFinalized();
     }
 
 }
