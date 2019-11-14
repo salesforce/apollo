@@ -727,16 +727,23 @@ public class WorkingSet {
     }
 
     public Collection<byte[]> finalized() {
-        List<byte[]> l = unfinalized.values()
-                                    .stream()
-                                    .filter(node -> node.isFinalized())
-                                    .map(node -> node.getEntry())
-                                    .collect(Collectors.toList());
+        List<byte[]> l = new ArrayList<>();
+        unfinalized.values()
+                   .stream()
+                   .filter(node -> node.isFinalized())
+                   .filter(e -> l.size() < 100)
+                   .map(node -> node.getKey())
+                   .forEach(e -> l.add(e.bytes()));
         if (!l.isEmpty()) {
             return l;
         }
-
-        return finalized.keySet();
+        for (byte[] key : finalized.keySet()) {
+            l.add(key);
+            if (l.size() > 100) {
+                return l;
+            }
+        }
+        return l;
     }
 
     public List<HashKey> frontier(Random entropy) {
@@ -1152,7 +1159,7 @@ public class WorkingSet {
         return exist;
     }
 
-    public List<HashKey> allFinalized() { 
+    public List<HashKey> allFinalized() {
         return finalized.allFinalized();
     }
 }
