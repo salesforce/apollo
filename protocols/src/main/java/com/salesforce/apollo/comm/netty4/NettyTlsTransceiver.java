@@ -362,15 +362,6 @@ public class NettyTlsTransceiver extends Transceiver {
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
             disconnect(false, true, cause.getCause());
-            super.exceptionCaught(ctx, cause);
         }
-
-        @Override
-        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-            log.debug("Remote peer " + remoteAddr + " closed connection.");
-            disconnect(false, true, null);
-            super.channelInactive(ctx);
-        }
-
     }
 }

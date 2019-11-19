@@ -60,11 +60,6 @@ public class AvalancheClientCommunications extends CommonClientCommunications im
         return client.query(transactions, wanted);
     }
 
-    @Override
-    public List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException {
-        return client.requestDAG(want);
-    }
-
     public void add(RPCPlugin plugin) {
         requestor.addRPCPlugin(plugin);
     }

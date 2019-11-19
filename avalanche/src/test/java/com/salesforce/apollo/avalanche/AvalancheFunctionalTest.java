@@ -66,7 +66,7 @@ public class AvalancheFunctionalTest {
 
     @BeforeClass
     public static void beforeClass() {
-        certs = IntStream.range(1, 7)
+        certs = IntStream.range(1, 14)
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
@@ -140,7 +140,7 @@ public class AvalancheFunctionalTest {
             aParams.delta = 1;
 
             AvalancheCommunications comm = new AvalancheNettyCommunications(view.getNode().getId().toString(), rpcStats,
-                    100, 100, 100, 100, 100);
+                    5, 5, 10, 100, 100);
             return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 

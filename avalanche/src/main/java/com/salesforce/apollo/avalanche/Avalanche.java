@@ -120,16 +120,7 @@ public class Avalanche {
                     + transactions.size();
 
             return new QueryResult(queried,
-                    dag.getQuerySerializedEntries(wanted.stream()
-                                                        .map(e -> new HashKey(e))
-                                                        .collect(Collectors.toList())));
-        }
-
-        public List<ByteBuffer> requestDAG(List<HASH> want) {
-            if (!running.get()) {
-                return new ArrayList<>();
-            }
-            return dag.getEntries(want.stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
+                    dag.getEntries(wanted.stream().map(e -> new HashKey(e)).collect(Collectors.toList())));
         }
     }
 
@@ -154,7 +145,6 @@ public class Avalanche {
     private final AtomicBoolean                              running             = new AtomicBoolean();
     private final Service                                    service             = new Service();
     private final View                                       view;
-    private final RandomMemberGenerator                      wantedSampler;
 
     public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p) {
         this(view, communications, p, null, null);
@@ -185,7 +175,6 @@ public class Avalanche {
         });
 
         querySampler = new RandomMemberGenerator(view);
-        wantedSampler = new RandomMemberGenerator(view);
         required = (int) (parameters.k * parameters.alpha);
         invalidThreshold = parameters.k - required - 1;
 
@@ -260,7 +249,6 @@ public class Avalanche {
         int advance = getEntropy().nextInt(50);
         for (int i = 0; i < advance; i++) {
             querySampler.next();
-            wantedSampler.next();
         }
 
         comm.start();
@@ -445,7 +433,9 @@ public class Avalanche {
     int query() {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        Collection<Member> sample = querySampler.sample(parameters.k);
+        List<Member> sample = new ArrayList<>(querySampler.sample(parameters.k));
+        Collections.shuffle(sample, getEntropy());
+
         if (sample.isEmpty()) {
             return 0;
         }
@@ -511,8 +501,6 @@ public class Avalanche {
         log.trace("querying {} txns in {} ms ({} Query) ({} Sample)", unqueried.size(),
                   System.currentTimeMillis() - start, retrieveTime, sampleTime);
 
-        getWanted();
-
         return results.size();
     }
 
@@ -534,9 +522,14 @@ public class Avalanche {
             invalid[i] = new AtomicInteger();
             votes[i] = new AtomicInteger();
         }
+        List<HASH> want = dag.getWanted(getEntropy()).stream().map(e -> e.toHash()).collect(Collectors.toList());
+        if (want.size() > 0 && metrics != null) {
+            metrics.getWantedRate().mark(want.size());
+        }
 
         CompletionService<Boolean> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
         List<Future<Boolean>> futures;
+        AtomicBoolean isWanted = new AtomicBoolean(true);
         futures = sample.stream().map(m -> frist.submit(() -> {
             QueryResult result;
             AvalancheClientCommunications connection = comm.connectToNode(m, getNode());
@@ -548,7 +541,7 @@ public class Avalanche {
                 return false;
             }
             try {
-                result = connection.query(batch, Collections.emptyList());
+                result = connection.query(batch, isWanted.compareAndSet(true, false) ? want : Collections.emptyList());
             } catch (AvroRemoteException e) {
                 for (int i = 0; i < batch.size(); i++) {
                     invalid[i].incrementAndGet();
@@ -559,6 +552,10 @@ public class Avalanche {
                 connection.close();
             }
             log.trace("queried: {} for: {} result: {}", m, batch.size(), result.getResult());
+            dag.insertSerialized(result.getWanted(), System.currentTimeMillis());
+            if (want.size() > 0 && metrics != null) {
+                metrics.getSatisfiedRate().mark(want.size());
+            }
             if (result.getResult().isEmpty()) {
                 for (int i = 0; i < batch.size(); i++) {
                     invalid[i].incrementAndGet();
@@ -674,44 +671,6 @@ public class Avalanche {
 
     private SecureRandom getEntropy() {
         return getNode().getParameters().entropy;
-    }
-
-    private void getWanted() {
-        List<HashKey> want = dag.getWanted(getEntropy());
-        if (want.isEmpty()) {
-            return;
-        }
-
-        if (metrics != null) {
-            metrics.getWantedRate().mark(want.size());
-        }
-
-        Member next = wantedSampler.next();
-        if (next == null) {
-            return;
-        }
-
-        AvalancheClientCommunications connection = comm.connectToNode(next, getNode());
-        if (connection == null) {
-            return;
-        }
-
-        List<ByteBuffer> requested;
-        try {
-            requested = connection.requestDAG(want.stream().map(e -> e.toHash()).collect(Collectors.toList()));
-        } catch (AvroRemoteException e) {
-            log.info("error getting wanted from {} ", next);
-            return;
-        }
-
-        if (metrics != null) {
-            metrics.getSatisfiedRate().mark(requested.size());
-        }
-
-        if (requested.isEmpty()) {
-            return;
-        }
-        dag.insertSerialized(requested, System.currentTimeMillis());
     }
 
     private void initializeProcessors(ClassLoader resolver) {
