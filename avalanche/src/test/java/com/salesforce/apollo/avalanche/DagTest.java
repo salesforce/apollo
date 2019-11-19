@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 import org.junit.After;
@@ -59,9 +58,7 @@ public class DagTest {
     @Before
     public void before() throws SQLException {
         entropy = new Random(0x666);
-        final AvalancheParameters parameters = new AvalancheParameters();
-        parameters.dagWood.store = new File(baseDir, UUID.randomUUID().toString());
-        parameters.dagWood.store.deleteOnExit();
+        final AvalancheParameters parameters = new AvalancheParameters(); 
         workingSet = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
         root = new DagEntry();
         root.setDescription(WellKnownDescriptions.GENESIS.toHash());

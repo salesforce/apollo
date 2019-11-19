@@ -90,8 +90,6 @@ public class TestApollo {
             config.avalanche.k = 3;
             config.avalanche.beta1 = 3;
             config.avalanche.beta2 = 5;
-            config.avalanche.dagWood.store = new File(baseDir, i + ".store");
-            config.avalanche.dagWood.store.deleteOnExit();
             config.gossipInterval = Duration.ofMillis(100);
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             ApolloConfiguration.FileIdentitySource ks = new ApolloConfiguration.FileIdentitySource();

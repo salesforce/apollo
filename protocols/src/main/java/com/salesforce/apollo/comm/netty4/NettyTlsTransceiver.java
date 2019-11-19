@@ -22,13 +22,11 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.avro.Protocol;
 import org.apache.avro.ipc.CallFuture;
@@ -56,70 +54,39 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.compression.FastLzFrameDecoder;
 import io.netty.handler.codec.compression.FastLzFrameEncoder;
 import io.netty.handler.ssl.SslContext;
+import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
  * A Netty-based TLS {@link Transceiver} implementation.
  */
 public class NettyTlsTransceiver extends Transceiver {
-    /** If not specified, the default connection timeout will be used (60 sec). */
-    public static final long    DEFAULT_CONNECTION_TIMEOUT_MILLIS = 2 * 1000L;
-    public static final String  NETTY_CONNECT_TIMEOUT_OPTION      = "connectTimeoutMillis";
-    public static final String  NETTY_TCP_NODELAY_OPTION          = "tcpNoDelay";
-    public static final String  NETTY_KEEPALIVE_OPTION            = "keepAlive";
-    public static final boolean DEFAULT_TCP_NODELAY_VALUE         = true;
 
     private static final Logger log = LoggerFactory.getLogger(NettyTlsTransceiver.class.getName());
 
     private final AtomicInteger                            serialGenerator = new AtomicInteger(0);
     private final Map<Integer, Callback<List<ByteBuffer>>> requests        = new ConcurrentHashMap<Integer, Callback<List<ByteBuffer>>>();
 
-    private final long              connectTimeoutMillis;
     private final Bootstrap         bootstrap;
     private final InetSocketAddress remoteAddr;
-    volatile ChannelFuture          channelFuture;
     volatile boolean                stopping;
-    private final Object            channelFutureLock = new Object();
 
-    /**
-     * Read lock must be acquired whenever using non-final state. Write lock must be
-     * acquired whenever modifying state.
-     */
-    private final ReentrantReadWriteLock stateLock = new ReentrantReadWriteLock();
-    private Channel                      channel;                                 // Synchronized on stateLock
-    private Protocol                     remote;                                  // Synchronized on stateLock
+    private final Channel     channel; // Synchronized on stateLock
+    private volatile Protocol remote;  // Synchronized on stateLock
 
     NettyTlsTransceiver() {
-        connectTimeoutMillis = 0L;
         bootstrap = null;
         remoteAddr = null;
-        channelFuture = null;
+        channel = null;
     }
 
-    /**
-     * Creates a NettyTransceiver, and attempts to connect to the given address.
-     * {@link #DEFAULT_CONNECTION_TIMEOUT_MILLIS} is used for the connection
-     * timeout.
-     * 
-     * @param addr       the address to connect to.
-     * @param eventGroup
-     * @throws IOException if an error occurs connecting to the given address.
-     */
-    public NettyTlsTransceiver(InetSocketAddress addr, SslContext sslContext, EventLoopGroup eventGroup)
-            throws IOException {
-        this(addr, buildDefaultBootstrapOptions(null), sslContext, eventGroup);
-    }
-
-    public NettyTlsTransceiver(InetSocketAddress addr, Map<String, Object> nettyClientBootstrapOptions,
-            SslContext sslCtx, EventLoopGroup group) throws IOException {
-        this.connectTimeoutMillis = (Long) nettyClientBootstrapOptions.get(NETTY_CONNECT_TIMEOUT_OPTION);
+    public NettyTlsTransceiver(InetSocketAddress addr, SslContext sslCtx, EventLoopGroup group,
+            EventExecutorGroup executor) throws IOException {
 
         bootstrap = new Bootstrap();
         bootstrap.group(group)
-                 .option(ChannelOption.TCP_NODELAY, true)
                  .option(ChannelOption.SO_KEEPALIVE, true)
                  .option(ChannelOption.TCP_NODELAY, true)
                  .option(ChannelOption.SO_REUSEADDR, true)
-                 .option(ChannelOption.SO_KEEPALIVE, true)
                  .option(ChannelOption.SO_LINGER, 0)
                  .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 30_000)
                  .channel(NioSocketChannel.class)
@@ -135,44 +102,26 @@ public class NettyTlsTransceiver extends Transceiver {
                                  .addLast(new FastLzFrameEncoder())
                                  .addLast("frameDecoder", new NettyFrameDecoder())
                                  .addLast("frameEncoder", new NettyFrameEncoder())
-                                 .addLast("handler", new NettyClientAvroHandler());
+                                 .addLast(executor, "handler", new NettyClientAvroHandler());
                      }
                  });
 
         remoteAddr = addr;
 
-        // Make a new connection.
-        stateLock.readLock().lock();
+        log.debug("Connecting to " + remoteAddr);
+        ChannelFuture channelFuture = bootstrap.connect(remoteAddr);
         try {
-            getChannel();
-        } finally {
-            stateLock.readLock().unlock();
+            channelFuture.await(3_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // Reset interrupt flag
+            throw new IOException("Interrupted while connecting to " + remoteAddr);
         }
-    }
 
-    /**
-     * Creates the default options map for the Netty ClientBootstrap.
-     * 
-     * @param connectTimeoutMillis connection timeout in milliseconds, or null if no
-     *                             timeout is desired.
-     * @return the map of Netty bootstrap options.
-     */
-    protected static Map<String, Object> buildDefaultBootstrapOptions(Long connectTimeoutMillis) {
-        Map<String, Object> options = new HashMap<String, Object>(3);
-        options.put(NETTY_TCP_NODELAY_OPTION, DEFAULT_TCP_NODELAY_VALUE);
-        options.put(NETTY_KEEPALIVE_OPTION, true);
-        options.put(NETTY_CONNECT_TIMEOUT_OPTION,
-                    connectTimeoutMillis == null ? DEFAULT_CONNECTION_TIMEOUT_MILLIS : connectTimeoutMillis);
-        return options;
-    }
+        if (!channelFuture.isSuccess()) {
+            throw new IOException("Error connecting to " + remoteAddr, channelFuture.cause());
+        }
+        channel = channelFuture.channel();
 
-    /**
-     * Tests whether the given channel is ready for writing.
-     * 
-     * @return true if the channel is open and ready; false otherwise.
-     */
-    private static boolean isChannelReady(Channel channel) {
-        return (channel != null) && channel.isOpen() && channel.isRegistered() && channel.isActive();
     }
 
     /**
@@ -184,42 +133,6 @@ public class NettyTlsTransceiver extends Transceiver {
      * @throws IOException if an error occurs connecting the channel.
      */
     private Channel getChannel() throws IOException {
-        if (!isChannelReady(channel)) {
-            // Need to reconnect
-            // Upgrade to write lock
-            stateLock.readLock().unlock();
-            stateLock.writeLock().lock();
-            try {
-                if (!isChannelReady(channel)) {
-                    synchronized (channelFutureLock) {
-                        if (!stopping) {
-                            log.debug("Connecting to " + remoteAddr);
-                            channelFuture = bootstrap.connect(remoteAddr);
-                        }
-                    }
-                    if (channelFuture != null) {
-                        try {
-                            channelFuture.await(connectTimeoutMillis);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt(); // Reset interrupt flag
-                            throw new IOException("Interrupted while connecting to " + remoteAddr);
-                        }
-
-                        synchronized (channelFutureLock) {
-                            if (!channelFuture.isSuccess()) {
-                                throw new IOException("Error connecting to " + remoteAddr, channelFuture.cause());
-                            }
-                            channel = channelFuture.channel();
-                            channelFuture = null;
-                        }
-                    }
-                }
-            } finally {
-                // Downgrade to read lock:
-                stateLock.readLock().lock();
-                stateLock.writeLock().unlock();
-            }
-        }
         return channel;
     }
 
@@ -234,47 +147,21 @@ public class NettyTlsTransceiver extends Transceiver {
      *                              this Throwable will be passed to all Callbacks.
      */
     private void disconnect(boolean awaitCompletion, boolean cancelPendingRequests, Throwable cause) {
-        Channel channelToClose = null;
         Map<Integer, Callback<List<ByteBuffer>>> requestsToCancel = null;
-        boolean stateReadLockHeld = stateLock.getReadHoldCount() != 0;
 
-        ChannelFuture channelFutureToCancel = null;
-        synchronized (channelFutureLock) {
-            if (stopping && channelFuture != null) {
-                channelFutureToCancel = channelFuture;
-                channelFuture = null;
+        if (channel != null) {
+            if (cause != null) {
+                log.debug("Disconnecting from " + remoteAddr, cause);
+            } else {
+                log.debug("Disconnecting from " + remoteAddr);
             }
-        }
-        if (channelFutureToCancel != null) {
-            channelFutureToCancel.cancel(true);
-        }
-
-        if (stateReadLockHeld) {
-            stateLock.readLock().unlock();
-        }
-        stateLock.writeLock().lock();
-        try {
-            if (channel != null) {
-                if (cause != null) {
-                    log.debug("Disconnecting from " + remoteAddr, cause);
-                } else {
-                    log.debug("Disconnecting from " + remoteAddr);
-                }
-                channelToClose = channel;
-                channel = null;
-                remote = null;
-                if (cancelPendingRequests) {
-                    // Remove all pending requests (will be canceled after relinquishing
-                    // write lock).
-                    requestsToCancel = new ConcurrentHashMap<Integer, Callback<List<ByteBuffer>>>(requests);
-                    requests.clear();
-                }
+            remote = null;
+            if (cancelPendingRequests) {
+                // Remove all pending requests (will be canceled after relinquishing
+                // write lock).
+                requestsToCancel = new ConcurrentHashMap<Integer, Callback<List<ByteBuffer>>>(requests);
+                requests.clear();
             }
-        } finally {
-            if (stateReadLockHeld) {
-                stateLock.readLock().lock();
-            }
-            stateLock.writeLock().unlock();
         }
 
         // Cancel any pending requests by sending errors to the callbacks:
@@ -291,22 +178,18 @@ public class NettyTlsTransceiver extends Transceiver {
         }
 
         // Close the channel:
-        if (channelToClose != null) {
-            log.debug("Closing {}", channelToClose);
-            ChannelFuture closeFuture = channelToClose.close();
-            if (awaitCompletion && (closeFuture != null)) {
-                try {
-                    closeFuture.await(connectTimeoutMillis);
-                    closeFuture.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    Thread.currentThread().interrupt(); // Reset interrupt flag
-                    log.warn("Interrupted while disconnecting", e);
-                }
+        log.debug("Closing {}", channel);
+        ChannelFuture closeFuture = channel.close();
+        if (awaitCompletion && (closeFuture != null)) {
+            try {
+                closeFuture.await(3_000);
+                closeFuture.get();
+            } catch (InterruptedException | ExecutionException e) {
+                Thread.currentThread().interrupt(); // Reset interrupt flag
+                log.warn("Interrupted while disconnecting", e);
             }
-            log.debug("Closed {}", channelToClose);
-        } else {
-            log.debug("no channel to close");
         }
+        log.debug("Closed {}", channel);
     }
 
     /**
@@ -374,30 +257,27 @@ public class NettyTlsTransceiver extends Transceiver {
 
     @Override
     public void transceive(List<ByteBuffer> request, Callback<List<ByteBuffer>> callback) throws IOException {
-        stateLock.readLock().lock();
+        int serial = serialGenerator.incrementAndGet();
+        NettyDataPack dataPack = new NettyDataPack(serial, request);
+        requests.put(serial, callback);
         try {
-            int serial = serialGenerator.incrementAndGet();
-            NettyDataPack dataPack = new NettyDataPack(serial, request);
-            requests.put(serial, callback);
-            try {
-                writeDataPack(dataPack).get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IOException(e);
+            writeDataPack(dataPack).get();
+        } catch (InterruptedException e) {
+            throw new IOException(e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof IOException) {
+                throw (IOException) cause;
+            } else {
+                throw new IllegalStateException(e);
             }
-        } finally {
-            stateLock.readLock().unlock();
         }
     }
 
     @Override
     public void writeBuffers(List<ByteBuffer> buffers) throws IOException {
         ChannelFuture writeFuture;
-        stateLock.readLock().lock();
-        try {
-            writeFuture = writeDataPack(new NettyDataPack(serialGenerator.incrementAndGet(), buffers));
-        } finally {
-            stateLock.readLock().unlock();
-        }
+        writeFuture = writeDataPack(new NettyDataPack(serialGenerator.incrementAndGet(), buffers));
 
         if (!writeFuture.isDone()) {
             try {
@@ -435,32 +315,18 @@ public class NettyTlsTransceiver extends Transceiver {
 
     @Override
     public Protocol getRemote() {
-        stateLock.readLock().lock();
-        try {
-            return remote;
-        } finally {
-            stateLock.readLock().unlock();
-        }
+        return remote;
     }
 
     @Override
     public boolean isConnected() {
-        stateLock.readLock().lock();
-        try {
-            return remote != null;
-        } finally {
-            stateLock.readLock().unlock();
-        }
+        final Protocol current = remote;
+        return current != null;
     }
 
     @Override
     public void setRemote(Protocol protocol) {
-        stateLock.writeLock().lock();
-        try {
-            this.remote = protocol;
-        } finally {
-            stateLock.writeLock().unlock();
-        }
+        this.remote = protocol;
     }
 
     /**

@@ -312,6 +312,7 @@ public class Avalanche {
             parents.add(parent);
         }
         if (parents.isEmpty()) {
+            log.info("No parents available for txn");
             if (future != null) {
                 future.completeExceptionally(new IllegalStateException("No parents available for transaction"));
             }
@@ -626,7 +627,7 @@ public class Avalanche {
             if (generateNoOps.compareAndSet(true, false)) {
                 generateNoOpTxns();
             } else {
-                Thread.sleep(1);
+                Thread.sleep(getEntropy().nextInt(200));
             }
         } catch (Throwable t) {
             log.error("Error performing Avalanche batch round", t);

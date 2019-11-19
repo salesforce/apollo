@@ -36,6 +36,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.concurrent.DefaultEventExecutorGroup;
+import io.netty.util.concurrent.EventExecutorGroup;
 
 abstract public class CommonNettyCommunications {
     public static List<String>    CIPHERS = new ArrayList<>();
@@ -55,7 +57,6 @@ abstract public class CommonNettyCommunications {
         return SslContextBuilder.forClient()
                                 .protocols(TL_SV1_2)
                                 .ciphers(CIPHERS)
-                                // .sslContextProvider(JSSE_PROVIDER)
                                 .keyManager(node.getKeyManagerFactory())
                                 .trustManager(node.getTrustManagerFactory())
                                 .sessionCacheSize(100)
@@ -66,7 +67,6 @@ abstract public class CommonNettyCommunications {
         return SslContextBuilder.forServer(node.getKeyManagerFactory())
                                 .protocols(TL_SV1_2)
                                 .ciphers(CIPHERS)
-                                // .sslContextProvider(JSSE_PROVIDER)
                                 .trustManager(node.getTrustManagerFactory())
                                 .sessionCacheSize(100)
                                 .sessionTimeout(10);
@@ -102,6 +102,8 @@ abstract public class CommonNettyCommunications {
 
     protected final EventLoopGroup                  bossGroup;
     protected final EventLoopGroup                  clientGroup;
+    protected final EventExecutorGroup              inboundExecutor;
+    protected final EventExecutorGroup              outboundExecutor;
     protected final Set<CommonClientCommunications> openOutbound = Collections.newSetFromMap(new ConcurrentHashMap<>());
     protected final RPCPlugin                       stats;
     protected final EventLoopGroup                  workerGroup;
@@ -109,25 +111,29 @@ abstract public class CommonNettyCommunications {
     private volatile MtlsServer                     server;
 
     public CommonNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
-            EventLoopGroup workerGroup) {
+            EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor) {
         this.stats = stats;
         this.clientGroup = clientGroup;
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
+        this.inboundExecutor = inboundExecutor;
+        this.outboundExecutor = outboundExecutor;
     }
 
     public CommonNettyCommunications(String label) {
-        this(label, 10, 10, 10);
+        this(label, 10, 10, 10, 10, 10);
     }
 
-    public CommonNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads) {
-        this(label, null, clientThreads, bossThreads, workerThreads);
+    public CommonNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
+            int inboundExecutorThreads, int outboundExecutorThreads) {
+        this(label, null, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
     }
 
     public CommonNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
-            int workerThreads) {
+            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads) {
         this(stats, newClientGroup(label, clientThreads), newBossGroup(label, bossThreads),
-                newWorkerGroup(label, workerThreads));
+                newWorkerGroup(label, workerThreads), new DefaultEventExecutorGroup(inboundExecutorThreads),
+                new DefaultEventExecutorGroup(outboundExecutorThreads));
     }
 
     public void close() {
@@ -188,7 +194,7 @@ abstract public class CommonNettyCommunications {
 
         try {
             return new MtlsServer(endpoint(), sslCtxBuilder().clientAuth(clientAuth()).build(), provider(),
-                    defaultBuiilder(), bossGroup, workerGroup);
+                    defaultBuiilder(), bossGroup, workerGroup, inboundExecutor);
         } catch (SSLException e) {
             throw new IllegalStateException("Unable to construct SslContex", e);
         }

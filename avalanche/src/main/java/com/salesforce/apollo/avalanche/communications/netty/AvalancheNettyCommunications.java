@@ -28,6 +28,7 @@ import com.salesforce.apollo.fireflies.communications.netty.CommonNettyCommunica
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
  * @author hal.hildebrand
@@ -37,37 +38,38 @@ public class AvalancheNettyCommunications extends CommonNettyCommunications impl
     private volatile Avalanche avalanche;
 
     public AvalancheNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
-            EventLoopGroup workerGroup) {
-        super(stats, clientGroup, bossGroup, workerGroup);
-    }
-
-    public AvalancheNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads) {
-        super(label, clientThreads, bossThreads, workerThreads);
-    }
-
-    public AvalancheNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
-            int workerThreads) {
-        super(label, stats, clientThreads, bossThreads, workerThreads);
+            EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor) {
+        super(stats, clientGroup, bossGroup, workerGroup, inboundExecutor, outboundExecutor);
     }
 
     public AvalancheNettyCommunications(String label) {
         super(label);
     }
 
+    public AvalancheNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
+            int inboundExecutorThreads, int outboundExecutorThreads) {
+        super(label, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
+    }
+
+    public AvalancheNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
+            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads) {
+        super(label, stats, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
+    }
+
     @Override
     public AvalancheClientCommunications connectToNode(Member to, Node from) {
         try {
             AvalancheClientCommunications thisOutbound[] = new AvalancheClientCommunications[1];
-            AvalancheClientCommunications outbound = new AvalancheClientCommunications(
-                    new NettyTlsTransceiver(to.getAvalancheEndpoint(), forClient(from).build(), clientGroup) {
+            AvalancheClientCommunications outbound = new AvalancheClientCommunications(new NettyTlsTransceiver(
+                    to.getAvalancheEndpoint(), forClient(from).build(), clientGroup, inboundExecutor) {
 
-                        @Override
-                        public void close() {
-                            openOutbound.remove(thisOutbound[0]);
-                            super.close();
-                        }
+                @Override
+                public void close() {
+                    openOutbound.remove(thisOutbound[0]);
+                    super.close();
+                }
 
-                    }, to);
+            }, to);
             thisOutbound[0] = outbound;
             openOutbound.add(outbound);
             if (stats != null) {
@@ -75,7 +77,11 @@ public class AvalancheNettyCommunications extends CommonNettyCommunications impl
             }
             return outbound;
         } catch (Throwable e) {
-            log.error("Error connecting to {}", to, e);
+            if (log.isDebugEnabled()) {
+                log.error("Error connecting to {}", to, e);
+            } else {
+                log.error("Error connecting to {}: {}", to, e.toString());
+            }
             return null;
         }
     }

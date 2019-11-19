@@ -26,7 +26,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
@@ -65,8 +64,6 @@ public class TransactionsTest {
     public void before() throws Exception {
         entropy = new Random(0x1638);
         parameters = new AvalancheParameters();
-        parameters.dagWood.store = new File(baseDir, UUID.randomUUID().toString());
-        parameters.dagWood.store.deleteOnExit();
         dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
         root = new DagEntry();
         root.setDescription(WellKnownDescriptions.GENESIS.toHash());

@@ -62,26 +62,32 @@ public class ApolloConfiguration {
 
     public static class NettyCommunicationsFactory implements CommunicationsFactory {
 
-        public int avalancheClientThreads = 10;
-        public int avalancheBossThreads   = 10;
-        public int avalancheWorkerThreads = 100;
+        public int avalancheClientThreads           = 10;
+        public int avalancheBossThreads             = 10;
+        public int avalancheWorkerThreads           = 10;
+        public int avalancheInboundExecutorThreads  = 200;
+        public int avalancheOutboundExecutorThreads = 10;
 
-        public int firefliesClientThreads = 10;
-        public int firefliesBossThreads   = 10;
-        public int firefliesWorkerThreads = 10;
+        public int firefliesClientThreads           = 10;
+        public int firefliesBossThreads             = 10;
+        public int firefliesWorkerThreads           = 10;
+        public int firefliesInboundExecutorThreads  = 10;
+        public int firefliesOutboundExecutorThreads = 10;
 
         @Override
         public AvalancheCommunications avalanche(MetricRegistry metrics) {
             return new AvalancheNettyCommunications("Avalanche",
                     metrics == null ? null : new DropWizardStatsPlugin(metrics), avalancheClientThreads,
-                    avalancheBossThreads, avalancheWorkerThreads);
+                    avalancheBossThreads, avalancheWorkerThreads, avalancheInboundExecutorThreads,
+                    avalancheOutboundExecutorThreads);
         }
 
         @Override
         public FirefliesCommunications fireflies(MetricRegistry metrics) {
             return new FirefliesNettyCommunications("Fireflies",
                     metrics == null ? null : new DropWizardStatsPlugin(metrics), firefliesClientThreads,
-                    firefliesBossThreads, firefliesWorkerThreads);
+                    firefliesBossThreads, firefliesWorkerThreads, firefliesInboundExecutorThreads,
+                    firefliesOutboundExecutorThreads);
         }
 
     }

@@ -50,6 +50,7 @@ import io.netty.handler.codec.compression.FastLzFrameDecoder;
 import io.netty.handler.codec.compression.FastLzFrameEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.util.concurrent.EventExecutorGroup;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.concurrent.GlobalEventExecutor;
@@ -62,12 +63,13 @@ public class MtlsServer implements Server {
 
     class AvroHandler extends ChannelInboundHandlerAdapter {
 
-        private final NettyTlsTransceiver connectionMetadata = new NettyTlsTransceiver();
+        private final NettyTlsTransceiver connectionMetadata;
         private volatile Responder        responder;
         private final SSLEngine           sslEngine;
 
         public AvroHandler(SSLEngine sslEngine) {
             this.sslEngine = sslEngine;
+            connectionMetadata = new NettyTlsTransceiver();
         }
 
         @Override
@@ -117,7 +119,7 @@ public class MtlsServer implements Server {
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
             log.warn("Error caught", cause);
             ctx.close();
-            super.exceptionCaught(ctx, cause);
+//            super.exceptionCaught(ctx, cause);
         }
 
         private Responder getResponder(String sessionId) {
@@ -186,7 +188,7 @@ public class MtlsServer implements Server {
 
     public MtlsServer(InetSocketAddress address, SslContext sslCtx,
             Function<X509Certificate, Responder> responderProvider, CacheBuilder<String, Responder> builder,
-            EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
+            EventLoopGroup bossGroup, EventLoopGroup workerGroup, EventExecutorGroup executor) {
         log.debug("Server starting, binding to: {}", address);
         responders = builder.build();
         this.responderProvider = responderProvider;
@@ -220,7 +222,7 @@ public class MtlsServer implements Server {
                                                             pipeline.addLast(new FastLzFrameEncoder());
                                                             pipeline.addLast(new NettyFrameDecoder());
                                                             pipeline.addLast(new NettyFrameEncoder());
-                                                            pipeline.addLast(new AvroHandler(engine));
+                                                            pipeline.addLast(executor, new AvroHandler(engine));
                                                         }
                                                     })
                                                     .bind(address);

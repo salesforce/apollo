@@ -90,7 +90,10 @@ public class DagApi {
     @Produces(MediaType.APPLICATION_JSON)
     @Timed
     public String[] allFinalized() {
-        final List<String> result = dag.allFinalized().stream().map(e -> e.b64Encoded()).collect(Collectors.toList());
+        final List<String> result = dag.allFinalized()
+                                       .stream()
+                                       .map(key -> ENCODER.encodeToString(key.bytes()))
+                                       .collect(Collectors.toList());
         return result.toArray(new String[result.size()]);
     }
 

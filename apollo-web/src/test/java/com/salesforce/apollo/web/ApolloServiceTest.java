@@ -83,7 +83,6 @@ public class ApolloServiceTest {
             config.avalanche.k = 6;
             config.avalanche.beta1 = 3;
             config.avalanche.beta2 = 5;
-            config.avalanche.dagWood.store = new File(baseDir, i + ".store");
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             ApolloConfiguration.ResourceIdentitySource ks = new ApolloConfiguration.ResourceIdentitySource();
             ks.store = PregenPopulation.memberKeystoreResource(i);
@@ -169,8 +168,9 @@ public class ApolloServiceTest {
                                .post(Entity.text(asyncResult));
             return r.getStatus() == 200 && r.readEntity(QueryFinalizedResult.class).isFinalized();
         }));
-        response = client.target(String.format("http://localhost:%d/metrics?pretty=true",
-                                               RULE.getAdminPort())).request().get();
+        response = client.target(String.format("http://localhost:%d/metrics?pretty=true", RULE.getAdminPort()))
+                         .request()
+                         .get();
 
         assertEquals(200, response.getStatus());
         System.out.println(response.readEntity(String.class));

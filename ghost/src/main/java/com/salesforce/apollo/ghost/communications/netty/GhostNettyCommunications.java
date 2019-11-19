@@ -28,6 +28,7 @@ import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
  * @author hal.hildebrand
@@ -37,41 +38,42 @@ public class GhostNettyCommunications extends CommonNettyCommunications implemen
     private volatile Ghost ghost;
 
     public GhostNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
-            EventLoopGroup workerGroup) {
-        super(stats, clientGroup, bossGroup, workerGroup);
-    }
-
-    public GhostNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads) {
-        super(label, clientThreads, bossThreads, workerThreads);
-    }
-
-    public GhostNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
-            int workerThreads) {
-        super(label, stats, clientThreads, bossThreads, workerThreads);
+            EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor) {
+        super(stats, clientGroup, bossGroup, workerGroup, inboundExecutor, outboundExecutor);
     }
 
     public GhostNettyCommunications(String label) {
         super(label);
     }
 
+    public GhostNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
+            int inboundExecutorThreads, int outboundExecutorThreads) {
+        super(label, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
+    }
+
+    public GhostNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
+            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads) {
+        super(label, stats, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
+    }
+
     @Override
     public GhostClientCommunications connect(Member to, Node from) {
         try {
             GhostClientCommunications thisOutbound[] = new GhostClientCommunications[1];
-            GhostClientCommunications outbound = new GhostClientCommunications(
-                    new NettyTlsTransceiver(to.getGhostEndpoint(), forClient(from).build(), clientGroup) {
+            GhostClientCommunications outbound = new GhostClientCommunications(new NettyTlsTransceiver(
+                    to.getGhostEndpoint(), forClient(from).build(), clientGroup, outboundExecutor) {
 
-                        @Override
-                        public void close() {
-                            openOutbound.remove(thisOutbound[0]);
-                            try {
-                                super.close();
-                            } catch (Throwable e) {
-                                log.info("error closing connection to " + to, e);
-                            }
-                        }
+                @Override
+                public void close() {
+                    openOutbound.remove(thisOutbound[0]);
+                    try {
+                        super.close();
+                    } catch (Throwable e) {
+                        log.info("error closing connection to " + to, e);
+                    }
+                }
 
-                    }, to);
+            }, to);
             thisOutbound[0] = outbound;
             openOutbound.add(outbound);
             return outbound;
@@ -87,15 +89,6 @@ public class GhostNettyCommunications extends CommonNettyCommunications implemen
     }
 
     @Override
-    protected Function<X509Certificate, Responder> provider() {
-        return certificate -> {
-            Service service = ghost.getService();
-            SpecificResponder responder = new SpecificResponder(Apollo.class, new GhostServerCommunications(service));
-            return responder;
-        };
-    }
-
-    @Override
     protected ClientAuth clientAuth() {
         return ClientAuth.NONE;
     }
@@ -103,6 +96,15 @@ public class GhostNettyCommunications extends CommonNettyCommunications implemen
     @Override
     protected InetSocketAddress endpoint() {
         return ghost.getNode().getGhostEndpoint();
+    }
+
+    @Override
+    protected Function<X509Certificate, Responder> provider() {
+        return certificate -> {
+            Service service = ghost.getService();
+            SpecificResponder responder = new SpecificResponder(Apollo.class, new GhostServerCommunications(service));
+            return responder;
+        };
     }
 
     @Override

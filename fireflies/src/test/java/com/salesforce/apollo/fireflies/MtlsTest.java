@@ -81,8 +81,8 @@ public class MtlsTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         List<View> views = members.stream()
-                                  .map(node -> new View(node, new FirefliesNettyCommunications(null, 2, 2, 2), seeds,
-                                          scheduler))
+                                  .map(node -> new View(node, new FirefliesNettyCommunications(null, 2, 2, 2, 100, 100),
+                                          seeds, scheduler))
                                   .collect(Collectors.toList());
 
         long then = System.currentTimeMillis();

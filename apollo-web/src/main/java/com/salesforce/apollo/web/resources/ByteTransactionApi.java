@@ -9,6 +9,7 @@ package com.salesforce.apollo.web.resources;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Base64.Decoder;
 import java.util.Base64.Encoder;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -76,6 +77,8 @@ public class ByteTransactionApi {
         }
     }
 
+    private static final Decoder DECODER = Base64.getDecoder();
+
     private final Avalanche                avalanche;
     private final ScheduledExecutorService scheduler;
 
@@ -97,7 +100,7 @@ public class ByteTransactionApi {
 
         byte[] data;
         try {
-            data = Base64.getDecoder().decode(transaction.encoded);
+            data = DECODER.decode(transaction.encoded);
         } catch (IllegalArgumentException e) {
             throw new WebApplicationException(
                     Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
@@ -136,16 +139,17 @@ public class ByteTransactionApi {
 
             byte[] data;
             try {
-                data = Base64.getDecoder().decode(transaction.encoded);
+                data = DECODER.decode(transaction.encoded);
             } catch (IllegalArgumentException e) {
                 throw new WebApplicationException(
                         Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
             }
-            result.add(Base64.getUrlEncoder()
-                             .withoutPadding()
-                             .encodeToString(avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
-                                                                         data)
-                                                      .bytes()));
+            final HashKey key = avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), data);
+            if (key != null) {
+                result.add(Base64.getUrlEncoder().withoutPadding().encodeToString(key.bytes()));
+            } else {
+                result.add(null);
+            }
         }
         return result.toArray(new String[result.size()]);
     }
@@ -162,16 +166,18 @@ public class ByteTransactionApi {
 
         byte[] data;
         try {
-            data = Base64.getDecoder().decode(transaction.encoded);
+            data = DECODER.decode(transaction.encoded);
         } catch (IllegalArgumentException e) {
             throw new WebApplicationException(
                     Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
         }
 
-        return Base64.getUrlEncoder()
-                     .withoutPadding()
-                     .encodeToString(avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), data)
-                                              .bytes());
+        final HashKey key = avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), data);
+        if (key == null) {
+            throw new WebApplicationException(
+                    Response.status(Status.BAD_REQUEST).entity("No parents available for the transaction").build());
+        }
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(key.bytes());
     }
 
 }

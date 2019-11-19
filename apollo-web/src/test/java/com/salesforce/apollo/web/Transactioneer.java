@@ -127,7 +127,7 @@ public class Transactioneer {
 
     private Runnable queryFinalized(WebTarget queryEndpoint) {
         return () -> {
-            log.info("Querying finalized for {}", id);
+            log.trace("Querying finalized for {}", id);
             final List<String> toQuery = unfinalized.keySet().stream().collect(Collectors.toList());
             final Boolean[] txnsFinalized = query(toQuery.toArray(new String[toQuery.size()]), queryEndpoint);
             int finalized = 0;
@@ -137,7 +137,7 @@ public class Transactioneer {
                 }
             }
             if (finalized > 0) {
-                log.info("Finalized: {}", finalized);
+                log.debug("Finalized: {}", finalized);
             }
         };
     }
@@ -157,7 +157,7 @@ public class Transactioneer {
                 submitted++;
             }
             if (submitted > 0) {
-                log.info("Submitted {} txns, {} failed, in {}", submitted, failed, System.currentTimeMillis() - then);
+                log.debug("Submitted {} txns, {} failed, in {}", submitted, failed, System.currentTimeMillis() - then);
             }
         };
     }

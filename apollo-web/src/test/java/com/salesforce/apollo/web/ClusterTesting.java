@@ -12,10 +12,14 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Base64.Decoder;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -57,12 +61,9 @@ public class ClusterTesting {
 
     @Test
     public void loadTest() throws Exception {
-        Client client = ClientBuilder.newClient();
 
-        final WebTarget endpoint = client.target(new URL("http", LOAD_BALANCER, 8080, "/").toURI());
-
-        smokeLoad(Duration.ofSeconds(120), endpoint, Duration.ofMillis(100), 200, Duration.ofSeconds(1), 10,
-                  Duration.ofMillis(20));
+        smokeLoad(200, Duration.ofSeconds(300), Duration.ofMillis(100), 400, Duration.ofSeconds(1), 2,
+                  Duration.ofMillis(15));
     }
 
     @Test
@@ -109,34 +110,50 @@ public class ClusterTesting {
         }));
     }
 
-    private void smokeLoad(Duration duration, WebTarget endpoint, Duration initialDelay, int outstanding,
+    private void smokeLoad(int clientCount, Duration duration, Duration initialDelay, int outstanding,
                            Duration queryInterval, int maxDelta, Duration submitInterval) {
         MetricRegistry registry = new MetricRegistry();
-        Transactioneer t = new Transactioneer(registry);
-        final WebTarget submitEndpoint = endpoint.path("api/byteTransaction/submitAsync");
-        final WebTarget queryEndpoint = endpoint.path("api/dag/queryAllFinalized");
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(3);
+        List<Transactioneer> txneers = new ArrayList<>();
+        for (int i = 0; i < clientCount; i++) {
+            txneers.add(new Transactioneer(registry));
+        }
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(clientCount * 2);
         ConsoleReporter.forRegistry(registry)
                        .convertRatesTo(TimeUnit.SECONDS)
                        .convertDurationsTo(TimeUnit.MILLISECONDS)
                        .build()
                        .start(30, TimeUnit.SECONDS);
 
-        log.info("Starting load test");
+        log.info("Starting load test for {} simulated clients", clientCount);
         long then = System.currentTimeMillis();
-        t.start(scheduler, duration, scheduler, queryInterval, queryEndpoint, scheduler, submitInterval, submitEndpoint,
-                outstanding, initialDelay, maxDelta);
+        txneers.forEach(t -> {
+            Client client = ClientBuilder.newClient();
+            WebTarget endpoint;
+            try {
+                endpoint = client.target(new URL("http", LOAD_BALANCER, 8080, "/").toURI());
+            } catch (MalformedURLException | URISyntaxException e) {
+                throw new IllegalStateException(e);
+            }
+
+            final WebTarget submitEndpoint = endpoint.path("api/byteTransaction/submitAsync");
+            final WebTarget queryEndpoint = endpoint.path("api/dag/queryAllFinalized");
+ 
+            t.start(scheduler, duration, scheduler, queryInterval, queryEndpoint, scheduler, submitInterval,
+                    submitEndpoint, outstanding, initialDelay, maxDelta);
+        });
 
         log.info("Load test started");
 
-        Utils.waitForCondition((int) (duration.toMillis() + 10_000), 1000, () -> t.isFinished());
+        Utils.waitForCondition((int) (duration.toMillis() + 10_000), 1000,
+                               () -> txneers.stream().map(t -> t.isFinished()).filter(e -> !e).count() == 0);
 
         final long testDuration = System.currentTimeMillis() - then;
 
-        int tps = (int) (t.getFinalized().size() / (testDuration / 1000));
+        int tps = (int) (txneers.stream().mapToInt(t -> t.getFinalized().size()).sum() / (testDuration / 1000));
 
-        log.info("Finalized {} in {} ms ({} TPS) ({} unfinalized)}", t.getFinalized().size(), testDuration, tps,
-                 t.getUnfinalized().size());
+        log.info("Finalized {} in {} ms ({} TPS) ({} unfinalized)}",
+                 txneers.stream().mapToInt(t -> t.getFinalized().size()).sum(), testDuration, tps,
+                 txneers.stream().mapToInt(t -> t.getUnfinalized().size()).sum());
 
         System.out.println();
         System.out.print("Final Metrics");

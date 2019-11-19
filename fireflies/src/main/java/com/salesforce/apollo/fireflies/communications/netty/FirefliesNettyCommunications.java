@@ -28,6 +28,7 @@ import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
  * @author hal.hildebrand
@@ -41,37 +42,38 @@ public class FirefliesNettyCommunications extends CommonNettyCommunications impl
     private volatile View view;
 
     public FirefliesNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
-            EventLoopGroup workerGroup) {
-        super(stats, clientGroup, bossGroup, workerGroup);
+            EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor) {
+        super(stats, clientGroup, bossGroup, workerGroup, inboundExecutor, outboundExecutor);
     }
 
     public FirefliesNettyCommunications(String label) {
         super(label);
     }
 
-    public FirefliesNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads) {
-        super(label, clientThreads, bossThreads, workerThreads);
+    public FirefliesNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
+            int inboundExecutorThreads, int outboundExecutorThreads) {
+        super(label, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
     }
 
     public FirefliesNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
-            int workerThreads) {
-        super(label, stats, clientThreads, bossThreads, workerThreads);
+            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads) {
+        super(label, stats, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
     }
 
     @Override
     public FfClientCommunications connectTo(Member to, Node from) {
         try {
             FfClientCommunications thisOutbound[] = new FfClientCommunications[1];
-            FfClientCommunications outbound = new FfClientCommunications(
-                    new NettyTlsTransceiver(to.getFirefliesEndpoint(), forClient(from).build(), clientGroup) {
+            FfClientCommunications outbound = new FfClientCommunications(new NettyTlsTransceiver(
+                    to.getFirefliesEndpoint(), forClient(from).build(), clientGroup, outboundExecutor) {
 
-                        @Override
-                        public void close() {
-                            openOutbound.remove(thisOutbound[0]);
-                            super.close();
-                        }
+                @Override
+                public void close() {
+                    openOutbound.remove(thisOutbound[0]);
+                    super.close();
+                }
 
-                    }, to);
+            }, to);
             thisOutbound[0] = outbound;
             openOutbound.add(outbound);
             return outbound;
