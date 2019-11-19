@@ -53,6 +53,10 @@ import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 import io.github.olivierlemasle.ca.RootCertificate;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.util.concurrent.DefaultEventExecutorGroup;
+import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
  * @author hal.hildebrand
@@ -117,14 +121,17 @@ public class AvalancheFunctionalTest {
 
     @Test
     public void smoke() throws Exception {
-        AvaMetrics avaMetrics = new AvaMetrics(node0Registry);
+        AvaMetrics avaMetrics = new AvaMetrics(node0Registry); 
+        EventLoopGroup eventLoop = new NioEventLoopGroup(20); 
+        EventExecutorGroup executor = new DefaultEventExecutorGroup(30);
+
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
             aParams.dagWood.maxCache = 1_000_000;
 
             // Avalanche protocol parameters
             aParams.alpha = 0.6;
-            aParams.k = 4;
+            aParams.k = 10;
             aParams.beta1 = 3;
             aParams.beta2 = 5;
             // parent selection target for avalanche dag voting
@@ -135,12 +142,13 @@ public class AvalancheFunctionalTest {
             aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
             aParams.maxActiveQueries = 200;
+            aParams.outstandingQueries = 5;
 
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
 
-            AvalancheCommunications comm = new AvalancheNettyCommunications(view.getNode().getId().toString(), rpcStats,
-                    5, 5, 10, 100, 100);
+            AvalancheCommunications comm = new AvalancheNettyCommunications(rpcStats, eventLoop, eventLoop,
+                                                                            eventLoop, executor, executor);
             return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 

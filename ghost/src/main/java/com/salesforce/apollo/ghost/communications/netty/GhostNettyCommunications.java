@@ -27,7 +27,7 @@ import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
 
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslContext;
 import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
@@ -38,42 +38,45 @@ public class GhostNettyCommunications extends CommonNettyCommunications implemen
     private volatile Ghost ghost;
 
     public GhostNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
-            EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor) {
-        super(stats, clientGroup, bossGroup, workerGroup, inboundExecutor, outboundExecutor);
+            EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor,
+            boolean closeOnReply) {
+        super(stats, clientGroup, bossGroup, workerGroup, inboundExecutor, outboundExecutor, closeOnReply);
+    }
+
+    public GhostNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
+            int inboundExecutorThreads, int outboundExecutorThreads, boolean closeOnReply) {
+        super(label, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads,
+                closeOnReply);
+    }
+
+    public GhostNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
+            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads, boolean closeOnReply) {
+        super(label, stats, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads,
+                closeOnReply);
     }
 
     public GhostNettyCommunications(String label) {
         super(label);
     }
 
-    public GhostNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
-            int inboundExecutorThreads, int outboundExecutorThreads) {
-        super(label, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
-    }
-
-    public GhostNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
-            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads) {
-        super(label, stats, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
-    }
-
     @Override
     public GhostClientCommunications connect(Member to, Node from) {
         try {
             GhostClientCommunications thisOutbound[] = new GhostClientCommunications[1];
-            GhostClientCommunications outbound = new GhostClientCommunications(new NettyTlsTransceiver(
-                    to.getGhostEndpoint(), forClient(from).build(), clientGroup, outboundExecutor) {
+            GhostClientCommunications outbound = new GhostClientCommunications(
+                    new NettyTlsTransceiver(to.getGhostEndpoint(), forClient(), clientGroup, outboundExecutor) {
 
-                @Override
-                public void close() {
-                    openOutbound.remove(thisOutbound[0]);
-                    try {
-                        super.close();
-                    } catch (Throwable e) {
-                        log.info("error closing connection to " + to, e);
-                    }
-                }
+                        @Override
+                        public void close() {
+                            openOutbound.remove(thisOutbound[0]);
+                            try {
+                                super.close();
+                            } catch (Throwable e) {
+                                log.info("error closing connection to " + to, e);
+                            }
+                        }
 
-            }, to);
+                    }, to);
             thisOutbound[0] = outbound;
             openOutbound.add(outbound);
             return outbound;
@@ -86,6 +89,7 @@ public class GhostNettyCommunications extends CommonNettyCommunications implemen
     @Override
     public void initialize(Ghost ghost) {
         this.ghost = ghost;
+        initialize(ghost.getNode());
     }
 
     @Override
@@ -108,8 +112,8 @@ public class GhostNettyCommunications extends CommonNettyCommunications implemen
     }
 
     @Override
-    protected SslContextBuilder sslCtxBuilder() {
-        return forServer(ghost.getNode());
+    protected SslContext sslCtx() {
+        return forServer(ghost.getNode(), ClientAuth.NONE);
     }
 
 }

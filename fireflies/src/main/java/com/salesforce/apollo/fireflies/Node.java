@@ -12,6 +12,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -35,6 +36,7 @@ import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.KeyManagerFactorySpi;
 import javax.net.ssl.ManagerFactoryParameters;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
@@ -262,15 +264,28 @@ public class Node extends Member {
 	 */
 	private final FirefliesParameters parameters;
 
+    private final SSLContext sslContext;
+
 	public Node(CertWithKey identity, FirefliesParameters p) {
 		this(identity, p, portsFrom(identity.getCertificate()));
 	}
 
-	public Node(CertWithKey identity, FirefliesParameters parameters, InetSocketAddress[] boundPorts) {
+    public Node(CertWithKey identity, FirefliesParameters parameters, InetSocketAddress[] boundPorts) {
 		super(identity.getCertificate(), null, parameters, null, boundPorts);
 
 		privateKey = identity.getPrivateKey();
 		this.parameters = parameters;
+
+        try {
+            sslContext = SSLContext.getInstance("TLS");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Cannot get SSL Context instance 'TLS'", e);
+        }
+        try {
+            sslContext.init(new KeyManager[] { new Keys() }, new TrustManager[] { new Trust() }, parameters.entropy);
+        } catch (KeyManagementException e) {
+            throw new IllegalStateException("Cannot get SSL Context instance 'TLS'", e);
+        }
 
 		log.info("Node[{}] ports: [FF:{}, G:{}, A:{}]", getId(), getFirefliesEndpoint(), getGhostEndpoint(),
 				getAvalancheEndpoint());
@@ -294,6 +309,10 @@ public class Node extends Member {
 	public FirefliesParameters getParameters() {
 		return parameters;
 	}
+
+	public SSLContext getSslContext() {
+        return sslContext;
+    }
 
 	public X509TrustManager getTrustManager() {
 		return new Trust();

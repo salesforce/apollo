@@ -11,17 +11,13 @@ import static com.salesforce.apollo.comm.netty4.MtlsServer.defaultBuiilder;
 import java.net.InetSocketAddress;
 import java.security.Security;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
-
-import javax.net.ssl.SSLException;
 
 import org.apache.avro.ipc.RPCPlugin;
 import org.apache.avro.ipc.Responder;
@@ -35,41 +31,21 @@ import com.salesforce.apollo.fireflies.communications.CommonClientCommunications
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.JdkSslContext;
+import io.netty.handler.ssl.SslContext;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
 
 abstract public class CommonNettyCommunications {
-    public static List<String>    CIPHERS = new ArrayList<>();
-    protected static final Logger log     = LoggerFactory.getLogger(CommonNettyCommunications.class);
-
-    private static final String TL_SV1_2 = "TLSv1.2";
-
-    static {
-        CIPHERS.add("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
-    }
+    protected static final Logger log = LoggerFactory.getLogger(CommonNettyCommunications.class);
 
     static {
         Security.setProperty("crypto.policy", "unlimited");
     }
 
-    public static SslContextBuilder forClient(Node node) {
-        return SslContextBuilder.forClient()
-                                .protocols(TL_SV1_2)
-                                .ciphers(CIPHERS)
-                                .keyManager(node.getKeyManagerFactory())
-                                .trustManager(node.getTrustManagerFactory())
-                                .sessionCacheSize(100)
-                                .sessionTimeout(10);
-    }
-
-    public static SslContextBuilder forServer(Node node) {
-        return SslContextBuilder.forServer(node.getKeyManagerFactory())
-                                .protocols(TL_SV1_2)
-                                .ciphers(CIPHERS)
-                                .trustManager(node.getTrustManagerFactory())
-                                .sessionCacheSize(100)
-                                .sessionTimeout(10);
+    @SuppressWarnings("deprecation")
+    public static SslContext forServer(Node node, ClientAuth clientAuth) {
+        return new JdkSslContext(node.getSslContext(), false, clientAuth);
     }
 
     public static NioEventLoopGroup newBossGroup(String label, int threads) {
@@ -100,40 +76,46 @@ abstract public class CommonNettyCommunications {
         return newGroup(label + " worker", threads);
     }
 
-    protected final EventLoopGroup                  bossGroup;
+    protected final EventLoopGroup bossGroup;
+
     protected final EventLoopGroup                  clientGroup;
     protected final EventExecutorGroup              inboundExecutor;
-    protected final EventExecutorGroup              outboundExecutor;
     protected final Set<CommonClientCommunications> openOutbound = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    protected final EventExecutorGroup              outboundExecutor;
     protected final RPCPlugin                       stats;
     protected final EventLoopGroup                  workerGroup;
+    private volatile SslContext                     clientSslContext;
+    private final boolean                           closeOnReply;
     private final AtomicBoolean                     running      = new AtomicBoolean();
     private volatile MtlsServer                     server;
 
     public CommonNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
-            EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor) {
+            EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor,
+            boolean closeOnReply) {
         this.stats = stats;
         this.clientGroup = clientGroup;
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
         this.inboundExecutor = inboundExecutor;
         this.outboundExecutor = outboundExecutor;
+        this.closeOnReply = closeOnReply;
     }
 
     public CommonNettyCommunications(String label) {
-        this(label, 10, 10, 10, 10, 10);
+        this(label, 10, 10, 10, 10, 10, false);
     }
 
     public CommonNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
-            int inboundExecutorThreads, int outboundExecutorThreads) {
-        this(label, null, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
+            int inboundExecutorThreads, int outboundExecutorThreads, boolean closeOnReply) {
+        this(label, null, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads,
+                closeOnReply);
     }
 
     public CommonNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
-            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads) {
+            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads, boolean closeOnReply) {
         this(stats, newClientGroup(label, clientThreads), newBossGroup(label, bossThreads),
                 newWorkerGroup(label, workerThreads), new DefaultEventExecutorGroup(inboundExecutorThreads),
-                new DefaultEventExecutorGroup(outboundExecutorThreads));
+                new DefaultEventExecutorGroup(outboundExecutorThreads), closeOnReply);
     }
 
     public void close() {
@@ -169,6 +151,11 @@ abstract public class CommonNettyCommunications {
         openOutbound.clear();
     }
 
+    public SslContext forClient() {
+        final SslContext current = clientSslContext;
+        return current;
+    }
+
     public void start() {
         MtlsServer current = server;
         if (current == null) {
@@ -181,18 +168,18 @@ abstract public class CommonNettyCommunications {
 
     protected abstract InetSocketAddress endpoint();
 
+    @SuppressWarnings("deprecation")
+    protected void initialize(Node node) {
+        clientSslContext = new JdkSslContext(node.getSslContext(), true, ClientAuth.OPTIONAL);
+    }
+
     protected abstract Function<X509Certificate, Responder> provider();
 
-    protected abstract SslContextBuilder sslCtxBuilder();
+    protected abstract SslContext sslCtx();
 
     private MtlsServer newServer() {
-
-        try {
-            return new MtlsServer(endpoint(), sslCtxBuilder().clientAuth(clientAuth()).build(), provider(),
-                    defaultBuiilder(), bossGroup, workerGroup, inboundExecutor);
-        } catch (SSLException e) {
-            throw new IllegalStateException("Unable to construct SslContex", e);
-        }
+        return new MtlsServer(closeOnReply, endpoint(), sslCtx(), provider(), defaultBuiilder(), bossGroup, workerGroup,
+                inboundExecutor);
 
     }
 }

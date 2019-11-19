@@ -27,7 +27,7 @@ import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
 
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslContext;
 import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
@@ -43,37 +43,38 @@ public class FirefliesNettyCommunications extends CommonNettyCommunications impl
 
     public FirefliesNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
             EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor) {
-        super(stats, clientGroup, bossGroup, workerGroup, inboundExecutor, outboundExecutor);
+        super(stats, clientGroup, bossGroup, workerGroup, inboundExecutor, outboundExecutor, false);
+    }
+
+    public FirefliesNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
+            int inboundExecutorThreads, int outboundExecutorThreads) {
+        super(label, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads, false);
+    }
+
+    public FirefliesNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
+            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads) {
+        super(label, stats, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads,
+                false);
     }
 
     public FirefliesNettyCommunications(String label) {
         super(label);
     }
 
-    public FirefliesNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
-            int inboundExecutorThreads, int outboundExecutorThreads) {
-        super(label, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
-    }
-
-    public FirefliesNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
-            int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads) {
-        super(label, stats, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
-    }
-
     @Override
     public FfClientCommunications connectTo(Member to, Node from) {
         try {
             FfClientCommunications thisOutbound[] = new FfClientCommunications[1];
-            FfClientCommunications outbound = new FfClientCommunications(new NettyTlsTransceiver(
-                    to.getFirefliesEndpoint(), forClient(from).build(), clientGroup, outboundExecutor) {
+            FfClientCommunications outbound = new FfClientCommunications(
+                    new NettyTlsTransceiver(to.getFirefliesEndpoint(), forClient(), clientGroup, outboundExecutor) {
 
-                @Override
-                public void close() {
-                    openOutbound.remove(thisOutbound[0]);
-                    super.close();
-                }
+                        @Override
+                        public void close() {
+                            openOutbound.remove(thisOutbound[0]);
+                            super.close();
+                        }
 
-            }, to);
+                    }, to);
             thisOutbound[0] = outbound;
             openOutbound.add(outbound);
             return outbound;
@@ -86,6 +87,7 @@ public class FirefliesNettyCommunications extends CommonNettyCommunications impl
     @Override
     public void initialize(View view) {
         this.view = view;
+        initialize(view.getNode());
     }
 
     @Override
@@ -120,7 +122,7 @@ public class FirefliesNettyCommunications extends CommonNettyCommunications impl
     }
 
     @Override
-    protected SslContextBuilder sslCtxBuilder() {
-        return forServer(view.getNode());
+    protected SslContext sslCtx() {
+        return forServer(view.getNode(), ClientAuth.REQUIRE);
     }
 }

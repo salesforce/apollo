@@ -22,6 +22,7 @@ import java.util.concurrent.CompletionService;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -145,6 +146,7 @@ public class Avalanche {
     private final AtomicBoolean                              running             = new AtomicBoolean();
     private final Service                                    service             = new Service();
     private final View                                       view;
+    private Executor                                         queryPool;
 
     public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p) {
         this(view, communications, p, null, null);
@@ -190,6 +192,11 @@ public class Avalanche {
         AtomicInteger i = new AtomicInteger();
         finalizer = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "Finalizer[" + getNode().getId() + "] : " + i.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        });
+        queryPool = Executors.newScheduledThreadPool(parameters.outstandingQueries, r -> {
+            Thread t = new Thread(r, "Outbound Query[" + getNode().getId() + "] : " + i.incrementAndGet());
             t.setDaemon(true);
             return t;
         });
@@ -527,7 +534,7 @@ public class Avalanche {
             metrics.getWantedRate().mark(want.size());
         }
 
-        CompletionService<Boolean> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
+        CompletionService<Boolean> frist = new ExecutorCompletionService<>(queryPool);
         List<Future<Boolean>> futures;
         AtomicBoolean isWanted = new AtomicBoolean(true);
         futures = sample.stream().map(m -> frist.submit(() -> {
@@ -623,8 +630,6 @@ public class Avalanche {
             query();
             if (generateNoOps.compareAndSet(true, false)) {
                 generateNoOpTxns();
-            } else {
-                Thread.sleep(getEntropy().nextInt(200));
             }
         } catch (Throwable t) {
             log.error("Error performing Avalanche batch round", t);

@@ -54,6 +54,8 @@ public class AvalancheParameters {
 
     public int noOpsPerRound = 10;
 
+    public int      outstandingQueries = 2;
+
     /**
      * The number of parents we desire for new txns
      */
@@ -68,9 +70,8 @@ public class AvalancheParameters {
      * Query timeout
      */
     public long timeout = 30;
-
     /**
      * Query timeout unit
      */
-    public TimeUnit unit = TimeUnit.SECONDS;
+    public TimeUnit unit               = TimeUnit.SECONDS;
 }

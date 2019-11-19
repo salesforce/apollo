@@ -27,7 +27,7 @@ import com.salesforce.apollo.fireflies.communications.netty.CommonNettyCommunica
 
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslContext;
 import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
@@ -35,41 +35,40 @@ import io.netty.util.concurrent.EventExecutorGroup;
  * @since 220
  */
 public class AvalancheNettyCommunications extends CommonNettyCommunications implements AvalancheCommunications {
-    private volatile Avalanche avalanche;
+    private static final boolean CLOSE_ON_REPLY = true;
+    private volatile Avalanche   avalanche;
 
     public AvalancheNettyCommunications(RPCPlugin stats, EventLoopGroup clientGroup, EventLoopGroup bossGroup,
             EventLoopGroup workerGroup, EventExecutorGroup inboundExecutor, EventExecutorGroup outboundExecutor) {
-        super(stats, clientGroup, bossGroup, workerGroup, inboundExecutor, outboundExecutor);
-    }
-
-    public AvalancheNettyCommunications(String label) {
-        super(label);
+        super(stats, clientGroup, bossGroup, workerGroup, inboundExecutor, outboundExecutor, CLOSE_ON_REPLY);
     }
 
     public AvalancheNettyCommunications(String label, int clientThreads, int bossThreads, int workerThreads,
             int inboundExecutorThreads, int outboundExecutorThreads) {
-        super(label, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
+        super(label, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads,
+                CLOSE_ON_REPLY);
     }
 
     public AvalancheNettyCommunications(String label, RPCPlugin stats, int clientThreads, int bossThreads,
             int workerThreads, int inboundExecutorThreads, int outboundExecutorThreads) {
-        super(label, stats, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads);
+        super(label, stats, clientThreads, bossThreads, workerThreads, inboundExecutorThreads, outboundExecutorThreads,
+                CLOSE_ON_REPLY);
     }
 
     @Override
     public AvalancheClientCommunications connectToNode(Member to, Node from) {
         try {
             AvalancheClientCommunications thisOutbound[] = new AvalancheClientCommunications[1];
-            AvalancheClientCommunications outbound = new AvalancheClientCommunications(new NettyTlsTransceiver(
-                    to.getAvalancheEndpoint(), forClient(from).build(), clientGroup, inboundExecutor) {
+            AvalancheClientCommunications outbound = new AvalancheClientCommunications(
+                    new NettyTlsTransceiver(to.getAvalancheEndpoint(), forClient(), clientGroup, inboundExecutor) {
 
-                @Override
-                public void close() {
-                    openOutbound.remove(thisOutbound[0]);
-                    super.close();
-                }
+                        @Override
+                        public void close() {
+                            openOutbound.remove(thisOutbound[0]);
+                            super.close();
+                        }
 
-            }, to);
+                    }, to);
             thisOutbound[0] = outbound;
             openOutbound.add(outbound);
             if (stats != null) {
@@ -89,6 +88,7 @@ public class AvalancheNettyCommunications extends CommonNettyCommunications impl
     @Override
     public void initialize(Avalanche avalanche) {
         this.avalanche = avalanche;
+        initialize(avalanche.getNode());
     }
 
     @Override
@@ -111,8 +111,8 @@ public class AvalancheNettyCommunications extends CommonNettyCommunications impl
     }
 
     @Override
-    protected SslContextBuilder sslCtxBuilder() {
-        return forServer(avalanche.getNode());
+    protected SslContext sslCtx() {
+        return forServer(avalanche.getNode(), ClientAuth.NONE);
     }
 
 }

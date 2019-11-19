@@ -55,8 +55,6 @@ import io.netty.util.concurrent.GenericFutureListener;
  * @author hhildebrand
  */
 public class MtlsServer implements Server {
-    private final static Logger log = LoggerFactory.getLogger(MtlsServer.class);
-
     class AvroHandler extends ChannelInboundHandlerAdapter {
 
         private final NettyTlsTransceiver connectionMetadata;
@@ -103,6 +101,9 @@ public class MtlsServer implements Server {
                 if (res != null) {
                     dataPack.setDatas(res);
                     ctx.channel().writeAndFlush(dataPack);
+                }
+                if (closeOnReply) {
+                    ctx.close();
                 }
             } catch (IOException ex) {
                 log.warn("unexpected error", ex);
@@ -166,6 +167,8 @@ public class MtlsServer implements Server {
         }
     }
 
+    private final static Logger log = LoggerFactory.getLogger(MtlsServer.class);
+
     public static CacheBuilder<String, Responder> defaultBuiilder() {
         CacheBuilder<?, ?> builder = CacheBuilder.from("maximumSize=1000,expireAfterWrite=120s");
         @SuppressWarnings("unchecked")
@@ -175,6 +178,7 @@ public class MtlsServer implements Server {
 
     private final Channel                              channel;
     private final CountDownLatch                       closed = new CountDownLatch(1);
+    private final boolean                              closeOnReply;
     private final Function<X509Certificate, Responder> responderProvider;
     private final Cache<String, Responder>             responders;
     private volatile RPCPlugin                         stats;
@@ -182,6 +186,13 @@ public class MtlsServer implements Server {
     public MtlsServer(InetSocketAddress address, SslContext sslCtx,
             Function<X509Certificate, Responder> responderProvider, CacheBuilder<String, Responder> builder,
             EventLoopGroup bossGroup, EventLoopGroup workerGroup, EventExecutorGroup executor) {
+        this(false, address, sslCtx, responderProvider, builder, bossGroup, workerGroup, executor);
+    }
+
+    public MtlsServer(boolean closeOnReply, InetSocketAddress address, SslContext sslCtx,
+            Function<X509Certificate, Responder> responderProvider, CacheBuilder<String, Responder> builder,
+            EventLoopGroup bossGroup, EventLoopGroup workerGroup, EventExecutorGroup executor) {
+        this.closeOnReply = closeOnReply;
         log.debug("Server starting, binding to: {}", address);
         responders = builder.build();
         this.responderProvider = responderProvider;
