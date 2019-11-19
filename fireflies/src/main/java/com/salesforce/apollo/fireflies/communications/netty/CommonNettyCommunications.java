@@ -169,11 +169,6 @@ abstract public class CommonNettyCommunications {
         openOutbound.clear();
     }
 
-    public void logDiag() {
-        log.trace(" outbound: {} inbound: {}", openOutbound.size(),
-                  server == null ? 0 : server.getNumActiveConnections());
-    }
-
     public void start() {
         MtlsServer current = server;
         if (current == null) {

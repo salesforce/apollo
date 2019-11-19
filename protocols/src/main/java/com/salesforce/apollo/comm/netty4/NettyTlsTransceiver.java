@@ -68,7 +68,6 @@ public class NettyTlsTransceiver extends Transceiver {
 
     private final Bootstrap         bootstrap;
     private final InetSocketAddress remoteAddr;
-    volatile boolean                stopping;
 
     private final Channel     channel; // Synchronized on stateLock
     private volatile Protocol remote;  // Synchronized on stateLock
@@ -227,8 +226,6 @@ public class NettyTlsTransceiver extends Transceiver {
      * @param awaitCompletion if true, will block until the close has completed.
      */
     public void close(boolean awaitCompletion) {
-        // Close the connection:
-        stopping = true;
         disconnect(awaitCompletion, true, null);
     }
 
@@ -260,18 +257,7 @@ public class NettyTlsTransceiver extends Transceiver {
         int serial = serialGenerator.incrementAndGet();
         NettyDataPack dataPack = new NettyDataPack(serial, request);
         requests.put(serial, callback);
-        try {
-            writeDataPack(dataPack).get();
-        } catch (InterruptedException e) {
-            throw new IOException(e);
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof IOException) {
-                throw (IOException) cause;
-            } else {
-                throw new IllegalStateException(e);
-            }
-        }
+        writeDataPack(dataPack);
     }
 
     @Override

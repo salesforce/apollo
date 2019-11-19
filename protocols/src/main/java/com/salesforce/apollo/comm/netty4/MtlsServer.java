@@ -41,9 +41,6 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.group.ChannelGroup;
-import io.netty.channel.group.ChannelGroupFuture;
-import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.compression.FastLzFrameDecoder;
@@ -53,7 +50,6 @@ import io.netty.handler.ssl.SslHandler;
 import io.netty.util.concurrent.EventExecutorGroup;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
-import io.netty.util.concurrent.GlobalEventExecutor;
 
 /**
  * @author hhildebrand
@@ -78,6 +74,7 @@ public class MtlsServer implements Server {
                .get(SslHandler.class)
                .handshakeFuture()
                .addListener(new GenericFutureListener<Future<Channel>>() {
+
                    @Override
                    public void operationComplete(Future<Channel> future) throws Exception {
                        responder = getResponder(getSessionId());
@@ -86,8 +83,6 @@ public class MtlsServer implements Server {
                            ctx.close();
                            return;
                        }
-
-                       allChannels.add(ctx.channel());
                    }
                });
             super.channelActive(ctx);
@@ -178,10 +173,8 @@ public class MtlsServer implements Server {
         return castBuilder;
     }
 
-    private final ChannelGroup                         allChannels = new DefaultChannelGroup(
-            GlobalEventExecutor.INSTANCE);
     private final Channel                              channel;
-    private final CountDownLatch                       closed      = new CountDownLatch(1);
+    private final CountDownLatch                       closed = new CountDownLatch(1);
     private final Function<X509Certificate, Responder> responderProvider;
     private final Cache<String, Responder>             responders;
     private volatile RPCPlugin                         stats;
@@ -202,8 +195,6 @@ public class MtlsServer implements Server {
                                                     .childOption(ChannelOption.SO_KEEPALIVE, true)
                                                     .childOption(ChannelOption.SO_LINGER, 0)
                                                     .childOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 30_000)
-                                                    .childOption(ChannelOption.SO_RCVBUF, 1048576)
-                                                    .childOption(ChannelOption.SO_SNDBUF, 1048576)
                                                     .childOption(ChannelOption.ALLOCATOR,
                                                                  PooledByteBufAllocator.DEFAULT)
                                                     .group(bossGroup, workerGroup)
@@ -241,17 +232,6 @@ public class MtlsServer implements Server {
 
     @Override
     public void close() {
-        ChannelGroupFuture future = allChannels.close();
-        try {
-            future.sync();
-        } catch (InterruptedException e) {
-            log.error("Failure closing all channels", e);
-        }
-        try {
-            future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failure closing all channels", e);
-        }
         channel.close().awaitUninterruptibly();
         try {
             channel.close().get();
@@ -260,10 +240,6 @@ public class MtlsServer implements Server {
             e.printStackTrace();
         }
         closed.countDown();
-    }
-
-    public int getNumActiveConnections() {
-        return allChannels.size();
     }
 
     @Override
