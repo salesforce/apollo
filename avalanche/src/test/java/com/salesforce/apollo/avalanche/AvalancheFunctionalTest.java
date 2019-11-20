@@ -130,14 +130,14 @@ public class AvalancheFunctionalTest {
             aParams.dagWood.maxCache = 1_000_000;
 
             // Avalanche protocol parameters
-            aParams.alpha = 0.6;
-            aParams.k = 10;
-            aParams.beta1 = 3;
-            aParams.beta2 = 5;
-            // parent selection target for avalanche dag voting
-            aParams.parentCount = 5;
+            aParams.core.alpha = 0.6;
+            aParams.core.k = 10;
+            aParams.core.beta1 = 3;
+            aParams.core.beta2 = 5;
 
             // Avalanche implementation parameters
+            // parent selection target for avalanche dag voting
+            aParams.parentCount = 5;
             aParams.queryBatchSize = 40;
             aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
@@ -147,18 +147,18 @@ public class AvalancheFunctionalTest {
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
 
-            AvalancheCommunications comm = new AvalancheNettyCommunications(rpcStats, eventLoop, eventLoop,
-                                                                            eventLoop, executor, executor);
+            AvalancheCommunications comm = new AvalancheNettyCommunications(rpcStats, eventLoop, eventLoop, eventLoop,
+                    executor, executor);
             return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 20_000;
+        int target = 4_000;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 400;
-        int runtime = (int) Duration.ofSeconds(120).toMillis();
+        int runtime = (int) Duration.ofSeconds(240).toMillis();
 
-        views.forEach(view -> view.getService().start(ffRound));
+        views.parallelStream().forEach(view -> view.getService().start(ffRound));
 
         assertTrue("Could not stabilize view membership)", Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()

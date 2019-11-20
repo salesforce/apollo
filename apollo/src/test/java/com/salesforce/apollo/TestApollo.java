@@ -86,10 +86,10 @@ public class TestApollo {
 
         for (int i = 1; i < PregenPopulation.getCardinality() + 1; i++) {
             ApolloConfiguration config = new ApolloConfiguration();
-            config.avalanche.alpha = 0.6;
-            config.avalanche.k = 3;
-            config.avalanche.beta1 = 3;
-            config.avalanche.beta2 = 5;
+            config.avalanche.core.alpha = 0.6;
+            config.avalanche.core.k = 3;
+            config.avalanche.core.beta1 = 3;
+            config.avalanche.core.beta2 = 5;
             config.gossipInterval = Duration.ofMillis(100);
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             ApolloConfiguration.FileIdentitySource ks = new ApolloConfiguration.FileIdentitySource();

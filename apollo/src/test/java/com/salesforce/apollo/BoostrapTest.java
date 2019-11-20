@@ -63,10 +63,10 @@ public class BoostrapTest {
 
         for (int i = 1; i <= PregenPopulation.getCardinality(); i++) {
             ApolloConfiguration config = new ApolloConfiguration();
-            config.avalanche.alpha = 0.6;
-            config.avalanche.k = 6;
-            config.avalanche.beta1 = 3;
-            config.avalanche.beta2 = 5;
+            config.avalanche.core.alpha = 0.6;
+            config.avalanche.core.k = 6;
+            config.avalanche.core.beta1 = 3;
+            config.avalanche.core.beta2 = 5;
             config.gossipInterval = Duration.ofMillis(500);
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             BootstrapIdSource ks = new BootstrapIdSource();

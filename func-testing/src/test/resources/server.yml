@@ -6,10 +6,12 @@ apollo:
    communications:
       type: sim
    avalanche:
+      core:
+          k: 3
+          beta1: 3
+          beta2: 5
       alpha: 0.6
-      k: 3
-      beta1: 3
-      beta2: 5
+      
 logging:
    level: INFO
    loggers:

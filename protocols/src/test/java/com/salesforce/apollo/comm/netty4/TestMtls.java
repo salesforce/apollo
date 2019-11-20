@@ -34,6 +34,7 @@ import com.salesforce.apollo.protocols.Utils;
 
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
@@ -51,11 +52,16 @@ public class TestMtls {
         Function<X509Certificate, Responder> responderProvider = certificate -> new SpecificResponder(Apollo.class,
                 service());
         MtlsServer server = new MtlsServer(serverAddress,
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build(), responderProvider,
-                MtlsServer.defaultBuiilder(), new NioEventLoopGroup(), new NioEventLoopGroup(),
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey())
+                                 .sslProvider(SslProvider.OPENSSL)
+                                 .build(),
+                responderProvider, MtlsServer.defaultBuiilder(), new NioEventLoopGroup(), new NioEventLoopGroup(),
                 new DefaultEventExecutorGroup(1));
         NettyTlsTransceiver transceiver = new NettyTlsTransceiver(serverAddress,
-                SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build(),
+                SslContextBuilder.forClient()
+                                 .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                                 .sslProvider(SslProvider.OPENSSL)
+                                 .build(),
                 new NioEventLoopGroup(), new DefaultEventExecutorGroup(1));
 
         SpecificRequestor requestor = new SpecificRequestor(Apollo.PROTOCOL, transceiver, SpecificData.get());

@@ -217,14 +217,14 @@ public class MtlsServer implements Server {
                                                             ChannelPipeline pipeline = ch.pipeline();
 //                                                            pipeline.addLast(new LoggingHandler("server child",
 //                                                                                                LogLevel.INFO));
-                                                            SslHandler newHandler = sslCtx.newHandler(ch.alloc());
-                                                            pipeline.addLast(newHandler);
-                                                            SSLEngine engine = newHandler.engine();
+                                                            SslHandler sslHandler = sslCtx.newHandler(ch.alloc());
+                                                            pipeline.addLast(sslHandler);
                                                             pipeline.addLast(new FastLzFrameDecoder());
                                                             pipeline.addLast(new FastLzFrameEncoder());
                                                             pipeline.addLast(new NettyFrameDecoder());
                                                             pipeline.addLast(new NettyFrameEncoder());
-                                                            pipeline.addLast(executor, new AvroHandler(engine));
+                                                            pipeline.addLast(executor,
+                                                                             new AvroHandler(sslHandler.engine()));
                                                         }
                                                     })
                                                     .bind(address);

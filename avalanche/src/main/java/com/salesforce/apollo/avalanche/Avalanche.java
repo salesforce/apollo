@@ -177,8 +177,8 @@ public class Avalanche {
         });
 
         querySampler = new RandomMemberGenerator(view);
-        required = (int) (parameters.k * parameters.alpha);
-        invalidThreshold = parameters.k - required - 1;
+        required = (int) (parameters.core.k * parameters.core.alpha);
+        invalidThreshold = parameters.core.k - required - 1;
 
         ClassLoader loader = resolver;
         if (resolver == null) {
@@ -440,14 +440,14 @@ public class Avalanche {
     int query() {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        List<Member> sample = new ArrayList<>(querySampler.sample(parameters.k));
+        List<Member> sample = new ArrayList<>(querySampler.sample(parameters.core.k));
         Collections.shuffle(sample, getEntropy());
 
         if (sample.isEmpty()) {
             return 0;
         }
-        if (sample.size() < parameters.k) {
-            log.trace("not enough members in sample: {} < {}", sample.size(), parameters.k);
+        if (sample.size() < parameters.core.k) {
+            log.trace("not enough members in sample: {} < {}", sample.size(), parameters.core.k);
             return 0;
         }
         now = System.currentTimeMillis();
@@ -529,7 +529,7 @@ public class Avalanche {
             invalid[i] = new AtomicInteger();
             votes[i] = new AtomicInteger();
         }
-        List<HASH> want = dag.getWanted(getEntropy()).stream().map(e -> e.toHash()).collect(Collectors.toList());
+        List<HASH> want = dag.getWanted().stream().map(e -> e.toHash()).collect(Collectors.toList());
         if (want.size() > 0 && metrics != null) {
             metrics.getWantedRate().mark(want.size());
         }

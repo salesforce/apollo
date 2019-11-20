@@ -11,13 +11,17 @@ import static com.salesforce.apollo.comm.netty4.MtlsServer.defaultBuiilder;
 import java.net.InetSocketAddress;
 import java.security.Security;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+
+import javax.net.ssl.SSLException;
 
 import org.apache.avro.ipc.RPCPlugin;
 import org.apache.avro.ipc.Responder;
@@ -31,21 +35,34 @@ import com.salesforce.apollo.fireflies.communications.CommonClientCommunications
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.JdkSslContext;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
 
 abstract public class CommonNettyCommunications {
     protected static final Logger log = LoggerFactory.getLogger(CommonNettyCommunications.class);
 
+    private static final SslProvider SSL_PROVIDER = SslProvider.JDK;
+
     static {
         Security.setProperty("crypto.policy", "unlimited");
     }
 
-    @SuppressWarnings("deprecation")
     public static SslContext forServer(Node node, ClientAuth clientAuth) {
-        return new JdkSslContext(node.getSslContext(), false, clientAuth);
+        try {
+            return SslContextBuilder.forServer(node.getKeyManagerFactory())
+                                    .sslProvider(SSL_PROVIDER)
+                                    .protocols(TL_SV1_2)
+                                    .ciphers(CIPHERS)
+                                    .trustManager(node.getTrustManagerFactory())
+                                    .clientAuth(clientAuth)
+                                    .build();
+        } catch (SSLException e) {
+            throw new IllegalStateException("Cannot build ssl client context", e);
+        }
+
     }
 
     public static NioEventLoopGroup newBossGroup(String label, int threads) {
@@ -164,13 +181,31 @@ abstract public class CommonNettyCommunications {
         }
     }
 
+    public static List<String> CIPHERS = new ArrayList<>();
+
+    private static final String TL_SV1_2 = "TLSv1.2";
+
+    static {
+        CIPHERS.add("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
+    }
+
     protected abstract ClientAuth clientAuth();
 
     protected abstract InetSocketAddress endpoint();
 
-    @SuppressWarnings("deprecation")
     protected void initialize(Node node) {
-        clientSslContext = new JdkSslContext(node.getSslContext(), true, ClientAuth.OPTIONAL);
+        try {
+            clientSslContext = SslContextBuilder.forClient()
+                                                .sslProvider(SSL_PROVIDER)
+                                                .protocols(TL_SV1_2)
+                                                .ciphers(CIPHERS)
+                                                .keyManager(node.getKeyManagerFactory())
+                                                .trustManager(node.getTrustManagerFactory())
+                                                .clientAuth(ClientAuth.OPTIONAL)
+                                                .build();
+        } catch (SSLException e) {
+            throw new IllegalStateException("Cannot build ssl client context", e);
+        }
     }
 
     protected abstract Function<X509Certificate, Responder> provider();

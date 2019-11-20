@@ -216,7 +216,7 @@ public class WorkingSet {
             }
             final int currentConfidence = confidence;
             final boolean preferred = conflictSet.getPreferred() == this;
-            if (conflictSet.getCounter() >= parameters.beta2 && preferred) {
+            if (conflictSet.getCounter() >= parameters.core.beta2 && preferred) {
                 finalized = true;
                 finalizedSet.add(this);
                 traverseClosure(node -> {
@@ -225,7 +225,7 @@ public class WorkingSet {
                     return true;
                 });
                 return true;
-            } else if (currentConfidence >= parameters.beta1 && conflictSet.getCardinality() == 1 && preferred) {
+            } else if (currentConfidence >= parameters.core.beta1 && conflictSet.getCardinality() == 1 && preferred) {
                 synchronized (this) {
                     if (links.stream()
                              .map(node -> node.tryFinalize(finalizedSet, visited))
@@ -750,7 +750,7 @@ public class WorkingSet {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
                                           .filter(node -> !node.isFinalized())
-                                          .filter(node -> node.isPreferred(parameters.beta1 - 1))
+                                          .filter(node -> node.isPreferred(parameters.core.beta1 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);
@@ -761,7 +761,7 @@ public class WorkingSet {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
                                           .filter(node -> !node.isFinalized())
-                                          .filter(node -> node.isPreferred(parameters.beta2 - 1))
+                                          .filter(node -> node.isPreferred(parameters.core.beta2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);
@@ -833,22 +833,12 @@ public class WorkingSet {
         return unfinalized;
     }
 
-    public Set<HashKey> getUnknown() {
-        return unknown;
-    }
-
     public BlockingDeque<HashKey> getUnqueried() {
         return unqueried;
     }
 
     public Set<HashKey> getWanted() {
         return unknown;
-    }
-
-    public List<HashKey> getWanted(Random entropy) {
-        List<HashKey> wanted = new ArrayList<>(unknown);
-        Collections.shuffle(wanted, entropy);
-        return wanted;
     }
 
     public HashKey insert(DagEntry entry, HashKey conflictSet, long discovered) {
@@ -944,7 +934,7 @@ public class WorkingSet {
         for (int i = 0; i < maxSize; i++) {
             HashKey key;
             try {
-                key = i == 0 ? unqueried.poll(1, TimeUnit.MILLISECONDS) : unqueried.poll(200, TimeUnit.MICROSECONDS);
+                key = unqueried.poll(200, TimeUnit.MICROSECONDS);
             } catch (InterruptedException e) {
                 return query;
             }
@@ -1000,7 +990,7 @@ public class WorkingSet {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
                                           .filter(node -> !node.isFinalized())
-                                          .filter(node -> node.isPreferredAndSingular(parameters.beta1 / 2 - 1))
+                                          .filter(node -> node.isPreferredAndSingular(parameters.core.beta1 / 2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);
@@ -1011,7 +1001,7 @@ public class WorkingSet {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
                                           .filter(node -> !node.isFinalized())
-                                          .filter(node -> node.isPreferredAndSingular(parameters.beta2 - 1))
+                                          .filter(node -> node.isPreferredAndSingular(parameters.core.beta2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
         Collections.shuffle(sample, entropy);

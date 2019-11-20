@@ -16,34 +16,39 @@ import com.salesforce.apollo.avalanche.DagWood.DagWoodParameters;
  */
 public class AvalancheParameters {
 
-    /**
-     * The percentage of k members that need to vote for a txn to be preferred
-     */
-    public double            alpha             = 0.9;
-    /**
-     * The confidence value for a transaction for early finalization
-     */
-    public int               beta1             = 11;
-    /**
-     * The consecutive counter - i.e. "votes" - for a transaction for finalization
-     */
-    public int               beta2             = 150;
-    public DagWoodParameters dagWood           = new DagWoodParameters();
+    public static class CoreParameters {
+        /**
+         * The percentage of k members that need to vote for a txn to be preferred
+         */
+        public double alpha = 0.9;
+        /**
+         * The confidence value for a transaction for early finalization
+         */
+        public int    beta1 = 11;
+        /**
+         * The consecutive counter - i.e. "votes" - for a transaction for finalization
+         */
+        public int    beta2 = 150;
+
+        /**
+         * The number of members to sample for a vote
+         */
+        public int k = 10;
+    }
+
+    public CoreParameters    core    = new CoreParameters();
+    public DagWoodParameters dagWood = new DagWoodParameters();
     /**
      * The number of FF rounds per NoOp generation round
      */
-    public int               delta             = 1;
-    public int               finalizeBatchSize = 40;
+    public int               delta   = 1;
+
+    public int finalizeBatchSize = 40;
 
     /**
      * The number of queries per FF round
      */
     public int gamma = 20;
-
-    /**
-     * The number of members to sample for a vote
-     */
-    public int k = 10;
 
     /**
      * Max JDBC connections in pool
@@ -54,7 +59,7 @@ public class AvalancheParameters {
 
     public int noOpsPerRound = 10;
 
-    public int      outstandingQueries = 2;
+    public int outstandingQueries = 10; // Currently same as K
 
     /**
      * The number of parents we desire for new txns
@@ -69,9 +74,9 @@ public class AvalancheParameters {
     /**
      * Query timeout
      */
-    public long timeout = 30;
+    public long     timeout = 30;
     /**
      * Query timeout unit
      */
-    public TimeUnit unit               = TimeUnit.SECONDS;
+    public TimeUnit unit    = TimeUnit.SECONDS;
 }
