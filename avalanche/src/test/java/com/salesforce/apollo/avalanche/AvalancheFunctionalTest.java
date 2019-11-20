@@ -41,7 +41,6 @@ import com.codahale.metrics.Slf4jReporter;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
-import com.salesforce.apollo.avalanche.communications.netty.AvalancheNettyCommunications;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Member;
@@ -53,16 +52,12 @@ import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 import io.github.olivierlemasle.ca.RootCertificate;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.util.concurrent.DefaultEventExecutorGroup;
-import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
  * @author hal.hildebrand
  * @since 222
  */
-public class AvalancheFunctionalTest {
+abstract public class AvalancheFunctionalTest {
 
     private static final RootCertificate     ca         = getCa();
     private static Map<UUID, CertWithKey>    certs;
@@ -76,15 +71,15 @@ public class AvalancheFunctionalTest {
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
-    private Random                   entropy;
-    private List<Node>               members;
-    private ScheduledExecutorService scheduler;
-    private List<X509Certificate>    seeds;
-    private List<View>               views;
-    private DropWizardStatsPlugin    rpcStats;
-    private MetricRegistry           commRegistry;
-    private MetricRegistry           node0Registry;
-    private File                     baseDir;
+    protected File                     baseDir;
+    protected MetricRegistry           commRegistry;
+    protected Random                   entropy;
+    protected List<Node>               members;
+    protected MetricRegistry           node0Registry;
+    protected DropWizardStatsPlugin    rpcStats;
+    protected ScheduledExecutorService scheduler;
+    protected List<X509Certificate>    seeds;
+    protected List<View>               views;
 
     @After
     public void after() {
@@ -121,9 +116,7 @@ public class AvalancheFunctionalTest {
 
     @Test
     public void smoke() throws Exception {
-        AvaMetrics avaMetrics = new AvaMetrics(node0Registry); 
-        EventLoopGroup eventLoop = new NioEventLoopGroup(20); 
-        EventExecutorGroup executor = new DefaultEventExecutorGroup(30);
+        AvaMetrics avaMetrics = new AvaMetrics(node0Registry);
 
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
@@ -147,8 +140,7 @@ public class AvalancheFunctionalTest {
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
 
-            AvalancheCommunications comm = new AvalancheNettyCommunications(rpcStats, eventLoop, eventLoop, eventLoop,
-                    executor, executor);
+            AvalancheCommunications comm = getCommunications();
             return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 
@@ -266,6 +258,8 @@ public class AvalancheFunctionalTest {
 //        Graphviz.fromGraph(DagViz.visualize("smoke", nodes.get(0).getDag(), true)).render(Format.PNG).toFile(new File("smoke.png"));
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
     }
+
+    abstract protected AvalancheCommunications getCommunications();
 
     private void seed(List<Avalanche> nodes) {
         long then = System.currentTimeMillis();

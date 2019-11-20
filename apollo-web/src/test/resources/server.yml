@@ -10,7 +10,7 @@ apollo:
           k: 3
           beta1: 3
           beta2: 5
-      alpha: 0.6
+          alpha: 0.6
 logging:
    level: INFO
    loggers:
