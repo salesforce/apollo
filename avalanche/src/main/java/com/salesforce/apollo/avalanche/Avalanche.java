@@ -554,7 +554,7 @@ public class Avalanche {
             }
             log.trace("queried: {} for: {} result: {}", m, batch.size(), result.getResult());
             dag.insertSerialized(result.getWanted(), System.currentTimeMillis());
-            if (want.size() > 0 && metrics != null) {
+            if (want.size() > 0 && metrics != null && m == wanted) {
                 metrics.getSatisfiedRate().mark(want.size());
             }
             if (result.getResult().isEmpty()) {
