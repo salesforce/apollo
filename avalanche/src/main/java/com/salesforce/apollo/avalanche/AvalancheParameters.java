@@ -36,39 +36,52 @@ public class AvalancheParameters {
         public int k = 10;
     }
 
-    public CoreParameters    core    = new CoreParameters();
-    public DagWoodParameters dagWood = new DagWoodParameters();
+    /**
+     * Core parameters to the Avalanche protocol
+     */
+    public CoreParameters    core                     = new CoreParameters();
+    /**
+     * Our "wood"
+     */
+    public DagWoodParameters dagWood                  = new DagWoodParameters();
     /**
      * The number of FF rounds per NoOp generation round
      */
-    public int               delta   = 1;
-
-    public int maxNoOpParents = 10;
-
-    public long noOpGenerationCullMillis = 60_000;
-
-    public long noOpQueryFactor = 80;
-
-    public int noOpsPerRound = 10;
-
-    public int outstandingQueries = 10; // Currently same as K
-
+    public int               delta                    = 1;
+    /**
+     * Max # of parents to apply to a NoOp txn
+     */
+    public int               maxNoOpParents           = 10;
+    /**
+     * Periodic rate we cull "finalized" NoOps that have propagated throughout the network, so can be "culled"
+     */
+    public long              noOpGenerationCullMillis = 60_000;
+    /**
+     * How many queries per generation of NoOps
+     */
+    public long              noOpQueryFactor          = 80;
+    /**
+     * How many NoOp txns to generate per round
+     */
+    public int               noOpsPerRound            = 10;
+    /**
+     * Number of threads to allocate per queries - i.e. how many simultaneous outbound queries we can make.
+     */
+    public int               outstandingQueries       = 10;                     // Currently same as K
     /**
      * The number of parents we desire for new txns
      */
-    public int parentCount = 5;
-
+    public int               parentCount              = 5;
     /**
      * The limit on the Avalanche query batch size
      */
-    public int queryBatchSize = 40;
-
+    public int               queryBatchSize           = 40;
     /**
      * Query timeout
      */
-    public long     timeout = 30;
+    public long              timeout                  = 30;
     /**
      * Query timeout unit
      */
-    public TimeUnit unit    = TimeUnit.SECONDS;
+    public TimeUnit          unit                     = TimeUnit.SECONDS;
 }
