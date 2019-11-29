@@ -602,6 +602,7 @@ public class View {
             rings.add(new Ring(i));
         }
         add(node);
+        log.info("View [{}]\n  Parameters: {}", node.getId(), parameters);
     }
 
     /**

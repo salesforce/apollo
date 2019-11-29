@@ -43,19 +43,11 @@ public class AvalancheParameters {
      */
     public int               delta   = 1;
 
-    public int finalizeBatchSize = 40;
-
-    /**
-     * The number of queries per FF round
-     */
-    public int gamma = 20;
-
-    /**
-     * Max JDBC connections in pool
-     */
-    public int maxActiveQueries = 100;
-
     public int maxNoOpParents = 10;
+
+    public long noOpGenerationCullMillis = 60_000;
+
+    public long noOpQueryFactor = 80;
 
     public int noOpsPerRound = 10;
 

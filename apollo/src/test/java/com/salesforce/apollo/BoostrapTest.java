@@ -95,7 +95,6 @@ public class BoostrapTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
         Avalanche master = oracles.get(0).getAvalanche();
-        System.out.println("Start round: " + master.getRoundCounter());
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
                                                                   scheduler);
@@ -105,7 +104,6 @@ public class BoostrapTest {
         } catch (TimeoutException e) {
             oracles.forEach(node -> node.stop());
         }
-        System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
 
         long now = System.currentTimeMillis();

@@ -62,7 +62,7 @@ public class ClusterTesting {
     @Test
     public void loadTest() throws Exception {
 
-        smokeLoad(200, Duration.ofSeconds(300), Duration.ofMillis(100), 400, Duration.ofSeconds(1), 2,
+        smokeLoad(200, Duration.ofSeconds(120), Duration.ofMillis(100), 400, Duration.ofSeconds(1), 2,
                   Duration.ofMillis(15));
     }
 

@@ -47,7 +47,6 @@ public class TestApollo {
 
     public static void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
-        System.out.println("    Rounds: " + node.getRoundCounter());
 
         Integer finalized = node.getDag().getFinalized().size();
         Integer unfinalizedUser = node.getDag()
@@ -118,7 +117,6 @@ public class TestApollo {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
         Avalanche master = oracles.get(0).getAvalanche();
-        System.out.println("Start round: " + master.getRoundCounter());
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
                                                                   scheduler);
@@ -128,7 +126,6 @@ public class TestApollo {
         } catch (TimeoutException e) {
             oracles.forEach(node -> node.stop());
         }
-        System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
 
         long now = System.currentTimeMillis();

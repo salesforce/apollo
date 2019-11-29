@@ -134,8 +134,8 @@ abstract public class AvalancheFunctionalTest {
             aParams.queryBatchSize = 40;
             aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
-            aParams.maxActiveQueries = 200;
             aParams.outstandingQueries = 5;
+            aParams.noOpQueryFactor = 80;
 
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
@@ -163,7 +163,6 @@ abstract public class AvalancheFunctionalTest {
 
         // generate the genesis transaction
         Avalanche master = nodes.get(0);
-        System.out.println("Start round: " + master.getRoundCounter());
         CompletableFuture<HashKey> genesis = nodes.get(0)
                                                   .createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
                                                                  txnScheduler);
@@ -174,10 +173,8 @@ abstract public class AvalancheFunctionalTest {
             nodes.forEach(node -> node.stop());
             views.forEach(v -> v.getService().stop());
 
-            System.out.println("Rounds: " + master.getRoundCounter());
 //            Graphviz.fromGraph(DagViz.visualize("smoke", nodes.get(0).getDag(), false)).render(Format.PNG).toFile(new File("smoke.png"));
         }
-        System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
 
         seed(nodes);
@@ -282,7 +279,6 @@ abstract public class AvalancheFunctionalTest {
 
     private void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
-        System.out.println("    Rounds: " + node.getRoundCounter());
 
         Integer finalized = node.getDag().getFinalized().size();
         Integer unfinalizedUser = node.getDag()
