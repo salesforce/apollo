@@ -1,22 +1,20 @@
 apollo:
-    gossipInterval: PT1S
+    gossipInterval: "PT0.1S"
+    source:
+        type: resource
+        store: /members/member-1.p12
+    communications:
+        type: sim
     avalanche:
         core:
-            alpha: 0.8
-            k: 10
+            k: 3
             beta1: 3
             beta2: 5
-        outstandingQueries: 10
-    source:
-        type: env
-        firefliesPort: 1638
-        ghostPort: 1639
-        avalanchePort: 1640
+            alpha: 0.6
 logging:
     level: INFO
     loggers:
         liquibase: WARN
-        com.salesforce.apollo.fireflies: INFO
-        com.salesforce.apollo.avalanche: TRACE
+        com.salesforce.apollo: INFO
     appenders:
-      - type: console
+        - type: console

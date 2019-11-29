@@ -31,6 +31,7 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +48,7 @@ import com.salesforce.apollo.web.resources.GenesisBlockApi.Result;
  * @author hhildebrand
  *
  */
-
+@Ignore
 public class ClusterTesting {
     // Create the genesis block
     private static boolean CREATE_GENESIS = true;
@@ -62,7 +63,7 @@ public class ClusterTesting {
     @Test
     public void loadTest() throws Exception {
 
-        smokeLoad(200, Duration.ofSeconds(120), Duration.ofMillis(100), 400, Duration.ofSeconds(1), 2,
+        smokeLoad(400, Duration.ofSeconds(600), Duration.ofMillis(100), 400, Duration.ofSeconds(1), 2,
                   Duration.ofMillis(15));
     }
 
