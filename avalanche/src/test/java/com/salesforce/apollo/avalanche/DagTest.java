@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.dagwood.schema.Tables.DAG;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -14,8 +13,6 @@ import static org.junit.Assert.assertNull;
 
 import java.io.File;
 import java.nio.ByteBuffer;
-import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -23,14 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-import org.jooq.ConnectionProvider;
-import org.jooq.DSLContext;
-import org.jooq.SQLDialect;
-import org.jooq.impl.DSL;
-import org.jooq.impl.DefaultConnectionProvider;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -47,14 +38,11 @@ import com.salesforce.apollo.protocols.Utils;
  */
 public class DagTest {
 
-    private static final String CONNECTION_URL = "jdbc:h2:mem:test";
-    private static File         baseDir;
-    private Connection          connection;
-    private DSLContext          create;
-    private WorkingSet          workingSet;
-    private Random              entropy;
-    private DagEntry            root;
-    private HashKey             rootKey;
+    private static File baseDir; 
+    private WorkingSet  workingSet;
+    private Random      entropy;
+    private DagEntry    root;
+    private HashKey     rootKey;
 
     @BeforeClass
     public static void beforeClass() {
@@ -64,30 +52,13 @@ public class DagTest {
     }
 
     @After
-    public void after() {
-        if (create != null) {
-            create.close();
-        }
-        if (connection != null) {
-            try {
-                connection.close();
-            } catch (SQLException e) {
-            }
-        }
+    public void after() { 
     }
 
     @Before
     public void before() throws SQLException {
-        Avalanche.loadSchema(CONNECTION_URL);
-        connection = DriverManager.getConnection(CONNECTION_URL, "apollo", "");
-        connection.setAutoCommit(false);
-        ConnectionProvider provider = new DefaultConnectionProvider(connection);
-        create = DSL.using(provider, SQLDialect.H2);
-        create.deleteFrom(DAG).execute();
         entropy = new Random(0x666);
-        final AvalancheParameters parameters = new AvalancheParameters();
-        parameters.dagWood.store = new File(baseDir, UUID.randomUUID().toString());
-        parameters.dagWood.store.deleteOnExit();
+        final AvalancheParameters parameters = new AvalancheParameters(); 
         workingSet = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
         root = new DagEntry();
         root.setDescription(WellKnownDescriptions.GENESIS.toHash());

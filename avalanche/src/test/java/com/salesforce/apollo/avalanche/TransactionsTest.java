@@ -26,7 +26,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
@@ -39,9 +38,6 @@ import com.salesforce.apollo.avalanche.WorkingSet.Node;
 import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
-
-import guru.nidi.graphviz.engine.Format;
-import guru.nidi.graphviz.engine.Graphviz;
 
 /**
  * @author hal.hildebrand
@@ -68,8 +64,6 @@ public class TransactionsTest {
     public void before() throws Exception {
         entropy = new Random(0x1638);
         parameters = new AvalancheParameters();
-        parameters.dagWood.store = new File(baseDir, UUID.randomUUID().toString());
-        parameters.dagWood.store.deleteOnExit();
         dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
         root = new DagEntry();
         root.setDescription(WellKnownDescriptions.GENESIS.toHash());
@@ -80,11 +74,11 @@ public class TransactionsTest {
 
     @Test
     public void consecutiveCounter() throws Exception {
-        int oldBeta1 = parameters.beta1;
-        int oldBeta2 = parameters.beta2;
+        int oldBeta1 = parameters.core.beta1;
+        int oldBeta2 = parameters.core.beta2;
         try {
-            parameters.beta1 = 100;
-            parameters.beta2 = 20;
+            parameters.core.beta1 = 100;
+            parameters.core.beta2 = 20;
             List<HashKey> ordered = new ArrayList<>();
             Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
             stored.put(rootKey, root);
@@ -96,7 +90,7 @@ public class TransactionsTest {
             HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
             last = secondCommit;
 
-            for (int i = 0; i < parameters.beta2; i++) {
+            for (int i = 0; i < parameters.core.beta2; i++) {
                 last = newDagEntry("entry: " + i, ordered, stored, Arrays.asList(last));
             }
 
@@ -105,15 +99,15 @@ public class TransactionsTest {
                 dag.tryFinalize(ordered.get(i));
             }
 
-            assertEquals(parameters.beta2 - 1, dag.get(firstCommit).getConflictSet().getCounter());
-            assertEquals(parameters.beta2 - 1, dag.get(secondCommit).getConflictSet().getCounter());
+            assertEquals(parameters.core.beta2 - 1, dag.get(firstCommit).getConflictSet().getCounter());
+            assertEquals(parameters.core.beta2 - 1, dag.get(secondCommit).getConflictSet().getCounter());
 
             assertFalse(dag.isFinalized(rootKey));
             assertFalse(dag.isFinalized(firstCommit));
             assertFalse(dag.isFinalized(secondCommit));
 
 //            DagViz.dumpClosure(ordered, dag);
-            Graphviz.fromGraph(DagViz.visualize("smoke", dag, false)).render(Format.PNG).toFile(new File("smoke.png"));
+//            Graphviz.fromGraph(DagViz.visualize("smoke", dag, false)).render(Format.PNG).toFile(new File("smoke.png"));
 
             dag.prefer(ordered.get(ordered.size() - 1));
             dag.tryFinalize(ordered.get(ordered.size() - 1));
@@ -121,8 +115,8 @@ public class TransactionsTest {
             assertTrue(dag.isFinalized(firstCommit));
             assertTrue(dag.isFinalized(secondCommit));
         } finally {
-            parameters.beta1 = oldBeta1;
-            parameters.beta2 = oldBeta2;
+            parameters.core.beta1 = oldBeta1;
+            parameters.core.beta2 = oldBeta2;
         }
     }
 
@@ -140,7 +134,7 @@ public class TransactionsTest {
         HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
         last = secondCommit;
 
-        for (int i = 0; i < parameters.beta1 - 2; i++) {
+        for (int i = 0; i < parameters.core.beta1 - 2; i++) {
             last = newDagEntry("entry: " + i, ordered, stored, Arrays.asList(last));
         }
 
@@ -152,8 +146,8 @@ public class TransactionsTest {
             assertFalse(dag.isFinalized(secondCommit));
         }
 
-        assertEquals(parameters.beta1 - 1, dag.get(firstCommit).getConflictSet().getCounter());
-        assertEquals(parameters.beta1 - 1, dag.get(secondCommit).getConflictSet().getCounter());
+        assertEquals(parameters.core.beta1 - 1, dag.get(firstCommit).getConflictSet().getCounter());
+        assertEquals(parameters.core.beta1 - 1, dag.get(secondCommit).getConflictSet().getCounter());
 
         dag.prefer(ordered.get(3));
         dag.tryFinalize(ordered.get(3));
@@ -172,12 +166,12 @@ public class TransactionsTest {
 
         HashKey last = rootKey;
 
-        for (int i = 0; i < parameters.beta1; i++) {
+        for (int i = 0; i < parameters.core.beta1; i++) {
             last = newDagEntry("entry: " + i, ordered, stored, Arrays.asList(last));
         }
         FinalizationData finalized;
 
-        for (int i = ordered.size() - 1; i > ordered.size() - parameters.beta1; i--) {
+        for (int i = ordered.size() - 1; i > ordered.size() - parameters.core.beta1; i--) {
             HashKey key = ordered.get(i);
             dag.prefer(key);
             finalized = dag.tryFinalize(key);
@@ -329,11 +323,11 @@ public class TransactionsTest {
 
     @Test
     public void knownUnknowns() throws Exception {
-        int oldBeta1 = parameters.beta1;
-        int oldBeta2 = parameters.beta2;
+        int oldBeta1 = parameters.core.beta1;
+        int oldBeta2 = parameters.core.beta2;
         try {
-            parameters.beta1 = 11;
-            parameters.beta2 = 150;
+            parameters.core.beta1 = 11;
+            parameters.core.beta2 = 150;
             List<HashKey> ordered = new ArrayList<>();
             Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
             stored.put(rootKey, root);
@@ -345,7 +339,7 @@ public class TransactionsTest {
             HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last), false);
             last = secondCommit;
 
-            for (int i = 0; i < parameters.beta2; i++) {
+            for (int i = 0; i < parameters.core.beta2; i++) {
                 last = newDagEntry("entry: " + i, ordered, stored, Arrays.asList(last));
             }
 
@@ -371,8 +365,8 @@ public class TransactionsTest {
                 assertTrue("node " + i + " is not finalized", dag.isFinalized(ordered.get(i)));
             }
         } finally {
-            parameters.beta1 = oldBeta1;
-            parameters.beta2 = oldBeta2;
+            parameters.core.beta1 = oldBeta1;
+            parameters.core.beta2 = oldBeta2;
         }
     }
 
@@ -393,7 +387,7 @@ public class TransactionsTest {
 
         last = userTxn;
 
-        for (int i = 0; i < parameters.beta2; i++) {
+        for (int i = 0; i < parameters.core.beta2; i++) {
             last = newDagEntry("entry: " + i, ordered, stored, Arrays.asList(last));
         }
 

@@ -7,6 +7,7 @@
 
 package com.salesforce.apollo.web.resources;
 
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Base64.Decoder;
 import java.util.Base64.Encoder;
@@ -17,12 +18,15 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 
 import com.codahale.metrics.annotation.Timed;
 import com.salesforce.apollo.avalanche.DagDao;
 import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hhildebrand
@@ -31,11 +35,12 @@ import com.salesforce.apollo.avro.HASH;
 public class DagApi {
 
     public static class DagNode {
-        private String data;
-        private String description;
+        private String       data;
+        private String       description;
         private List<String> links;
 
-        public DagNode() {}
+        public DagNode() {
+        }
 
         public DagNode(String data, List<String> links, String description) {
             this.data = data;
@@ -59,7 +64,8 @@ public class DagApi {
     public static class QueryFinalizedResult {
         private boolean finalized;
 
-        public QueryFinalizedResult() {}
+        public QueryFinalizedResult() {
+        }
 
         public QueryFinalizedResult(boolean finalized) {
             this.finalized = finalized;
@@ -80,16 +86,29 @@ public class DagApi {
     }
 
     @POST()
+    @Path("allFinalized")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Timed
+    public String[] allFinalized() {
+        final List<String> result = dag.allFinalized()
+                                       .stream()
+                                       .map(key -> ENCODER.encodeToString(key.bytes()))
+                                       .collect(Collectors.toList());
+        return result.toArray(new String[result.size()]);
+    }
+
+    @POST()
     @Path("fetch")
     @Consumes(MediaType.TEXT_PLAIN)
     @Produces(MediaType.TEXT_PLAIN)
     @Timed
     public String fetch(String key) {
-        HASH hash = new HASH(DECODER.decode(key));
+        HashKey hash = new HashKey(DECODER.decode(key));
         DagEntry dagEntry = dag.get(hash);
-        if (dagEntry == null) { return null; }
-        return dagEntry.getData() == null ? null
-                : ENCODER.encodeToString(dagEntry.getData().array());
+        if (dagEntry == null) {
+            return null;
+        }
+        return dagEntry.getData() == null ? null : ENCODER.encodeToString(dagEntry.getData().array());
     }
 
     @POST()
@@ -98,14 +117,33 @@ public class DagApi {
     @Produces(MediaType.APPLICATION_JSON)
     @Timed
     public DagNode fetchDagNode(String key) {
-        HASH hash = new HASH(DECODER.decode(key));
+        HashKey hash = new HashKey(DECODER.decode(key));
         DagEntry dagEntry = dag.get(hash);
-        if (dagEntry == null) { return null; }
+        if (dagEntry == null) {
+            return null;
+        }
         List<String> links = dagEntry.getLinks() == null ? null
                 : dagEntry.getLinks().stream().map(h -> ENCODER.encodeToString(h.bytes())).collect(Collectors.toList());
-        return new DagNode(dagEntry.getData() == null ? null
-                : ENCODER.encodeToString(dagEntry.getData().array()), links,
-                           ENCODER.encodeToString(dagEntry.getData().array()));
+        return new DagNode(dagEntry.getData() == null ? null : ENCODER.encodeToString(dagEntry.getData().array()),
+                links, ENCODER.encodeToString(dagEntry.getData().array()));
+    }
+
+    @POST()
+    @Path("queryAllFinalized")
+    @Timed
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Boolean[] queryAllFinalized(String[] query) {
+        if (query == null) {
+            throw new WebApplicationException(
+                    Response.status(Status.BAD_REQUEST).entity("Encoded transaction content cannot be null").build());
+        }
+
+        List<Boolean> result = new ArrayList<>();
+        for (String t : query) {
+            result.add(dag.isFinalized(new HashKey(DECODER.decode(t))));
+        }
+        return result.toArray(new Boolean[result.size()]);
     }
 
     @POST()
@@ -114,7 +152,7 @@ public class DagApi {
     @Produces(MediaType.APPLICATION_JSON)
     @Timed
     public QueryFinalizedResult queryFinalized(String key) {
-        HASH hash = new HASH(DECODER.decode(key));
+        HashKey hash = new HashKey(DECODER.decode(key));
         Boolean finalized = dag.isFinalized(hash);
         return new QueryFinalizedResult(finalized == null ? false : finalized);
     }

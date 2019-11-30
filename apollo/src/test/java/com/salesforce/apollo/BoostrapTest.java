@@ -28,7 +28,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import com.salesforce.apollo.avalanche.Avalanche;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.bootstrap.BootstrapCA;
 import com.salesforce.apollo.bootstrap.BootstrapConfiguration;
 import com.salesforce.apollo.protocols.HashKey;
@@ -64,13 +63,10 @@ public class BoostrapTest {
 
         for (int i = 1; i <= PregenPopulation.getCardinality(); i++) {
             ApolloConfiguration config = new ApolloConfiguration();
-            config.avalanche.alpha = 0.6;
-            config.avalanche.k = 6;
-            config.avalanche.beta1 = 3;
-            config.avalanche.beta2 = 5;
-            config.avalanche.dbConnect = "jdbc:h2:mem:bootstrap-" + i;
-            config.avalanche.dagWood.store = new File(baseDir, i + ".store");
-            config.avalanche.dagWood.store.deleteOnExit();
+            config.avalanche.core.alpha = 0.6;
+            config.avalanche.core.k = 6;
+            config.avalanche.core.beta1 = 3;
+            config.avalanche.core.beta2 = 5;
             config.gossipInterval = Duration.ofMillis(500);
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             BootstrapIdSource ks = new BootstrapIdSource();
@@ -99,7 +95,6 @@ public class BoostrapTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
         Avalanche master = oracles.get(0).getAvalanche();
-        System.out.println("Start round: " + master.getRoundCounter());
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
                                                                   scheduler);
@@ -109,15 +104,14 @@ public class BoostrapTest {
         } catch (TimeoutException e) {
             oracles.forEach(node -> node.stop());
         }
-        System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
 
         long now = System.currentTimeMillis();
         List<Transactioneer> transactioneers = new ArrayList<>();
-        HASH k = genesisKey.toHash();
+        HashKey key = genesisKey;
         for (Apollo o : oracles) {
             assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
-                       Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)));
+                       Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(key)));
             transactioneers.add(new Transactioneer(o.getAvalanche()));
         }
 
@@ -125,7 +119,7 @@ public class BoostrapTest {
         int target = 15;
         transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), target * 40, scheduler));
 
-        boolean finalized = Utils.waitForCondition(300_000, 1_000, () -> {
+        boolean finalized = Utils.waitForCondition(30_000, 1_000, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= target)

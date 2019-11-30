@@ -36,6 +36,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
+import io.netty.util.concurrent.DefaultEventExecutorGroup;
 
 /**
  * @author hhildebrand
@@ -51,15 +52,16 @@ public class TestMtls {
                 service());
         MtlsServer server = new MtlsServer(serverAddress,
                 SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build(), responderProvider,
-                MtlsServer.defaultBuiilder(), 1, "test", 1);
+                MtlsServer.defaultBuiilder(), new NioEventLoopGroup(), new NioEventLoopGroup(),
+                new DefaultEventExecutorGroup(1));
         NettyTlsTransceiver transceiver = new NettyTlsTransceiver(serverAddress,
                 SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build(),
-                new NioEventLoopGroup());
+                new NioEventLoopGroup(), new DefaultEventExecutorGroup(1));
 
         SpecificRequestor requestor = new SpecificRequestor(Apollo.PROTOCOL, transceiver, SpecificData.get());
         Apollo client = SpecificRequestor.getClient(Apollo.class, requestor);
-
-        assertEquals(110, client.ping(0));
+        for (int i = 0; i < 10000; i++)
+            assertEquals(110, client.ping(0));
 
         transceiver.close();
         server.close();
@@ -100,12 +102,6 @@ public class TestMtls {
 
             @Override
             public QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) {
-                // TODO Auto-generated method stub
-                return null;
-            }
-
-            @Override
-            public List<ByteBuffer> requestDAG(List<HASH> want) {
                 // TODO Auto-generated method stub
                 return null;
             }

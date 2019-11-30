@@ -26,7 +26,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -34,14 +33,14 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Slf4jReporter;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
-import com.salesforce.apollo.avalanche.communications.AvalancheLocalCommSim;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Member;
@@ -58,7 +57,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
  * @author hal.hildebrand
  * @since 222
  */
-public class AvalancheFunctionalTest {
+abstract public class AvalancheFunctionalTest {
 
     private static final RootCertificate     ca         = getCa();
     private static Map<UUID, CertWithKey>    certs;
@@ -66,21 +65,21 @@ public class AvalancheFunctionalTest {
 
     @BeforeClass
     public static void beforeClass() {
-        certs = IntStream.range(1, 12)
+        certs = IntStream.range(1, 14)
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
-    private Random                   entropy;
-    private List<Node>               members;
-    private ScheduledExecutorService scheduler;
-    private List<X509Certificate>    seeds;
-    private List<View>               views;
-    private DropWizardStatsPlugin    rpcStats;
-    private MetricRegistry           commRegistry;
-    private MetricRegistry           node0Registry;
-    private File                     baseDir;
+    protected File                     baseDir;
+    protected MetricRegistry           commRegistry;
+    protected Random                   entropy;
+    protected List<Node>               members;
+    protected MetricRegistry           node0Registry;
+    protected DropWizardStatsPlugin    rpcStats;
+    protected ScheduledExecutorService scheduler;
+    protected List<X509Certificate>    seeds;
+    protected List<View>               views;
 
     @After
     public void after() {
@@ -118,41 +117,40 @@ public class AvalancheFunctionalTest {
     @Test
     public void smoke() throws Exception {
         AvaMetrics avaMetrics = new AvaMetrics(node0Registry);
-        AvalancheCommunications comm = new AvalancheLocalCommSim(rpcStats);
-        AtomicInteger index = new AtomicInteger(0);
+
         List<Avalanche> nodes = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
-            aParams.dagWood.store = new File(baseDir, view.getNode().getId() + ".store");
-            aParams.dagWood.maxCache = 50_000;
+            aParams.dagWood.maxCache = 1_000_000;
 
             // Avalanche protocol parameters
-            aParams.alpha = 0.6;
-            aParams.k = 10;
-            aParams.beta1 = 3;
-            aParams.beta2 = 5;
-            // parent selection target for avalanche dag voting
-            aParams.parentCount = 5;
+            aParams.core.alpha = 0.6;
+            aParams.core.k = 10;
+            aParams.core.beta1 = 3;
+            aParams.core.beta2 = 5;
 
             // Avalanche implementation parameters
+            // parent selection target for avalanche dag voting
+            aParams.parentCount = 5;
             aParams.queryBatchSize = 40;
             aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
-            aParams.maxActiveQueries = 200;
+            aParams.outstandingQueries = 5;
+            aParams.noOpQueryFactor = 80;
 
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
 
-            aParams.dbConnect = "jdbc:h2:mem:test-" + index.getAndIncrement() + ";MULTI_THREADED=1;MVCC=TRUE";
+            AvalancheCommunications comm = getCommunications();
             return new Avalanche(view, comm, aParams, avaMetrics);
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 800;
+        int target = 4_000;
         Duration ffRound = Duration.ofMillis(500);
-        int outstanding = 200;
-        int runtime = (int) Duration.ofSeconds(600).toMillis();
+        int outstanding = 400;
+        int runtime = (int) Duration.ofSeconds(240).toMillis();
 
-        views.forEach(view -> view.getService().start(ffRound));
+        views.parallelStream().forEach(view -> view.getService().start(ffRound));
 
         assertTrue("Could not stabilize view membership)", Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()
@@ -165,7 +163,6 @@ public class AvalancheFunctionalTest {
 
         // generate the genesis transaction
         Avalanche master = nodes.get(0);
-        System.out.println("Start round: " + master.getRoundCounter());
         CompletableFuture<HashKey> genesis = nodes.get(0)
                                                   .createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
                                                                  txnScheduler);
@@ -176,16 +173,27 @@ public class AvalancheFunctionalTest {
             nodes.forEach(node -> node.stop());
             views.forEach(v -> v.getService().stop());
 
-            System.out.println("Rounds: " + master.getRoundCounter());
 //            Graphviz.fromGraph(DagViz.visualize("smoke", nodes.get(0).getDag(), false)).render(Format.PNG).toFile(new File("smoke.png"));
         }
-        System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
 
         seed(nodes);
 
+        Slf4jReporter.forRegistry(node0Registry)
+                     .outputTo(LoggerFactory.getLogger("func-metrics"))
+                     .convertRatesTo(TimeUnit.SECONDS)
+                     .convertDurationsTo(TimeUnit.MILLISECONDS)
+                     .build()
+                     .start(30, TimeUnit.SECONDS);
+
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .start(30, TimeUnit.SECONDS);
+
         long now = System.currentTimeMillis();
-        HASH k = genesisKey.toHash();
+        HashKey k = genesisKey;
         for (Avalanche a : nodes) {
             assertTrue("Failed to finalize genesis on: " + a.getNode().getId(),
                        Utils.waitForCondition(10_000, () -> a.getDagDao().isFinalized(k)));
@@ -248,6 +256,8 @@ public class AvalancheFunctionalTest {
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
     }
 
+    abstract protected AvalancheCommunications getCommunications();
+
     private void seed(List<Avalanche> nodes) {
         long then = System.currentTimeMillis();
         List<Transactioneer> transactioneers = nodes.stream()
@@ -269,7 +279,6 @@ public class AvalancheFunctionalTest {
 
     private void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
-        System.out.println("    Rounds: " + node.getRoundCounter());
 
         Integer finalized = node.getDag().getFinalized().size();
         Integer unfinalizedUser = node.getDag()

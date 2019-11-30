@@ -1,22 +1,20 @@
 apollo:
-   gossipInterval: "PT0.1S"
-   source:
-      type: resource
-      store: /members/member-1.p12
-   communications:
-      type: sim
-   avalanche:
-      alpha: 0.6
-      k: 3
-      beta1: 3
-      beta2: 5
-      dbConnect: jdbc:h2:mem:test-1
-      dagWood:
-          store: target/cluster/1.store
+    gossipInterval: "PT0.1S"
+    source:
+        type: resource
+        store: /members/member-1.p12
+    communications:
+        type: sim
+    avalanche:
+        core:
+            k: 3
+            beta1: 3
+            beta2: 5
+            alpha: 0.6
 logging:
-   level: INFO
-   loggers:
-      liquibase: WARN
-      com.salesforce.apollo: INFO
-   appenders:
-   -  type: console
+    level: INFO
+    loggers:
+        liquibase: WARN
+        com.salesforce.apollo: INFO
+    appenders:
+        - type: console

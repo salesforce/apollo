@@ -26,41 +26,41 @@ import io.dropwizard.setup.Environment;
  */
 public class ApolloService extends Application<ApolloServiceConfiguration> {
 
-	public static void main(String[] argv) throws Exception {
-		ApolloService apolloService = new ApolloService();
-		apolloService.run(argv);
-	}
+    public static void main(String[] argv) throws Exception {
+        ApolloService apolloService = new ApolloService();
+        apolloService.run(argv);
+    }
 
-	private volatile Apollo apollo;
+    private volatile Apollo apollo;
 
-	public Apollo getApollo() {
-		return apollo;
-	}
+    public Apollo getApollo() {
+        return apollo;
+    }
 
-	@Override
-	public void run(ApolloServiceConfiguration configuration, Environment environment) throws Exception {
-		apollo = new Apollo(configuration.getApollo());
-		apollo.start();
-		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10, r -> {
-			Thread daemon = new Thread(r, "Apollo Txn Timeout Scheduler");
-			return daemon;
-		});
-		Avalanche avalanche = apollo.getAvalanche();
+    @Override
+    public void run(ApolloServiceConfiguration configuration, Environment environment) throws Exception {
+        apollo = new Apollo(configuration.getApollo(), environment.metrics());
+        apollo.start();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10, r -> {
+            Thread daemon = new Thread(r, "Apollo Txn Timeout Scheduler");
+            return daemon;
+        });
+        Avalanche avalanche = apollo.getAvalanche();
 
-		environment.healthChecks().register("fireflies", new FirefliesHealthCheck(apollo.getView()));
-		environment.healthChecks().register("avalanche", new AvalancheHealthCheck(avalanche));
-		environment.healthChecks().register("Apollo", new ApolloHealthCheck(apollo));
+        environment.healthChecks().register("fireflies", new FirefliesHealthCheck(apollo.getView()));
+        environment.healthChecks().register("avalanche", new AvalancheHealthCheck(avalanche));
+        environment.healthChecks().register("Apollo", new ApolloHealthCheck(apollo));
 
-		environment.jersey().register(new ByteTransactionApi(avalanche, scheduler));
-		environment.jersey().register(new GenesisBlockApi(avalanche, scheduler));
-		environment.jersey().register(new DagApi(avalanche.getDagDao()));
-	}
+        environment.jersey().register(new ByteTransactionApi(avalanche, scheduler));
+        environment.jersey().register(new GenesisBlockApi(avalanche, scheduler));
+        environment.jersey().register(new DagApi(avalanche.getDagDao()));
+    }
 
-	public void start() {
-		apollo.start();
-	}
+    public void start() {
+        apollo.start();
+    }
 
-	public void stop() {
-		apollo.stop();
-	}
+    public void stop() {
+        apollo.stop();
+    }
 }

@@ -22,6 +22,4 @@ public interface Avalanche {
 
     QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) throws AvroRemoteException;
 
-    List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException;
-
 }

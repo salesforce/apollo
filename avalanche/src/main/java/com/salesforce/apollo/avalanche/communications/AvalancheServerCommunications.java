@@ -31,9 +31,4 @@ public class AvalancheServerCommunications implements Avalanche {
     public QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) throws AvroRemoteException {
         return avalanche.onQuery(transactions, wanted);
     }
-
-    @Override
-    public List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException {
-        return avalanche.requestDAG(want);
-    }
 }

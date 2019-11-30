@@ -6,13 +6,12 @@ apollo:
    communications:
       type: sim
    avalanche:
-      alpha: 0.6
-      k: 3
-      beta1: 3
-      beta2: 5
-      dbConnect: jdbc:h2:mem:test-1;DB_CLOSE_ON_EXIT=FALSE
-      dagWood:
-          store: target/cluster/1.store
+      core:
+          k: 3
+          beta1: 3
+          beta2: 5
+          alpha: 0.6
+      
 logging:
    level: INFO
    loggers:

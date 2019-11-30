@@ -27,7 +27,6 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -48,7 +47,6 @@ public class TestApollo {
 
     public static void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
-        System.out.println("    Rounds: " + node.getRoundCounter());
 
         Integer finalized = node.getDag().getFinalized().size();
         Integer unfinalizedUser = node.getDag()
@@ -87,13 +85,10 @@ public class TestApollo {
 
         for (int i = 1; i < PregenPopulation.getCardinality() + 1; i++) {
             ApolloConfiguration config = new ApolloConfiguration();
-            config.avalanche.alpha = 0.6;
-            config.avalanche.k = 3;
-            config.avalanche.beta1 = 3;
-            config.avalanche.beta2 = 5;
-            config.avalanche.dbConnect = "jdbc:h2:mem:test-" + i;
-            config.avalanche.dagWood.store = new File(baseDir, i + ".store");
-            config.avalanche.dagWood.store.deleteOnExit();
+            config.avalanche.core.alpha = 0.6;
+            config.avalanche.core.k = 3;
+            config.avalanche.core.beta1 = 3;
+            config.avalanche.core.beta2 = 5;
             config.gossipInterval = Duration.ofMillis(100);
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
             ApolloConfiguration.FileIdentitySource ks = new ApolloConfiguration.FileIdentitySource();
@@ -122,7 +117,6 @@ public class TestApollo {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
         Avalanche master = oracles.get(0).getAvalanche();
-        System.out.println("Start round: " + master.getRoundCounter());
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
                                                                   scheduler);
@@ -132,12 +126,11 @@ public class TestApollo {
         } catch (TimeoutException e) {
             oracles.forEach(node -> node.stop());
         }
-        System.out.println("Rounds: " + master.getRoundCounter());
         assertNotNull(genesisKey);
 
         long now = System.currentTimeMillis();
         List<Transactioneer> transactioneers = new ArrayList<>();
-        HASH k = genesisKey.toHash();
+        HashKey k = genesisKey;
         for (Apollo o : oracles) {
             assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
                        Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)));

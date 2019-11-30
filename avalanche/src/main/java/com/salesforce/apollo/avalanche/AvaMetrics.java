@@ -18,31 +18,31 @@ import com.codahale.metrics.Timer;
  * @author hhildebrand
  */
 public class AvaMetrics {
-    private final Meter         failedTxnQueryRate;
-    private final Meter         finalizerRate;
-    private final Timer         finalizeTimer;
-    private final Meter         inboundQueryRate;
-    private final Timer         inboundQueryTimer;
-    private final Meter         inboundQueryUnknownRate;
-    private final Meter         inputRate;
-    private final Timer         noOpTimer;
-    private final Meter         parentSampleRate;
-    private final Timer         parentSampleTimer;
-    private final Meter         preferRate;
-    private final Timer         preferTimer;
-    private final Meter         purgedNoOps;
-    private final Meter         queryRate;
-    private final Timer         queryTimer;
-    private final Meter         resampledRate;
-    private final Meter         satisfiedRate;
-    private final Meter         submissionRate;
-    private final Timer         submissionTimer;
-    private final AtomicInteger unknown = new AtomicInteger();
-    private final Meter         unknownLinkRate;
-    private final Meter         unknownReplacementRate;
-    private final Meter         wantedRate;
+    private final Meter          failedTxnQueryRate;
+    private final Meter          finalizerRate;
+    private final Timer          finalizeTimer;
+    private final Meter          inboundQueryRate;
+    private final Timer          inboundQueryTimer;
+    private final Meter          inboundQueryUnknownRate;
+    private final Meter          inputRate;
+    private final Meter          preferRate;
+    private final Timer          preferTimer;
+    private final Meter          purgedNoOps;
+    private final Meter          queryRate;
+    private final Timer          queryTimer;
+    private final MetricRegistry registry;
+    private final Meter          resampledRate;
+    private final Meter          satisfiedRate;
+    private final Meter          submissionRate;
+    private final Timer          submissionTimer;
+    private final AtomicInteger  unknown = new AtomicInteger();
+    private final Meter          unknownLinkRate;
+    private final Meter          unknownReplacementRate;
+    private final Meter          wantedRate;
+    private Meter                noOpGeneration;
 
-    public AvaMetrics(MetricRegistry registry) {
+    public AvaMetrics(MetricRegistry r) {
+        registry = r;
         submissionTimer = registry.timer("Txn submission duration");
         submissionRate = registry.meter("Txn submission rate");
 
@@ -61,10 +61,7 @@ public class AvaMetrics {
         inboundQueryRate = registry.meter("Inbound query rate");
         inboundQueryUnknownRate = registry.meter("Inbound query unknown rate");
 
-        noOpTimer = registry.timer("NoOp txn generation duration");
-
-        parentSampleTimer = registry.timer("Parent sample duration");
-        parentSampleRate = registry.meter("Parent sample rate");
+        noOpGeneration = registry.meter("NoOp txn rate");
 
         unknownReplacementRate = registry.meter("Unknown replacement rate");
 
@@ -92,17 +89,9 @@ public class AvaMetrics {
         return failedTxnQueryRate;
     }
 
-    /**
-     * @return the finalizerRate
-     */
-
     public Meter getFinalizerRate() {
         return finalizerRate;
     }
-
-    /**
-     * @return the finalizeTimer
-     */
 
     public Timer getFinalizeTimer() {
         return finalizeTimer;
@@ -120,63 +109,25 @@ public class AvaMetrics {
         return inboundQueryUnknownRate;
     }
 
-    /**
-     * @return the inputRate
-     */
-
     public Meter getInputRate() {
         return inputRate;
     }
 
-    /**
-     * @return the noOpTimer
-     */
-
-    public Timer getNoOpTimer() {
-        return noOpTimer;
+    public Meter getNoOpGenerationRate() {
+        return noOpGeneration;
     }
-
-    /**
-     * @return the parentSampleRate
-     */
-    public Meter getParentSampleRate() {
-        return parentSampleRate;
-    }
-
-    /**
-     * @return the parentSampleTimer
-     */
-    public Timer getParentSampleTimer() {
-        return parentSampleTimer;
-    }
-
-    /**
-     * @return the preferRate
-     */
 
     public Meter getPreferRate() {
         return preferRate;
     }
 
-    /**
-     * @return the preferTimer
-     */
-
     public Timer getPreferTimer() {
         return preferTimer;
     }
 
-    /**
-     * @return the queryRate
-     */
-
     public Meter getQueryRate() {
         return queryRate;
     }
-
-    /**
-     * @return the queryTimer
-     */
 
     public Timer getQueryTimer() {
         return queryTimer;
@@ -190,17 +141,9 @@ public class AvaMetrics {
         return satisfiedRate;
     }
 
-    /**
-     * @return the submissionRate
-     */
-
     public Meter getSubmissionRate() {
         return submissionRate;
     }
-
-    /**
-     * @return the submissionTimer
-     */
 
     public Timer getSubmissionTimer() {
         return submissionTimer;

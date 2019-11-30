@@ -1,7 +1,6 @@
 faultTolerance: 0.1
 probabilityByzantine: 0.2
 cardinality: 10
-dbConnect: "jdbc:h2:mem:cnc-1"
 
 logging:
    level: INFO

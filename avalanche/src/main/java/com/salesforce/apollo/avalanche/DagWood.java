@@ -7,17 +7,16 @@
 
 package com.salesforce.apollo.avalanche;
 
-import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Executors;
 
-import org.mapdb.BTreeMap;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
 import org.mapdb.HTreeMap;
 import org.mapdb.Serializer;
 
-import com.google.common.collect.Sets;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hhildebrand
@@ -27,68 +26,51 @@ import com.google.common.collect.Sets;
 public class DagWood {
 
     public static class DagWoodParameters {
-
-        public long maxCache = 50_000;
-        public File store    = new File("dagwood.store");
+        public long maxCache = 150_000;
 
     }
 
     private static final String CACHE = "dagwood.cache";
-    private static final String STORE = "wood";
 
     private final HTreeMap<byte[], byte[]> cache;
-    private final DB                       dbDisk;
     private final DB                       dbMemory;
-    private final DagWoodParameters        parameters;
-    private final BTreeMap<byte[], byte[]> wood;
 
-    public DagWood(DagWoodParameters p) {
-        parameters = p;
-        dbMemory = DBMaker.memoryDB().make();
-        dbDisk = DBMaker.fileDB(parameters.store).fileMmapEnable().fileMmapPreclearDisable().cleanerHackEnable().make();
-
-        wood = dbDisk.treeMap(STORE)
-                     .keySerializer(Serializer.BYTE_ARRAY)
-                     .valueSerializer(Serializer.BYTE_ARRAY)
-                     .counterEnable()
-                     .create();
+    public DagWood(DagWoodParameters parameters) {
+        dbMemory = DBMaker.memoryDirectDB().cleanerHackEnable().make();
 
         cache = dbMemory.hashMap(CACHE)
                         .keySerializer(Serializer.BYTE_ARRAY)
                         .valueSerializer(Serializer.BYTE_ARRAY)
                         .expireAfterCreate()
-                        .expireExecutor(Executors.newScheduledThreadPool(2))
-                        .expireOverflow(wood)
-                        .expireMaxSize(parameters.maxCache)
                         .counterEnable()
                         .createOrOpen();
-        dbDisk.getStore().fileLoad();
     }
 
-    public void close() {
-        dbDisk.close();
-        dbMemory.close();
-        wood.close();
+    public List<HashKey> allFinalized() {
+        List<HashKey> all = new ArrayList<>();
+        cache.keySet().forEach(e -> all.add(new HashKey(e)));
+        return all;
     }
 
     public boolean cacheContainsKey(byte[] key) {
         return cache.containsKey(key);
     }
 
+    public void close() {
+        dbMemory.close();
+    }
+
     public boolean containsKey(byte[] key) {
-        return cache.containsKey(key) || wood.containsKey(key);
+        return cache.containsKey(key);
     }
 
     public byte[] get(byte[] key) {
-        byte[] value = cache.get(key);
-        if (value != null) {
-            return value;
-        }
-        return wood.get(key);
+        return cache.get(key);
+
     }
 
     public Set<byte[]> keySet() {
-        return Sets.union(cache.keySet(), wood.keySet());
+        return cache.keySet();
     }
 
     public void put(byte[] key, byte[] entry) {
@@ -96,6 +78,6 @@ public class DagWood {
     }
 
     public int size() {
-        return cache.getSize() + wood.getSize();
+        return cache.getSize();
     }
 }
