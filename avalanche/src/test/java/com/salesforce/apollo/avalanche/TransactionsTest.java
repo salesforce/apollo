@@ -565,7 +565,7 @@ public class TransactionsTest {
         dag.prefer(ordered.get(6));
         frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
 
-        assertEquals(6, frontier.size());
+        assertEquals(2, frontier.size());
 
         assertTrue(frontier.contains(ordered.get(3)));
         assertFalse(frontier.contains(ordered.get(4)));

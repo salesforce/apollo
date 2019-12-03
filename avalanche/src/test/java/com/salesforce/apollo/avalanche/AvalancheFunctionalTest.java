@@ -51,6 +51,9 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import guru.nidi.graphviz.engine.Format;
+import guru.nidi.graphviz.engine.Graphviz;
+import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -131,11 +134,11 @@ abstract public class AvalancheFunctionalTest {
             // Avalanche implementation parameters
             // parent selection target for avalanche dag voting
             aParams.parentCount = 5;
-            aParams.queryBatchSize = 40;
+            aParams.queryBatchSize = 400;
             aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
             aParams.outstandingQueries = 5;
-            aParams.noOpQueryFactor = 80;
+            aParams.noOpQueryFactor =80;
 
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
@@ -148,7 +151,7 @@ abstract public class AvalancheFunctionalTest {
         int target = 4_000;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 400;
-        int runtime = (int) Duration.ofSeconds(240).toMillis();
+        int runtime = (int) Duration.ofSeconds(100).toMillis();
 
         views.parallelStream().forEach(view -> view.getService().start(ffRound));
 
@@ -221,7 +224,6 @@ abstract public class AvalancheFunctionalTest {
         views.forEach(v -> v.getService().stop());
         nodes.forEach(node -> node.stop());
         Thread.sleep(2_000); // drain the swamp
-        // System.out.println(profiler.getTop(3));
 
         System.out.println("Global tps: "
                 + transactioneers.stream().mapToInt(e -> e.getSuccess()).sum() / (duration / 1000));
