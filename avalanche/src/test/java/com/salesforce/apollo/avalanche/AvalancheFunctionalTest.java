@@ -51,9 +51,6 @@ import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
-import guru.nidi.graphviz.engine.Format;
-import guru.nidi.graphviz.engine.Graphviz;
-import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -138,7 +135,7 @@ abstract public class AvalancheFunctionalTest {
             aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
             aParams.outstandingQueries = 5;
-            aParams.noOpQueryFactor =80;
+            aParams.noOpQueryFactor = 40;
 
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
@@ -236,7 +233,8 @@ abstract public class AvalancheFunctionalTest {
         System.out.println(master.getDag().getWanted());
         System.out.println();
         transactioneers.forEach(t -> {
-            System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
+            System.out.println("finalized " + t.getSuccess() + " and failed to finalize " + t.getFailed() + " for "
+                    + t.getId());
         });
         System.out.println();
         System.out.println("Global Metrics");

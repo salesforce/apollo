@@ -996,7 +996,8 @@ public class WorkingSet {
     }
 
     public int sampleParents(Collection<HashKey> collector, Random entropy) {
-        List<HashKey> sample = singularFrontier(entropy);
+        List<HashKey> sample = frontier();
+        Collections.shuffle(sample, entropy);
         if (sample.isEmpty()) {
             sample = frontier(entropy);
         }
@@ -1169,8 +1170,8 @@ public class WorkingSet {
         return exist;
     }
 
-    private Stream<Node> frontier() {
-        return unfinalized.values().stream().filter(node -> node.isFrontier());
+    public List<HashKey> frontier() {
+        return unfinalized.values().stream().filter(node -> node.isFrontier()).map(node -> node.getKey()).collect(Collectors.toList());
     }
 
     private byte[] getBytes(HashKey key) {
