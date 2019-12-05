@@ -35,7 +35,9 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -158,6 +160,11 @@ public class WorkingSet {
         }
 
         @Override
+        public boolean isFrontier() {
+            return dependents.isEmpty();
+        }
+
+        @Override
         public boolean isPreferred(int maxConfidence) {
             final int current = confidence;
             return current <= maxConfidence && conflictSet.getPreferred() == this;
@@ -195,6 +202,17 @@ public class WorkingSet {
         public void markPreferred() {
             confidence++;
             conflictSet.prefer(this);
+        }
+
+        @Override
+        public Stream<Node> parents(int depth, Predicate<Node> filter) {
+            if (depth <= 0) {
+                throw new IllegalArgumentException("depth must be >= 1 : " + depth);
+            }
+            if (depth == 1) {
+                return links().stream().filter(filter);
+            }
+            return links().stream().flatMap(node -> node.parents(depth - 1, filter));
         }
 
         @Override
@@ -463,6 +481,10 @@ public class WorkingSet {
 
         abstract public boolean isFinalized();
 
+        public boolean isFrontier() {
+            return false;
+        }
+
         public boolean isKnown() {
             return false;
         }
@@ -501,6 +523,10 @@ public class WorkingSet {
         }
 
         abstract public void markStronglyPreferred();
+
+        public Stream<Node> parents(int depth, Predicate<Node> filter) {
+            throw new UnsupportedOperationException("not applicable to " + getClass().getSimpleName());
+        }
 
         abstract public void prefer();
 
@@ -760,7 +786,6 @@ public class WorkingSet {
     public List<HashKey> frontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
-                                          .filter(node -> !node.isFinalized())
                                           .filter(node -> node.isPreferred(parameters.core.beta1 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -771,7 +796,6 @@ public class WorkingSet {
     public List<HashKey> frontierForNoOp(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
-                                          .filter(node -> !node.isFinalized())
                                           .filter(node -> node.isPreferred(parameters.core.beta2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -972,7 +996,8 @@ public class WorkingSet {
     }
 
     public int sampleParents(Collection<HashKey> collector, Random entropy) {
-        List<HashKey> sample = singularFrontier(entropy);
+        List<HashKey> sample = frontier();
+        Collections.shuffle(sample, entropy);
         if (sample.isEmpty()) {
             sample = frontier(entropy);
         }
@@ -983,9 +1008,9 @@ public class WorkingSet {
             sample = preferred(entropy);
         }
         if (sample.isEmpty()) {
-            sample = new ArrayList<>(finalized().stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
+            collector.addAll(finalized().stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
         }
-        sample.forEach(e -> collector.add(e));
+        collector.addAll(sample);
         return sample.size();
     }
 
@@ -998,7 +1023,6 @@ public class WorkingSet {
     public List<HashKey> singularFrontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
-                                          .filter(node -> !node.isFinalized())
                                           .filter(node -> node.isPreferredAndSingular(parameters.core.beta1 / 2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -1009,7 +1033,6 @@ public class WorkingSet {
     public List<HashKey> singularNoOpFrontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
-                                          .filter(node -> !node.isFinalized())
                                           .filter(node -> node.isPreferredAndSingular(parameters.core.beta2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -1050,7 +1073,6 @@ public class WorkingSet {
     public List<HashKey> unfinalizedSingular(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
-                                          .filter(node -> node.isFinalized())
                                           .filter(node -> node.isUnfinalizedSingular())
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -1077,7 +1099,7 @@ public class WorkingSet {
                 unfinalized.remove(loser.getKey());
             });
             data.finalized.add(node.getKey());
-        } 
+        }
     }
 
     void insert(HashKey key, DagEntry entry, byte[] serialized, boolean noOp, long discovered, HashKey cs) {
@@ -1146,6 +1168,10 @@ public class WorkingSet {
             unknown.add(key);
         }
         return exist;
+    }
+
+    public List<HashKey> frontier() {
+        return unfinalized.values().stream().filter(node -> node.isFrontier()).map(node -> node.getKey()).collect(Collectors.toList());
     }
 
     private byte[] getBytes(HashKey key) {

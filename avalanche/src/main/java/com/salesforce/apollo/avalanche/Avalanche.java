@@ -237,6 +237,10 @@ public class Avalanche {
         Thread queryThread = new Thread(() -> {
             while (running.get()) {
                 round();
+                try {
+                    Thread.sleep(0, 50);
+                } catch (InterruptedException e) {
+                }
             }
         }, "Query[" + view.getNode().getId() + "]");
         queryThread.setDaemon(true);

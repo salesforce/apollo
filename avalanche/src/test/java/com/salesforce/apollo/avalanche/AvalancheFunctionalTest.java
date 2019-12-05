@@ -131,11 +131,11 @@ abstract public class AvalancheFunctionalTest {
             // Avalanche implementation parameters
             // parent selection target for avalanche dag voting
             aParams.parentCount = 5;
-            aParams.queryBatchSize = 40;
+            aParams.queryBatchSize = 400;
             aParams.noOpsPerRound = 10;
             aParams.maxNoOpParents = 10;
             aParams.outstandingQueries = 5;
-            aParams.noOpQueryFactor = 80;
+            aParams.noOpQueryFactor = 40;
 
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
@@ -148,7 +148,7 @@ abstract public class AvalancheFunctionalTest {
         int target = 4_000;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 400;
-        int runtime = (int) Duration.ofSeconds(240).toMillis();
+        int runtime = (int) Duration.ofSeconds(100).toMillis();
 
         views.parallelStream().forEach(view -> view.getService().start(ffRound));
 
@@ -221,7 +221,6 @@ abstract public class AvalancheFunctionalTest {
         views.forEach(v -> v.getService().stop());
         nodes.forEach(node -> node.stop());
         Thread.sleep(2_000); // drain the swamp
-        // System.out.println(profiler.getTop(3));
 
         System.out.println("Global tps: "
                 + transactioneers.stream().mapToInt(e -> e.getSuccess()).sum() / (duration / 1000));
@@ -234,7 +233,8 @@ abstract public class AvalancheFunctionalTest {
         System.out.println(master.getDag().getWanted());
         System.out.println();
         transactioneers.forEach(t -> {
-            System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
+            System.out.println("finalized " + t.getSuccess() + " and failed to finalize " + t.getFailed() + " for "
+                    + t.getId());
         });
         System.out.println();
         System.out.println("Global Metrics");
