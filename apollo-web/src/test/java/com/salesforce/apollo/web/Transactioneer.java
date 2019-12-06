@@ -34,7 +34,7 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.codahale.metrics.Timer.Context;
-import com.salesforce.apollo.web.resources.ByteTransactionApi;
+import com.salesforce.apollo.web.resources.ByteTransactionApi.ByteTransaction;
 
 /**
  * @author hhildebrand
@@ -83,14 +83,14 @@ public class Transactioneer {
     public void start(ScheduledExecutorService run, Duration duration, ScheduledExecutorService query,
                       Duration queryInterval, WebTarget queryEndpoint, ScheduledExecutorService submit,
                       Duration submitInterval, WebTarget submitEndpoint, int outstanding, Duration initialDelay,
-                      int maxDelta) {
+                      int batchSize) {
         final ScheduledFuture<?> queryFuture = query.scheduleWithFixedDelay(queryFinalized(queryEndpoint), 0,
                                                                             queryInterval.toMillis(),
                                                                             TimeUnit.MILLISECONDS);
 
-        final ScheduledFuture<?> submitFuture = submit.scheduleWithFixedDelay(submitTransaction(outstanding,
-                                                                                                submitEndpoint,
-                                                                                                maxDelta),
+        final ScheduledFuture<?> submitFuture = submit.scheduleWithFixedDelay(submitTransactions(outstanding,
+                                                                                                 submitEndpoint,
+                                                                                                 batchSize),
                                                                               initialDelay.toMillis(),
                                                                               submitInterval.toMillis(),
                                                                               TimeUnit.MILLISECONDS);
@@ -142,45 +142,33 @@ public class Transactioneer {
         };
     }
 
-    private Runnable submitTransaction(int outstanding, WebTarget submitEndpoint, int maxDelta) {
+    private Runnable submitTransactions(int outstanding, WebTarget submitEndpoint, int batchSize) {
         return () -> {
             log.trace("submitting txns for {}", id);
-            long then = System.currentTimeMillis();
-            int remaining = maxDelta;
-            int failed = 0;
-            int submitted = 0;
-            while (remaining > 0 && unfinalized.size() < outstanding) {
-                remaining--;
-                if (!submitTxn(submitEndpoint)) {
-                    failed++;
-                }
-                submitted++;
+            if (unfinalized.size() >= outstanding) {
+                return;
             }
-            if (submitted > 0) {
-                log.debug("Submitted {} txns, {} failed, in {}", submitted, failed, System.currentTimeMillis() - then);
+
+            ByteTransaction[] batch = new ByteTransaction[Math.min(batchSize, outstanding - unfinalized.size())];
+            for (int i = 0; i < batch.length; i++) {
+                batch[i] = new ByteTransaction(-1, String
+                                                         .format("Hello World %s from: %s @ %s", id,
+                                                                 lastTxn.incrementAndGet(), System.currentTimeMillis())
+                                                         .getBytes());
+
+            }
+            Response response = submitEndpoint.request(MediaType.APPLICATION_JSON).post(Entity.json(batch));
+
+            if (!(response.getStatus() == 200)) {
+                log.error("Failed submitting txn #{} response: {}: {}", lastTxn.get(), response.getStatus(),
+                          response.readEntity(String.class));
+                return;
+            }
+            String[] keys = response.readEntity(String[].class);
+            submisions.mark(keys.length);
+            for (String key : keys) {
+                unfinalized.put(key, latency.time());
             }
         };
-    }
-
-    private Boolean submitTxn(WebTarget submitEndpoint) {
-        final Context timer = latency.time();
-
-        Response response = submitEndpoint.request(MediaType.APPLICATION_JSON)
-                                          .post(Entity.json(new ByteTransactionApi.ByteTransaction(40_000,
-                                                  String.format("Hello World %s from: %s @ %s", id,
-                                                                lastTxn.incrementAndGet(), System.currentTimeMillis())
-                                                        .getBytes())));
-
-        if (!(response.getStatus() == 200)) {
-            log.error("Failed submitting txn #{} response: {}: {}", lastTxn.get(), response.getStatus(),
-                      response.readEntity(String.class));
-            return false;
-        }
-
-        String key = response.readEntity(String.class);
-        unfinalized.put(key, timer);
-        submisions.mark();
-
-        return true;
     }
 }
