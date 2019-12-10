@@ -47,16 +47,14 @@ public class Transactioneer {
     private final UUID                 id          = UUID.randomUUID();
     private final AtomicInteger        lastTxn     = new AtomicInteger();
     private final Logger               log;
-    private final Map<String, Context> unfinalized = new ConcurrentHashMap<>();
-    private final Meter                finalizations;
+    private final Map<String, Context> unfinalized = new ConcurrentHashMap<>(); 
     private final Meter                submisions;
     private final Timer                latency;
 
     public Transactioneer(MetricRegistry registry) {
         log = LoggerFactory.getLogger("Transactioneer [" + id);
 
-        submisions = registry.meter("Transaction submit rate");
-        finalizations = registry.meter("Transaction finalize rate");
+        submisions = registry.meter("Transaction submit rate"); 
         latency = registry.timer("Transaction finalization latency");
     }
 
@@ -117,8 +115,7 @@ public class Transactioneer {
             if (results[i]) {
                 String txn = txns[i];
                 final Context timer = unfinalized.remove(txn);
-                timer.stop();
-                finalizations.mark();
+                timer.stop(); 
                 finalized.add(txn);
             }
         }

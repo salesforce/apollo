@@ -33,6 +33,7 @@ import javax.ws.rs.core.Response;
 
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.client.ClientProperties;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,7 @@ import com.salesforce.apollo.web.resources.GenesisBlockApi.Result;
  * @author hhildebrand
  *
  */
+@Ignore
 public class ClusterTesting {
     // Create the genesis block
     private static boolean CREATE_GENESIS = true;
@@ -61,14 +63,7 @@ public class ClusterTesting {
     private static final Logger log = LoggerFactory.getLogger(ClusterTesting.class);
 
     @Test
-    public void loadTest() throws Exception {
-
-        smokeLoad(20, Duration.ofSeconds(600), Duration.ofMillis(300), 400, Duration.ofSeconds(1), 30,
-                  Duration.ofMillis(15));
-    }
-
-    @Test
-    public void smoke() throws Exception {
+    public void createGenesis() throws Exception {
         ClientConfig configuration = new ClientConfig();
         configuration.property(ClientProperties.CONNECT_TIMEOUT, 1000);
         configuration.property(ClientProperties.READ_TIMEOUT, 60000);
@@ -83,6 +78,13 @@ public class ClusterTesting {
 
         smokeSyncApi(endpoint);
         smokeAsync(endpoint);
+    }
+
+    @Test
+    public void loadTest() throws Exception {
+
+        smokeLoad(20, Duration.ofSeconds(600), Duration.ofMillis(300), 400, Duration.ofSeconds(1), 100,
+                  Duration.ofMillis(15));
     }
 
     private void createGenesis(WebTarget endpoint) {
