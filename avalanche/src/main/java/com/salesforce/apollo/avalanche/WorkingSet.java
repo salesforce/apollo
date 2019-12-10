@@ -996,8 +996,7 @@ public class WorkingSet {
     }
 
     public int sampleParents(Collection<HashKey> collector, Random entropy) {
-        List<HashKey> sample = frontier();
-        Collections.shuffle(sample, entropy);
+        List<HashKey> sample = singularFrontier(entropy);
         if (sample.isEmpty()) {
             sample = frontier(entropy);
         }
@@ -1008,7 +1007,7 @@ public class WorkingSet {
             sample = preferred(entropy);
         }
         if (sample.isEmpty()) {
-            collector.addAll(finalized().stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
+            sample = new ArrayList<>(finalized().stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
         }
         collector.addAll(sample);
         return sample.size();

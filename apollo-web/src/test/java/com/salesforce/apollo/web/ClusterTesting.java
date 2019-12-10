@@ -31,6 +31,8 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.client.ClientProperties;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -61,15 +63,11 @@ public class ClusterTesting {
     private static final Logger log = LoggerFactory.getLogger(ClusterTesting.class);
 
     @Test
-    public void loadTest() throws Exception {
-
-        smokeLoad(400, Duration.ofSeconds(600), Duration.ofMillis(100), 400, Duration.ofSeconds(1), 2,
-                  Duration.ofMillis(15));
-    }
-
-    @Test
-    public void smoke() throws Exception {
-        Client client = ClientBuilder.newClient();
+    public void createGenesis() throws Exception {
+        ClientConfig configuration = new ClientConfig();
+        configuration.property(ClientProperties.CONNECT_TIMEOUT, 1000);
+        configuration.property(ClientProperties.READ_TIMEOUT, 60000);
+        Client client = ClientBuilder.newClient(configuration);
 
         final WebTarget endpoint = client.target(new URL("http", LOAD_BALANCER, 8080, "/").toURI());
 
@@ -80,6 +78,13 @@ public class ClusterTesting {
 
         smokeSyncApi(endpoint);
         smokeAsync(endpoint);
+    }
+
+    @Test
+    public void loadTest() throws Exception {
+
+        smokeLoad(20, Duration.ofSeconds(600), Duration.ofMillis(300), 400, Duration.ofSeconds(1), 100,
+                  Duration.ofMillis(15));
     }
 
     private void createGenesis(WebTarget endpoint) {
@@ -112,7 +117,7 @@ public class ClusterTesting {
     }
 
     private void smokeLoad(int clientCount, Duration duration, Duration initialDelay, int outstanding,
-                           Duration queryInterval, int maxDelta, Duration submitInterval) {
+                           Duration queryInterval, int batchSize, Duration submitInterval) {
         MetricRegistry registry = new MetricRegistry();
         List<Transactioneer> txneers = new ArrayList<>();
         for (int i = 0; i < clientCount; i++) {
@@ -136,11 +141,11 @@ public class ClusterTesting {
                 throw new IllegalStateException(e);
             }
 
-            final WebTarget submitEndpoint = endpoint.path("api/byteTransaction/submitAsync");
+            final WebTarget submitEndpoint = endpoint.path("api/byteTransaction/submitAll");
             final WebTarget queryEndpoint = endpoint.path("api/dag/queryAllFinalized");
- 
+
             t.start(scheduler, duration, scheduler, queryInterval, queryEndpoint, scheduler, submitInterval,
-                    submitEndpoint, outstanding, initialDelay, maxDelta);
+                    submitEndpoint, outstanding, initialDelay, batchSize);
         });
 
         log.info("Load test started");
