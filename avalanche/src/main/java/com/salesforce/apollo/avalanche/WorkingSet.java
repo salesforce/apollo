@@ -592,8 +592,6 @@ public class WorkingSet {
 
         private final List<MaterializedNode> dependents = new ArrayList<>();
 
-        private volatile boolean finalized;
-
         public UnknownNode(HashKey key, long discovered) {
             super(key, discovered);
         }
@@ -627,25 +625,17 @@ public class WorkingSet {
 
         @Override
         public boolean isFinalized() {
-            return finalized;
+            return false;
         }
 
         @Override
         public Boolean isPreferred() {
-            boolean current = finalized;
-            if (current) {
-                return true;
-            }
             log.trace("node is unknown, not preferred");
             return null;
         }
 
         @Override
         public Boolean isStronglyPreferred() {
-            boolean current = finalized;
-            if (current) {
-                return true;
-            }
             log.info("{} failed to strongly prefer because querying unknown", key);
             return null;
         }
@@ -657,7 +647,7 @@ public class WorkingSet {
 
         @Override
         public void markFinalized() {
-            finalized = true;
+            throw new IllegalStateException("Unknown nodes cannot be finalized");
         }
 
         @Override
@@ -710,7 +700,7 @@ public class WorkingSet {
 
         @Override
         public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
-            return finalized;
+            return false;
         }
     }
 

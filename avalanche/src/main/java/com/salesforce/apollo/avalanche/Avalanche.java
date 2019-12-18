@@ -661,6 +661,7 @@ public class Avalanche {
         try {
             query();
             generateNoOpTxns();
+            Thread.sleep(0, 500);
         } catch (Throwable t) {
             log.error("Error performing Avalanche batch round", t);
         }
