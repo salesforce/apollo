@@ -238,6 +238,9 @@ public class WorkingSet {
             final int currentConfidence = confidence;
             final boolean preferred = conflictSet.getPreferred() == this;
             if (conflictSet.getCounter() >= parameters.core.beta2 && preferred) {
+                if (!isComplete()) {
+                    return false;
+                }
                 finalized = true;
                 finalizedSet.add(this);
                 traverseClosure(node -> {
