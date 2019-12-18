@@ -107,6 +107,12 @@ public class TestMtls {
             }
 
             @Override
+            public List<ByteBuffer> requestDag(List<HASH> wanted) {
+                // TODO Auto-generated method stub
+                return null;
+            }
+
+            @Override
             public void update(int ring, Update update) {
                 // TODO Auto-generated method stub
 

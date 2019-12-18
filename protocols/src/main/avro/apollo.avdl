@@ -137,4 +137,9 @@ protocol Apollo {
      * Avalanche query
      */
     QueryResult query ( array<bytes> transactions, array<HASH> wanted );
+    
+    /**
+     * parent gossip
+     */
+    array<bytes> requestDag (array<HASH> wanted );
 }
