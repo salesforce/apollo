@@ -121,6 +121,10 @@ public class Avalanche {
             return new QueryResult(queried,
                     dag.getEntries(wanted.stream().map(e -> new HashKey(e)).collect(Collectors.toList())));
         }
+
+        public List<ByteBuffer> requestDAG(List<HASH> want) {
+            return dag.getEntries(want.stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
+        }
     }
 
     private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
@@ -455,6 +459,26 @@ public class Avalanche {
             if (timer != null) {
                 timer.close();
             }
+            List<HASH> wanted = dag.getWanted().stream().map(e -> e.toHash()).collect(Collectors.toList());
+            if (wanted.isEmpty()) {
+                log.trace("no wanted DAG entries");
+                return 0;
+            }
+            Member member = sample.get(getEntropy().nextInt(sample.size()));
+            AvalancheClientCommunications connection = comm.connectToNode(member, getNode());
+            if (connection == null) {
+                log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
+            }
+            try {
+                List<ByteBuffer> entries = connection.requestDAG(wanted);
+                dag.insertSerialized(entries, System.currentTimeMillis());
+                if (metrics != null) {
+                    metrics.getWantedRate().mark(wanted.size());
+                    metrics.getSatisfiedRate().mark(entries.size());
+                }
+            } catch (AvroRemoteException e) {
+                log.warn("Error requesting DAG {} for {}", member, wanted.size(), e);
+            }
             return 0;
         }
         List<ByteBuffer> query = dag.getQuerySerializedEntries(unqueried);
@@ -551,7 +575,7 @@ public class Avalanche {
                 for (int i = 0; i < batch.size(); i++) {
                     invalid[i].incrementAndGet();
                 }
-                log.info("Error querying {} for {}", m, batch, e);
+                log.warn("Error querying {} for {}", m, batch, e);
                 return false;
             } finally {
                 connection.close();

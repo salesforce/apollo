@@ -32,8 +32,8 @@ import com.salesforce.apollo.protocols.Avalanche;
 public class AvalancheClientCommunications extends CommonClientCommunications implements Avalanche {
     private static final Logger     log = LoggerFactory.getLogger(AvalancheClientCommunications.class);
     private final Apollo            client;
-    private final Transceiver       transceiver;
     private final SpecificRequestor requestor;
+    private final Transceiver       transceiver;
 
     public AvalancheClientCommunications(Transceiver transceiver, Member member) throws AvroRemoteException {
         super(member);
@@ -44,6 +44,10 @@ public class AvalancheClientCommunications extends CommonClientCommunications im
         } catch (IOException e) {
             throw new AvroRemoteException("Cannot create proxy rpc client to: " + member + " : " + transceiver, e);
         }
+    }
+
+    public void add(RPCPlugin plugin) {
+        requestor.addRPCPlugin(plugin);
     }
 
     @Override
@@ -60,7 +64,8 @@ public class AvalancheClientCommunications extends CommonClientCommunications im
         return client.query(transactions, wanted);
     }
 
-    public void add(RPCPlugin plugin) {
-        requestor.addRPCPlugin(plugin);
+    @Override
+    public List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException {
+        return client.requestDag(want);
     }
 }
