@@ -1170,13 +1170,17 @@ public class WorkingSet {
     }
 
     public List<HashKey> frontier() {
-        return unfinalized.values().stream().filter(node -> node.isFrontier()).map(node -> node.getKey()).collect(Collectors.toList());
+        return unfinalized.values()
+                          .stream()
+                          .filter(node -> node.isFrontier())
+                          .map(node -> node.getKey())
+                          .collect(Collectors.toList());
     }
 
     private byte[] getBytes(HashKey key) {
         final Node node = unfinalized.get(key);
         if (node != null) {
-            if (node.isUnknown()) {
+            if (!node.isComplete()) {
                 queueUnqueried(node.getKey());
                 return null;
             } else {
