@@ -1,18 +1,18 @@
 # Apollo
-The Apollo project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.   The underlying membership of Apollo is managed by the Fireflies secure communication layer.  The consensus layer is supplied by Avalanche.  An IPFS-esque DAG based DHT is provided in addition to DAG ledger state.
+The Apollo project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication layer.  The consensus layer is supplied by Avalanche.  An IPFS-esque DAG based DHT is provided in addition to DAG ledger state.
 
 
 ## Protocols
-* [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communictions
-    * Assumes byzantine members (and allows one to parameterize the system according to the probability of such)
-    * Creates an overlay network in which each member gossips with the successor of the member in a ring
-    * The monitoring ring is capable of detecting member crashes (failures)
-    * Reliable group message flooding
+* [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications
+    * Assumes byzantine members (and allows one to parameterize the system according to the probability of such).
+    * Creates an overlay network in which each member gossips with the successor of the member in a ring.
+    * The monitoring ring is capable of detecting member crashes (failures).
+    * Reliable group message flooding.
 * [Avalanche](https://arxiv.org/abs/1906.08936) - scalable, leaderless, byzantine fault tolerant consensus
-    * Consensus on causal ordering of events with a high dynamic range of nodes
+    * Consensus on causal ordering of events with a high dynamic range of nodes.
 * Ghost- a Merkle directed acyclic graph (DAG) used for storing block data
-    * An immutable, content-based, single hop Distributed Hash Table (DHT) in which the "key" of data stored is the hash of that data (meaning you look up data with the key)
-    * Leverages the underlying Fireflies rings for consistent hash rings and single hop routing
+    * An immutable, content-based, single hop Distributed Hash Table (DHT) in which the "key" of data stored is the hash of that data (meaning you look up data with the key).
+    * Leverages the underlying Fireflies rings for consistent hash rings and single hop routing.
 
 
 ## Not A Coin Platform(tm)
