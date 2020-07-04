@@ -22,11 +22,8 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.glassfish.jersey.client.ClientProperties;
-import org.glassfish.jersey.client.JerseyClientBuilder;
 import org.junit.After;
 import org.junit.BeforeClass;
-import org.junit.Rule;
 import org.junit.Test;
 
 import com.salesforce.apollo.Apollo;
@@ -40,7 +37,7 @@ import com.salesforce.apollo.web.resources.DagApi.QueryFinalizedResult;
 import com.salesforce.apollo.web.resources.GenesisBlockApi.Result;
 
 import io.dropwizard.testing.ResourceHelpers;
-import io.dropwizard.testing.junit.DropwizardAppRule;
+import io.dropwizard.testing.junit5.DropwizardAppExtension;
 
 /**
  * @author hhildebrand
@@ -62,16 +59,8 @@ public class ApolloServiceTest {
         baseDir.mkdirs();
     }
 
-    @Rule
-    public final DropwizardAppRule<ApolloServiceConfiguration> RULE = new DropwizardAppRule<ApolloServiceConfiguration>(
-            ApolloService.class, ResourceHelpers.resourceFilePath("server.yml")) {
-
-        @Override
-        protected JerseyClientBuilder clientBuilder() {
-            return super.clientBuilder().property(ClientProperties.CONNECT_TIMEOUT, 1000)
-                                        .property(ClientProperties.READ_TIMEOUT, 60_000);
-        }
-    };
+    private static DropwizardAppExtension<ApolloServiceConfiguration> EXT = new DropwizardAppExtension<>(
+            ApolloService.class, ResourceHelpers.resourceFilePath("server.yml"));
 
     @Test
     public void smoke() throws Exception {
@@ -99,7 +88,7 @@ public class ApolloServiceTest {
             }
         });
 
-        Client client = RULE.client();
+        Client client = EXT.client();
 
         boolean stabilized = Utils.waitForCondition(15_000, 1_000, () -> {
             return oracles.stream()
@@ -113,7 +102,7 @@ public class ApolloServiceTest {
                 + (System.currentTimeMillis() - then) + " millis");
 
         Response response = client.target(String.format("http://localhost:%d/api/genesisBlock/create",
-                                                        RULE.getLocalPort()))
+                                                        EXT.getLocalPort()))
                                   .request(MediaType.APPLICATION_JSON)
                                   .post(Entity.json(new String(
                                           Base64.getUrlEncoder().withoutPadding().encode("Hello World".getBytes()))));
@@ -122,7 +111,7 @@ public class ApolloServiceTest {
         assertNotNull(genesisResult);
         assertFalse(genesisResult.errorMessage, genesisResult.error);
 
-        response = client.target(String.format("http://localhost:%d/api/byteTransaction/submit", RULE.getLocalPort()))
+        response = client.target(String.format("http://localhost:%d/api/byteTransaction/submit", EXT.getLocalPort()))
                          .request(MediaType.APPLICATION_JSON)
                          .post(Entity.json(new ByteTransactionApi.ByteTransaction(40_000, "Hello World".getBytes())));
 
@@ -131,7 +120,7 @@ public class ApolloServiceTest {
         assertNotNull(result);
         assertFalse(result.errorMessage, result.error);
 
-        response = client.target(String.format("http://localhost:%d/api/dag/fetch", RULE.getLocalPort()))
+        response = client.target(String.format("http://localhost:%d/api/dag/fetch", EXT.getLocalPort()))
                          .request()
                          .post(Entity.text(result.result));
 
@@ -140,7 +129,7 @@ public class ApolloServiceTest {
         assertNotNull(fetched);
         assertEquals("Hello World", new String(DECODER.decode(fetched)));
 
-        response = client.target(String.format("http://localhost:%d/api/dag/fetchDagNode", RULE.getLocalPort()))
+        response = client.target(String.format("http://localhost:%d/api/dag/fetchDagNode", EXT.getLocalPort()))
                          .request()
                          .post(Entity.text(result.result));
 
@@ -155,7 +144,7 @@ public class ApolloServiceTest {
         // Asynchronous transaction case
 
         response = client.target(String.format("http://localhost:%d/api/byteTransaction/submitAsync",
-                                               RULE.getLocalPort()))
+                                               EXT.getLocalPort()))
                          .request(MediaType.APPLICATION_JSON)
                          .post(Entity.json(new ByteTransactionApi.ByteTransaction(40_000, "Hello World 2".getBytes())));
 
@@ -163,12 +152,12 @@ public class ApolloServiceTest {
         String asyncResult = response.readEntity(String.class);
         assertNotNull(asyncResult);
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
-            Response r = client.target(String.format("http://localhost:%d/api/dag/queryFinalized", RULE.getLocalPort()))
+            Response r = client.target(String.format("http://localhost:%d/api/dag/queryFinalized", EXT.getLocalPort()))
                                .request()
                                .post(Entity.text(asyncResult));
             return r.getStatus() == 200 && r.readEntity(QueryFinalizedResult.class).isFinalized();
         }));
-        response = client.target(String.format("http://localhost:%d/metrics?pretty=true", RULE.getAdminPort()))
+        response = client.target(String.format("http://localhost:%d/metrics?pretty=true", EXT.getAdminPort()))
                          .request()
                          .get();
 
@@ -179,7 +168,7 @@ public class ApolloServiceTest {
     @After
     public void stop() {
         try {
-            ((ApolloService) RULE.getApplication()).stop();
+            ((ApolloService) EXT.getApplication()).stop();
         } catch (Throwable e) {
             // ignore
         }

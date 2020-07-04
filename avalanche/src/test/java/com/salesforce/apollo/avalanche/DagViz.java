@@ -28,7 +28,6 @@ import com.salesforce.apollo.protocols.HashKey;
 
 import guru.nidi.graphviz.attribute.Color;
 import guru.nidi.graphviz.attribute.Label;
-import guru.nidi.graphviz.attribute.RankDir;
 import guru.nidi.graphviz.attribute.Shape;
 import guru.nidi.graphviz.attribute.Style;
 import guru.nidi.graphviz.model.MutableGraph;
@@ -86,7 +85,7 @@ public class DagViz {
     public static MutableGraph visualize(String title, WorkingSet dag, boolean ignoreNoOp) {
         return mutGraph(title).setDirected(true).use((gr, ctx) -> {
             traverse(dag, ignoreNoOp);
-        }).graphAttrs().add(RankDir.BOTTOM_TO_TOP);
+        });
     }
 
     static void traverse(WorkingSet dag, boolean ignoreNoOp) {

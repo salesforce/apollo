@@ -38,13 +38,6 @@ import java.util.stream.Collectors;
 
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response.Status;
 
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
@@ -66,13 +59,19 @@ import io.github.olivierlemasle.ca.RootCertificate;
 import io.github.olivierlemasle.ca.Signer.SignerWithSerial;
 import io.github.olivierlemasle.ca.SignerImpl;
 import io.github.olivierlemasle.ca.ext.CertExtension;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response.Status;
 import liquibase.Contexts;
 import liquibase.Liquibase;
 import liquibase.database.Database;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.exception.DatabaseException;
-import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
@@ -81,14 +80,15 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 @Path("/api/cnc")
 public class MintApi {
     public static class MintRequest {
-        private int avalanchePort;
-        private int firefliesPort;
-        private int ghostPort;
+        private int    avalanchePort;
+        private int    firefliesPort;
+        private int    ghostPort;
         private String hostname;
         private String publicKey;
         private String signature;
 
-        public MintRequest() {}
+        public MintRequest() {
+        }
 
         public MintRequest(String hostname, int firefliesPort, int ghostPort, int avalanchePort, String publicKey,
                 String signature) {
@@ -127,11 +127,12 @@ public class MintApi {
     }
 
     public static class MintResult {
-        private String encodedCA;
-        private String encodedIdentity;
+        private String       encodedCA;
+        private String       encodedIdentity;
         private List<String> encodedSeeds;
 
-        public MintResult() {};
+        public MintResult() {
+        };
 
         public MintResult(String encodedCA, String encodedIdentity, List<String> encodedSeeds) {
             this.encodedCA = encodedCA;
@@ -152,11 +153,11 @@ public class MintApi {
         }
     }
 
-    public static final String PORT_TEMPLATE = "%s:%s:%s";
-    public static final String SHA_256 = "sha-256";
-    public static final String SIGNATURE_ALGORITHM = "SHA256withRSA";
-    private static final Decoder DECODER = Base64.getUrlDecoder();
-    private static final Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
+    public static final String   PORT_TEMPLATE       = "%s:%s:%s";
+    public static final String   SHA_256             = "sha-256";
+    public static final String   SIGNATURE_ALGORITHM = "SHA256withRSA";
+    private static final Decoder DECODER             = Base64.getUrlDecoder();
+    private static final Encoder ENCODER             = Base64.getUrlEncoder().withoutPadding();
 
     public static void loadSchema(DSLContext context) {
         Connection connection = context.configuration().connectionProvider().acquire();
@@ -167,16 +168,15 @@ public class MintApi {
             throw new IllegalStateException("Unable to get DB factory for: " + connection, e);
         }
         database.setLiquibaseSchemaName("public");
-        Liquibase liquibase = new Liquibase("bootstrap-schema.yml",
-                                            new ClassLoaderResourceAccessor(MintApi.class.getClassLoader()),
-                                            database);
-        try {
-            liquibase.update((Contexts)null);
-        } catch (LiquibaseException e) {
+        try (Liquibase liquibase = new Liquibase("bootstrap-schema.yml",
+                new ClassLoaderResourceAccessor(MintApi.class.getClassLoader()), database)) {
+            liquibase.update((Contexts) null);
+        } catch (Exception e) {
             throw new IllegalStateException("Cannot load schema", e);
-        }
+        } 
 
-        // liquibase = new Liquibase("functions.yml", new ClassLoaderResourceAccessor(MintApi.class.getClassLoader()),
+        // liquibase = new Liquibase("functions.yml", new
+        // ClassLoaderResourceAccessor(MintApi.class.getClassLoader()),
         // database);
         // try {
         // liquibase.update((Contexts)null);
@@ -192,7 +192,7 @@ public class MintApi {
     }
 
     public static RootCertificate mint(DistinguishedName dn, int cardinality, double probabilityByzantine,
-            double faultTolerance) {
+                                       double faultTolerance) {
 
         DnBuilder builder = dn();
         decodeDN(dn.getName()).entrySet().stream().filter(e -> !e.getKey().equals("O")).forEach(e -> {
@@ -234,18 +234,18 @@ public class MintApi {
             throw new IllegalArgumentException("invalid DN: " + dn, e);
         }
         Map<String, String> decoded = new HashMap<>();
-        ldapDN.getRdns().forEach(rdn -> decoded.put(rdn.getType(), (String)rdn.getValue()));
+        ldapDN.getRdns().forEach(rdn -> decoded.put(rdn.getType(), (String) rdn.getValue()));
         return decoded;
     }
 
-    private final DSLContext context;
-    private final String country = "US";
+    private final DSLContext         context;
+    private final String             country          = "US";
     private final TimeBasedGenerator generator;
-    private final String organization = "World Company";
-    private final String orginazationUnit = "IT dep";
-    private final RootCertificate root;
-    private int seedCount;
-    private final String state = "CA";
+    private final String             organization     = "World Company";
+    private final String             orginazationUnit = "IT dep";
+    private final RootCertificate    root;
+    private int                      seedCount;
+    private final String             state            = "CA";
 
     public MintApi(RootCertificate root, DSLContext context, int seedCount) {
         this(root, Generators.timeBasedGenerator(), context, seedCount);
@@ -272,9 +272,7 @@ public class MintApi {
             throw new WebApplicationException("Invalid host/ports", Status.BAD_REQUEST);
         }
         DistinguishedName dn = dn().setCn(mintRequest.hostname)
-                                   .setL(String.format(PORT_TEMPLATE,
-                                                       mintRequest.firefliesPort,
-                                                       mintRequest.ghostPort,
+                                   .setL(String.format(PORT_TEMPLATE, mintRequest.firefliesPort, mintRequest.ghostPort,
                                                        mintRequest.avalanchePort))
                                    .setO(organization)
                                    .setOu(orginazationUnit)
@@ -333,12 +331,13 @@ public class MintApi {
                   .where(MEMBERS.ID.eq(id))
                   .and(MEMBERS.VERSION.eq(thisVersion))
                   .execute();
-            return new MintResult(ENCODER.encodeToString(create.select(SETTINGS.CA_CERTIFICATE)
-                                                               .from(SETTINGS)
-                                                               .where(SETTINGS.VERSION.eq(caVersion))
-                                                               .fetchOne()
-                                                               .value1()),
-                                  ENCODER.encodeToString(derEncoded), chooseSeeds(id, create));
+            return new MintResult(
+                    ENCODER.encodeToString(create.select(SETTINGS.CA_CERTIFICATE)
+                                                 .from(SETTINGS)
+                                                 .where(SETTINGS.VERSION.eq(caVersion))
+                                                 .fetchOne()
+                                                 .value1()),
+                    ENCODER.encodeToString(derEncoded), chooseSeeds(id, create));
         });
     }
 
@@ -398,16 +397,18 @@ public class MintApi {
         cereal.putLong(serialNumber.getMostSignificantBits());
         cereal.putLong(serialNumber.getLeastSignificantBits());
 
-        SignerWithSerial signer = new SignerImpl(new KeyPair(root.getX509Certificate().getPublicKey(),
-                                                             root.getPrivateKey()),
-                                                 dn(root.getX509Certificate().getSubjectX500Principal().getName()),
-                                                 publicKey, dn).setSerialNumber(new BigInteger(cereal.array()));
+        SignerWithSerial signer = new SignerImpl(
+                new KeyPair(root.getX509Certificate().getPublicKey(),
+                        root.getPrivateKey()),
+                dn(root.getX509Certificate().getSubjectX500Principal().getName()), publicKey, dn)
+                                                                                                 .setSerialNumber(new BigInteger(
+                                                                                                         cereal.array()));
 
         ByteBuffer idBuff = ByteBuffer.wrap(new byte[16]);
         idBuff.putLong(id.getMostSignificantBits());
         idBuff.putLong(id.getLeastSignificantBits());
         signer.addExtension(new CertExtension(Extension.subjectKeyIdentifier, false,
-                                              new SubjectKeyIdentifier(idBuff.array())));
+                new SubjectKeyIdentifier(idBuff.array())));
         signer.addExtension(Extension.basicConstraints, false, new BasicConstraints(false));
         return signer.sign(false);
     }

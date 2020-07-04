@@ -18,8 +18,6 @@ import java.util.stream.Collectors;
 
 import org.junit.Test;
 
-import com.salesforce.apollo.slush.Color;
-
 @SuppressWarnings("rawtypes")
 abstract public class AbstractProtocolTest {
 

@@ -34,39 +34,26 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.glassfish.jersey.client.ClientProperties;
-import org.glassfish.jersey.client.JerseyClientBuilder;
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import com.salesforce.apollo.bootstrap.MintApi.MintRequest;
 import com.salesforce.apollo.bootstrap.MintApi.MintResult;
 
 import io.dropwizard.testing.ResourceHelpers;
-import io.dropwizard.testing.junit.DropwizardAppRule;
+import io.dropwizard.testing.junit5.DropwizardAppExtension;
 import io.github.olivierlemasle.ca.KeysUtil;
 
 /**
  * @author hhildebrand
  */
 public class SeedTest {
-
-    @ClassRule
-    public static final DropwizardAppRule<BootstrapConfiguration> RULE = new DropwizardAppRule<BootstrapConfiguration>(BootstrapCA.class,
-                                                                                                                       ResourceHelpers.resourceFilePath("seeds.yml")) {
-
-        @Override
-        protected JerseyClientBuilder clientBuilder() {
-            return super.clientBuilder().property(ClientProperties.CONNECT_TIMEOUT, 1000)
-                                        .property(ClientProperties.READ_TIMEOUT, 60_000);
-        }
-    };
-    private static final Encoder ENCODER = Base64.getUrlEncoder()
-                                                 .withoutPadding();
+    private static DropwizardAppExtension<BootstrapConfiguration> EXT     = new DropwizardAppExtension<>(
+            BootstrapCA.class, ResourceHelpers.resourceFilePath("seeds.yml"));
+    private static final Encoder                                  ENCODER = Base64.getUrlEncoder().withoutPadding();
 
     @Test
     public void seeds() throws Exception {
-        Client client = RULE.client();
+        Client client = EXT.client();
         Response response = null;
         for (int i = 0; i < 20; i++) {
             response = mint(client, "localhost", i * 100, i * 101, i * 102);
@@ -110,13 +97,9 @@ public class SeedTest {
 
         KeyPair pair = KeysUtil.generateKeyPair();
         MintRequest request = new MintRequest(host, fPort, gPort, aPort,
-                                              ENCODER.encodeToString(pair.getPublic().getEncoded()),
-                                              ENCODER.encodeToString(sign(pair.getPublic(),
-                                                                          forSigning(pair.getPrivate(),
-                                                                                     new SecureRandom()))));
-        return client.target(
-                             String.format("http://localhost:%d/api/cnc/mint",
-                                           RULE.getLocalPort()))
+                ENCODER.encodeToString(pair.getPublic().getEncoded()),
+                ENCODER.encodeToString(sign(pair.getPublic(), forSigning(pair.getPrivate(), new SecureRandom()))));
+        return client.target(String.format("http://localhost:%d/api/cnc/mint", EXT.getLocalPort()))
                      .request(MediaType.APPLICATION_JSON)
                      .post(Entity.json(request));
     }

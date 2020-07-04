@@ -28,17 +28,38 @@
 		<h2.version>1.4.200</h2.version>
 		<jooq.version>3.13.2</jooq.version>
 		<bc.version>1.65.01</bc.version>
+		<logback.version>1.3.0-alpha5</logback.version>
 
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 
 
 	<dependencyManagement>
-		<dependencies> 
+		<dependencies>
+			<dependency>
+				<groupId>ch.qos.logback</groupId>
+				<artifactId>logback-core</artifactId>
+				<version>${logback.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>ch.qos.logback</groupId>
+				<artifactId>logback-classic</artifactId>
+				<version>${logback.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.glassfish</groupId>
+				<artifactId>jakarta.el</artifactId>
+				<version>4.0.0-RC2</version>
+			</dependency>
+			<dependency>
+				<groupId>jakarta.validation</groupId>
+				<artifactId>jakarta.validation-api</artifactId>
+				<version>3.0.0-M1</version>
+			</dependency>
 			<dependency>
 				<groupId>org.checkerframework</groupId>
 				<artifactId>checker-qual</artifactId>
-				<version>3.4.1</version>
+				<version>3.5.0</version>
 			</dependency>
 			<dependency>
 				<groupId>com.google.errorprone</groupId>
@@ -48,22 +69,22 @@
 			<dependency>
 				<groupId>org.glassfish.jersey.ext</groupId>
 				<artifactId>jersey-bean-validation</artifactId>
-				<version>2.31</version>
+				<version>3.0.0-M6</version>
 			</dependency>
 			<dependency>
 				<groupId>jakarta.xml.bind</groupId>
 				<artifactId>jakarta.xml.bind-api</artifactId>
-				<version>2.3.3</version>
+				<version>3.0.0-RC3</version>
 			</dependency>
 			<dependency>
 				<groupId>jakarta.annotation</groupId>
 				<artifactId>jakarta.annotation-api</artifactId>
-				<version>1.3.5</version>
+				<version>2.0.0-RC1</version>
 			</dependency>
 			<dependency>
 				<groupId>jakarta.activation</groupId>
 				<artifactId>jakarta.activation-api</artifactId>
-				<version>1.2.2</version>
+				<version>2.0.0-RC3</version>
 				<scope>provided</scope>
 			</dependency>
 			<dependency>
@@ -74,7 +95,7 @@
 			<dependency>
 				<groupId>com.fasterxml</groupId>
 				<artifactId>classmate</artifactId>
-				<version>1.5.0</version>
+				<version>1.5.1</version>
 			</dependency>
 			<dependency>
 				<groupId>javax.validation</groupId>
@@ -84,17 +105,17 @@
 			<dependency>
 				<groupId>org.yaml</groupId>
 				<artifactId>snakeyaml</artifactId>
-				<version>1.24</version>
+				<version>1.26</version>
 			</dependency>
 			<dependency>
 				<groupId>org.apache.commons</groupId>
 				<artifactId>commons-lang3</artifactId>
-				<version>3.9</version>
+				<version>3.10</version>
 			</dependency>
 			<dependency>
 				<groupId>org.hibernate.validator</groupId>
 				<artifactId>hibernate-validator</artifactId>
-				<version>6.1.0.Final</version>
+				<version>7.0.0.Alpha4</version>
 			</dependency>
 			<dependency>
 				<groupId>com.github.ben-manes.caffeine</groupId>
@@ -115,27 +136,27 @@
 			<dependency>
 				<groupId>joda-time</groupId>
 				<artifactId>joda-time</artifactId>
-				<version>2.10.1</version>
+				<version>2.10.6</version>
 			</dependency>
 			<dependency>
 				<groupId>commons-io</groupId>
 				<artifactId>commons-io</artifactId>
-				<version>2.6</version>
+				<version>2.7</version>
 			</dependency>
 			<dependency>
 				<groupId>javax.xml.bind</groupId>
 				<artifactId>jaxb-api</artifactId>
-				<version>2.3.0</version>
+				<version>2.4.0-b180830.0359</version>
 			</dependency>
 			<dependency>
 				<groupId>com.sun.xml.bind</groupId>
 				<artifactId>jaxb-impl</artifactId>
-				<version>2.3.0.1</version>
+				<version>3.0.0-M4</version>
 			</dependency>
 			<dependency>
 				<groupId>com.sun.xml.bind</groupId>
 				<artifactId>jaxb-core</artifactId>
-				<version>2.3.0.1</version>
+				<version>3.0.0-M4</version>
 			</dependency>
 			<dependency>
 				<groupId>javax.activation</groupId>
@@ -150,7 +171,7 @@
 			<dependency>
 				<groupId>cglib</groupId>
 				<artifactId>cglib-nodep</artifactId>
-				<version>3.2.7</version>
+				<version>3.3.0</version>
 			</dependency>
 			<dependency>
 				<groupId>com.fasterxml.jackson</groupId>
@@ -167,7 +188,7 @@
 			<dependency>
 				<groupId>org.slf4j</groupId>
 				<artifactId>slf4j-api</artifactId>
-				<version>1.7.28</version>
+				<version>2.0.0-alpha1</version>
 			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
@@ -263,32 +284,37 @@
 			<dependency>
 				<groupId>com.fasterxml.uuid</groupId>
 				<artifactId>java-uuid-generator</artifactId>
-				<version>3.2.0</version>
-			</dependency>
-			<dependency>
-				<groupId>ch.qos.logback</groupId>
-				<artifactId>logback-classic</artifactId>
-				<version>1.2.3</version>
+				<version>4.0.1</version>
 			</dependency>
 			<dependency>
 				<groupId>javax.servlet</groupId>
 				<artifactId>javax.servlet-api</artifactId>
-				<version>3.1.0</version>
+				<version>4.0.1</version>
 			</dependency>
 			<dependency>
 				<groupId>org.glassfish.jersey.core</groupId>
 				<artifactId>jersey-client</artifactId>
-				<version>2.31</version>
+				<version>3.0.0-M6</version>
+			</dependency>
+			<dependency>
+				<groupId>jakarta.ws.rs</groupId>
+				<artifactId>jakarta.ws.rs-api</artifactId>
+				<version>3.0.0-M1</version>
+			</dependency>
+			<dependency>
+				<groupId>javax.ws.rs</groupId>
+				<artifactId>javax.ws.rs-api</artifactId>
+				<version>2.1.1</version>
 			</dependency>
 			<dependency>
 				<groupId>org.glassfish.jersey.core</groupId>
 				<artifactId>jersey-server</artifactId>
-				<version>2.31</version>
+				<version>3.0.0-M6</version>
 			</dependency>
 			<dependency>
 				<groupId>org.glassfish.jersey.core</groupId>
 				<artifactId>jersey-common</artifactId>
-				<version>2.31</version>
+				<version>3.0.0-M6</version>
 			</dependency>
 			<dependency>
 				<groupId>io.netty</groupId>
@@ -343,17 +369,17 @@
 			<dependency>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-core</artifactId>
-				<version>3.6.3</version>
+				<version>4.0.0-beta2</version>
 			</dependency>
 			<dependency>
 				<groupId>com.zaxxer</groupId>
 				<artifactId>HikariCP</artifactId>
-				<version>3.4.1</version>
+				<version>3.4.5</version>
 			</dependency>
 			<dependency>
 				<groupId>org.mapdb</groupId>
 				<artifactId>mapdb</artifactId>
-				<version>3.0.7</version>
+				<version>3.0.8</version>
 			</dependency>
 
 			<!-- Test dependencies only below this line! -->
@@ -361,22 +387,23 @@
 			<dependency>
 				<groupId>org.mockito</groupId>
 				<artifactId>mockito-all</artifactId>
-				<version>1.10.19</version>
+				<version>2.0.2-beta</version>
 			</dependency>
 			<dependency>
-				<groupId>junit</groupId>
-				<artifactId>junit</artifactId>
-				<version>4.12</version>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter-engine</artifactId>
+				<version>5.6.2</version>
+				<scope>test</scope>
 			</dependency>
 			<dependency>
 				<groupId>org.slf4j</groupId>
 				<artifactId>log4j-over-slf4j</artifactId>
-				<version>1.7.28</version>
+				<version>2.0.0-alpha1</version>
 			</dependency>
 			<dependency>
 				<groupId>guru.nidi</groupId>
 				<artifactId>graphviz-java</artifactId>
-				<version>0.8.7</version>
+				<version>0.16.3</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

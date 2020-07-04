@@ -21,8 +21,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.fireflies.Member;
-import com.salesforce.apollo.slush.AbstractProtocol;
-import com.salesforce.apollo.slush.Communications;
 
 /**
  * @author hal.hildebrand
@@ -32,7 +30,7 @@ import com.salesforce.apollo.slush.Communications;
 public class MockCommunications<Protocol extends AbstractProtocol<?, ?>> implements Communications {
     protected static class TimeSink {
         final ScheduledFuture<?> futureSailor;
-        final Sink<?> sink;
+        final Sink<?>            sink;
 
         TimeSink(Sink<?> sink, ScheduledFuture<?> futureSailor) {
             this.sink = sink;
@@ -42,10 +40,10 @@ public class MockCommunications<Protocol extends AbstractProtocol<?, ?>> impleme
 
     private static Logger log = LoggerFactory.getLogger(MockCommunications.class);
 
-    protected final Member address;
-    protected final ConcurrentMap<UUID, TimeSink> outstanding = new ConcurrentHashMap<>();
-    protected final ConcurrentMap<Member, MockCommunications> peers = new ConcurrentHashMap<>();
-    protected final ScheduledExecutorService scheduler;
+    protected final Member                                    address;
+    protected final ConcurrentMap<UUID, TimeSink>             outstanding = new ConcurrentHashMap<>();
+    protected final ConcurrentMap<Member, MockCommunications> peers       = new ConcurrentHashMap<>();
+    protected final ScheduledExecutorService                  scheduler;
 
     private Protocol protocol;
 
@@ -108,12 +106,12 @@ public class MockCommunications<Protocol extends AbstractProtocol<?, ?>> impleme
                     try {
                         log.debug("{} query ({}) to {}", address, message.get(), coms.address());
                         @SuppressWarnings("unchecked")
-                        T response = (T)coms.getProtocol().query(message.get());
+                        T response = (T) coms.getProtocol().query(message.get());
                         log.debug("{} response {} from {}", address, response, coms.address());
                         TimeSink timeSink = outstanding.get(sink);
                         if (timeSink != null) {
                             @SuppressWarnings("unchecked")
-                            Sink<T> ts = (Sink<T>)timeSink.sink;
+                            Sink<T> ts = (Sink<T>) timeSink.sink;
                             ts.consume(coms.address(), response);
                         }
                     } catch (Throwable t) {

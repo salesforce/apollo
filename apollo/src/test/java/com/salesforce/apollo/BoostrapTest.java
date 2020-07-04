@@ -22,9 +22,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
-import org.glassfish.jersey.client.ClientProperties;
-import org.glassfish.jersey.client.JerseyClientBuilder;
-import org.junit.Rule;
 import org.junit.Test;
 
 import com.salesforce.apollo.avalanche.Avalanche;
@@ -34,23 +31,15 @@ import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 import io.dropwizard.testing.ResourceHelpers;
-import io.dropwizard.testing.junit.DropwizardAppRule;
+import io.dropwizard.testing.junit5.DropwizardAppExtension;
 
 /**
  * @author hhildebrand
  */
 public class BoostrapTest {
 
-    @Rule
-    public final DropwizardAppRule<BootstrapConfiguration> RULE = new DropwizardAppRule<BootstrapConfiguration>(
-            BootstrapCA.class, ResourceHelpers.resourceFilePath("bootstrap.yml")) {
-
-        @Override
-        protected JerseyClientBuilder clientBuilder() {
-            return super.clientBuilder().property(ClientProperties.CONNECT_TIMEOUT, 1000)
-                                        .property(ClientProperties.READ_TIMEOUT, 60_000);
-        }
-    };
+    private static DropwizardAppExtension<BootstrapConfiguration> EXT = new DropwizardAppExtension<BootstrapConfiguration>(
+            BootstrapCA.class, ResourceHelpers.resourceFilePath("bootstrap.yml"));
 
     @Test
     public void smoke() throws Exception {
@@ -59,7 +48,7 @@ public class BoostrapTest {
         baseDir.mkdirs();
         ApolloConfiguration.SimCommunicationsFactory.reset();
         List<Apollo> oracles = new ArrayList<>();
-        URL endpoint = new URL(String.format("http://localhost:%d/api/cnc/mint", RULE.getLocalPort()));
+        URL endpoint = new URL(String.format("http://localhost:%d/api/cnc/mint", EXT.getLocalPort()));
 
         for (int i = 1; i <= PregenPopulation.getCardinality(); i++) {
             ApolloConfiguration config = new ApolloConfiguration();

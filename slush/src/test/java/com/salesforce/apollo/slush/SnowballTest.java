@@ -15,8 +15,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import com.salesforce.apollo.fireflies.Member;
-import com.salesforce.apollo.slush.Color;
-import com.salesforce.apollo.slush.Snowflake;
 import com.salesforce.apollo.slush.config.SnowflakeParameters;
 
 /**
@@ -27,7 +25,7 @@ import com.salesforce.apollo.slush.config.SnowflakeParameters;
 public class SnowballTest extends AbstractProtocolTest {
 
     @SuppressWarnings("serial")
-	@Override
+    @Override
     protected MockCommunications newMember(int port, Color initialColor, int cardinality) {
         SnowflakeParameters parameters = new SnowflakeParameters();
         parameters.alpha = 0.9f;
@@ -42,12 +40,12 @@ public class SnowballTest extends AbstractProtocolTest {
         Member member = mock(Member.class);
         MockCommunications<Snowflake<Color>> communications = new MockCommunications<>(member, scheduler);
         communications.setProtocol(new Snowflake<Color>(communications, parameters, new Random(0x666), initialColor,
-                                                        new ArrayList<Color>() {
-                                                            {
-                                                                add(Color.Red);
-                                                                add(Color.Blue);
-                                                            }
-                                                        }, scheduler));
+                new ArrayList<Color>() {
+                    {
+                        add(Color.Red);
+                        add(Color.Blue);
+                    }
+                }, scheduler));
         return communications;
     }
 }
