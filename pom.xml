@@ -20,6 +20,7 @@
 		<module>simple-ca</module>
 		<module>bootstrap-service</module>
 		<module>bootstrap-client</module>
+		<module>chain-scopes</module>
 	</modules>
 
 	<properties>
