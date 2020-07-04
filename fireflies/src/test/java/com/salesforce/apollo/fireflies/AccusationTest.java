@@ -5,8 +5,9 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.fireflies;
+ 
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -14,7 +15,9 @@ import java.security.SecureRandom;
 import java.security.Signature;
 import java.util.UUID;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+ 
 
 public class AccusationTest {
 

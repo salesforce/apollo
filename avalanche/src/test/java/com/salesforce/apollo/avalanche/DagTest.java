@@ -6,10 +6,8 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -22,10 +20,9 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 
 import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
@@ -38,27 +35,27 @@ import com.salesforce.apollo.protocols.Utils;
  */
 public class DagTest {
 
-    private static File baseDir; 
+    private static File baseDir;
     private WorkingSet  workingSet;
     private Random      entropy;
     private DagEntry    root;
     private HashKey     rootKey;
 
-    @BeforeClass
+    @BeforeAll
     public static void beforeClass() {
         baseDir = new File(System.getProperty("user.dir"), "target/dag-tst");
         Utils.clean(baseDir);
         baseDir.mkdirs();
     }
 
-    @After
-    public void after() { 
+    @AfterEach
+    public void after() {
     }
 
-    @Before
+    @BeforeEach
     public void before() throws SQLException {
         entropy = new Random(0x666);
-        final AvalancheParameters parameters = new AvalancheParameters(); 
+        final AvalancheParameters parameters = new AvalancheParameters();
         workingSet = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
         root = new DagEntry();
         root.setDescription(WellKnownDescriptions.GENESIS.toHash());
@@ -98,7 +95,7 @@ public class DagTest {
         for (HashKey key : ordered) {
             assertEquals(1, workingSet.getConflictSet(key).getCardinality());
             DagEntry found = workingSet.getDagEntry(key);
-            assertNotNull("Not found: " + key, found);
+            assertNotNull(found, "Not found: " + key);
             DagEntry original = stored.get(key);
             assertArrayEquals(original.getData().array(), found.getData().array());
             if (original.getLinks() == null) {

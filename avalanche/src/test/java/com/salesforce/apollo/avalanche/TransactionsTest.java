@@ -9,12 +9,7 @@ package com.salesforce.apollo.avalanche;
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
 import static com.salesforce.apollo.protocols.Conversion.serialize;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -29,9 +24,9 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
@@ -47,7 +42,7 @@ public class TransactionsTest {
 
     private static File baseDir;
 
-    @BeforeClass
+    @BeforeAll
     public static void beforeClass() {
         baseDir = new File(System.getProperty("user.dir"), "target/txn-tst");
         Utils.clean(baseDir);
@@ -60,7 +55,7 @@ public class TransactionsTest {
     private DagEntry            root;
     private HashKey             rootKey;
 
-    @Before
+    @BeforeEach
     public void before() throws Exception {
         entropy = new Random(0x1638);
         parameters = new AvalancheParameters();
@@ -187,7 +182,7 @@ public class TransactionsTest {
         assertEquals(3, finalized.finalized.size());
         assertEquals(0, finalized.deleted.size());
         for (HashKey key : finalized.finalized) {
-            assertTrue("not finalized: " + key, dag.isFinalized(key));
+            assertTrue(dag.isFinalized(key), "not finalized: " + key);
         }
     }
 
@@ -266,19 +261,20 @@ public class TransactionsTest {
         ordered.add(key);
 
         HashKey zero = new HashKey(new byte[32]);
-        assertNull("Not exist returned true: ", dag.isStronglyPreferred(zero));
+        assertNull(dag.isStronglyPreferred(zero), "Not exist returned true: ");
 
         byte[] o = new byte[32];
         Arrays.fill(o, (byte) 1);
         HashKey one = new HashKey(o);
-        assertNull("Not exist returned true: ", dag.isStronglyPreferred(one));
-        assertArrayEquals("Aggregate failed: ", new Boolean[] { null, null },
-                          dag.isStronglyPreferred(Arrays.asList(zero, one)).toArray(new Boolean[2]));
+        assertNull(dag.isStronglyPreferred(one), "Not exist returned true: ");
+        assertArrayEquals(new Boolean[] { null, null },
+                          dag.isStronglyPreferred(Arrays.asList(zero, one)).toArray(new Boolean[2]),
+                          "Aggregate failed: ");
 
         // All are strongly preferred
         for (int i = 0; i < ordered.size(); i++) {
             HashKey test = ordered.get(i);
-            assertTrue(String.format("node %s is not strongly preferred", i), dag.isStronglyPreferred(test));
+            assertTrue(dag.isStronglyPreferred(test), String.format("node %s is not strongly preferred", i));
         }
 
         entry = new DagEntry();
@@ -289,15 +285,15 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        assertTrue(String.format("node 3 is not strongly preferred: " + ordered.get(4)),
-                   dag.isStronglyPreferred(ordered.get(3)));
+        assertTrue(dag.isStronglyPreferred(ordered.get(3)),
+                   String.format("node 3 is not strongly preferred: " + ordered.get(4)));
 
-        assertFalse(String.format("node 4 is strongly preferred: " + ordered.get(4)),
-                    dag.isStronglyPreferred(ordered.get(4)));
+        assertFalse(dag.isStronglyPreferred(ordered.get(4)),
+                    String.format("node 4 is strongly preferred: " + ordered.get(4)));
 
         for (int i = 0; i < 4; i++) {
             int it = i;
-            assertTrue(String.format("node %s is not strongly preferred", i), dag.isStronglyPreferred(ordered.get(it)));
+            assertTrue(dag.isStronglyPreferred(ordered.get(it)), String.format("node %s is not strongly preferred", i));
         }
 
         entry = new DagEntry();
@@ -308,17 +304,17 @@ public class TransactionsTest {
         ordered.add(key);
 
         // check transitivity of isStronglyPreferred()
-        assertFalse(String.format("node 5 is strongly preferred"), dag.isStronglyPreferred(ordered.get(5)));
+        assertFalse(dag.isStronglyPreferred(ordered.get(5)), String.format("node 5 is strongly preferred"));
 
         Boolean[] expected = new Boolean[] { true, true, true, true, false, false };
         List<HashKey> all = ordered.stream().map(e -> e).collect(Collectors.toList());
-        assertArrayEquals("Aggregate failed: ", expected,
-                          dag.isStronglyPreferred(all).toArray(new Boolean[ordered.size()]));
+        assertArrayEquals(expected, dag.isStronglyPreferred(all).toArray(new Boolean[ordered.size()]),
+                          "Aggregate failed: ");
         dag.finalize(rootKey);
         assertTrue(dag.isFinalized(rootKey));
         assertTrue(dag.isStronglyPreferred(rootKey));
-        assertArrayEquals("Aggregate failed: ", expected,
-                          dag.isStronglyPreferred(all).toArray(new Boolean[ordered.size()]));
+        assertArrayEquals(expected, dag.isStronglyPreferred(all).toArray(new Boolean[ordered.size()]),
+                          "Aggregate failed: ");
     }
 
     @Test
@@ -345,8 +341,8 @@ public class TransactionsTest {
 
             for (int i = 2; i < ordered.size() - 1; i++) {
                 final Node node = dag.get(ordered.get(i));
-                assertNotNull("Node " + i + " is not present!", node);
-                assertEquals("Node " + i + " has no dependents", 1, node.dependents().size());
+                assertNotNull(node);
+                assertEquals(1, node.dependents().size(), "Node " + i + " has no dependents");
             }
 
             for (int i = 3; i < ordered.size() - 1; i++) {
@@ -362,7 +358,7 @@ public class TransactionsTest {
             dag.tryFinalize(ordered.get(ordered.size() - 1));
 
             for (int i = 3; i < 143; i++) {
-                assertFalse("node " + i + " is not finalized", dag.isFinalized(ordered.get(i)));
+                assertFalse(dag.isFinalized(ordered.get(i)), "node " + i + " is not finalized");
             }
         } finally {
             parameters.core.beta1 = oldBeta1;
@@ -627,19 +623,19 @@ public class TransactionsTest {
         dag.prefer(ordered.get(3));
 
 //		dumpClosure(ordered, create);
-        assertFalse(String.format("node 4 is strongly preferred: ") + ordered.get(4),
-                    dag.isStronglyPreferred(ordered.get(4)));
+        assertFalse(dag.isStronglyPreferred(ordered.get(4)),
+                    String.format("node 4 is strongly preferred: ") + ordered.get(4));
 
         assertTrue(dag.get(ordered.get(3)).getChit());
         assertEquals(1, dag.get(ordered.get(0)).getConfidence());
         assertEquals(1, dag.get(ordered.get(2)).getConfidence());
         assertEquals(0, dag.get(ordered.get(4)).getConfidence());
 
-        assertTrue(String.format("node 0 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(0)));
-        assertTrue(String.format("node 1 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(1)));
-        assertTrue(String.format("node 2 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(2)));
-        assertTrue(String.format("node 3 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(3)));
-        assertFalse(String.format("node 4 is strongly preferred"), dag.isStronglyPreferred(ordered.get(4)));
+        assertTrue(dag.isStronglyPreferred(ordered.get(0)), String.format("node 0 is not strongly preferred"));
+        assertTrue(dag.isStronglyPreferred(ordered.get(1)), String.format("node 0 is not strongly preferred"));
+        assertTrue(dag.isStronglyPreferred(ordered.get(2)), String.format("node 1 is not strongly preferred"));
+        assertTrue(dag.isStronglyPreferred(ordered.get(3)), String.format("node 3 is not strongly preferred"));
+        assertFalse(dag.isStronglyPreferred(ordered.get(4)), String.format("node 4 is not strongly preferred"));
 
         dag.prefer(ordered.get(4));
 
@@ -649,9 +645,8 @@ public class TransactionsTest {
         assertEquals(1, dag.get(ordered.get(3)).getConfidence());
         assertEquals(1, dag.get(ordered.get(4)).getConfidence());
 
-        assertTrue(String.format("node 3 is not strongly preferred " + ordered.get(3)),
-                   dag.isStronglyPreferred(ordered.get(3)));
-        assertFalse(String.format("node 4 is strongly preferred"), dag.isStronglyPreferred(ordered.get(4)));
+        assertTrue(dag.isStronglyPreferred(ordered.get(3)));
+        assertFalse(dag.isStronglyPreferred(ordered.get(4)), String.format("node 4 is strongly preferred"));
 
         entry = new DagEntry();
         entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
@@ -669,9 +664,9 @@ public class TransactionsTest {
         assertEquals(1, dag.get(ordered.get(3)).getConfidence());
         assertEquals(2, dag.get(ordered.get(4)).getConfidence());
 
-        assertFalse(String.format("node 3 is strongly preferred " + ordered.get(3)),
-                    dag.isStronglyPreferred(ordered.get(3)));
-        assertTrue(String.format("node 4 is not strongly preferred"), dag.isStronglyPreferred(ordered.get(4)));
+        assertFalse(dag.isStronglyPreferred(ordered.get(3)),
+                    String.format("node 3 is strongly preferred " + ordered.get(3)));
+        assertTrue(dag.isStronglyPreferred(ordered.get(4)), String.format("node 4 is not strongly preferred"));
     }
 
     HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links) {

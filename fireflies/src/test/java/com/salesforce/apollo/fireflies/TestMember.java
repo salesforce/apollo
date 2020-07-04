@@ -8,13 +8,13 @@ package com.salesforce.apollo.fireflies;
 
 import static io.github.olivierlemasle.ca.CA.createCsr;
 import static io.github.olivierlemasle.ca.CA.dn;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.net.InetSocketAddress;
 import java.util.UUID;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
 

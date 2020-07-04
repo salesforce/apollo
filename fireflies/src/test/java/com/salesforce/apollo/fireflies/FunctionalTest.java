@@ -8,7 +8,7 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -23,8 +23,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
@@ -38,64 +38,74 @@ import io.github.olivierlemasle.ca.RootCertificate;
  * @since 220
  */
 public class FunctionalTest {
-	private static final RootCertificate ca = getCa();
-	private static Map<UUID, CertWithKey> certs;
-	private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate     ca         = getCa();
+    private static Map<UUID, CertWithKey>    certs;
+    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-	@BeforeClass
-	public static void beforeClass() {
-		certs = IntStream.range(1, 11).parallel().mapToObj(i -> getMember(i))
-				.collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
-	}
+    @BeforeAll
+    public static void beforeClass() {
+        certs = IntStream.range(1, 11)
+                         .parallel()
+                         .mapToObj(i -> getMember(i))
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+    }
 
-	@Test
-	public void e2e() throws Exception {
-		Random entropy = new Random(0x666);
+    @Test
+    public void e2e() throws Exception {
+        Random entropy = new Random(0x666);
 
-		List<X509Certificate> seeds = new ArrayList<>();
-		MetricRegistry registry = new MetricRegistry();
-		FfLocalCommSim communications = new FfLocalCommSim(new DropWizardStatsPlugin(registry));
-		communications.checkStarted(false);
-		List<Node> members = certs.values().parallelStream()
-				.map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
-				.map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-		assertEquals(certs.size(), members.size());
+        List<X509Certificate> seeds = new ArrayList<>();
+        MetricRegistry registry = new MetricRegistry();
+        FfLocalCommSim communications = new FfLocalCommSim(new DropWizardStatsPlugin(registry));
+        communications.checkStarted(false);
+        List<Node> members = certs.values()
+                                  .parallelStream()
+                                  .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
+                                  .map(cert -> new Node(cert, parameters))
+                                  .collect(Collectors.toList());
+        assertEquals(certs.size(), members.size());
 
-		while (seeds.size() < parameters.toleranceLevel + 1) {
-			CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-			if (!seeds.contains(cert.getCertificate())) {
-				seeds.add(cert.getCertificate());
-			}
-		}
+        while (seeds.size() < parameters.toleranceLevel + 1) {
+            CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
+            if (!seeds.contains(cert.getCertificate())) {
+                seeds.add(cert.getCertificate());
+            }
+        }
 
-		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
-		List<View> views = members.parallelStream().map(node -> new View(node, communications, seeds, scheduler))
-				.peek(view -> view.getService().start(Duration.ofMillis(20_000))).collect(Collectors.toList());
+        List<View> views = members.parallelStream()
+                                  .map(node -> new View(node, communications, seeds, scheduler))
+                                  .peek(view -> view.getService().start(Duration.ofMillis(20_000)))
+                                  .collect(Collectors.toList());
 
-		for (int i = 0; i < parameters.rings + 2; i++) {
-			views.forEach(view -> view.getService().gossip());
-		}
-		for (int i = 0; i < parameters.rings + 2; i++) {
-			views.forEach(view -> view.getService().gossip());
-		}
+        for (int i = 0; i < parameters.rings + 2; i++) {
+            views.forEach(view -> view.getService().gossip());
+        }
+        for (int i = 0; i < parameters.rings + 2; i++) {
+            views.forEach(view -> view.getService().gossip());
+        }
 
-		List<View> invalid = views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
-				.filter(view -> view != null).collect(Collectors.toList());
-		assertEquals(invalid.stream().map(view -> {
-			Set<?> difference = Sets.difference(
-					views.stream().map(v -> v.getNode().getId()).collect(Collectors.toSet()), view.getLive().keySet());
-			return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
-		}).collect(Collectors.toList()).toString(), 0, invalid.size());
+        List<View> invalid = views.stream()
+                                  .map(view -> view.getLive().size() != views.size() ? view : null)
+                                  .filter(view -> view != null)
+                                  .collect(Collectors.toList());
+        assertEquals(0, invalid.size(), invalid.stream().map(view -> {
+            Set<?> difference = Sets.difference(views.stream()
+                                                     .map(v -> v.getNode().getId())
+                                                     .collect(Collectors.toSet()),
+                                                view.getLive().keySet());
+            return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
+        }).collect(Collectors.toList()).toString());
 
-		View frist = views.get(0);
-		for (View view : views) {
-			for (int ring = 0; ring < parameters.rings; ring++) {
-				Ring trueRing = frist.getRing(ring);
-				Ring comparedTo = view.getRing(ring);
-				assertEquals(trueRing.getRing(), comparedTo.getRing());
-				assertEquals(trueRing.successor(view.getNode()), comparedTo.successor(view.getNode()));
-			}
-		}
-	}
+        View frist = views.get(0);
+        for (View view : views) {
+            for (int ring = 0; ring < parameters.rings; ring++) {
+                Ring trueRing = frist.getRing(ring);
+                Ring comparedTo = view.getRing(ring);
+                assertEquals(trueRing.getRing(), comparedTo.getRing());
+                assertEquals(trueRing.successor(view.getNode()), comparedTo.successor(view.getNode()));
+            }
+        }
+    }
 }

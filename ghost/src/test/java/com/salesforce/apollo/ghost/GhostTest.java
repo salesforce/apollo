@@ -8,9 +8,7 @@ package com.salesforce.apollo.ghost;
 
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
@@ -26,8 +24,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.avro.DagEntry;
@@ -54,7 +52,7 @@ public class GhostTest {
     private static Map<UUID, CertWithKey>    certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-    @BeforeClass
+    @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 101)
                          .parallel()
@@ -108,11 +106,12 @@ public class GhostTest {
                                             new MemoryStore()))
                                     .collect(Collectors.toList());
         ghosties.forEach(e -> e.getService().start());
-        assertEquals("Not all nodes joined the cluster", ghosties.size(),
+        assertEquals(ghosties.size(),
                      ghosties.parallelStream()
                              .map(g -> Utils.waitForCondition(5_000, () -> g.joined()))
                              .filter(e -> e)
-                             .count());
+                             .count(),
+                     "Not all nodes joined the cluster");
         int rounds = 3;
         Map<HashKey, DagEntry> stored = new HashMap<>();
         for (int i = 0; i < rounds; i++) {

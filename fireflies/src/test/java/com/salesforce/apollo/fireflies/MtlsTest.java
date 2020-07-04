@@ -8,8 +8,8 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -28,8 +28,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Sets;
 import com.salesforce.apollo.avro.MessageGossip;
@@ -48,7 +48,7 @@ public class MtlsTest {
     private static Map<UUID, CertWithKey>    certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-    @BeforeClass
+    @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 101)
                          .parallel()
@@ -88,12 +88,12 @@ public class MtlsTest {
         long then = System.currentTimeMillis();
         views.forEach(view -> view.getService().start(Duration.ofMillis(1_000)));
 
-        assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
-        }));
+        }), "view did not stabilize");
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + views.size() + " members");
 
@@ -102,13 +102,13 @@ public class MtlsTest {
                                   .map(view -> view.getLive().size() != views.size() ? view : null)
                                   .filter(view -> view != null)
                                   .collect(Collectors.toList());
-        assertEquals(invalid.stream().map(view -> {
+        assertEquals(0, invalid.size(), invalid.stream().map(view -> {
             Set<?> difference = Sets.difference(views.stream()
                                                      .map(v -> v.getNode().getId())
                                                      .collect(Collectors.toSet()),
                                                 view.getLive().keySet());
             return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
-        }).collect(Collectors.toList()).toString(), 0, invalid.size());
+        }).collect(Collectors.toList()).toString());
 
         System.out.println("Stoping views");
         views.forEach(view -> view.getService().stop());
@@ -116,7 +116,7 @@ public class MtlsTest {
         System.out.println("Restarting views");
         views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
 
-        assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 100, () -> {
+        assertTrue(Utils.waitForCondition(30_000, 100, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
@@ -125,7 +125,7 @@ public class MtlsTest {
 
         System.out.println("Stabilized, now sleeping to see if views remain stabilized");
         Thread.sleep(10_000);
-        assertTrue("view did not stabilize", Utils.waitForCondition(30_000, 100, () -> {
+        assertTrue(Utils.waitForCondition(30_000, 100, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
@@ -138,13 +138,7 @@ public class MtlsTest {
                        .map(view -> view.getLive().size() != views.size() ? view : null)
                        .filter(view -> view != null)
                        .collect(Collectors.toList());
-        assertEquals(invalid.stream().map(view -> {
-            Set<?> difference = Sets.difference(views.stream()
-                                                     .map(v -> v.getNode().getId())
-                                                     .collect(Collectors.toSet()),
-                                                view.getLive().keySet());
-            return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
-        }).collect(Collectors.toList()).toString(), 0, invalid.size());
+        assertEquals(0, invalid.size());
 
         System.out.println("Stoping views");
         views.forEach(view -> view.getService().stop());

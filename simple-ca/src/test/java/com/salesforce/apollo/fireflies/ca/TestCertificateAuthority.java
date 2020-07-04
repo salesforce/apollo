@@ -8,9 +8,9 @@ package com.salesforce.apollo.fireflies.ca;
 
 import static io.github.olivierlemasle.ca.CA.createCsr;
 import static io.github.olivierlemasle.ca.CA.dn;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import io.github.olivierlemasle.ca.CA;
 import io.github.olivierlemasle.ca.CSR;
