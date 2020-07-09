@@ -14,11 +14,29 @@ import com.salesforce.apollo.avro.HASH;
  * @author hal.hildebrand
  *
  */
-public interface Block<T> {
+public abstract class Block<T> {
 
-    byte[] getContent();
+    private final byte[] content;
+    private final HASH   key;
+    private final HASH   parent;
 
-    HASH getKey();
+    public Block(HASH parent, HASH key, byte[] content) {
+        this.parent = parent;
+        this.key = key;
+        this.content = content;
+    }
 
-    T getValue();
+    public byte[] getContent() {
+        return content;
+    }
+
+    public HASH getKey() {
+        return key;
+    }
+
+    public HASH getParent() {
+        return parent;
+    }
+
+    public abstract T getValue();
 }

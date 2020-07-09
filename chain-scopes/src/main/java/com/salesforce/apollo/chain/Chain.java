@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.chain;
 
+import java.util.function.Consumer;
+
 import com.salesforce.apollo.avro.HASH;
 
 /**
@@ -15,11 +17,11 @@ import com.salesforce.apollo.avro.HASH;
  *         A linear chain o' blocks
  *
  */
-public interface Chain<T> {
+public interface Chain<M> {
 
     HASH getKey();
 
-    Block<T> getBlock(HASH index);
+    Block<M> getBlock(HASH index);
 
-    void insert(Block<T> block);
+    void onAccept(Consumer<Block<M>> consumer);
 }

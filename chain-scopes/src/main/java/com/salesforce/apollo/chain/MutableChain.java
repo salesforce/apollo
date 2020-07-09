@@ -1,17 +1,17 @@
 /*
-s * Copyright (c) 2019, salesforce.com, inc.
+ * Copyright (c) 2020, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.chain;
 
-import com.salesforce.apollo.avro.HASH;
+/**
+ * @author hal.hildebrand
+ *
+ */
+public interface MutableChain<M> extends Chain<M> {
 
-public interface Scope {
-    <M> Chain<Block<M>> get(HASH key);
+    void insert(Block<M> block);
 
-    HASH getKey();
-
-    Scope subScope(HASH key);
 }
