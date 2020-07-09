@@ -46,7 +46,9 @@ public abstract class TestUtil {
 
   /** This is to be used by {@link #rethrow(Throwable, String)} to add extra information via
    * {@link Throwable#addSuppressed(Throwable)}. */
-  private static class ExtraInformation extends Throwable {
+  private static class ExtraInformation extends Throwable { 
+    private static final long serialVersionUID = 1L;
+
     ExtraInformation(String message) {
       super(message);
     }
@@ -239,7 +241,8 @@ public abstract class TestUtil {
   }
 
   /** Rethrows given exception keeping stacktraces clean and compact. */
-  public static <E extends Throwable> RuntimeException rethrow(Throwable e) throws E {
+  @SuppressWarnings("unchecked")
+public static <E extends Throwable> RuntimeException rethrow(Throwable e) throws E {
     if (e instanceof InvocationTargetException) {
       e = e.getCause();
     }
@@ -247,7 +250,8 @@ public abstract class TestUtil {
   }
 
   /** Rethrows given exception keeping stacktraces clean and compact. */
-  public static <E extends Throwable> RuntimeException rethrow(Throwable e,
+  @SuppressWarnings("unchecked")
+public static <E extends Throwable> RuntimeException rethrow(Throwable e,
       String message) throws E {
     e.addSuppressed(new ExtraInformation(message));
     throw (E) e;

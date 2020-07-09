@@ -31,7 +31,6 @@ import java.util.Map;
  * <p>Allows a custom schema to be included in a <code><i>model</i>.json</code>
  * file.
  */
-@SuppressWarnings("UnusedDeclaration")
 public class CsvSchemaFactory implements SchemaFactory {
   /** Name of the column that is implicitly created in a CSV stream table
    * to hold the data arrival time. */

@@ -67,7 +67,7 @@ public class CsvTranslatableTable extends CsvTable
   }
 
   public Expression getExpression(SchemaPlus schema, String tableName,
-      Class clazz) {
+      @SuppressWarnings("rawtypes") Class clazz) {
     return Schemas.tableExpression(schema, getElementType(), tableName, clazz);
   }
 

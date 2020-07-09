@@ -65,7 +65,8 @@ class CsvEnumerator<E> implements Enumerator<E> {
     this(source, cancelFlag, fieldTypes, identityList(fieldTypes.size()));
   }
 
-  CsvEnumerator(Source source, AtomicBoolean cancelFlag,
+  @SuppressWarnings("unchecked")
+CsvEnumerator(Source source, AtomicBoolean cancelFlag,
       List<CsvFieldType> fieldTypes, int[] fields) {
     //noinspection unchecked
     this(source, cancelFlag, false, null,
@@ -361,7 +362,7 @@ class CsvEnumerator<E> implements Enumerator<E> {
   }
 
   /** Single column row converter. */
-  private static class SingleColumnRowConverter extends RowConverter {
+  private static class SingleColumnRowConverter extends RowConverter<Object> {
     private final CsvFieldType fieldType;
     private final int fieldIndex;
 

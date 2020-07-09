@@ -46,10 +46,11 @@ public class JsonEnumerator implements Enumerator<Object[]> {
     for (Object obj : list) {
       if (obj instanceof Collection) {
         //noinspection unchecked
+        @SuppressWarnings("unchecked")
         List<Object> tmp = (List<Object>) obj;
         objs.add(tmp.toArray());
       } else if (obj instanceof Map) {
-        objs.add(((LinkedHashMap) obj).values().toArray());
+        objs.add(((LinkedHashMap<?, ?>) obj).values().toArray());
       } else {
         objs.add(new Object[]{obj});
       }
@@ -59,7 +60,8 @@ public class JsonEnumerator implements Enumerator<Object[]> {
 
   /** Deduces the names and types of a table's columns by reading the first line
    * of a JSON file. */
-  static JsonDataConverter deduceRowType(RelDataTypeFactory typeFactory, Source source) {
+  @SuppressWarnings("unchecked")
+static JsonDataConverter deduceRowType(RelDataTypeFactory typeFactory, Source source) {
     final ObjectMapper objectMapper = new ObjectMapper();
     List<Object> list;
     LinkedHashMap<String, Object> jsonFieldMap = new LinkedHashMap<>(1);
@@ -94,12 +96,12 @@ public class JsonEnumerator implements Enumerator<Object[]> {
       //noinspection unchecked
       list = (List<Object>) jsonObj;
       //noinspection unchecked
-      jsonFieldMap = (LinkedHashMap) (list.get(0));
+      jsonFieldMap = (LinkedHashMap<String, Object>) (list.get(0));
     } else if (jsonObj instanceof Map) {
       //noinspection unchecked
-      jsonFieldMap = (LinkedHashMap) jsonObj;
+      jsonFieldMap = (LinkedHashMap<String, Object>) jsonObj;
       //noinspection unchecked
-      list = new ArrayList(((LinkedHashMap) jsonObj).values());
+      list = new ArrayList<Object>(((LinkedHashMap<?, ?>) jsonObj).values());
     } else {
       jsonFieldMap.put("line", jsonObj);
       list = new ArrayList<>();

@@ -44,7 +44,7 @@ enum CsvFieldType {
   TIME(java.sql.Time.class, "time"),
   TIMESTAMP(java.sql.Timestamp.class, "timestamp");
 
-  private final Class clazz;
+  private final Class<?> clazz;
   private final String simpleName;
 
   private static final Map<String, CsvFieldType> MAP = new HashMap<>();
@@ -59,7 +59,7 @@ enum CsvFieldType {
     this(primitive.boxClass, primitive.primitiveName);
   }
 
-  CsvFieldType(Class clazz, String simpleName) {
+  CsvFieldType(Class<?> clazz, String simpleName) {
     this.clazz = clazz;
     this.simpleName = simpleName;
   }
