@@ -90,6 +90,8 @@ import org.h2.value.Value;
 import org.h2.value.ValueInt;
 import org.h2.value.ValueTimestampTimeZone;
 
+import com.salesforce.apollo.state.h2.CdcSession;
+
 /**
  * There is one database object per open database.
  *
@@ -715,7 +717,7 @@ public class Database implements DataHandler, CastDataProvider {
         publicRole = new Role(this, 0, sysIdentifier(Constants.PUBLIC_ROLE_NAME), true);
         roles.put(publicRole.getName(), publicRole);
         systemUser.setAdmin(true);
-        systemSession = new Session(this, systemUser, ++nextSessionId);
+        systemSession = new CdcSession(this, systemUser, ++nextSessionId);
         lobSession = new Session(this, systemUser, ++nextSessionId);
         CreateTableData data = new CreateTableData();
         ArrayList<Column> cols = data.columns;
@@ -1277,7 +1279,7 @@ public class Database implements DataHandler, CastDataProvider {
         if (exclusiveSession.get() != null) {
             throw DbException.get(ErrorCode.DATABASE_IS_IN_EXCLUSIVE_MODE);
         }
-        Session session = new Session(this, user, ++nextSessionId);
+        Session session = new CdcSession(this, user, ++nextSessionId);
         session.setNetworkConnectionInfo(networkConnectionInfo);
         userSessions.add(session);
         trace.info("connecting session #{0} to {1}", session.getId(), databaseName);
