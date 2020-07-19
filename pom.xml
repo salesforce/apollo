@@ -22,6 +22,7 @@
 		<module>bootstrap-client</module>
 		<module>chain-scopes</module>
 		<module>sql-state</module>
+		<module>memberships</module>
 	</modules>
 
 	<properties>
