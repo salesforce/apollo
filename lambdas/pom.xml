@@ -10,7 +10,7 @@
 	<artifactId>lambdas</artifactId>
 	<name>lambdas</name>
 	<description>Lambdas in WASM on the JVM for Apollo</description>
-	
+
 	<properties>
 		<kotlin.compiler.incremental>true</kotlin.compiler.incremental>
 	</properties>
@@ -59,9 +59,25 @@
 			<artifactId>logback-classic</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.jetbrains.kotlin</groupId>
+			<artifactId>kotlin-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.jetbrains.kotlin</groupId>
+			<artifactId>kotlin-test-junit</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
+
 		<plugins>
 			<plugin>
 				<groupId>org.jetbrains.kotlin</groupId>
@@ -121,11 +137,12 @@
 						<goals>
 							<goal>testCompile</goal>
 						</goals>
-						<configuration>
-							<skip>${maven.test.skip}</skip>
-						</configuration>
 					</execution>
 				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
 			</plugin>
 		</plugins>
 	</build>
