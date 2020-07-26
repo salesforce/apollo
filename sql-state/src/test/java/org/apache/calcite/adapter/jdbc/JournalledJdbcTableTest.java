@@ -15,6 +15,8 @@
  */
 package org.apache.calcite.adapter.jdbc;
 
+import org.apache.calcite.adapter.jdbc.JournalledJdbcSchema;
+import org.apache.calcite.adapter.jdbc.JournalledJdbcTable;
 import org.apache.calcite.adapter.jdbc.tools.JdbcRelBuilder;
 import org.apache.calcite.adapter.jdbc.tools.JdbcRelBuilderFactory;
 import org.apache.calcite.plan.RelOptCluster;

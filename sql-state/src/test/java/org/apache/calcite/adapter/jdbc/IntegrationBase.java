@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 package org.apache.calcite.adapter.jdbc;
- 
+
+import org.apache.calcite.adapter.jdbc.JournalVersionType;
+import org.apache.calcite.adapter.jdbc.JournalledJdbcSchema;
+
 abstract class IntegrationBase {
 	protected final JournalVersionType versionType;
 	protected final String virtualSchemaName;

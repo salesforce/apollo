@@ -18,6 +18,8 @@ package org.apache.calcite.adapter.jdbc;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import org.apache.calcite.adapter.jdbc.JournalVersionType;
+import org.apache.calcite.adapter.jdbc.JournalledJdbcRuleManager;
 import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.test.CalciteAssert;
 import org.junit.jupiter.api.Test;

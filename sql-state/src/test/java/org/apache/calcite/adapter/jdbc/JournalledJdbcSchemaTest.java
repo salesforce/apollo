@@ -30,6 +30,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.calcite.adapter.jdbc.JournalVersionType;
+import org.apache.calcite.adapter.jdbc.JournalledJdbcRuleManager;
+import org.apache.calcite.adapter.jdbc.JournalledJdbcSchema;
+import org.apache.calcite.adapter.jdbc.JournalledJdbcTable;
 import org.apache.calcite.adapter.jdbc.programs.ForcedRulesProgram;
 import org.apache.calcite.adapter.jdbc.programs.SequenceProgram;
 import org.apache.calcite.runtime.Hook;

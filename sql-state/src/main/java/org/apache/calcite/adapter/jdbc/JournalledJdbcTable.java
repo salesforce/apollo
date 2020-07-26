@@ -15,6 +15,7 @@
  */
 package org.apache.calcite.adapter.jdbc;
 
+import org.apache.calcite.adapter.jdbc.JdbcTable;
 import org.apache.calcite.adapter.jdbc.tools.JdbcRelBuilder;
 import org.apache.calcite.adapter.jdbc.tools.JdbcRelBuilderFactory;
 import org.apache.calcite.plan.RelOptTable;

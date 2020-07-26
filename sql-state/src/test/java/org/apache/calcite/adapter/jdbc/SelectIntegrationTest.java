@@ -15,6 +15,8 @@
  */
 package org.apache.calcite.adapter.jdbc;
 
+import org.apache.calcite.adapter.jdbc.JournalVersionType;
+import org.apache.calcite.adapter.jdbc.JournalledJdbcRuleManager;
 import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.test.CalciteAssert;
 import org.junit.jupiter.api.Test;

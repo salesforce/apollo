@@ -25,6 +25,7 @@ import java.util.logging.Logger;
 
 import javax.sql.DataSource;
 
+import org.apache.calcite.adapter.jdbc.JournalVersionType;
 import org.apache.commons.io.IOUtils;
 
 class TargetDatabase {

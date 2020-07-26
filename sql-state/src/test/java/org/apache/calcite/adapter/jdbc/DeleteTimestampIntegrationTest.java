@@ -31,7 +31,8 @@ public class DeleteTimestampIntegrationTest extends IntegrationBase {
         CalciteAssert.model(TargetDatabase.makeJournalledModel(versionType))
                      .query("DELETE FROM \"" + virtualSchemaName + "\".\"depts\" WHERE \"deptno\"=3")
                      .withHook(Hook.PROGRAM, JournalledJdbcRuleManager.program())
-x                             + virtualSchemaName + ", depts_journal]], operation=[INSERT], flattened=[false])\n"
+                     .explainContains("PLAN=JdbcToEnumerableConverter\n" + "  JdbcTableModify(table=[["
+                             + virtualSchemaName + ", depts_journal]], operation=[INSERT], flattened=[false])\n"
                              + "    JdbcProject(deptno=[$0], department_name=[$1], version_number=[CURRENT_TIMESTAMP], subsequent_version_number=[CURRENT_TIMESTAMP])\n"
                              + "      JdbcFilter(condition=[AND(=($2, $4), IS NULL($3), =($0, 3))])\n"
                              + "        JdbcProject(deptno=[$0], department_name=[$1], version_number=[$2], subsequent_version_number=[$3], $f4=[MAX($2) OVER (PARTITION BY $0 ORDER BY $2 ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)])\n"
@@ -63,7 +64,7 @@ x                             + virtualSchemaName + ", depts_journal]], operatio
                                  + "FROM \"" + actualSchemaName + "\".\"depts_journal\") AS \"t\"\n"
                                  + "WHERE \"version_number\" = \"$f4\" AND \"subsequent_version_number\" IS NULL AND \"deptno\" = 3)",
                                            1);
-            fail("expected runtime exception");
+            fail("Expected RuntimeException");
         } catch (RuntimeException e) {
             // expected
         }

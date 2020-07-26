@@ -1,6 +1,6 @@
 {
   "jdbcDriver": "org.h2.Driver",
-  "jdbcUrl": "h2:mem:db1",
+  "jdbcUrl": "jdbc:h2:mem:db1",
   "jdbcUser": "",
   "jdbcPassword": ""
 }

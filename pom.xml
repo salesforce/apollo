@@ -442,6 +442,11 @@
 				<artifactId>asm-commons</artifactId>
 				<version>${asm.version}</version>
 			</dependency>
+			<dependency>
+				<groupId>org.apiguardian</groupId>
+				<artifactId>apiguardian-api</artifactId>
+				<version>1.1.0</version>
+			</dependency>
 
 
 			<!-- Test dependencies only below this line! -->
@@ -477,7 +482,7 @@
 			<dependency>
 				<groupId>org.junit.jupiter</groupId>
 				<artifactId>junit-jupiter-params</artifactId>
-				<version>5.4.2</version>
+				<version>5.6.2</version>
 				<scope>test</scope>
 			</dependency>
 		</dependencies>
