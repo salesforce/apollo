@@ -39,10 +39,6 @@
 			<artifactId>jcl-over-slf4j</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>au.com.bytecode</groupId>
-			<artifactId>opencsv</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>org.apache.calcite</groupId>
 			<artifactId>calcite-server</artifactId>
 			<exclusions>
@@ -57,9 +53,13 @@
 			</exclusions>
 		</dependency>
 		<dependency>
+			<groupId>org.apache.calcite</groupId>
+			<artifactId>calcite-babel</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-lang3</artifactId>
-		</dependency> 
+		</dependency>
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
@@ -91,7 +91,7 @@
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
 			<scope>test</scope>
-		</dependency> 
+		</dependency>
 
 		<dependency>
 			<groupId>org.apache.calcite</groupId>

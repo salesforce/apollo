@@ -401,12 +401,12 @@
 				<groupId>org.apache.calcite</groupId>
 				<artifactId>calcite-server</artifactId>
 				<version>${calcite.version}</version>
-			</dependency>
+			</dependency> 
 			<dependency>
-				<groupId>au.com.bytecode</groupId>
-				<artifactId>opencsv</artifactId>
-				<version>2.4</version>
-			</dependency>
+				<groupId>org.apache.calcite</groupId>
+				<artifactId>calcite-babel</artifactId>
+				<version>${calcite.version}</version>
+			</dependency> 
 			<dependency>
 				<groupId>org.apache.commons</groupId>
 				<artifactId>commons-lang3</artifactId>
