@@ -8,6 +8,7 @@ package com.salesforce.apollo.state;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -24,25 +25,42 @@ import com.salesforce.apollo.state.jdbc.CdcConnection;
 public class CdcEngine {
     private final CdcSession        capture;
     private final JdbcConnection    connection;
-    private final CdcSession        system;
     private final List<Transaction> transactions = new ArrayList<>();
+    private Savepoint               checkpoint;
 
     public CdcEngine(String url, Properties info) throws SQLException {
         connection = new JdbcConnection(url, info);
         capture = (CdcSession) connection.getSession();
-        system = (CdcSession) capture.getDatabase().getSystemSession();
     }
 
-    public Connection newTransaction() {
+    public void commit() {
+        // TODO Auto-generated method stub
+
+    }
+
+    public Connection beginTransaction() {
         Transaction t = new Transaction();
         transactions.add(t);
         capture.setCdc((table, op, row) -> t.log(table, op, row));
-        system.setCdc((table, op, row) -> t.log(table, op, row));
         try {
             connection.setAutoCommit(false);
         } catch (SQLException e) {
             throw new IllegalStateException("Cannot set base connection to autocommit: false");
         }
-        return new CdcConnection(connection);
+        try {
+            checkpoint = connection.setSavepoint();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Cannot set savepoint for transaction");
+        }
+        return new CdcConnection(this, connection);
+    }
+
+    public void rollback() {
+        transactions.remove(transactions.size() - 1);
+        try {
+            connection.rollback(checkpoint);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Cannot rollback to checkpoint for current transaction");
+        }
     }
 }

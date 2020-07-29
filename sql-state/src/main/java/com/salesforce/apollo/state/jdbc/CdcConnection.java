@@ -7,15 +7,45 @@
 package com.salesforce.apollo.state.jdbc;
 
 import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Savepoint;
+
+import com.salesforce.apollo.state.CdcEngine;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class CdcConnection extends DelegatingConnection { 
-    public CdcConnection(Connection cdcConnection) {
-        super(cdcConnection); 
-        
+public class CdcConnection extends DelegatingConnection {
+    private final CdcEngine engine;
+
+    public CdcConnection(CdcEngine engine, Connection cdcConnection) {
+        super(cdcConnection);
+        this.engine = engine;
+    }
+
+    @Override
+    public void commit() throws SQLException {
+        engine.commit();
+        super.rollback();
+    }
+
+    @Override
+    public void rollback() throws SQLException {
+        engine.rollback();
+        super.rollback();
+    }
+
+    @Override
+    public void rollback(Savepoint arg0) throws SQLException {
+        super.rollback(arg0);
+    }
+
+    @Override
+    public void setAutoCommit(boolean a) throws SQLException {
+        if (a) {
+            throw new SQLException("auto commit not allowed for this connection");
+        }
     }
 
 }
