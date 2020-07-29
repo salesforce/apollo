@@ -15,7 +15,7 @@ public class SmokeTest {
     @Test
     public void test() throws IOException {
         Context.Builder contextBuilder = Context.newBuilder("wasm");
-        byte[] binary;
+        byte[] binary = null;
         Source.Builder sourceBuilder = Source.newBuilder("wasm", ByteSequence.create(binary), "main");
         Source source = sourceBuilder.build();
         Context context = contextBuilder.build();

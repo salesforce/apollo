@@ -1,6 +1,18 @@
 # Apollo
 The Apollo project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication layer.  The consensus layer is supplied by Avalanche.  An IPFS-esque DAG based DHT is provided in addition to DAG ledger state.
 
+## Requirements
+Apollo requires the JDK 11 [GraalVM](https://www.graalvm.org/).  To install this, see the [Getting Started](https://www.graalvm.org/getting-started/) section at the GraalVM site.  Install the GraalVM for your operating system.  When that is installed, use the _gu_ GraalVM tool to [install the WASM support](https://www.graalvm.org/docs/reference-manual/languages/wasm/).
+
+    gu install wasm
+
+Note that you may also need to perform the following on MacOS:
+
+    xattr -d com.apple.quarantine $JAVA_HOME
+
+After the installation, as the GraalVM has not yet been notorized on Catalina
+
+Apollo also requires [Maven](https://maven.apache.org/) 3.6.1 and above.  
 
 ## Protocols
 * [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications
@@ -24,7 +36,7 @@ Note that Apollo is very much a _work in progress_.  It is by no means a full fe
 
 
 ## Requirements
-Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.5.3+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using __Java 11__.
+Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.6.1+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using __Java 11__, in particular using the _GraalVM_.
 
 Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html).  This means that the various modules of Apollo are built and versioned as a whole, rather than being seperated out into individual repositories.  This also means that modules refer to other modules within the project as dependencies, and consequently must be built in the correct order.  Note that Maven does this by default, so there should be no issues.  However, it does mean that you can't simply cd into a module and build it without building its dependencies first.
 
