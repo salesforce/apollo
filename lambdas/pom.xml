@@ -13,6 +13,11 @@
 
     <dependencies>
 
+        <dependency>
+            <groupId>org.graalvm.sdk</groupId>
+            <artifactId>graal-sdk</artifactId>
+        </dependency>
+
         <!-- Test only deps below this line -->
         <dependency>
             <groupId>org.hamcrest</groupId>
