@@ -13,21 +13,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
-
 /**
  * @author hal.hildebrand
  *
  */
 public class Context {
-    public static final ThreadLocal<MessageDigest> DIGEST_CACHE = new ThreadLocal<>();
-    public static final String  RING_HASH_ALGORITHM = Conversion.SHA_256;
+    public static final String                     SHA_256             = "sha-256";
+    public static final ThreadLocal<MessageDigest> DIGEST_CACHE        = new ThreadLocal<>();
+    public static final String                     RING_HASH_ALGORITHM = SHA_256;
 
-    private static final String RING_HASH_TEMPLATE  = "%s-%s";
-    private final Map<Member, HashKey[]>           hashes      = new HashMap<>();
-    private final HashKey                          id;
-    private final Ring[]                           rings;
+    private static final String          RING_HASH_TEMPLATE = "%s-%s";
+    private final Map<Member, HashKey[]> hashes             = new HashMap<>();
+    private final HashKey                id;
+    private final Ring[]                 rings;
 
     public Context(HashKey id, int r) {
         this.id = id;

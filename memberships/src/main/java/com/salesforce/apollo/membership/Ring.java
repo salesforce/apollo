@@ -17,8 +17,6 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import com.salesforce.apollo.protocols.HashKey;
-
 /**
  * A ring of members. Also, too, addressable functions by HashKey, for ring
  * operations to obtain members.
@@ -27,13 +25,13 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Ring implements Iterable<Member> {
-    private final Context                                 grouping;
+    private final Context                                 context;
     private final int                                     index;
     private final ConcurrentNavigableMap<HashKey, Member> ring = new ConcurrentSkipListMap<>();
 
-    public Ring(int index, Context grouping) {
+    public Ring(int index, Context context) {
         this.index = index;
-        this.grouping = grouping;
+        this.context = context;
     }
 
     /**
@@ -125,8 +123,7 @@ public class Ring implements Iterable<Member> {
 
     /**
      * <pre>
-     * Please note the following semantic:
-     *
+     *  
      *    - An item lies between itself. That is, if pred == itm == succ, True is
      *    returned.
      *
@@ -471,7 +468,7 @@ public class Ring implements Iterable<Member> {
     }
 
     protected HashKey hash(Member m) {
-        return grouping.hashFor(m, index);
+        return context.hashFor(m, index);
     }
 
     protected Member insert(Member m) {

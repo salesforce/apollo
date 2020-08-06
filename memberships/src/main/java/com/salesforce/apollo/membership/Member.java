@@ -11,9 +11,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.util.UUID;
-
-import com.salesforce.apollo.avro.Uuid;
-import com.salesforce.apollo.protocols.Conversion;
+ 
 
 /**
  * A member of the view
@@ -22,10 +20,7 @@ import com.salesforce.apollo.protocols.Conversion;
  * @since 220
  */
 public class Member {
-
-    public static Uuid uuidBits(UUID id) {
-        return Conversion.uuidBits(id);
-    }
+ 
 
     /**
      * Signing identity
