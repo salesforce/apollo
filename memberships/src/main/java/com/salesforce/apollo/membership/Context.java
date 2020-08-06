@@ -8,9 +8,12 @@ package com.salesforce.apollo.membership;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -18,14 +21,18 @@ import java.util.stream.Stream;
  *
  */
 public class Context {
-    public static final String                     SHA_256             = "sha-256";
-    public static final ThreadLocal<MessageDigest> DIGEST_CACHE        = new ThreadLocal<>();
-    public static final String                     RING_HASH_ALGORITHM = SHA_256;
-
-    private static final String          RING_HASH_TEMPLATE = "%s-%s";
-    private final Map<Member, HashKey[]> hashes             = new HashMap<>();
-    private final HashKey                id;
-    private final Ring[]                 rings;
+    public static final ThreadLocal<MessageDigest> DIGEST_CACHE       = ThreadLocal.withInitial(() -> {
+                                                                          try {
+                                                                              return MessageDigest.getInstance(Context.SHA_256);
+                                                                          } catch (NoSuchAlgorithmException e) {
+                                                                              throw new IllegalStateException(e);
+                                                                          }
+                                                                      });
+    public static final String                     SHA_256            = "sha-256";
+    private static final String                    RING_HASH_TEMPLATE = "%s-%s";
+    private final Map<Member, HashKey[]>           hashes             = new HashMap<>();
+    private final HashKey                          id;
+    private final Ring[]                           rings;
 
     public Context(HashKey id, int r) {
         this.id = id;
@@ -45,14 +52,6 @@ public class Context {
 
     public void insert(Member m) {
         MessageDigest md = DIGEST_CACHE.get();
-        if (md == null) {
-            try {
-                md = MessageDigest.getInstance(RING_HASH_ALGORITHM);
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("No hash algorithm found: " + RING_HASH_ALGORITHM);
-            }
-            DIGEST_CACHE.set(md);
-        }
         for (int ring = 0; ring < rings.length; ring++) {
             md.reset();
             md.update(String.format(RING_HASH_TEMPLATE, m.getId(), ring).getBytes());
@@ -62,6 +61,22 @@ public class Context {
         for (Ring ring : rings) {
             ring.insert(m);
         }
+    }
+
+    public List<Member> predecessors(HashKey key) {
+        List<Member> predecessors = new ArrayList<>();
+        for (Ring ring : rings) {
+            predecessors.add(ring.predecessor(key));
+        }
+        return predecessors;
+    }
+
+    public List<Member> predecessors(HashKey key, Predicate<Member> test) {
+        List<Member> predecessors = new ArrayList<>();
+        for (Ring ring : rings) {
+            predecessors.add(ring.predecessor(key, test));
+        }
+        return predecessors;
     }
 
     public void remove(Member m) {
@@ -76,5 +91,21 @@ public class Context {
 
     public Stream<Ring> rings() {
         return Arrays.asList(rings).stream();
+    }
+
+    public List<Member> successors(HashKey key) {
+        List<Member> successors = new ArrayList<>();
+        for (Ring ring : rings) {
+            successors.add(ring.successor(key));
+        }
+        return successors;
+    }
+
+    public List<Member> successors(HashKey key, Predicate<Member> test) {
+        List<Member> successors = new ArrayList<>();
+        for (Ring ring : rings) {
+            successors.add(ring.successor(key, test));
+        }
+        return successors;
     }
 }

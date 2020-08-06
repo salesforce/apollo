@@ -158,6 +158,30 @@ public class Ring implements Iterable<Member> {
         return ring.navigableKeySet();
     }
 
+    public Member predecessor(HashKey location) {
+        return predecessor(location, m -> true);
+    }
+
+    /**
+     * @param location  - the target
+     * @param predicate - the test predicate
+     * @return the first predecessor of m for which predicate evaluates to True. m
+     *         is never evaluated.
+     */
+    public Member predecessor(HashKey location, Predicate<Member> predicate) {
+        for (Member member : ring.headMap(location, false).descendingMap().values()) {
+            if (predicate.test(member)) {
+                return member;
+            }
+        }
+        for (Member member : ring.tailMap(location, false).descendingMap().values()) {
+            if (predicate.test(member)) {
+                return member;
+            }
+        }
+        return null;
+    }
+
     /**
      * @param m - the member
      * @return the predecessor of the member
