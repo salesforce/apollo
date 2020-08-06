@@ -18,18 +18,6 @@ import org.h2.table.Table;
  */
 public class CdcSession extends Session {
 
-    public static class CdcEvent {
-        public final short operation;
-        public final Row   row;
-        public final Table table;
-
-        public CdcEvent(Table table, short operation, Row row) {
-            this.table = table;
-            this.operation = operation;
-            this.row = row;
-        }
-    }
-
     private Cdc cdc = new NullCapture();
 
     public CdcSession(Database database, User user, int id) {

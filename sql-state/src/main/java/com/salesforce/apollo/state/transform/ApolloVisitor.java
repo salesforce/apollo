@@ -4,17 +4,14 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.state;
+package com.salesforce.apollo.state.transform;
 
-import java.util.ArrayList;
-import java.util.List;
+import org.apache.calcite.sql.util.SqlBasicVisitor;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class BlockStateBuilder {
-    @SuppressWarnings("unused")
-    private final List<Transaction> transactions = new ArrayList<>();
+public class ApolloVisitor extends SqlBasicVisitor<Void>{
 
 }

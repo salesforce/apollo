@@ -13,6 +13,10 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>lambdas</artifactId> 
+		</dependency>
+		<dependency>
 			<groupId>org.apiguardian</groupId>
 			<artifactId>apiguardian-api</artifactId>
 		</dependency>

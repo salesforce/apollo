@@ -16,7 +16,6 @@ import org.h2.result.Row;
 import org.h2.table.Table;
 
 import com.salesforce.apollo.state.h2.Cdc;
-import com.salesforce.apollo.state.h2.CdcSession.CdcEvent;
 
 /**
  * @author hal.hildebrand
@@ -40,19 +39,6 @@ public class Transaction implements Cdc {
         return changes.stream().flatMap(events -> events.stream()).collect(Collectors.toList());
     }
 
-    public void process(SqlNode statement) {
-        statements.add(parse(statement));
-        changes.add(new ArrayList<>());
-    }
-
-    private Statement parse(SqlNode statement) {
-        return new Statement(statement);
-    }
-
-    public Cdc getDdlCdc() {
-        return (table, op, row) -> log(table, op, row);
-    }
-
     public List<Statement> getStatements() {
         return statements;
     }
@@ -60,6 +46,15 @@ public class Transaction implements Cdc {
     @Override
     public void log(Table table, short operation, Row row) {
         changes.get(changes.size() - 1).add(new CdcEvent(table, operation, row));
+    }
+
+    public void process(SqlNode statement) {
+        statements.add(parse(statement));
+        changes.add(new ArrayList<>());
+    }
+
+    private Statement parse(SqlNode statement) {
+        return new Statement(statement);
     }
 
 }

@@ -63,4 +63,8 @@ public class CdcEngine {
             throw new IllegalStateException("Cannot rollback to checkpoint for current transaction");
         }
     }
+    
+    public void commit(Transaction t) {
+        
+    }
 }

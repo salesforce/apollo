@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.memberships;
+package com.salesforce.apollo.membership;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -27,11 +27,11 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Ring implements Iterable<Member> {
-    private final Grouping                                grouping;
+    private final Context                                 grouping;
     private final int                                     index;
     private final ConcurrentNavigableMap<HashKey, Member> ring = new ConcurrentSkipListMap<>();
 
-    public Ring(int index, Grouping grouping) {
+    public Ring(int index, Context grouping) {
         this.index = index;
         this.grouping = grouping;
     }
@@ -113,6 +113,10 @@ public class Ring implements Iterable<Member> {
                 };
             }
         };
+    }
+
+    public void delete(Member m) {
+        ring.remove(hash(m));
     }
 
     public int getIndex() {

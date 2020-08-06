@@ -275,6 +275,16 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>lambdas</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>sql-state</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.dropwizard</groupId>
                 <artifactId>dropwizard-core</artifactId>
                 <version>${dropwizard.version}</version>
