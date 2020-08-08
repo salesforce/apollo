@@ -67,7 +67,6 @@ public class SmokeTest {
                 assertThat(r.next(), is(true));
             }
         }
-
     }
 
     @Test
