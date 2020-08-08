@@ -1,0 +1,17 @@
+{
+	"version": "1.0",
+	"defaultSchema": "area-51",
+	"schemas": [
+		{
+			"name": "ZAreaX",
+			"type": "custom",
+			"factory": "org.apache.calcite.adapter.jdbc.JdbcSchema$Factory",
+			"operand": {
+				"jdbcDriver": "org.h2.Driver",
+				"jdbcUrl": "jdbc:h2:mem:test_mem",
+				"jdbcUser": "god",
+				"jdbcPassword": "almighty"
+			}
+		}
+	]
+}

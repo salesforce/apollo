@@ -67,4 +67,8 @@ public class CdcEngine {
     public void commit(Transaction t) {
         
     }
+    
+    public List<Transaction> getTransactions() {
+        return transactions;
+    }
 }
