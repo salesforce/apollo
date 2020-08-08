@@ -1,0 +1,2 @@
+-- file:date.sql ln:274 expect:true
+SELECT DATE_TRUNC('MILLENNIUM', TIMESTAMP '1970-03-20 04:30:00.00000')

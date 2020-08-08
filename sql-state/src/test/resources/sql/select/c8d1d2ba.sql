@@ -1,0 +1,2 @@
+-- file:name.sql ln:75 expect:true
+SELECT parse_ident(E'X\rXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')

@@ -1,0 +1,13 @@
+-- file:xml.sql ln:471 expect:true
+INSERT INTO xmldata VALUES('<ROWS>
+<ROW id="20">
+  <COUNTRY_ID>EG</COUNTRY_ID>
+  <COUNTRY_NAME>Egypt</COUNTRY_NAME>
+  <REGION_ID>1</REGION_ID>
+</ROW>
+<ROW id="21">
+  <COUNTRY_ID>SD</COUNTRY_ID>
+  <COUNTRY_NAME>Sudan</COUNTRY_NAME>
+  <REGION_ID>1</REGION_ID>
+</ROW>
+</ROWS>')

@@ -1,0 +1,2 @@
+-- file:alter_table.sql ln:465 expect:true
+ALTER TABLE FKTABLE ALTER CONSTRAINT fkdd2 DEFERRABLE INITIALLY DEFERRED

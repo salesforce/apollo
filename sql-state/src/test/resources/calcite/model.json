@@ -3,7 +3,7 @@
 	"defaultSchema": "area-51",
 	"schemas": [
 		{
-			"name": "ZAreaX",
+			"name": "public",
 			"type": "custom",
 			"factory": "org.apache.calcite.adapter.jdbc.JdbcSchema$Factory",
 			"operand": {
