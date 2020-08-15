@@ -72,6 +72,7 @@ public class SmokeTest {
     @Test
     void testCreateSchema() throws Exception {
         try (Connection c = connect(); Statement s = c.createStatement()) {
+            s.executeQuery("SELECT * FROM metadata.TABLES");
             boolean b = s.execute("create schema s");
             assertThat(b, is(false));
             b = s.execute("create table s.t (i int not null)");
@@ -93,7 +94,8 @@ public class SmokeTest {
                    ServerDdlExecutor.class.getName() + "#PARSER_FACTORY");
         config.put(CalciteConnectionProperty.MATERIALIZATIONS_ENABLED.camelName(), "true");
         config.put(CalciteConnectionProperty.FUN.camelName(), "standard,oracle");
-//        config.put(CalciteConnectionProperty.MODEL.camelName(), "target/test-classes/calcite/model.json");
+        config.put(CalciteConnectionProperty.CASE_SENSITIVE.camelName(), "false");
+        config.put(CalciteConnectionProperty.MODEL.camelName(), "target/test-classes/calcite/model.json");
 
         Connection connection = DriverManager.getConnection("jdbc:calcite:", config);
         return connection;

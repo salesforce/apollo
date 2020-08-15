@@ -1,6 +1,6 @@
 {
 	"version": "1.0",
-	"defaultSchema": "area-51",
+	"defaultSchema": "public",
 	"schemas": [
 		{
 			"name": "public",
