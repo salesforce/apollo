@@ -50,7 +50,7 @@ import com.google.common.primitives.Ints;
 /**
  * Utilities for the JDBC provider.
  */
-final class JdbcUtils {
+final class Utils {
     /**
      * Ensures that if two data sources have the same definition, they will use the
      * same object.
@@ -221,7 +221,7 @@ final class JdbcUtils {
         }
     }
 
-    private JdbcUtils() {
+    private Utils() {
         throw new AssertionError("no instances!");
     }
 } 

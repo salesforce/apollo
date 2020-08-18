@@ -92,7 +92,7 @@ class MaterializedView extends AbstractQueryableTable implements TranslatableTab
             @SuppressWarnings("unchecked")
             final Enumerable<T> enumerable = (Enumerable<T>) ResultSetEnumerable.of(SubSchema.getDataSource(),
                                                                                     sql.getSql(),
-                                                                                    JdbcUtils.ObjectArrayRowBuilder.factory(fieldClasses(typeFactory)));
+                                                                                    Utils.ObjectArrayRowBuilder.factory(fieldClasses(typeFactory)));
             return enumerable.enumerator();
         }
 
@@ -101,22 +101,23 @@ class MaterializedView extends AbstractQueryableTable implements TranslatableTab
             return "MaterializedViewQueryable {table: " + tableName + "}";
         }
     }
-    private final String           jdbcCatalogName;
-    private final String           MaterializedViewName;
-    private final Schema.TableType MaterializedViewType;
+
+    private final String           catalogName;
+    private final String           tableName;
+    private final Schema.TableType tableType;
     private RelProtoDataType       protoRowType;
     private final SubSchema        SubSchema;
 
-    private final String           SubSchemaName;
+    private final String SubSchemaName;
 
-    public MaterializedView(SubSchema SubSchema, String jdbcCatalogName, String SubSchemaName, String tableName,
-            Schema.TableType MaterializedViewType) {
+    public MaterializedView(SubSchema SubSchema, String catalogName, String SubSchemaName, String tableName,
+            Schema.TableType tableType) {
         super(Object[].class);
         this.SubSchema = SubSchema;
-        this.jdbcCatalogName = jdbcCatalogName;
+        this.catalogName = catalogName;
         this.SubSchemaName = SubSchemaName;
-        this.MaterializedViewName = tableName;
-        this.MaterializedViewType = Preconditions.checkNotNull(MaterializedViewType);
+        this.tableName = tableName;
+        this.tableType = Preconditions.checkNotNull(tableType);
     }
 
     public <T> Queryable<T> asQueryable(QueryProvider queryProvider, SchemaPlus schema, String tableName) {
@@ -125,7 +126,7 @@ class MaterializedView extends AbstractQueryableTable implements TranslatableTab
 
     @Override
     public Schema.TableType getJdbcTableType() {
-        return MaterializedViewType;
+        return tableType;
     }
 
     @Override
@@ -136,9 +137,9 @@ class MaterializedView extends AbstractQueryableTable implements TranslatableTab
     public RelDataType getRowType(RelDataTypeFactory typeFactory) {
         if (protoRowType == null) {
             try {
-                protoRowType = SubSchema.getRelDataType(jdbcCatalogName, SubSchemaName, MaterializedViewName);
+                protoRowType = SubSchema.getRelDataType(catalogName, SubSchemaName, tableName);
             } catch (SQLException e) {
-                throw new RuntimeException("Exception while reading definition of table '" + MaterializedViewName + "'",
+                throw new RuntimeException("Exception while reading definition of table '" + tableName + "'",
                         e);
             }
         }
@@ -149,25 +150,25 @@ class MaterializedView extends AbstractQueryableTable implements TranslatableTab
         final JavaTypeFactory typeFactory = root.getTypeFactory();
         final SqlString sql = generateSql();
         return ResultSetEnumerable.of(SubSchema.getDataSource(), sql.getSql(),
-                                      JdbcUtils.ObjectArrayRowBuilder.factory(fieldClasses(typeFactory)));
+                                      Utils.ObjectArrayRowBuilder.factory(fieldClasses(typeFactory)));
     }
 
     @Override
     public TableModify toModificationRel(RelOptCluster cluster, RelOptTable table, CatalogReader catalogReader,
                                          RelNode input, Operation operation, List<String> updateColumnList,
                                          List<RexNode> sourceExpressionList, boolean flattened) {
-        SubSchema.convention.register(cluster.getPlanner());
+        SubSchema.getConvention().register(cluster.getPlanner());
 
         return new LogicalTableModify(cluster, cluster.traitSetOf(Convention.NONE), table, catalogReader, input,
                 operation, updateColumnList, sourceExpressionList, flattened);
     }
 
     public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
-        return new MaterializedViewScan(context.getCluster(), relOptTable, this, SubSchema.convention);
+        return new MaterializedViewScan(context.getCluster(), relOptTable, this, SubSchema.getConvention());
     }
 
     public String toString() {
-        return "MaterializedView {" + MaterializedViewName + "}";
+        return "MaterializedView {" + tableName + "}";
     }
 
     SqlString generateSql() {
@@ -183,13 +184,13 @@ class MaterializedView extends AbstractQueryableTable implements TranslatableTab
 
     SqlIdentifier tableName() {
         final List<String> strings = new ArrayList<>();
-        if (SubSchema.catalog != null) {
-            strings.add(SubSchema.catalog);
+        if (SubSchema.getCatalog() != null) {
+            strings.add(SubSchema.getCatalog());
         }
-        if (SubSchema.schema != null) {
-            strings.add(SubSchema.schema);
+        if (SubSchema.getName() != null) {
+            strings.add(SubSchema.getName());
         }
-        strings.add(MaterializedViewName);
+        strings.add(tableName);
         return new SqlIdentifier(strings, SqlParserPos.ZERO);
     }
 

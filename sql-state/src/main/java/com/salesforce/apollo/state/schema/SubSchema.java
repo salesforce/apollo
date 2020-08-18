@@ -12,6 +12,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -20,6 +21,7 @@ import javax.sql.DataSource;
 
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
+import org.apache.calcite.avatica.AvaticaUtils;
 import org.apache.calcite.avatica.SqlType;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.materialize.Lattice;
@@ -30,7 +32,6 @@ import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.SchemaVersion;
 import org.apache.calcite.schema.Schemas;
@@ -42,51 +43,65 @@ import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.MultimapBuilder;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class SubSchema implements SchemaPlus {
+
+    public static SubSchema create(ChainSchema parentSchema, String name, DataSource dataSource, String catalog,
+                                   String schema) {
+        final Expression expression = Schemas.subSchemaExpression(parentSchema, name, JdbcSchema.class);
+        final SqlDialect dialect = createDialect(dataSource);
+        final JdbcConvention convention = JdbcConvention.of(dialect, expression, name);
+        return new SubSchema(parentSchema, dataSource, dialect, convention, catalog, schema);
+    }
+
     /**
-     * Schema factory that creates a
-     * {@link org.apache.calcite.adapter.jdbc.JdbcSchema}. This allows you to create
-     * a jdbc schema inside a model.json file.
+     * Creates a JdbcSchema, taking credentials from a map.
      *
-     * <pre>
-     * {@code
-     * {
-     *   version: '1.0',
-     *   defaultSchema: 'FOODMART_CLONE',
-     *   schemas: [
-     *     {
-     *       name: 'FOODMART_CLONE',
-     *       type: 'custom',
-     *       factory: 'org.apache.calcite.adapter.jdbc.JdbcSchema$Factory',
-     *       operand: {
-     *         jdbcDriver: 'com.mysql.jdbc.Driver',
-     *         jdbcUrl: 'jdbc:mysql://localhost/foodmart',
-     *         jdbcUser: 'foodmart',
-     *         jdbcPassword: 'foodmart'
-     *       }
-     *     }
-     *   ]
-     * }
-     * }
-     * </pre>
+     * @param parentSchema Parent schema
+     * @param name         Name
+     * @param operand      Map of property/value pairs
+     * @return A JdbcSchema
      */
-    public static class Factory implements SchemaFactory {
-        public static final Factory INSTANCE = new Factory();
-
-        private Factory() {
+    public static SubSchema create(ChainSchema parentSchema, String name, Map<String, Object> operand) {
+        DataSource dataSource;
+        try {
+            final String dataSourceName = (String) operand.get("dataSource");
+            if (dataSourceName != null) {
+                dataSource = AvaticaUtils.instantiatePlugin(DataSource.class, dataSourceName);
+            } else {
+                final String jdbcUrl = (String) operand.get("jdbcUrl");
+                final String jdbcDriver = (String) operand.get("jdbcDriver");
+                final String jdbcUser = (String) operand.get("jdbcUser");
+                final String jdbcPassword = (String) operand.get("jdbcPassword");
+                dataSource = dataSource(jdbcUrl, jdbcDriver, jdbcUser, jdbcPassword);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Error while reading dataSource", e);
         }
+        String jdbcCatalog = (String) operand.get("jdbcCatalog");
+        String jdbcSchema = (String) operand.get("jdbcSchema");
+        return create(parentSchema, name, dataSource, jdbcCatalog, jdbcSchema);
+    }
 
-        public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
-            return JdbcSchema.create(parentSchema, name, operand);
+    /** Returns a suitable SQL dialect for the given data source. */
+    public static SqlDialect createDialect(DataSource dataSource) {
+        return Utils.DialectPool.INSTANCE.get(dataSource);
+    }
+
+    /** Creates a JDBC data source with the given specification. */
+    public static DataSource dataSource(String url, String driverClassName, String username, String password) {
+        if (url.startsWith("jdbc:hsqldb:")) {
+            // Prevent hsqldb from screwing up java.util.logging.
+            System.setProperty("hsqldb.reconfig_logging", "false");
         }
+        return Utils.DataSourcePool.INSTANCE.get(url, driverClassName, username, password);
     }
 
     private static void close(Connection connection, Statement statement, ResultSet resultSet) {
@@ -113,18 +128,21 @@ public class SubSchema implements SchemaPlus {
         }
     }
 
-    public final SqlDialect dialect;
-    final String            catalog;
-    final JdbcConvention    convention;
-    final DataSource        dataSource;
+    public final SqlDialect                     dialect;
+    private final String                        catalog;
+    private final JdbcConvention                convention;
+    private final DataSource                    dataSource;
+    @SuppressWarnings("unchecked")
+    private final Multimap<String, Function>    functions = (Multimap<String, Function>) MultimapBuilder.linkedHashKeys();
+    private final ChainSchema                   parent;
+    private final String                        schema;
+    private Map<String, MaterializedView>       tableMap  = new HashMap<>();
+    private final Map<String, RelProtoDataType> typeMap   = new HashMap<>();
 
-    final String schema;
-
-    private ImmutableMap<String, MaterializedView> tableMap;
-
-    public SubSchema(DataSource dataSource, SqlDialect dialect, JdbcConvention convention, String catalog,
-            String schema) {
+    public SubSchema(ChainSchema parent, DataSource dataSource, SqlDialect dialect, JdbcConvention convention,
+            String catalog, String schema) {
         super();
+        this.parent = parent;
         this.dataSource = dataSource;
         this.dialect = dialect;
         this.convention = convention;
@@ -186,15 +204,13 @@ public class SubSchema implements SchemaPlus {
     }
 
     @Override
-    public String getName() {
-        // TODO Auto-generated method stub
-        return null;
+    public String getName() { 
+        return schema;
     }
 
     @Override
     public SchemaPlus getParentSchema() {
-        // TODO Auto-generated method stub
-        return null;
+        return parent;
     }
 
     public SubSchema getSubSchema(String name) {
@@ -210,21 +226,17 @@ public class SubSchema implements SchemaPlus {
     }
 
     public Set<String> getTableNames() {
-        // This method is called during a cache refresh. We can take it as a signal
-        // that we need to re-build our own cache.
         return getTableMap(true).keySet();
     }
 
     @Override
     public RelProtoDataType getType(String name) {
-        // TODO Auto-generated method stub
-        return null;
+        return typeMap.get(name);
     }
 
     @Override
     public Set<String> getTypeNames() {
-        // TODO Auto-generated method stub
-        return null;
+        return typeMap.keySet();
     }
 
     @Override
@@ -261,9 +273,16 @@ public class SubSchema implements SchemaPlus {
         return null;
     }
 
+    protected String getCatalog() {
+        return catalog;
+    }
+
+    protected JdbcConvention getConvention() {
+        return convention;
+    }
+
     protected Multimap<String, Function> getFunctions() {
-        // TODO: populate map from JDBC metadata
-        return ImmutableMultimap.of();
+        return functions;
     }
 
     @SuppressWarnings("deprecation")
@@ -356,7 +375,7 @@ public class SubSchema implements SchemaPlus {
         if (force || tableMap == null) {
             tableMap = computeTables();
         }
-        return tableMap;
+        return (ImmutableMap<String, MaterializedView>) tableMap;
     }
 
     /**

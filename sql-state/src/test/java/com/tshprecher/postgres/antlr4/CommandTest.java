@@ -37,6 +37,7 @@ public abstract class CommandTest {
                     fail("unexpected header format: cannot read expectation of file " + name);
                 }
 
+                @SuppressWarnings("deprecation")
                 PostgreSQLLexer lexer = new PostgreSQLLexer(new ANTLRInputStream(fio)); // TODO: fix deprecation
                 PostgreSQLParser parser = new PostgreSQLParser(new CommonTokenStream(lexer));
                 success.set(true);

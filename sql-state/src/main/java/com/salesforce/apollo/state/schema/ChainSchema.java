@@ -7,6 +7,7 @@
 package com.salesforce.apollo.state.schema;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -22,9 +23,8 @@ import org.apache.calcite.schema.Schemas;
 import org.apache.calcite.schema.Table;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.MultimapBuilder;
 
 /**
  * @author hal.hildebrand
@@ -43,6 +43,12 @@ public class ChainSchema implements SchemaPlus {
             return null;
         }
     }
+
+    @SuppressWarnings("unchecked")
+    private final Multimap<String, Function>    functions    = (Multimap<String, Function>) MultimapBuilder.linkedHashKeys();
+    private final Map<String, SchemaPlus>       subSchemaMap = new HashMap<>();
+    private final Map<String, Table>            tableMap     = new HashMap<>();
+    private final Map<String, RelProtoDataType> typeMap      = new HashMap<>();
 
     @Override
     public void add(String name, Function function) {
@@ -169,7 +175,7 @@ public class ChainSchema implements SchemaPlus {
      * @return Multi-map of functions in this schema by name
      */
     protected Multimap<String, Function> getFunctionMultimap() {
-        return ImmutableMultimap.of();
+        return functions;
     }
 
     /**
@@ -185,7 +191,7 @@ public class ChainSchema implements SchemaPlus {
      * @return Map of sub-schemas in this schema by name
      */
     protected Map<String, SchemaPlus> getSubSchemaMap() {
-        return ImmutableMap.of();
+        return subSchemaMap;
     }
 
     /**
@@ -200,7 +206,7 @@ public class ChainSchema implements SchemaPlus {
      * @return Map of tables in this schema by name
      */
     protected Map<String, Table> getTableMap() {
-        return ImmutableMap.of();
+        return tableMap;
     }
 
     /**
@@ -215,6 +221,6 @@ public class ChainSchema implements SchemaPlus {
      * @return Map of types in this schema by name
      */
     protected Map<String, RelProtoDataType> getTypeMap() {
-        return ImmutableMap.of();
+        return typeMap;
     }
 }
