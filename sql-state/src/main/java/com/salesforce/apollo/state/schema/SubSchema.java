@@ -53,7 +53,7 @@ import com.google.common.collect.MultimapBuilder;
  */
 public class SubSchema implements SchemaPlus {
 
-    public static SubSchema create(ChainSchema parentSchema, String name, DataSource dataSource, String catalog,
+    public static SubSchema create(SchemaPlus parentSchema, String name, DataSource dataSource, String catalog,
                                    String schema) {
         final Expression expression = Schemas.subSchemaExpression(parentSchema, name, JdbcSchema.class);
         final SqlDialect dialect = createDialect(dataSource);
@@ -69,7 +69,7 @@ public class SubSchema implements SchemaPlus {
      * @param operand      Map of property/value pairs
      * @return A JdbcSchema
      */
-    public static SubSchema create(ChainSchema parentSchema, String name, Map<String, Object> operand) {
+    public static SubSchema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
         DataSource dataSource;
         try {
             final String dataSourceName = (String) operand.get("dataSource");
@@ -134,15 +134,15 @@ public class SubSchema implements SchemaPlus {
     private final DataSource                    dataSource;
     @SuppressWarnings("unchecked")
     private final Multimap<String, Function>    functions = (Multimap<String, Function>) MultimapBuilder.linkedHashKeys();
-    private final ChainSchema                   parent;
+    private final SchemaPlus                    parent;
     private final String                        schema;
     private Map<String, MaterializedView>       tableMap  = new HashMap<>();
     private final Map<String, RelProtoDataType> typeMap   = new HashMap<>();
 
-    public SubSchema(ChainSchema parent, DataSource dataSource, SqlDialect dialect, JdbcConvention convention,
+    public SubSchema(SchemaPlus parentSchema, DataSource dataSource, SqlDialect dialect, JdbcConvention convention,
             String catalog, String schema) {
         super();
-        this.parent = parent;
+        this.parent = parentSchema;
         this.dataSource = dataSource;
         this.dialect = dialect;
         this.convention = convention;
@@ -204,7 +204,7 @@ public class SubSchema implements SchemaPlus {
     }
 
     @Override
-    public String getName() { 
+    public String getName() {
         return schema;
     }
 

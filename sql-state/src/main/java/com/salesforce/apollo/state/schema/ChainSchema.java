@@ -9,8 +9,12 @@ package com.salesforce.apollo.state.schema;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
+import javax.sql.DataSource;
+
+import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.materialize.Lattice;
 import org.apache.calcite.rel.type.RelProtoDataType;
@@ -21,6 +25,7 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.SchemaVersion;
 import org.apache.calcite.schema.Schemas;
 import org.apache.calcite.schema.Table;
+import org.apache.calcite.sql.SqlDialect;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
@@ -40,15 +45,36 @@ public class ChainSchema implements SchemaPlus {
 
         @Override
         public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
-            return null;
+            return SubSchema.create(parentSchema, name, operand);
         }
     }
 
+    @SuppressWarnings("unused")
+    private final String                        catalog;
+    @SuppressWarnings("unused")
+    private final JdbcConvention                convention;
+    @SuppressWarnings("unused")
+    private final DataSource                    dataSource;
+    @SuppressWarnings("unused")
+    private final SqlDialect                    dialect;
     @SuppressWarnings("unchecked")
     private final Multimap<String, Function>    functions    = (Multimap<String, Function>) MultimapBuilder.linkedHashKeys();
+    private final String                        schema;
+    @SuppressWarnings("unused")
+    private final boolean                       snapshot;
     private final Map<String, SchemaPlus>       subSchemaMap = new HashMap<>();
     private final Map<String, Table>            tableMap     = new HashMap<>();
     private final Map<String, RelProtoDataType> typeMap      = new HashMap<>();
+
+    private ChainSchema(DataSource dataSource, SqlDialect dialect, JdbcConvention convention, String catalog,
+            String schema) {
+        this.dataSource = Objects.requireNonNull(dataSource);
+        this.dialect = Objects.requireNonNull(dialect);
+        this.convention = convention;
+        this.catalog = catalog;
+        this.schema = schema;
+        this.snapshot = tableMap != null;
+    }
 
     @Override
     public void add(String name, Function function) {
@@ -94,8 +120,7 @@ public class ChainSchema implements SchemaPlus {
 
     @Override
     public String getName() {
-        // TODO Auto-generated method stub
-        return null;
+        return schema;
     }
 
     @Override

@@ -1,0 +1,156 @@
+databaseChangeLog:
+-  preConditions:
+   -  runningAs:
+         username: bootstrap
+-  changeSet:
+      id: 1
+      author: hhildebrand
+      changes:
+
+      -  createTable:
+            tableName: lambda
+            columns:
+            -  column:
+                  name: schema
+                  type: VARCHAR
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: name
+                  type: VARCHAR
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: description
+                  type: VARCHAR
+            -  column:
+                  name: wasm
+                  type: BINARY
+      -  addUniqueConstraint:
+            tableName: lambda
+            columnNames: schema, name
+            constraintName: lambda_unique_schema_name
+
+      -  createTable:
+            tableName: lambda_parameter
+            columns:
+            -  column:
+                  name: schema
+                  type: VARCHAR
+            -  column:
+                  name: lambda
+                  type: VARCHAR
+            -  column:
+                  name: position
+                  type: INT
+            -  column:
+                  name: type
+                  type: INT
+            -  column:
+                  name: description
+                  type: VARCHAR
+      -  addUniqueConstraint:
+            tableName: lambda_parameter
+            columnNames: schema, lambda, position
+            constraintName: lambda_unique_parameter
+      -  addForeignKeyConstraint:  
+            baseColumnNames:  schema, lambda  
+            baseTableName:  lambda_parameter   
+            constraintName:  fk_lambda_name_parameter 
+            onUpdate:  RESTRICT  
+            referencedColumnNames:  schema, name   
+            referencedTableName:  lambda
+            validate:  true
+
+      -  createTable:
+            tableName: table_def
+            columns:
+            -  column:
+                  name: schema
+                  type: VARCHAR
+            -  column:
+                  name: name
+                  type: VARCHAR
+            -  column:
+                  name: description
+                  type: VARCHAR
+      -  addUniqueConstraint:
+            tableName: table_def
+            columnNames: schema, name
+            constraintName: table_unique_schema_name
+
+      -  createTable:
+            tableName: table_column
+            columns:
+            -  column:
+                  name: schema
+                  type: VARCHAR
+            -  column:
+                  name: table_def
+                  type: VARCHAR
+            -  column:
+                  name: position
+                  type: INT
+            -  column:
+                  name: name
+                  type: VARCHAR
+            -  column:
+                  name: type
+                  type: INT
+            -  column:
+                  name: description
+                  type: VARCHAR
+      -  addUniqueConstraint:
+            tableName: table_column
+            columnNames: schema, table_def, position
+            constraintName: table_column_unique_position
+      -  addForeignKeyConstraint:  
+            baseColumnNames:  schema, table_def 
+            baseTableName:  table_column    
+            constraintName:  fk_table_column_schema_table
+            onUpdate:  RESTRICT  
+            referencedColumnNames:  schema, name   
+            referencedTableName:  table_def
+            validate:  true
+
+      -  createTable:
+            tableName: table_trigger
+            columns:
+            -  column:
+                  name: schema
+                  type: VARCHAR
+            -  column:
+                  name: table_def
+                  type: VARCHAR
+            -  column:
+                  name: event
+                  type: INT
+            -  column:
+                  name: order
+                  type: INT
+            -  column:
+                  name: lambda_schema
+                  type: VARCHAR
+            -  column:
+                  name: lambda
+                  type: VARCHAR
+      -  addUniqueConstraint:
+            tableName: table_trigger
+            columnNames: schema, table_def, event, order
+            constraintName: table_trigger_unique_order
+      -  addForeignKeyConstraint:
+            baseColumnNames:  schema, table_def 
+            baseTableName:  table_trigger    
+            constraintName:  fk_trigger_schema_table
+            onUpdate:  RESTRICT  
+            referencedColumnNames:  schema, name   
+            referencedTableName:  table_def
+            validate:  true
+      -  addForeignKeyConstraint:
+            baseColumnNames:  lambda_schema, lambda 
+            baseTableName:  table_trigger    
+            constraintName:  fk_trigger_schema_lambda
+            onUpdate:  RESTRICT  
+            referencedColumnNames:  schema, name   
+            referencedTableName:  lambda
+            validate:  true
