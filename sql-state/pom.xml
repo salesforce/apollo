@@ -168,18 +168,36 @@
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-maven-plugin</artifactId>
 				<configuration>
-					<changeLogFile>src/main/resources/kernel.yaml</changeLogFile>
 					<driver>org.h2.Driver</driver>
-					<url>jdbc:h2:file:${project.build.directory}/data/jooq</url>
+					<url>jdbc:h2:file:${project.build.directory}/data/jooq;IGNORECASE=true</url>
 					<username>bootstrap</username>
 					<password>${db.password}</password>
+					<liquibaseSchemaName>public</liquibaseSchemaName>
+					<verbose>true</verbose>
 				</configuration>
 				<executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <id>create-schema</id>
+                        <goals>
+                            <goal>update</goal>
+                        </goals>
+                        <configuration>
+                            <changelogSchemaName>public</changelogSchemaName>
+                            <changeLogFile>src/main/resources/create-schema.yaml</changeLogFile>
+                        </configuration>
+                    </execution>
 					<execution>
 						<phase>generate-sources</phase>
+						<id>update</id>
 						<goals>
 							<goal>update</goal>
 						</goals>
+						<configuration>
+							<changelogSchemaName>public</changelogSchemaName>
+                            <defaultSchemaName>kernel</defaultSchemaName>
+							<changeLogFile>src/main/resources/kernel.yaml</changeLogFile>
+						</configuration>
 					</execution>
 				</executions>
 				<dependencies>
@@ -211,7 +229,7 @@
 				<configuration>
 					<jdbc>
 						<driver>org.h2.Driver</driver>
-						<url>jdbc:h2:file:${project.build.directory}/data/jooq</url>
+						<url>jdbc:h2:file:${project.build.directory}/data/jooq;IGNORECASE=true</url>
 						<user>bootstrap</user>
 						<password>${db.password}</password>
 					</jdbc>
@@ -220,7 +238,14 @@
 							<name>org.jooq.meta.h2.H2Database</name>
 							<includes>.*</includes>
 							<excludes></excludes>
-							<inputSchema>PUBLIC</inputSchema>
+                            <schemata>
+                                <schema>
+                                    <inputSchema>kernel</inputSchema>
+                                </schema>
+                                <schema>
+                                    <inputSchema>INFORMATION_SCHEMA</inputSchema>
+                                </schema>
+                            </schemata>
 						</database>
 						<generate></generate>
 						<target>
@@ -233,7 +258,8 @@
 		</plugins>
 		<pluginManagement>
 			<plugins>
-				<!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+				<!--This plugin's configuration is used to store Eclipse m2e settings 
+					only. It has no influence on the Maven build itself. -->
 				<plugin>
 					<groupId>org.eclipse.m2e</groupId>
 					<artifactId>lifecycle-mapping</artifactId>

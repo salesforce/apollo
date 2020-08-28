@@ -404,7 +404,7 @@
 			<dependency>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-core</artifactId>
-				<version>4.0.0-beta2</version>
+				<version>4.0.0</version>
 			</dependency>
 			<dependency>
 				<groupId>com.zaxxer</groupId>
@@ -652,7 +652,7 @@
 				<plugin>
 					<groupId>org.liquibase</groupId>
 					<artifactId>liquibase-maven-plugin</artifactId>
-					<version>3.6.3</version>
+					<version>4.0.0</version>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>

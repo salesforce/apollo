@@ -1,13 +1,19 @@
 databaseChangeLog:
 -  preConditions:
    -  runningAs:
-         username: bootstrap
+         username: bootstrap 
+
 -  changeSet:
       id: 1
       author: hhildebrand
       changes:
+      -  sql:
+            sql: SET SCHEMA_SEARCH_PATH kernel, public
+      -  sql:
+            sql: SET SCHEMA_SEARCH_PATH kernel, public
 
       -  createTable:
+            schemaName: kernel
             tableName: lambda
             columns:
             -  column:
@@ -27,11 +33,13 @@ databaseChangeLog:
                   name: wasm
                   type: BINARY
       -  addUniqueConstraint:
+            schemaName: kernel
             tableName: lambda
             columnNames: schema, name
             constraintName: lambda_unique_schema_name
 
       -  createTable:
+            schemaName: kernel
             tableName: lambda_parameter
             columns:
             -  column:
@@ -50,19 +58,23 @@ databaseChangeLog:
                   name: description
                   type: VARCHAR
       -  addUniqueConstraint:
+            schemaName: kernel
             tableName: lambda_parameter
             columnNames: schema, lambda, position
             constraintName: lambda_unique_parameter
       -  addForeignKeyConstraint:  
+            schemaName: kernel
             baseColumnNames:  schema, lambda  
             baseTableName:  lambda_parameter   
-            constraintName:  fk_lambda_name_parameter 
-            onUpdate:  RESTRICT  
+            baseTableSchemaName: kernel
+            constraintName:  fk_lambda_parameter_schema_name
+            onUpdate:  RESTRICT
             referencedColumnNames:  schema, name   
             referencedTableName:  lambda
             validate:  true
 
       -  createTable:
+            schemaName: kernel
             tableName: table_def
             columns:
             -  column:
@@ -75,11 +87,13 @@ databaseChangeLog:
                   name: description
                   type: VARCHAR
       -  addUniqueConstraint:
+            schemaName: kernel
             tableName: table_def
             columnNames: schema, name
             constraintName: table_unique_schema_name
 
       -  createTable:
+            schemaName: kernel
             tableName: table_column
             columns:
             -  column:
@@ -101,10 +115,12 @@ databaseChangeLog:
                   name: description
                   type: VARCHAR
       -  addUniqueConstraint:
+            schemaName: kernel
             tableName: table_column
             columnNames: schema, table_def, position
             constraintName: table_column_unique_position
       -  addForeignKeyConstraint:  
+            schemaName: kernel
             baseColumnNames:  schema, table_def 
             baseTableName:  table_column    
             constraintName:  fk_table_column_schema_table
@@ -114,6 +130,7 @@ databaseChangeLog:
             validate:  true
 
       -  createTable:
+            schemaName: kernel
             tableName: table_trigger
             columns:
             -  column:
@@ -135,10 +152,12 @@ databaseChangeLog:
                   name: lambda
                   type: VARCHAR
       -  addUniqueConstraint:
+            schemaName: kernel
             tableName: table_trigger
             columnNames: schema, table_def, event, order
             constraintName: table_trigger_unique_order
       -  addForeignKeyConstraint:
+            schemaName: kernel
             baseColumnNames:  schema, table_def 
             baseTableName:  table_trigger    
             constraintName:  fk_trigger_schema_table
@@ -147,6 +166,7 @@ databaseChangeLog:
             referencedTableName:  table_def
             validate:  true
       -  addForeignKeyConstraint:
+            schemaName: kernel
             baseColumnNames:  lambda_schema, lambda 
             baseTableName:  table_trigger    
             constraintName:  fk_trigger_schema_lambda
