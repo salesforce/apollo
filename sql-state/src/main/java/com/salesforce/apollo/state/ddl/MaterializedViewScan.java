@@ -19,7 +19,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.salesforce.apollo.state.schema;
+package com.salesforce.apollo.state.ddl;
 
 import java.util.List;
 
@@ -38,10 +38,10 @@ import com.google.common.collect.ImmutableList;
  * Relational expression representing a scan of a table in a JDBC data source.
  */
 public class MaterializedViewScan extends TableScan implements JdbcRel {
-    final MaterializedView jdbcTable;
+    final MaterializedTable jdbcTable;
 
     @SuppressWarnings("deprecation")
-    protected MaterializedViewScan(RelOptCluster cluster, RelOptTable table, MaterializedView jdbcTable,
+    protected MaterializedViewScan(RelOptCluster cluster, RelOptTable table, MaterializedTable jdbcTable,
             JdbcConvention jdbcConvention) {
         super(cluster, cluster.traitSetOf(jdbcConvention), table);
         this.jdbcTable = jdbcTable;

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.state.schema;
+package com.salesforce.apollo.state.ddl;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -21,7 +21,6 @@ import javax.sql.DataSource;
 
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
-import org.apache.calcite.avatica.AvaticaUtils;
 import org.apache.calcite.avatica.SqlType;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.materialize.Lattice;
@@ -51,14 +50,11 @@ import com.google.common.collect.MultimapBuilder;
  * @author hal.hildebrand
  *
  */
-public class SubSchema implements SchemaPlus {
+public class ApolloSchema implements SchemaPlus {
 
-    public static SubSchema create(SchemaPlus parentSchema, String name, DataSource dataSource, String catalog,
-                                   String schema) {
-        final Expression expression = Schemas.subSchemaExpression(parentSchema, name, JdbcSchema.class);
-        final SqlDialect dialect = createDialect(dataSource);
-        final JdbcConvention convention = JdbcConvention.of(dialect, expression, name);
-        return new SubSchema(parentSchema, dataSource, dialect, convention, catalog, schema);
+    public static ApolloSchema create(ChainSchema parentSchema, String name, DataSource ds, String catalog,
+                                      String schema) {
+        return new ApolloSchema(parentSchema, schema);
     }
 
     /**
@@ -69,25 +65,11 @@ public class SubSchema implements SchemaPlus {
      * @param operand      Map of property/value pairs
      * @return A JdbcSchema
      */
-    public static SubSchema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
-        DataSource dataSource;
-        try {
-            final String dataSourceName = (String) operand.get("dataSource");
-            if (dataSourceName != null) {
-                dataSource = AvaticaUtils.instantiatePlugin(DataSource.class, dataSourceName);
-            } else {
-                final String jdbcUrl = (String) operand.get("jdbcUrl");
-                final String jdbcDriver = (String) operand.get("jdbcDriver");
-                final String jdbcUser = (String) operand.get("jdbcUser");
-                final String jdbcPassword = (String) operand.get("jdbcPassword");
-                dataSource = dataSource(jdbcUrl, jdbcDriver, jdbcUser, jdbcPassword);
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Error while reading dataSource", e);
-        }
+    public static ApolloSchema create(ChainSchema parentSchema, String name, Map<String, Object> operand,
+                                      DataSource ds) {
         String jdbcCatalog = (String) operand.get("jdbcCatalog");
         String jdbcSchema = (String) operand.get("jdbcSchema");
-        return create(parentSchema, name, dataSource, jdbcCatalog, jdbcSchema);
+        return create(parentSchema, name, ds, jdbcCatalog, jdbcSchema);
     }
 
     /** Returns a suitable SQL dialect for the given data source. */
@@ -104,7 +86,7 @@ public class SubSchema implements SchemaPlus {
         return Utils.DataSourcePool.INSTANCE.get(url, driverClassName, username, password);
     }
 
-    private static void close(Connection connection, Statement statement, ResultSet resultSet) {
+    private static void close(Statement statement, ResultSet resultSet) {
         if (resultSet != null) {
             try {
                 resultSet.close();
@@ -119,37 +101,18 @@ public class SubSchema implements SchemaPlus {
                 // ignore
             }
         }
-        if (connection != null) {
-            try {
-                connection.close();
-            } catch (SQLException e) {
-                // ignore
-            }
-        }
     }
 
-    public final SqlDialect                     dialect;
-    private final String                        catalog;
-    private final JdbcConvention                convention;
-    private final DataSource                    dataSource;
-    @SuppressWarnings("unchecked")
-    private final Multimap<String, Function>    functions = (Multimap<String, Function>) MultimapBuilder.linkedHashKeys();
-    private final SchemaPlus                    parent;
+    private final Multimap<String, Function>    functions = MultimapBuilder.treeKeys().arrayListValues().build();
+    private final ChainSchema                   parent;
     private final String                        schema;
-    private Map<String, MaterializedView>       tableMap  = new HashMap<>();
+    private Map<String, MaterializedTable>      tableMap  = new HashMap<>();
     private final Map<String, RelProtoDataType> typeMap   = new HashMap<>();
 
-    public SubSchema(SchemaPlus parentSchema, DataSource dataSource, SqlDialect dialect, JdbcConvention convention,
-            String catalog, String schema) {
+    public ApolloSchema(ChainSchema parentSchema, String schema) {
         super();
         this.parent = parentSchema;
-        this.dataSource = dataSource;
-        this.dialect = dialect;
-        this.convention = convention;
-        this.catalog = catalog;
         this.schema = schema;
-        assert dialect != null;
-        assert dataSource != null;
     }
 
     @Override
@@ -186,11 +149,6 @@ public class SubSchema implements SchemaPlus {
         return false;
     }
 
-    // Used by generated code.
-    public DataSource getDataSource() {
-        return dataSource;
-    }
-
     public Expression getExpression(SchemaPlus parentSchema, String name) {
         return Schemas.subSchemaExpression(parentSchema, name, JdbcSchema.class);
     }
@@ -213,7 +171,7 @@ public class SubSchema implements SchemaPlus {
         return parent;
     }
 
-    public SubSchema getSubSchema(String name) {
+    public ApolloSchema getSubSchema(String name) {
         return null;
     }
 
@@ -274,11 +232,7 @@ public class SubSchema implements SchemaPlus {
     }
 
     protected String getCatalog() {
-        return catalog;
-    }
-
-    protected JdbcConvention getConvention() {
-        return convention;
+        return "";
     }
 
     protected Multimap<String, Function> getFunctions() {
@@ -321,28 +275,22 @@ public class SubSchema implements SchemaPlus {
     }
 
     RelProtoDataType getRelDataType(String catalogName, String schemaName, String tableName) throws SQLException {
-        Connection connection = null;
-        try {
-            connection = dataSource.getConnection();
+        try (Connection connection = parent.getConnection()) {
             DatabaseMetaData metaData = connection.getMetaData();
             return getRelDataType(metaData, catalogName, schemaName, tableName);
         } finally {
-            close(connection, null, null);
+            close(null, null);
         }
     }
 
-    private ImmutableMap<String, MaterializedView> computeTables() {
-        Connection connection = null;
+    private ImmutableMap<String, MaterializedTable> computeTables() {
         ResultSet resultSet = null;
         try {
-            connection = dataSource.getConnection();
-            DatabaseMetaData metaData = connection.getMetaData();
-            resultSet = metaData.getTables(catalog, schema, null, null);
-            final ImmutableMap.Builder<String, MaterializedView> builder = ImmutableMap.builder();
+            DatabaseMetaData metaData = parent.getConnection().getMetaData();
+            resultSet = metaData.getTables("", schema, null, null);
+            final ImmutableMap.Builder<String, MaterializedTable> builder = ImmutableMap.builder();
             while (resultSet.next()) {
                 final String tableName = resultSet.getString(3);
-                final String catalogName = resultSet.getString(1);
-                final String schemaName = resultSet.getString(2);
                 final String tableTypeName = resultSet.getString(4);
                 // Clean up table type. In particular, this ensures that 'SYSTEM TABLE',
                 // returned by Phoenix among others, maps to TableType.SYSTEM_TABLE.
@@ -359,23 +307,22 @@ public class SubSchema implements SchemaPlus {
                 if (tableType == TableType.OTHER && tableTypeName2 != null) {
                     System.out.println("Unknown table type: " + tableTypeName2);
                 }
-                final MaterializedView table = new MaterializedView(this, catalogName, schemaName, tableName,
-                        tableType);
+                final MaterializedTable table = new MaterializedTable(this, tableName, tableType);
                 builder.put(tableName, table);
             }
             return builder.build();
         } catch (SQLException e) {
             throw new RuntimeException("Exception while reading tables", e);
         } finally {
-            close(connection, null, resultSet);
+            close(null, resultSet);
         }
     }
 
-    private synchronized ImmutableMap<String, MaterializedView> getTableMap(boolean force) {
+    private synchronized ImmutableMap<String, MaterializedTable> getTableMap(boolean force) {
         if (force || tableMap == null) {
             tableMap = computeTables();
         }
-        return (ImmutableMap<String, MaterializedView>) tableMap;
+        return (ImmutableMap<String, MaterializedTable>) tableMap;
     }
 
     /**
@@ -439,5 +386,14 @@ public class SubSchema implements SchemaPlus {
             assert sqlTypeName.allowsNoPrecNoScale();
             return typeFactory.createSqlType(sqlTypeName);
         }
+    }
+
+    public JdbcConvention getConvention() {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    public DataSource getDatasource() {
+        return parent.getDatasource();
     }
 }

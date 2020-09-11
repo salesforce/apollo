@@ -4,8 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.state.schema;
+package com.salesforce.apollo.state.ddl;
 
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,22 +18,20 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 
-import org.apache.calcite.adapter.jdbc.JdbcConvention;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.materialize.Lattice;
 import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.Schema;
-import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.SchemaVersion;
 import org.apache.calcite.schema.Schemas;
 import org.apache.calcite.schema.Table;
-import org.apache.calcite.sql.SqlDialect;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
+import com.salesforce.apollo.state.CdcEngine;
 
 /**
  * @author hal.hildebrand
@@ -37,43 +39,18 @@ import com.google.common.collect.MultimapBuilder;
  */
 public class ChainSchema implements SchemaPlus {
 
-    public static class Factory implements SchemaFactory {
-        public static Factory INSTANCE = new Factory();
-
-        private Factory() {
-        }
-
-        @Override
-        public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
-            return SubSchema.create(parentSchema, name, operand);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    private final String                        catalog;
-    @SuppressWarnings("unused")
-    private final JdbcConvention                convention;
-    @SuppressWarnings("unused")
-    private final DataSource                    dataSource;
-    @SuppressWarnings("unused")
-    private final SqlDialect                    dialect;
-    @SuppressWarnings("unchecked")
-    private final Multimap<String, Function>    functions    = (Multimap<String, Function>) MultimapBuilder.linkedHashKeys();
-    private final String                        schema;
+    private final Multimap<String, Function>    functions = MultimapBuilder.treeKeys().arrayListValues().build();
     @SuppressWarnings("unused")
     private final boolean                       snapshot;
-    private final Map<String, SchemaPlus>       subSchemaMap = new HashMap<>();
-    private final Map<String, Table>            tableMap     = new HashMap<>();
-    private final Map<String, RelProtoDataType> typeMap      = new HashMap<>();
+    private final Map<String, SchemaPlus>       schemaMap = new HashMap<>();
+    private final Map<String, Table>            tableMap  = new HashMap<>();
+    private final Map<String, RelProtoDataType> typeMap   = new HashMap<>();
+    private final CdcEngine                     engine;
 
-    private ChainSchema(DataSource dataSource, SqlDialect dialect, JdbcConvention convention, String catalog,
-            String schema) {
-        this.dataSource = Objects.requireNonNull(dataSource);
-        this.dialect = Objects.requireNonNull(dialect);
-        this.convention = convention;
-        this.catalog = catalog;
-        this.schema = schema;
-        this.snapshot = tableMap != null;
+    public ChainSchema(CdcEngine engine) throws SQLException {
+        this.engine = Objects.requireNonNull(engine);
+        snapshot = tableMap != null;
+        initializeFrom(engine.getConnection().getMetaData());
     }
 
     @Override
@@ -120,7 +97,7 @@ public class ChainSchema implements SchemaPlus {
 
     @Override
     public String getName() {
-        return schema;
+        return "";
     }
 
     @Override
@@ -130,11 +107,11 @@ public class ChainSchema implements SchemaPlus {
     }
 
     public SchemaPlus getSubSchema(String name) {
-        return getSubSchemaMap().get(name);
+        return getSchemaMap().get(name);
     }
 
     public Set<String> getSubSchemaNames() {
-        return getSubSchemaMap().keySet();
+        return getSchemaMap().keySet();
     }
 
     public Table getTable(String name) {
@@ -215,8 +192,8 @@ public class ChainSchema implements SchemaPlus {
      *
      * @return Map of sub-schemas in this schema by name
      */
-    protected Map<String, SchemaPlus> getSubSchemaMap() {
-        return subSchemaMap;
+    protected Map<String, SchemaPlus> getSchemaMap() {
+        return schemaMap;
     }
 
     /**
@@ -248,4 +225,23 @@ public class ChainSchema implements SchemaPlus {
     protected Map<String, RelProtoDataType> getTypeMap() {
         return typeMap;
     }
+
+    private void initializeFrom(DatabaseMetaData metaData) throws SQLException {
+        ResultSet schemas = metaData.getSchemas(null, null);
+        while (schemas.next()) {
+            final String schemaName = schemas.getNString(1);
+            ApolloSchema subSchema = new ApolloSchema(this, schemaName);
+            schemaMap.put(schemaName, subSchema);
+            subSchema.getTableNames();
+        }
+    }
+
+    public Connection getConnection() {
+        return engine.getConnection();
+    }
+
+    public DataSource getDatasource() {
+        return engine.getDatasource();
+    }
+
 }

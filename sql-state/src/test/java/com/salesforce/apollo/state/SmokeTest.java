@@ -7,14 +7,11 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
 
-import org.apache.calcite.config.CalciteConnectionProperty;
-import org.apache.calcite.server.ServerDdlExecutor;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParser.Config;
@@ -73,10 +70,8 @@ public class SmokeTest {
     void testCreateSchema() throws Exception {
         try (Connection c = connect(); Statement s = c.createStatement()) {
             s.executeQuery("SELECT * FROM metadata.TABLES");
-            boolean b = s.execute("create schema s");
-            assertThat(b, is(false));
-            b = s.execute("create table s.t (i int not null)");
-            assertThat(b, is(false));
+            s.execute("create schema s");
+            s.execute("create table s.t (i int not null)");
             int x = s.executeUpdate("insert into s.t values 1");
             assertThat(x, is(1));
             try (ResultSet r = s.executeQuery("select count(*) from s.t")) {
@@ -88,16 +83,7 @@ public class SmokeTest {
     }
 
     private Connection connect() throws SQLException {
-        Properties config = new Properties();
-
-        config.put(CalciteConnectionProperty.PARSER_FACTORY.camelName(),
-                   ServerDdlExecutor.class.getName() + "#PARSER_FACTORY");
-        config.put(CalciteConnectionProperty.MATERIALIZATIONS_ENABLED.camelName(), "true");
-        config.put(CalciteConnectionProperty.FUN.camelName(), "standard,oracle");
-        config.put(CalciteConnectionProperty.CASE_SENSITIVE.camelName(), "false");
-        config.put(CalciteConnectionProperty.MODEL.camelName(), "target/test-classes/calcite/model.json");
-
-        Connection connection = DriverManager.getConnection("jdbc:calcite:", config);
-        return connection;
+        CdcEngine engine = new CdcEngine("jdbc:h2:mem:test_mem", new Properties());
+        return engine.getConnection();
     }
 }
