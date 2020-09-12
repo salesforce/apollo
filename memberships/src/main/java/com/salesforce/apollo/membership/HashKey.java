@@ -40,22 +40,6 @@ public class HashKey implements Comparable<HashKey> {
         return new String(hexChars);
     }
 
-    public static int compare(byte[] buffer1, byte[] buffer2) {
-        // Short circuit equal case
-        if (buffer1 == buffer2) {
-            return 0;
-        }
-        // Bring WritableComparator code local
-        for (int i = 0, j = 0; i < buffer1.length && j < buffer1.length; i++, j++) {
-            int a = (buffer1[i] & 0xff);
-            int b = (buffer2[j] & 0xff);
-            if (a != b) {
-                return a - b;
-            }
-        }
-        return 0;
-    }
-
     protected final byte[] itself;
 
     public HashKey(byte[] key) {
@@ -72,7 +56,18 @@ public class HashKey implements Comparable<HashKey> {
 
     @Override
     public int compareTo(HashKey o) {
-        return compare(itself, o.itself);
+        byte[] buffer2 = o.itself;
+        if (itself == buffer2) {
+            return 0;
+        }
+        for (int i = 0, j = 0; i < itself.length && j < itself.length; i++, j++) {
+            int a = (itself[i] & 0xff);
+            int b = (buffer2[j] & 0xff);
+            if (a != b) {
+                return a - b;
+            }
+        }
+        return 0;
     }
 
     @Override
@@ -83,8 +78,7 @@ public class HashKey implements Comparable<HashKey> {
             return false;
         if (getClass() != obj.getClass())
             return false;
-        HashKey other = (HashKey) obj;
-        return this.compareTo(other) == 0;
+        return Arrays.equals(itself, ((HashKey) obj).itself);
     }
 
     @Override
