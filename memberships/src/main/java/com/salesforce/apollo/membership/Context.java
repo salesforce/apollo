@@ -17,7 +17,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -48,20 +47,20 @@ public class Context {
         }
     }
 
-    public static final ThreadLocal<MessageDigest>     DIGEST_CACHE       = ThreadLocal.withInitial(() -> {
-                                                                              try {
-                                                                                  return MessageDigest.getInstance(Context.SHA_256);
-                                                                              } catch (NoSuchAlgorithmException e) {
-                                                                                  throw new IllegalStateException(e);
-                                                                              }
-                                                                          });
-    public static final String                         SHA_256            = "sha-256";
-    private static final String                        RING_HASH_TEMPLATE = "%s-%s";
-    private final ConcurrentNavigableMap<UUID, Member> active             = new ConcurrentSkipListMap<>();
-    private final Map<Member, HashKey[]>               hashes             = new ConcurrentHashMap<>();
-    private final HashKey                              id;
-    private final ConcurrentHashMap<UUID, Member>      offline            = new ConcurrentHashMap<>();
-    private final Ring[]                               rings;
+    public static final ThreadLocal<MessageDigest>        DIGEST_CACHE       = ThreadLocal.withInitial(() -> {
+                                                                                 try {
+                                                                                     return MessageDigest.getInstance(Context.SHA_256);
+                                                                                 } catch (NoSuchAlgorithmException e) {
+                                                                                     throw new IllegalStateException(e);
+                                                                                 }
+                                                                             });
+    public static final String                            SHA_256            = "sha-256";
+    private static final String                           RING_HASH_TEMPLATE = "%s-%s";
+    private final ConcurrentNavigableMap<HashKey, Member> active             = new ConcurrentSkipListMap<>();
+    private final Map<Member, HashKey[]>                  hashes             = new ConcurrentHashMap<>();
+    private final HashKey                                 id;
+    private final ConcurrentHashMap<HashKey, Member>      offline            = new ConcurrentHashMap<>();
+    private final Ring[]                                  rings;
 
     public Context(HashKey id, int r) {
         this.id = id;
@@ -77,6 +76,7 @@ public class Context {
     public void activate(Member m) {
         active.computeIfAbsent(m.getId(), id -> m);
         offline.remove(m.getId());
+        hash(m);
         for (Ring ring : rings) {
             ring.insert(m);
         }

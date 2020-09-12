@@ -10,8 +10,6 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
-import java.util.UUID;
- 
 
 /**
  * A member of the view
@@ -20,7 +18,6 @@ import java.util.UUID;
  * @since 220
  */
 public class Member {
- 
 
     /**
      * Signing identity
@@ -30,13 +27,16 @@ public class Member {
     /**
      * Unique ID of the memmber
      */
-    private final UUID id;
+    private final HashKey id;
 
-    protected Member(UUID id, X509Certificate c) {
+    private static int hashCode;
+
+    protected Member(HashKey id, X509Certificate c) {
         assert c != null;
         assert id != null;
         certificate = c;
         this.id = id;
+        hashCode = id.hashCode();
     }
 
     @Override
@@ -61,13 +61,13 @@ public class Member {
     /**
      * @return the unique id of this member
      */
-    public UUID getId() {
+    public HashKey getId() {
         return id;
     }
 
     @Override
     public int hashCode() {
-        return id.hashCode();
+        return hashCode;
     }
 
     @Override

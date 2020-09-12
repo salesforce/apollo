@@ -15,9 +15,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.bouncycastle.util.Arrays;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
  */
 public class RingTest {
     private static List<Member> members;
+    private static final byte[] PROTO = new byte[32];
 
     @BeforeAll
     public static void beforeClass() {
@@ -39,7 +40,9 @@ public class RingTest {
     }
 
     private static Member createMember(int i) {
-        return new Member(new UUID(0, i), generate());
+        byte[] hash = Arrays.copyOf(PROTO, PROTO.length);
+        hash[31] = (byte) i;
+        return new Member(new HashKey(hash), generate());
     }
 
     private Ring    ring;

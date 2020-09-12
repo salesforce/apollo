@@ -46,8 +46,12 @@ public class HashKey implements Comparable<HashKey> {
         itself = key;
     }
 
+    public HashKey(String b64Encoded) {
+        this(Base64.getUrlDecoder().decode(b64Encoded));
+    }
+
     public String b64Encoded() {
-        return Base64.getEncoder().withoutPadding().encodeToString(itself);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(itself);
     }
 
     public byte[] bytes() {
