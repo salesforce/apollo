@@ -290,6 +290,11 @@
 				<artifactId>lambdas</artifactId>
 				<version>${project.version}</version>
 			</dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>memberships</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>sql-state</artifactId>

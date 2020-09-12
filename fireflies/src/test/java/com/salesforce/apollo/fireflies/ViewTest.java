@@ -80,12 +80,11 @@ public class ViewTest {
     public void rumors() {
         FirefliesCommunications clientFactory = mock(FirefliesCommunications.class);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        View viewNode = new View(node, clientFactory, Collections.emptyList(), scheduler);
-        View viewM0 = new View(new Node(certs.get(members.get(0).getId()), parameters), clientFactory,
-                Collections.emptyList(), scheduler);
+        View viewNode = new View(node, clientFactory, scheduler);
+        View viewM0 = new View(new Node(certs.get(members.get(0).getId()), parameters), clientFactory, scheduler);
 
-        viewNode.getService().start(Duration.ofMillis(20_000));
-        viewM0.getService().start(Duration.ofMillis(20_000));
+        viewNode.getService().start(Duration.ofMillis(20_000), Collections.emptyList());
+        viewM0.getService().start(Duration.ofMillis(20_000), Collections.emptyList());
 
         Member m0 = viewM0.getView().get(members.get(0).getId());
 
@@ -136,9 +135,8 @@ public class ViewTest {
     @Test
     public void smoke() throws Exception {
         FirefliesCommunications clientFactory = mock(FirefliesCommunications.class);
-        View view = new View(node, clientFactory, Collections.emptyList(),
-                Executors.newSingleThreadScheduledExecutor());
-        view.getService().start(Duration.ofMillis(20_000));
+        View view = new View(node, clientFactory, Executors.newSingleThreadScheduledExecutor());
+        view.getService().start(Duration.ofMillis(20_000), Collections.emptyList());
         assertEquals(1, view.getLive().size());
 
         List<CertificateDigest> certGossip = view.gatherCertificateDigests();

@@ -84,11 +84,11 @@ public class GhostTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         List<View> views = members.stream()
-                                  .map(node -> new View(node, ffComms, seeds, scheduler))
+                                  .map(node -> new View(node, ffComms, scheduler))
                                   .collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(1000), seeds));
 
         Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream()

@@ -76,7 +76,11 @@ public class Apollo {
         if (!running.compareAndSet(false, true)) {
             return;
         }
-        view.getService().start(configuration.gossipInterval);
+        view.getService()
+            .start(configuration.gossipInterval,
+                   configuration.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
+                                                          ApolloConfiguration.DEFAULT_IDENTITY_ALIAS)
+                                       .seeds());
         avalanche.start();
     }
 

@@ -141,11 +141,11 @@ public class MessageTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         List<View> views = members.stream()
-                                  .map(node -> new View(node, communications, seeds, scheduler))
+                                  .map(node -> new View(node, communications, scheduler))
                                   .collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(100)));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds));
 
         Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream()

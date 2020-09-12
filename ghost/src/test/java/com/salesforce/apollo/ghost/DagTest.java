@@ -98,7 +98,7 @@ public class DagTest {
         System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(members.size() * 3);
 
-        views = members.stream().map(node -> new View(node, ffComms, seeds, scheduler)).collect(Collectors.toList());
+        views = members.stream().map(node -> new View(node, ffComms, scheduler)).collect(Collectors.toList());
     }
 
     @Test
@@ -111,7 +111,7 @@ public class DagTest {
             testViews.add(views.get(i));
         }
 
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000)));
+        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
@@ -168,7 +168,7 @@ public class DagTest {
         }
 
         then = System.currentTimeMillis();
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000)));
+        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds));
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
                      ghosties.parallelStream()

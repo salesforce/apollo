@@ -56,10 +56,11 @@ public class SwarmTest {
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
-    private List<Node>     members;
-    private MetricRegistry registry;
-    private List<View>     views;
-    private FfLocalCommSim communications;
+    private List<Node>            members;
+    private MetricRegistry        registry;
+    private List<View>            views;
+    private FfLocalCommSim        communications;
+    private List<X509Certificate> seeds;
 
     @AfterEach
     public void after() {
@@ -80,7 +81,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(100)));
+            testViews.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds));
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
@@ -99,7 +100,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(10)));
+            testViews.forEach(view -> view.getService().start(Duration.ofMillis(10), seeds));
 
             boolean stabilized = Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
@@ -142,7 +143,7 @@ public class SwarmTest {
         initialize();
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(100)));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
@@ -196,7 +197,7 @@ public class SwarmTest {
     private void initialize() {
         Random entropy = new Random(0x666);
 
-        List<X509Certificate> seeds = new ArrayList<>();
+        seeds = new ArrayList<>();
         members = certs.values()
                        .parallelStream()
                        .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
@@ -216,8 +217,6 @@ public class SwarmTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        views = members.stream()
-                       .map(node -> new View(node, communications, seeds, scheduler))
-                       .collect(Collectors.toList());
+        views = members.stream().map(node -> new View(node, communications, scheduler)).collect(Collectors.toList());
     }
 }

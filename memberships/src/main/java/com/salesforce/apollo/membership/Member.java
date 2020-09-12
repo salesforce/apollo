@@ -48,8 +48,7 @@ public class Member {
             return false;
         if (!(obj instanceof Member))
             return false;
-        Member other = (Member) obj;
-        return id.equals(other.id);
+        return id.equals(((Member) obj).id);
     }
 
     /**

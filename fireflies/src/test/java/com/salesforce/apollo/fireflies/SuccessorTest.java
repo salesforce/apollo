@@ -44,78 +44,86 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class SuccessorTest {
 
-	private static final RootCertificate ca = getCa();
-	private static Map<UUID, CertWithKey> certs;
-	private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate     ca         = getCa();
+    private static Map<UUID, CertWithKey>    certs;
+    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-	@BeforeAll
-	public static void beforeClass() {
-		certs = IntStream.range(1, 10).parallel().mapToObj(i -> getMember(i))
-				.collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
-	}
+    @BeforeAll
+    public static void beforeClass() {
+        certs = IntStream.range(1, 10)
+                         .parallel()
+                         .mapToObj(i -> getMember(i))
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+    }
 
-	@Test
-	public void allSuccessors() throws Exception {
-		Random entropy = new Random(0x666);
+    @Test
+    public void allSuccessors() throws Exception {
+        Random entropy = new Random(0x666);
 
-		List<X509Certificate> seeds = new ArrayList<>();
-		List<Node> members = certs.values().parallelStream()
-				.map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
-				.map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-		FfLocalCommSim communications = new FfLocalCommSim();
-		assertEquals(certs.size(), members.size());
+        List<X509Certificate> seeds = new ArrayList<>();
+        List<Node> members = certs.values()
+                                  .parallelStream()
+                                  .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
+                                  .map(cert -> new Node(cert, parameters))
+                                  .collect(Collectors.toList());
+        FfLocalCommSim communications = new FfLocalCommSim();
+        assertEquals(certs.size(), members.size());
 
-		while (seeds.size() < parameters.toleranceLevel + 1) {
-			CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-			if (!seeds.contains(cert.getCertificate())) {
-				seeds.add(cert.getCertificate());
-			}
-		}
-		MessageBuffer messageBuffer = mock(MessageBuffer.class);
-		when(messageBuffer.process(any()))
-				.thenReturn(new MessageGossip(Collections.emptyList(), Collections.emptyList()));
+        while (seeds.size() < parameters.toleranceLevel + 1) {
+            CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
+            if (!seeds.contains(cert.getCertificate())) {
+                seeds.add(cert.getCertificate());
+            }
+        }
+        MessageBuffer messageBuffer = mock(MessageBuffer.class);
+        when(messageBuffer.process(any())).thenReturn(new MessageGossip(Collections.emptyList(),
+                Collections.emptyList()));
 
-		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-		Map<Member, View> views = members.stream().map(node -> new View(node, communications, seeds, scheduler))
-				.collect(Collectors.toMap(v -> v.getNode(), v -> v));
+        Map<Member, View> views = members.stream()
+                                         .map(node -> new View(node, communications, scheduler))
+                                         .collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
-		views.values().forEach(view -> view.getService().start(Duration.ofMillis(10)));
+        views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds));
 
-		Utils.waitForCondition(15_000, 1_000, () -> {
-			return views.values().stream().map(view -> view.getLive().size() != views.size() ? view : null)
-					.filter(view -> view != null).count() == 0;
-		});
+        Utils.waitForCondition(15_000, 1_000, () -> {
+            return views.values()
+                        .stream()
+                        .map(view -> view.getLive().size() != views.size() ? view : null)
+                        .filter(view -> view != null)
+                        .count() == 0;
+        });
 
-		for (View view : views.values()) {
-			for (Member m : view.getView().values()) {
-				assertTrue(m.getEpoch() > 0);
-			}
-			for (int r = 0; r < parameters.rings; r++) {
-				Ring ring = view.getRing(r);
-				Member successor = ring.successor(view.getNode());
-				View successorView = views.get(successor);
-				Member test = successorView.getRing(r).successor(view.getNode());
-				assertEquals(successor, test);
-			}
-		}
+        for (View view : views.values()) {
+            for (Member m : view.getView().values()) {
+                assertTrue(m.getEpoch() > 0);
+            }
+            for (int r = 0; r < parameters.rings; r++) {
+                Ring ring = view.getRing(r);
+                Member successor = ring.successor(view.getNode());
+                View successorView = views.get(successor);
+                Member test = successorView.getRing(r).successor(view.getNode());
+                assertEquals(successor, test);
+            }
+        }
 
-		View test = views.get(members.get(0));
-		System.out.println("Test member: " + test.getNode());
-		Field lastRing = Service.class.getDeclaredField("lastRing");
-		lastRing.setAccessible(true);
-		int ring = (lastRing.getInt(test.getService()) + 1) % test.getRings().size();
-		Member successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
-		System.out.println("ring: " + ring + " successor: " + successor);
-		assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
-		assertTrue(successor.isLive());
-		test.getService().gossip();
+        View test = views.get(members.get(0));
+        System.out.println("Test member: " + test.getNode());
+        Field lastRing = Service.class.getDeclaredField("lastRing");
+        lastRing.setAccessible(true);
+        int ring = (lastRing.getInt(test.getService()) + 1) % test.getRings().size();
+        Member successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
+        System.out.println("ring: " + ring + " successor: " + successor);
+        assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
+        assertTrue(successor.isLive());
+        test.getService().gossip();
 
-		ring = (ring + 1) % test.getRings().size();
-		successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
-		System.out.println("ring: " + ring + " successor: " + successor);
-		assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
-		assertTrue(successor.isLive());
-		test.getService().gossip();
-	}
+        ring = (ring + 1) % test.getRings().size();
+        successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
+        System.out.println("ring: " + ring + " successor: " + successor);
+        assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
+        assertTrue(successor.isLive());
+        test.getService().gossip();
+    }
 }

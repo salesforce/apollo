@@ -42,6 +42,14 @@ public class Context {
         }
     }
 
+    public HashKey getId() {
+        return id;
+    }
+
+    public Ring[] getRings() {
+        return Arrays.copyOf(rings, rings.length);
+    }
+
     public HashKey hashFor(Member m, int index) {
         HashKey[] hSet = hashes.get(m);
         if (hSet == null) {

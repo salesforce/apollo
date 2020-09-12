@@ -350,7 +350,7 @@ public class View {
                             processAccusationDigests(digests.getAccusations()));
         }
 
-        public void start(Duration d) {
+        public void start(Duration d, List<X509Certificate> seeds) {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
@@ -570,15 +570,12 @@ public class View {
      * The view of all known members
      */
     private final ConcurrentMap<UUID, Member> view = new ConcurrentHashMap<>();
-    private final List<X509Certificate>       seeds;
 
-    public View(Node node, FirefliesCommunications communications, List<X509Certificate> s,
-            ScheduledExecutorService scheduler) {
+    public View(Node node, FirefliesCommunications communications, ScheduledExecutorService scheduler) {
         this.node = node;
         this.comm = communications;
         this.parameters = this.node.getParameters();
         this.scheduler = scheduler;
-        this.seeds = s;
         diameter = diameter(parameters);
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
         dispatcher = Executors.newSingleThreadExecutor(new ThreadFactory() {
@@ -875,8 +872,8 @@ public class View {
             stopRebutalTimer(m);
             checkInvalidations(m);
         }
- 
-            recover(m); 
+
+        recover(m);
 
         m.setNote(note);
 
@@ -1055,7 +1052,11 @@ public class View {
                       outbound.getCertificates().size(), outbound.getNotes().size(), outbound.getAccusations().size(),
                       outbound.getMessages().size());
         }
-        Gossip gossip = link.gossip(node.getSignedNote(), ring, outbound);
+        Signed signedNote = node.getSignedNote();
+        if (signedNote == null) {
+            return true;
+        }
+        Gossip gossip = link.gossip(signedNote, ring, outbound);
         if (log.isTraceEnabled()) {
             log.trace("inbound\nwant: certs: {}, notes: {}, accusations: {}, messages: {}\nupdates: certs: {}, notes: {}, accusations: {}, messages: {}",
                       gossip.getCertificates().getDigests().size(), gossip.getNotes().getDigests().size(),

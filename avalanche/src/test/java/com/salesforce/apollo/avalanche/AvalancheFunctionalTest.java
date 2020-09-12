@@ -111,7 +111,7 @@ abstract public class AvalancheFunctionalTest {
         System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(members.size());
 
-        views = members.stream().map(node -> new View(node, ffComms, seeds, scheduler)).collect(Collectors.toList());
+        views = members.stream().map(node -> new View(node, ffComms, scheduler)).collect(Collectors.toList());
     }
 
     @Test
@@ -150,7 +150,7 @@ abstract public class AvalancheFunctionalTest {
         int outstanding = 400;
         int runtime = (int) Duration.ofSeconds(100).toMillis();
 
-        views.parallelStream().forEach(view -> view.getService().start(ffRound));
+        views.parallelStream().forEach(view -> view.getService().start(ffRound, seeds));
 
         assertTrue(Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()

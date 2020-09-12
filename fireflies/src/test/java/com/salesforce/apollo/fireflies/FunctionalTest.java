@@ -75,8 +75,8 @@ public class FunctionalTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         List<View> views = members.parallelStream()
-                                  .map(node -> new View(node, communications, seeds, scheduler))
-                                  .peek(view -> view.getService().start(Duration.ofMillis(20_000)))
+                                  .map(node -> new View(node, communications, scheduler))
+                                  .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds))
                                   .collect(Collectors.toList());
 
         for (int i = 0; i < parameters.rings + 2; i++) {

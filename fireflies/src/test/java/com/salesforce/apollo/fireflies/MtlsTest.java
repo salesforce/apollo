@@ -82,11 +82,11 @@ public class MtlsTest {
 
         List<View> views = members.stream()
                                   .map(node -> new View(node, new FirefliesNettyCommunications(null, 2, 2, 2, 100, 100),
-                                          seeds, scheduler))
+                                          scheduler))
                                   .collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1_000)));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(1_000), seeds));
 
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return views.stream()
@@ -114,7 +114,7 @@ public class MtlsTest {
         views.forEach(view -> view.getService().stop());
 
         System.out.println("Restarting views");
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(1000), seeds));
 
         assertTrue(Utils.waitForCondition(30_000, 100, () -> {
             return views.stream()
