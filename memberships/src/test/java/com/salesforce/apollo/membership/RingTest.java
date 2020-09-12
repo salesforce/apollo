@@ -49,7 +49,7 @@ public class RingTest {
     public void before() {
         context = new Context(new HashKey(new byte[] { 0, 1, 2 }), 1);
         ring = context.rings().findFirst().get();
-        members.forEach(m -> context.insert(m));
+        members.forEach(m -> context.activate(m));
 
         Collections.sort(members, new Comparator<Member>() {
             @Override

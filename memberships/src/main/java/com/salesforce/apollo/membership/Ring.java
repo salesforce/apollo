@@ -113,10 +113,6 @@ public class Ring implements Iterable<Member> {
         };
     }
 
-    public void delete(Member m) {
-        ring.remove(hash(m));
-    }
-
     public int getIndex() {
         return index;
     }
@@ -489,6 +485,10 @@ public class Ring implements Iterable<Member> {
                 };
             }
         };
+    }
+
+    protected void delete(Member m) {
+        ring.remove(hash(m));
     }
 
     protected HashKey hash(Member m) {
