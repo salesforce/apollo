@@ -27,13 +27,17 @@ import org.junit.jupiter.api.Test;
  * @since 220
  */
 public class RingTest {
+    /**
+     * 
+     */
+    private static final int    MEMBER_COUNT = 10;
     private static List<Member> members;
-    private static final byte[] PROTO = new byte[32];
+    private static final byte[] PROTO        = new byte[32];
 
     @BeforeAll
     public static void beforeClass() {
         members = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < MEMBER_COUNT; i++) {
             Member m = createMember(i);
             members.add(m);
         }
@@ -45,12 +49,12 @@ public class RingTest {
         return new Member(new HashKey(hash), generate());
     }
 
-    private Ring    ring;
-    private Context context;
+    private Ring<Member>    ring;
+    private Context<Member> context;
 
     @BeforeEach
     public void before() {
-        context = new Context(new HashKey(new byte[] { 0, 1, 2 }), 1);
+        context = new Context<>(new HashKey(new byte[] { 0, 1, 2 }), 1);
         ring = context.rings().findFirst().get();
         members.forEach(m -> context.activate(m));
 
@@ -149,6 +153,14 @@ public class RingTest {
             int successor = (i + 1) % members.size();
             assertEquals(successor, members.indexOf(ring.successor(members.get(i))));
         }
+    }
+
+    @Test
+    public void noRing() {
+        context = new Context<>(new HashKey(new byte[] { 0, 1, 2 }));
+        assertEquals(0, context.getRings().length);
+        members.forEach(m -> context.activate(m));
+        assertEquals(MEMBER_COUNT, context.getActive().size());
     }
 
     @Test

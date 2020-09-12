@@ -16,7 +16,9 @@ import java.util.Base64;
  */
 public class HashKey implements Comparable<HashKey> {
 
+    // Last ID on a 32 byte hash ring
     public static final HashKey LAST;
+    // First ID on a 32 byte hash ring
     public static final HashKey ORIGIN;
 
     private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
