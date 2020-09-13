@@ -113,7 +113,6 @@ public class CdcEngine {
 
     }
 
-    private final ChainSchema       root;
     private final CdcSession        capture;
     private Savepoint               checkpoint;
     private final JdbcConnection    connection;
@@ -122,7 +121,6 @@ public class CdcEngine {
 
     public CdcEngine(String url, Properties info) throws SQLException {
         connection = new JdbcConnection(url, info);
-        root = new ChainSchema(this);
         capture = (CdcSession) connection.getSession();
     }
 
