@@ -1046,15 +1046,15 @@ public class View {
      * @throws AvroRemoteException
      */
     boolean gossip(int ring, FfClientCommunications link) throws AvroRemoteException {
+        Signed signedNote = node.getSignedNote();
+        if (signedNote == null) {
+            return true;
+        }
         Digests outbound = commonDigests();
         if (log.isTraceEnabled()) {
             log.trace("outbound, certs: {}, notes: {}, accusations: {}, messages: {}",
                       outbound.getCertificates().size(), outbound.getNotes().size(), outbound.getAccusations().size(),
                       outbound.getMessages().size());
-        }
-        Signed signedNote = node.getSignedNote();
-        if (signedNote == null) {
-            return true;
         }
         Gossip gossip = link.gossip(signedNote, ring, outbound);
         if (log.isTraceEnabled()) {

@@ -24,10 +24,13 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
- * Provides a Context for Membership. Members may be either active or offline.
- * The Context maintains a number of Rings (can be zero) that this Context
- * provides. Each ring has a unique hash of each individual member, and thus
- * each ring has a diffent ring order of the same membership.
+ * Provides a Context for Membership and is uniquely identified by a HashKey;.
+ * Members may be either active or offline. The Context maintains a number of
+ * Rings (may be zero) that the Context provides for Firefly type ordering
+ * operators. Each ring has a unique hash of each individual member, and thus
+ * each ring has a different ring order of the same membership set. Hashes for
+ * Context level operators include the ID of the ring. Hashes computed for each
+ * member, per ring include the ID of the enclosing Context.
  * 
  * @author hal.hildebrand
  *
@@ -45,26 +48,28 @@ public class Context<T extends Member> {
         public boolean accept() {
             boolean accepted = current.equals(indices.get(0));
             if (accepted) {
-                indices.subList(1, indices.size());
+                indices = indices.subList(1, indices.size());
             }
             current = current + 1;
             return accepted;
         }
     }
 
-    public static final ThreadLocal<MessageDigest>   DIGEST_CACHE       = ThreadLocal.withInitial(() -> {
-                                                                            try {
-                                                                                return MessageDigest.getInstance(Context.SHA_256);
-                                                                            } catch (NoSuchAlgorithmException e) {
-                                                                                throw new IllegalStateException(e);
-                                                                            }
-                                                                        });
-    public static final String                       SHA_256            = "sha-256";
-    private static final String                      RING_HASH_TEMPLATE = "%s-%s";
-    private final ConcurrentNavigableMap<HashKey, T> active             = new ConcurrentSkipListMap<>();
-    private final Map<T, HashKey[]>                  hashes             = new ConcurrentHashMap<>();
+    public static final ThreadLocal<MessageDigest> DIGEST_CACHE          = ThreadLocal.withInitial(() -> {
+                                                                             try {
+                                                                                 return MessageDigest.getInstance(Context.SHA_256);
+                                                                             } catch (NoSuchAlgorithmException e) {
+                                                                                 throw new IllegalStateException(e);
+                                                                             }
+                                                                         });
+    public static final String                     SHA_256               = "sha-256";
+    private static final String                    CONTEXT_HASH_TEMPLATE = "%s-%s";
+    private static final String                    RING_HASH_TEMPLATE    = "%s-%s-%s";
+
+    private final ConcurrentNavigableMap<HashKey, T> active  = new ConcurrentSkipListMap<>();
+    private final Map<T, HashKey[]>                  hashes  = new ConcurrentHashMap<>();
     private final HashKey                            id;
-    private final ConcurrentHashMap<HashKey, T>      offline            = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<HashKey, T>      offline = new ConcurrentHashMap<>();
     private final Ring<T>[]                          rings;
 
     public Context(HashKey id) {
@@ -73,7 +78,7 @@ public class Context<T extends Member> {
 
     @SuppressWarnings("unchecked")
     public Context(HashKey id, int r) {
-        this.id = id; 
+        this.id = id;
         this.rings = new Ring[r];
         for (int i = 0; i < r; i++) {
             rings[i] = new Ring<T>(i, this);
@@ -84,9 +89,9 @@ public class Context<T extends Member> {
      * Mark a member as active in the context
      */
     public void activate(T m) {
+        hash(m);
         active.computeIfAbsent(m.getId(), id -> m);
         offline.remove(m.getId());
-        hash(m);
         for (Ring<T> ring : rings) {
             ring.insert(m);
         }
@@ -95,6 +100,23 @@ public class Context<T extends Member> {
     public void add(T m) {
         hash(m);
         offline(m);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        Context<?> other = (Context<?>) obj;
+        if (id == null) {
+            if (other.id != null)
+                return false;
+        } else if (!id.equals(other.id))
+            return false;
+        return true;
     }
 
     public Collection<T> getActive() {
@@ -111,6 +133,14 @@ public class Context<T extends Member> {
 
     public Ring<T>[] getRings() {
         return Arrays.copyOf(rings, rings.length);
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((id == null) ? 0 : id.hashCode());
+        return result;
     }
 
     public boolean isActive(T m) {
@@ -136,11 +166,7 @@ public class Context<T extends Member> {
      * @return the predecessor on each ring for the provided key
      */
     public List<T> predecessors(HashKey key) {
-        List<T> predecessors = new ArrayList<>();
-        for (Ring<T> ring : rings) {
-            predecessors.add(ring.predecessor(key));
-        }
-        return predecessors;
+        return predecessors(key, t -> true);
     }
 
     /**
@@ -150,7 +176,7 @@ public class Context<T extends Member> {
     public List<T> predecessors(HashKey key, Predicate<T> test) {
         List<T> predecessors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            predecessors.add(ring.predecessor(key, test));
+            predecessors.add(ring.predecessor(contextHash(key, ring.getIndex()), test));
         }
         return predecessors;
     }
@@ -215,11 +241,7 @@ public class Context<T extends Member> {
      * @return the list of successors to the key on each ring
      */
     public List<T> successors(HashKey key) {
-        List<T> successors = new ArrayList<>();
-        for (Ring<T> ring : rings) {
-            successors.add(ring.successor(key));
-        }
-        return successors;
+        return successors(key, t -> true);
     }
 
     /**
@@ -229,7 +251,7 @@ public class Context<T extends Member> {
     public List<T> successors(HashKey key, Predicate<T> test) {
         List<T> successors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            successors.add(ring.successor(key, test));
+            successors.add(ring.successor(contextHash(key, ring.getIndex()), test));
         }
         return successors;
     }
@@ -242,15 +264,23 @@ public class Context<T extends Member> {
         return hSet[index];
     }
 
+    private HashKey contextHash(HashKey key, int ring) {
+        MessageDigest md = DIGEST_CACHE.get();
+        md.reset();
+        md.update(String.format(CONTEXT_HASH_TEMPLATE, ring).getBytes());
+        return new HashKey(md.digest());
+    }
+
     private void hash(T m) {
         if (hashes.containsKey(m)) {
             return;
         }
+        HashKey[] s = new HashKey[rings.length];
+        hashes.put(m, s);
         MessageDigest md = DIGEST_CACHE.get();
         for (int ring = 0; ring < rings.length; ring++) {
             md.reset();
-            md.update(String.format(RING_HASH_TEMPLATE, m.getId(), ring).getBytes());
-            HashKey[] s = hashes.computeIfAbsent(m, k -> new HashKey[rings.length]);
+            md.update(String.format(RING_HASH_TEMPLATE, id, m.getId(), ring).getBytes());
             s[ring] = new HashKey(md.digest());
         }
     }

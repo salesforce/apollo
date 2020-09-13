@@ -43,9 +43,11 @@ public class HashKey implements Comparable<HashKey> {
     }
 
     protected final byte[] itself;
+    protected final int    hashCode;
 
     public HashKey(byte[] key) {
         itself = key;
+        hashCode = new String(itself).hashCode();
     }
 
     public HashKey(String b64Encoded) {
@@ -89,7 +91,7 @@ public class HashKey implements Comparable<HashKey> {
 
     @Override
     public int hashCode() {
-        return new String(itself).hashCode();
+        return hashCode;
     }
 
     @Override
