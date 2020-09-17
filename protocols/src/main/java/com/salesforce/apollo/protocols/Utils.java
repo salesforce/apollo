@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
@@ -64,18 +65,13 @@ public class Utils {
         BRACKET, DOLLAR, PASS_THROUGH
     }
 
-    public static Object accessField(String fieldName,
-                                     Object target) throws SecurityException,
-                                                    NoSuchFieldException,
-                                                    IllegalArgumentException,
-                                                    IllegalAccessException {
+    public static Object accessField(String fieldName, Object target) throws SecurityException, NoSuchFieldException,
+                                                                      IllegalArgumentException, IllegalAccessException {
         Field field;
         try {
-            field = target.getClass()
-                          .getDeclaredField(fieldName);
+            field = target.getClass().getDeclaredField(fieldName);
         } catch (NoSuchFieldException e) {
-            Class<?> superClass = target.getClass()
-                                        .getSuperclass();
+            Class<?> superClass = target.getClass().getSuperclass();
             if (superClass == null) {
                 throw e;
             }
@@ -86,10 +82,8 @@ public class Utils {
     }
 
     public static Object accessField(String fieldName, Object target,
-                                     Class<?> targetClass) throws SecurityException,
-                                                           NoSuchFieldException,
-                                                           IllegalArgumentException,
-                                                           IllegalAccessException {
+                                     Class<?> targetClass) throws SecurityException, NoSuchFieldException,
+                                                           IllegalArgumentException, IllegalAccessException {
         Field field;
         try {
             field = targetClass.getDeclaredField(fieldName);
@@ -104,10 +98,8 @@ public class Utils {
         return field.get(target);
     }
 
-    public static void addToZip(File root, File file,
-                                ZipOutputStream zos) throws IOException {
-        String relativePath = Utils.relativize(root, file.getAbsoluteFile())
-                                   .getPath();
+    public static void addToZip(File root, File file, ZipOutputStream zos) throws IOException {
+        String relativePath = Utils.relativize(root, file.getAbsoluteFile()).getPath();
         if (file.isDirectory()) {
             relativePath += '/';
         }
@@ -139,9 +131,7 @@ public class Utils {
      * @return the port number or -1 if none available
      */
     public static int allocatePort(InetAddress host) {
-        InetSocketAddress address = host == null ? new InetSocketAddress(0)
-                                                 : new InetSocketAddress(host,
-                                                                         0);
+        InetSocketAddress address = host == null ? new InetSocketAddress(0) : new InetSocketAddress(host, 0);
         try (ServerSocket socket = new ServerSocket();) {
             socket.bind(address);
             return socket.getLocalPort();
@@ -163,8 +153,7 @@ public class Utils {
                         remove(file);
                     } else {
                         if (!file.delete()) {
-                            throw new IllegalStateException(String.format("Cannot delete [%s] ",
-                                                                          file));
+                            throw new IllegalStateException(String.format("Cannot delete [%s] ", file));
                         }
                     }
                 }
@@ -185,34 +174,30 @@ public class Utils {
      * @param buffer
      * @throws IOException
      */
-    public static void copy(File sourceFile, File destFile,
-                            byte[] buffer) throws IOException {
-        try (InputStream is = new FileInputStream(sourceFile);
-                OutputStream os = new FileOutputStream(destFile);) {
+    public static void copy(File sourceFile, File destFile, byte[] buffer) throws IOException {
+        try (InputStream is = new FileInputStream(sourceFile); OutputStream os = new FileOutputStream(destFile);) {
             copy(is, os, buffer);
         }
     }
 
     /**
-     * Copy the contents of the source file into the destination file using a
-     * buffer of the supplied size
+     * Copy the contents of the source file into the destination file using a buffer
+     * of the supplied size
      * 
      * @param sourceFile
      * @param destFile
      * @param bufferSize
      * @throws IOException
      */
-    public static void copy(File sourceFile, File destFile,
-                            int bufferSize) throws IOException {
+    public static void copy(File sourceFile, File destFile, int bufferSize) throws IOException {
         copy(sourceFile, destFile, new byte[bufferSize]);
     }
 
     /**
      * 
-     * Copy and transform the zip entry to the destination. If the
-     * transformation extensions contains the entry's extension, then ${xxx}
-     * style parameters are replace with the supplied properties or
-     * System.getProperties()
+     * Copy and transform the zip entry to the destination. If the transformation
+     * extensions contains the entry's extension, then ${xxx} style parameters are
+     * replace with the supplied properties or System.getProperties()
      * 
      * @param dest
      * @param zf
@@ -221,8 +206,7 @@ public class Utils {
      * @param properties
      * @throws IOException
      */
-    public static void copy(File dest, ZipFile zf, ZipEntry ze,
-                            Map<String, String> properties,
+    public static void copy(File dest, ZipFile zf, ZipEntry ze, Map<String, String> properties,
                             Collection<String> extensions) throws IOException {
         try (InputStream is = zf.getInputStream(ze)) {
             File outFile = new File(dest, ze.getName());
@@ -253,8 +237,7 @@ public class Utils {
      * @param os
      * @throws IOException
      */
-    public static void copy(InputStream is,
-                            OutputStream os) throws IOException {
+    public static void copy(InputStream is, OutputStream os) throws IOException {
         copy(is, os, 16 * 1024);
     }
 
@@ -262,16 +245,12 @@ public class Utils {
      * Copy the contents of the input stream to the output stream. It is the
      * caller's responsibility to close the streams.
      * 
-     * @param is
-     *            - source
-     * @param os
-     *            - destination
-     * @param buffer
-     *            - byte buffer to use
+     * @param is     - source
+     * @param os     - destination
+     * @param buffer - byte buffer to use
      * @throws IOException
      */
-    public static void copy(InputStream is, OutputStream os,
-                            byte[] buffer) throws IOException {
+    public static void copy(InputStream is, OutputStream os, byte[] buffer) throws IOException {
         int len;
         while ((len = is.read(buffer)) > 0) {
             os.write(buffer, 0, len);
@@ -282,42 +261,34 @@ public class Utils {
      * Copy the contents of the input stream to the output stream. It is the
      * caller's responsibility to close the streams.
      * 
-     * @param is
-     *            - source
-     * @param os
-     *            - destination
-     * @param bufferSize
-     *            - buffer size to use
+     * @param is         - source
+     * @param os         - destination
+     * @param bufferSize - buffer size to use
      * @throws IOException
      */
-    public static void copy(InputStream is, OutputStream os,
-                            int bufferSize) throws IOException {
+    public static void copy(InputStream is, OutputStream os, int bufferSize) throws IOException {
         copy(is, os, new byte[bufferSize]);
     }
 
     /**
-     * Replicate the entire contents of the source directory to the target
-     * directory
+     * Replicate the entire contents of the source directory to the target directory
      * 
-     * @param sourceLocation
-     *            - must be a directory and must exist
-     * @param targetLocation
-     *            - if exists, must be a directory. Will be created with full
-     *            paths if does not exist
+     * @param sourceLocation - must be a directory and must exist
+     * @param targetLocation - if exists, must be a directory. Will be created with
+     *                       full paths if does not exist
      * @throws IOException
      */
-    public static void copyDirectory(File sourceLocation,
-                                     File targetLocation) throws IOException {
+    public static void copyDirectory(File sourceLocation, File targetLocation) throws IOException {
 
         if (sourceLocation.isDirectory()) {
             if (!targetLocation.exists()) {
                 if (!targetLocation.mkdirs()) {
-                    throw new IllegalArgumentException(String.format("Cannot create directory [%s]",
-                                                                     targetLocation.getAbsolutePath()));
+                    throw new IllegalArgumentException(
+                            String.format("Cannot create directory [%s]", targetLocation.getAbsolutePath()));
                 }
             } else if (targetLocation.isFile()) {
-                throw new IllegalArgumentException(String.format("Target location must be a directory [%s]",
-                                                                 targetLocation.getAbsolutePath()));
+                throw new IllegalArgumentException(
+                        String.format("Target location must be a directory [%s]", targetLocation.getAbsolutePath()));
             }
 
             String[] children = sourceLocation.list();
@@ -331,26 +302,21 @@ public class Utils {
                 }
             }
         } else {
-            throw new IllegalArgumentException(String.format("[%s] is not a directory",
-                                                             sourceLocation.getAbsolutePath()));
+            throw new IllegalArgumentException(
+                    String.format("[%s] is not a directory", sourceLocation.getAbsolutePath()));
         }
     }
 
     /**
      * Create a zip from the contents of a directory.
      * 
-     * @param root
-     *            - the root of the zip contents
-     * @param os
-     *            - the output stream to create the zip with
-     * @throws IOException
-     *             - if anything goes wrong
+     * @param root - the root of the zip contents
+     * @param os   - the output stream to create the zip with
+     * @throws IOException - if anything goes wrong
      */
-    public static void createZip(File root, boolean includeRoot,
-                                 OutputStream os) throws IOException {
+    public static void createZip(File root, boolean includeRoot, OutputStream os) throws IOException {
         if (!root.isDirectory()) {
-            throw new IllegalArgumentException(String.format("%s is not a directory",
-                                                             root));
+            throw new IllegalArgumentException(String.format("%s is not a directory", root));
         }
         File directory = root.getAbsoluteFile();
 
@@ -372,26 +338,20 @@ public class Utils {
     }
 
     /**
-     * Expand the zip resource into the destination, replacing any ${propName}
-     * style properties with the corresponding values in the substitutions map
+     * Expand the zip resource into the destination, replacing any ${propName} style
+     * properties with the corresponding values in the substitutions map
      * 
-     * @param zip
-     *            - the zip file to expand
-     * @param extensions
-     *            - the list of file extensions targeted for property
-     *            substitution
-     * @param substitutions
-     *            - the map of substitutions
-     * @param destination
-     *            - the destination directory for the expansion
+     * @param zip           - the zip file to expand
+     * @param extensions    - the list of file extensions targeted for property
+     *                      substitution
+     * @param substitutions - the map of substitutions
+     * @param destination   - the destination directory for the expansion
      * 
      * @throws IOException
      * @throws ZipException
      */
-    public static void expandAndReplace(File zip, File dest,
-                                        Map<String, String> substitutions,
-                                        Collection<String> extensions) throws ZipException,
-                                                                       IOException {
+    public static void expandAndReplace(File zip, File dest, Map<String, String> substitutions,
+                                        Collection<String> extensions) throws ZipException, IOException {
         try (InputStream is = new FileInputStream(zip)) {
             expandAndReplace(is, dest, substitutions, extensions);
         }
@@ -399,10 +359,9 @@ public class Utils {
 
     /**
      * 
-     * Copy and transform the zip entry to the destination. If the
-     * transformation extensions contains the entry's extension, then ${xxx}
-     * style parameters are replace with the supplied properties or
-     * System.getProperties()
+     * Copy and transform the zip entry to the destination. If the transformation
+     * extensions contains the entry's extension, then ${xxx} style parameters are
+     * replace with the supplied properties or System.getProperties()
      * 
      * @param dest
      * @param zis
@@ -411,9 +370,7 @@ public class Utils {
      * @param properties
      * @throws IOException
      */
-    public static void expandAndReplace(File dest, ZipInputStream zis,
-                                        ZipEntry ze,
-                                        Map<String, String> properties,
+    public static void expandAndReplace(File dest, ZipInputStream zis, ZipEntry ze, Map<String, String> properties,
                                         Collection<String> extensions) throws IOException {
         File outFile = new File(dest, ze.getName());
         if (ze.isDirectory()) {
@@ -424,29 +381,22 @@ public class Utils {
     }
 
     /**
-     * Expand the zip resource into the destination, replacing any ${propName}
-     * style properties with the corresponding values in the substitutions map
+     * Expand the zip resource into the destination, replacing any ${propName} style
+     * properties with the corresponding values in the substitutions map
      * 
-     * @param is
-     *            - the zip input stream to expand
-     * @param extensions
-     *            - the list of file extensions targeted for property
-     *            substitution
-     * @param substitutions
-     *            - the map of substitutions
-     * @param destination
-     *            - the destination directory for the expansion
+     * @param is            - the zip input stream to expand
+     * @param extensions    - the list of file extensions targeted for property
+     *                      substitution
+     * @param substitutions - the map of substitutions
+     * @param destination   - the destination directory for the expansion
      * 
      * @throws IOException
      * @throws ZipException
      */
-    public static void expandAndReplace(InputStream is, File dest,
-                                        Map<String, String> substitutions,
-                                        Collection<String> extensions) throws ZipException,
-                                                                       IOException {
+    public static void expandAndReplace(InputStream is, File dest, Map<String, String> substitutions,
+                                        Collection<String> extensions) throws ZipException, IOException {
         if (!dest.exists() && !dest.mkdir()) {
-            throw new IOException(String.format("Cannot create destination directory: %s",
-                                                dest.getAbsolutePath()));
+            throw new IOException(String.format("Cannot create destination directory: %s", dest.getAbsolutePath()));
         }
         ZipInputStream zis = new ZipInputStream(is);
         ZipEntry ze = zis.getNextEntry();
@@ -468,21 +418,19 @@ public class Utils {
      * @throws ZipException
      */
     public static void explode(File zip, File dest, Map<String, String> map,
-                               Collection<String> extensions) throws ZipException,
-                                                              IOException {
+                               Collection<String> extensions) throws ZipException, IOException {
         expandAndReplace(zip, dest, map, extensions);
     }
 
     /**
-     * Find the substitution value for the key in the properties. If the
-     * supplied properties are null, use the system properties.
+     * Find the substitution value for the key in the properties. If the supplied
+     * properties are null, use the system properties.
      * 
      * @param key
      * @param props
      * @return
      */
-    public static String findValue(final String key,
-                                   final Map<String, String> props) {
+    public static String findValue(final String key, final Map<String, String> props) {
         String value;
         // check from the properties
         if (props != null) {
@@ -522,13 +470,11 @@ public class Utils {
         return getAddress(iface, true);
     }
 
-    public static InetAddress getAddress(NetworkInterface iface,
-                                         boolean requireIPV4) {
+    public static InetAddress getAddress(NetworkInterface iface, boolean requireIPV4) {
         InetAddress interfaceAddress = null;
         for (InterfaceAddress address : iface.getInterfaceAddresses()) {
             if (requireIPV4) {
-                if (address.getAddress()
-                           .getAddress().length == 4) {
+                if (address.getAddress().getAddress().length == 4) {
                     interfaceAddress = address.getAddress();
                     break;
                 }
@@ -538,9 +484,7 @@ public class Utils {
         }
         if (interfaceAddress == null) {
             throw new IllegalStateException(String.format("Unable ot determine bound %s address for interface '%s'",
-                                                          requireIPV4 ? "IPV4"
-                                                                      : "IPV4/6",
-                                                          iface));
+                                                          requireIPV4 ? "IPV4" : "IPV4/6", iface));
         }
         return interfaceAddress;
     }
@@ -562,11 +506,9 @@ public class Utils {
     /**
      * Answer the string representation of the document
      * 
-     * @param openStream
-     *            - ye olde stream
+     * @param openStream - ye olde stream
      * @return the string the stream represents
-     * @throws IOException
-     *             - if we're boned
+     * @throws IOException - if we're boned
      */
     public static String getDocument(InputStream is) throws IOException {
         return getDocument(is, new HashMap<String, String>());
@@ -575,16 +517,12 @@ public class Utils {
     /**
      * Answer the string representation of the document
      * 
-     * @param openStream
-     *            - ye olde stream
-     * @param -
-     *            the replacement properties for the document
+     * @param openStream - ye olde stream
+     * @param -          the replacement properties for the document
      * @return the string the stream represents
-     * @throws IOException
-     *             - if we're boned
+     * @throws IOException - if we're boned
      */
-    public static String getDocument(InputStream is,
-                                     Map<String, String> properties) throws IOException {
+    public static String getDocument(InputStream is, Map<String, String> properties) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         replaceProperties(is, baos, properties);
         return baos.toString();
@@ -593,16 +531,12 @@ public class Utils {
     /**
      * Answer the string representation of the document
      * 
-     * @param openStream
-     *            - ye olde stream
-     * @param -
-     *            the replacement properties for the document
+     * @param openStream - ye olde stream
+     * @param -          the replacement properties for the document
      * @return the string the stream represents
-     * @throws IOException
-     *             - if we're boned
+     * @throws IOException - if we're boned
      */
-    public static String getDocument(InputStream is,
-                                     Properties properties) throws IOException {
+    public static String getDocument(InputStream is, Properties properties) throws IOException {
         Map<String, String> props = transform(properties);
         return getDocument(is, props);
     }
@@ -640,14 +574,14 @@ public class Utils {
         if (ifaceName == null) {
             NetworkInterface iface = NetworkInterface.getByIndex(1);
             if (iface == null) {
-                throw new IllegalArgumentException("Supplied ANY address for endpoint: %s with no networkInterface defined, cannot find network interface 1 ");
+                throw new IllegalArgumentException(
+                        "Supplied ANY address for endpoint: %s with no networkInterface defined, cannot find network interface 1 ");
             }
             return iface;
         } else {
             NetworkInterface iface = NetworkInterface.getByName(ifaceName);
             if (iface == null) {
-                throw new IllegalArgumentException(String.format("Cannot find network interface: %s ",
-                                                                 ifaceName));
+                throw new IllegalArgumentException(String.format("Cannot find network interface: %s ", ifaceName));
             }
             return iface;
         }
@@ -671,8 +605,7 @@ public class Utils {
     /**
      * Answer a property map read from the stream
      * 
-     * @param is
-     *            - the stream containing the property map
+     * @param is - the stream containing the property map
      * @return the Map of properties
      * @throws IOException
      */
@@ -689,11 +622,9 @@ public class Utils {
     /**
      * Answer the string representation of the inputstream
      * 
-     * @param openStream
-     *            - ye olde stream
+     * @param openStream - ye olde stream
      * @return the string the stream represents
-     * @throws IOException
-     *             - if we're boned
+     * @throws IOException - if we're boned
      */
     public static String getString(InputStream is) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -702,22 +633,21 @@ public class Utils {
     }
 
     /**
-     * Remove and reinitialze the directory. The directory and full paths will
-     * be created if it does not exist
+     * Remove and reinitialze the directory. The directory and full paths will be
+     * created if it does not exist
      * 
      * @param directory
      */
     public static void initializeDirectory(File directory) {
         clean(directory);
         if (!directory.exists() && !directory.mkdirs()) {
-            throw new IllegalStateException("Cannot create directory: "
-                                            + directory);
+            throw new IllegalStateException("Cannot create directory: " + directory);
         }
     }
 
     /**
-     * Remove and reinitialze the directory. The directory and full paths will
-     * be created if it does not exist
+     * Remove and reinitialze the directory. The directory and full paths will be
+     * created if it does not exist
      * 
      * @param dir
      */
@@ -732,9 +662,8 @@ public class Utils {
      * @return
      */
     public static boolean isClosedConnection(IOException ioe) {
-        return ioe instanceof ClosedChannelException
-               || "Broken pipe".equals(ioe.getMessage())
-               || "Connection reset by peer".equals(ioe.getMessage());
+        return ioe instanceof ClosedChannelException || "Broken pipe".equals(ioe.getMessage())
+                || "Connection reset by peer".equals(ioe.getMessage());
     }
 
     public static File relativize(File parent, File child) {
@@ -758,15 +687,13 @@ public class Utils {
                         remove(file);
                     } else {
                         if (!file.delete()) {
-                            throw new IllegalStateException(String.format("Cannot delete [%s] ",
-                                                                          file));
+                            throw new IllegalStateException(String.format("Cannot delete [%s] ", file));
                         }
                     }
                 }
             }
             if (!directoryOrFile.delete()) {
-                throw new IllegalStateException(String.format("Cannot delete [%s] ",
-                                                              directoryOrFile));
+                throw new IllegalStateException(String.format("Cannot delete [%s] ", directoryOrFile));
             }
         }
     }
@@ -776,26 +703,21 @@ public class Utils {
      * props.get(p) value. If there is no such property p defined, then the ${p}
      * reference will remain unchanged.
      * 
-     * If the property reference is of the form ${p:v} and there is no such
-     * property p, then the default value v will be returned.
+     * If the property reference is of the form ${p:v} and there is no such property
+     * p, then the default value v will be returned.
      * 
      * If the property reference is of the form ${p1,p2} or ${p1,p2:v} then the
-     * primary and the secondary properties will be tried in turn, before
-     * returning either the unchanged input, or the default value.
+     * primary and the secondary properties will be tried in turn, before returning
+     * either the unchanged input, or the default value.
      * 
-     * @param in
-     *            - the file with possible ${x} references
-     * @param out
-     *            - the file output for the transformed input
-     * @param props
-     *            - the source for ${x} property ref values, null means use
-     *            System.getProperty()
+     * @param in    - the file with possible ${x} references
+     * @param out   - the file output for the transformed input
+     * @param props - the source for ${x} property ref values, null means use
+     *              System.getProperty()
      * @throws IOException
      */
-    public static void replaceProperties(File in, File out,
-                                         Map<String, String> props) throws IOException {
-        try (InputStream is = new FileInputStream(in);
-                OutputStream os = new FileOutputStream(out);) {
+    public static void replaceProperties(File in, File out, Map<String, String> props) throws IOException {
+        try (InputStream is = new FileInputStream(in); OutputStream os = new FileOutputStream(out);) {
 
             replaceProperties(is, os, props);
         }
@@ -806,23 +728,19 @@ public class Utils {
      * props.get(p) value. If there is no such property p defined, then the ${p}
      * reference will remain unchanged.
      * 
-     * If the property reference is of the form ${p:v} and there is no such
-     * property p, then the default value v will be returned.
+     * If the property reference is of the form ${p:v} and there is no such property
+     * p, then the default value v will be returned.
      * 
      * If the property reference is of the form ${p1,p2} or ${p1,p2:v} then the
-     * primary and the secondary properties will be tried in turn, before
-     * returning either the unchanged input, or the default value.
+     * primary and the secondary properties will be tried in turn, before returning
+     * either the unchanged input, or the default value.
      * 
-     * @param in
-     *            - the stream with possible ${x} references
-     * @param out
-     *            - the output for the transformed input
-     * @param props
-     *            - the source for ${x} property ref values, null means use
-     *            System.getProperty()
+     * @param in    - the stream with possible ${x} references
+     * @param out   - the output for the transformed input
+     * @param props - the source for ${x} property ref values, null means use
+     *              System.getProperty()
      */
-    public static void replaceProperties(final InputStream in,
-                                         final OutputStream out,
+    public static void replaceProperties(final InputStream in, final OutputStream out,
                                          final Map<String, String> props) throws IOException {
         Reader reader = new BufferedReader(new InputStreamReader(in));
         Writer writer = new BufferedWriter(new OutputStreamWriter(out));
@@ -832,56 +750,56 @@ public class Utils {
         for (int next = reader.read(); next != -1; next = reader.read()) {
             char c = (char) next;
             switch (state) {
-                case PASS_THROUGH: {
-                    if (c == '$') {
-                        state = ParsingState.DOLLAR;
-                    } else {
-                        writer.append(c);
-                    }
-                    break;
+            case PASS_THROUGH: {
+                if (c == '$') {
+                    state = ParsingState.DOLLAR;
+                } else {
+                    writer.append(c);
                 }
-                case DOLLAR: {
-                    if (c == '{') {
-                        state = ParsingState.BRACKET;
-                        keyBuffer = new StringBuffer();
-                    } else if (c == '$') {
-                        writer.append('$'); // just saw $$
-                    } else {
-                        state = ParsingState.PASS_THROUGH;
-                        writer.append('$');
-                        writer.append(c);
-                    }
-                    break;
+                break;
+            }
+            case DOLLAR: {
+                if (c == '{') {
+                    state = ParsingState.BRACKET;
+                    keyBuffer = new StringBuffer();
+                } else if (c == '$') {
+                    writer.append('$'); // just saw $$
+                } else {
+                    state = ParsingState.PASS_THROUGH;
+                    writer.append('$');
+                    writer.append(c);
                 }
-                case BRACKET: {
-                    if (c == '}') {
-                        state = ParsingState.PASS_THROUGH;
-                        if (keyBuffer.length() == 0) {
-                            writer.append("${}");
-                        } else {
-                            String value = null;
-                            String key = keyBuffer.toString();
-                            value = findValue(key, props);
+                break;
+            }
+            case BRACKET: {
+                if (c == '}') {
+                    state = ParsingState.PASS_THROUGH;
+                    if (keyBuffer.length() == 0) {
+                        writer.append("${}");
+                    } else {
+                        String value = null;
+                        String key = keyBuffer.toString();
+                        value = findValue(key, props);
 
-                            if (value != null) {
-                                writer.append(value);
-                            } else {
-                                writer.append("${");
-                                writer.append(key);
-                                writer.append('}');
-                            }
+                        if (value != null) {
+                            writer.append(value);
+                        } else {
+                            writer.append("${");
+                            writer.append(key);
+                            writer.append('}');
                         }
-                        keyBuffer = null;
-                    } else if (c == '$') {
-                        // We're inside of a ${ already, so bail and reset
-                        state = ParsingState.DOLLAR;
-                        writer.append("${");
-                        writer.append(keyBuffer.toString());
-                        keyBuffer = null;
-                    } else {
-                        keyBuffer.append(c);
                     }
+                    keyBuffer = null;
+                } else if (c == '$') {
+                    // We're inside of a ${ already, so bail and reset
+                    state = ParsingState.DOLLAR;
+                    writer.append("${");
+                    writer.append(keyBuffer.toString());
+                    keyBuffer = null;
+                } else {
+                    keyBuffer.append(c);
                 }
+            }
             }
         }
         writer.flush();
@@ -889,19 +807,16 @@ public class Utils {
 
     /**
      * Try to resolve a "key" from the provided properties by checking if it is
-     * actually a "key1,key2", in which case try first "key1", then "key2". If
-     * all fails, return null.
+     * actually a "key1,key2", in which case try first "key1", then "key2". If all
+     * fails, return null.
      * 
      * It also accepts "key1," and ",key2".
      * 
-     * @param key
-     *            the key to resolve
-     * @param props
-     *            the properties to use
+     * @param key   the key to resolve
+     * @param props the properties to use
      * @return the resolved key or null
      */
-    public static String resolveCompositeKey(final String key,
-                                             Map<String, String> props) {
+    public static String resolveCompositeKey(final String key, Map<String, String> props) {
         String value = null;
 
         // Look for the comma
@@ -932,44 +847,38 @@ public class Utils {
     }
 
     /**
-     * Resolve a resource. First see if the supplied resource is an URL. If so,
-     * open it and return the stream. If not, try for a file. If that exists and
-     * is not a directory, then return that stream. Finally, look for a
-     * classpath resource, relative to the supplied base class. If that exists,
-     * open the stream and return that. Otherwise, barf
+     * Resolve a resource. First see if the supplied resource is an URL. If so, open
+     * it and return the stream. If not, try for a file. If that exists and is not a
+     * directory, then return that stream. Finally, look for a classpath resource,
+     * relative to the supplied base class. If that exists, open the stream and
+     * return that. Otherwise, barf
      * 
-     * @param base
-     *            - the base class for resolving classpath resources - may be
-     *            null
-     * @param resource
-     *            - the resource to resolve
+     * @param base     - the base class for resolving classpath resources - may be
+     *                 null
+     * @param resource - the resource to resolve
      * @return the InputStream of the resolved resource
-     * @throws IOException
-     *             - if something gnarly happens, or we can't find your resource
+     * @throws IOException - if something gnarly happens, or we can't find your
+     *                     resource
      */
-    public static InputStream resolveResource(Class<?> base,
-                                              String resource) throws IOException {
+    public static InputStream resolveResource(Class<?> base, String resource) throws IOException {
         return resolveResourceURL(base, resource).openStream();
     }
 
     /**
-     * Resolve a resource. Replace any ${foo} style properties in the resource
-     * with the supplied properties map. First see if the supplied resource is
-     * an URL. If so, open it and return the stream. If not, try for a file. If
-     * that exists and is not a directory, then return that stream. Finally,
-     * look for a classpath resource, relative to the supplied base class. If
-     * that exists, open the stream and return that. Otherwise, barf
+     * Resolve a resource. Replace any ${foo} style properties in the resource with
+     * the supplied properties map. First see if the supplied resource is an URL. If
+     * so, open it and return the stream. If not, try for a file. If that exists and
+     * is not a directory, then return that stream. Finally, look for a classpath
+     * resource, relative to the supplied base class. If that exists, open the
+     * stream and return that. Otherwise, barf
      * 
-     * @param base
-     *            - the base class for resolving classpath resources - may be
-     *            null
-     * @param resource
-     *            - the resource to resolve
-     * @param properties
-     *            - the properties to replace in the resource stream
+     * @param base       - the base class for resolving classpath resources - may be
+     *                   null
+     * @param resource   - the resource to resolve
+     * @param properties - the properties to replace in the resource stream
      * @return the InputStream of the resolved resource
-     * @throws IOException
-     *             - if something gnarly happens, or we can't find your resource
+     * @throws IOException - if something gnarly happens, or we can't find your
+     *                     resource
      */
     public static InputStream resolveResource(Class<?> base, String resource,
                                               Map<String, String> properties) throws IOException {
@@ -979,23 +888,20 @@ public class Utils {
     }
 
     /**
-     * Resolve a resource. Replace any ${foo} style properties in the resource
-     * with the supplied properties map. First see if the supplied resource is
-     * an URL. If so, open it and return the stream. If not, try for a file. If
-     * that exists and is not a directory, then return that stream. Finally,
-     * look for a classpath resource, relative to the supplied base class. If
-     * that exists, open the stream and return that. Otherwise, barf
+     * Resolve a resource. Replace any ${foo} style properties in the resource with
+     * the supplied properties map. First see if the supplied resource is an URL. If
+     * so, open it and return the stream. If not, try for a file. If that exists and
+     * is not a directory, then return that stream. Finally, look for a classpath
+     * resource, relative to the supplied base class. If that exists, open the
+     * stream and return that. Otherwise, barf
      * 
-     * @param base
-     *            - the base class for resolving classpath resources - may be
-     *            null
-     * @param resource
-     *            - the resource to resolve
-     * @param properties
-     *            - the properties to replace in the resource stream
+     * @param base       - the base class for resolving classpath resources - may be
+     *                   null
+     * @param resource   - the resource to resolve
+     * @param properties - the properties to replace in the resource stream
      * @return the InputStream of the resolved resource
-     * @throws IOException
-     *             - if something gnarly happens, or we can't find your resource
+     * @throws IOException - if something gnarly happens, or we can't find your
+     *                     resource
      */
     public static InputStream resolveResource(Class<?> base, String resource,
                                               Properties properties) throws IOException {
@@ -1003,23 +909,20 @@ public class Utils {
     }
 
     /**
-     * Resolve a resource. First see if the supplied resource is an URL. If so,
-     * open it and return the stream. If not, try for a file. If that exists and
-     * is not a directory, then return that stream. Finally, look for a
-     * classpath resource, relative to the supplied base class. If that exists,
-     * open the stream and return that. Otherwise, barf
+     * Resolve a resource. First see if the supplied resource is an URL. If so, open
+     * it and return the stream. If not, try for a file. If that exists and is not a
+     * directory, then return that stream. Finally, look for a classpath resource,
+     * relative to the supplied base class. If that exists, open the stream and
+     * return that. Otherwise, barf
      * 
-     * @param base
-     *            - the base class for resolving classpath resources - may be
-     *            null
-     * @param resource
-     *            - the resource to resolve
+     * @param base     - the base class for resolving classpath resources - may be
+     *                 null
+     * @param resource - the resource to resolve
      * @return the URL of the resolved resource
-     * @throws IOException
-     *             - if something gnarly happens, or we can't find your resource
+     * @throws IOException - if something gnarly happens, or we can't find your
+     *                     resource
      */
-    public static URL resolveResourceURL(Class<?> base,
-                                         String resource) throws IOException {
+    public static URL resolveResourceURL(Class<?> base, String resource) throws IOException {
         try {
             URL url = new URL(resource);
             return url;
@@ -1031,24 +934,21 @@ public class Utils {
         File configFile = new File(resource);
         if (!configFile.exists()) {
             if (base == null) {
-                throw new FileNotFoundException(String.format("resource does not exist as a file: %s",
-                                                              resource));
+                throw new FileNotFoundException(String.format("resource does not exist as a file: %s", resource));
             }
         } else if (configFile.isDirectory()) {
             Logger.getAnonymousLogger()
-                  .fine(String.format("resource is a directory: %s\n Trying to find corresponding resource",
-                                      resource));
+                  .fine(String.format("resource is a directory: %s\n Trying to find corresponding resource", resource));
         } else {
-            return configFile.toURI()
-                             .toURL();
+            return configFile.toURI().toURL();
         }
         return base.getResource(resource);
     }
 
     /**
-     * Transform the contents of the input stream, replacing any ${p} values in
-     * the stream with the value in the supplied properties. The transformed
-     * contents are placed in the supplied output file.
+     * Transform the contents of the input stream, replacing any ${p} values in the
+     * stream with the value in the supplied properties. The transformed contents
+     * are placed in the supplied output file.
      * 
      * @param properties
      * @param extensions
@@ -1057,10 +957,8 @@ public class Utils {
      * @throws FileNotFoundException
      * @throws IOException
      */
-    public static void transform(Map<String, String> properties,
-                                 Collection<String> extensions, InputStream is,
-                                 File outFile) throws FileNotFoundException,
-                                               IOException {
+    public static void transform(Map<String, String> properties, Collection<String> extensions, InputStream is,
+                                 File outFile) throws FileNotFoundException, IOException {
         File parent = outFile.getParentFile();
         if (parent != null) {
             parent.mkdirs();
@@ -1083,16 +981,14 @@ public class Utils {
         return props;
     }
 
-    public static boolean waitForCondition(int maxWaitTime,
-                                           Condition condition) {
+    public static boolean waitForCondition(int maxWaitTime, Supplier<Boolean> condition) {
         return waitForCondition(maxWaitTime, 100, condition);
     }
 
-    public static boolean waitForCondition(int maxWaitTime, final int sleepTime,
-                                           Condition condition) {
+    public static boolean waitForCondition(int maxWaitTime, final int sleepTime, Supplier<Boolean> condition) {
         long endTime = System.currentTimeMillis() + maxWaitTime;
         while (System.currentTimeMillis() < endTime) {
-            if (condition.isTrue()) {
+            if (condition.get()) {
                 return true;
             }
             try {

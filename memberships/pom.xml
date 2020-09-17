@@ -14,10 +14,10 @@
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>com.fasterxml.uuid</groupId>
-			<artifactId>java-uuid-generator</artifactId>
-		</dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>protocols</artifactId>
+        </dependency>
 
 		<!-- Test Only Dependencies Below This Line -->
 

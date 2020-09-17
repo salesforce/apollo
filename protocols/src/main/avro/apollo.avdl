@@ -2,10 +2,9 @@
 protocol Apollo {
     fixed ADDRESS ( 70 );
     fixed HASH ( 32 );
-    fixed Uuid ( 16 );
     record MessageDigest {
-        Uuid source;
-        Uuid id;
+        HASH source;
+        HASH id;
         int age;
         long time;
     }
@@ -28,7 +27,7 @@ protocol Apollo {
     }
 
     record AccusationDigest {
-        Uuid id;
+        HASH id;
         long epoch;
         int ring;
     }
@@ -39,7 +38,7 @@ protocol Apollo {
     }
 
     record CertificateDigest {
-        Uuid id;
+        HASH id;
         long epoch;
         bytes hash;
     }
@@ -55,7 +54,7 @@ protocol Apollo {
     }
 
     record NoteDigest {
-        Uuid id;
+        HASH id;
         long epoch;
     }
 

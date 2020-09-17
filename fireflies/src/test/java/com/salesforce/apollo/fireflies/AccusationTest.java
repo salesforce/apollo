@@ -17,6 +17,8 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.protocols.HashKey;
+
  
 
 public class AccusationTest {
@@ -27,8 +29,8 @@ public class AccusationTest {
         gen.initialize(2048);
         KeyPair keyPair = gen.generateKeyPair();
 
-        UUID accuser = UUID.randomUUID();
-        UUID accused = UUID.randomUUID();
+        HashKey accuser = new HashKey(UUID.randomUUID());
+        HashKey accused = new HashKey(UUID.randomUUID());
         int epoch = 456423456;
         int ringNumber = 17;
 

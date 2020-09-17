@@ -14,11 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableSet;
 import java.util.Random;
-import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -45,7 +44,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class SwarmTest {
 
     private static final RootCertificate     ca         = getCa();
-    private static Map<UUID, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -122,9 +121,9 @@ public class SwarmTest {
 
         for (View view : views) {
             for (int ring = 0; ring < view.getRings().size(); ring++) {
+                final Collection<Member> membership = view.getRing(ring).members();
                 for (Node node : members) {
-                    final NavigableSet<HashKey> membership = view.getRing(ring).members();
-                    assertTrue(membership.contains(node.hashFor(ring)));
+                    assertTrue(membership.contains(node));
                 }
             }
         }
@@ -166,16 +165,6 @@ public class SwarmTest {
                                   .collect(Collectors.toList());
         assertEquals(0, invalid.size());
 
-        views.forEach(view -> view.getService().stop());
-
-        System.out.println();
-        System.out.println();
-        ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
-                                                  .convertRatesTo(TimeUnit.SECONDS)
-                                                  .convertDurationsTo(TimeUnit.MILLISECONDS)
-                                                  .build();
-        reporter.report();
-
         Graph<Member> testGraph = new Graph<>();
         for (View v : views) {
             for (int i = 0; i < parameters.rings; i++) {
@@ -186,12 +175,22 @@ public class SwarmTest {
 
         for (View view : views) {
             for (int ring = 0; ring < view.getRings().size(); ring++) {
-                for (Node node : members) {
-                    final NavigableSet<HashKey> membership = view.getRing(ring).members();
-                    assertTrue(membership.contains(node.hashFor(ring)));
+                final Collection<Member> membership = view.getRing(ring).members();
+                for (Node node : members) { 
+                    assertTrue(membership.contains(node));
                 }
             }
         }
+
+        views.forEach(view -> view.getService().stop());
+
+        System.out.println();
+        System.out.println();
+        ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
+                                                  .convertRatesTo(TimeUnit.SECONDS)
+                                                  .convertDurationsTo(TimeUnit.MILLISECONDS)
+                                                  .build();
+        reporter.report();
     }
 
     private void initialize() {

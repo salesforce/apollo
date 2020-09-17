@@ -7,7 +7,6 @@
 package com.salesforce.apollo.fireflies.communications;
 
 import java.security.cert.X509Certificate;
-import java.util.UUID;
 
 import org.apache.avro.AvroRemoteException;
 
@@ -18,6 +17,7 @@ import com.salesforce.apollo.avro.Update;
 import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.protocols.Fireflies;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -26,8 +26,8 @@ import com.salesforce.apollo.protocols.Fireflies;
 public class FfServerCommunications implements Fireflies {
 
     private final X509Certificate certificate;
-    private final UUID remoteMemberId;
-    private final Service service;
+    private final HashKey         remoteMemberId;
+    private final Service         service;
 
     public FfServerCommunications(Service view, X509Certificate certificate) {
         assert view != null : "View cannot be null";
@@ -37,7 +37,7 @@ public class FfServerCommunications implements Fireflies {
         this.certificate = certificate;
     }
 
-    public UUID getRemoteMemberId() {
+    public HashKey getRemoteMemberId() {
         return remoteMemberId;
     }
 

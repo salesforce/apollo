@@ -23,6 +23,8 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+import com.salesforce.apollo.protocols.HashKey;
+
 /**
  * Provides a Context for Membership and is uniquely identified by a HashKey;.
  * Members may be either active or offline. The Context maintains a number of
@@ -67,7 +69,7 @@ public class Context<T extends Member> {
     private static final String                    RING_HASH_TEMPLATE    = "%s-%s-%s";
 
     private final ConcurrentNavigableMap<HashKey, T> active  = new ConcurrentSkipListMap<>();
-    private final Map<T, HashKey[]>                  hashes  = new ConcurrentHashMap<>();
+    private final Map<HashKey, HashKey[]>            hashes  = new ConcurrentHashMap<>();
     private final HashKey                            id;
     private final ConcurrentHashMap<HashKey, T>      offline = new ConcurrentHashMap<>();
     private final Ring<T>[]                          rings;
@@ -89,7 +91,6 @@ public class Context<T extends Member> {
      * Mark a member as active in the context
      */
     public void activate(T m) {
-        hash(m);
         active.computeIfAbsent(m.getId(), id -> m);
         offline.remove(m.getId());
         for (Ring<T> ring : rings) {
@@ -98,7 +99,6 @@ public class Context<T extends Member> {
     }
 
     public void add(T m) {
-        hash(m);
         offline(m);
     }
 
@@ -147,6 +147,10 @@ public class Context<T extends Member> {
         return active.containsKey(m.getId());
     }
 
+    public boolean isOffline(HashKey hashKey) {
+        return offline.containsKey(hashKey);
+    }
+
     public boolean isOffline(T m) {
         return offline.containsKey(m.getId());
     }
@@ -185,7 +189,7 @@ public class Context<T extends Member> {
      * remove a member from the receiving Context
      */
     public void remove(T m) {
-        HashKey[] s = hashes.remove(m);
+        HashKey[] s = hashes.remove(m.getId());
         if (s == null) {
             return;
         }
@@ -257,7 +261,16 @@ public class Context<T extends Member> {
     }
 
     protected HashKey hashFor(T m, int index) {
-        HashKey[] hSet = hashes.get(m);
+        HashKey[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
+            HashKey[] s = new HashKey[rings.length];
+            MessageDigest md = DIGEST_CACHE.get();
+            for (int ring = 0; ring < rings.length; ring++) {
+                md.reset();
+                md.update(String.format(RING_HASH_TEMPLATE, id, m.getId(), ring).getBytes());
+                s[ring] = new HashKey(md.digest());
+            }
+            return s;
+        });
         if (hSet == null) {
             throw new IllegalArgumentException("T " + m.getId() + " is not part of this group " + id);
         }
@@ -269,19 +282,5 @@ public class Context<T extends Member> {
         md.reset();
         md.update(String.format(CONTEXT_HASH_TEMPLATE, ring).getBytes());
         return new HashKey(md.digest());
-    }
-
-    private void hash(T m) {
-        if (hashes.containsKey(m)) {
-            return;
-        }
-        HashKey[] s = new HashKey[rings.length];
-        hashes.put(m, s);
-        MessageDigest md = DIGEST_CACHE.get();
-        for (int ring = 0; ring < rings.length; ring++) {
-            md.reset();
-            md.update(String.format(RING_HASH_TEMPLATE, id, m.getId(), ring).getBytes());
-            s[ring] = new HashKey(md.digest());
-        }
     }
 }

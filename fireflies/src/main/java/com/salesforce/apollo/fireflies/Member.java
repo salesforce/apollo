@@ -10,21 +10,19 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.Signature;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.slf4j.Logger;
@@ -35,7 +33,6 @@ import com.salesforce.apollo.avro.CertificateDigest;
 import com.salesforce.apollo.avro.EncodedCertificate;
 import com.salesforce.apollo.avro.NoteDigest;
 import com.salesforce.apollo.avro.Signed;
-import com.salesforce.apollo.avro.Uuid;
 import com.salesforce.apollo.fireflies.View.AccTag;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -46,31 +43,31 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  * @since 220
  */
-public class Member implements Comparable<Member> {
+public class Member extends com.salesforce.apollo.membership.Member {
 
-    public static final String PORT_TEMPLATE = "%s:%s:%s";
-    public static final String RING_HASH_ALGORITHM = Conversion.SHA_256;
-    private static final Logger log = LoggerFactory.getLogger(Member.class);
-    private static final String PORT_SEPARATOR = ":";
-    private static final String RING_HASH_TEMPLATE = "%s-gossip-%s";
+    public static final String  PORT_TEMPLATE       = "%s:%s:%s";
+    public static final String  RING_HASH_ALGORITHM = Conversion.SHA_256;
+    private static final Logger log                 = LoggerFactory.getLogger(Member.class);
+    private static final String PORT_SEPARATOR      = ":";
+    private static final String RING_HASH_TEMPLATE  = "%s-gossip-%s";
 
-    public static UUID getMemberId(X509Certificate c) {
+    public static HashKey getMemberId(X509Certificate c) {
         X509CertificateHolder holder;
         try {
             holder = new X509CertificateHolder(c.getEncoded());
         } catch (CertificateEncodingException | IOException e) {
             throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
         }
-        ByteBuffer buf = ByteBuffer.wrap(holder.getExtension(Extension.subjectKeyIdentifier)
-                                               .getExtnValue()
-                                               .getOctets());
-        UUID memberId = new UUID(buf.getLong(), buf.getLong());
-        return memberId;
+        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
+
+        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
+        return new HashKey(id);
     }
 
     /**
      * @param certificate
-     * @return array of 3 InetSocketAddress in the ordering of {fireflies, ghost, avalanche)
+     * @return array of 3 InetSocketAddress in the ordering of {fireflies, ghost,
+     *         avalanche)
      */
     public static InetSocketAddress[] portsFrom(X509Certificate certificate) {
 
@@ -93,11 +90,8 @@ public class Member implements Comparable<Member> {
             throw new IllegalArgumentException("Invalid certificate, missing \"CN\" of dn= " + dn);
         }
         return new InetSocketAddress[] { new InetSocketAddress(hostName, ffPort),
-                new InetSocketAddress(hostName, gPort), new InetSocketAddress(hostName, aPort) };
-    }
-
-    public static Uuid uuidBits(UUID id) {
-        return Conversion.uuidBits(id);
+                                         new InetSocketAddress(hostName, gPort),
+                                         new InetSocketAddress(hostName, aPort) };
     }
 
     /**
@@ -114,11 +108,6 @@ public class Member implements Comparable<Member> {
      * Avalanche socket endpoint for the member
      */
     private final InetSocketAddress avalancheEndpoint;
-
-    /**
-     * Signing identity
-     */
-    private final X509Certificate certificate;
 
     /**
      * The hash of the member's certificate
@@ -146,11 +135,6 @@ public class Member implements Comparable<Member> {
     private final InetSocketAddress ghostEndpoint;
 
     /**
-     * Unique ID of the memmber
-     */
-    private final UUID id;
-
-    /**
      * Precomputed hashes for all the configured rings
      */
     private final HashKey[] ringHashes;
@@ -167,16 +151,15 @@ public class Member implements Comparable<Member> {
 
     protected Member(X509Certificate c, byte[] derEncodedCertificate, FirefliesParameters parameters,
             byte[] certificateHash, InetSocketAddress[] boundPorts) {
+        super(getMemberId(c), c);
         assert c != null;
-        certificate = c;
-        id = getMemberId(c);
         if (derEncodedCertificate != null) {
             this.derEncodedCertificate = derEncodedCertificate;
         } else {
             try {
-                this.derEncodedCertificate = certificate.getEncoded();
+                this.derEncodedCertificate = getCertificate().getEncoded();
             } catch (CertificateEncodingException e) {
-                throw new IllegalArgumentException("Cannot encode certifiate for member: " + id, e);
+                throw new IllegalArgumentException("Cannot encode certifiate for member: " + getId(), e);
             }
         }
 
@@ -193,9 +176,9 @@ public class Member implements Comparable<Member> {
                 throw new IllegalStateException("No hash algorithm found: " + parameters.hashAlgorithm);
             }
             try {
-                derEncodedCertificate = certificate.getEncoded();
+                derEncodedCertificate = getCertificate().getEncoded();
             } catch (CertificateEncodingException e) {
-                throw new IllegalArgumentException("Cannot encode certifiate for member: " + id, e);
+                throw new IllegalArgumentException("Cannot encode certifiate for member: " + getId(), e);
             }
 
             md.update(derEncodedCertificate);
@@ -210,38 +193,13 @@ public class Member implements Comparable<Member> {
         }
         for (int ring = 0; ring < parameters.rings; ring++) {
             md.reset();
-            md.update(String.format(RING_HASH_TEMPLATE, id, ring).getBytes());
+            md.update(String.format(RING_HASH_TEMPLATE, getId(), ring).getBytes());
             ringHashes[ring] = new HashKey(md.digest());
         }
     }
 
-    @Override
-    public int compareTo(Member o) {
-        // TODO Auto-generated method stub
-        return 0;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (!(obj instanceof Member))
-            return false;
-        Member other = (Member)obj;
-        return id.equals(other.id);
-    }
-
     public InetSocketAddress getAvalancheEndpoint() {
         return avalancheEndpoint;
-    }
-
-    /**
-     * @return the identifying certificate of the member
-     */
-    public X509Certificate getCertificate() {
-        return certificate;
     }
 
     /**
@@ -266,23 +224,6 @@ public class Member implements Comparable<Member> {
         return firefliesEndpoint.getAddress();
     }
 
-    /**
-     * @return the unique id of this member
-     */
-    public UUID getId() {
-        return id;
-    }
-
-    @Override
-    public int hashCode() {
-        return id.hashCode();
-    }
-
-    public HashKey hashFor(int ring) {
-        assert ring < ringHashes.length && ring >= 0 : "Invalid ring";
-        return ringHashes[ring];
-    }
-
     public boolean isFailed() {
         Instant current = failedAt;
         return current != null;
@@ -294,7 +235,7 @@ public class Member implements Comparable<Member> {
 
     @Override
     public String toString() {
-        return "Member[" + id + "]";
+        return "Member[" + getId() + "]";
     }
 
     /**
@@ -304,16 +245,18 @@ public class Member implements Comparable<Member> {
      */
     void addAccusation(Accusation accusation) {
         Note n = getNote();
-        if (n == null) { return; }
+        if (n == null) {
+            return;
+        }
         Integer ringNumber = accusation.getRingNumber();
         if (n.getEpoch() != accusation.getEpoch()) {
-            log.trace("Invalid epoch discarding accusation from {} on {} ring {}", accusation.getAccuser(), id,
+            log.trace("Invalid epoch discarding accusation from {} on {} ring {}", accusation.getAccuser(), getId(),
                       ringNumber);
         }
         if (n.getMask().get(ringNumber)) {
             validAccusations.put(ringNumber, accusation);
             if (log.isDebugEnabled()) {
-                log.debug("Member {} is accusing {} on {}", accusation.getAccuser(), id, ringNumber);
+                log.debug("Member {} is accusing {} on {}", accusation.getAccuser(), getId(), ringNumber);
             }
         }
     }
@@ -323,28 +266,7 @@ public class Member implements Comparable<Member> {
      */
     void clearAccusations() {
         validAccusations.clear();
-        log.trace("Clearing accusations for {}", id);
-    }
-
-    /**
-     * Answer the Signature, initialized with the member's public key, using the supplied signature algorithm.
-     * 
-     * @param signatureAlgorithm
-     * @return the signature, initialized for verification
-     */
-    Signature forVerification(String signatureAlgorithm) {
-        Signature signature;
-        try {
-            signature = Signature.getInstance(signatureAlgorithm);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("no such algorithm: " + signatureAlgorithm, e);
-        }
-        try {
-            signature.initVerify(certificate.getPublicKey());
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException("invalid public key", e);
-        }
-        return signature;
+        log.trace("Clearing accusations for {}", getId());
     }
 
     Accusation getAccusation(int index) {
@@ -354,17 +276,17 @@ public class Member implements Comparable<Member> {
     Stream<AccusationDigest> getAccusationDigests() {
         return validAccusations.values()
                                .stream()
-                               .map(e -> new AccusationDigest(uuidBits(id), e.getEpoch(), e.getRingNumber()));
+                               .map(e -> new AccusationDigest(getId().toHash(), e.getEpoch(), e.getRingNumber()));
     }
 
     List<AccTag> getAccusationTags() {
-        return validAccusations.keySet().stream().map(ring -> new AccTag(id, ring)).collect(Collectors.toList());
+        return validAccusations.keySet().stream().map(ring -> new AccTag(getId(), ring)).collect(Collectors.toList());
     }
 
     CertificateDigest getCertificateDigest() {
         Note current = note;
         return current == null ? null
-                : new CertificateDigest(uuidBits(id), getEpoch(), ByteBuffer.wrap(certificateHash));
+                : new CertificateDigest(getId().toHash(), getEpoch(), ByteBuffer.wrap(certificateHash));
     }
 
     byte[] getCertificateHash() {
@@ -390,7 +312,9 @@ public class Member implements Comparable<Member> {
 
     long getEpoch() {
         Note current = note;
-        if (current == null) { return 0; }
+        if (current == null) {
+            return 0;
+        }
         return current.getEpoch();
     }
 
@@ -400,7 +324,7 @@ public class Member implements Comparable<Member> {
 
     NoteDigest getNoteDigest() {
         Note current = note;
-        return current == null ? null : new NoteDigest(uuidBits(id), current.getEpoch());
+        return current == null ? null : new NoteDigest(getId().toHash(), current.getEpoch());
     }
 
     Signed getSignedNote() {
@@ -410,7 +334,7 @@ public class Member implements Comparable<Member> {
 
     void invalidateAccusationOnRing(int index) {
         validAccusations.remove(index);
-        log.trace("Invalidating accusations of {} on {}", id, index);
+        log.trace("Invalidating accusations of {} on {}", getId(), index);
     }
 
     boolean isAccused() {
@@ -425,7 +349,7 @@ public class Member implements Comparable<Member> {
         failedAt = null;
         validAccusations.clear();
         note = null;
-        log.trace("Reset {}", id);
+        log.trace("Reset {}", getId());
     }
 
     void setFailed(boolean failed) {
@@ -438,7 +362,7 @@ public class Member implements Comparable<Member> {
             long nextEpoch = next.getEpoch();
             long currentEpoch = current.getEpoch();
             if (currentEpoch < nextEpoch - 1) {
-                log.info("discarding note for {} with wrong previous epoch {} : {}" + id, nextEpoch, currentEpoch);
+                log.info("discarding note for {} with wrong previous epoch {} : {}" + getId(), nextEpoch, currentEpoch);
                 return;
             }
         }

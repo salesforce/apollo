@@ -12,11 +12,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.net.InetSocketAddress;
-import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
+import com.salesforce.apollo.protocols.HashKey;
 
 import io.github.olivierlemasle.ca.CSR;
 import io.github.olivierlemasle.ca.Certificate;
@@ -49,7 +49,7 @@ public class TestMember {
         InetSocketAddress address = m.getFirefliesEndpoint();
         assertEquals("test.com", address.getHostName());
         assertEquals(0x666, address.getPort());
-        UUID id = m.getId();
+        HashKey id = m.getId();
         assertNotNull(id);
     }
 }

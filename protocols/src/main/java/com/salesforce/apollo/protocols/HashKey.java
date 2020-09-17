@@ -9,6 +9,7 @@ package com.salesforce.apollo.protocols;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.UUID;
 
 import com.salesforce.apollo.avro.HASH;
 
@@ -59,13 +60,32 @@ public class HashKey implements Comparable<HashKey> {
     }
 
     protected final byte[] itself;
+    private final int      hashCode;
 
     public HashKey(byte[] key) {
+        assert key != null && key.length == 32 : "Must be 32 bytes: " + key.length;
         itself = key;
+        hashCode = Base64.getEncoder().withoutPadding().encodeToString(itself).hashCode();
     }
 
     public HashKey(HASH key) {
         this(key.bytes());
+    }
+
+    public HashKey(String b64Encoded) {
+        this(Base64.getUrlDecoder().decode(b64Encoded));
+    }
+
+    public HashKey(UUID uuid) {
+        this(bytes(uuid));
+    }
+
+    public static byte[] bytes(UUID uuid) {
+        byte[] bytes = new byte[32];
+        ByteBuffer buf = ByteBuffer.wrap(bytes);
+        buf.putLong(uuid.getLeastSignificantBits());
+        buf.putLong(uuid.getMostSignificantBits());
+        return bytes;
     }
 
     public String b64Encoded() {
@@ -93,13 +113,12 @@ public class HashKey implements Comparable<HashKey> {
             return false;
         if (getClass() != obj.getClass())
             return false;
-        HashKey other = (HashKey) obj;
-        return this.compareTo(other) == 0;
+        return Arrays.equals(itself, ((HashKey) obj).itself);
     }
 
     @Override
     public int hashCode() {
-        return new String(itself).hashCode();
+        return hashCode;
     }
 
     public HASH toHash() {

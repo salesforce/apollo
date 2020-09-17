@@ -6,16 +6,18 @@
  */
 package com.salesforce.apollo.membership;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.NavigableSet;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
+
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * A ring of members. Also, too, addressable functions by HashKey, for ring
@@ -150,8 +152,8 @@ public class Ring<T extends Member> implements Iterable<T> {
         return ring.values().iterator();
     }
 
-    public NavigableSet<HashKey> members() {
-        return ring.navigableKeySet();
+    public Collection<T> members() {
+        return ring.values();
     }
 
     public T predecessor(HashKey location) {
@@ -504,7 +506,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      * 
      * @return
      */
-    Map<HashKey, T> getRing() {
+    public Map<HashKey, T> getRing() {
         return ring;
     }
 }

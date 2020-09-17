@@ -11,13 +11,15 @@ import java.security.NoSuchAlgorithmException;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
 
+import com.salesforce.apollo.protocols.HashKey;
+
 /**
  * A member of the view
  * 
  * @author hal.hildebrand
  * @since 220
  */
-public class Member {
+public class Member implements Comparable<Member> {
 
     /**
      * Signing identity
@@ -29,14 +31,14 @@ public class Member {
      */
     private final HashKey id;
 
-    private static int hashCode;
-
     protected Member(HashKey id, X509Certificate c) {
-        assert c != null;
-        assert id != null;
         certificate = c;
         this.id = id;
-        hashCode = id.hashCode();
+    }
+
+    @Override
+    public int compareTo(Member o) {
+        return id.compareTo(o.getId());
     }
 
     @Override
@@ -49,6 +51,28 @@ public class Member {
         if (!(obj instanceof Member))
             return false;
         return id.equals(((Member) obj).id);
+    }
+
+    /**
+     * Answer the Signature, initialized with the member's public key, using the
+     * supplied signature algorithm.
+     * 
+     * @param signatureAlgorithm
+     * @return the signature, initialized for verification
+     */
+    public Signature forVerification(String signatureAlgorithm) {
+        Signature signature;
+        try {
+            signature = Signature.getInstance(signatureAlgorithm);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("no such algorithm: " + signatureAlgorithm, e);
+        }
+        try {
+            signature.initVerify(certificate.getPublicKey());
+        } catch (InvalidKeyException e) {
+            throw new IllegalStateException("invalid public key", e);
+        }
+        return signature;
     }
 
     /**
@@ -67,34 +91,12 @@ public class Member {
 
     @Override
     public int hashCode() {
-        return hashCode;
+        return id.hashCode();
     }
 
     @Override
     public String toString() {
         return "Member[" + id + "]";
-    }
-
-    /**
-     * Answer the Signature, initialized with the member's public key, using the
-     * supplied signature algorithm.
-     * 
-     * @param signatureAlgorithm
-     * @return the signature, initialized for verification
-     */
-    Signature forVerification(String signatureAlgorithm) {
-        Signature signature;
-        try {
-            signature = Signature.getInstance(signatureAlgorithm);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("no such algorithm: " + signatureAlgorithm, e);
-        }
-        try {
-            signature.initVerify(certificate.getPublicKey());
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException("invalid public key", e);
-        }
-        return signature;
     }
 
 }

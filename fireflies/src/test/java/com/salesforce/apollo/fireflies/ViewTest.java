@@ -24,7 +24,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
@@ -41,6 +40,7 @@ import com.salesforce.apollo.avro.Gossip;
 import com.salesforce.apollo.avro.NoteDigest;
 import com.salesforce.apollo.avro.Update;
 import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
+import com.salesforce.apollo.protocols.HashKey;
 
 import io.github.olivierlemasle.ca.RootCertificate;
 
@@ -51,7 +51,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class ViewTest {
 
     private static final RootCertificate        ca         = getCa();
-    private static final Map<UUID, CertWithKey> certs      = new HashMap<>();
+    private static final Map<HashKey, CertWithKey> certs      = new HashMap<>();
     private static List<Member>                 members    = new ArrayList<>();
     private static Node                         node;
     private static final FirefliesParameters    parameters = new FirefliesParameters(ca.getX509Certificate());

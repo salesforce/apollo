@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
@@ -30,6 +29,8 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
 import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
+import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.protocols.HashKey;
 
 import io.github.olivierlemasle.ca.RootCertificate;
 
@@ -39,7 +40,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class FunctionalTest {
     private static final RootCertificate     ca         = getCa();
-    private static Map<UUID, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -94,15 +95,18 @@ public class FunctionalTest {
             Set<?> difference = Sets.difference(views.stream()
                                                      .map(v -> v.getNode().getId())
                                                      .collect(Collectors.toSet()),
-                                                view.getLive().keySet());
+                                                view.getLive()
+                                                    .stream()
+                                                    .map(v -> v.getId())
+                                                    .collect(Collectors.toSet()));
             return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
         }).collect(Collectors.toList()).toString());
 
         View frist = views.get(0);
         for (View view : views) {
             for (int ring = 0; ring < parameters.rings; ring++) {
-                Ring trueRing = frist.getRing(ring);
-                Ring comparedTo = view.getRing(ring);
+                Ring<Member> trueRing = frist.getRing(ring);
+                Ring<Member> comparedTo = view.getRing(ring);
                 assertEquals(trueRing.getRing(), comparedTo.getRing());
                 assertEquals(trueRing.successor(view.getNode()), comparedTo.successor(view.getNode()));
             }

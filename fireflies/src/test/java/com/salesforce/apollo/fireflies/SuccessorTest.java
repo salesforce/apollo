@@ -22,7 +22,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
@@ -34,6 +33,8 @@ import org.junit.jupiter.api.Test;
 import com.salesforce.apollo.avro.MessageGossip;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
+import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 import io.github.olivierlemasle.ca.RootCertificate;
@@ -45,7 +46,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class SuccessorTest {
 
     private static final RootCertificate     ca         = getCa();
-    private static Map<UUID, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey>    certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -100,7 +101,7 @@ public class SuccessorTest {
                 assertTrue(m.getEpoch() > 0);
             }
             for (int r = 0; r < parameters.rings; r++) {
-                Ring ring = view.getRing(r);
+                Ring<Member> ring = view.getRing(r);
                 Member successor = ring.successor(view.getNode());
                 View successorView = views.get(successor);
                 Member test = successorView.getRing(r).successor(view.getNode());

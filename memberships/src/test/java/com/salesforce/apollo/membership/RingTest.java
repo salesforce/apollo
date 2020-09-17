@@ -22,6 +22,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.protocols.HashKey;
+
 /**
  * @author hal.hildebrand
  * @since 220

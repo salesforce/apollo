@@ -8,7 +8,6 @@ package com.salesforce.apollo.fireflies.communications;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.avro.ipc.LocalTransceiver;
@@ -23,6 +22,7 @@ import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * A communications factory for local,non network communications for simulations
@@ -34,7 +34,7 @@ public class FfLocalCommSim implements FirefliesCommunications {
 	private static final Logger log = LoggerFactory.getLogger(FfLocalCommSim.class);
 
 	private volatile boolean checkStarted;
-	private final Map<UUID, View> servers = new ConcurrentHashMap<>();
+	private final Map<HashKey, View> servers = new ConcurrentHashMap<>();
 	private final RPCPlugin stats;
 
 	public FfLocalCommSim() {
@@ -76,7 +76,7 @@ public class FfLocalCommSim implements FirefliesCommunications {
 		return clientCommunications;
 	}
 
-	public Map<UUID, View> getServers() {
+	public Map<HashKey, View> getServers() {
 		return servers;
 	}
 

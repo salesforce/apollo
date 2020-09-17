@@ -22,6 +22,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -30,7 +31,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -72,11 +72,12 @@ import com.salesforce.apollo.avro.NoteDigest;
 import com.salesforce.apollo.avro.NoteGossip;
 import com.salesforce.apollo.avro.Signed;
 import com.salesforce.apollo.avro.Update;
-import com.salesforce.apollo.avro.Uuid;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler.Msg;
 import com.salesforce.apollo.fireflies.communications.FfClientCommunications;
 import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
-import com.salesforce.apollo.protocols.Conversion;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * The View is the active representation view of all members - failed and live -
@@ -96,10 +97,10 @@ public class View {
      * Used in set reconcillation of Accusation Digests
      */
     public static class AccTag {
-        public final UUID id;
-        public final int  ring;
+        public final HashKey id;
+        public final int     ring;
 
-        public AccTag(UUID id, int ring) {
+        public AccTag(HashKey id, int ring) {
             this.id = id;
             this.ring = ring;
         }
@@ -289,7 +290,7 @@ public class View {
             if (ring < 0) {
                 return;
             }
-            Member successor = rings.get(ring).successor(node, m -> !m.isFailed() && !m.isAccused());
+            Member successor = context.ring(ring).successor(node, m -> !m.isFailed() && !m.isAccused());
             if (successor == null) {
                 log.info("No successor to node on ring: {}", ring);
                 return;
@@ -320,8 +321,8 @@ public class View {
          *         is out of touch with, and digests from the sender that this node
          *         would like updated.
          */
-        public Gossip rumors(int ring, Digests digests, UUID from, X509Certificate certificate, Signed note) {
-            if (ring >= rings.size() || ring < 0) {
+        public Gossip rumors(int ring, Digests digests, HashKey from, X509Certificate certificate, Signed note) {
+            if (ring >= context.getRings().length || ring < 0) {
                 log.info("invalid ring {} from {}", ring, from);
                 return emptyGossip();
             }
@@ -358,7 +359,7 @@ public class View {
             node.setFailed(false);
             node.nextNote();
             recover(node);
-            List<UUID> seedList = new ArrayList<>();
+            List<HashKey> seedList = new ArrayList<>();
             seeds.stream()
                  .map(cert -> new Member(cert, parameters))
                  .peek(m -> seedList.add(m.getId()))
@@ -392,9 +393,10 @@ public class View {
             }
             scheduledRebutals.clear();
             pendingRebutals.clear();
-            failed.putAll(live);
-            live.values().forEach(m -> m.setFailed(true));
-            live.clear();
+            context.getActive().forEach(m -> {
+                m.setFailed(true);
+                context.offline(m);
+            });
             connections.invalidateAll();
             comm.close();
             messageBuffer.clear();
@@ -408,7 +410,7 @@ public class View {
          * @param update
          * @param from
          */
-        public void update(int ring, Update update, UUID from) {
+        public void update(int ring, Update update, HashKey from) {
             assert from != null;
             processUpdates(update.getCertificates(), update.getNotes(), update.getAccusations(), update.getMessages());
 
@@ -473,10 +475,6 @@ public class View {
         return mask.cardinality() == parameters.toleranceLevel + 1;
     }
 
-    public static UUID uuid(Uuid bits) {
-        return Conversion.uuid(bits);
-    }
-
     /**
      * Message channel handlers
      */
@@ -494,6 +492,11 @@ public class View {
     private final LoadingCache<Member, FfClientCommunications> connections;
 
     /**
+     * View context
+     */
+    private final Context<Member> context;
+
+    /**
      * The analytical diameter of the graph of members
      */
     private final int diameter;
@@ -502,16 +505,6 @@ public class View {
      * Single threaded event dispatcher
      */
     private final ExecutorService dispatcher;
-
-    /**
-     * The set of failed members
-     */
-    private final ConcurrentMap<UUID, Member> failed = new ConcurrentHashMap<>();
-
-    /**
-     * The set of live members
-     */
-    private final ConcurrentMap<UUID, Member> live = new ConcurrentHashMap<>();
 
     /**
      * Membership listeners
@@ -533,13 +526,7 @@ public class View {
     /**
      * Pending rebutal timers by member id
      */
-    private final ConcurrentMap<UUID, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>();
-
-    /**
-     * Gossip rings - the list of rings that determine the magical low diameter
-     * connectivity
-     */
-    private final List<Ring> rings = new ArrayList<>();
+    private final ConcurrentMap<HashKey, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>();
 
     /**
      * Current gossip round
@@ -569,7 +556,7 @@ public class View {
     /**
      * The view of all known members
      */
-    private final ConcurrentMap<UUID, Member> view = new ConcurrentHashMap<>();
+    private final ConcurrentMap<HashKey, Member> view = new ConcurrentHashMap<>();
 
     public View(Node node, FirefliesCommunications communications, ScheduledExecutorService scheduler) {
         this.node = node;
@@ -594,10 +581,7 @@ public class View {
                 return comm.connectTo(to, node);
             }
         });
-
-        for (int i = 0; i < parameters.rings; i++) {
-            rings.add(new Ring(i));
-        }
+        context = new Context<>(HashKey.ORIGIN, parameters.rings);
         add(node);
         log.info("View [{}]\n  Parameters: {}", node.getId(), parameters);
     }
@@ -612,15 +596,15 @@ public class View {
     /**
      * @return the Map of all failed members
      */
-    public Map<UUID, Member> getFailed() {
-        return failed;
+    public Collection<Member> getFailed() {
+        return context.getOffline();
     }
 
     /**
      * @return the Map of all live members
      */
-    public Map<UUID, Member> getLive() {
-        return live;
+    public Collection<Member> getLive() {
+        return context.getActive();
     }
 
     /**
@@ -648,15 +632,15 @@ public class View {
      * @param ring
      * @return the Ring corresponding to the index
      */
-    public Ring getRing(int ring) {
-        return rings.get(ring);
+    public Ring<Member> getRing(int ring) {
+        return context.ring(ring);
     }
 
     /**
      * @return the List of Rings that this view maintains
      */
-    public List<Ring> getRings() {
-        return rings;
+    public List<Ring<Member>> getRings() {
+        return context.rings().collect(Collectors.toList());
     }
 
     /**
@@ -683,7 +667,7 @@ public class View {
     /**
      * @return the entire view - members both failed and live
      */
-    public ConcurrentMap<UUID, Member> getView() {
+    public ConcurrentMap<HashKey, Member> getView() {
         return view;
     }
 
@@ -772,7 +756,7 @@ public class View {
      * @param accused
      */
     void add(Accusation accusation, Member accuser, Member accused) {
-        Ring ring = rings.get(accusation.getRingNumber());
+        Ring<Member> ring = context.ring(accusation.getRingNumber());
 
         if (accused.isAccusedOn(ring.getIndex())) {
             Accusation currentAccusation = accused.getAccusation(ring.getIndex());
@@ -806,7 +790,7 @@ public class View {
      * @return the added member or the real member associated with this certificate
      */
     Member add(CertWithHash cert) {
-        UUID id = getMemberId(cert.certificate);
+        HashKey id = getMemberId(cert.certificate);
         Member member = view.get(id);
         if (member != null) {
             update(member, cert);
@@ -825,11 +809,11 @@ public class View {
         Member previous = view.putIfAbsent(member.getId(), member);
         if (previous == null) {
             log.trace("Adding member: {}", member.getId(), member.getCertificate().getSubjectDN());
-            rings.forEach(ring -> ring.insert(member));
+            context.offline(member);
             if (!member.isFailed()) {
                 recover(member);
             } else {
-                failed.put(member.getId(), member);
+                context.offline(member);
             }
             return member;
         }
@@ -901,7 +885,7 @@ public class View {
     void addSeed(Member seed) {
         seed.setNote(new Note(seed.getId(), -1, Node.createInitialMask(parameters.toleranceLevel, parameters.entropy),
                 node.forSigning()));
-        rings.forEach(ring -> ring.insert(seed));
+        context.activate(seed);
     }
 
     /**
@@ -949,13 +933,13 @@ public class View {
         check.add(m);
         while (!check.isEmpty()) {
             Member checked = check.pop();
-            for (Ring ring : rings) {
+            context.rings().forEach(ring -> {
                 for (Member q : ring.successors(checked, member -> !member.isAccused())) {
                     if (q.isAccusedOn(ring.getIndex())) {
                         invalidate(q, ring, check);
                     }
                 }
-            }
+            });
         }
     }
 
@@ -977,7 +961,7 @@ public class View {
                    .stream()
                    .filter(m -> !m.equals(node)) // Never send accusations from the view's node
                    .flatMap(m -> m.getAccusationDigests())
-                   .filter(digest -> !failed.containsKey(uuid(digest.getId())))
+                   .filter(digest -> !context.isOffline(new HashKey(digest.getId())))
                    .collect(Collectors.toList());
     }
 
@@ -1016,8 +1000,7 @@ public class View {
     }
 
     void gc(Member member) {
-        failed.put(member.getId(), member);
-        live.remove(member.getId());
+        context.offline(member);
         member.setFailed(true);
         dispatcher.execute(() -> membershipListeners.parallelStream().forEach(l -> {
             try {
@@ -1033,7 +1016,7 @@ public class View {
      * 
      * @return
      */
-    Map<UUID, FutureRebutal> getPendingRebutals() {
+    Map<HashKey, FutureRebutal> getPendingRebutals() {
         return pendingRebutals;
     }
 
@@ -1114,7 +1097,7 @@ public class View {
      * @param ring
      * @param check
      */
-    void invalidate(Member q, Ring ring, Deque<Member> check) {
+    void invalidate(Member q, Ring<Member> ring, Deque<Member> check) {
         Accusation qa = q.getAccusation(ring.getIndex());
         Member accuser = view.get(qa.getAccuser());
         Member accused = view.get(qa.getAccused());
@@ -1147,7 +1130,7 @@ public class View {
      *         state
      */
     FfClientCommunications linkFor(Integer ring) {
-        Member successor = rings.get(ring).successor(node, m -> !m.isFailed());
+        Member successor = context.ring(ring).successor(node, m -> !m.isFailed());
         if (successor == null) {
             log.debug("No successor to node on ring: {}", ring);
             return null;
@@ -1207,7 +1190,7 @@ public class View {
      *         state
      */
     FfClientCommunications monitorLinkFor(Integer ring) {
-        Member successor = rings.get(ring).successor(node, m -> !m.isFailed() && !m.isAccused());
+        Member successor = context.ring(ring).successor(node, m -> !m.isFailed() && !m.isAccused());
         if (successor == null) {
             log.debug("No successor to node on ring: {}", ring);
             return null;
@@ -1251,7 +1234,7 @@ public class View {
         List<Signed> updates = new ArrayList<>();
         AccusationGossip accusations = new AccusationGossip();
         accusations.setDigests(digests.stream().filter(accusation -> {
-            UUID id = uuid(accusation.getId());
+            HashKey id = new HashKey(accusation.getId());
             Member member = view.get(id);
             if (member == null) {
                 return true;
@@ -1261,7 +1244,7 @@ public class View {
             received.add(new AccTag(id, ring));
             if (epoch < member.getEpoch()) {
                 Accusation existing = member.getAccusation(ring);
-                if (existing != null && !failed.containsKey(existing.getAccuser())) {
+                if (existing != null && !context.isOffline(existing.getAccuser())) {
                     updates.add(existing.getSigned());
                     return false;
                 }
@@ -1276,7 +1259,7 @@ public class View {
                 return member == null ? null : member.getAccusation(tag.ring);
             })
             .filter(acc -> acc != null)
-            .filter(acc -> !failed.containsKey(acc.getAccuser()))
+            .filter(acc -> !context.isOffline(acc.getAccuser()))
             .map(acc -> acc.getSigned())
             .forEach(signed -> updates.add(signed));
         accusations.setUpdates(updates);
@@ -1294,14 +1277,14 @@ public class View {
      * @param certificates
      * @return the CertificateGossip based on the processing
      */
-    CertificateGossip processCertificateDigests(UUID from, List<CertificateDigest> certificates) {
-        Set<UUID> received = new HashSet<>(certificates.size());
+    CertificateGossip processCertificateDigests(HashKey from, List<CertificateDigest> certificates) {
+        Set<HashKey> received = new HashSet<>(certificates.size());
         List<EncodedCertificate> updates = new ArrayList<>();
         CertificateGossip gossip = new CertificateGossip();
 
         // Process all inbound digests
         gossip.setDigests(certificates.stream().filter(cert -> {
-            UUID id = uuid(cert.getId());
+            HashKey id = new HashKey(cert.getId());
             received.add(id);
             if (from.equals(id)) {
                 return false;
@@ -1343,13 +1326,13 @@ public class View {
      * @param from
      * @param digests
      */
-    NoteGossip processNoteDigests(UUID from, List<NoteDigest> digests) {
+    NoteGossip processNoteDigests(HashKey from, List<NoteDigest> digests) {
         NoteGossip notes = new NoteGossip();
         List<Signed> updates = new ArrayList<>();
-        Set<UUID> received = new HashSet<>(digests.size());
+        Set<HashKey> received = new HashSet<>(digests.size());
         // Process all inbound digests
         notes.setDigests(digests.stream().filter(note -> {
-            UUID id = uuid(note.getId());
+            HashKey id = new HashKey(note.getId());
             received.add(id);
             if (from.equals(id)) {
                 return false;
@@ -1422,7 +1405,7 @@ public class View {
         Map<Integer, List<Msg>> newMessages = new HashMap<>();
 
         messageBuffer.merge(messageUpdates, message -> validate(message)).stream().map(m -> {
-            UUID id = uuid(m.getDigest().getSource());
+            HashKey id = new HashKey(m.getDigest().getSource());
             Member from = view.get(id);
             if (from == null) {
                 log.trace("{} message from unknown member: {}", node, id);
@@ -1447,16 +1430,10 @@ public class View {
      * @param member
      */
     void recover(Member member) {
-        AtomicBoolean notify = new AtomicBoolean();
-        live.computeIfAbsent(member.getId(), k -> {
+        if (context.isOffline(member)) {
+            context.activate(member);
             member.setFailed(false);
-            failed.remove(member.getId());
-            rings.forEach(ring -> ring.insert(member));
             log.info("Recovering: {}", member.getId());
-            notify.set(true);
-            return member;
-        });
-        if (notify.get()) {
             dispatcher.execute(() -> membershipListeners.parallelStream().forEach(l -> {
                 try {
                     l.recover(member);
@@ -1543,8 +1520,8 @@ public class View {
     AccusationGossip updateAccusations(List<AccusationDigest> common, List<AccusationDigest> requested) {
         return new AccusationGossip(common,
                 requested.stream()
-                         .filter(a -> view.get(uuid(a.getId())) != null)
-                         .map(a -> view.get(uuid(a.getId())).getEncodedAccusation(a.getRing()))
+                         .filter(a -> view.get(new HashKey(a.getId())) != null)
+                         .map(a -> view.get(new HashKey(a.getId())).getEncodedAccusation(a.getRing()))
                          .filter(e -> e != null)
                          .collect(Collectors.toList()));
     }
@@ -1560,7 +1537,7 @@ public class View {
     CertificateGossip updateCertificates(List<CertificateDigest> common, List<CertificateDigest> requested) {
         return new CertificateGossip(common,
                 requested.stream()
-                         .map(digest -> uuid(digest.getId()))
+                         .map(digest -> new HashKey(digest.getId()))
                          .map(id -> view.get(id))
                          .filter(e -> e != null)
                          .map(m -> m.getEncodedCertificate())
@@ -1578,7 +1555,7 @@ public class View {
     NoteGossip updateNotes(List<NoteDigest> common, List<NoteDigest> requested) {
         return new NoteGossip(common,
                 requested.stream()
-                         .map(digest -> uuid(digest.getId()))
+                         .map(digest -> new HashKey(digest.getId()))
                          .map(id -> view.get(id))
                          .filter(e -> e != null)
                          .map(m -> m.getSignedNote())
@@ -1597,22 +1574,22 @@ public class View {
                 gossip.getCertificates()
                       .getDigests()
                       .stream()
-                      .map(digest -> view.get(uuid(digest.getId())))
+                      .map(digest -> view.get(new HashKey(digest.getId())))
                       .filter(member -> member != null)
                       .map(member -> member.getEncodedCertificate())
                       .collect(Collectors.toList()),
                 gossip.getNotes()
                       .getDigests()
                       .stream()
-                      .map(digest -> view.get(uuid(digest.getId())))
+                      .map(digest -> view.get(new HashKey(digest.getId())))
                       .filter(member -> member != null)
                       .map(member -> member.getSignedNote())
                       .collect(Collectors.toList()),
                 gossip.getAccusations()
                       .getDigests()
                       .stream()
-                      .filter(digest -> view.containsKey(uuid(digest.getId())))
-                      .map(digest -> view.get(uuid(digest.getId())).getAccusation(digest.getRing()))
+                      .filter(digest -> view.containsKey(new HashKey(digest.getId())))
+                      .map(digest -> view.get(new HashKey(digest.getId())).getAccusation(digest.getRing()))
                       .filter(accusation -> accusation != null)
                       .map(accusation -> accusation.getSigned())
                       .collect(Collectors.toList()));
@@ -1626,7 +1603,7 @@ public class View {
      *         signature doesn't validate
      */
     boolean validate(Message message) {
-        UUID from = uuid(message.getDigest().getSource());
+        HashKey from = new HashKey(message.getDigest().getSource());
         Member member = view.get(from);
         if (member == null) {
             return false;
@@ -1636,7 +1613,7 @@ public class View {
             signature.update(message.getContent().array());
             return signature.verify(message.getSignature().array());
         } catch (SignatureException e) {
-            log.debug("invalid signature for message {}", uuid(message.getDigest().getId()), from);
+            log.debug("invalid signature for message {}", new HashKey(message.getDigest().getId()), from);
             return false;
         }
     }

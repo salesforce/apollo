@@ -22,7 +22,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.Uuid;
 
 /**
  * @author hal.hildebrand
@@ -53,10 +52,12 @@ public final class Conversion {
      * @param entry
      * @return the hash value of the entry
      */
-    public static byte[] hashOf(byte[] entry) {
+    public static byte[] hashOf(byte[]... bytes) {
         MessageDigest md = MESSAGE_DIGEST.get();
         md.reset();
-        md.update(entry);
+        for (byte[] entry : bytes) {
+            md.update(entry);
+        }
         return md.digest();
     }
 
@@ -94,16 +95,6 @@ public final class Conversion {
             CodecRecycler.release(encoder);
         }
         return out.toByteArray();
-    }
-
-    public static UUID uuid(Uuid bits) {
-        ByteBuffer buff = ByteBuffer.wrap(bits.bytes());
-        UUID id = new UUID(buff.getLong(), buff.getLong());
-        return id;
-    }
-
-    public static Uuid uuidBits(UUID id) {
-        return new Uuid(bytes(id));
     }
 
     private Conversion() {
