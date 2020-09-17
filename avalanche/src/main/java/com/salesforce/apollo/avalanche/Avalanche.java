@@ -11,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
@@ -139,7 +140,6 @@ public class Avalanche {
     private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentSkipListMap<>();
     private final Executor                                   queryPool;
     private final AtomicLong                                 queryRounds         = new AtomicLong();
-    private final ViewSampler                                querySampler;
     private final int                                        required;
     private final AtomicBoolean                              running             = new AtomicBoolean();
     private volatile ScheduledFuture<?>                      scheduledNoOpsCull;
@@ -163,7 +163,6 @@ public class Avalanche {
         comm.initialize(this);
         this.dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), metrics);
 
-        querySampler = new ViewSampler(view, getEntropy());
         required = (int) (parameters.core.k * parameters.core.alpha);
         invalidThreshold = parameters.core.k - required - 1;
 
@@ -441,7 +440,7 @@ public class Avalanche {
     private int query() {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        List<Member> sample = querySampler.sample(parameters.core.k);
+        Collection<Member> sample = view.sample(parameters.core.k, getEntropy());
 
         if (sample.isEmpty()) {
             return 0;
@@ -464,7 +463,7 @@ public class Avalanche {
                 log.trace("no wanted DAG entries");
                 return 0;
             }
-            Member member = sample.get(getEntropy().nextInt(sample.size()));
+            Member member = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size())); 
             AvalancheClientCommunications connection = comm.connectToNode(member, getNode());
             if (connection == null) {
                 log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
@@ -543,7 +542,7 @@ public class Avalanche {
      *         transaction batch, or NULL if there could not be a determination
      *         (such as comm failure) of the query for that member
      */
-    private List<Boolean> query(List<ByteBuffer> batch, List<Member> sample) {
+    private List<Boolean> query(List<ByteBuffer> batch, Collection<Member> sample) {
         long now = System.currentTimeMillis();
         AtomicInteger[] invalid = new AtomicInteger[batch.size()];
         AtomicInteger[] votes = new AtomicInteger[batch.size()];
@@ -557,8 +556,8 @@ public class Avalanche {
         }
 
         CompletionService<Boolean> frist = new ExecutorCompletionService<>(queryPool);
-        List<Future<Boolean>> futures;
-        Member wanted = sample.get(getEntropy().nextInt(sample.size()));
+        List<Future<Boolean>> futures; 
+        Member wanted = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size())); 
         futures = sample.stream().map(m -> frist.submit(() -> {
             QueryResult result;
             AvalancheClientCommunications connection = comm.connectToNode(m, getNode());

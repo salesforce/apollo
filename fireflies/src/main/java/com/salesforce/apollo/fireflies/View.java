@@ -12,6 +12,7 @@ import java.io.ByteArrayInputStream;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.cert.CertificateException;
@@ -690,6 +691,10 @@ public class View {
 
     public void registerRoundListener(Runnable callback) {
         roundListeners.add(callback);
+    }
+
+    public Collection<Member> sample(int range, SecureRandom entropy) {
+        return context.sample(range, entropy);
     }
 
     /**

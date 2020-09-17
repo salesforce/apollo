@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -229,15 +230,18 @@ public class Context<T extends Member> {
         }
         Set<Integer> indices = new HashSet<>(range);
         while (indices.size() < range && indices.size() < active.size()) {
-            indices.add(entropy.nextInt(range));
+            indices.add(entropy.nextInt(active.size()));
         }
         List<T> sample = new ArrayList<>(range);
         Counter index = new Counter(indices);
-        active.forEach((uuid, m) -> {
+        for (Entry<HashKey, T> entry : active.entrySet()) {
             if (index.accept()) {
-                sample.add(m);
+                sample.add(entry.getValue());
             }
-        });
+            if (sample.size() == range) {
+                break;
+            }
+        }
         return sample;
     }
 
