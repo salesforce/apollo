@@ -7,7 +7,6 @@
 package com.salesforce.apollo.avalanche.communications;
 
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.avro.AvroRemoteException;
@@ -19,6 +18,7 @@ import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avro.Apollo;
 import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -26,8 +26,8 @@ import com.salesforce.apollo.fireflies.Node;
  */
 public class AvalancheLocalCommSim implements AvalancheCommunications {
 
-    private final Map<UUID, Avalanche> servers = new ConcurrentHashMap<>();
-    private final RPCPlugin stats;
+    private final Map<HashKey, Avalanche> servers = new ConcurrentHashMap<>();
+    private final RPCPlugin               stats;
 
     public AvalancheLocalCommSim() {
         this(null);
@@ -38,14 +38,17 @@ public class AvalancheLocalCommSim implements AvalancheCommunications {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 
     @Override
     public AvalancheClientCommunications connectToNode(Member to, Node from) {
         Avalanche av = servers.get(to.getId());
-        if (av == null) { throw new IllegalArgumentException("Unable to connect to: " + to + " from: " + from); }
+        if (av == null) {
+            throw new IllegalArgumentException("Unable to connect to: " + to + " from: " + from);
+        }
         SpecificResponder responder = new SpecificResponder(Apollo.PROTOCOL,
-                                                            new AvalancheServerCommunications(av.getService()));
+                new AvalancheServerCommunications(av.getService()));
 
         AvalancheClientCommunications clientCommunications;
         try {
@@ -59,7 +62,7 @@ public class AvalancheLocalCommSim implements AvalancheCommunications {
         return clientCommunications;
     }
 
-    public Map<UUID, Avalanche> getServers() {
+    public Map<HashKey, Avalanche> getServers() {
         return servers;
     }
 
@@ -73,6 +76,7 @@ public class AvalancheLocalCommSim implements AvalancheCommunications {
     }
 
     @Override
-    public void start() {}
+    public void start() {
+    }
 
 }

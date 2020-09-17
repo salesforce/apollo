@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -60,7 +59,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 abstract public class AvalancheFunctionalTest {
 
     private static final RootCertificate     ca         = getCa();
-    private static Map<UUID, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey>    certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll

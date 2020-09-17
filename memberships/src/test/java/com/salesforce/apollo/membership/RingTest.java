@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 import org.bouncycastle.util.Arrays;
@@ -56,7 +57,10 @@ public class RingTest {
 
     @BeforeEach
     public void before() {
-        context = new Context<>(new HashKey(new byte[] { 0, 1, 2 }), 1);
+        Random entropy = new Random(0x1638);
+        byte[] id = new byte[32];
+        entropy.nextBytes(id);
+        context = new Context<>(new HashKey(id), 1);
         ring = context.rings().findFirst().get();
         members.forEach(m -> context.activate(m));
 
@@ -159,7 +163,7 @@ public class RingTest {
 
     @Test
     public void noRing() {
-        context = new Context<>(new HashKey(new byte[] { 0, 1, 2 }));
+        context = new Context<>(HashKey.ORIGIN);
         assertEquals(0, context.getRings().length);
         members.forEach(m -> context.activate(m));
         assertEquals(MEMBER_COUNT, context.getActive().size());

@@ -8,7 +8,6 @@ package com.salesforce.apollo;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -27,12 +26,12 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 222
  */
 public class Transactioneer {
-    private final AtomicInteger counter = new AtomicInteger();
-    private final AtomicInteger failed = new AtomicInteger();
-    private volatile ScheduledFuture<?> futureSailor;
-    private final Avalanche node;
+    private final AtomicInteger                    counter     = new AtomicInteger();
+    private final AtomicInteger                    failed      = new AtomicInteger();
+    private volatile ScheduledFuture<?>            futureSailor;
+    private final Avalanche                        node;
     private final List<CompletableFuture<HashKey>> outstanding = new CopyOnWriteArrayList<>();
-    private final AtomicInteger success = new AtomicInteger();
+    private final AtomicInteger                    success     = new AtomicInteger();
 
     public Transactioneer(Avalanche node) {
         this.node = node;
@@ -42,7 +41,7 @@ public class Transactioneer {
         return failed.get();
     }
 
-    public UUID getId() {
+    public HashKey getId() {
         return node.getNode().getId();
     }
 
@@ -80,7 +79,8 @@ public class Transactioneer {
                     } else {
                         failed.incrementAndGet();
                     }
-                } catch (TimeoutException | InterruptedException e) {} catch (ExecutionException e) {
+                } catch (TimeoutException | InterruptedException e) {
+                } catch (ExecutionException e) {
                     e.getCause().printStackTrace();
                 }
             }
@@ -88,9 +88,7 @@ public class Transactioneer {
     }
 
     private void addTransaction(Duration txnWait, ScheduledExecutorService scheduler) {
-        outstanding.add(node.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
-                                               ("transaction for: " + node.getNode().getId() + " : "
-                                                       + counter.incrementAndGet()).getBytes(),
-                                               txnWait, scheduler));
+        outstanding.add(node.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), ("transaction for: "
+                + node.getNode().getId() + " : " + counter.incrementAndGet()).getBytes(), txnWait, scheduler));
     }
 }

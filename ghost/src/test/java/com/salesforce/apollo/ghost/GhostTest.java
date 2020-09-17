@@ -8,7 +8,9 @@ package com.salesforce.apollo.ghost;
 
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
@@ -18,7 +20,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
@@ -49,7 +50,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class GhostTest {
 
     private static final RootCertificate     ca         = getCa();
-    private static Map<UUID, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey>    certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll

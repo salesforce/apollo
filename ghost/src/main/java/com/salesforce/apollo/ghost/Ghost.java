@@ -32,12 +32,12 @@ import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.Interval;
 import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.Ring;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.MembershipListener;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler;
 import com.salesforce.apollo.ghost.communications.GhostClientCommunications;
 import com.salesforce.apollo.ghost.communications.GhostCommunications;
+import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -392,13 +392,13 @@ public class Ghost {
     private CombinedIntervals keyIntervals() {
         List<KeyInterval> intervals = new ArrayList<>();
         for (int i = 0; i < rings; i++) {
-            Ring ring = view.getRing(i);
+            Ring<Member> ring = view.getRing(i);
             Member predecessor = ring.predecessor(getNode(), n -> n.isLive());
             if (predecessor == null) {
                 continue;
             }
-            HashKey begin = predecessor.hashFor(ring.getIndex());
-            HashKey end = getNode().hashFor(ring.getIndex());
+            HashKey begin = ring.hash(predecessor);
+            HashKey end = ring.hash(getNode());
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
                 intervals.add(new KeyInterval(end, LAST));
                 intervals.add(new KeyInterval(ORIGIN, begin));

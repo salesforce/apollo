@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ghost.communications;
 
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.avro.AvroRemoteException;
@@ -19,6 +18,7 @@ import com.salesforce.apollo.avro.Apollo;
 import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.ghost.Ghost;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -26,7 +26,7 @@ import com.salesforce.apollo.ghost.Ghost;
  */
 public class GhostLocalCommSim implements GhostCommunications {
 
-    private final Map<UUID, Ghost> servers = new ConcurrentHashMap<>();
+    private final Map<HashKey, Ghost> servers = new ConcurrentHashMap<>();
     private final RPCPlugin stats;
 
     public GhostLocalCommSim() {
@@ -40,7 +40,7 @@ public class GhostLocalCommSim implements GhostCommunications {
     @Override
     public void close() {}
 
-    public Map<UUID, Ghost> getServers() {
+    public Map<HashKey, Ghost> getServers() {
         return servers;
     }
 

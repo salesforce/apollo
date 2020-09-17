@@ -8,7 +8,6 @@ package com.salesforce.apollo.avalanche;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -42,7 +41,7 @@ public class Transactioneer {
         return failed.get();
     }
 
-    public UUID getId() {
+    public HashKey getId() {
         return node.getNode().getId();
     }
 

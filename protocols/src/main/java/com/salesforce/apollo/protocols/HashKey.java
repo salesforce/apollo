@@ -63,7 +63,6 @@ public class HashKey implements Comparable<HashKey> {
     private final int      hashCode;
 
     public HashKey(byte[] key) {
-        assert key != null && key.length == 32 : "Must be 32 bytes: " + key.length;
         itself = key;
         hashCode = Base64.getEncoder().withoutPadding().encodeToString(itself).hashCode();
     }

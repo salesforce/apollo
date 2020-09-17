@@ -120,6 +120,19 @@ public class Ring<T extends Member> implements Iterable<T> {
     }
 
     /**
+     * for testing
+     * 
+     * @return
+     */
+    public Map<HashKey, T> getRing() {
+        return ring;
+    }
+
+    public HashKey hash(T m) {
+        return context.hashFor(m, index);
+    }
+
+    /**
      * <pre>
      *  
      *    - An item lies between itself. That is, if pred == itm == succ, True is
@@ -493,20 +506,7 @@ public class Ring<T extends Member> implements Iterable<T> {
         ring.remove(hash(m));
     }
 
-    protected HashKey hash(T m) {
-        return context.hashFor(m, index);
-    }
-
     protected T insert(T m) {
         return ring.put(hash(m), m);
-    }
-
-    /**
-     * for testing
-     * 
-     * @return
-     */
-    public Map<HashKey, T> getRing() {
-        return ring;
     }
 }

@@ -41,7 +41,7 @@ public class ViewSampler {
 
         while (sample.size() < trueRange) {
             if (currentSet.isEmpty()) {
-                List<Member> next = new ArrayList<>(view.getLive().values());
+                List<Member> next = new ArrayList<>(view.getLive());
                 Collections.shuffle(next, entropy);
                 currentSet.addAll(next);
             }
