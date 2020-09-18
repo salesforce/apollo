@@ -73,7 +73,7 @@
 			<extension>
 				<groupId>kr.motd.maven</groupId>
 				<artifactId>os-maven-plugin</artifactId>
-				<version>1.4.1.Final</version>
+				<version>1.6.2</version>
 			</extension>
 		</extensions>
 		<plugins>
@@ -89,9 +89,11 @@
 						</goals>
 						<configuration>
 							<sources>
-								<source>${project.basedir}/target/generated-sources</source>
+								<source>${project.basedir}/target/generated-sources/avro</source>
+                                <source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
+                                <source>${project.basedir}/target/generated-sources/protobuf/java</source>
 								<source>${project.basedir}/src/main/avro</source>
-								<source>${project.basedir}/src/main/protobuf</source>
+								<source>${project.basedir}/src/main/proto</source>
 							</sources>
 						</configuration>
 					</execution>
@@ -110,7 +112,7 @@
 						</goals>
 						<configuration>
 							<sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
-							<outputDirectory>${project.basedir}/target/generated-sources</outputDirectory>
+							<outputDirectory>${project.basedir}/target/generated-sources/avro</outputDirectory>
 						</configuration>
 					</execution>
 				</executions>
@@ -127,22 +129,20 @@
 				</executions>
 			</plugin>
 			<plugin>
-				<groupId>com.github.os72</groupId>
-				<artifactId>protoc-jar-maven-plugin</artifactId>
-				<version>3.11.4</version>
+				<groupId>org.xolstice.maven.plugins</groupId>
+				<artifactId>protobuf-maven-plugin</artifactId>
+				<version>0.6.1</version>
+				<configuration>
+					<protocArtifact>com.google.protobuf:protoc:3.12.0:exe:${os.detected.classifier}</protocArtifact>
+					<pluginId>grpc-java</pluginId>
+					<pluginArtifact>io.grpc:protoc-gen-grpc-java:1.32.1:exe:${os.detected.classifier}</pluginArtifact>
+				</configuration>
 				<executions>
 					<execution>
-						<phase>generate-sources</phase>
 						<goals>
-							<goal>run</goal>
+							<goal>compile</goal>
+							<goal>compile-custom</goal>
 						</goals>
-						<configuration>
-							<addProtoSources>all</addProtoSources>
-							<includeMavenTypes>direct</includeMavenTypes>
-							<inputDirectories>
-								<include>src/main/protobuf</include>
-							</inputDirectories>
-						</configuration>
 					</execution>
 				</executions>
 			</plugin>
