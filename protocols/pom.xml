@@ -25,14 +25,6 @@
 			<artifactId>jackson-annotations</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.avro</groupId>
-			<artifactId>avro</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.avro</groupId>
-			<artifactId>avro-ipc</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
 			<exclusions>
@@ -41,10 +33,6 @@
 					<artifactId>jsr305</artifactId>
 				</exclusion>
 			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>io.netty</groupId>
-			<artifactId>netty-all</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.grpc</groupId>
@@ -74,11 +62,11 @@
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
 		</dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>simple-ca</artifactId>
-            <scope>test</scope>
-        </dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>simple-ca</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -102,30 +90,11 @@
 						</goals>
 						<configuration>
 							<sources>
-								<source>${project.basedir}/target/generated-sources/avro</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/java</source>
 								<source>${project.basedir}/src/main/avro</source>
 								<source>${project.basedir}/src/main/proto</source>
 							</sources>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.avro</groupId>
-				<artifactId>avro-maven-plugin</artifactId>
-				<executions>
-					<execution>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>schema</goal>
-							<goal>protocol</goal>
-							<goal>idl-protocol</goal>
-						</goals>
-						<configuration>
-							<sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
-							<outputDirectory>${project.basedir}/target/generated-sources/avro</outputDirectory>
 						</configuration>
 					</execution>
 				</executions>
@@ -160,41 +129,5 @@
 				</executions>
 			</plugin>
 		</plugins>
-		<pluginManagement>
-			<plugins>
-				<!--This plugin's configuration is used to store Eclipse m2e settings 
-					only. It has no influence on the Maven build itself. -->
-				<plugin>
-					<groupId>org.eclipse.m2e</groupId>
-					<artifactId>lifecycle-mapping</artifactId>
-					<version>1.0.0</version>
-					<configuration>
-						<lifecycleMappingMetadata>
-							<pluginExecutions>
-								<pluginExecution>
-									<pluginExecutionFilter>
-										<groupId>
-											org.apache.avro
-										</groupId>
-										<artifactId>
-											avro-maven-plugin
-										</artifactId>
-										<versionRange>[1.7.7,)</versionRange>
-										<goals>
-											<goal>idl-protocol</goal>
-											<goal>protocol</goal>
-											<goal>schema</goal>
-										</goals>
-									</pluginExecutionFilter>
-									<action>
-										<ignore></ignore>
-									</action>
-								</pluginExecution>
-							</pluginExecutions>
-						</lifecycleMappingMetadata>
-					</configuration>
-				</plugin>
-			</plugins>
-		</pluginManagement>
 	</build>
 </project>

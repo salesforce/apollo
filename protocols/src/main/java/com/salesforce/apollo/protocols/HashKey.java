@@ -12,7 +12,6 @@ import java.util.Base64;
 import java.util.UUID;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.avro.HASH;
 
 /**
  * @author hal.hildebrand
@@ -80,10 +79,6 @@ public class HashKey implements Comparable<HashKey> {
         this(key.toByteArray());
     }
 
-    public HashKey(HASH key) {
-        this(key.bytes());
-    }
-
     public HashKey(String b64Encoded) {
         this(Base64.getUrlDecoder().decode(b64Encoded));
     }
@@ -98,10 +93,6 @@ public class HashKey implements Comparable<HashKey> {
 
     public byte[] bytes() {
         return itself;
-    }
-
-    public int compareTo(HASH t) {
-        return compare(itself, t.bytes());
     }
 
     @Override
@@ -127,10 +118,6 @@ public class HashKey implements Comparable<HashKey> {
 
     public ByteString toByteString() {
         return ByteString.copyFrom(itself);
-    }
-
-    public HASH toHash() {
-        return new HASH(bytes());
     }
 
     @Override
