@@ -4,17 +4,18 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.avalanche.communications;
+package com.salesforce.apollo.avalanche.communications.avro;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.avro.AvroRemoteException;
 
 import com.salesforce.apollo.avalanche.Avalanche.Service;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.QueryResult;
 import com.salesforce.apollo.protocols.Avalanche;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -28,12 +29,12 @@ public class AvalancheServerCommunications implements Avalanche {
     }
 
     @Override
-    public QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) throws AvroRemoteException {
+    public QueryResult query(List<ByteBuffer> transactions, Collection<HashKey> wanted) throws AvroRemoteException {
         return avalanche.onQuery(transactions, wanted);
     }
 
     @Override
-    public List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException { 
+    public List<ByteBuffer> requestDAG(Collection<HashKey> want) throws AvroRemoteException {
         return avalanche.requestDAG(want);
     }
 }

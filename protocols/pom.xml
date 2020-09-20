@@ -13,6 +13,14 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk15on</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcpkix-jdk15on</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-annotations</artifactId>
 		</dependency>
@@ -66,6 +74,11 @@
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
 		</dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>simple-ca</artifactId>
+            <scope>test</scope>
+        </dependency>
 	</dependencies>
 
 	<build>
@@ -90,8 +103,8 @@
 						<configuration>
 							<sources>
 								<source>${project.basedir}/target/generated-sources/avro</source>
-                                <source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
-                                <source>${project.basedir}/target/generated-sources/protobuf/java</source>
+								<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
+								<source>${project.basedir}/target/generated-sources/protobuf/java</source>
 								<source>${project.basedir}/src/main/avro</source>
 								<source>${project.basedir}/src/main/proto</source>
 							</sources>

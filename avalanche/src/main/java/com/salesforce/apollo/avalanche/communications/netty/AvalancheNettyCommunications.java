@@ -16,9 +16,9 @@ import org.apache.avro.ipc.specific.SpecificResponder;
 
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.Avalanche.Service;
-import com.salesforce.apollo.avalanche.communications.AvalancheClientCommunications;
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
-import com.salesforce.apollo.avalanche.communications.AvalancheServerCommunications;
+import com.salesforce.apollo.avalanche.communications.avro.AvalancheClientCommunications;
+import com.salesforce.apollo.avalanche.communications.avro.AvalancheCommunications;
+import com.salesforce.apollo.avalanche.communications.avro.AvalancheServerCommunications;
 import com.salesforce.apollo.avro.Apollo;
 import com.salesforce.apollo.comm.netty4.NettyTlsTransceiver;
 import com.salesforce.apollo.fireflies.Member;

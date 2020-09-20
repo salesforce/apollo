@@ -822,8 +822,8 @@ public class WorkingSet {
         return entry == null ? null : manifestDag(entry);
     }
 
-    public List<ByteBuffer> getEntries(List<HashKey> collect) {
-        return collect.stream().map(key -> {
+    public List<ByteBuffer> getEntries(Collection<HashKey> wanted) {
+        return wanted.stream().map(key -> {
             Node n = unfinalized.get(key);
             if (n == null) {
                 byte[] entry = finalized.get(key.bytes());

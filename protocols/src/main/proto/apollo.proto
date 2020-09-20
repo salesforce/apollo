@@ -7,8 +7,8 @@ option objc_class_prefix = "Ap";
 
 package apollo;
 
-// Interface exported by the server.
-service Apollo {
+
+service Fireflies {
     /*
      * Fireflies 3 phase gossip
      */
@@ -19,6 +19,21 @@ service Apollo {
      * Fireflies liveness ping
      */
     rpc ping (Null) returns (Null) {}
+}
+
+service Avalanche {
+    /**
+     * Avalanche query
+     */
+    rpc query (Query) returns (QueryResult) {}
+    
+    /**
+     * parent gossip
+     */
+    rpc requestDag ( DagNodes ) returns (DagNodes) {}
+}
+
+service Ghost {
 
     /*
      * Ghost API
@@ -29,17 +44,7 @@ service Apollo {
     /**
      * Ghost interval gossip
      */
-    rpc intervals (Intervals) returns (DagEntries) {}
-
-    /**
-     * Avalanche query
-     */
-    rpc query (Query) returns (QueryResult) {}
-    
-    /**
-     * parent gossip
-     */
-    rpc requestDag ( DagNodes ) returns (DagNodes) {}
+    rpc intervals (Intervals) returns (DagEntries) {} 
 }
 
 message DagNodes {

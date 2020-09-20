@@ -9,7 +9,7 @@ package com.salesforce.apollo.avalanche;
 
 import org.junit.jupiter.api.BeforeEach;
 
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
+import com.salesforce.apollo.avalanche.communications.avro.AvalancheCommunications;
 import com.salesforce.apollo.avalanche.communications.netty.AvalancheNettyCommunications;
 
 import io.netty.channel.EventLoopGroup;

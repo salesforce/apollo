@@ -42,8 +42,8 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
-import com.salesforce.apollo.avalanche.communications.AvalancheClientCommunications;
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
+import com.salesforce.apollo.avalanche.communications.avro.AvalancheClientCommunications;
+import com.salesforce.apollo.avalanche.communications.avro.AvalancheCommunications;
 import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.QueryResult;
@@ -60,6 +60,16 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Avalanche {
+
+    public static class Query {
+        public final List<Boolean>    stronglyPreferred;
+        public final List<ByteBuffer> wanted;
+
+        public Query(List<Boolean> stronglyPreferred, List<ByteBuffer> wanted) {
+            this.stronglyPreferred = stronglyPreferred;
+            this.wanted = wanted;
+        }
+    }
 
     public static class PendingTransaction {
         public final CompletableFuture<HashKey> pending;
@@ -82,16 +92,16 @@ public class Avalanche {
 
     public class Service {
 
-        public QueryResult onQuery(List<ByteBuffer> transactions, List<HASH> wanted) {
+        public Query onQuery(List<ByteBuffer> transactions, Collection<HashKey> wanted) {
             if (!running.get()) {
-                ArrayList<Vote> results = new ArrayList<>();
+                ArrayList<Boolean> results = new ArrayList<>();
                 for (int i = 0; i < transactions.size(); i++) {
-                    results.add(Vote.UNKNOWN);
+                    results.add(null);
                     if (metrics != null) {
                         metrics.getInboundQueryUnknownRate().mark();
                     }
                 }
-                return new QueryResult(results, Collections.emptyList());
+                return new Query(results, Collections.emptyList());
             }
             long now = System.currentTimeMillis();
             Context timer = metrics == null ? null : metrics.getInboundQueryTimer().time();
@@ -99,32 +109,18 @@ public class Avalanche {
             final List<HashKey> inserted = dag.insertSerialized(transactions, System.currentTimeMillis());
             List<Boolean> stronglyPreferred = dag.isStronglyPreferred(inserted);
             log.trace("onquery {} txn in {} ms", stronglyPreferred, System.currentTimeMillis() - now);
-            List<Vote> queried = stronglyPreferred.stream().map(r -> {
-                if (r == null) {
-                    if (metrics != null) {
-                        metrics.getInboundQueryUnknownRate().mark();
-                    }
-                    return Vote.UNKNOWN;
-                } else if (r) {
-                    return Vote.TRUE;
-                } else {
-                    return Vote.FALSE;
-                }
-            }).collect(Collectors.toList());
-
             if (timer != null) {
                 timer.close();
                 metrics.getInboundQueryRate().mark(transactions.size());
             }
-            assert queried.size() == transactions.size() : "on query results " + queried.size() + " != "
-                    + transactions.size();
+            assert stronglyPreferred.size() == transactions.size() : "on query results " + stronglyPreferred.size()
+                    + " != " + transactions.size();
 
-            return new QueryResult(queried,
-                    dag.getEntries(wanted.stream().map(e -> new HashKey(e)).collect(Collectors.toList())));
+            return new Query(stronglyPreferred, dag.getEntries(wanted));
         }
 
-        public List<ByteBuffer> requestDAG(List<HASH> want) {
-            return dag.getEntries(want.stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
+        public List<ByteBuffer> requestDAG(Collection<HashKey> want) {
+            return dag.getEntries(want);
         }
     }
 
@@ -458,12 +454,12 @@ public class Avalanche {
             if (timer != null) {
                 timer.close();
             }
-            List<HASH> wanted = dag.getWanted().stream().map(e -> e.toHash()).collect(Collectors.toList());
+            List<HashKey> wanted = dag.getWanted().stream().collect(Collectors.toList());
             if (wanted.isEmpty()) {
                 log.trace("no wanted DAG entries");
                 return 0;
             }
-            Member member = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size())); 
+            Member member = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size()));
             AvalancheClientCommunications connection = comm.connectToNode(member, getNode());
             if (connection == null) {
                 log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
@@ -550,14 +546,14 @@ public class Avalanche {
             invalid[i] = new AtomicInteger();
             votes[i] = new AtomicInteger();
         }
-        List<HASH> want = dag.getWanted().stream().map(e -> e.toHash()).collect(Collectors.toList());
+        List<HashKey> want = dag.getWanted().stream().collect(Collectors.toList());
         if (want.size() > 0 && metrics != null) {
             metrics.getWantedRate().mark(want.size());
         }
 
         CompletionService<Boolean> frist = new ExecutorCompletionService<>(queryPool);
-        List<Future<Boolean>> futures; 
-        Member wanted = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size())); 
+        List<Future<Boolean>> futures;
+        Member wanted = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size()));
         futures = sample.stream().map(m -> frist.submit(() -> {
             QueryResult result;
             AvalancheClientCommunications connection = comm.connectToNode(m, getNode());

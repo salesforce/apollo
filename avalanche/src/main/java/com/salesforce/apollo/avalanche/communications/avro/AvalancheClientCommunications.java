@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.avalanche.communications;
+package com.salesforce.apollo.avalanche.communications.avro;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.apache.avro.AvroRemoteException;
 import org.apache.avro.ipc.RPCPlugin;
@@ -19,11 +21,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.avro.QueryResult;
 import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.communications.CommonClientCommunications;
 import com.salesforce.apollo.protocols.Avalanche;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -60,12 +62,13 @@ public class AvalancheClientCommunications extends CommonClientCommunications im
     }
 
     @Override
-    public QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) throws AvroRemoteException {
-        return client.query(transactions, wanted);
+    public QueryResult query(List<ByteBuffer> transactions, List<HashKey> wanted) throws AvroRemoteException {
+        QueryResult query = client.query(transactions, wanted);
+        return query;
     }
 
     @Override
-    public List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException {
-        return client.requestDag(want);
+    public List<ByteBuffer> requestDAG(Collection<HashKey> want) throws AvroRemoteException {
+        return client.requestDag(want.stream().map(e -> e.toHash()).collect(Collectors.toList()));
     }
 }

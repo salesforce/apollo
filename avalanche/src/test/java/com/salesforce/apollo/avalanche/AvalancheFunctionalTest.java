@@ -39,7 +39,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Slf4jReporter;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
+import com.salesforce.apollo.avalanche.communications.avro.AvalancheCommunications;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Member;

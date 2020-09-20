@@ -30,6 +30,7 @@ import com.salesforce.apollo.avro.Interval;
 import com.salesforce.apollo.avro.QueryResult;
 import com.salesforce.apollo.avro.Signed;
 import com.salesforce.apollo.avro.Update;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -71,7 +72,7 @@ public class TestMtls {
         return new Apollo() {
 
             @Override
-            public DagEntry get(HASH key) {
+            public DagEntry get(HashKey key) {
                 // TODO Auto-generated method stub
                 return null;
             }
@@ -83,7 +84,7 @@ public class TestMtls {
             }
 
             @Override
-            public List<DagEntry> intervals(List<Interval> intervals, List<HASH> have) {
+            public List<DagEntry> intervals(List<Interval> intervals, List<HashKey> have) {
                 // TODO Auto-generated method stub
                 return null;
             }
