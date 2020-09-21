@@ -9,7 +9,6 @@ package com.salesforce.apollo.fireflies;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateEncodingException;
@@ -28,11 +27,12 @@ import org.bouncycastle.cert.X509CertificateHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.avro.AccusationDigest;
-import com.salesforce.apollo.avro.CertificateDigest;
-import com.salesforce.apollo.avro.EncodedCertificate;
-import com.salesforce.apollo.avro.NoteDigest;
-import com.salesforce.apollo.avro.Signed;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.AccusationDigest;
+import com.salesfoce.apollo.proto.CertificateDigest;
+import com.salesfoce.apollo.proto.EncodedCertificate;
+import com.salesfoce.apollo.proto.NoteDigest;
+import com.salesfoce.apollo.proto.Signed;
 import com.salesforce.apollo.fireflies.View.AccTag;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -276,7 +276,11 @@ public class Member extends com.salesforce.apollo.membership.Member {
     Stream<AccusationDigest> getAccusationDigests() {
         return validAccusations.values()
                                .stream()
-                               .map(e -> new AccusationDigest(getId().toHash(), e.getEpoch(), e.getRingNumber()));
+                               .map(e -> AccusationDigest.newBuilder()
+                                                         .setId(getId().toByteString())
+                                                         .setEpoch(e.getEpoch())
+                                                         .setRing(e.getRingNumber())
+                                                         .build());
     }
 
     List<AccTag> getAccusationTags() {
@@ -286,7 +290,11 @@ public class Member extends com.salesforce.apollo.membership.Member {
     CertificateDigest getCertificateDigest() {
         Note current = note;
         return current == null ? null
-                : new CertificateDigest(getId().toHash(), getEpoch(), ByteBuffer.wrap(certificateHash));
+                : CertificateDigest.newBuilder()
+                                   .setId(getId().toByteString())
+                                   .setEpoch(current.getEpoch())
+                                   .setHash(ByteString.copyFrom(certificateHash))
+                                   .build();
     }
 
     byte[] getCertificateHash() {
@@ -307,7 +315,11 @@ public class Member extends com.salesforce.apollo.membership.Member {
 
     EncodedCertificate getEncodedCertificate() {
         CertificateDigest digest = getCertificateDigest();
-        return digest == null ? null : new EncodedCertificate(digest, ByteBuffer.wrap(derEncodedCertificate));
+        return digest == null ? null
+                : EncodedCertificate.newBuilder()
+                                    .setDigest(digest)
+                                    .setContent(ByteString.copyFrom(derEncodedCertificate))
+                                    .build();
     }
 
     long getEpoch() {
@@ -324,7 +336,8 @@ public class Member extends com.salesforce.apollo.membership.Member {
 
     NoteDigest getNoteDigest() {
         Note current = note;
-        return current == null ? null : new NoteDigest(getId().toHash(), current.getEpoch());
+        return current == null ? null
+                : NoteDigest.newBuilder().setId(getId().toByteString()).setEpoch(current.getEpoch()).build();
     }
 
     Signed getSignedNote() {

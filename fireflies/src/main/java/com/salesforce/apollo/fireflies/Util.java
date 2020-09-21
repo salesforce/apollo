@@ -30,31 +30,26 @@ import java.util.UUID;
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
 
-import com.fasterxml.uuid.Generators;
-import com.fasterxml.uuid.impl.TimeBasedGenerator;
-
 /**
  * @author hal.hildebrand
  * @since 220
  */
 final public class Util {
 
-    private static final TimeBasedGenerator GENERATOR = Generators.timeBasedGenerator();
-
     /**
-     * A single event X has probability p. Calculate probability of k occurrences X within n events
+     * A single event X has probability p. Calculate probability of k occurrences X
+     * within n events
      * 
-     * @param k
-     *            - number of occurrences
-     * @param n
-     *            - number of events
-     * @param p
-     *            - probability of event occurring
+     * @param k - number of occurrences
+     * @param n - number of events
+     * @param p - probability of event occurring
      * @return probability of k occurrences X within n events
      */
     public static double binomialc(int k, int n, double p) {
         // special cases
-        if (p == 0.0) { return 1.0; }
+        if (p == 0.0) {
+            return 1.0;
+        }
         if (p == 1.0)
             if (k == n) {
                 return 1.0;
@@ -87,7 +82,7 @@ final public class Util {
             throw new IllegalArgumentException("invalid DN: " + dn, e);
         }
         Map<String, String> decoded = new HashMap<>();
-        ldapDN.getRdns().forEach(rdn -> decoded.put(rdn.getType(), (String)rdn.getValue()));
+        ldapDN.getRdns().forEach(rdn -> decoded.put(rdn.getType(), (String) rdn.getValue()));
         return decoded;
     }
 
@@ -99,16 +94,7 @@ final public class Util {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    public static String generate() {
-        return encode(generateUUID());
-    }
-
-    public static UUID generateUUID() {
-        return GENERATOR.generate();
-    }
-
-    public static CertWithKey loadFrom(final File keystoreFile, final char[] password,
-            final String alias) {
+    public static CertWithKey loadFrom(final File keystoreFile, final char[] password, final String alias) {
         try {
             final KeyStore keystore = KeyStore.getInstance("PKCS12");
             try (InputStream stream = new FileInputStream(keystoreFile)) {
@@ -120,8 +106,7 @@ final public class Util {
         }
     }
 
-    public static CertWithKey loadFrom(final InputStream stream, final char[] password,
-            final String alias) {
+    public static CertWithKey loadFrom(final InputStream stream, final char[] password, final String alias) {
         try {
             final KeyStore keystore = KeyStore.getInstance("PKCS12");
             keystore.load(stream, password);
@@ -134,32 +119,37 @@ final public class Util {
     public static CertWithKey loadFrom(KeyStore keystore, String alias) {
         try {
             final Certificate certificate = keystore.getCertificate(alias);
-            final PrivateKey privateKey = (PrivateKey)keystore.getKey(alias, null);
+            final PrivateKey privateKey = (PrivateKey) keystore.getKey(alias, null);
             if (certificate == null || privateKey == null)
                 throw new IllegalStateException("Keystore does not contain certificate and key for alias " + alias);
-            return new CertWithKey((X509Certificate)certificate, privateKey);
+            return new CertWithKey((X509Certificate) certificate, privateKey);
         } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException e) {
             throw new IllegalStateException(e);
         }
     }
 
     /**
-     * @return the minimum t such that the probability of more than t out of 2t+1 monitors are correct with probability
-     *         e/size given the uniform probability pByz that a monitor is Byzantine.
+     * @return the minimum t such that the probability of more than t out of 2t+1
+     *         monitors are correct with probability e/size given the uniform
+     *         probability pByz that a monitor is Byzantine.
      */
     public static int minMajority(double pByz, double faultToleranceLevel) {
         for (int t = 1; t <= 10000; t++) {
             double pf = 1.0 - binomialc(t, 2 * t + 1, pByz);
-            if (faultToleranceLevel >= pf) { return t; }
+            if (faultToleranceLevel >= pf) {
+                return t;
+            }
         }
         throw new IllegalArgumentException("Cannot compute number if rings from pByz=" + pByz);
     }
 
     public static int minMajority(double pByz, int size, int e) {
-        double pTarget = ((double)e) / ((double)size);
+        double pTarget = ((double) e) / ((double) size);
         for (int t = 1; t <= 10000; t++) {
             double pf = 1.0 - binomialc(t, 2 * t + 1, pByz);
-            if (pTarget >= pf) { return t; }
+            if (pTarget >= pf) {
+                return t;
+            }
         }
         throw new IllegalArgumentException("Cannot compute number if rings from pByz=" + pByz);
     }
@@ -178,5 +168,6 @@ final public class Util {
         return String.format("%0" + (bytes.length << 1) + "X", bi);
     }
 
-    private Util() {}
+    private Util() {
+    }
 }

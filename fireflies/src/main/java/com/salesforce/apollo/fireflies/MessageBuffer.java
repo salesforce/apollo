@@ -22,9 +22,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.avro.Message;
-import com.salesforce.apollo.avro.MessageDigest;
-import com.salesforce.apollo.avro.MessageGossip;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.Message;
+import com.salesfoce.apollo.proto.MessageDigest;
+import com.salesfoce.apollo.proto.MessageGossip;
+import com.salesfoce.apollo.proto.MessageGossip.Builder;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -75,24 +77,26 @@ public class MessageBuffer {
     }
 
     public MessageGossip process(List<MessageDigest> requested) {
-        MessageGossip gossip = new MessageGossip();
+        Builder builder = MessageGossip.newBuilder();
         Set<HashKey> received = new HashSet<>(requested.size());
-        gossip.setDigests(requested.stream().filter(d -> {
+        requested.stream().filter(d -> {
             HashKey id = new HashKey(d.getId());
             received.add(id);
-            Message update = state.get(id);
-            if (update != null) {
-                update.getDigest().setAge(Math.max(update.getDigest().getAge(), d.getAge()));
-                return false;
-            }
-            return true;
-        }).collect(Collectors.toList()));
-        gossip.setUpdates(Sets.difference(state.keySet(), received)
-                              .stream()
-                              .map(id -> state.get(id))
-                              .collect(Collectors.toList()));
+            return null == state.computeIfPresent(id,
+                                                  (k,
+                                                   m) -> Message.newBuilder(m)
+                                                                .setDigest(MessageDigest.newBuilder(m.getDigest())
+                                                                                        .setAge(Math.max(m.getDigest()
+                                                                                                          .getAge(),
+                                                                                                         d.getAge()))
+                                                                                        .build())
+                                                                .build());
+        }).forEach(e -> builder.addDigests(e));
 
-        log.trace("want messages: {} updates: {}", gossip.getDigests().size(), gossip.getUpdates().size());
+        Sets.difference(state.keySet(), received).stream().map(id -> state.get(id)).forEach(e -> builder.addUpdates(e));
+        MessageGossip gossip = builder.build();
+
+        log.trace("want messages: {} updates: {}", gossip.getDigestsCount(), gossip.getUpdatesCount());
         return gossip;
     }
 
@@ -137,8 +141,17 @@ public class MessageBuffer {
         } catch (SignatureException e) {
             throw new IllegalStateException("Unable to sign message content", e);
         }
-        return new Message(new MessageDigest(from.toHash(), id.toHash(), 0, System.currentTimeMillis()), channel,
-                ByteBuffer.wrap(content), ByteBuffer.wrap(s));
+        return Message.newBuilder()
+                      .setDigest(MessageDigest.newBuilder()
+                                              .setSource(from.toByteString())
+                                              .setId(id.toByteString())
+                                              .setAge(0)
+                                              .setTime(System.currentTimeMillis())
+                                              .build())
+                      .setChannel(channel)
+                      .setContent(ByteString.copyFrom(content))
+                      .setSignature(ByteString.copyFrom(s))
+                      .build();
     }
 
     private void purgeTheAged() {
@@ -177,8 +190,11 @@ public class MessageBuffer {
                 updated.set(true);
                 return update;
             }
-            v.getDigest().setAge(Math.max(v.getDigest().getAge(), update.getDigest().getAge()));
-            return v; // regossiped, but not updated
+            return Message.newBuilder(v)
+                          .setDigest(MessageDigest.newBuilder(v.getDigest())
+                                                  .setAge(Math.max(v.getDigest().getAge(),
+                                                                   update.getDigest().getAge())))
+                          .build();
         });
         return updated.get();
     }
