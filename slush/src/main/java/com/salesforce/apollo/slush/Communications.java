@@ -12,7 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import com.salesforce.apollo.fireflies.Member;
+import com.salesforce.apollo.fireflies.Participant;
 
 /**
  * The Communications abstraction for the Avalance family of protocols.
@@ -33,7 +33,7 @@ public interface Communications {
          * @param response
          *            - the result of the query
          */
-        void consume(Member from, T response);
+        void consume(Participant from, T response);
 
         /**
          * @return the unique UUID of the receiver
@@ -49,7 +49,7 @@ public interface Communications {
     /**
      * @return the local address of this Communications instance
      */
-    Member address();
+    Participant address();
 
     /**
      * Set up a rendezvous for the sink
@@ -74,7 +74,7 @@ public interface Communications {
     /**
      * @return the Set of addresses of all tracked members
      */
-    Set<Member> getPopulation();
+    Set<Participant> getPopulation();
 
     /**
      * Send a message to a subset of members.
@@ -87,5 +87,5 @@ public interface Communications {
      *            - the id of the Sink for responses
      * @return - the receiver
      */
-    <T> Communications query(Supplier<T> query, Collection<Member> to, UUID sink);
+    <T> Communications query(Supplier<T> query, Collection<Participant> to, UUID sink);
 }

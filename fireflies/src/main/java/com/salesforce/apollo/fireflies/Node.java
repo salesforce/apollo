@@ -56,7 +56,7 @@ import org.slf4j.LoggerFactory;
  * @author hal.hildebrand
  * @since 220
  */
-public class Node extends Member {
+public class Node extends Participant {
     public class NodeKeyManagerFactory extends KeyManagerFactory {
 
         public NodeKeyManagerFactory() {
@@ -327,7 +327,7 @@ public class Node extends Member {
         return "Node[" + getId() + "]";
     }
 
-    Accusation accuse(Member m, int ringNumber) {
+    Accusation accuse(Participant m, int ringNumber) {
         return new Accusation(m.getEpoch(), getId(), ringNumber, m.getId(), forSigning());
     }
 

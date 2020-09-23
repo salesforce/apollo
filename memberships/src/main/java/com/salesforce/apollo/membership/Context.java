@@ -287,4 +287,11 @@ public class Context<T extends Member> {
         md.update(String.format(CONTEXT_HASH_TEMPLATE, ring).getBytes());
         return new HashKey(md.digest());
     }
+
+    public void clear() {
+        for (Ring<T> ring: rings) {
+            ring.clear();
+        }
+        hashes.clear();
+    }
 }

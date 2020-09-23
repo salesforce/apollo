@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, salesforce.com, inc.
+ * Copyright (c) 2020, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
@@ -8,51 +8,57 @@ package com.salesforce.apollo.fireflies.communications;
 
 import java.security.cert.X509Certificate;
 
-import org.apache.avro.AvroRemoteException;
-
-import com.salesforce.apollo.avro.Digests;
-import com.salesforce.apollo.avro.Gossip;
-import com.salesforce.apollo.avro.Signed;
-import com.salesforce.apollo.avro.Update;
-import com.salesforce.apollo.fireflies.Member;
+import com.salesfoce.apollo.proto.FirefliesGrpc.FirefliesImplBase;
+import com.salesfoce.apollo.proto.Gossip;
+import com.salesfoce.apollo.proto.Null;
+import com.salesfoce.apollo.proto.SayWhat;
+import com.salesfoce.apollo.proto.State;
+import com.salesforce.apollo.comm.grpc.ClientIdentity;
 import com.salesforce.apollo.fireflies.View.Service;
-import com.salesforce.apollo.protocols.Fireflies;
 import com.salesforce.apollo.protocols.HashKey;
+
+import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- * @since 220
+ *
  */
-public class FfServerCommunications implements Fireflies {
+public class FfServerCommunications extends FirefliesImplBase {
 
-    private final X509Certificate certificate;
-    private final HashKey         remoteMemberId;
-    private final Service         service;
+    private final ClientIdentity identity;
+    private final Service        service;
 
-    public FfServerCommunications(Service view, X509Certificate certificate) {
-        assert view != null : "View cannot be null";
-        assert certificate != null : "Certificate cannot be null";
-        this.service = view;
-        this.remoteMemberId = Member.getMemberId(certificate);
-        this.certificate = certificate;
-    }
-
-    public HashKey getRemoteMemberId() {
-        return remoteMemberId;
+    public FfServerCommunications(Service service, ClientIdentity identity) {
+        this.service = service;
+        this.identity = identity;
     }
 
     @Override
-    public Gossip gossip(Signed note, int ring, Digests digests) throws AvroRemoteException {
-        return service.rumors(ring, digests, remoteMemberId, certificate, note);
+    public void gossip(SayWhat request, StreamObserver<Gossip> responseObserver) {
+        Gossip gossip = service.rumors(request.getRing(), request.getGossip(), getFrom(), getCert(), request.getNote());
+        responseObserver.onNext(gossip);
+        responseObserver.onCompleted();
     }
 
     @Override
-    public int ping(int ping) throws AvroRemoteException {
-        return 200; // we handle the ping here - no need for the view to get involved
+    public void ping(Null request, StreamObserver<Null> responseObserver) {
+        responseObserver.onNext(Null.newBuilder().build());
+        responseObserver.onCompleted();
     }
 
     @Override
-    public void update(int ring, Update update) {
-        service.update(ring, update, remoteMemberId);
+    public void update(State request, StreamObserver<Null> responseObserver) {
+        service.update(request.getRing(), request.getUpdate(), getFrom());
+        responseObserver.onNext(Null.newBuilder().build());
+        responseObserver.onCompleted();
     }
+
+    private X509Certificate getCert() {
+        return (X509Certificate) identity.getCert();
+    }
+
+    private HashKey getFrom() {
+        return identity.getFrom();
+    }
+
 }

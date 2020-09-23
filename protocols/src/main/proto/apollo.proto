@@ -1,0 +1,193 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.proto";
+option java_outer_classname = "ApolloProto";
+option objc_class_prefix = "Ap";
+
+package apollo;
+
+
+service Fireflies {
+    /*
+     * Fireflies 3 phase gossip
+     */
+    rpc gossip (SayWhat) returns (Gossip) {}
+    rpc update (State) returns (Null) {}
+
+    /**
+     * Fireflies liveness ping
+     */
+    rpc ping (Null) returns (Null) {}
+}
+
+service Avalanche {
+    /**
+     * Avalanche query
+     */
+    rpc query (Query) returns (QueryResult) {}
+    
+    /**
+     * parent gossip
+     */
+    rpc requestDag ( DagNodes ) returns (DagNodes) {}
+}
+
+service Ghost {
+
+    /*
+     * Ghost API
+     */
+    rpc get ( Bytes ) returns (DagEntry) {}
+    rpc put ( DagEntry ) returns (Null) {}
+
+    /**
+     * Ghost interval gossip
+     */
+    rpc intervals (Intervals) returns (DagEntries) {} 
+}
+
+message DagNodes {
+    repeated bytes entries = 1;
+}
+
+message DagEntries {
+    repeated DagEntry entries = 1;
+}
+
+message Bytes {
+    bytes bites = 1;
+}
+
+message Intervals {
+    repeated Interval intervals = 1;
+    repeated bytes have = 2;
+}
+
+message Query {
+    repeated bytes transactions = 1;
+    repeated bytes wanted = 2;
+}
+
+message Null {
+}
+
+message SayWhat {
+ Signed note = 1;
+ int32 ring = 2;
+ Digests gossip = 3;
+}
+
+message State {
+    int32 ring = 1;
+    Update update = 2;
+}
+
+message MessageDigest {
+    bytes source = 1;
+    bytes id = 2;
+    int32 age = 3;
+    int64 time = 4;
+}
+
+message Message {
+    MessageDigest digest = 1;
+    int32 channel = 2;
+    bytes content = 3;
+    bytes signature = 4;
+}
+
+message MessageGossip {
+        repeated MessageDigest digests = 1;
+        repeated  Message updates = 2;
+    }
+
+message Signed {
+        bytes content = 1;
+        bytes signature = 2;
+    }
+
+message AccusationDigest {
+        bytes id = 1;
+        int64 epoch = 2;
+        int32 ring = 3;
+    }
+
+message AccusationGossip {
+        repeated AccusationDigest digests = 1;
+        repeated Signed updates = 2;
+    }
+
+message CertificateDigest {
+        bytes id = 1;
+        int64 epoch = 2;
+        bytes hash = 3;
+    }
+
+message EncodedCertificate {
+        CertificateDigest digest = 1;
+        bytes content = 2;
+    }
+
+message CertificateGossip {
+        repeated CertificateDigest digests = 1;
+        repeated EncodedCertificate updates = 2;
+    }
+
+message NoteDigest {
+        bytes id = 1;
+        int64 epoch = 2;
+    }
+
+message NoteGossip {
+        repeated NoteDigest digests = 1;
+        repeated Signed updates = 2;
+    }
+
+message Digests {
+        repeated MessageDigest messages = 1;
+        repeated CertificateDigest certificates = 2;
+        repeated NoteDigest notes = 3;
+        repeated AccusationDigest accusations = 4;
+    }
+
+message Gossip {
+        bool redirect = 1;
+        MessageGossip messages = 2;
+        CertificateGossip certificates = 3;
+        NoteGossip notes = 4;
+        AccusationGossip accusations = 5;
+    }
+
+message Update {
+        repeated Message messages = 1;
+        repeated EncodedCertificate certificates = 2;
+        repeated Signed notes = 3;
+        repeated Signed accusations = 4;
+    }
+
+message DagEntry {
+        bytes description = 1;
+        repeated bytes links = 2;
+        bytes data = 3;
+    }
+
+message Interval {
+        bytes start = 1;
+        bytes end = 2;
+    }
+
+message JoinResponse {
+        Signed forward = 1;
+        repeated bytes interval = 2;
+    }
+
+message QueryResult {
+    enum Vote {
+        TRUE = 0;
+        FALSE = 1;
+        UNKNOWN = 2; 
+    } 
+    repeated Vote result = 1;
+    repeated bytes wanted = 2;
+}

@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies.communications;
+package com.salesforce.apollo.comm;
 
-import com.salesforce.apollo.fireflies.Member;
+import com.salesforce.apollo.membership.Member;
 
 abstract public class CommonClientCommunications {
 
@@ -16,8 +16,6 @@ abstract public class CommonClientCommunications {
         this.member = member;
     }
 
-    abstract public void close();
-
     @Override
     public boolean equals(Object obj) {
         if (this == obj)
@@ -26,7 +24,7 @@ abstract public class CommonClientCommunications {
             return false;
         if (!(obj instanceof CommonClientCommunications))
             return false;
-        CommonClientCommunications other = (CommonClientCommunications)obj;
+        CommonClientCommunications other = (CommonClientCommunications) obj;
         return member.equals(other.member);
     }
 

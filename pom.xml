@@ -36,6 +36,7 @@
 		<calcite.version>1.24.0</calcite.version>
 		<asm.version>8.0.1</asm.version>
 		<antlr.version>4.8-1</antlr.version>
+		<grpc.version>1.32.1</grpc.version>
 
 		<graalvm.version>20.1.0</graalvm.version>
 		<compiler.dir>${project.build.directory}/compiler</compiler.dir>
@@ -290,11 +291,11 @@
 				<artifactId>lambdas</artifactId>
 				<version>${project.version}</version>
 			</dependency>
-            <dependency>
-                <groupId>com.salesforce.apollo</groupId>
-                <artifactId>memberships</artifactId>
-                <version>${project.version}</version>
-            </dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>memberships</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>sql-state</artifactId>
@@ -487,7 +488,27 @@
 				<version>${graalvm.version}</version>
 				<scope>runtime</scope>
 			</dependency>
-
+			<dependency>
+				<groupId>io.grpc</groupId>
+				<artifactId>grpc-netty-shaded</artifactId>
+				<version>${grpc.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.grpc</groupId>
+				<artifactId>grpc-protobuf</artifactId>
+				<version>${grpc.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.grpc</groupId>
+				<artifactId>grpc-stub</artifactId>
+				<version>${grpc.version}</version>
+			</dependency>
+			<dependency> <!-- necessary for Java 9+ -->
+				<groupId>org.apache.tomcat</groupId>
+				<artifactId>annotations-api</artifactId>
+				<version>6.0.53</version>
+				<scope>provided</scope>
+			</dependency>
 
 			<!-- Test dependencies only below this line! -->
 

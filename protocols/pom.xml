@@ -13,16 +13,16 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk15on</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcpkix-jdk15on</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-annotations</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.avro</groupId>
-			<artifactId>avro</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.avro</groupId>
-			<artifactId>avro-ipc</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.google.guava</groupId>
@@ -35,8 +35,21 @@
 			</exclusions>
 		</dependency>
 		<dependency>
-			<groupId>io.netty</groupId>
-			<artifactId>netty-all</artifactId>
+			<groupId>io.grpc</groupId>
+			<artifactId>grpc-netty-shaded</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.grpc</groupId>
+			<artifactId>grpc-protobuf</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.grpc</groupId>
+			<artifactId>grpc-stub</artifactId>
+		</dependency>
+		<dependency> <!-- necessary for Java 9+ -->
+			<groupId>org.apache.tomcat</groupId>
+			<artifactId>annotations-api</artifactId>
+			<scope>provided</scope>
 		</dependency>
 
 		<!-- Test only deps below this line -->
@@ -49,9 +62,21 @@
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>simple-ca</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
+		<extensions>
+			<extension>
+				<groupId>kr.motd.maven</groupId>
+				<artifactId>os-maven-plugin</artifactId>
+				<version>1.6.2</version>
+			</extension>
+		</extensions>
 		<plugins>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -65,27 +90,11 @@
 						</goals>
 						<configuration>
 							<sources>
-								<source>${project.basedir}/target/generated-sources</source>
+								<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
+								<source>${project.basedir}/target/generated-sources/protobuf/java</source>
 								<source>${project.basedir}/src/main/avro</source>
+								<source>${project.basedir}/src/main/proto</source>
 							</sources>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.avro</groupId>
-				<artifactId>avro-maven-plugin</artifactId>
-				<executions>
-					<execution>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>schema</goal>
-							<goal>protocol</goal>
-							<goal>idl-protocol</goal>
-						</goals>
-						<configuration>
-							<sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
-							<outputDirectory>${project.basedir}/target/generated-sources</outputDirectory>
 						</configuration>
 					</execution>
 				</executions>
@@ -101,42 +110,24 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+				<groupId>org.xolstice.maven.plugins</groupId>
+				<artifactId>protobuf-maven-plugin</artifactId>
+				<version>0.6.1</version>
+				<configuration>
+					<protocArtifact>com.google.protobuf:protoc:3.12.0:exe:${os.detected.classifier}</protocArtifact>
+					<pluginId>grpc-java</pluginId>
+					<pluginArtifact>io.grpc:protoc-gen-grpc-java:1.32.1:exe:${os.detected.classifier}</pluginArtifact>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>compile</goal>
+							<goal>compile-custom</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
-		<pluginManagement>
-			<plugins>
-				<!--This plugin's configuration is used to store Eclipse m2e settings 
-					only. It has no influence on the Maven build itself. -->
-				<plugin>
-					<groupId>org.eclipse.m2e</groupId>
-					<artifactId>lifecycle-mapping</artifactId>
-					<version>1.0.0</version>
-					<configuration>
-						<lifecycleMappingMetadata>
-							<pluginExecutions>
-								<pluginExecution>
-									<pluginExecutionFilter>
-										<groupId>
-											org.apache.avro
-										</groupId>
-										<artifactId>
-											avro-maven-plugin
-										</artifactId>
-										<versionRange>[1.7.7,)</versionRange>
-										<goals>
-											<goal>idl-protocol</goal>
-											<goal>protocol</goal>
-											<goal>schema</goal>
-										</goals>
-									</pluginExecutionFilter>
-									<action>
-										<ignore></ignore>
-									</action>
-								</pluginExecution>
-							</pluginExecutions>
-						</lifecycleMappingMetadata>
-					</configuration>
-				</plugin>
-			</plugins>
-		</pluginManagement>
 	</build>
 </project>

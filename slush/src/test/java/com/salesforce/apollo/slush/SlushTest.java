@@ -14,7 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import com.salesforce.apollo.fireflies.Member;
+import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.slush.config.SlushParameters;
 
 /**
@@ -37,7 +37,7 @@ public class SlushTest extends AbstractProtocolTest {
         parameters.timeout = 200;
         parameters.unit = TimeUnit.MILLISECONDS;
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
-        Member member = mock(Member.class);
+        Participant member = mock(Participant.class);
         MockCommunications<Slush<Color>> communications = new MockCommunications<>(member, scheduler);
         communications.setProtocol(new Slush<Color>(communications, parameters, new Random(0x666), initialColor,
                 new ArrayList<Color>() {

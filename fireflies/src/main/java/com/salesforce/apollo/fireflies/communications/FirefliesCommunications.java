@@ -11,7 +11,7 @@ import java.net.InetSocketAddress;
 
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Member;
+import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 
@@ -34,7 +34,7 @@ public interface FirefliesCommunications {
      * @return
      * @throws IOException
      */
-    FfClientCommunications connectTo(Member to, Node from);
+    FfClientCommunications connectTo(Participant to, Node from);
 
     /**
      * Initialize the view of the reciever. Used to break circular deps

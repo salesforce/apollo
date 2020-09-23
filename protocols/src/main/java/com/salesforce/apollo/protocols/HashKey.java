@@ -11,7 +11,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.UUID;
 
-import com.salesforce.apollo.avro.HASH;
+import com.google.protobuf.ByteString;
 
 /**
  * @author hal.hildebrand
@@ -31,6 +31,14 @@ public class HashKey implements Comparable<HashKey> {
         byte[] l = new byte[32];
         Arrays.fill(l, (byte) 255);
         LAST = new HashKey(l);
+    }
+
+    public static byte[] bytes(UUID uuid) {
+        byte[] bytes = new byte[32];
+        ByteBuffer buf = ByteBuffer.wrap(bytes);
+        buf.putLong(uuid.getLeastSignificantBits());
+        buf.putLong(uuid.getMostSignificantBits());
+        return bytes;
     }
 
     public static String bytesToHex(byte[] bytes) {
@@ -67,8 +75,8 @@ public class HashKey implements Comparable<HashKey> {
         hashCode = Base64.getEncoder().withoutPadding().encodeToString(itself).hashCode();
     }
 
-    public HashKey(HASH key) {
-        this(key.bytes());
+    public HashKey(ByteString key) {
+        this(key.toByteArray());
     }
 
     public HashKey(String b64Encoded) {
@@ -79,24 +87,12 @@ public class HashKey implements Comparable<HashKey> {
         this(bytes(uuid));
     }
 
-    public static byte[] bytes(UUID uuid) {
-        byte[] bytes = new byte[32];
-        ByteBuffer buf = ByteBuffer.wrap(bytes);
-        buf.putLong(uuid.getLeastSignificantBits());
-        buf.putLong(uuid.getMostSignificantBits());
-        return bytes;
-    }
-
     public String b64Encoded() {
         return Base64.getEncoder().withoutPadding().encodeToString(itself);
     }
 
     public byte[] bytes() {
         return itself;
-    }
-
-    public int compareTo(HASH t) {
-        return compare(itself, t.bytes());
     }
 
     @Override
@@ -120,8 +116,8 @@ public class HashKey implements Comparable<HashKey> {
         return hashCode;
     }
 
-    public HASH toHash() {
-        return new HASH(bytes());
+    public ByteString toByteString() {
+        return ByteString.copyFrom(itself);
     }
 
     @Override

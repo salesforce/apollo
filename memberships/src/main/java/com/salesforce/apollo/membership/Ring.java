@@ -115,6 +115,10 @@ public class Ring<T extends Member> implements Iterable<T> {
         };
     }
 
+    public void clear() {
+        ring.clear();
+    }
+
     public int getIndex() {
         return index;
     }
