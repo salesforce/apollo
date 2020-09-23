@@ -8,22 +8,22 @@ package com.salesforce.apollo.avalanche.communications;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.avro.AvroRemoteException;
-import org.apache.avro.ipc.RPCPlugin;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.apache.avro.specific.SpecificData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesfoce.apollo.proto.QueryResult;
 import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.avro.QueryResult;
-import com.salesforce.apollo.fireflies.Member;
-import com.salesforce.apollo.fireflies.communications.CommonClientCommunications;
+import com.salesforce.apollo.comm.CommonClientCommunications;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Avalanche;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -46,10 +46,6 @@ public class AvalancheClientCommunications extends CommonClientCommunications im
         }
     }
 
-    public void add(RPCPlugin plugin) {
-        requestor.addRPCPlugin(plugin);
-    }
-
     @Override
     public void close() {
         try {
@@ -60,12 +56,12 @@ public class AvalancheClientCommunications extends CommonClientCommunications im
     }
 
     @Override
-    public QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) throws AvroRemoteException {
+    public QueryResult query(List<ByteBuffer> transactions, Collection<HashKey> wanted) {
         return client.query(transactions, wanted);
     }
 
     @Override
-    public List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException {
+    public List<ByteBuffer> requestDAG(Collection<HashKey> want) {
         return client.requestDag(want);
     }
 }

@@ -22,7 +22,7 @@ public class LocalSimFunctionalTest extends AvalancheFunctionalTest {
 
     @BeforeEach
     public void beforeTest() {
-        localComSim = new AvalancheLocalCommSim(rpcStats);
+        localComSim = new AvalancheLocalCommSim();
     }
 
     protected AvalancheCommunications getCommunications() {

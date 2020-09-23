@@ -40,13 +40,12 @@ import com.codahale.metrics.Slf4jReporter;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
+import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
-import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -59,7 +58,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 abstract public class AvalancheFunctionalTest {
 
     private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -67,7 +66,8 @@ abstract public class AvalancheFunctionalTest {
         certs = IntStream.range(1, 14)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> MtlsServer.getMemberId(cert.getCertificate()),
+                                                   cert -> cert));
     }
 
     protected File                     baseDir;
@@ -75,7 +75,6 @@ abstract public class AvalancheFunctionalTest {
     protected Random                   entropy;
     protected List<Node>               members;
     protected MetricRegistry           node0Registry;
-    protected DropWizardStatsPlugin    rpcStats;
     protected ScheduledExecutorService scheduler;
     protected List<X509Certificate>    seeds;
     protected List<View>               views;
@@ -92,12 +91,11 @@ abstract public class AvalancheFunctionalTest {
         baseDir.mkdirs();
         commRegistry = new MetricRegistry();
         node0Registry = new MetricRegistry();
-        rpcStats = new DropWizardStatsPlugin(commRegistry);
         entropy = new Random(0x666);
 
         seeds = new ArrayList<>();
         members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        FfLocalCommSim ffComms = new FfLocalCommSim(rpcStats);
+        FfLocalCommSim ffComms = new FfLocalCommSim();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < Math.min(parameters.toleranceLevel + 1, certs.size())) {
@@ -107,7 +105,7 @@ abstract public class AvalancheFunctionalTest {
             }
         }
 
-        System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
+        System.out.println("Seeds: " + seeds.stream().map(e -> MtlsServer.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(members.size());
 
         views = members.stream().map(node -> new View(node, ffComms, scheduler)).collect(Collectors.toList());

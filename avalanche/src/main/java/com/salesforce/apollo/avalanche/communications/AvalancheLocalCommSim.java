@@ -9,15 +9,9 @@ package com.salesforce.apollo.avalanche.communications;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.avro.AvroRemoteException;
-import org.apache.avro.ipc.LocalTransceiver;
-import org.apache.avro.ipc.RPCPlugin;
-import org.apache.avro.ipc.specific.SpecificResponder;
-
 import com.salesforce.apollo.avalanche.Avalanche;
-import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -27,15 +21,6 @@ import com.salesforce.apollo.protocols.HashKey;
 public class AvalancheLocalCommSim implements AvalancheCommunications {
 
     private final Map<HashKey, Avalanche> servers = new ConcurrentHashMap<>();
-    private final RPCPlugin               stats;
-
-    public AvalancheLocalCommSim() {
-        this(null);
-    }
-
-    public AvalancheLocalCommSim(RPCPlugin stats) {
-        this.stats = stats;
-    }
 
     @Override
     public void close() {
@@ -64,10 +49,6 @@ public class AvalancheLocalCommSim implements AvalancheCommunications {
 
     public Map<HashKey, Avalanche> getServers() {
         return servers;
-    }
-
-    public RPCPlugin getStats() {
-        return stats;
     }
 
     @Override

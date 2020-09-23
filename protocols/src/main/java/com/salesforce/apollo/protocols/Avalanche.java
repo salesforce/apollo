@@ -18,7 +18,7 @@ import com.salesfoce.apollo.proto.QueryResult;
  */
 public interface Avalanche {
 
-    QueryResult query(List<ByteBuffer> transactions, List<HashKey> wanted);
+    QueryResult query(List<ByteBuffer> transactions, Collection<HashKey> wanted);
 
     List<ByteBuffer> requestDAG(Collection<HashKey> want);
 

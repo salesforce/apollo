@@ -75,6 +75,7 @@ import com.salesforce.apollo.fireflies.View.MessageChannelHandler.Msg;
 import com.salesforce.apollo.fireflies.communications.FfClientCommunications;
 import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -692,7 +693,7 @@ public class View {
         roundListeners.add(callback);
     }
 
-    public Collection<Participant> sample(int range, SecureRandom entropy) {
+    public Collection<? extends Member> sample(int range, SecureRandom entropy) {
         return context.sample(range, entropy);
     }
 

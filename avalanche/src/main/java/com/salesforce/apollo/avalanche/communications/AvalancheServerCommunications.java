@@ -8,12 +8,10 @@ package com.salesforce.apollo.avalanche.communications;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+ 
 
-import org.apache.avro.AvroRemoteException;
-
-import com.salesforce.apollo.avalanche.Avalanche.Service;
-import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.avro.QueryResult;
+import com.salesfoce.apollo.proto.QueryResult;
+import com.salesforce.apollo.avalanche.Avalanche.Service; 
 import com.salesforce.apollo.protocols.Avalanche;
 
 /**
@@ -28,12 +26,12 @@ public class AvalancheServerCommunications implements Avalanche {
     }
 
     @Override
-    public QueryResult query(List<ByteBuffer> transactions, List<HASH> wanted) throws AvroRemoteException {
+    public QueryResult query(List<ByteBuffer> transactions, List<HashKey> wanted)   {
         return avalanche.onQuery(transactions, wanted);
     }
 
     @Override
-    public List<ByteBuffer> requestDAG(List<HASH> want) throws AvroRemoteException { 
+    public List<ByteBuffer> requestDAG(List<HashKey> want)   {
         return avalanche.requestDAG(want);
     }
 }

@@ -7,8 +7,8 @@
 package com.salesforce.apollo.avalanche.communications;
 
 import com.salesforce.apollo.avalanche.Avalanche;
-import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
@@ -16,7 +16,8 @@ import com.salesforce.apollo.fireflies.Node;
  */
 public interface AvalancheCommunications {
     /**
-     * Stop the communications. Server endpoint for this process is stopped and not accepting inbound connections.
+     * Stop the communications. Server endpoint for this process is stopped and not
+     * accepting inbound connections.
      */
     void close();
 
@@ -37,7 +38,8 @@ public interface AvalancheCommunications {
     void initialize(Avalanche avalanche);
 
     /**
-     * Start the communications. Server endpoint for this process is initialized and running.
+     * Start the communications. Server endpoint for this process is initialized and
+     * running.
      */
     void start();
 }

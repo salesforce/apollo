@@ -42,8 +42,8 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -73,12 +73,12 @@ public class WorkingSet {
                 return;
             }
 
-            if (dagEntry.getLinks() == null) {
+            if (dagEntry.getLinksList() == null) {
                 return;
             }
 
-            dagEntry.getLinks().forEach(link -> {
-                DagInsert n = set.get(new HashKey(link.bytes()));
+            dagEntry.getLinksList().forEach(link -> {
+                DagInsert n = set.get(new HashKey(link.toByteArray()));
                 if (n != null && !visited.contains(n)) {
                     n.topologicalSort(set, visited, stack);
                 }
@@ -864,7 +864,7 @@ public class WorkingSet {
     public HashKey insert(DagEntry entry, HashKey conflictSet, long discovered) {
         byte[] serialized = serialize(entry);
         HashKey key = new HashKey(hashOf(serialized));
-        conflictSet = (entry.getLinks() == null || entry.getLinks().isEmpty()) ? GENESIS_CONFLICT_SET
+        conflictSet = (entry.getLinksList() == null || entry.getLinksList().isEmpty()) ? GENESIS_CONFLICT_SET
                        : conflictSet == null ? key : conflictSet;
         insert(key, entry, serialized, entry.getDescription() == null, discovered, conflictSet);
         return key;
@@ -888,7 +888,8 @@ public class WorkingSet {
             Node node = unfinalized.get(key);
             if (node == null || node.isUnknown()) {
                 DagEntry entry = manifestDag(t);
-                HashKey conflictSet = (entry.getLinks() == null || entry.getLinks().isEmpty()) ? GENESIS_CONFLICT_SET
+                HashKey conflictSet = (entry.getLinksList() == null || entry.getLinksList().isEmpty())
+                        ? GENESIS_CONFLICT_SET
                         : key;
                 insert(key, entry, t, entry.getDescription() == null, discovered, conflictSet);
             }
@@ -1131,7 +1132,7 @@ public class WorkingSet {
     }
 
     ArrayList<Node> linksOf(DagEntry entry, long discovered) {
-        List<HASH> links = entry.getLinks();
+        List<ByteString> links = entry.getLinksList();
         return links == null ? EMPTY_ARRAY_LIST
                 : links.stream()
                        .map(link -> new HashKey(link))

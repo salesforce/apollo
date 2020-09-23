@@ -20,10 +20,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
 import com.salesforce.apollo.protocols.HashKey;
 
 import guru.nidi.graphviz.attribute.Color;
@@ -56,7 +56,7 @@ public class DagViz {
 
         while (!stack.isEmpty()) {
             final DagEntry node = stack.pop();
-            final List<HASH> links = node.getLinks() == null ? Collections.emptyList() : node.getLinks();
+            final List<ByteString> links = node.getLinksList() == null ? Collections.emptyList() : node.getLinksList();
             for (HashKey e : links.stream().map(e -> new HashKey(e)).collect(Collectors.toList())) {
                 if (visited.add(e)) {
                     DagEntry child = dag.getDagEntry(e);
@@ -77,8 +77,8 @@ public class DagViz {
         });
     }
 
-    public static void dumpClosures(List<HASH> nodes, WorkingSet dag) {
-        dumpClosure(nodes.stream().map(e -> new HashKey(e)).collect(Collectors.toList()), dag);
+    public static void dumpClosures(List<HashKey> nodes, WorkingSet dag) {
+        dumpClosure(nodes, dag);
 
     }
 
@@ -94,8 +94,10 @@ public class DagViz {
 
         dag.traverseAll((k, e) -> {
             if (!(ignoreNoOp && e.getDescription() == null)) {
-                decorate(k, e, labelFor, e.getLinks() == null ? Collections.emptyList()
-                        : e.getLinks().stream().map(l -> new HashKey(l)).collect(Collectors.toList()), dag);
+                decorate(k, e, labelFor,
+                         e.getLinksList() == null ? Collections.emptyList()
+                                 : e.getLinksList().stream().map(l -> new HashKey(l)).collect(Collectors.toList()),
+                         dag);
             }
         });
 
