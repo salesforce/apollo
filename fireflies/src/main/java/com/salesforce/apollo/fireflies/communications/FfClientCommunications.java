@@ -20,7 +20,7 @@ import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.protocols.Fireflies;
 
-import io.grpc.Channel;
+import io.grpc.ManagedChannel;
 
 /**
  * @author hal.hildebrand
@@ -28,11 +28,12 @@ import io.grpc.Channel;
  */
 public class FfClientCommunications extends CommonClientCommunications implements Fireflies {
     private final FirefliesBlockingStub client;
+    private final ManagedChannel        channel;
 
-    public FfClientCommunications(Channel channel, Participant member) {
+    public FfClientCommunications(ManagedChannel channel, Participant member) {
         super(member);
         assert !(member instanceof Node) : "whoops : " + member;
-
+        this.channel = channel;
         this.client = FirefliesGrpc.newBlockingStub(channel);
     }
 
@@ -72,5 +73,10 @@ public class FfClientCommunications extends CommonClientCommunications implement
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         }
+    }
+
+    @Override
+    public void close() {
+        channel.shutdown();
     }
 }

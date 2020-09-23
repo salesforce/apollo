@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -115,7 +116,16 @@ public class MessageTest {
                                                    cert -> cert));
     }
 
+    private FfLocalCommSim communications;
+
     private final AtomicInteger totalReceived = new AtomicInteger(0);
+
+    @AfterEach
+    public void after() {
+        if (communications != null) {
+            communications.clear();
+        }
+    }
 
     @Test
     public void broadcast() throws Exception {
@@ -127,7 +137,7 @@ public class MessageTest {
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
-        FfLocalCommSim communications = new FfLocalCommSim();
+        communications = new FfLocalCommSim();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {

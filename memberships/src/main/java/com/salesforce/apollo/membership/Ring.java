@@ -17,7 +17,9 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import com.salesforce.apollo.protocols.HashKey;
+import org.slf4j.LoggerFactory;
+
+import com.salesforce.apollo.protocols.HashKey; 
 
 /**
  * A ring of members. Also, too, addressable functions by HashKey, for ring
@@ -511,6 +513,7 @@ public class Ring<T extends Member> implements Iterable<T> {
     }
 
     protected T insert(T m) {
+        LoggerFactory.getLogger(getClass()).trace("Adding: {} to ring: {}", m, index);
         return ring.put(hash(m), m);
     }
 }

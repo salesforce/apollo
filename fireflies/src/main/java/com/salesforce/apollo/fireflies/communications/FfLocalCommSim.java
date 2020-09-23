@@ -42,11 +42,21 @@ import io.grpc.inprocess.InProcessServerBuilder;
  * @since 220
  */
 public class FfLocalCommSim implements FirefliesCommunications, ClientIdentity {
+    private static class LocalServer {
+        private final View   view;
+        private final Server server;
+
+        private LocalServer(View view, Server server) {
+            this.view = view;
+            this.server = server;
+        }
+    }
+
     private static final Logger                log             = LoggerFactory.getLogger(FfLocalCommSim.class);
     private final ThreadLocal<X509Certificate> callCertificate = new ThreadLocal<>();
 
-    private volatile boolean         checkStarted;
-    private final Map<HashKey, View> servers = new ConcurrentHashMap<>();
+    private volatile boolean                checkStarted;
+    private final Map<HashKey, LocalServer> servers = new ConcurrentHashMap<>();
 
     public FfLocalCommSim() {
     }
@@ -56,6 +66,9 @@ public class FfLocalCommSim implements FirefliesCommunications, ClientIdentity {
     }
 
     public void clear() {
+        servers.values().forEach(ls -> {
+            ls.server.shutdownNow();
+        });
         servers.clear();
     }
 
@@ -65,13 +78,14 @@ public class FfLocalCommSim implements FirefliesCommunications, ClientIdentity {
 
     @Override
     public FfClientCommunications connectTo(Participant to, Node from) {
-        View view = servers.get(to.getId());
-        if (view == null || (checkStarted && !view.getService().isStarted())) {
+        assert !to.getId().equals(from.getId());
+        LocalServer localServer = servers.get(to.getId());
+        if (localServer == null || (checkStarted && !localServer.view.getService().isStarted())) {
             log.debug("Unable to connect to: " + to + " from: " + from
-                    + (view == null ? null : view.getService().isStarted()));
+                    + (localServer == null ? null : localServer.view.getService().isStarted()));
             return null;
         }
-        ManagedChannel channel = InProcessChannelBuilder.forName(from.getId().b64Encoded()).directExecutor().build();
+        ManagedChannel channel = InProcessChannelBuilder.forName(to.getId().b64Encoded()).directExecutor().build();
         return new FfClientCommunications(channel, to) {
 
             @Override
@@ -125,23 +139,19 @@ public class FfLocalCommSim implements FirefliesCommunications, ClientIdentity {
         return getMemberId(getCert());
     }
 
-    public Map<HashKey, View> getServers() {
-        return servers;
-    }
-
     @Override
     public void initialize(View view) {
         log.debug("adding view: " + view.getNode().getId());
         try {
-            InProcessServerBuilder.forName(view.getNode().getId().b64Encoded())
-                                  .directExecutor() // directExecutor is fine for unit tests
-                                  .addService(new FfServerCommunications(view.getService(), this))
-                                  .build()
-                                  .start();
+            Server server = InProcessServerBuilder.forName(view.getNode().getId().b64Encoded())
+                                                  .directExecutor() // directExecutor is fine for unit tests
+                                                  .addService(new FfServerCommunications(view.getService(), this))
+                                                  .build()
+                                                  .start();
+            servers.put(view.getNode().getId(), new LocalServer(view, server));
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
-        servers.put(view.getNode().getId(), view);
     }
 
     @Override

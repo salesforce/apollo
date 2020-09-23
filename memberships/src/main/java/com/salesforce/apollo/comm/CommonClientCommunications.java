@@ -36,5 +36,7 @@ abstract public class CommonClientCommunications {
     public int hashCode() {
         return member.hashCode();
     }
+    
+    abstract public void close();
 
 }

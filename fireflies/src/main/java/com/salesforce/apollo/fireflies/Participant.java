@@ -342,9 +342,9 @@ public class Participant extends Member {
     }
 
     void reset() {
-        failedAt = null;
-        validAccusations.clear();
+        failedAt = Instant.now();
         note = null;
+        validAccusations.clear();
         log.trace("Reset {}", getId());
     }
 
@@ -363,7 +363,7 @@ public class Participant extends Member {
             }
         }
         this.note = next;
-        clearAccusations();
         failedAt = null;
+        clearAccusations();
     }
 }

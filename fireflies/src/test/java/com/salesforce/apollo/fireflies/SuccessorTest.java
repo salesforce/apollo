@@ -26,6 +26,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +58,15 @@ public class SuccessorTest {
                                                    cert -> cert));
     }
 
+    private FfLocalCommSim communications;
+
+    @AfterEach
+    public void after() {
+        if (communications != null) {
+            communications.clear();
+        }
+    }
+
     @Test
     public void allSuccessors() throws Exception {
         Random entropy = new Random(0x666);
@@ -67,7 +77,7 @@ public class SuccessorTest {
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
-        FfLocalCommSim communications = new FfLocalCommSim();
+        communications = new FfLocalCommSim();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {

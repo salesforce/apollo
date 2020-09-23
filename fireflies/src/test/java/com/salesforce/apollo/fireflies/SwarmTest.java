@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -28,8 +27,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.ConsoleReporter;
-import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -56,7 +53,6 @@ public class SwarmTest {
     }
 
     private List<Node>            members;
-    private MetricRegistry        registry;
     private List<View>            views;
     private FfLocalCommSim        communications;
     private List<X509Certificate> seeds;
@@ -66,6 +62,7 @@ public class SwarmTest {
         if (views != null) {
             views.forEach(v -> v.getService().stop());
         }
+        communications.clear();
     }
 
     @Test
@@ -127,14 +124,6 @@ public class SwarmTest {
                 }
             }
         }
-
-        System.out.println();
-        System.out.println();
-        ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
-                                                  .convertRatesTo(TimeUnit.SECONDS)
-                                                  .convertDurationsTo(TimeUnit.MILLISECONDS)
-                                                  .build();
-        reporter.report();
     }
 
     @Test
@@ -183,14 +172,6 @@ public class SwarmTest {
         }
 
         views.forEach(view -> view.getService().stop());
-
-        System.out.println();
-        System.out.println();
-        ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
-                                                  .convertRatesTo(TimeUnit.SECONDS)
-                                                  .convertDurationsTo(TimeUnit.MILLISECONDS)
-                                                  .build();
-        reporter.report();
     }
 
     private void initialize() {

@@ -22,6 +22,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -50,12 +51,21 @@ public class FunctionalTest {
                                                    cert -> cert));
     }
 
+    private FfLocalCommSim communications;
+
+    @AfterEach
+    public void after() {
+        if (communications != null) {
+            communications.clear();
+        }
+    }
+
     @Test
     public void e2e() throws Exception {
         Random entropy = new Random(0x666);
 
         List<X509Certificate> seeds = new ArrayList<>();
-        FfLocalCommSim communications = new FfLocalCommSim();
+        communications = new FfLocalCommSim();
         communications.checkStarted(false);
         List<Node> members = certs.values()
                                   .parallelStream()
