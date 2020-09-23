@@ -33,12 +33,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.avro.AccusationDigest;
-import com.salesforce.apollo.avro.CertificateDigest;
-import com.salesforce.apollo.avro.Digests;
-import com.salesforce.apollo.avro.Gossip;
-import com.salesforce.apollo.avro.NoteDigest;
-import com.salesforce.apollo.avro.Update;
+import com.salesfoce.apollo.proto.AccusationDigest;
+import com.salesfoce.apollo.proto.CertificateDigest;
+import com.salesfoce.apollo.proto.Digests;
+import com.salesfoce.apollo.proto.Gossip;
+import com.salesfoce.apollo.proto.NoteDigest;
+import com.salesfoce.apollo.proto.Update;
 import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -52,7 +52,7 @@ public class ViewTest {
 
     private static final RootCertificate        ca         = getCa();
     private static final Map<HashKey, CertWithKey> certs      = new HashMap<>();
-    private static List<Member>                 members    = new ArrayList<>();
+    private static List<Participant>                 members    = new ArrayList<>();
     private static Node                         node;
     private static final FirefliesParameters    parameters = new FirefliesParameters(ca.getX509Certificate());
 
@@ -61,7 +61,7 @@ public class ViewTest {
         node = new Node(getMember(1), parameters);
         members = IntStream.range(2, 10).parallel().mapToObj(i -> {
             CertWithKey cert = getMember(i);
-            Member member = new Member(cert.getCertificate(), parameters);
+            Participant member = new Participant(cert.getCertificate(), parameters);
             certs.put(member.getId(), cert);
             return member;
         }).collect(Collectors.toList());
@@ -86,7 +86,7 @@ public class ViewTest {
         viewNode.getService().start(Duration.ofMillis(20_000), Collections.emptyList());
         viewM0.getService().start(Duration.ofMillis(20_000), Collections.emptyList());
 
-        Member m0 = viewM0.getView().get(members.get(0).getId());
+        Participant m0 = viewM0.getView().get(members.get(0).getId());
 
         Digests vN = viewNode.commonDigests();
         Digests vM0 = viewM0.commonDigests();
@@ -94,27 +94,27 @@ public class ViewTest {
         Gossip vNreply = viewNode.getService().rumors(0, vM0, m0.getId(), m0.getCertificate(), m0.getSignedNote());
         assertNotNull(vNreply);
         assertFalse(vNreply.getRedirect());
-        assertEquals(0, vNreply.getCertificates().getDigests().size());
-        assertEquals(1, vNreply.getCertificates().getUpdates().size());
-        assertEquals(0, vNreply.getNotes().getDigests().size());
-        assertEquals(1, vNreply.getNotes().getUpdates().size());
+        assertEquals(0, vNreply.getCertificates().getDigestsCount());
+        assertEquals(1, vNreply.getCertificates().getUpdatesCount());
+        assertEquals(0, vNreply.getNotes().getDigestsCount());
+        assertEquals(1, vNreply.getNotes().getUpdatesCount());
 
         Gossip vM0reply = viewM0.getService().rumors(0, vN, node.getId(), node.getCertificate(), node.getSignedNote());
         assertNotNull(vM0reply);
-        assertEquals(0, vM0reply.getCertificates().getDigests().size());
-        assertEquals(1, vM0reply.getCertificates().getUpdates().size());
-        assertEquals(0, vM0reply.getNotes().getDigests().size());
-        assertEquals(1, vM0reply.getCertificates().getUpdates().size());
+        assertEquals(0, vM0reply.getCertificates().getDigestsCount());
+        assertEquals(1, vM0reply.getCertificates().getUpdatesCount());
+        assertEquals(0, vM0reply.getNotes().getDigestsCount());
+        assertEquals(1, vM0reply.getCertificates().getUpdatesCount());
 
         Update vM0nextRound = viewM0.response(vNreply);
         assertNotNull(vM0nextRound);
-        assertEquals(0, vM0nextRound.getCertificates().size());
-        assertEquals(0, vM0nextRound.getNotes().size());
+        assertEquals(0, vM0nextRound.getCertificatesCount());
+        assertEquals(0, vM0nextRound.getNotesCount());
 
         Update vNnextRound = viewNode.response(vM0reply);
         assertNotNull(vNnextRound);
-        assertEquals(0, vNnextRound.getCertificates().size());
-        assertEquals(0, vNnextRound.getNotes().size());
+        assertEquals(0, vNnextRound.getCertificatesCount());
+        assertEquals(0, vNnextRound.getNotesCount());
 
         viewNode.getService().update(0, vM0nextRound, viewM0.getNode().getId());
         assertEquals(2, viewNode.getLive().size());
@@ -146,12 +146,12 @@ public class ViewTest {
         List<AccusationDigest> accGossip = view.gatherAccusationDigests();
         assertEquals(0, accGossip.size());
 
-        Member m0 = members.get(0);
+        Participant m0 = members.get(0);
         view.add(m0.getCertificate());
         assertEquals(1, view.getLive().size());
         assertEquals(1, view.getFailed().size());
 
-        Member testMember = view.getView().get(m0.getId());
+        Participant testMember = view.getView().get(m0.getId());
         assertNotNull(testMember);
         BitSet mask = new BitSet(parameters.rings);
         for (int i = 0; i < parameters.toleranceLevel + 1; i++) {
@@ -177,7 +177,7 @@ public class ViewTest {
         assertFalse(view.getPendingRebutals().containsKey(testMember.getId()));
     }
 
-    private Note generateNote(Member m, int epoch, BitSet mask) throws NoSuchAlgorithmException, InvalidKeyException {
+    private Note generateNote(Participant m, int epoch, BitSet mask) throws NoSuchAlgorithmException, InvalidKeyException {
         Signature s = Signature.getInstance(node.getParameters().signatureAlgorithm);
         s.initSign(certs.get(m.getId()).getPrivateKey());
         return new Note(m.getId(), epoch, mask, s);

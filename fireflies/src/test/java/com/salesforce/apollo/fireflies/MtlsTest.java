@@ -17,7 +17,6 @@ import static org.mockito.Mockito.when;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -31,8 +30,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.avro.MessageGossip;
-import com.salesforce.apollo.fireflies.communications.netty.FirefliesNettyCommunications;
+import com.salesfoce.apollo.proto.MessageGossip;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -53,7 +51,8 @@ public class MtlsTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Participant.getMemberId(cert.getCertificate()),
+                                                   cert -> cert));
     }
 
     @Test
@@ -75,8 +74,7 @@ public class MtlsTest {
             }
         }
         MessageBuffer messageBuffer = mock(MessageBuffer.class);
-        when(messageBuffer.process(any())).thenReturn(new MessageGossip(Collections.emptyList(),
-                Collections.emptyList()));
+        when(messageBuffer.process(any())).thenReturn(MessageGossip.getDefaultInstance());
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 

@@ -45,7 +45,7 @@ public class TestMember {
         Certificate certificate = ca.mintNode(csr);
 
         FirefliesParameters parameters = new FirefliesParameters(root.getX509Certificate());
-        Member m = new Member(certificate.getX509Certificate(), parameters);
+        Participant m = new Participant(certificate.getX509Certificate(), parameters);
         InetSocketAddress address = m.getFirefliesEndpoint();
         assertEquals("test.com", address.getHostName());
         assertEquals(0x666, address.getPort());

@@ -33,11 +33,9 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.fireflies.View.MembershipListener;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler;
 import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
-import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -50,11 +48,11 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class MessageTest {
 
     class Receiver implements MessageChannelHandler, MembershipListener {
-        final Set<Member>       counted    = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Set<Participant>  counted    = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger     current;
-        final Set<Member>       discovered = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Set<Participant>  discovered = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger     dups       = new AtomicInteger(0);
-        final Set<Member>       live       = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Set<Participant>  live       = Collections.newSetFromMap(new ConcurrentHashMap<>());
         volatile CountDownLatch round;
 
         Receiver(int cardinality, AtomicInteger current) {
@@ -62,7 +60,7 @@ public class MessageTest {
         }
 
         @Override
-        public void fail(Member member) {
+        public void fail(Participant member) {
             live.add(member);
         }
 
@@ -88,7 +86,7 @@ public class MessageTest {
         }
 
         @Override
-        public void recover(Member member) {
+        public void recover(Participant member) {
             discovered.add(member);
             live.add(member);
         }
@@ -113,7 +111,8 @@ public class MessageTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Participant.getMemberId(cert.getCertificate()),
+                                                   cert -> cert));
     }
 
     private final AtomicInteger totalReceived = new AtomicInteger(0);
@@ -128,8 +127,7 @@ public class MessageTest {
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
-        MetricRegistry registry = new MetricRegistry();
-        FfLocalCommSim communications = new FfLocalCommSim(new DropWizardStatsPlugin(registry));
+        FfLocalCommSim communications = new FfLocalCommSim();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -157,7 +155,7 @@ public class MessageTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + views.size() + " members");
 
-        Map<Member, Receiver> receivers = new HashMap<>();
+        Map<Participant, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);
         for (View view : views) {
             Receiver receiver = new Receiver(views.size(), current);

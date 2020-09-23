@@ -18,7 +18,6 @@ import java.lang.reflect.Field;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -30,7 +29,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.avro.MessageGossip;
+import com.salesfoce.apollo.proto.MessageGossip;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.membership.Ring;
@@ -46,7 +45,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class SuccessorTest {
 
     private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -54,7 +53,8 @@ public class SuccessorTest {
         certs = IntStream.range(1, 10)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Participant.getMemberId(cert.getCertificate()),
+                                                   cert -> cert));
     }
 
     @Test
@@ -77,14 +77,13 @@ public class SuccessorTest {
             }
         }
         MessageBuffer messageBuffer = mock(MessageBuffer.class);
-        when(messageBuffer.process(any())).thenReturn(new MessageGossip(Collections.emptyList(),
-                Collections.emptyList()));
+        when(messageBuffer.process(any())).thenReturn(MessageGossip.getDefaultInstance());
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        Map<Member, View> views = members.stream()
-                                         .map(node -> new View(node, communications, scheduler))
-                                         .collect(Collectors.toMap(v -> v.getNode(), v -> v));
+        Map<Participant, View> views = members.stream()
+                                              .map(node -> new View(node, communications, scheduler))
+                                              .collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
         views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds));
 
@@ -97,14 +96,14 @@ public class SuccessorTest {
         });
 
         for (View view : views.values()) {
-            for (Member m : view.getView().values()) {
+            for (Participant m : view.getView().values()) {
                 assertTrue(m.getEpoch() > 0);
             }
             for (int r = 0; r < parameters.rings; r++) {
-                Ring<Member> ring = view.getRing(r);
-                Member successor = ring.successor(view.getNode());
+                Ring<Participant> ring = view.getRing(r);
+                Participant successor = ring.successor(view.getNode());
                 View successorView = views.get(successor);
-                Member test = successorView.getRing(r).successor(view.getNode());
+                Participant test = successorView.getRing(r).successor(view.getNode());
                 assertEquals(successor, test);
             }
         }
@@ -114,7 +113,7 @@ public class SuccessorTest {
         Field lastRing = Service.class.getDeclaredField("lastRing");
         lastRing.setAccessible(true);
         int ring = (lastRing.getInt(test.getService()) + 1) % test.getRings().size();
-        Member successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
+        Participant successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
         System.out.println("ring: " + ring + " successor: " + successor);
         assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
         assertTrue(successor.isLive());

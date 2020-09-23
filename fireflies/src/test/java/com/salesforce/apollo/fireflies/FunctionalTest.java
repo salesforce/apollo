@@ -25,10 +25,8 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
 import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
-import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -48,7 +46,8 @@ public class FunctionalTest {
         certs = IntStream.range(1, 11)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Participant.getMemberId(cert.getCertificate()),
+                                                   cert -> cert));
     }
 
     @Test
@@ -56,8 +55,7 @@ public class FunctionalTest {
         Random entropy = new Random(0x666);
 
         List<X509Certificate> seeds = new ArrayList<>();
-        MetricRegistry registry = new MetricRegistry();
-        FfLocalCommSim communications = new FfLocalCommSim(new DropWizardStatsPlugin(registry));
+        FfLocalCommSim communications = new FfLocalCommSim();
         communications.checkStarted(false);
         List<Node> members = certs.values()
                                   .parallelStream()
@@ -105,8 +103,8 @@ public class FunctionalTest {
         View frist = views.get(0);
         for (View view : views) {
             for (int ring = 0; ring < parameters.rings; ring++) {
-                Ring<Member> trueRing = frist.getRing(ring);
-                Ring<Member> comparedTo = view.getRing(ring);
+                Ring<Participant> trueRing = frist.getRing(ring);
+                Ring<Participant> comparedTo = view.getRing(ring);
                 assertEquals(trueRing.getRing(), comparedTo.getRing());
                 assertEquals(trueRing.successor(view.getNode()), comparedTo.successor(view.getNode()));
             }

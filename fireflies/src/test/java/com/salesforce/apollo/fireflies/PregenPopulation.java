@@ -68,7 +68,7 @@ public class PregenPopulation {
             int gPort = startPort--;
             int aPort = startPort--;
             CsrWithPrivateKey request = createCsr().generateRequest(dn().setCn(host)
-                                                                        .setL(String.format(Member.PORT_TEMPLATE,
+                                                                        .setL(String.format(Participant.PORT_TEMPLATE,
                                                                                             ffPort, gPort, aPort))
                                                                         .setO("World Company")
                                                                         .setOu("IT dep")
