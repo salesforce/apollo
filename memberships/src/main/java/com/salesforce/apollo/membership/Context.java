@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -49,7 +50,7 @@ public class Context<T extends Member> {
         }
 
         public boolean accept() {
-            boolean accepted = current.equals(indices.get(0));
+            boolean accepted = indices.isEmpty() ? false : current.equals(indices.get(0));
             if (accepted) {
                 indices = indices.subList(1, indices.size());
             }
@@ -219,12 +220,14 @@ public class Context<T extends Member> {
      * Answer a random sample of at least range size from the active members of the
      * context
      * 
-     * @param range   - the desired range
-     * @param entropy - source o randomness
+     * @param range    - the desired range
+     * @param entropy  - source o randomness
+     * @param excluded - the member to exclude from sample
      * @return a random sample set of the view's live members. May be limited by the
      *         number of active members.
      */
-    public Collection<T> sample(int range, SecureRandom entropy) {
+    public Collection<T> sample(int range, SecureRandom entropy, Member excluded) {
+ 
         if (active.size() <= range) {
             return active.values();
         }
@@ -232,14 +235,37 @@ public class Context<T extends Member> {
         while (indices.size() < range && indices.size() < active.size()) {
             indices.add(entropy.nextInt(active.size()));
         }
-        List<T> sample = new ArrayList<>(range);
+        Set<T> sample = new HashSet<>(range);
         Counter index = new Counter(indices);
         for (Entry<HashKey, T> entry : active.entrySet()) {
             if (index.accept()) {
-                sample.add(entry.getValue());
+                // only add if not equals the excluded member
+                if (!entry.getValue().equals(excluded)) {
+                    sample.add(entry.getValue());
+                }
             }
             if (sample.size() == range) {
                 break;
+            }
+        }
+
+        // If the excluded was included in the sample, traverse a random ring in random order to fill remainging sample
+        if (sample.size() < range && range < active.size()) {
+            Ring<T> ring = rings[entropy.nextInt(rings.length)];
+            @SuppressWarnings("unchecked")
+            T typeCast = (T) excluded;
+            HashKey hash = hashFor(typeCast, ring.getIndex());
+            Predicate<T> predicate = m -> sample.size() < range;
+            Consumer<? super T> add = e -> {
+                if (entropy.nextBoolean()) {
+                    sample.add(e);
+                }
+            };
+            
+            if (entropy.nextBoolean()) {
+                ring.streamPredecessors(hash, predicate).forEach(add);
+            } else {
+                ring.streamSuccessors(hash, predicate).forEach(add);
             }
         }
         return sample;
@@ -289,7 +315,7 @@ public class Context<T extends Member> {
     }
 
     public void clear() {
-        for (Ring<T> ring: rings) {
+        for (Ring<T> ring : rings) {
             ring.clear();
         }
         hashes.clear();

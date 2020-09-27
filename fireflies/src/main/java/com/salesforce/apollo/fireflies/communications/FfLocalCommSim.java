@@ -13,6 +13,7 @@ import java.net.InetSocketAddress;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -57,6 +58,7 @@ public class FfLocalCommSim implements FirefliesCommunications, ClientIdentity {
 
     private volatile boolean                checkStarted;
     private final Map<HashKey, LocalServer> servers = new ConcurrentHashMap<>();
+    private final String                    suffix  = UUID.randomUUID().toString();
 
     public FfLocalCommSim() {
     }
@@ -85,7 +87,9 @@ public class FfLocalCommSim implements FirefliesCommunications, ClientIdentity {
                     + (localServer == null ? null : localServer.view.getService().isStarted()));
             return null;
         }
-        ManagedChannel channel = InProcessChannelBuilder.forName(to.getId().b64Encoded()).directExecutor().build();
+        ManagedChannel channel = InProcessChannelBuilder.forName(to.getId().b64Encoded() + suffix)
+                                                        .directExecutor()
+                                                        .build();
         return new FfClientCommunications(channel, to) {
 
             @Override
@@ -143,7 +147,7 @@ public class FfLocalCommSim implements FirefliesCommunications, ClientIdentity {
     public void initialize(View view) {
         log.debug("adding view: " + view.getNode().getId());
         try {
-            Server server = InProcessServerBuilder.forName(view.getNode().getId().b64Encoded())
+            Server server = InProcessServerBuilder.forName(view.getNode().getId().b64Encoded() + suffix)
                                                   .directExecutor() // directExecutor is fine for unit tests
                                                   .addService(new FfServerCommunications(view.getService(), this))
                                                   .build()

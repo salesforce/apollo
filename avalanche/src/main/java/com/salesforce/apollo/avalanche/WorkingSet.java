@@ -42,7 +42,7 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -842,11 +842,15 @@ public class WorkingSet {
     }
 
     public List<ByteBuffer> getQuerySerializedEntries(List<HashKey> keys) {
-        return keys.stream()
+        List<ByteBuffer> entries = keys.stream()
                    .map(key -> getBytes(key))
                    .filter(entry -> entry != null)
-                   .map(entry -> ByteBuffer.wrap(entry))
+                   .map(entry -> ByteBuffer.wrap(entry)) 
                    .collect(Collectors.toList());
+        for (ByteBuffer entry: entries) {
+            assert entry.hasRemaining() : "Whoops!";
+        }
+        return entries;
     }
 
     public NavigableMap<HashKey, Node> getUnfinalized() {
@@ -863,9 +867,16 @@ public class WorkingSet {
 
     public HashKey insert(DagEntry entry, HashKey conflictSet, long discovered) {
         byte[] serialized = serialize(entry);
+        try {
+            assert entry.equals(DagEntry.parseFrom(serialized)) : "Something lost in translation";
+        } catch (InvalidProtocolBufferException e) {
+            throw new IllegalStateException(e);
+        }
         HashKey key = new HashKey(hashOf(serialized));
-        conflictSet = (entry.getLinksList() == null || entry.getLinksList().isEmpty()) ? GENESIS_CONFLICT_SET
-                       : conflictSet == null ? key : conflictSet;
+        conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET : conflictSet == null ? key : conflictSet;
+        if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
+            assert new HashKey(entry.getDescription()).equals(GENESIS_CONFLICT_SET) : "Not in the genesis set";
+        }
         insert(key, entry, serialized, entry.getDescription() == null, discovered, conflictSet);
         return key;
     }
@@ -884,13 +895,15 @@ public class WorkingSet {
 
     public List<HashKey> insertSerializedRaw(List<byte[]> transactions, long discovered) {
         return transactions.stream().map(t -> {
+            assert t.length > 0 : "whoopsie";
             HashKey key = new HashKey(hashOf(t));
             Node node = unfinalized.get(key);
             if (node == null || node.isUnknown()) {
                 DagEntry entry = manifestDag(t);
-                HashKey conflictSet = (entry.getLinksList() == null || entry.getLinksList().isEmpty())
-                        ? GENESIS_CONFLICT_SET
-                        : key;
+                HashKey conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET : key;
+                if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
+                    assert new HashKey(entry.getDescription()).equals(GENESIS_CONFLICT_SET) : "Not in the genesis set";
+                }
                 insert(key, entry, t, entry.getDescription() == null, discovered, conflictSet);
             }
             return key;
@@ -1132,9 +1145,9 @@ public class WorkingSet {
     }
 
     ArrayList<Node> linksOf(DagEntry entry, long discovered) {
-        List<ByteString> links = entry.getLinksList();
-        return links == null ? EMPTY_ARRAY_LIST
-                : links.stream()
+        return entry.getLinksCount() == 0 ? EMPTY_ARRAY_LIST
+                : entry.getLinksList()
+                       .stream()
                        .map(link -> new HashKey(link))
                        .map(link -> resolve(link, discovered))
                        .filter(node -> node != null)
@@ -1181,6 +1194,8 @@ public class WorkingSet {
                 return node.getEntry();
             }
         }
-        return finalized.get(key.bytes());
+        byte[] bs = finalized.get(key.bytes());
+        assert bs.length > 0 : "invalid stored for: " + key;
+        return bs;
     }
 }

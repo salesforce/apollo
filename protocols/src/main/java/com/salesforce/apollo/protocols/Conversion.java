@@ -9,6 +9,7 @@ package com.salesforce.apollo.protocols;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.UUID;
 
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -60,15 +61,26 @@ public final class Conversion {
     }
 
     public static DagEntry manifestDag(byte[] data) {
+        if (data.length == 0) {
+            System.out.println(" Invalid data");
+        }
         try {
-            return DagEntry.parseFrom(data);
+            DagEntry entry = DagEntry.parseFrom(data);
+            if (entry.getLinksCount() == 0) {
+                assert new HashKey(
+                        entry.getDescription()).equals(HashKey.ORIGIN) : "Should be, but is not a genesis node: "
+                                + Base64.getUrlEncoder().withoutPadding().encodeToString(data);
+            }
+            return entry;
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalArgumentException("invalid data");
         }
     }
 
     public static byte[] serialize(DagEntry dag) {
-        return dag.toByteArray();
+        byte[] bytes = dag.toByteArray();
+        assert bytes.length > 0 : " Invalid serialization: " + dag.getDescription();
+        return bytes;
     }
 
     private Conversion() {

@@ -11,6 +11,7 @@ import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.security.cert.X509Certificate;
@@ -160,15 +161,15 @@ abstract public class AvalancheFunctionalTest {
 
         // generate the genesis transaction
         Avalanche master = nodes.get(0);
-        CompletableFuture<HashKey> genesis = nodes.get(0)
-                                                  .createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
-                                                                 txnScheduler);
+        CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
+                                                                  txnScheduler);
         HashKey genesisKey = null;
         try {
             genesisKey = genesis.get(10, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             nodes.forEach(node -> node.stop());
             views.forEach(v -> v.getService().stop());
+            fail("Genesis timeout");
 
 //            Graphviz.fromGraph(DagViz.visualize("smoke", nodes.get(0).getDag(), false)).render(Format.PNG).toFile(new File("smoke.png"));
         }
@@ -192,7 +193,7 @@ abstract public class AvalancheFunctionalTest {
         long now = System.currentTimeMillis();
         HashKey k = genesisKey;
         for (Avalanche a : nodes) {
-            assertTrue(Utils.waitForCondition(10_000, () -> a.getDagDao().isFinalized(k)),
+            assertTrue(Utils.waitForCondition(90_000, () -> a.getDagDao().isFinalized(k)),
                        "Failed to finalize genesis on: " + a.getNode().getId());
         }
 

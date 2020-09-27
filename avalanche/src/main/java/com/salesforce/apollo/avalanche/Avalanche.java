@@ -32,6 +32,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -211,10 +212,11 @@ public class Avalanche {
         CompletableFuture<HashKey> futureSailor = new CompletableFuture<>();
         DagEntry dagEntry = DagEntry.newBuilder()
                                     .setDescription(WellKnownDescriptions.GENESIS.toHash().toByteString())
-                                    .setData(ByteString.copyFrom("Genesis".getBytes()))
+                                    .setData(ByteString.copyFrom(data))
                                     .build();
         // genesis has no parents
         HashKey key = dag.insert(dagEntry, WellKnownDescriptions.GENESIS.toHash(), System.currentTimeMillis());
+        log.info("Genesis added: {}", key);
         pendingTransactions.put(key, new PendingTransaction(futureSailor,
                 scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
         return futureSailor;
@@ -371,6 +373,7 @@ public class Avalanche {
         }
         ForkJoinPool.commonPool().execute(() -> {
             finalized.finalized.forEach(key -> {
+                assert key != null;
                 PendingTransaction pending = pendingTransactions.remove(key);
                 if (pending != null) {
                     pending.complete(key);
@@ -380,7 +383,7 @@ public class Avalanche {
             finalized.deleted.forEach(key -> {
                 PendingTransaction pending = pendingTransactions.remove(key);
                 if (pending != null) {
-                    pending.complete(null);
+                    pending.pending.completeExceptionally(new TransactionRejected("Transaction rejected due to conflict resolution"));
                 }
             });
         });
@@ -413,6 +416,7 @@ public class Avalanche {
             Builder builder = DagEntry.newBuilder().setData(ByteString.copyFrom(dummy));
             parents.stream().map(e -> e.toByteString()).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
+            assert dagEntry.getLinksCount() > 0 : "Whoopsie";
             dag.insert(dagEntry, System.currentTimeMillis());
             if (log.isTraceEnabled()) {
                 log.trace("noOp transaction {}", parents.size());
@@ -449,7 +453,7 @@ public class Avalanche {
     private int query() {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        Collection<? extends Member> sample = view.sample(parameters.core.k, getEntropy());
+        Collection<? extends Member> sample = view.sample(parameters.core.k, getEntropy(), view.getNode());
 
         if (sample.isEmpty()) {
             return 0;
@@ -490,6 +494,10 @@ public class Avalanche {
             return 0;
         }
         List<ByteBuffer> query = dag.getQuerySerializedEntries(unqueried);
+
+        for (ByteBuffer e: query) {
+            assert e.hasRemaining() : "whoopsie";
+        }
         long sampleTime = System.currentTimeMillis() - now;
 
         now = System.currentTimeMillis();
@@ -589,9 +597,9 @@ public class Avalanche {
                 connection.close();
             }
             log.trace("queried: {} for: {} result: {}", m, batch.size(), result.getResultList());
-            dag.insertSerialized(result.getWantedList()
+            dag.insertSerializedRaw(result.getWantedList()
                                        .stream()
-                                       .map(e -> e.asReadOnlyByteBuffer())
+                                       .map(e -> e.toByteArray())
                                        .collect(Collectors.toList()),
                                  System.currentTimeMillis());
             if (want.size() > 0 && metrics != null && m == wanted) {
@@ -651,14 +659,14 @@ public class Avalanche {
                 queryResults.add(null);
             } else {
                 queryResults.add(votes[i].get() >= required);
-            }
+                                                                                                                                                                    }
         }
 
         log.debug("query results: {} in: {} ms", queryResults.size(), System.currentTimeMillis() - now);
 
         return queryResults;
-    }
-
+    }   
+  
     @SuppressWarnings("unused")
     private EntryProcessor resolve(String processor, ClassLoader resolver) {
         try {
@@ -691,6 +699,6 @@ public class Avalanche {
             return;
         }
         pending.timer.cancel(true);
-        pending.pending.complete(null);
+        pending.pending.completeExceptionally(new TimeoutException("Transaction timeout"));
     }
 }

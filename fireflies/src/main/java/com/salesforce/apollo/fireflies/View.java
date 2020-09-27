@@ -693,8 +693,8 @@ public class View {
         roundListeners.add(callback);
     }
 
-    public Collection<? extends Member> sample(int range, SecureRandom entropy) {
-        return context.sample(range, entropy);
+    public Collection<? extends Member> sample(int range, SecureRandom entropy, Member excluded) {
+        return context.sample(range, entropy, excluded);
     }
 
     /**
