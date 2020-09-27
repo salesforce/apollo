@@ -28,7 +28,6 @@ public class MtlsClient {
             PrivateKey privateKey, X509Certificate ca) {
 
         channel = NettyChannelBuilder.forAddress(address)
-                                     .overrideAuthority("foo.test.google.fr") /* Only for using provided test certs. */
                                      .sslContext(forClient(clientAuth, alias, certificate, privateKey, ca))
                                      .build();
 
