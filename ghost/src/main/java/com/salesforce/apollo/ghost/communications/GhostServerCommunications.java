@@ -8,12 +8,10 @@ package com.salesforce.apollo.ghost.communications;
 
 import java.util.List;
 
-import org.apache.avro.AvroRemoteException;
-
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.avro.Interval;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.Interval;
 import com.salesforce.apollo.ghost.Ghost.Service;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.SpaceGhost;
 
 /**
@@ -28,12 +26,12 @@ public class GhostServerCommunications implements SpaceGhost {
     }
 
     @Override
-    public DagEntry get(HASH key) throws AvroRemoteException {
+    public DagEntry get(HashKey key) {
         return ghost.get(key);
     }
 
     @Override
-    public List<DagEntry> intervals(List<Interval> intervals, List<HASH> have) {
+    public List<DagEntry> intervals(List<Interval> intervals, List<HashKey> have) {
         return ghost.intervals(intervals, have);
     }
 

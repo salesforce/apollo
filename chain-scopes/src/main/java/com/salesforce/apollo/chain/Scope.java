@@ -6,12 +6,12 @@ s * Copyright (c) 2019, salesforce.com, inc.
  */
 package com.salesforce.apollo.chain;
 
-import com.salesforce.apollo.avro.HASH;
+import com.salesforce.apollo.protocols.HashKey;
 
 public interface Scope {
-    <M> Chain<Block<M>> get(HASH key);
+    <M> Chain<Block<M>> get(HashKey key);
 
-    HASH getKey();
+    HashKey getKey();
 
-    Scope subScope(HASH key);
+    Scope subScope(HashKey key);
 }

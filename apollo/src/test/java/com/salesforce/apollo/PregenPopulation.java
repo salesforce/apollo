@@ -29,7 +29,7 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Member;
+import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
@@ -86,7 +86,7 @@ public class PregenPopulation {
             int gPort = startPort--;
             int aPort = startPort--;
             CsrWithPrivateKey request = createCsr().generateRequest(dn().setCn(host)
-                                                                        .setL(String.format(Member.PORT_TEMPLATE,
+                                                                        .setL(String.format(Participant.PORT_TEMPLATE,
                                                                                             ffPort, gPort, aPort))
                                                                         .setO("World Company")
                                                                         .setOu("IT dep")

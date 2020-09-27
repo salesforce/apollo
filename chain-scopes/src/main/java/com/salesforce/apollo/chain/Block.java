@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.chain;
 
-import com.salesforce.apollo.avro.HASH;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * A hash identified block o bytes
@@ -16,11 +16,11 @@ import com.salesforce.apollo.avro.HASH;
  */
 public abstract class Block<T> {
 
-    private final byte[] content;
-    private final HASH   key;
-    private final HASH   parent;
+    private final byte[]  content;
+    private final HashKey key;
+    private final HashKey parent;
 
-    public Block(HASH parent, HASH key, byte[] content) {
+    public Block(HashKey parent, HashKey key, byte[] content) {
         this.parent = parent;
         this.key = key;
         this.content = content;
@@ -30,11 +30,11 @@ public abstract class Block<T> {
         return content;
     }
 
-    public HASH getKey() {
+    public HashKey getKey() {
         return key;
     }
 
-    public HASH getParent() {
+    public HashKey getParent() {
         return parent;
     }
 

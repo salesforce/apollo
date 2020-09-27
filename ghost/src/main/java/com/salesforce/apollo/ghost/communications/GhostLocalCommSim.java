@@ -9,15 +9,9 @@ package com.salesforce.apollo.ghost.communications;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.avro.AvroRemoteException;
-import org.apache.avro.ipc.LocalTransceiver;
-import org.apache.avro.ipc.RPCPlugin;
-import org.apache.avro.ipc.specific.SpecificResponder;
-
-import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.ghost.Ghost;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -27,25 +21,13 @@ import com.salesforce.apollo.protocols.HashKey;
 public class GhostLocalCommSim implements GhostCommunications {
 
     private final Map<HashKey, Ghost> servers = new ConcurrentHashMap<>();
-    private final RPCPlugin stats;
-
-    public GhostLocalCommSim() {
-        this(null);
-    }
-
-    public GhostLocalCommSim(RPCPlugin stats) {
-        this.stats = stats;
-    }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 
     public Map<HashKey, Ghost> getServers() {
         return servers;
-    }
-
-    public RPCPlugin getStats() {
-        return stats;
     }
 
     @Override
@@ -54,14 +36,17 @@ public class GhostLocalCommSim implements GhostCommunications {
     }
 
     @Override
-    public void start() {}
+    public void start() {
+    }
 
     @Override
     public GhostClientCommunications connect(Member to, Node from) {
         Ghost ghost = servers.get(to.getId());
-        if (ghost == null) { return null; }
+        if (ghost == null) {
+            return null;
+        }
         SpecificResponder responder = new SpecificResponder(Apollo.PROTOCOL,
-                                                            new GhostServerCommunications(ghost.getService()));
+                new GhostServerCommunications(ghost.getService()));
 
         GhostClientCommunications clientCommunications;
         try {

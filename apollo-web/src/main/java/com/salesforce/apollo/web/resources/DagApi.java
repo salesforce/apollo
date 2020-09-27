@@ -24,8 +24,8 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
 import com.codahale.metrics.annotation.Timed;
+import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.avalanche.DagDao;
-import com.salesforce.apollo.avro.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -108,7 +108,7 @@ public class DagApi {
         if (dagEntry == null) {
             return null;
         }
-        return dagEntry.getData() == null ? null : ENCODER.encodeToString(dagEntry.getData().array());
+        return dagEntry.getData() == null ? null : ENCODER.encodeToString(dagEntry.getData().toByteArray());
     }
 
     @POST()
@@ -122,10 +122,13 @@ public class DagApi {
         if (dagEntry == null) {
             return null;
         }
-        List<String> links = dagEntry.getLinks() == null ? null
-                : dagEntry.getLinks().stream().map(h -> ENCODER.encodeToString(h.bytes())).collect(Collectors.toList());
-        return new DagNode(dagEntry.getData() == null ? null : ENCODER.encodeToString(dagEntry.getData().array()),
-                links, ENCODER.encodeToString(dagEntry.getData().array()));
+        List<String> links = dagEntry.getLinksCount() == 0 ? null
+                : dagEntry.getLinksList()
+                          .stream()
+                          .map(h -> ENCODER.encodeToString(h.toByteArray()))
+                          .collect(Collectors.toList());
+        return new DagNode(dagEntry.getData() == null ? null : ENCODER.encodeToString(dagEntry.getData().toByteArray()),
+                links, ENCODER.encodeToString(dagEntry.getData().toByteArray()));
     }
 
     @POST()

@@ -8,7 +8,8 @@ package com.salesforce.apollo.chain;
 
 import java.util.function.Consumer;
 
-import com.salesforce.apollo.avro.HASH;
+import com.salesforce.apollo.protocols.HashKey;
+ 
 
 /**
  * 
@@ -19,9 +20,9 @@ import com.salesforce.apollo.avro.HASH;
  */
 public interface Chain<M> {
 
-    HASH getKey();
+    HashKey getKey();
 
-    Block<M> getBlock(HASH index);
+    Block<M> getBlock(HashKey index);
 
     void onAccept(Consumer<Block<M>> consumer);
 }
