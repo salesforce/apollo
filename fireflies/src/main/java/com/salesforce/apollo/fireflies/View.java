@@ -190,11 +190,11 @@ public class View {
     @FunctionalInterface
     public interface MessageChannelHandler {
         class Msg {
-            public final int         channel;
-            public final byte[]      content;
-            public final Participant from;
+            public final int    channel;
+            public final byte[] content;
+            public final Member from;
 
-            public Msg(Participant from, int channel, byte[] content) {
+            public Msg(Member from, int channel, byte[] content) {
                 this.channel = channel;
                 this.from = from;
                 this.content = content;

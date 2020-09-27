@@ -9,18 +9,14 @@ package com.salesforce.apollo.ghost.communications;
 import java.io.IOException;
 import java.util.List;
 
-import org.apache.avro.AvroRemoteException;
-import org.apache.avro.ipc.Transceiver;
-import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.avro.Interval;
-import com.salesforce.apollo.fireflies.Member;
-import com.salesforce.apollo.fireflies.communications.CommonClientCommunications;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.Interval;
+import com.salesforce.apollo.comm.CommonClientCommunications;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.SpaceGhost;
 
 /**
@@ -32,7 +28,7 @@ public class GhostClientCommunications extends CommonClientCommunications implem
 	private final Apollo client;
 	private final Transceiver transceiver;
 
-	public GhostClientCommunications(Transceiver transceiver, Member member) throws AvroRemoteException {
+	public GhostClientCommunications(Transceiver transceiver, Member member)   {
 		super(member);
 		this.transceiver = transceiver;
 		try {
@@ -52,12 +48,12 @@ public class GhostClientCommunications extends CommonClientCommunications implem
 	}
 
 	@Override
-	public DagEntry get(HASH DagEntry) throws AvroRemoteException {
+	public DagEntry get(HashKey DagEntry)   {
 		return client.get(DagEntry);
 	}
 
 	@Override
-	public List<DagEntry> intervals(List<Interval> intervals, List<HASH> have) {
+	public List<DagEntry> intervals(List<Interval> intervals, List<HashKey> have) {
 		return client.intervals(intervals, have);
 	}
 

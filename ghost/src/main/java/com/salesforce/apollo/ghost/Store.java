@@ -8,8 +8,8 @@ package com.salesforce.apollo.ghost;
 
 import java.util.List;
 
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesforce.apollo.protocols.HashKey; 
 
 /**
  * @author hal.hildebrand
@@ -17,18 +17,18 @@ import com.salesforce.apollo.avro.HASH;
  */
 public interface Store {
 
-	public List<DagEntry> entriesIn(CombinedIntervals combinedIntervals, List<HASH> have);
+	public List<DagEntry> entriesIn(CombinedIntervals combinedIntervals, List<HashKey> have);
 
-	public List<HASH> have(CombinedIntervals keyIntervals);
+	public List<HashKey> have(CombinedIntervals keyIntervals);
 
-	public List<HASH> keySet();
+	public List<HashKey> keySet();
 
-	void add(List<DagEntry> entries, List<HASH> total);
+	void add(List<DagEntry> entries, List<HashKey> total);
 
-	DagEntry get(HASH key);
+	DagEntry get(HashKey key);
 
-	List<DagEntry> getUpdates(List<HASH> want);
+	List<DagEntry> getUpdates(List<HashKey> want);
 
-	void put(HASH key, DagEntry value);
+	void put(HashKey key, DagEntry value);
 
 }

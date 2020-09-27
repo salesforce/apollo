@@ -23,20 +23,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.apache.avro.AvroRemoteException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.avro.Interval;
-import com.salesforce.apollo.fireflies.Member;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.Interval;
 import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.MembershipListener;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler;
 import com.salesforce.apollo.ghost.communications.GhostClientCommunications;
 import com.salesforce.apollo.ghost.communications.GhostCommunications;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -95,7 +94,7 @@ public class Ghost {
     public class Listener implements MessageChannelHandler, MembershipListener {
 
         @Override
-        public void fail(Member member) {
+        public void fail(Participant member) {
             joining.remove(member);
         }
 
@@ -107,7 +106,7 @@ public class Ghost {
         }
 
         @Override
-        public void recover(Member member) {
+        public void recover(Participant member) {
             joining.add(member);
         }
 
@@ -127,7 +126,7 @@ public class Ghost {
         private final AtomicBoolean busy    = new AtomicBoolean();
         private final AtomicBoolean started = new AtomicBoolean();
 
-        public DagEntry get(HASH key) {
+        public DagEntry get(HashKey key) {
             return store.get(key);
         }
 
@@ -141,7 +140,7 @@ public class Ghost {
             }
             try {
                 CombinedIntervals keyIntervals = keyIntervals();
-                List<HASH> have = store.have(keyIntervals);
+                List<HashKey> have = store.have(keyIntervals);
                 int zeros = 0;
 
                 for (int i = 0; i < view.getRings().size(); i++) {
@@ -179,17 +178,17 @@ public class Ghost {
             }
         }
 
-        public List<DagEntry> intervals(List<Interval> intervals, List<HASH> have) {
+        public List<DagEntry> intervals(List<Interval> intervals, List<HashKey> have) {
             return store.entriesIn(new CombinedIntervals(
                     intervals.stream().map(e -> new KeyInterval(e)).collect(Collectors.toList())), have);
         }
 
         public Void put(DagEntry value) {
-            store.put(new HASH(hashOf(value)), value);
+            store.put(new HashKey(hashOf(value)), value);
             return null;
         }
 
-        public List<DagEntry> satisfy(List<HASH> want) {
+        public List<DagEntry> satisfy(List<HashKey> want) {
             return store.getUpdates(want);
         }
 
@@ -246,7 +245,6 @@ public class Ghost {
         if (!joined()) {
             throw new IllegalStateException("Node has not joined the cluster");
         }
-        HASH keyBits = key.toHash();
         CompletionService<DagEntry> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
         List<Future<DagEntry>> futures;
         futures = IntStream.range(0, rings).mapToObj(i -> view.getRing(i)).map(ring -> frist.submit(() -> {
@@ -258,8 +256,8 @@ public class Ghost {
                     return null;
                 }
                 try {
-                    DagEntry = connection.get(keyBits);
-                } catch (AvroRemoteException e) {
+                    DagEntry = connection.get(key);
+                } catch (Exception e) {
                     log.debug("Error looking up {} on {} : {}", key, successor, e);
                     return null;
                 } finally {
@@ -392,8 +390,8 @@ public class Ghost {
     private CombinedIntervals keyIntervals() {
         List<KeyInterval> intervals = new ArrayList<>();
         for (int i = 0; i < rings; i++) {
-            Ring<Member> ring = view.getRing(i);
-            Member predecessor = ring.predecessor(getNode(), n -> n.isLive());
+            Ring<Participant> ring = view.getRing(i);
+            Participant predecessor = ring.predecessor(getNode(), n -> n.isLive());
             if (predecessor == null) {
                 continue;
             }

@@ -16,8 +16,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
+import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -29,18 +28,19 @@ public class MemoryStore implements Store {
     private final ConcurrentNavigableMap<HashKey, DagEntry> data = new ConcurrentSkipListMap<>();
 
     @Override
-    public void add(List<DagEntry> entries, List<HASH> total) {
+    public void add(List<DagEntry> entries, List<HashKey> total) {
         entries.forEach(e -> {
             byte[] key = hashOf(e);
             data.put(new HashKey(key), e);
-            total.add(new HASH(key));
+            total.add(new HashKey(key));
         });
     }
 
     @Override
-    public List<DagEntry> entriesIn(CombinedIntervals combined, List<HASH> have) { // TODO refactor using IBLT or such
+    public List<DagEntry> entriesIn(CombinedIntervals combined, List<HashKey> have) { // TODO refactor using IBLT or
+                                                                                      // such
         Set<HashKey> canHas = new ConcurrentSkipListSet<>();
-        have.stream().map(e -> new HashKey(e)).forEach(e -> canHas.add(e)); // really expensive
+        have.forEach(e -> canHas.add(e)); // really expensive
         List<DagEntry> entries = new ArrayList<>(); // TODO batching. we do need stinking batches for realistic scale
         combined.getIntervals().forEach(i -> {
             data.keySet()
@@ -53,35 +53,30 @@ public class MemoryStore implements Store {
     }
 
     @Override
-    public DagEntry get(HASH key) {
-        return data.get(new HashKey(key));
+    public DagEntry get(HashKey key) {
+        return data.get(key);
     }
 
     @Override
-    public List<DagEntry> getUpdates(List<HASH> want) {
-        return want.stream()
-                   .map(e -> new HashKey(e))
-                   .map(e -> data.get(e))
-                   .filter(e -> e != null)
-                   .collect(Collectors.toList());
+    public List<DagEntry> getUpdates(List<HashKey> want) {
+        return want.stream().map(e -> data.get(e)).filter(e -> e != null).collect(Collectors.toList());
     }
 
     @Override
-    public List<HASH> have(CombinedIntervals keyIntervals) {
+    public List<HashKey> have(CombinedIntervals keyIntervals) {
         return keyIntervals.getIntervals()
                            .stream()
                            .flatMap(i -> data.keySet().subSet(i.getBegin(), true, i.getEnd(), false).stream())
-                           .map(e -> e.toHash())
                            .collect(Collectors.toList());
     }
 
     @Override
-    public List<HASH> keySet() {
-        return data.keySet().stream().map(k -> k.toHash()).collect(Collectors.toList());
+    public List<HashKey> keySet() {
+        return data.keySet().stream().collect(Collectors.toList());
     }
 
     @Override
-    public void put(HASH key, DagEntry value) {
-        data.putIfAbsent(new HashKey(key), value);
+    public void put(HashKey key, DagEntry value) {
+        data.putIfAbsent(key, value);
     }
 }
