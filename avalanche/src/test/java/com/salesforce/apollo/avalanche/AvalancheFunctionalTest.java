@@ -63,7 +63,7 @@ abstract public class AvalancheFunctionalTest {
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 14)
+        certs = IntStream.range(1, 30)
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> MtlsServer.getMemberId(cert.getCertificate()),
