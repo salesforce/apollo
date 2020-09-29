@@ -11,7 +11,6 @@ import static io.github.olivierlemasle.ca.CA.dn;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 
@@ -43,11 +42,11 @@ public class TestMtls {
 
         MtlsServer server = server(ca, serverAddress);
         server.start();
-
+        server.bind(avaServer());
         MtlsClient client = client(ca, serverAddress);
 
         QueryResult query = AvalancheGrpc.newBlockingStub(client.getChannel()).query(null);
-        
+
         assertNotNull(query);
     }
 
@@ -103,8 +102,8 @@ public class TestMtls {
     private MtlsServer server(CertificateAuthority ca, InetSocketAddress serverAddress) {
         CertificateWithPrivateKey serverCert = serverIdentity(ca);
 
-        MtlsServer server = new MtlsServer(Arrays.asList(avaServer()), serverAddress, ClientAuth.REQUIRE, "foo",
-                serverCert.getX509Certificate(), serverCert.getPrivateKey(), ca.getRoot());
+        MtlsServer server = new MtlsServer(serverAddress, ClientAuth.REQUIRE, "foo", serverCert.getX509Certificate(),
+                serverCert.getPrivateKey(), ca.getRoot());
         return server;
     }
 

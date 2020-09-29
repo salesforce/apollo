@@ -7,6 +7,7 @@
 package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.Participant.getMemberId;
+import static com.salesforce.apollo.fireflies.communications.FfClientCommunications.getCreate;
 
 import java.io.ByteArrayInputStream;
 import java.security.InvalidKeyException;
@@ -35,7 +36,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -49,14 +49,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.CacheLoader.InvalidCacheLoadException;
-import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.salesfoce.apollo.proto.AccusationDigest;
 import com.salesfoce.apollo.proto.AccusationGossip;
 import com.salesfoce.apollo.proto.AccusationGossip.Builder;
@@ -71,9 +64,11 @@ import com.salesfoce.apollo.proto.NoteDigest;
 import com.salesfoce.apollo.proto.NoteGossip;
 import com.salesfoce.apollo.proto.Signed;
 import com.salesfoce.apollo.proto.Update;
+import com.salesforce.apollo.comm.CommonCommunications;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler.Msg;
 import com.salesforce.apollo.fireflies.communications.FfClientCommunications;
-import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
+import com.salesforce.apollo.fireflies.communications.FfServerCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
@@ -190,11 +185,11 @@ public class View {
     @FunctionalInterface
     public interface MessageChannelHandler {
         class Msg {
-            public final int    channel;
-            public final byte[] content;
-            public final Member from;
+            public final int         channel;
+            public final byte[]      content;
+            public final Participant from;
 
-            public Msg(Member from, int channel, byte[] content) {
+            public Msg(Participant from, int channel, byte[] content) {
                 this.channel = channel;
                 this.from = from;
                 this.content = content;
@@ -242,7 +237,7 @@ public class View {
             try {
                 success = View.this.gossip(lastRing, link);
             } catch (Exception e) {
-                connections.invalidate(link.getMember());
+                link.release();
                 log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing, e);
                 return;
             }
@@ -255,7 +250,7 @@ public class View {
                     }
                     success = View.this.gossip(lastRing, link);
                 } catch (Exception e) {
-                    connections.invalidate(link.getMember());
+                    link.release();
                     log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing);
                     return;
                 }
@@ -368,8 +363,6 @@ public class View {
                  .peek(m -> seedList.add(m.getId()))
                  .forEach(m -> addSeed(m));
 
-            comm.initialize(View.this);
-            comm.start();
             long interval = d.toMillis();
             int initialDelay = parameters.entropy.nextInt((int) interval * 2);
             futureGossip = scheduler.scheduleWithFixedDelay(() -> {
@@ -401,8 +394,6 @@ public class View {
                 context.offline(m);
             });
             context.clear();
-            connections.invalidateAll();
-            comm.close();
             messageBuffer.clear();
         }
 
@@ -484,13 +475,7 @@ public class View {
     /**
      * Communications with other members
      */
-    private final FirefliesCommunications comm;
-
-    /**
-     * The mapped set of open outbound connections with other members, mapped by
-     * member
-     */
-    private final LoadingCache<Participant, FfClientCommunications> connections;
+    private final CommonCommunications<FfClientCommunications> comm;
 
     /**
      * View context
@@ -559,9 +544,10 @@ public class View {
      */
     private final ConcurrentMap<HashKey, Participant> view = new ConcurrentHashMap<>();
 
-    public View(Node node, FirefliesCommunications communications, ScheduledExecutorService scheduler) {
+    public View(Node node, Communications communications, ScheduledExecutorService scheduler) {
         this.node = node;
-        this.comm = communications;
+        this.comm = communications.create(node, getCreate(), new FfServerCommunications(service,
+                communications.getClientIdentityProvider()));
         this.parameters = this.node.getParameters();
         this.scheduler = scheduler;
         diameter = diameter(parameters);
@@ -575,13 +561,6 @@ public class View {
             }
         });
         this.messageBuffer = new MessageBuffer(parameters.bufferSize, parameters.toleranceLevel * diameter + 1);
-
-        connections = cacheBuilder().build(new CacheLoader<Participant, FfClientCommunications>() {
-            @Override
-            public FfClientCommunications load(Participant to) throws Exception {
-                return comm.connectTo(to, node);
-            }
-        });
         context = new Context<>(HashKey.ORIGIN, parameters.rings);
         add(node);
         log.info("View [{}]\n  Parameters: {}", node.getId(), parameters);
@@ -1082,7 +1061,7 @@ public class View {
             }
             CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates(0));
             if (certificate != null) {
-                connections.invalidate(link.getMember());
+                link.release();
                 add(certificate);
                 Signed signed = gossip.getNotes().getUpdates(0);
                 Note note = new Note(signed.getContent().toByteArray(), signed.getSignature().toByteArray());
@@ -1191,9 +1170,9 @@ public class View {
             link.ping(200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
         } catch (Exception e) {
-            connections.invalidate(link.getMember());
+            link.release();
             log.error("Exception pinging {} -> {} : {}", link.getMember(), link.getMember().getFirefliesEndpoint(),
-                      e.toString());
+                      e.toString(), e);
             accuseOn(link.getMember(), lastRing);
         }
     }
@@ -1219,7 +1198,6 @@ public class View {
      */
     void oneRound() {
         round.incrementAndGet();
-        comm.logDiag();
         try {
             service.gossip();
         } catch (Throwable e) {
@@ -1661,30 +1639,10 @@ public class View {
         }
     }
 
-    private CacheBuilder<Participant, FfClientCommunications> cacheBuilder() {
-        CacheBuilder<?, ?> builder = CacheBuilder.newBuilder();
-        @SuppressWarnings("unchecked")
-        CacheBuilder<Participant, FfClientCommunications> castBuilder = (CacheBuilder<Participant, FfClientCommunications>) builder;
-        castBuilder.maximumSize(parameters.rings + 2)
-                   .removalListener(new RemovalListener<Participant, FfClientCommunications>() {
-                       @Override
-                       public void onRemoval(RemovalNotification<Participant, FfClientCommunications> notification) {
-                           notification.getValue().close();
-                       }
-                   });
-        return castBuilder;
-    }
-
     private FfClientCommunications linkFor(Participant m) {
         try {
-            return connections.get(m);
-        } catch (UncheckedExecutionException e) {
-            log.debug("error opening connection to {}: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
-        } catch (InvalidCacheLoadException e) {
-            log.debug("error opening connection to {}: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
-        } catch (ExecutionException e) {
+            return comm.apply(m, node);
+        } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", m.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
         }

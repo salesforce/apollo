@@ -27,7 +27,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
+import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -54,7 +54,7 @@ public class SwarmTest {
 
     private List<Node>            members;
     private List<View>            views;
-    private FfLocalCommSim        communications;
+    private LocalCommSimm         communications;
     private List<X509Certificate> seeds;
 
     @AfterEach
@@ -62,7 +62,7 @@ public class SwarmTest {
         if (views != null) {
             views.forEach(v -> v.getService().stop());
         }
-        communications.clear();
+        communications.close();
     }
 
     @Test
@@ -89,7 +89,7 @@ public class SwarmTest {
         System.out.println("Stopping views");
         testViews.forEach(e -> e.getService().stop());
         testViews.clear();
-        communications.clear();
+//        communications.close();
         for (int i = 0; i < 4; i++) {
             int start = testViews.size();
             for (int j = 0; j < 25; j++) {
@@ -183,8 +183,7 @@ public class SwarmTest {
                        .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                        .map(cert -> new Node(cert, parameters))
                        .collect(Collectors.toList());
-        communications = new FfLocalCommSim();
-        communications.checkStarted(true);
+        communications = new LocalCommSimm();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {

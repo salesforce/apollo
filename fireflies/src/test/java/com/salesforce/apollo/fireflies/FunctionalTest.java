@@ -27,7 +27,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
+import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -51,12 +51,12 @@ public class FunctionalTest {
                                                    cert -> cert));
     }
 
-    private FfLocalCommSim communications;
+    private LocalCommSimm communications;
 
     @AfterEach
     public void after() {
         if (communications != null) {
-            communications.clear();
+            communications.close();
         }
     }
 
@@ -65,8 +65,7 @@ public class FunctionalTest {
         Random entropy = new Random(0x666);
 
         List<X509Certificate> seeds = new ArrayList<>();
-        communications = new FfLocalCommSim();
-        communications.checkStarted(false);
+        communications = new LocalCommSimm();
         List<Node> members = certs.values()
                                   .parallelStream()
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))

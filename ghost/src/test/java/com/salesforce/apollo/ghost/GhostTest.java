@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -28,14 +27,15 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.avro.DagEntry;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
+import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 import com.salesforce.apollo.ghost.communications.GhostLocalCommSim;
 import com.salesforce.apollo.protocols.HashKey;
@@ -50,7 +50,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class GhostTest {
 
     private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -58,7 +58,8 @@ public class GhostTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Participant.getMemberId(cert.getCertificate()),
+                                                   cert -> cert));
     }
 
     @Test
@@ -70,9 +71,7 @@ public class GhostTest {
                                   .parallelStream()
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
-        MetricRegistry registry = new MetricRegistry();
-        com.salesforce.apollo.fireflies.communications.FfLocalCommSim ffComms = new com.salesforce.apollo.fireflies.communications.FfLocalCommSim(
-                new DropWizardStatsPlugin(registry));
+        FfLocalCommSim ffComms = new FfLocalCommSim();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -117,8 +116,11 @@ public class GhostTest {
         Map<HashKey, DagEntry> stored = new HashMap<>();
         for (int i = 0; i < rounds; i++) {
             for (Ghost ghost : ghosties) {
-                DagEntry entry = new DagEntry(null, null,
-                        ByteBuffer.wrap(String.format("Member: %s round: %s", ghost.getNode().getId(), i).getBytes()));
+                Builder builder = DagEntry.newBuilder()
+                                          .setData(ByteString.copyFrom(String.format("Member: %s round: %s",
+                                                                                     ghost.getNode().getId(), i)
+                                                                             .getBytes()));
+                DagEntry entry = builder.build();
                 stored.put(ghost.putDagEntry(entry), entry);
             }
         }
@@ -127,7 +129,7 @@ public class GhostTest {
             for (Ghost ghost : ghosties) {
                 DagEntry found = ghost.getDagEntry(entry.getKey());
                 assertNotNull(found);
-                assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
+                assertArrayEquals(entry.getValue().getData().toByteArray(), found.getData().toByteArray());
             }
         }
     }

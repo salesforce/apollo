@@ -18,7 +18,7 @@ import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.Query.Builder;
 import com.salesfoce.apollo.proto.QueryResult;
-import com.salesforce.apollo.comm.CommonClientCommunications;
+import com.salesforce.apollo.comm.CommonCommunications;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.membership.Member;
@@ -31,7 +31,7 @@ import io.grpc.ManagedChannel;
  * @author hal.hildebrand
  * @since 220
  */
-public class AvalancheClientCommunications extends CommonClientCommunications implements Avalanche {
+public class AvalancheClientCommunications extends CommonCommunications implements Avalanche {
     private final AvalancheBlockingStub client;
     private final ManagedChannel        channel;
 

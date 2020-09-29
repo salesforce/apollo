@@ -34,9 +34,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.fireflies.View.MembershipListener;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler;
-import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -116,14 +116,14 @@ public class MessageTest {
                                                    cert -> cert));
     }
 
-    private FfLocalCommSim communications;
+    private LocalCommSimm communications;
 
     private final AtomicInteger totalReceived = new AtomicInteger(0);
 
     @AfterEach
     public void after() {
         if (communications != null) {
-            communications.clear();
+            communications.close();
         }
     }
 
@@ -137,7 +137,7 @@ public class MessageTest {
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
-        communications = new FfLocalCommSim();
+        communications = new LocalCommSimm();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {

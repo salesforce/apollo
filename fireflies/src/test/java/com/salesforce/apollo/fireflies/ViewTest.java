@@ -39,7 +39,7 @@ import com.salesfoce.apollo.proto.Digests;
 import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.NoteDigest;
 import com.salesfoce.apollo.proto.Update;
-import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
+import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.protocols.HashKey;
 
 import io.github.olivierlemasle.ca.RootCertificate;
@@ -50,11 +50,11 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class ViewTest {
 
-    private static final RootCertificate        ca         = getCa();
+    private static final RootCertificate           ca         = getCa();
     private static final Map<HashKey, CertWithKey> certs      = new HashMap<>();
-    private static List<Participant>                 members    = new ArrayList<>();
-    private static Node                         node;
-    private static final FirefliesParameters    parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static List<Participant>               members    = new ArrayList<>();
+    private static Node                            node;
+    private static final FirefliesParameters       parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
     public static void beforeClass() {
@@ -78,7 +78,7 @@ public class ViewTest {
      */
     @Test
     public void rumors() {
-        FirefliesCommunications clientFactory = mock(FirefliesCommunications.class);
+        LocalCommSimm clientFactory = mock(LocalCommSimm.class);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         View viewNode = new View(node, clientFactory, scheduler);
         View viewM0 = new View(new Node(certs.get(members.get(0).getId()), parameters), clientFactory, scheduler);
@@ -134,7 +134,7 @@ public class ViewTest {
 
     @Test
     public void smoke() throws Exception {
-        FirefliesCommunications clientFactory = mock(FirefliesCommunications.class);
+        LocalCommSimm clientFactory = mock(LocalCommSimm.class);
         View view = new View(node, clientFactory, Executors.newSingleThreadScheduledExecutor());
         view.getService().start(Duration.ofMillis(20_000), Collections.emptyList());
         assertEquals(1, view.getLive().size());
@@ -177,7 +177,8 @@ public class ViewTest {
         assertFalse(view.getPendingRebutals().containsKey(testMember.getId()));
     }
 
-    private Note generateNote(Participant m, int epoch, BitSet mask) throws NoSuchAlgorithmException, InvalidKeyException {
+    private Note generateNote(Participant m, int epoch, BitSet mask) throws NoSuchAlgorithmException,
+                                                                     InvalidKeyException {
         Signature s = Signature.getInstance(node.getParameters().signatureAlgorithm);
         s.initSign(certs.get(m.getId()).getPrivateKey());
         return new Note(m.getId(), epoch, mask, s);

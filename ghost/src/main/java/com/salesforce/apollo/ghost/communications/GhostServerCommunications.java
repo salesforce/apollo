@@ -6,38 +6,53 @@
  */
 package com.salesforce.apollo.ghost.communications;
 
-import java.util.List;
+import java.util.stream.Collectors;
 
+import com.salesfoce.apollo.proto.Bytes;
+import com.salesfoce.apollo.proto.DagEntries;
+import com.salesfoce.apollo.proto.DagEntries.Builder;
 import com.salesfoce.apollo.proto.DagEntry;
-import com.salesfoce.apollo.proto.Interval;
+import com.salesfoce.apollo.proto.GhostGrpc.GhostImplBase;
+import com.salesfoce.apollo.proto.Intervals;
+import com.salesfoce.apollo.proto.Null;
+import com.salesforce.apollo.comm.grpc.ClientIdentity;
 import com.salesforce.apollo.ghost.Ghost.Service;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.SpaceGhost;
+
+import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public class GhostServerCommunications implements SpaceGhost {
+public class GhostServerCommunications extends GhostImplBase {
+    @Override
+    public void get(Bytes request, StreamObserver<DagEntry> responseObserver) {
+        responseObserver.onNext(ghost.get(new HashKey(request.getBites())));
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void put(DagEntry request, StreamObserver<Null> responseObserver) {
+        ghost.put(request);
+        responseObserver.onNext(Null.getDefaultInstance());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void intervals(Intervals request, StreamObserver<DagEntries> responseObserver) {
+        Builder builder = DagEntries.newBuilder();
+        ghost.intervals(request.getIntervalsList(),
+                        request.getHaveList().stream().map(e -> new HashKey(e)).collect(Collectors.toList()))
+             .forEach(e -> builder.addEntries(e));
+        responseObserver.onNext(builder.build());
+        responseObserver.onCompleted();
+    }
+
     private final Service ghost;
 
-    public GhostServerCommunications(Service ghost) {
+    public GhostServerCommunications(Service ghost, ClientIdentity identity) {
         this.ghost = ghost;
-    }
-
-    @Override
-    public DagEntry get(HashKey key) {
-        return ghost.get(key);
-    }
-
-    @Override
-    public List<DagEntry> intervals(List<Interval> intervals, List<HashKey> have) {
-        return ghost.intervals(intervals, have);
-    }
-
-    @Override
-    public void put(DagEntry value) {
-        ghost.put(value);
     }
 
 }

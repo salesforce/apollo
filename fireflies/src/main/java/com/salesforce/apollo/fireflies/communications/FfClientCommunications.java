@@ -15,31 +15,38 @@ import com.salesfoce.apollo.proto.SayWhat;
 import com.salesfoce.apollo.proto.Signed;
 import com.salesfoce.apollo.proto.State;
 import com.salesfoce.apollo.proto.Update;
-import com.salesforce.apollo.comm.CommonClientCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.protocols.Fireflies;
-
-import io.grpc.ManagedChannel;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public class FfClientCommunications extends CommonClientCommunications implements Fireflies {
-    private final FirefliesBlockingStub client;
-    private final ManagedChannel        channel;
+public class FfClientCommunications implements Fireflies {
 
-    public FfClientCommunications(ManagedChannel channel, Participant member) {
-        super(member);
-        assert !(member instanceof Node) : "whoops : " + member;
-        this.channel = channel;
-        this.client = FirefliesGrpc.newBlockingStub(channel);
+    public static CreateClientCommunications<FfClientCommunications> getCreate() {
+        CreateClientCommunications<FfClientCommunications> createFunction = (t, f, c) -> new FfClientCommunications(c,
+                (Participant) t);
+        return createFunction;
+
     }
 
-    @Override
+    private final ManagedServerConnection channel;
+    private final FirefliesBlockingStub   client;
+    private Participant                   member;
+
+    public FfClientCommunications(ManagedServerConnection channel, Participant member) {
+        this.member = member;
+        assert !(member instanceof Node) : "whoops : " + member;
+        this.channel = channel;
+        this.client = FirefliesGrpc.newBlockingStub(channel.channel);
+    }
+
     public Participant getMember() {
-        return (Participant) super.getMember();
+        return member;
     }
 
     @Override
@@ -61,6 +68,10 @@ public class FfClientCommunications extends CommonClientCommunications implement
         return 0;
     }
 
+    public void release() {
+        channel.release();
+    }
+
     @Override
     public String toString() {
         return String.format("->[%s]", member);
@@ -75,8 +86,7 @@ public class FfClientCommunications extends CommonClientCommunications implement
         }
     }
 
-    @Override
-    public void close() {
-        channel.shutdown();
+    public void start() {
+
     }
 }

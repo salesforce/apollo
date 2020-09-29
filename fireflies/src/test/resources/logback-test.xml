@@ -13,23 +13,14 @@
   %msg%n
 			</Pattern>
 		</encoder>
-	</appender>
-    <logger name="com.salesforce.apollo.comm.netty4" level="TRACE"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger> 
+	</appender> 
     
-	<logger name="com.salesforce.apollo" level="TRACE"
-		additivity="false">
-		<appender-ref ref="STDOUT" />
-	</logger>
-
-	<logger name="io.netty" level="TRACE"
+	<logger name="com.salesforce.apollo" level="INFO"
 		additivity="false">
 		<appender-ref ref="STDOUT" />
 	</logger> 
 
-	<root level="TRACE">
+	<root level="INFO">
 		<appender-ref ref="STDOUT" />
 	</root>
 

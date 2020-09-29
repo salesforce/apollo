@@ -64,6 +64,7 @@ import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
+import io.grpc.util.MutableHandlerRegistry;
 
 /**
  * @author hal.hildebrand
@@ -326,18 +327,20 @@ public class MtlsServer implements ClientIdentity {
         return new HashKey(id);
     }
 
+    private final TlsInterceptor          interceptor;
+    private final MutableHandlerRegistry  registry;
     private final Server                  server;
     private final Context.Key<SSLSession> sslSessionContext = Context.key("SSLSession");
 
-    public MtlsServer(List<BindableService> services, SocketAddress address, ClientAuth clientAuth, String alias,
-            X509Certificate certificate, PrivateKey privateKey, X509Certificate ca) {
+    public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
+            PrivateKey privateKey, X509Certificate ca) {
+        registry = new MutableHandlerRegistry();
+        interceptor = new TlsInterceptor();
+
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
                                                        .sslContext(forServer(clientAuth, alias, certificate, privateKey,
                                                                              ca));
-        TlsInterceptor interceptor = new TlsInterceptor();
-        for (BindableService service : services) {
-            builder.addService(ServerInterceptors.intercept(service, interceptor));
-        }
+        builder.fallbackHandlerRegistry(registry);
         server = builder.build();
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -346,7 +349,11 @@ public class MtlsServer implements ClientIdentity {
             }
         });
     }
-    
+
+    public void bind(BindableService service) {
+        registry.addService(ServerInterceptors.intercept(service, interceptor));
+    }
+
     @Override
     public X509Certificate getCert() {
         return (X509Certificate) getCerts()[0];
@@ -361,16 +368,16 @@ public class MtlsServer implements ClientIdentity {
         }
     }
 
+    @Override
+    public HashKey getFrom() {
+        return getMemberId(getCert());
+    }
+
     public void start() throws IOException {
         server.start();
     }
 
     public void stop() {
         server.shutdown();
-    }
-
-    @Override
-    public HashKey getFrom() { 
-        return getMemberId(getCert());
     }
 }
