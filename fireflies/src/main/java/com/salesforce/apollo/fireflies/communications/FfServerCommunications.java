@@ -13,8 +13,8 @@ import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.Null;
 import com.salesfoce.apollo.proto.SayWhat;
 import com.salesfoce.apollo.proto.State;
-import com.salesforce.apollo.comm.grpc.ClientIdentity;
 import com.salesforce.apollo.fireflies.View.Service;
+import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.stub.StreamObserver;

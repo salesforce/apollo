@@ -8,6 +8,7 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
+import static com.salesforce.apollo.fireflies.View.getStandardEpProvider;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Matchers.any;
@@ -17,7 +18,6 @@ import static org.mockito.Mockito.when;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -27,11 +27,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Sets;
 import com.salesfoce.apollo.proto.MessageGossip;
+import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.EndpointProvider;
+import com.salesforce.apollo.comm.MtlsCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
+import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -46,14 +54,27 @@ public class MtlsTest {
     private static final RootCertificate     ca         = getCa();
     private static Map<HashKey, CertWithKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private List<Communications>             communications = new ArrayList<>();
+    private List<View>                       views;
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Participant.getMemberId(cert.getCertificate()),
-                                                   cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+    }
+
+    @AfterEach
+    public void after() {
+        if (views != null) {
+            views.forEach(e -> e.getService().stop());
+            views.clear();
+        }
+        if (communications != null) {
+            communications.forEach(e -> e.close());
+            communications.clear();
+        }
     }
 
     @Test
@@ -79,14 +100,16 @@ public class MtlsTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        List<View> views = Collections.emptyList();
-        
-//        List<View> views = members.stream()
-//                .map(node -> new View(node, new FirefliesNettyCommunications(null, 2, 2, 2, 100, 100),
-//                        scheduler))
-//                .collect(Collectors.toList());
+        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(30);
+        views = members.stream().map(node -> {
+            EndpointProvider ep = getStandardEpProvider(node);
+            MtlsCommunications comms = new MtlsCommunications(builder, ep);
+            communications.add(comms);
+            return new View(node, comms, scheduler);
+        }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
+        communications.forEach(e -> e.start());
         views.forEach(view -> view.getService().start(Duration.ofMillis(1_000), seeds));
 
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {

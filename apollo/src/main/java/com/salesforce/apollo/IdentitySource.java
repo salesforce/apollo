@@ -27,11 +27,11 @@ import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.salesforce.apollo.bootstrap.client.Bootstrap;
-import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
+import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.protocols.Utils;
 
 /**

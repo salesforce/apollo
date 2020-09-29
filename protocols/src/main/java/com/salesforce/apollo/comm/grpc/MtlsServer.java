@@ -10,16 +10,13 @@ import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
 import java.security.Principal;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.Security;
-import java.security.SignatureException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
@@ -47,7 +44,9 @@ import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Validator;
 
 import io.grpc.BindableService;
 import io.grpc.Context;
@@ -109,23 +108,23 @@ public class MtlsServer implements ClientIdentity {
 
     public static class NodeTrustManagerFactory extends TrustManagerFactory {
 
-        public NodeTrustManagerFactory(X509Certificate ca) {
-            super(new NodeTrustManagerFactorySpi(ca), PROVIDER, "Trust");
+        public NodeTrustManagerFactory(Validator validator) {
+            super(new NodeTrustManagerFactorySpi(validator), PROVIDER, "Trust");
         }
 
     }
 
     public static class NodeTrustManagerFactorySpi extends TrustManagerFactorySpi {
 
-        private final X509Certificate ca;
+        private final Validator validator;
 
-        public NodeTrustManagerFactorySpi(X509Certificate ca) {
-            this.ca = ca;
+        public NodeTrustManagerFactorySpi(Validator validator) {
+            this.validator = validator;
         }
 
         @Override
         protected TrustManager[] engineGetTrustManagers() {
-            return new TrustManager[] { new Trust(ca) };
+            return new TrustManager[] { new Trust(validator) };
         }
 
         @Override
@@ -207,65 +206,49 @@ public class MtlsServer implements ClientIdentity {
     }
 
     private static class Trust extends X509ExtendedTrustManager {
+        private final Validator validator;
 
-        private final X509Certificate ca;
-
-        public Trust(X509Certificate ca) {
-            this.ca = ca;
+        public Trust(Validator validator) {
+            this.validator = validator;
         }
 
         @Override
         public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-            chain[0].checkValidity();
-            try {
-                chain[0].verify(ca.getPublicKey());
-            } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException | CertificateException
-                    | NoSuchProviderException e) {
-                throw new CertificateException("Invalid cert: " + chain[0].getSubjectDN());
-            }
+            validator.validateClient(chain);
         }
 
         @Override
         public void checkClientTrusted(X509Certificate[] chain, String authType,
                                        Socket socket) throws CertificateException {
-            // TODO Auto-generated method stub
-
+            validator.validateClient(chain);
         }
 
         @Override
         public void checkClientTrusted(X509Certificate[] chain, String authType,
                                        SSLEngine engine) throws CertificateException {
-            // TODO Auto-generated method stub
-
+            validator.validateClient(chain);
         }
 
         @Override
         public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-            chain[0].checkValidity();
-            try {
-                chain[0].verify(ca.getPublicKey());
-            } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException | CertificateException
-                    | NoSuchProviderException e) {
-                throw new CertificateException("Invalid cert: " + chain[0].getSubjectDN());
-            }
+            validator.validateServer(chain);
         }
 
         @Override
-        public void checkServerTrusted(X509Certificate[] arg0, String arg1, Socket arg2) throws CertificateException {
-            // TODO Auto-generated method stub
-
+        public void checkServerTrusted(X509Certificate[] chain, String authType,
+                                       Socket socket) throws CertificateException {
+            validator.validateServer(chain);
         }
 
         @Override
-        public void checkServerTrusted(X509Certificate[] arg0, String arg1,
+        public void checkServerTrusted(X509Certificate[] chain, String authType,
                                        SSLEngine arg2) throws CertificateException {
-            // TODO Auto-generated method stub
-
+            validator.validateServer(chain);
         }
 
         @Override
         public X509Certificate[] getAcceptedIssuers() {
-            return new X509Certificate[] { ca };
+            return new X509Certificate[0];
         }
 
     }
@@ -280,14 +263,14 @@ public class MtlsServer implements ClientIdentity {
     }
 
     public static SslContext forClient(ClientAuth clientAuth, String alias, X509Certificate certificate,
-                                       PrivateKey privateKey, X509Certificate ca) {
+                                       PrivateKey privateKey, Validator validator) {
         SslContextBuilder builder = SslContextBuilder.forClient()
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
                                                              privateKey));
         GrpcSslContexts.configure(builder);
         builder.protocols(TL_SV1_2)
                .ciphers(CIPHERS)
-               .trustManager(new NodeTrustManagerFactory(ca))
+               .trustManager(new NodeTrustManagerFactory(validator))
                .clientAuth(clientAuth);
         try {
             return builder.build();
@@ -298,13 +281,13 @@ public class MtlsServer implements ClientIdentity {
     }
 
     public static SslContext forServer(ClientAuth clientAuth, String alias, X509Certificate certificate,
-                                       PrivateKey privateKey, X509Certificate ca) {
+                                       PrivateKey privateKey, Validator validator) {
         SslContextBuilder builder = SslContextBuilder.forServer(new NodeKeyManagerFactory(alias, certificate,
                 privateKey));
         GrpcSslContexts.configure(builder);
         builder.protocols(TL_SV1_2)
                .ciphers(CIPHERS)
-               .trustManager(new NodeTrustManagerFactory(ca))
+               .trustManager(new NodeTrustManagerFactory(validator))
                .clientAuth(clientAuth);
         try {
             return builder.build();
@@ -333,13 +316,13 @@ public class MtlsServer implements ClientIdentity {
     private final Context.Key<SSLSession> sslSessionContext = Context.key("SSLSession");
 
     public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
-            PrivateKey privateKey, X509Certificate ca) {
+            PrivateKey privateKey, Validator validator) {
         registry = new MutableHandlerRegistry();
         interceptor = new TlsInterceptor();
 
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
                                                        .sslContext(forServer(clientAuth, alias, certificate, privateKey,
-                                                                             ca));
+                                                                             validator));
         builder.fallbackHandlerRegistry(registry);
         server = builder.build();
         Runtime.getRuntime().addShutdownHook(new Thread() {

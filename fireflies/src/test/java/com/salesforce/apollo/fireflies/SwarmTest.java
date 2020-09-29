@@ -28,6 +28,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -48,7 +50,7 @@ public class SwarmTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Participant.getMemberId(cert.getCertificate()),
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
                                                    cert -> cert));
     }
 

@@ -15,8 +15,8 @@ import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.GhostGrpc.GhostImplBase;
 import com.salesfoce.apollo.proto.Intervals;
 import com.salesfoce.apollo.proto.Null;
-import com.salesforce.apollo.comm.grpc.ClientIdentity;
 import com.salesforce.apollo.ghost.Ghost.Service;
+import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.stub.StreamObserver;

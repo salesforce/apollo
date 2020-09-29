@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateEncodingException;
@@ -21,9 +18,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import org.bouncycastle.asn1.ASN1OctetString;
-import org.bouncycastle.asn1.x509.Extension;
-import org.bouncycastle.cert.X509CertificateHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +29,6 @@ import com.salesfoce.apollo.proto.NoteDigest;
 import com.salesfoce.apollo.proto.Signed;
 import com.salesforce.apollo.fireflies.View.AccTag;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * A member of the view
@@ -45,54 +37,7 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Participant extends Member {
-
-    public static final String  PORT_TEMPLATE       = "%s:%s:%s";
-    public static final String  RING_HASH_ALGORITHM = Conversion.SHA_256;
-    private static final Logger log                 = LoggerFactory.getLogger(Participant.class);
-    private static final String PORT_SEPARATOR      = ":";
-
-    public static HashKey getMemberId(X509Certificate c) {
-        X509CertificateHolder holder;
-        try {
-            holder = new X509CertificateHolder(c.getEncoded());
-        } catch (CertificateEncodingException | IOException e) {
-            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
-        }
-        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
-
-        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
-        return new HashKey(id);
-    }
-
-    /**
-     * @param certificate
-     * @return array of 3 InetSocketAddress in the ordering of {fireflies, ghost,
-     *         avalanche)
-     */
-    public static InetSocketAddress[] portsFrom(X509Certificate certificate) {
-
-        String dn = certificate.getSubjectX500Principal().getName();
-        Map<String, String> decoded = Util.decodeDN(dn);
-        String portString = decoded.get("L");
-        if (portString == null) {
-            throw new IllegalArgumentException("Invalid certificate, no port encodings in \"L\" of dn= " + dn);
-        }
-        String[] ports = portString.split(PORT_SEPARATOR);
-        if (ports.length != 3) {
-            throw new IllegalArgumentException("Invalid port encodings (not == 3 ports) in \"L\" of dn= " + dn);
-        }
-        int ffPort = Integer.parseInt(ports[0]);
-        int gPort = Integer.parseInt(ports[1]);
-        int aPort = Integer.parseInt(ports[2]);
-
-        String hostName = decoded.get("CN");
-        if (hostName == null) {
-            throw new IllegalArgumentException("Invalid certificate, missing \"CN\" of dn= " + dn);
-        }
-        return new InetSocketAddress[] { new InetSocketAddress(hostName, ffPort),
-                                         new InetSocketAddress(hostName, gPort),
-                                         new InetSocketAddress(hostName, aPort) };
-    }
+    private static final Logger log = LoggerFactory.getLogger(Participant.class);
 
     /**
      * The member's latest note
@@ -103,11 +48,6 @@ public class Participant extends Member {
      * The valid accusatons for this member
      */
     final Map<Integer, Accusation> validAccusations = new ConcurrentHashMap<>();
-
-    /**
-     * Avalanche socket endpoint for the member
-     */
-    private final InetSocketAddress avalancheEndpoint;
 
     /**
      * The hash of the member's certificate
@@ -124,28 +64,13 @@ public class Participant extends Member {
      */
     private volatile Instant failedAt = Instant.now();
 
-    /**
-     * Fireflies socket endpoint for the member
-     */
-    private final InetSocketAddress firefliesEndpoint;
-
-    /**
-     * Ghost DHT socket endpoint for the member
-     */
-    private final InetSocketAddress ghostEndpoint;
-
-    public Participant(X509Certificate c, byte[] derEncodedCertificate, FirefliesParameters parameters,
-            byte[] certificateHash) {
-        this(c, derEncodedCertificate, parameters, certificateHash, portsFrom(c));
-    }
-
     public Participant(X509Certificate c, FirefliesParameters parameters) {
         this(c, null, parameters, null);
 
     }
 
     protected Participant(X509Certificate c, byte[] derEncodedCertificate, FirefliesParameters parameters,
-            byte[] certificateHash, InetSocketAddress[] boundPorts) {
+            byte[] certificateHash) {
         super(getMemberId(c), c);
         assert c != null;
         if (derEncodedCertificate != null) {
@@ -158,9 +83,6 @@ public class Participant extends Member {
             }
         }
 
-        firefliesEndpoint = boundPorts[0];
-        ghostEndpoint = boundPorts[1];
-        avalancheEndpoint = boundPorts[2];
         if (certificateHash != null) {
             this.certificateHash = certificateHash;
         } else {
@@ -181,30 +103,11 @@ public class Participant extends Member {
         }
     }
 
-    public InetSocketAddress getAvalancheEndpoint() {
-        return avalancheEndpoint;
-    }
-
     /**
      * @return the Instant this member was determined as failing
      */
     public Instant getFailedAt() {
         return failedAt;
-    }
-
-    public InetSocketAddress getFirefliesEndpoint() {
-        return firefliesEndpoint;
-    }
-
-    public InetSocketAddress getGhostEndpoint() {
-        return ghostEndpoint;
-    }
-
-    /**
-     * @return the host address of the member
-     */
-    public InetAddress getHost() {
-        return firefliesEndpoint.getAddress();
     }
 
     public boolean isFailed() {

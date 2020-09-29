@@ -6,10 +6,18 @@
  */
 package com.salesforce.apollo.membership;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Signature;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
+import java.util.Map;
+
+import org.bouncycastle.asn1.ASN1OctetString;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.cert.X509CertificateHolder;
 
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -20,6 +28,7 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Member implements Comparable<Member> {
+    private static final String PORT_SEPARATOR = ":";
 
     /**
      * Signing identity
@@ -30,6 +39,8 @@ public class Member implements Comparable<Member> {
      * Unique ID of the memmber
      */
     private final HashKey id;
+
+    public static final String  PORT_TEMPLATE       = "%s:%s:%s";
 
     protected Member(HashKey id, X509Certificate c) {
         certificate = c;
@@ -97,6 +108,44 @@ public class Member implements Comparable<Member> {
     @Override
     public String toString() {
         return "Member[" + id + "]";
+    }
+
+    public static HashKey getMemberId(X509Certificate c) {
+        X509CertificateHolder holder;
+        try {
+            holder = new X509CertificateHolder(c.getEncoded());
+        } catch (CertificateEncodingException | IOException e) {
+            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
+        }
+        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
+
+        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
+        return new HashKey(id);
+    }
+
+    /**
+     * @param certificate
+     * @return host and port for the member indicated by the certificate
+     */
+    public static InetSocketAddress portsFrom(X509Certificate certificate) {
+
+        String dn = certificate.getSubjectX500Principal().getName();
+        Map<String, String> decoded = Util.decodeDN(dn);
+        String portString = decoded.get("L");
+        if (portString == null) {
+            throw new IllegalArgumentException("Invalid certificate, no port encodings in \"L\" of dn= " + dn);
+        }
+        String[] ports = portString.split(PORT_SEPARATOR);
+        if (ports.length != 3) {
+            throw new IllegalArgumentException("Invalid port encodings (not == 3 ports) in \"L\" of dn= " + dn);
+        }
+        int ffPort = Integer.parseInt(ports[0]);
+
+        String hostName = decoded.get("CN");
+        if (hostName == null) {
+            throw new IllegalArgumentException("Invalid certificate, missing \"CN\" of dn= " + dn);
+        }
+        return new InetSocketAddress(hostName, ffPort);
     }
 
 }

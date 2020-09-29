@@ -19,8 +19,8 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
-import com.salesforce.apollo.comm.grpc.ClientIdentity;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.BindableService;
@@ -64,10 +64,12 @@ public class LocalCommSimm implements Communications {
     private static class ServerWrapper {
         private final MutableHandlerRegistry registry;
         private final Server                 server;
+        private final ServerConnectionCache  cache;
 
-        public ServerWrapper(MutableHandlerRegistry registry, Server server) {
+        public ServerWrapper(MutableHandlerRegistry registry, Server server, ServerConnectionCache cache) {
             this.registry = registry;
             this.server = server;
+            this.cache = cache;
         }
     }
 
@@ -93,10 +95,9 @@ public class LocalCommSimm implements Communications {
     public static ThreadLocal<X509Certificate> callCertificate = new ThreadLocal<>();
     public static final ThreadIdentity         LOCAL_IDENTITY  = new ThreadIdentity();
 
-    private final ServerConnectionCacheBuilder        builder;
-    private final Map<HashKey, ServerConnectionCache> clients = new ConcurrentHashMap<>();
-    private final ServerConnectionFactory             factory = new LocalServerConnectionFactory();
-    private final Map<HashKey, ServerWrapper>         servers = new ConcurrentHashMap<>();
+    private final ServerConnectionCacheBuilder builder;
+    private final ServerConnectionFactory      factory = new LocalServerConnectionFactory();
+    private final Map<HashKey, ServerWrapper>  servers = new ConcurrentHashMap<>();
 
     public LocalCommSimm() {
         this(ServerConnectionCache.newBuilder().setTarget(30));
@@ -129,13 +130,11 @@ public class LocalCommSimm implements Communications {
                 throw new IllegalStateException("Unable to start in process server for " + id, e);
             }
             LoggerFactory.getLogger(LocalCommSimm.class).info("Starting server for: " + member.getId());
-            return new ServerWrapper(registry, s);
+            return new ServerWrapper(registry, s, builder.setFactory(factory).build());
         });
         wrapper.registry.addService(service);
-        ServerConnectionCache cache = clients.computeIfAbsent(member.getId(),
-                                                              id -> builder.setFactory(factory).build());
         LoggerFactory.getLogger(LocalCommSimm.class).info("Communications created for: " + member.getId());
-        return new CommonCommunications<T>(cache, createFunction);
+        return new CommonCommunications<T>(wrapper.cache, createFunction);
     }
 
     @Override

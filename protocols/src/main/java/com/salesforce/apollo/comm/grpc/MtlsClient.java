@@ -12,6 +12,8 @@ import java.net.SocketAddress;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
+import com.salesforce.apollo.protocols.Validator;
+
 import io.grpc.ManagedChannel;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
@@ -25,10 +27,10 @@ public class MtlsClient {
     private final ManagedChannel channel;
 
     public MtlsClient(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
-            PrivateKey privateKey, X509Certificate ca) {
+            PrivateKey privateKey, Validator validator) {
 
         channel = NettyChannelBuilder.forAddress(address)
-                                     .sslContext(forClient(clientAuth, alias, certificate, privateKey, ca))
+                                     .sslContext(forClient(clientAuth, alias, certificate, privateKey, validator))
                                      .build();
 
     }

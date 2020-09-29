@@ -40,6 +40,8 @@ import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.NoteDigest;
 import com.salesfoce.apollo.proto.Update;
 import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Util;
 import com.salesforce.apollo.protocols.HashKey;
 
 import io.github.olivierlemasle.ca.RootCertificate;

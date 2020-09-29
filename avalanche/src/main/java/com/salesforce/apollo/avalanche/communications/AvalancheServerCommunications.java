@@ -17,7 +17,7 @@ import com.salesfoce.apollo.proto.DagNodes.Builder;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesforce.apollo.avalanche.Avalanche.Service;
-import com.salesforce.apollo.comm.grpc.ClientIdentity;
+import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.stub.StreamObserver;

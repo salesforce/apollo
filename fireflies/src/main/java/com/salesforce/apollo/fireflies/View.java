@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.Participant.getMemberId;
 import static com.salesforce.apollo.fireflies.communications.FfClientCommunications.getCreate;
 
 import java.io.ByteArrayInputStream;
@@ -66,13 +65,18 @@ import com.salesfoce.apollo.proto.Signed;
 import com.salesfoce.apollo.proto.Update;
 import com.salesforce.apollo.comm.CommonCommunications;
 import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.EndpointProvider;
+import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler.Msg;
 import com.salesforce.apollo.fireflies.communications.FfClientCommunications;
 import com.salesforce.apollo.fireflies.communications.FfServerCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.protocols.CaValidator;
 import com.salesforce.apollo.protocols.HashKey;
+
+import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
 /**
  * The View is the active representation view of all members - failed and live -
@@ -87,6 +91,13 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class View {
+
+    public static EndpointProvider getStandardEpProvider(Node member) {
+
+        X509Certificate certificate = member.getCertificate();
+        return new StandardEpProvider(Member.portsFrom(certificate), certificate, member.privateKey, ClientAuth.REQUIRE,
+                new CaValidator(member.getCA()));
+    }
 
     /**
      * Used in set reconcillation of Accusation Digests
@@ -239,7 +250,7 @@ public class View {
             } catch (Exception e) {
                 log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing, e);
                 return;
-            } finally { 
+            } finally {
                 link.release();
             }
             if (!success) {
@@ -776,7 +787,7 @@ public class View {
      * @return the added member or the real member associated with this certificate
      */
     Participant add(CertWithHash cert) {
-        HashKey id = getMemberId(cert.certificate);
+        HashKey id = Member.getMemberId(cert.certificate);
         Participant member = view.get(id);
         if (member != null) {
             update(member, cert);
@@ -1172,8 +1183,7 @@ public class View {
             link.ping(200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
         } catch (Exception e) {
-            log.error("Exception pinging {} -> {} : {}", link.getMember(), link.getMember().getFirefliesEndpoint(),
-                      e.toString(), e);
+            log.error("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(), e.getCause().getMessage());
             accuseOn(link.getMember(), lastRing);
         } finally {
             link.release();

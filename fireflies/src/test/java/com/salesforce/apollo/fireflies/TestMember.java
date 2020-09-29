@@ -8,10 +8,7 @@ package com.salesforce.apollo.fireflies;
 
 import static io.github.olivierlemasle.ca.CA.createCsr;
 import static io.github.olivierlemasle.ca.CA.dn;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-
-import java.net.InetSocketAddress;
 
 import org.junit.jupiter.api.Test;
 
@@ -46,9 +43,6 @@ public class TestMember {
 
         FirefliesParameters parameters = new FirefliesParameters(root.getX509Certificate());
         Participant m = new Participant(certificate.getX509Certificate(), parameters);
-        InetSocketAddress address = m.getFirefliesEndpoint();
-        assertEquals("test.com", address.getHostName());
-        assertEquals(0x666, address.getPort());
         HashKey id = m.getId();
         assertNotNull(id);
     }

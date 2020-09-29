@@ -7,8 +7,8 @@
 package com.salesforce.apollo.comm;
 
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.grpc.ClientIdentity;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.BindableService;
 

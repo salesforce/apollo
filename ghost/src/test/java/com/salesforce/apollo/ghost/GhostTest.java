@@ -33,12 +33,12 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesforce.apollo.comm.LocalCommSimm;
-import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
+import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -59,7 +59,7 @@ public class GhostTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Participant.getMemberId(cert.getCertificate()),
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
                                                    cert -> cert));
     }
 

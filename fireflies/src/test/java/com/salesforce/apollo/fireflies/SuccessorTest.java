@@ -33,6 +33,8 @@ import org.junit.jupiter.api.Test;
 import com.salesfoce.apollo.proto.MessageGossip;
 import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.fireflies.View.Service;
+import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -54,7 +56,7 @@ public class SuccessorTest {
         certs = IntStream.range(1, 10)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Participant.getMemberId(cert.getCertificate()),
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
                                                    cert -> cert));
     }
 

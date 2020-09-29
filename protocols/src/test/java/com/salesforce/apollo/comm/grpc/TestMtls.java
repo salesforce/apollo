@@ -20,7 +20,9 @@ import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
+import com.salesforce.apollo.protocols.CaValidator;
 import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.protocols.Validator;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.CsrWithPrivateKey;
@@ -34,9 +36,11 @@ import io.grpc.stub.StreamObserver;
  */
 public class TestMtls {
 
+    private CertificateAuthority ca;
+
     @Test
     public void smoke() throws Exception {
-        CertificateAuthority ca = certAuth();
+        ca = certAuth();
 
         InetSocketAddress serverAddress = new InetSocketAddress("localhost", Utils.allocatePort());
 
@@ -83,7 +87,7 @@ public class TestMtls {
         CertificateWithPrivateKey clientCert = clientIdentity(ca);
 
         MtlsClient client = new MtlsClient(serverAddress, ClientAuth.REQUIRE, "foo", clientCert.getX509Certificate(),
-                clientCert.getPrivateKey(), ca.getRoot());
+                clientCert.getPrivateKey(), validator());
         return client;
     }
 
@@ -103,7 +107,7 @@ public class TestMtls {
         CertificateWithPrivateKey serverCert = serverIdentity(ca);
 
         MtlsServer server = new MtlsServer(serverAddress, ClientAuth.REQUIRE, "foo", serverCert.getX509Certificate(),
-                serverCert.getPrivateKey(), ca.getRoot());
+                serverCert.getPrivateKey(), validator());
         return server;
     }
 
@@ -120,4 +124,7 @@ public class TestMtls {
         return serverCert;
     }
 
+    private Validator validator() {
+        return new CaValidator(ca.getRoot());
+    }
 }

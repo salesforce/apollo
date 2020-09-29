@@ -11,6 +11,7 @@ import java.security.cert.X509Certificate;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.salesforce.apollo.membership.Util;
 import com.salesforce.apollo.protocols.Conversion;
 
 /**
