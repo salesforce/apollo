@@ -49,7 +49,9 @@ import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.QueryResult.Vote;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.communications.AvalancheClientCommunications;
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
+import com.salesforce.apollo.avalanche.communications.AvalancheServerCommunications;
+import com.salesforce.apollo.comm.CommonCommunications;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Member;
@@ -137,37 +139,37 @@ public class Avalanche {
 
     private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
 
-    private final AvalancheCommunications                    comm;
-    private final WorkingSet                                 dag;
-    private final ExecutorService                            finalizer;
-    private final int                                        invalidThreshold;
-    private final AvaMetrics                                 metrics;
-    private final AvalancheParameters                        parameters;
-    private final Deque<HashKey>                             parentSample        = new LinkedBlockingDeque<>();
-    private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentSkipListMap<>();
-    private final Executor                                   queryPool;
-    private final AtomicLong                                 queryRounds         = new AtomicLong();
-    private final int                                        required;
-    private final AtomicBoolean                              running             = new AtomicBoolean();
-    private volatile ScheduledFuture<?>                      scheduledNoOpsCull;
-    private final Service                                    service             = new Service();
-    private final View                                       view;
+    private final CommonCommunications<AvalancheClientCommunications> comm;
+    private final WorkingSet                                          dag;
+    private final ExecutorService                                     finalizer;
+    private final int                                                 invalidThreshold;
+    private final AvaMetrics                                          metrics;
+    private final AvalancheParameters                                 parameters;
+    private final Deque<HashKey>                                      parentSample        = new LinkedBlockingDeque<>();
+    private final ConcurrentMap<HashKey, PendingTransaction>          pendingTransactions = new ConcurrentSkipListMap<>();
+    private final Executor                                            queryPool;
+    private final AtomicLong                                          queryRounds         = new AtomicLong();
+    private final int                                                 required;
+    private final AtomicBoolean                                       running             = new AtomicBoolean();
+    private volatile ScheduledFuture<?>                               scheduledNoOpsCull;
+    private final Service                                             service             = new Service();
+    private final View                                                view;
 
-    public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p) {
+    public Avalanche(View view, Communications communications, AvalancheParameters p) {
         this(view, communications, p, null, null);
     }
 
-    public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p, AvaMetrics metrics) {
+    public Avalanche(View view, Communications communications, AvalancheParameters p, AvaMetrics metrics) {
         this(view, communications, p, metrics, null);
     }
 
-    public Avalanche(View view, AvalancheCommunications communications, AvalancheParameters p, AvaMetrics metrics,
+    public Avalanche(View view, Communications communications, AvalancheParameters p, AvaMetrics metrics,
             ClassLoader resolver) {
         this.metrics = metrics;
         parameters = p;
-        this.view = view;
-        this.comm = communications;
-        comm.initialize(this);
+        this.view = view; 
+        this.comm = communications.create(getNode(), AvalancheClientCommunications.getCreate(), new AvalancheServerCommunications(service,
+                communications.getClientIdentityProvider()));
         this.dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), metrics);
 
         required = (int) (parameters.core.k * parameters.core.alpha);
@@ -243,7 +245,6 @@ public class Avalanche {
             return;
         }
         queryRounds.set(0);
-        comm.start();
 
         Thread queryThread = new Thread(() -> {
             while (running.get()) {
@@ -267,7 +268,6 @@ public class Avalanche {
         if (!running.compareAndSet(true, false)) {
             return;
         }
-        comm.close();
         pendingTransactions.values().clear();
         ScheduledFuture<?> current = scheduledNoOpsCull;
         scheduledNoOpsCull = null;
@@ -383,7 +383,8 @@ public class Avalanche {
             finalized.deleted.forEach(key -> {
                 PendingTransaction pending = pendingTransactions.remove(key);
                 if (pending != null) {
-                    pending.pending.completeExceptionally(new TransactionRejected("Transaction rejected due to conflict resolution"));
+                    pending.pending.completeExceptionally(new TransactionRejected(
+                            "Transaction rejected due to conflict resolution"));
                 }
             });
         });
@@ -477,7 +478,7 @@ public class Avalanche {
                 return 0;
             }
             Member member = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size()));
-            AvalancheClientCommunications connection = comm.connectToNode(member, getNode());
+            AvalancheClientCommunications connection = comm.apply(member, getNode());
             if (connection == null) {
                 log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
             }
@@ -490,12 +491,14 @@ public class Avalanche {
                 }
             } catch (Exception e) {
                 log.warn("Error requesting DAG {} for {}", member, wanted.size(), e);
+            } finally {
+                connection.release();
             }
             return 0;
         }
         List<ByteBuffer> query = dag.getQuerySerializedEntries(unqueried);
 
-        for (ByteBuffer e: query) {
+        for (ByteBuffer e : query) {
             assert e.hasRemaining() : "whoopsie";
         }
         long sampleTime = System.currentTimeMillis() - now;
@@ -577,7 +580,7 @@ public class Avalanche {
         Member wanted = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size()));
         futures = sample.stream().map(m -> frist.submit(() -> {
             QueryResult result;
-            AvalancheClientCommunications connection = comm.connectToNode(m, getNode());
+            AvalancheClientCommunications connection = comm.apply(m, getNode());
             if (connection == null) {
                 log.info("No connection querying {} for {} queries", m, batch.size());
                 for (int i = 0; i < batch.size(); i++) {
@@ -594,14 +597,14 @@ public class Avalanche {
                 log.warn("Error querying {} for {}", m, batch, e);
                 return false;
             } finally {
-                connection.close();
+                connection.release();
             }
             log.trace("queried: {} for: {} result: {}", m, batch.size(), result.getResultList());
             dag.insertSerializedRaw(result.getWantedList()
-                                       .stream()
-                                       .map(e -> e.toByteArray())
-                                       .collect(Collectors.toList()),
-                                 System.currentTimeMillis());
+                                          .stream()
+                                          .map(e -> e.toByteArray())
+                                          .collect(Collectors.toList()),
+                                    System.currentTimeMillis());
             if (want.size() > 0 && metrics != null && m == wanted) {
                 metrics.getSatisfiedRate().mark(want.size());
             }
@@ -659,14 +662,14 @@ public class Avalanche {
                 queryResults.add(null);
             } else {
                 queryResults.add(votes[i].get() >= required);
-                                                                                                                                                                    }
+            }
         }
 
         log.debug("query results: {} in: {} ms", queryResults.size(), System.currentTimeMillis() - now);
 
         return queryResults;
-    }   
-  
+    }
+
     @SuppressWarnings("unused")
     private EntryProcessor resolve(String processor, ClassLoader resolver) {
         try {

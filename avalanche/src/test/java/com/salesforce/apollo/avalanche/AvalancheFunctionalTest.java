@@ -40,13 +40,12 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Slf4jReporter;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -79,6 +78,7 @@ abstract public class AvalancheFunctionalTest {
     protected ScheduledExecutorService scheduler;
     protected List<X509Certificate>    seeds;
     protected List<View>               views;
+    private Communications comms;
 
     @AfterEach
     public void after() {
@@ -96,7 +96,7 @@ abstract public class AvalancheFunctionalTest {
 
         seeds = new ArrayList<>();
         members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        FfLocalCommSim ffComms = new FfLocalCommSim();
+        comms = getCommunications();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < Math.min(parameters.toleranceLevel + 1, certs.size())) {
@@ -109,7 +109,7 @@ abstract public class AvalancheFunctionalTest {
         System.out.println("Seeds: " + seeds.stream().map(e -> MtlsServer.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(members.size());
 
-        views = members.stream().map(node -> new View(node, ffComms, scheduler)).collect(Collectors.toList());
+        views = members.stream().map(node -> new View(node, comms, scheduler)).collect(Collectors.toList());
     }
 
     @Test
@@ -137,9 +137,8 @@ abstract public class AvalancheFunctionalTest {
 
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
-
-            AvalancheCommunications comm = getCommunications();
-            return new Avalanche(view, comm, aParams, avaMetrics);
+ 
+            return new Avalanche(view, comms, aParams, avaMetrics);
         }).collect(Collectors.toList());
 
         // # of txns per node
@@ -254,7 +253,7 @@ abstract public class AvalancheFunctionalTest {
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
     }
 
-    abstract protected AvalancheCommunications getCommunications();
+    abstract protected Communications getCommunications();
 
     private void seed(List<Avalanche> nodes) {
         long then = System.currentTimeMillis();

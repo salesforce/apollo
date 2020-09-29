@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.ghost;
 
+import static com.salesforce.apollo.ghost.communications.GhostClientCommunications.getCreate;
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
 import static com.salesforce.apollo.protocols.HashKey.LAST;
 import static com.salesforce.apollo.protocols.HashKey.ORIGIN;
@@ -28,13 +29,15 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.Interval;
+import com.salesforce.apollo.comm.CommonCommunications;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.MembershipListener;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler;
 import com.salesforce.apollo.ghost.communications.GhostClientCommunications;
-import com.salesforce.apollo.ghost.communications.GhostCommunications;
+import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.HashKey;
@@ -150,8 +153,9 @@ public class Ghost {
                         continue;
                     }
                     assert !target.equals(getNode());
-                    GhostClientCommunications connection = communications.connect(target, getNode());
+                    GhostClientCommunications connection = communications.apply(target, getNode());
                     if (connection == null) {
+                        log.debug("No connection for intervals on ring: {} to: {} ", i, target.getId());
                         continue;
                     }
                     try {
@@ -166,7 +170,7 @@ public class Ghost {
                             continue;
                         }
                     } finally {
-                        connection.close();
+                        connection.release();
                     }
                 }
                 if (zeros == view.getRings().size()) {
@@ -196,38 +200,35 @@ public class Ghost {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
-            communications.start();
         }
 
         public void stop() {
             if (!started.compareAndSet(true, false)) {
                 return;
             }
-            communications.close();
         }
     }
 
-    public static final int JOIN_MESSAGE_CHANNEL = 3;
+    public static final int     JOIN_MESSAGE_CHANNEL = 3;
+    private static final Logger log                  = LoggerFactory.getLogger(Ghost.class);
 
-    private static final Logger log = LoggerFactory.getLogger(Ghost.class);
+    private final CommonCommunications<GhostClientCommunications> communications;
+    private final AtomicBoolean                                   joined   = new AtomicBoolean(false);
+    private final ConcurrentSkipListSet<Member>                   joining  = new ConcurrentSkipListSet<>();
+    private final Listener                                        listener = new Listener();
+    private final GhostParameters                                 parameters;
+    private final int                                             rings;
+    private final Service                                         service  = new Service();
+    private final Store                                           store;
+    private final View                                            view;
 
-    private final GhostCommunications           communications;
-    private final AtomicBoolean                 joined   = new AtomicBoolean(false);
-    private final ConcurrentSkipListSet<Member> joining  = new ConcurrentSkipListSet<>();
-    private final Listener                      listener = new Listener();
-    private final GhostParameters               parameters;
-    private final int                           rings;
-    private final Service                       service  = new Service();
-    private final Store                         store;
-    private final View                          view;
-
-    public Ghost(GhostParameters p, GhostCommunications c, View v, Store s) {
+    public Ghost(GhostParameters p, Communications c, View v, Store s) {
         parameters = p;
-        communications = c;
         view = v;
         store = s;
-        communications.initialize(this);
 
+        communications = c.create(getNode(), getCreate(),
+                                  new GhostServerCommunications(service, c.getClientIdentityProvider()));
         view.register(listener);
         view.register(JOIN_MESSAGE_CHANNEL, listener);
         view.registerRoundListener(() -> listener.round());
@@ -251,8 +252,9 @@ public class Ghost {
             Member successor = ring.successor(key, m -> m.isLive() && !joining.contains(m));
             if (successor != null) {
                 DagEntry DagEntry;
-                GhostClientCommunications connection = communications.connect(successor, getNode());
+                GhostClientCommunications connection = communications.apply(successor, getNode());
                 if (connection == null) {
+                    log.debug("Error looking up {} on {} connection is null", key, successor);
                     return null;
                 }
                 try {
@@ -261,7 +263,7 @@ public class Ghost {
                     log.debug("Error looking up {} on {} : {}", key, successor, e);
                     return null;
                 } finally {
-                    connection.close();
+                    connection.release();
                 }
                 log.debug("ring {} on {} get {} from {} get: {}", ring.getIndex(), getNode().getId(), key,
                           successor.getId(), DagEntry != null);
@@ -340,16 +342,19 @@ public class Ghost {
                                                  .map(ring -> frist.submit(() -> {
                                                      Member successor = ring.successor(key);
                                                      if (successor != null) {
-                                                         GhostClientCommunications connection = communications.connect(successor,
-                                                                                                                       getNode());
+                                                         GhostClientCommunications connection = communications.apply(successor,
+                                                                                                                     getNode());
                                                          if (connection != null) {
                                                              try {
                                                                  connection.put(DagEntry);
                                                                  log.debug("put {} on {}", key, successor.getId());
                                                                  return true;
                                                              } finally {
-                                                                 connection.close();
+                                                                 connection.release();
                                                              }
+                                                         } else {
+                                                             log.debug("Error inserting {} on {} no connection", key,
+                                                                       successor);
                                                          }
                                                      }
 

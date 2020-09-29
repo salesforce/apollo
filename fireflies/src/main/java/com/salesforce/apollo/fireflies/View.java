@@ -237,9 +237,10 @@ public class View {
             try {
                 success = View.this.gossip(lastRing, link);
             } catch (Exception e) {
-                link.release();
                 log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing, e);
                 return;
+            } finally { 
+                link.release();
             }
             if (!success) {
                 try {
@@ -250,9 +251,10 @@ public class View {
                     }
                     success = View.this.gossip(lastRing, link);
                 } catch (Exception e) {
-                    link.release();
                     log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing);
                     return;
+                } finally {
+                    link.release();
                 }
                 if (!success) {
                     log.trace("Partial redirect round of gossip with {}, ring {} not redirecting further",
@@ -1170,26 +1172,12 @@ public class View {
             link.ping(200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
         } catch (Exception e) {
-            link.release();
             log.error("Exception pinging {} -> {} : {}", link.getMember(), link.getMember().getFirefliesEndpoint(),
                       e.toString(), e);
             accuseOn(link.getMember(), lastRing);
+        } finally {
+            link.release();
         }
-    }
-
-    /**
-     * @param ring - the ring to gossip on
-     * @return the communication link for this ring, based on current membership
-     *         state
-     */
-    FfClientCommunications monitorLinkFor(Integer ring) {
-        Participant successor = context.ring(ring).successor(node, m -> !m.isFailed() && !m.isAccused());
-        if (successor == null) {
-            log.debug("No successor to node on ring: {}", ring);
-            return null;
-        }
-
-        return linkFor(successor);
     }
 
     /**

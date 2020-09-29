@@ -16,33 +16,40 @@ import com.salesfoce.apollo.proto.GhostGrpc.GhostBlockingStub;
 import com.salesfoce.apollo.proto.Interval;
 import com.salesfoce.apollo.proto.Intervals;
 import com.salesfoce.apollo.proto.Intervals.Builder;
-import com.salesforce.apollo.comm.CommonCommunications;
-import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.SpaceGhost;
 
-import io.grpc.ManagedChannel;
-
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public class GhostClientCommunications extends CommonCommunications implements SpaceGhost {
-    private final GhostBlockingStub client;
-    private final ManagedChannel    channel;
+public class GhostClientCommunications implements SpaceGhost {
 
-    public GhostClientCommunications(ManagedChannel channel, Member member) {
-        super(member);
-        assert !(member instanceof Node) : "whoops : " + member + " is not to defined for instance of Node";
-        this.channel = channel;
-        this.client = GhostGrpc.newBlockingStub(channel);
+    public static CreateClientCommunications<GhostClientCommunications> getCreate() {
+        CreateClientCommunications<GhostClientCommunications> createFunction = (t, f,
+                                                                                c) -> new GhostClientCommunications(c,
+                                                                                        (Participant) t);
+        return createFunction;
+
     }
 
-    @Override
+    private final GhostBlockingStub       client;
+    private final ManagedServerConnection channel;
+    private final Member                  member;
+
+    public GhostClientCommunications(ManagedServerConnection channel, Member member) {
+//        assert !(member instanceof Node) : "whoops : " + member + " is not to defined for instance of Node";
+        this.member = member;
+        this.channel = channel;
+        this.client = GhostGrpc.newBlockingStub(channel.channel);
+    }
+
     public Participant getMember() {
-        return (Participant) super.getMember();
+        return (Participant) member;
     }
 
     @Override
@@ -50,9 +57,8 @@ public class GhostClientCommunications extends CommonCommunications implements S
         return String.format("->[%s]", member);
     }
 
-    @Override
-    public void close() {
-        channel.shutdown();
+    public void release() {
+        channel.release();
     }
 
     @Override

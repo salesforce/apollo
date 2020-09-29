@@ -155,43 +155,47 @@ public class MessageTest {
         long then = System.currentTimeMillis();
         views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds));
 
-        Utils.waitForCondition(15_000, 1_000, () -> {
-            return views.stream()
-                        .map(view -> view.getLive().size() != views.size() ? view : null)
-                        .filter(view -> view != null)
-                        .count() == 0;
-        });
+        try {
+            Utils.waitForCondition(15_000, 1_000, () -> {
+                return views.stream()
+                            .map(view -> view.getLive().size() != views.size() ? view : null)
+                            .filter(view -> view != null)
+                            .count() == 0;
+            });
 
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + views.size() + " members");
+            System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+                    + views.size() + " members");
 
-        Map<Participant, Receiver> receivers = new HashMap<>();
-        AtomicInteger current = new AtomicInteger(-1);
-        for (View view : views) {
-            Receiver receiver = new Receiver(views.size(), current);
-            view.register(0, receiver);
-            view.register(receiver);
-            receivers.put(view.getNode(), receiver);
-        }
-        int rounds = 5;
-        for (int r = 0; r < rounds; r++) {
-            CountDownLatch round = new CountDownLatch(views.size());
-            for (Receiver receiver : receivers.values()) {
-                receiver.setRound(round);
+            Map<Participant, Receiver> receivers = new HashMap<>();
+            AtomicInteger current = new AtomicInteger(-1);
+            for (View view : views) {
+                Receiver receiver = new Receiver(views.size(), current);
+                view.register(0, receiver);
+                view.register(receiver);
+                receivers.put(view.getNode(), receiver);
             }
-            ByteBuffer buf = ByteBuffer.wrap(new byte[4]);
-            buf.putInt(r);
-            views.parallelStream().forEach(view -> view.publish(0, buf.array()));
-            boolean success = round.await(10, TimeUnit.SECONDS);
-            assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
+            int rounds = 5;
+            for (int r = 0; r < rounds; r++) {
+                CountDownLatch round = new CountDownLatch(views.size());
+                for (Receiver receiver : receivers.values()) {
+                    receiver.setRound(round);
+                }
+                ByteBuffer buf = ByteBuffer.wrap(new byte[4]);
+                buf.putInt(r);
+                views.parallelStream().forEach(view -> view.publish(0, buf.array()));
+                boolean success = round.await(10, TimeUnit.SECONDS);
+                assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
 
-            round = new CountDownLatch(views.size());
-            current.incrementAndGet();
-            for (Receiver receiver : receivers.values()) {
-                assertEquals(0, receiver.dups.get());
-                receiver.reset();
+                round = new CountDownLatch(views.size());
+                current.incrementAndGet();
+                for (Receiver receiver : receivers.values()) {
+                    assertEquals(0, receiver.dups.get());
+                    receiver.reset();
+                }
             }
+            System.out.println();
+        } finally {
+            views.forEach(e -> e.getService().stop());
         }
-        System.out.println();
     }
 }

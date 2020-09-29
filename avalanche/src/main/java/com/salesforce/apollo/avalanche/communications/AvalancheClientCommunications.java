@@ -18,55 +18,59 @@ import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.Query.Builder;
 import com.salesfoce.apollo.proto.QueryResult;
-import com.salesforce.apollo.comm.CommonCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Avalanche;
 import com.salesforce.apollo.protocols.HashKey;
 
-import io.grpc.ManagedChannel;
-
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public class AvalancheClientCommunications extends CommonCommunications implements Avalanche {
-    private final AvalancheBlockingStub client;
-    private final ManagedChannel        channel;
+public class AvalancheClientCommunications implements Avalanche {
 
-    public AvalancheClientCommunications(ManagedChannel channel, Member member) {
-        super(member);
+    public static CreateClientCommunications<AvalancheClientCommunications> getCreate() {
+        CreateClientCommunications<AvalancheClientCommunications> createFunction = (t, f,
+                                                                                    c) -> new AvalancheClientCommunications(
+                                                                                            c, (Participant) t);
+        return createFunction;
+
+    }
+
+    private final ManagedServerConnection channel;
+    private final AvalancheBlockingStub   client;
+    private final Member                  member;
+
+    public AvalancheClientCommunications(ManagedServerConnection conn, Member member) {
         assert !(member instanceof Node) : "whoops : " + member + " is not to defined for instance of Node";
-        this.channel = channel;
-        this.client = AvalancheGrpc.newBlockingStub(channel);
+        this.channel = conn;
+        this.member = member;
+        this.client = AvalancheGrpc.newBlockingStub(conn.channel);
     }
 
-    @Override
     public Participant getMember() {
-        return (Participant) super.getMember();
-    }
-
-    @Override
-    public String toString() {
-        return String.format("->[%s]", member);
-    }
-
-    @Override
-    public void close() {
-        channel.shutdown();
+        return (Participant) member;
     }
 
     @Override
     public QueryResult query(List<ByteBuffer> transactions, Collection<HashKey> wanted) {
         Builder builder = Query.newBuilder();
-        transactions.stream().filter(e -> e.hasRemaining()).forEach(e -> builder.addTransactions(ByteString.copyFrom(e.array())));
+        transactions.stream()
+                    .filter(e -> e.hasRemaining())
+                    .forEach(e -> builder.addTransactions(ByteString.copyFrom(e.array())));
         wanted.forEach(e -> builder.addWanted(e.toByteString()));
         try {
             return client.query(builder.build());
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         }
+    }
+
+    public void release() {
+        channel.release();
     }
 
     @Override
@@ -79,5 +83,10 @@ public class AvalancheClientCommunications extends CommonCommunications implemen
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("->[%s]", member);
     }
 }

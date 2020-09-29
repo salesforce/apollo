@@ -99,7 +99,7 @@ public class LocalCommSimm implements Communications {
     private final Map<HashKey, ServerWrapper>         servers = new ConcurrentHashMap<>();
 
     public LocalCommSimm() {
-        this(ServerConnectionCache.newBuilder().setTarget(30).setTargetOpenAndIdle(40));
+        this(ServerConnectionCache.newBuilder().setTarget(30));
     }
 
     public LocalCommSimm(ServerConnectionCacheBuilder builder) {

@@ -97,43 +97,47 @@ public class SuccessorTest {
 
         views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds));
 
-        Utils.waitForCondition(15_000, 1_000, () -> {
-            return views.values()
-                        .stream()
-                        .map(view -> view.getLive().size() != views.size() ? view : null)
-                        .filter(view -> view != null)
-                        .count() == 0;
-        });
+        try {
+            Utils.waitForCondition(15_000, 1_000, () -> {
+                return views.values()
+                            .stream()
+                            .map(view -> view.getLive().size() != views.size() ? view : null)
+                            .filter(view -> view != null)
+                            .count() == 0;
+            });
 
-        for (View view : views.values()) {
-            for (Participant m : view.getView().values()) {
-                assertTrue(m.getEpoch() > 0);
+            for (View view : views.values()) {
+                for (Participant m : view.getView().values()) {
+                    assertTrue(m.getEpoch() > 0);
+                }
+                for (int r = 0; r < parameters.rings; r++) {
+                    Ring<Participant> ring = view.getRing(r);
+                    Participant successor = ring.successor(view.getNode());
+                    View successorView = views.get(successor);
+                    Participant test = successorView.getRing(r).successor(view.getNode());
+                    assertEquals(successor, test);
+                }
             }
-            for (int r = 0; r < parameters.rings; r++) {
-                Ring<Participant> ring = view.getRing(r);
-                Participant successor = ring.successor(view.getNode());
-                View successorView = views.get(successor);
-                Participant test = successorView.getRing(r).successor(view.getNode());
-                assertEquals(successor, test);
-            }
+
+            View test = views.get(members.get(0));
+            System.out.println("Test member: " + test.getNode());
+            Field lastRing = Service.class.getDeclaredField("lastRing");
+            lastRing.setAccessible(true);
+            int ring = (lastRing.getInt(test.getService()) + 1) % test.getRings().size();
+            Participant successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
+            System.out.println("ring: " + ring + " successor: " + successor);
+            assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
+            assertTrue(successor.isLive());
+            test.getService().gossip();
+
+            ring = (ring + 1) % test.getRings().size();
+            successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
+            System.out.println("ring: " + ring + " successor: " + successor);
+            assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
+            assertTrue(successor.isLive());
+            test.getService().gossip();
+        } finally {
+            views.values().forEach(e -> e.getService().stop());
         }
-
-        View test = views.get(members.get(0));
-        System.out.println("Test member: " + test.getNode());
-        Field lastRing = Service.class.getDeclaredField("lastRing");
-        lastRing.setAccessible(true);
-        int ring = (lastRing.getInt(test.getService()) + 1) % test.getRings().size();
-        Participant successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
-        System.out.println("ring: " + ring + " successor: " + successor);
-        assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
-        assertTrue(successor.isLive());
-        test.getService().gossip();
-
-        ring = (ring + 1) % test.getRings().size();
-        successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
-        System.out.println("ring: " + ring + " successor: " + successor);
-        assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
-        assertTrue(successor.isLive());
-        test.getService().gossip();
     }
 }

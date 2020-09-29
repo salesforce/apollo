@@ -7,10 +7,8 @@
 
 package com.salesforce.apollo.avalanche;
 
-import org.junit.jupiter.api.BeforeEach;
-
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
-import com.salesforce.apollo.avalanche.communications.AvalancheLocalCommSim;
+import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.LocalCommSimm;
 
 /**
  * @author hhildebrand
@@ -18,14 +16,7 @@ import com.salesforce.apollo.avalanche.communications.AvalancheLocalCommSim;
  */
 public class LocalSimFunctionalTest extends AvalancheFunctionalTest {
 
-    private AvalancheLocalCommSim localComSim;
-
-    @BeforeEach
-    public void beforeTest() {
-        localComSim = new AvalancheLocalCommSim();
-    }
-
-    protected AvalancheCommunications getCommunications() {
-        return localComSim;
+    protected Communications getCommunications() {
+        return new LocalCommSimm();
     }
 }

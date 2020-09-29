@@ -37,14 +37,13 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
+import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
-import com.salesforce.apollo.ghost.communications.GhostLocalCommSim;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -70,10 +69,12 @@ public class DagTest {
     private List<X509Certificate>    seeds;
     private List<View>               views;
     private Random                   entropy;
+    private LocalCommSimm            comms;
 
     @AfterEach
     public void after() {
         views.forEach(e -> e.getService().stop());
+        comms.close();
     }
 
     @BeforeEach
@@ -82,7 +83,7 @@ public class DagTest {
 
         seeds = new ArrayList<>();
         members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        FfLocalCommSim ffComms = new FfLocalCommSim();
+        comms = new LocalCommSimm();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -96,7 +97,7 @@ public class DagTest {
                 + seeds.stream().map(e -> Participant.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(members.size() * 3);
 
-        views = members.stream().map(node -> new View(node, ffComms, scheduler)).collect(Collectors.toList());
+        views = members.stream().map(node -> new View(node, comms, scheduler)).collect(Collectors.toList());
     }
 
     @Test
@@ -118,10 +119,8 @@ public class DagTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + testViews.size() + " members");
 
-        GhostLocalCommSim communications = new GhostLocalCommSim();
         List<Ghost> ghosties = testViews.stream()
-                                        .map(view -> new Ghost(new GhostParameters(), communications, view,
-                                                new MemoryStore()))
+                                        .map(view -> new Ghost(new GhostParameters(), comms, view, new MemoryStore()))
                                         .collect(Collectors.toList());
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
@@ -164,7 +163,7 @@ public class DagTest {
         for (int i = 0; i < add; i++) {
             View view = views.get(i + start);
             testViews.add(view);
-            ghosties.add(new Ghost(new GhostParameters(), communications, view, new MemoryStore()));
+            ghosties.add(new Ghost(new GhostParameters(), comms, view, new MemoryStore()));
         }
 
         then = System.currentTimeMillis();

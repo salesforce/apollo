@@ -117,14 +117,13 @@ public class ServerConnectionCache {
     }
 
     public static class ServerConnectionCacheBuilder {
-        private Clock                   clock             = Clock.systemUTC();
-        private ServerConnectionFactory factory           = null;
-        private Duration                minIdle           = Duration.ofMillis(100);
-        private int                     target            = 0;
-        private int                     targetOpenAndIdle = 0;
+        private Clock                   clock   = Clock.systemUTC();
+        private ServerConnectionFactory factory = null;
+        private Duration                minIdle = Duration.ofMillis(100);
+        private int                     target  = 0;
 
         public ServerConnectionCache build() {
-            return new ServerConnectionCache(factory, target, minIdle, clock, targetOpenAndIdle);
+            return new ServerConnectionCache(factory, target, minIdle, clock);
         }
 
         public Clock getClock() {
@@ -141,10 +140,6 @@ public class ServerConnectionCache {
 
         public int getTarget() {
             return target;
-        }
-
-        public int getTargetOpenAndIdle() {
-            return targetOpenAndIdle;
         }
 
         public ServerConnectionCacheBuilder setClock(Clock clock) {
@@ -166,11 +161,6 @@ public class ServerConnectionCache {
             this.target = target;
             return this;
         }
-
-        public ServerConnectionCacheBuilder setTargetOpenAndIdle(int targetOpenAndIdle) {
-            this.targetOpenAndIdle = targetOpenAndIdle;
-            return this;
-        }
     }
 
     public static interface ServerConnectionFactory {
@@ -190,23 +180,19 @@ public class ServerConnectionCache {
     private final Duration                               minIdle;
     private final PriorityQueue<ManagedServerConnection> queue = new PriorityQueue<>();
     private final int                                    target;
-    private final int                                    targetOpenAndIdle;
 
-    public ServerConnectionCache(ServerConnectionFactory factory, int target, Duration minIdle, Clock clock,
-            int targetOpenAndIdle) {
+    public ServerConnectionCache(ServerConnectionFactory factory, int target, Duration minIdle, Clock clock) {
         this.factory = factory;
         this.target = target;
         this.minIdle = minIdle;
-        this.targetOpenAndIdle = targetOpenAndIdle;
         this.clock = clock;
     }
 
     public <T> T borrow(Member to, Member from, CreateClientCommunications<T> createFunction) {
         return lock(() -> {
-            if (cache.size() == target) {
-                log.warn("Cache target open connections exceeded: {} from: {}, failed to open channel to {}", target,
-                         from, to.getId());
-                return null;
+            if (cache.size() >= target) {
+                log.debug("Cache target open connections exceeded: {}, opening from: {} to {}", target, from.getId(),
+                         to.getId());
             }
             ManagedServerConnection connection = cache.computeIfAbsent(to.getId(),
                                                                        member -> new ManagedServerConnection(to.getId(),
@@ -216,8 +202,8 @@ public class ServerConnectionCache {
                 return null;
             }
             if (connection.incrementBorrow()) {
-                log.debug("Opened channel to {}, last used: {}, channel: {}", connection.id, connection.lastUsed,
-                          connection.channel);
+                log.debug("Opened channel to {}, last used: {}, from: {}", connection.id, connection.lastUsed,
+                          from.getId());
                 queue.remove(connection);
             }
             log.trace("Opened channel to {}, borrowed: {}, usage: {}", connection.id, connection.borrowed,
@@ -292,7 +278,7 @@ public class ServerConnectionCache {
 
     private void manageConnections() {
         Iterator<ManagedServerConnection> connections = queue.iterator();
-        while (connections.hasNext() && cache.size() > targetOpenAndIdle) {
+        while (connections.hasNext() && cache.size() > target) {
             if (close(connections.next())) {
                 connections.remove();
             }

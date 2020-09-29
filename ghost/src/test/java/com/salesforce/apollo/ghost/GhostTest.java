@@ -18,26 +18,27 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
+import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.fireflies.CertWithKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
-import com.salesforce.apollo.ghost.communications.GhostLocalCommSim;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -62,8 +63,21 @@ public class GhostTest {
                                                    cert -> cert));
     }
 
+    private LocalCommSimm comms;
+    private List<View>    views;
+
+    @AfterEach
+    public void after() {
+        if (views != null) {
+            views.forEach(e -> e.getService().stop());
+        }
+        if (comms != null) {
+            comms.close();
+        }
+    }
+
     @Test
-    public void smoke() {
+    public void smoke() throws Exception {
         Random entropy = new Random(0x666);
 
         List<X509Certificate> seeds = new ArrayList<>();
@@ -71,7 +85,7 @@ public class GhostTest {
                                   .parallelStream()
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
-        FfLocalCommSim ffComms = new FfLocalCommSim();
+        comms = new LocalCommSimm();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -83,9 +97,7 @@ public class GhostTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        List<View> views = members.stream()
-                                  .map(node -> new View(node, ffComms, scheduler))
-                                  .collect(Collectors.toList());
+        views = members.stream().map(node -> new View(node, comms, scheduler)).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
         views.forEach(view -> view.getService().start(Duration.ofMillis(1000), seeds));
@@ -100,10 +112,8 @@ public class GhostTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + views.size() + " members");
 
-        GhostLocalCommSim communications = new GhostLocalCommSim();
         List<Ghost> ghosties = views.stream()
-                                    .map(view -> new Ghost(new GhostParameters(), communications, view,
-                                            new MemoryStore()))
+                                    .map(view -> new Ghost(new GhostParameters(), comms, view, new MemoryStore()))
                                     .collect(Collectors.toList());
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
@@ -125,7 +135,8 @@ public class GhostTest {
             }
         }
 
-        for (java.util.Map.Entry<HashKey, DagEntry> entry : stored.entrySet()) {
+        Thread.sleep(3000);
+        for (Entry<HashKey, DagEntry> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
                 DagEntry found = ghost.getDagEntry(entry.getKey());
                 assertNotNull(found);
