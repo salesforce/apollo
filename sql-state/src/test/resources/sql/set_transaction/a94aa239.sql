@@ -1,2 +1,0 @@
--- file:transactions.sql ln:43 expect:true
-SET TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY, DEFERRABLE

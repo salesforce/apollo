@@ -66,7 +66,6 @@ public class SmokeTest {
         }
     }
 
-    @Test
     void testCreateSchema() throws Exception {
         try (Connection c = connect(); Statement s = c.createStatement()) {
             s.executeQuery("SELECT * FROM metadata.TABLES");

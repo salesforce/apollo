@@ -1,2 +1,0 @@
--- file:bit.sql ln:162 expect:true
-INSERT INTO BIT_SHIFT_TABLE VALUES (B'1101100000000000')

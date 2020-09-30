@@ -1,2 +1,0 @@
--- file:bit.sql ln:142 expect:true
-SELECT POSITION(B'111010110' IN B'00000111010110')

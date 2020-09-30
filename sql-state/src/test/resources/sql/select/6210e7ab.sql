@@ -1,2 +1,0 @@
--- file:jsonb.sql ln:854 expect:true
-SELECT '["a","b","c",[1,2],null]'::jsonb -> 4
