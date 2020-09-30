@@ -20,10 +20,8 @@
 		<module>simple-ca</module>
 		<module>bootstrap-service</module>
 		<module>bootstrap-client</module>
-		<module>chain-scopes</module>
 		<module>sql-state</module>
 		<module>memberships</module>
-		<module>lambdas</module>
 	</modules>
 
 	<properties>
