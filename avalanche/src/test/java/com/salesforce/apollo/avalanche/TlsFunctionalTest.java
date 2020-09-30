@@ -7,14 +7,22 @@
 
 package com.salesforce.apollo.avalanche;
 
+import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.MtlsCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
+import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.fireflies.View;
+
 /**
  * @author hhildebrand
  *
  */
 public class TlsFunctionalTest extends AvalancheFunctionalTest {
 
-    protected AvalancheCommunications getCommunications() {
-        return new AvalancheNettyCommunications(rpcStats, eventLoop, eventLoop, eventLoop, executor, executor);
+    protected Communications getCommunications(Node node) {
+        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(30);
+        return new MtlsCommunications(builder, View.getStandardEpProvider(node));
     }
 
 }

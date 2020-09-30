@@ -18,6 +18,7 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -63,26 +64,29 @@ abstract public class AvalancheFunctionalTest {
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 30)
+        certs = IntStream.range(1, 31)
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> MtlsServer.getMemberId(cert.getCertificate()),
                                                    cert -> cert));
     }
 
-    protected File                     baseDir;
-    protected MetricRegistry           commRegistry;
-    protected Random                   entropy;
-    protected List<Node>               members;
-    protected MetricRegistry           node0Registry;
-    protected ScheduledExecutorService scheduler;
-    protected List<X509Certificate>    seeds;
-    protected List<View>               views;
-    private Communications comms;
+    protected File                       baseDir;
+    protected MetricRegistry             commRegistry;
+    protected Random                     entropy;
+    protected List<Node>                 members;
+    protected MetricRegistry             node0Registry;
+    protected ScheduledExecutorService   scheduler;
+    protected List<X509Certificate>      seeds;
+    protected List<View>                 views;
+    private Map<HashKey, Communications> communications = new HashMap<>();
 
     @AfterEach
     public void after() {
         views.forEach(e -> e.getService().stop());
+        views.clear();
+        communications.values().forEach(e -> e.close());
+        communications.clear();
     }
 
     @BeforeEach
@@ -96,7 +100,6 @@ abstract public class AvalancheFunctionalTest {
 
         seeds = new ArrayList<>();
         members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        comms = getCommunications();
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < Math.min(parameters.toleranceLevel + 1, certs.size())) {
@@ -109,7 +112,11 @@ abstract public class AvalancheFunctionalTest {
         System.out.println("Seeds: " + seeds.stream().map(e -> MtlsServer.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(members.size());
 
-        views = members.stream().map(node -> new View(node, comms, scheduler)).collect(Collectors.toList());
+        views = members.stream().map(node -> {
+            Communications comms = getCommunications(node);
+            communications.put(node.getId(), comms);
+            return new View(node, comms, scheduler);
+        }).collect(Collectors.toList());
     }
 
     @Test
@@ -137,16 +144,17 @@ abstract public class AvalancheFunctionalTest {
 
             // # of firefly rounds per noOp generation round
             aParams.delta = 1;
- 
-            return new Avalanche(view, comms, aParams, avaMetrics);
+
+            return new Avalanche(view, communications.get(view.getNode().getId()), aParams, avaMetrics);
         }).collect(Collectors.toList());
 
         // # of txns per node
         int target = 4_000;
         Duration ffRound = Duration.ofMillis(500);
         int outstanding = 400;
-        int runtime = (int) Duration.ofSeconds(100).toMillis();
+        int runtime = (int) Duration.ofSeconds(120).toMillis();
 
+        communications.values().forEach(e -> e.start());
         views.parallelStream().forEach(view -> view.getService().start(ffRound, seeds));
 
         assertTrue(Utils.waitForCondition(30_000, 3_000, () -> {
@@ -168,6 +176,7 @@ abstract public class AvalancheFunctionalTest {
         } catch (TimeoutException e) {
             nodes.forEach(node -> node.stop());
             views.forEach(v -> v.getService().stop());
+            communications.values().forEach(c -> c.close());
             fail("Genesis timeout");
 
 //            Graphviz.fromGraph(DagViz.visualize("smoke", nodes.get(0).getDag(), false)).render(Format.PNG).toFile(new File("smoke.png"));
@@ -253,7 +262,7 @@ abstract public class AvalancheFunctionalTest {
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
     }
 
-    abstract protected Communications getCommunications();
+    abstract protected Communications getCommunications(Node node);
 
     private void seed(List<Avalanche> nodes) {
         long then = System.currentTimeMillis();

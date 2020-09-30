@@ -7,8 +7,11 @@
 
 package com.salesforce.apollo.avalanche;
 
+import org.junit.jupiter.api.AfterEach;
+
 import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.fireflies.Node;
 
 /**
  * @author hhildebrand
@@ -16,7 +19,17 @@ import com.salesforce.apollo.comm.LocalCommSimm;
  */
 public class LocalSimFunctionalTest extends AvalancheFunctionalTest {
 
-    protected Communications getCommunications() {
-        return new LocalCommSimm();
+    private LocalCommSimm comms;
+
+    @AfterEach
+    public void after() {
+        comms = null;
+    }
+
+    protected Communications getCommunications(Node node) {
+        if (comms == null) {
+            comms = new LocalCommSimm();
+        }
+        return comms;
     }
 }
