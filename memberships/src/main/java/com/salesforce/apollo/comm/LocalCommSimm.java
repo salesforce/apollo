@@ -146,7 +146,10 @@ public class LocalCommSimm implements Communications {
     public void start() {
         servers.entrySet().forEach(entry -> {
             try {
-                entry.getValue().server.start();
+                Server server = entry.getValue().server;
+                if (server.isShutdown() || server.isTerminated()) {
+                    server.start();
+                }
             } catch (IOException ex) {
                 LoggerFactory.getLogger(LocalCommSimm.class).info("Server start failed for: ", entry.getKey());
             }

@@ -12,19 +12,16 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.time.Duration;
 
-import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonSubTypes.Type;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.salesforce.apollo.IdentitySource.DefaultIdentitySource;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
-import com.salesforce.apollo.avalanche.communications.AvalancheLocalCommSim;
-import com.salesforce.apollo.avalanche.communications.netty.AvalancheNettyCommunications;
-import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
-import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
-import com.salesforce.apollo.fireflies.communications.netty.FirefliesNettyCommunications;
-import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
+import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.EndpointProvider;
+import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.MtlsCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 
 /**
@@ -32,11 +29,10 @@ import com.salesforce.apollo.ghost.Ghost.GhostParameters;
  * @since 218
  */
 public class ApolloConfiguration {
-
     public interface CommunicationsFactory {
-        AvalancheCommunications avalanche(MetricRegistry metrics);
 
-        FirefliesCommunications fireflies(MetricRegistry metrics);
+        Communications getComms();
+
     }
 
     public static class FileIdentitySource implements IdentityStoreSource {
@@ -60,38 +56,6 @@ public class ApolloConfiguration {
         IdentitySource getIdentitySource(String caAlias, String identityAlias);
     }
 
-    public static class NettyCommunicationsFactory implements CommunicationsFactory {
-
-        public int avalancheClientThreads           = 10;
-        public int avalancheBossThreads             = 10;
-        public int avalancheWorkerThreads           = 10;
-        public int avalancheInboundExecutorThreads  = 200;
-        public int avalancheOutboundExecutorThreads = 10;
-
-        public int firefliesClientThreads           = 10;
-        public int firefliesBossThreads             = 10;
-        public int firefliesWorkerThreads           = 10;
-        public int firefliesInboundExecutorThreads  = 10;
-        public int firefliesOutboundExecutorThreads = 10;
-
-        @Override
-        public AvalancheCommunications avalanche(MetricRegistry metrics) {
-            return new AvalancheNettyCommunications("Avalanche",
-                    metrics == null ? null : new DropWizardStatsPlugin(metrics), avalancheClientThreads,
-                    avalancheBossThreads, avalancheWorkerThreads, avalancheInboundExecutorThreads,
-                    avalancheOutboundExecutorThreads);
-        }
-
-        @Override
-        public FirefliesCommunications fireflies(MetricRegistry metrics) {
-            return new FirefliesNettyCommunications("Fireflies",
-                    metrics == null ? null : new DropWizardStatsPlugin(metrics), firefliesClientThreads,
-                    firefliesBossThreads, firefliesWorkerThreads, firefliesInboundExecutorThreads,
-                    firefliesOutboundExecutorThreads);
-        }
-
-    }
-
     public static class ResourceIdentitySource implements IdentityStoreSource {
 
         public char[] password = DEFAULT_PASSWORD;
@@ -108,34 +72,38 @@ public class ApolloConfiguration {
         }
     }
 
+    public static class MtlsCommunicationsFactory implements CommunicationsFactory {
+        public int target = 30;
+
+        @Override
+        public Communications getComms() {
+            EndpointProvider ep = null;
+            return new MtlsCommunications(ServerConnectionCache.newBuilder(), ep);
+        }
+
+    }
+
     public static class SimCommunicationsFactory implements CommunicationsFactory {
+
+        public static LocalCommSimm LOCAL_COM;
 
         static {
             reset();
         }
 
-        public static AvalancheLocalCommSim AVALANCHE_LOCAL_COMM;
-        public static FfLocalCommSim        FF_LOCAL_COM;
-
         public static void reset() {
-            AVALANCHE_LOCAL_COMM = new AvalancheLocalCommSim();
-            FF_LOCAL_COM = new FfLocalCommSim();
+            if (LOCAL_COM != null) {
+                LOCAL_COM.close();
+            }
+            LOCAL_COM = new LocalCommSimm();
         }
 
         @Override
-        public AvalancheCommunications avalanche(MetricRegistry metrics) {
-            if (AVALANCHE_LOCAL_COMM == null) {
+        public Communications getComms() {
+            if (LOCAL_COM == null) {
                 throw new IllegalStateException("SimCommunicationsFactory must be reset first");
             }
-            return AVALANCHE_LOCAL_COMM;
-        }
-
-        @Override
-        public FirefliesCommunications fireflies(MetricRegistry metrics) {
-            if (FF_LOCAL_COM == null) {
-                throw new IllegalStateException("SimCommunicationsFactory must be reset first");
-            }
-            return FF_LOCAL_COM;
+            return LOCAL_COM;
         }
 
     }
@@ -150,9 +118,9 @@ public class ApolloConfiguration {
     public long                  bufferSize     = 100 * 1024;
     public String                ca             = DEFAULT_CA_ALIAS;
     @JsonSubTypes({ @Type(value = SimCommunicationsFactory.class, name = "sim"),
-                    @Type(value = NettyCommunicationsFactory.class, name = "netty") })
+                    @Type(value = MtlsCommunications.class, name = "mtls") })
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
-    public CommunicationsFactory communications = new NettyCommunicationsFactory();
+    public CommunicationsFactory communications = new MtlsCommunicationsFactory();
     public GhostParameters       ghost          = new GhostParameters();
     public Duration              gossipInterval = DEFAULT_GOSSIP_INTERVAL;
     public String                identity       = DEFAULT_IDENTITY_ALIAS;

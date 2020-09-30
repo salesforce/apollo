@@ -34,20 +34,18 @@ import com.salesforce.apollo.protocols.Utils;
  * @author hhildebrand
  */
 public class BootstrapIdSource implements IdentityStoreSource {
-    public static final String ALGORITHM = "RSA";
-    public static final int DEFAULT_KEY_SIZE = 2048;
+    public static final String ALGORITHM           = "RSA";
+    public static final int    DEFAULT_KEY_SIZE    = 2048;
     public static final String SIGNATURE_ALGORITHM = "SHA256withRSA";
 
-    public int avalanchePort = 0;
-    public URL endpoint;
-    public int firefliesPort = 0;
-    public int ghostPort = 0;
+    public int    grpcPort              = 0;
     public String hostName;
     public String keyGeneratorAlgorithm = ALGORITHM;
-    public int keySize = DEFAULT_KEY_SIZE;
-    public int retries = 30;
-    public long retryPeriod = 1_000; // MS
-    public String signatureAlgorithm = SIGNATURE_ALGORITHM;
+    public int    keySize               = DEFAULT_KEY_SIZE;
+    public int    retries               = 30;
+    public long   retryPeriod           = 1_000;              // MS
+    public String signatureAlgorithm    = SIGNATURE_ALGORITHM;
+    public URL    endpoint;
 
     public KeyPair generateKeyPair() {
         try {
@@ -57,6 +55,10 @@ public class BootstrapIdSource implements IdentityStoreSource {
         } catch (final NoSuchAlgorithmException | InvalidParameterException e) {
             throw new IllegalStateException("Unable to generate keypair", e);
         }
+    }
+
+    protected URI getEndpoint() throws URISyntaxException {
+        return endpoint.toURI();
     }
 
     @Override
@@ -72,9 +74,7 @@ public class BootstrapIdSource implements IdentityStoreSource {
         WebTarget targetEndpoint = client.target(uri);
 
         Bootstrap bootstrap = new Bootstrap(targetEndpoint, pair.getPublic(),
-                                            forSigning(pair.getPrivate(), new SecureRandom()), getHostName(),
-                                            getFirefliesPort(),
-                                            getGhostPort(), getAvalanchePort(), retryPeriod, retries);
+                forSigning(pair.getPrivate(), new SecureRandom()), getHostName(), getGrpcPort(), retryPeriod, retries);
         return new BootstrapIdentitySource(bootstrap, pair.getPrivate());
     }
 
@@ -93,20 +93,8 @@ public class BootstrapIdSource implements IdentityStoreSource {
         return signature;
     }
 
-    protected int getAvalanchePort() {
-        return avalanchePort != 0 ? avalanchePort : Utils.allocatePort();
-    }
-
-    protected URI getEndpoint() throws URISyntaxException {
-        return endpoint.toURI();
-    }
-
-    protected int getFirefliesPort() {
-        return firefliesPort != 0 ? firefliesPort : Utils.allocatePort();
-    }
-
-    protected int getGhostPort() {
-        return ghostPort != 0 ? ghostPort : Utils.allocatePort();
+    protected int getGrpcPort() {
+        return grpcPort != 0 ? grpcPort : Utils.allocatePort();
     }
 
     protected String getHostName() {

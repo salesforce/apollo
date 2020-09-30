@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.AvaMetrics;
 import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -49,6 +50,7 @@ public class Apollo {
     private final ApolloConfiguration configuration;
     private final AtomicBoolean       running = new AtomicBoolean();
     private final View                view;
+    private final Communications      communications;
 
     public Apollo(ApolloConfiguration config) throws SocketException, KeyStoreException {
         this(config, null);
@@ -56,12 +58,12 @@ public class Apollo {
 
     public Apollo(ApolloConfiguration c, MetricRegistry metrics) throws SocketException, KeyStoreException {
         configuration = c;
+        communications = null;
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(configuration.threadPool);
         view = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
                                           ApolloConfiguration.DEFAULT_IDENTITY_ALIAS)
-                       .createView(configuration.communications.fireflies(metrics), scheduler);
-        avalanche = new Avalanche(view, configuration.communications.avalanche(metrics), c.avalanche,
-                metrics == null ? null : new AvaMetrics(metrics));
+                       .createView(communications, scheduler);
+        avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics));
     }
 
     public Avalanche getAvalanche() {

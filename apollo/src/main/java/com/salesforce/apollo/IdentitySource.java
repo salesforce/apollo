@@ -12,7 +12,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetSocketAddress;
 import java.net.URL;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -30,7 +29,7 @@ import com.salesforce.apollo.bootstrap.client.Bootstrap;
 import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.View; 
+import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -179,33 +178,19 @@ public interface IdentitySource {
     }
 
     class MappingIdentitySource extends BootstrapIdentitySource {
-        private final int    avalanchePort;
-        private final int    firefliesPort;
-        private final int    ghostPort;
-        private final String hostName;
 
         /**
          * @param bootstrap
          * @param privateKey
          */
-        public MappingIdentitySource(Bootstrap bootstrap, PrivateKey privateKey, String hostName, int firefliesPort,
-                int ghostPort, int avalanchePort) {
+        public MappingIdentitySource(Bootstrap bootstrap, PrivateKey privateKey) {
             super(bootstrap, privateKey);
-            this.hostName = hostName;
-            this.firefliesPort = firefliesPort;
-            this.ghostPort = ghostPort;
-            this.avalanchePort = avalanchePort;
         }
 
         @Override
         public View createView(Communications communications, ScheduledExecutorService scheduler) {
             FirefliesParameters parameters = new FirefliesParameters(getCA());
-
-            InetSocketAddress[] boundPorts = new InetSocketAddress[] { new InetSocketAddress(hostName, firefliesPort),
-                                                                       new InetSocketAddress(hostName, ghostPort),
-                                                                       new InetSocketAddress(hostName, avalanchePort) };
-
-            return new View(communications.newNode(identity(), parameters, boundPorts), communications, scheduler);
+            return new View(new Node(identity(), parameters), communications, scheduler);
         }
     }
 
@@ -213,11 +198,10 @@ public interface IdentitySource {
     public static final String DEFAULT_IDENTITY_ALIAS = "identity";
     public static final String SEED_PREFIX            = "seed.";
 
-    default <T extends Node> View createView(Communications communications,
-                                             ScheduledExecutorService scheduler) {
+    default <T extends Node> View createView(Communications communications, ScheduledExecutorService scheduler) {
         FirefliesParameters parameters = new FirefliesParameters(getCA());
 
-        return new View(communications.newNode(identity(), parameters), communications, scheduler);
+        return new View(new Node(identity(), parameters), communications, scheduler);
     }
 
     X509Certificate getCA();
