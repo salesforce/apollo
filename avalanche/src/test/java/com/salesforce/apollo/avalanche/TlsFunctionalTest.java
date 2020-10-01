@@ -16,7 +16,6 @@ import com.salesforce.apollo.fireflies.View;
 
 /**
  * @author hhildebrand
- *
  */
 public class TlsFunctionalTest extends AvalancheFunctionalTest {
 
@@ -25,4 +24,8 @@ public class TlsFunctionalTest extends AvalancheFunctionalTest {
         return new MtlsCommunications(builder, View.getStandardEpProvider(node));
     }
 
+    @Override
+    protected int testCardinality() {
+        return 14;
+    }
 }

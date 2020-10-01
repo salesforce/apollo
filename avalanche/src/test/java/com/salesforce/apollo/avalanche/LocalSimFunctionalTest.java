@@ -15,7 +15,6 @@ import com.salesforce.apollo.fireflies.Node;
 
 /**
  * @author hhildebrand
- *
  */
 public class LocalSimFunctionalTest extends AvalancheFunctionalTest {
 
@@ -31,5 +30,10 @@ public class LocalSimFunctionalTest extends AvalancheFunctionalTest {
             comms = new LocalCommSimm();
         }
         return comms;
+    }
+
+    @Override
+    protected int testCardinality() {
+        return 31;
     }
 }
