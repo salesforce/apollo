@@ -9,6 +9,7 @@ package com.salesforce.apollo.fireflies.communications;
 import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.FirefliesGrpc.FirefliesImplBase;
@@ -42,28 +43,19 @@ public class FfServerCommunications extends FirefliesImplBase {
 
     @Override
     public void gossip(SayWhat request, StreamObserver<Gossip> responseObserver) {
-        ByteString context = request.getContext();
-        Service service = getService(context);
-        if (service == null) {
-            responseObserver.onError(new StatusRuntimeException(Status.UNKNOWN));
-        } else {
-            Gossip gossip = service.rumors(request.getRing(), request.getGossip(), getFrom(), getCert(),
-                                           request.getNote());
+        evaluate(responseObserver, request.getContext(), s -> {
+            Gossip gossip = s.rumors(request.getRing(), request.getGossip(), getFrom(), getCert(), request.getNote());
             responseObserver.onNext(gossip);
             responseObserver.onCompleted();
-        }
+        });
     }
 
     @Override
     public void ping(Null request, StreamObserver<Null> responseObserver) {
-        ByteString context = request.getContext();
-        Service service = getService(context);
-        if (service == null) {
-            responseObserver.onError(new StatusRuntimeException(Status.UNKNOWN));
-        } else {
+        evaluate(responseObserver, request.getContext(), s -> {
             responseObserver.onNext(Null.getDefaultInstance());
             responseObserver.onCompleted();
-        }
+        });
     }
 
     public void register(Member member, Service service) {
@@ -72,14 +64,19 @@ public class FfServerCommunications extends FirefliesImplBase {
 
     @Override
     public void update(State request, StreamObserver<Null> responseObserver) {
-        ByteString context = request.getContext();
+        evaluate(responseObserver, request.getContext(), s -> {
+            s.update(request.getRing(), request.getUpdate(), getFrom());
+            responseObserver.onNext(Null.getDefaultInstance());
+            responseObserver.onCompleted();
+        });
+    }
+
+    private void evaluate(StreamObserver<?> responseObserver, ByteString context, Consumer<Service> c) {
         Service service = getService(context);
         if (service == null) {
             responseObserver.onError(new StatusRuntimeException(Status.UNKNOWN));
         } else {
-            service.update(request.getRing(), request.getUpdate(), getFrom());
-            responseObserver.onNext(Null.newBuilder().build());
-            responseObserver.onCompleted();
+            c.accept(service);
         }
     }
 
