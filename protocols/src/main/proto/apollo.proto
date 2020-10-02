@@ -46,7 +46,7 @@ service Ghost {
      * Ghost API
      */
     rpc get ( Bytes ) returns (DagEntry) {}
-    rpc put ( DagEntry ) returns (Null) {}
+    rpc put ( ADagEntry ) returns (Null) {}
 
     /**
      * Ghost interval gossip
@@ -80,12 +80,19 @@ message DagEntries {
 }
 
 message Bytes {
-    bytes bites = 1;
+    bytes context = 1;
+    bytes bites = 2;
+}
+
+message ADagEntry {
+    bytes context = 1;
+    DagEntry entry = 2;
 }
 
 message Intervals {
-    repeated Interval intervals = 1;
-    repeated bytes have = 2;
+    bytes context = 1;
+    repeated Interval intervals = 2;
+    repeated bytes have = 3;
 }
 
 message Query {

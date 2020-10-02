@@ -8,6 +8,7 @@ package com.salesforce.apollo.ghost.communications;
 
 import java.util.List;
 
+import com.salesfoce.apollo.proto.ADagEntry;
 import com.salesfoce.apollo.proto.Bytes;
 import com.salesfoce.apollo.proto.DagEntries;
 import com.salesfoce.apollo.proto.DagEntry;
@@ -72,7 +73,7 @@ public class GhostClientCommunications implements SpaceGhost {
 
     @Override
     public void put(DagEntry value) {
-        client.put(value);
+        client.put(ADagEntry.newBuilder().setEntry(value).build());
     }
 
 }

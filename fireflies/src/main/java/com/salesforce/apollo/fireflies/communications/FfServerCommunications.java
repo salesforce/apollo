@@ -6,12 +6,9 @@
  */
 package com.salesforce.apollo.fireflies.communications;
 
-import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.FirefliesGrpc.FirefliesImplBase;
 import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.Null;
@@ -22,23 +19,20 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class FfServerCommunications extends FirefliesImplBase {
-
-    private final ClientIdentity        identity;
-    private final Map<HashKey, Service> services = new ConcurrentHashMap<>();
-    private final Service               system;
+public class FfServerCommunications extends FirefliesImplBase implements BaseServerCommunications<Service> {
+    private Service               system;
+    private ClientIdentity        identity;
+    private Map<HashKey, Service> services = new ConcurrentHashMap<>();
 
     public FfServerCommunications(Service system, ClientIdentity identity) {
-        this.identity = identity;
         this.system = system;
+        this.identity = identity;
     }
 
     @Override
@@ -47,7 +41,7 @@ public class FfServerCommunications extends FirefliesImplBase {
             Gossip gossip = s.rumors(request.getRing(), request.getGossip(), getFrom(), getCert(), request.getNote());
             responseObserver.onNext(gossip);
             responseObserver.onCompleted();
-        });
+        }, system, services);
     }
 
     @Override
@@ -55,9 +49,10 @@ public class FfServerCommunications extends FirefliesImplBase {
         evaluate(responseObserver, request.getContext(), s -> {
             responseObserver.onNext(Null.getDefaultInstance());
             responseObserver.onCompleted();
-        });
+        }, system, services);
     }
 
+    @Override
     public void register(Member member, Service service) {
         services.computeIfAbsent(member.getId(), m -> service);
     }
@@ -68,28 +63,12 @@ public class FfServerCommunications extends FirefliesImplBase {
             s.update(request.getRing(), request.getUpdate(), getFrom());
             responseObserver.onNext(Null.getDefaultInstance());
             responseObserver.onCompleted();
-        });
+        }, system, services);
     }
 
-    private void evaluate(StreamObserver<?> responseObserver, ByteString context, Consumer<Service> c) {
-        Service service = getService(context);
-        if (service == null) {
-            responseObserver.onError(new StatusRuntimeException(Status.UNKNOWN));
-        } else {
-            c.accept(service);
-        }
-    }
-
-    private X509Certificate getCert() {
-        return (X509Certificate) identity.getCert();
-    }
-
-    private HashKey getFrom() {
-        return identity.getFrom();
-    }
-
-    private Service getService(ByteString context) {
-        return (context.isEmpty() && system != null) ? system : services.get(new HashKey(context));
+    @Override
+    public ClientIdentity getClientIdentity() {
+        return identity;
     }
 
 }
