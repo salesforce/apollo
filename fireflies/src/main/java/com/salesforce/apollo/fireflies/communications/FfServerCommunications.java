@@ -14,8 +14,8 @@ import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.Null;
 import com.salesfoce.apollo.proto.SayWhat;
 import com.salesfoce.apollo.proto.State;
+import com.salesforce.apollo.comm.grpc.BaseServerCommunications;
 import com.salesforce.apollo.fireflies.View.Service;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -53,8 +53,8 @@ public class FfServerCommunications extends FirefliesImplBase implements BaseSer
     }
 
     @Override
-    public void register(Member member, Service service) {
-        services.computeIfAbsent(member.getId(), m -> service);
+    public void register(HashKey id, Service service) {
+        services.computeIfAbsent(id, m -> service);
     }
 
     @Override

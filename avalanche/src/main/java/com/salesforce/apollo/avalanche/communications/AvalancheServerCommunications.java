@@ -19,8 +19,7 @@ import com.salesfoce.apollo.proto.DagNodes.Builder;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesforce.apollo.avalanche.Avalanche.Service;
-import com.salesforce.apollo.fireflies.communications.BaseServerCommunications;
-import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.comm.grpc.BaseServerCommunications;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -62,8 +61,8 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
     }
 
     @Override
-    public void register(Member member, Service service) {
-        services.computeIfAbsent(member.getId(), m -> service);
+    public void register(HashKey id, Service service) {
+        services.computeIfAbsent(id, m -> service);
     }
 
     @Override

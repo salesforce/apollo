@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies.communications;
+package com.salesforce.apollo.comm.grpc;
 
 import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.function.Consumer;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -49,6 +48,6 @@ public abstract interface BaseServerCommunications<T> {
         return (context.isEmpty() && system != null) ? system : services.get(new HashKey(context));
     }
 
-    void register(Member member, T service);
+    void register(HashKey id, T service);
 
 }

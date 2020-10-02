@@ -18,9 +18,8 @@ import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.GhostGrpc.GhostImplBase;
 import com.salesfoce.apollo.proto.Intervals;
 import com.salesfoce.apollo.proto.Null;
-import com.salesforce.apollo.fireflies.communications.BaseServerCommunications;
+import com.salesforce.apollo.comm.grpc.BaseServerCommunications;
 import com.salesforce.apollo.ghost.Ghost.Service;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -76,8 +75,8 @@ public class GhostServerCommunications extends GhostImplBase implements BaseServ
     }
 
     @Override
-    public void register(Member member, Service service) {
-        services.computeIfAbsent(member.getId(), id -> service);
+    public void register(HashKey id, Service service) {
+        services.computeIfAbsent(id, m -> service);
     }
 
 }
