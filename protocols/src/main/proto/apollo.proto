@@ -7,6 +7,13 @@ option objc_class_prefix = "Ap";
 
 package apollo;
 
+service Orderer {
+    /**
+     * The batch ordering of transactions
+     */
+     rpc submit(Submission) returns (SubmitResolution) {}
+     
+}
 
 service Fireflies {
     /*
@@ -47,12 +54,29 @@ service Ghost {
     rpc intervals (Intervals) returns (DagEntries) {} 
 }
 
+message Submission {
+    bytes context = 1;
+    bytes source = 2;
+    repeated bytes batch = 3;
+    bytes signature = 4;
+}
+
+message SubmitResolution {
+    bool accepted = 1;
+    string failureMessage = 2;
+    bytes prev = 3;
+    bytes block = 4;
+    
+}
+
 message DagNodes {
-    repeated bytes entries = 1;
+    bytes context = 1;
+    repeated bytes entries = 2;
 }
 
 message DagEntries {
-    repeated DagEntry entries = 1;
+    bytes context = 1;
+    repeated DagEntry entries = 2;
 }
 
 message Bytes {
@@ -65,22 +89,26 @@ message Intervals {
 }
 
 message Query {
-    repeated bytes transactions = 1;
-    repeated bytes wanted = 2;
+    bytes context = 1;
+    repeated bytes transactions = 2;
+    repeated bytes wanted = 3;
 }
 
 message Null {
+    bytes context = 1;
 }
 
 message SayWhat {
- Signed note = 1;
- int32 ring = 2;
- Digests gossip = 3;
+    bytes context = 1;
+    Signed note = 2;
+    int32 ring = 3;
+    Digests gossip = 4;
 }
 
 message State {
-    int32 ring = 1;
-    Update update = 2;
+    bytes context = 1;
+    int32 ring = 2;
+    Update update = 3;
 }
 
 message MessageDigest {

@@ -28,9 +28,7 @@ import com.salesforce.apollo.protocols.Fireflies;
 public class FfClientCommunications implements Fireflies {
 
     public static CreateClientCommunications<FfClientCommunications> getCreate() {
-        CreateClientCommunications<FfClientCommunications> createFunction = (t, f, c) -> new FfClientCommunications(c,
-                (Participant) t);
-        return createFunction;
+        return (t, f, c) -> new FfClientCommunications(c, (Participant) t);
 
     }
 

@@ -33,10 +33,7 @@ import com.salesforce.apollo.protocols.HashKey;
 public class AvalancheClientCommunications implements Avalanche {
 
     public static CreateClientCommunications<AvalancheClientCommunications> getCreate() {
-        CreateClientCommunications<AvalancheClientCommunications> createFunction = (t, f,
-                                                                                    c) -> new AvalancheClientCommunications(
-                                                                                            c, (Participant) t);
-        return createFunction;
+        return (t, f, c) -> new AvalancheClientCommunications(c, (Participant) t);
 
     }
 

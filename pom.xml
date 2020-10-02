@@ -22,6 +22,7 @@
 		<module>bootstrap-client</module>
 		<module>sql-state</module>
 		<module>memberships</module>
+		<module>consortium</module>
 	</modules>
 
 	<properties>
@@ -530,12 +531,6 @@
 				<groupId>org.hamcrest</groupId>
 				<artifactId>hamcrest</artifactId>
 				<version>2.2</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>junit</groupId>
-				<artifactId>junit</artifactId>
-				<version>4.13</version>
 				<scope>test</scope>
 			</dependency>
 			<dependency>

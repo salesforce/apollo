@@ -30,11 +30,7 @@ import com.salesforce.apollo.protocols.SpaceGhost;
 public class GhostClientCommunications implements SpaceGhost {
 
     public static CreateClientCommunications<GhostClientCommunications> getCreate() {
-        CreateClientCommunications<GhostClientCommunications> createFunction = (t, f,
-                                                                                c) -> new GhostClientCommunications(c,
-                                                                                        (Participant) t);
-        return createFunction;
-
+        return (t, f, c) -> new GhostClientCommunications(c, (Participant) t);
     }
 
     private final GhostBlockingStub       client;
