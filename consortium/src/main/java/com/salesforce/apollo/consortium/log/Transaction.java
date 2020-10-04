@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.consortium;
+package com.salesforce.apollo.consortium.log;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface Response {
+public interface Transaction {
 
 }

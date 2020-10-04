@@ -6,11 +6,13 @@
  */
 package com.salesforce.apollo.consortium;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.salesforce.apollo.consortium.log.Block;
+import com.salesforce.apollo.consortium.log.Proof;
+import com.salesforce.apollo.consortium.log.Transaction;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
@@ -20,21 +22,15 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class Committee {
-    static class Cached {
-        List<Transaction> batch = new ArrayList<>();
-        Certification     cert;
-        Header            header;
-        List<Response>    responses;
-    }
 
-    private final Map<Long, Cached> cache               = new ConcurrentHashMap<>();
-    private final Context<Member>   context;
-    private final HashKey           id;
-    private HashKey                 lastBlock           = HashKey.ORIGIN;
-    private long                    lastCheckpoint      = 1;
-    private long                    lastReconfiguration = 1;
-    private StateSnapshot           lastSnapshot        = new StateSnapshot();
-    private long                    next                = 1;
+    private final Map<Long, Block> cache               = new ConcurrentHashMap<>();
+    private final Context<Member>  context;
+    private final HashKey          id;
+    private HashKey                lastBlock           = HashKey.ORIGIN;
+    private long                   lastCheckpoint      = 1;
+    private long                   lastReconfiguration = 1;
+    private StateSnapshot          lastSnapshot        = new StateSnapshot();
+    private long                   next                = 1;
 
     public Committee(HashKey id, Context<Member> context) {
         this.context = context;
@@ -57,6 +53,10 @@ public class Committee {
 
     void writeGenesisBlock() {
         // TODO Auto-generated method stub
+
+    }
+
+    void deliverTranssactions(long consensusId, List<Transaction> transactions, List<Proof> proofs) {
 
     }
 }
