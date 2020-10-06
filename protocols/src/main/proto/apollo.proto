@@ -135,6 +135,7 @@ message Message {
 message MessageGossip {
         repeated MessageDigest digests = 1;
         repeated  Message updates = 2;
+        Biff bff = 3;
     }
 
 message Signed {
@@ -151,6 +152,7 @@ message AccusationDigest {
 message AccusationGossip {
         repeated AccusationDigest digests = 1;
         repeated Signed updates = 2;
+        Biff bff = 3;
     }
 
 message CertificateDigest {
@@ -161,13 +163,20 @@ message CertificateDigest {
 
 message EncodedCertificate {
         CertificateDigest digest = 1;
-        bytes content = 2;
+        bytes content = 2; 
     }
 
 message CertificateGossip {
-        repeated CertificateDigest digests = 1;
+        repeated CertificateDigest digests = 1; 
         repeated EncodedCertificate updates = 2;
+        Biff bff = 3;
     }
+
+message Biff {
+        int32 m = 1;
+        repeated bytes h = 2;
+        bytes bits = 3;
+}
 
 message NoteDigest {
         bytes id = 1;
@@ -177,6 +186,7 @@ message NoteDigest {
 message NoteGossip {
         repeated NoteDigest digests = 1;
         repeated Signed updates = 2;
+        Biff bff = 3;
     }
 
 message Digests {
@@ -184,6 +194,11 @@ message Digests {
         repeated CertificateDigest certificates = 2;
         repeated NoteDigest notes = 3;
         repeated AccusationDigest accusations = 4;
+        
+        Biff messageBff = 5;
+        Biff certificateBff = 6;
+        Biff noteBff = 7;
+        Biff accusationBff = 8; 
     }
 
 message Gossip {
@@ -199,6 +214,7 @@ message Update {
         repeated EncodedCertificate certificates = 2;
         repeated Signed notes = 3;
         repeated Signed accusations = 4;
+        repeated Signed signedMessages = 5;
     }
 
 message DagEntry {

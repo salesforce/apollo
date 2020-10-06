@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.fireflies;
 
+import static com.salesforce.apollo.protocols.Conversion.hashOf;
+
 import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
@@ -30,11 +32,13 @@ public class Accusation implements Verifiable {
     }
 
     private final byte[] content;
+    private final byte[] hash;
     private final byte[] signature;
 
     public Accusation(byte[] content, byte[] signature) {
         this.content = content;
         this.signature = signature;
+        hash = hashOf(content);
     }
 
     public Accusation(long epoch, HashKey accuser, int ringNumber, HashKey accused, Signature s) {
@@ -44,6 +48,7 @@ public class Accusation implements Verifiable {
         buffer.put(accused.bytes());
         buffer.putInt(ringNumber);
         content = buffer.array();
+        hash = hashOf(content);
         try {
             s.update(content);
             signature = s.sign();
@@ -102,5 +107,10 @@ public class Accusation implements Verifiable {
     @Override
     public byte[] getSignature() {
         return signature;
+    }
+
+    @Override
+    public byte[] hash() {
+        return hash;
     }
 }

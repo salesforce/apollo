@@ -30,6 +30,8 @@ public interface Verifiable {
                      .build();
     }
 
+    byte[] hash();
+
     default boolean verify(Signature s) {
         try {
             s.update(content());

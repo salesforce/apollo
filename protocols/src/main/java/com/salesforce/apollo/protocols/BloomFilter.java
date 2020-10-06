@@ -9,6 +9,12 @@ package com.salesforce.apollo.protocols;
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
 
 import java.util.BitSet;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.Biff;
+import com.salesfoce.apollo.proto.Biff.Builder;
 
 /**
  * @author hal.hildebrand
@@ -26,6 +32,12 @@ public class BloomFilter {
             int k = optimalK(n, m);
             h = generateSeeds(initial, k);
             keysize = initial.itself.length;
+        }
+
+        public HashFunction(int m, List<byte[]> collect) {
+            this.m = m;
+            keysize = 32;
+            h = collect.toArray(new byte[collect.size()][]);
         }
 
         public byte[][] getH() {
@@ -147,6 +159,12 @@ public class BloomFilter {
     private final BitSet       bits;
     private final HashFunction h;
 
+    public BloomFilter(Biff bff) {
+        int m = bff.getM();
+        bits = BitSet.valueOf(bff.getBits().toByteArray());
+        h = new HashFunction(m, bff.getHList().stream().map(e -> e.toByteArray()).collect(Collectors.toList()));
+    }
+
     public BloomFilter(HashFunction h) {
         this.h = h;
         bits = new BitSet(h.getM());
@@ -187,5 +205,13 @@ public class BloomFilter {
      */
     public double getEstimatedPopulation() {
         return population(bits, h.getK(), h.getM());
+    }
+
+    public Biff toBff() {
+        Builder builder = Biff.newBuilder().setM(h.m).setBits(ByteString.copyFrom(bits.toByteArray()));
+        for (byte[] hash : h.h) {
+            builder.addH(ByteString.copyFrom(hash));
+        }
+        return builder.build();
     }
 }

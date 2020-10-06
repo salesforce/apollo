@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.fireflies;
 
+import static com.salesforce.apollo.protocols.Conversion.hashOf;
+
 import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
@@ -22,10 +24,10 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 218
  */
 public class Note implements Verifiable {
+    private static final int BASE_SIZE   = 8 + 32;
     private static final int EPOCH_INDEX = 0;
     private static final int ID_INDEX;
     private static final int MASK_INDEX;
-    private static final int BASE_SIZE   = 8 + 32;
 
     static {
         ID_INDEX = EPOCH_INDEX + 8;
@@ -37,10 +39,18 @@ public class Note implements Verifiable {
      */
     private final byte[] content;
 
+    private final byte[] hash;
+
     /**
      * Signed with the member's private key.
      */
     private final byte[] signature;
+
+    public Note(byte[] content, byte[] signature) {
+        this.content = content;
+        this.signature = signature;
+        hash = hashOf(content);
+    }
 
     public Note(HashKey id, long epoch, BitSet mask, Signature s) {
         byte[] maskBytes = mask.toByteArray();
@@ -55,11 +65,7 @@ public class Note implements Verifiable {
         } catch (SignatureException e) {
             throw new IllegalStateException("Unable to sign content", e);
         }
-    }
-
-    public Note(byte[] content, byte[] signature) {
-        this.content = content;
-        this.signature = signature;
+        hash = hashOf(content);
     }
 
     @Override
@@ -88,6 +94,11 @@ public class Note implements Verifiable {
     @Override
     public byte[] getSignature() {
         return signature;
+    }
+
+    @Override
+    public byte[] hash() {
+        return hash;
     }
 
     private ByteBuffer getBuffer() {
