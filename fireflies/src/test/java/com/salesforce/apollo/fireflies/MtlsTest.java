@@ -12,6 +12,7 @@ import static com.salesforce.apollo.fireflies.View.getStandardEpProvider;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyDouble;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -51,9 +52,9 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class MtlsTest {
 
-    private static final RootCertificate     ca         = getCa();
+    private static final RootCertificate     ca             = getCa();
     private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final FirefliesParameters parameters     = new FirefliesParameters(ca.getX509Certificate());
     private List<Communications>             communications = new ArrayList<>();
     private List<View>                       views;
 
@@ -96,7 +97,7 @@ public class MtlsTest {
             }
         }
         MessageBuffer messageBuffer = mock(MessageBuffer.class);
-        when(messageBuffer.process(any())).thenReturn(MessageGossip.getDefaultInstance());
+        when(messageBuffer.process(any(), any(), anyDouble())).thenReturn(MessageGossip.getDefaultInstance());
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 

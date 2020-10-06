@@ -11,6 +11,7 @@ import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyDouble;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -56,8 +57,7 @@ public class SuccessorTest {
         certs = IntStream.range(1, 10)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
-                                                   cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
     private LocalCommSimm communications;
@@ -89,7 +89,7 @@ public class SuccessorTest {
             }
         }
         MessageBuffer messageBuffer = mock(MessageBuffer.class);
-        when(messageBuffer.process(any())).thenReturn(MessageGossip.getDefaultInstance());
+        when(messageBuffer.process(any(), any(), anyDouble())).thenReturn(MessageGossip.getDefaultInstance());
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 

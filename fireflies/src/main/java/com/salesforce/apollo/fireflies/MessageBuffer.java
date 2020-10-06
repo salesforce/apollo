@@ -27,6 +27,8 @@ import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.MessageDigest;
 import com.salesfoce.apollo.proto.MessageGossip;
 import com.salesfoce.apollo.proto.MessageGossip.Builder;
+import com.salesforce.apollo.protocols.BloomFilter;
+import com.salesforce.apollo.protocols.BloomFilter.HashFunction;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -58,6 +60,12 @@ public class MessageBuffer {
         }
     }
 
+    public BloomFilter getBff(HashKey seed, double p) {
+        BloomFilter bff = new BloomFilter(new HashFunction(seed, bufferSize, p));
+        state.keySet().forEach(h -> bff.add(h));
+        return bff;
+    }
+
     /**
      * @return the digest state
      */
@@ -76,7 +84,7 @@ public class MessageBuffer {
         return updates.stream().filter(validator).filter(message -> put(message)).collect(Collectors.toList());
     }
 
-    public MessageGossip process(List<MessageDigest> requested) {
+    public MessageGossip process(List<MessageDigest> requested, HashKey seed, double p) {
         log.trace("process message digests: ", requested.size());
         Builder builder = MessageGossip.newBuilder();
         Set<HashKey> received = new HashSet<>(requested.size());
@@ -95,6 +103,7 @@ public class MessageBuffer {
         }).forEach(e -> builder.addDigests(e));
 
         Sets.difference(state.keySet(), received).stream().map(id -> state.get(id)).forEach(e -> builder.addUpdates(e));
+        builder.setBff(getBff(seed, p).toBff());
         MessageGossip gossip = builder.build();
 
         log.trace("want messages: {} updates: {}", gossip.getDigestsCount(), gossip.getUpdatesCount());

@@ -169,6 +169,10 @@ public class Participant extends Member {
                                                          .build());
     }
 
+    Stream<Accusation> getAccusations() {
+        return validAccusations.values().stream();
+    }
+
     List<AccTag> getAccusationTags() {
         return validAccusations.keySet().stream().map(ring -> new AccTag(getId(), ring)).collect(Collectors.toList());
     }

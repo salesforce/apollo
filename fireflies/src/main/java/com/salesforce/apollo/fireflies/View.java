@@ -73,6 +73,8 @@ import com.salesforce.apollo.fireflies.communications.FfServerCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.protocols.BloomFilter;
+import com.salesforce.apollo.protocols.BloomFilter.HashFunction;
 import com.salesforce.apollo.protocols.CaValidator;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -91,13 +93,6 @@ import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
  * @since 220
  */
 public class View {
-
-    public static EndpointProvider getStandardEpProvider(Node member) {
-
-        X509Certificate certificate = member.getCertificate();
-        return new StandardEpProvider(Member.portsFrom(certificate), certificate, member.privateKey, ClientAuth.REQUIRE,
-                new CaValidator(member.getCA()));
-    }
 
     /**
      * Used in set reconcillation of Accusation Digests
@@ -352,14 +347,20 @@ public class View {
             if (successor == null) {
                 return emptyGossip();
             }
-            return !successor.equals(node) ? redirectTo(member, ring, successor)
-                    : Gossip.newBuilder()
-                            .setRedirect(false)
-                            .setMessages(messageBuffer.process(digests.getMessagesList()))
-                            .setCertificates(processCertificateDigests(from, digests.getCertificatesList()))
-                            .setNotes(processNoteDigests(from, digests.getNotesList()))
-                            .setAccusations(processAccusationDigests(digests.getAccusationsList()))
-                            .build();
+            if (!successor.equals(node)) {
+                redirectTo(member, ring, successor);
+            }
+            byte[] bytes = new byte[32];
+            parameters.entropy.nextBytes(bytes);
+            HashKey seed = new HashKey(bytes);
+            double p = 0.5;
+            return Gossip.newBuilder()
+                         .setRedirect(false)
+                         .setMessages(messageBuffer.process(digests.getMessagesList(), seed, p))
+                         .setCertificates(processCertificateDigests(from, digests.getCertificatesList(), seed, p))
+                         .setNotes(processNoteDigests(from, digests.getNotesList(), seed, p))
+                         .setAccusations(processAccusationDigests(digests.getAccusationsList(), seed, p))
+                         .build();
         }
 
         public void start(Duration d, List<X509Certificate> seeds) {
@@ -444,8 +445,8 @@ public class View {
     }
 
     private static final CertificateFactory cf;
-    private static Logger                   log = LoggerFactory.getLogger(View.class);
 
+    private static Logger log = LoggerFactory.getLogger(View.class);
     static {
         try {
             cf = CertificateFactory.getInstance("X.509");
@@ -462,6 +463,13 @@ public class View {
 
     public static Gossip emptyGossip() {
         return Gossip.getDefaultInstance();
+    }
+
+    public static EndpointProvider getStandardEpProvider(Node member) {
+
+        X509Certificate certificate = member.getCertificate();
+        return new StandardEpProvider(Member.portsFrom(certificate), certificate, member.privateKey, ClientAuth.REQUIRE,
+                new CaValidator(member.getCA()));
     }
 
     /**
@@ -799,24 +807,6 @@ public class View {
     }
 
     /**
-     * Add a new member to the view
-     * 
-     * @param member
-     */
-    Participant add(Participant member) {
-        Participant previous = view.putIfAbsent(member.getId(), member);
-        if (previous == null) {
-            context.add(member);
-            if (!member.isFailed()) {
-                recover(member);
-            }
-            log.trace("Adding member: {}, recovering: {}", member.getId(), !member.isFailed());
-            return member;
-        }
-        return previous;
-    }
-
-    /**
      * add an inbound note to the view
      * 
      * @param note
@@ -861,6 +851,24 @@ public class View {
         m.setNote(note);
 
         return true;
+    }
+
+    /**
+     * Add a new member to the view
+     * 
+     * @param member
+     */
+    Participant add(Participant member) {
+        Participant previous = view.putIfAbsent(member.getId(), member);
+        if (previous == null) {
+            context.add(member);
+            if (!member.isFailed()) {
+                recover(member);
+            }
+            log.trace("Adding member: {}, recovering: {}", member.getId(), !member.isFailed());
+            return member;
+        }
+        return previous;
     }
 
     /**
@@ -948,11 +956,19 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     Digests commonDigests() {
+        byte[] bytes = new byte[32];
+        parameters.entropy.nextBytes(bytes);
+        HashKey seed = new HashKey(bytes);
+        double p = .5;
         return Digests.newBuilder()
                       .addAllMessages((gatherMessageDigests()))
                       .addAllCertificates(gatherCertificateDigests())
                       .addAllNotes(gatherNoteDigests())
                       .addAllAccusations(gatherAccusationDigests())
+                      .setAccusationBff(getAccusationsBff(seed, p).toBff())
+                      .setNoteBff(getNotesBff(seed, p).toBff())
+                      .setMessageBff(getMessagesBff(seed, p).toBff())
+                      .setCertificateBff(getCertificatesBff(seed, p).toBff())
                       .build();
     }
 
@@ -966,7 +982,6 @@ public class View {
                    .stream()
                    .filter(m -> !m.equals(node)) // Never send accusations from the view's node
                    .flatMap(m -> m.getAccusationDigests())
-                   .filter(digest -> !context.isOffline(new HashKey(digest.getId())))
                    .collect(Collectors.toList());
     }
 
@@ -1016,6 +1031,43 @@ public class View {
                 log.error("error sending fail to listener: " + l, e);
             }
         }));
+    }
+
+    BloomFilter getAccusationsBff(HashKey seed, double p) {
+        BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality * parameters.rings, p));
+        view.values()
+            .stream()
+            .filter(m -> !m.equals(node))
+            .flatMap(m -> m.getAccusations())
+            .filter(e -> e != null)
+            .forEach(n -> bff.add(new HashKey(n.hash())));
+        return bff;
+    }
+
+    BloomFilter getCertificatesBff(HashKey seed, double p) {
+        BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality, p));
+        view.values()
+            .stream()
+            .filter(m -> !m.equals(node))
+            .map(m -> m.getCertificateHash())
+            .filter(e -> e != null)
+            .forEach(n -> bff.add(new HashKey(n)));
+        return bff;
+    }
+
+    BloomFilter getMessagesBff(HashKey seed, double p) {
+        return messageBuffer.getBff(seed, p);
+    }
+
+    BloomFilter getNotesBff(HashKey seed, double p) {
+        BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality, p));
+        view.values()
+            .stream()
+            .filter(m -> !m.equals(node))
+            .map(m -> m.getNote())
+            .filter(e -> e != null)
+            .forEach(n -> bff.add(new HashKey(n.hash())));
+        return bff;
     }
 
     /**
@@ -1183,7 +1235,8 @@ public class View {
             link.ping(200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
         } catch (Exception e) {
-            log.error("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(), e.getCause().getMessage());
+            log.error("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(),
+                      e.getCause().getMessage());
             accuseOn(link.getMember(), lastRing);
         } finally {
             link.release();
@@ -1217,9 +1270,11 @@ public class View {
      * accusations from crashed members
      * 
      * @param digests
+     * @param p
+     * @param seed
      * @return
      */
-    AccusationGossip processAccusationDigests(List<AccusationDigest> digests) {
+    AccusationGossip processAccusationDigests(List<AccusationDigest> digests, HashKey seed, double p) {
         log.trace("process accusations digests: ", digests.size());
         Set<AccTag> received = new HashSet<>(digests.size());
         Builder builder = AccusationGossip.newBuilder();
@@ -1255,6 +1310,7 @@ public class View {
             .filter(acc -> !context.isOffline(acc.getAccuser()))
             .map(acc -> acc.getSigned())
             .forEach(signed -> builder.addUpdates(signed));
+        builder.setBff(getAccusationsBff(seed, p).toBff());
         AccusationGossip gossip = builder.build();
         log.trace("process accusations produded updates: {}, digests: {}", gossip.getUpdatesCount(),
                   gossip.getDigestsCount());
@@ -1270,9 +1326,12 @@ public class View {
      * 
      * @param from
      * @param certificates
+     * @param p
+     * @param seed
      * @return the CertificateGossip based on the processing
      */
-    CertificateGossip processCertificateDigests(HashKey from, List<CertificateDigest> certificates) {
+    CertificateGossip processCertificateDigests(HashKey from, List<CertificateDigest> certificates, HashKey seed,
+                                                double p) {
         log.trace("process cert digests: ", certificates.size());
         Set<HashKey> received = new HashSet<>(certificates.size());
 
@@ -1309,6 +1368,7 @@ public class View {
             .map(m -> m.getEncodedCertificate())
             .filter(cert -> cert != null)
             .forEach(cert -> builder.addUpdates(cert));
+        builder.setBff(getCertificatesBff(seed, p).toBff());
         CertificateGossip gossip = builder.build();
         log.trace("process certificates produded updates: {}, digests: {}", gossip.getUpdatesCount(),
                   gossip.getDigestsCount());
@@ -1323,8 +1383,10 @@ public class View {
      * 
      * @param from
      * @param digests
+     * @param p
+     * @param seed
      */
-    NoteGossip processNoteDigests(HashKey from, List<NoteDigest> digests) {
+    NoteGossip processNoteDigests(HashKey from, List<NoteDigest> digests, HashKey seed, double p) {
         log.trace("process note digests: ", digests.size());
         com.salesfoce.apollo.proto.NoteGossip.Builder builder = NoteGossip.newBuilder();
 
@@ -1360,6 +1422,7 @@ public class View {
             .map(m -> m.getSignedNote())
             .filter(note -> note != null)
             .forEach(note -> builder.addUpdates(note));
+        builder.setBff(getNotesBff(seed, p).toBff());
         NoteGossip gossip = builder.build();
         log.trace("process notes produded updates: {}, digests: {}", gossip.getUpdatesCount(),
                   gossip.getDigestsCount());
