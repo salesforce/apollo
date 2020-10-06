@@ -513,6 +513,11 @@
 				<version>6.0.53</version>
 				<scope>provided</scope>
 			</dependency>
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-math3</artifactId>
+				<version>3.6.1</version>
+			</dependency>
 
 			<!-- Test dependencies only below this line! -->
 
