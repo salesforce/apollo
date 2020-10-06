@@ -9,10 +9,8 @@ package com.salesforce.apollo.fireflies;
 import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
@@ -21,10 +19,8 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.Message;
-import com.salesfoce.apollo.proto.MessageDigest;
 import com.salesfoce.apollo.proto.MessageGossip;
 import com.salesfoce.apollo.proto.MessageGossip.Builder;
 import com.salesforce.apollo.protocols.BloomFilter;
@@ -67,13 +63,6 @@ public class MessageBuffer {
     }
 
     /**
-     * @return the digest state
-     */
-    public List<MessageDigest> getDigests() {
-        return state.values().stream().map(m -> m.getDigest()).collect(Collectors.toList());
-    }
-
-    /**
      * Merge the updates.
      * 
      * @param updates
@@ -84,29 +73,16 @@ public class MessageBuffer {
         return updates.stream().filter(validator).filter(message -> put(message)).collect(Collectors.toList());
     }
 
-    public MessageGossip process(List<MessageDigest> requested, HashKey seed, double p) {
-        log.trace("process message digests: ", requested.size());
+    public MessageGossip process(BloomFilter bff, HashKey seed, double p) {
         Builder builder = MessageGossip.newBuilder();
-        Set<HashKey> received = new HashSet<>(requested.size());
-        requested.stream().filter(d -> {
-            HashKey id = new HashKey(d.getId());
-            received.add(id);
-            return null == state.computeIfPresent(id,
-                                                  (k,
-                                                   m) -> Message.newBuilder(m)
-                                                                .setDigest(MessageDigest.newBuilder(m.getDigest())
-                                                                                        .setAge(Math.max(m.getDigest()
-                                                                                                          .getAge(),
-                                                                                                         d.getAge()))
-                                                                                        .build())
-                                                                .build());
-        }).forEach(e -> builder.addDigests(e));
-
-        Sets.difference(state.keySet(), received).stream().map(id -> state.get(id)).forEach(e -> builder.addUpdates(e));
+        state.entrySet().forEach(entry -> {
+            if (!bff.contains(entry.getKey())) {
+                builder.addUpdates(entry.getValue());
+            }
+        });
         builder.setBff(getBff(seed, p).toBff());
         MessageGossip gossip = builder.build();
-
-        log.trace("want messages: {} updates: {}", gossip.getDigestsCount(), gossip.getUpdatesCount());
+        log.trace("updates: {}", gossip.getUpdatesCount());
         return gossip;
     }
 
@@ -130,11 +106,12 @@ public class MessageBuffer {
         return update;
     }
 
-    public List<Message> updatesFor(List<MessageDigest> digests) {
-        return digests.stream()
-                      .map(digest -> state.get(new HashKey(digest.getId())))
-                      .filter(m -> m != null)
-                      .collect(Collectors.toList());
+    public List<Message> updatesFor(BloomFilter bff) {
+        return state.entrySet()
+                    .stream()
+                    .filter(entry -> bff.contains(entry.getKey()))
+                    .map(entry -> entry.getValue())
+                    .collect(Collectors.toList());
     }
 
     private void compact() {
@@ -152,12 +129,10 @@ public class MessageBuffer {
             throw new IllegalStateException("Unable to sign message content", e);
         }
         return Message.newBuilder()
-                      .setDigest(MessageDigest.newBuilder()
-                                              .setSource(from.toByteString())
-                                              .setId(id.toByteString())
-                                              .setAge(0)
-                                              .setTime(System.currentTimeMillis())
-                                              .build())
+                      .setSource(from.toByteString())
+                      .setId(id.toByteString())
+                      .setAge(0)
+                      .setTime(System.currentTimeMillis())
                       .setChannel(channel)
                       .setContent(ByteString.copyFrom(content))
                       .setSignature(ByteString.copyFrom(s))
@@ -171,15 +146,14 @@ public class MessageBuffer {
             for (Message u : state.values()) {
                 if (max == null) {
                     max = u;
-                } else if (u.getDigest().getAge() > max.getDigest().getAge()
-                        && u.getDigest().getTime() >= max.getDigest().getTime()) {
+                } else if (u.getAge() > max.getAge() && u.getTime() >= max.getTime()) {
                     max = u;
                 }
             }
             if (max == null) {
                 break;
             }
-            HashKey removed = new HashKey(max.getDigest().getId());
+            HashKey removed = new HashKey(max.getId());
             state.remove(removed);
             log.trace("removing: {}", removed);
         }
@@ -187,32 +161,27 @@ public class MessageBuffer {
 
     private boolean put(Message update) {
         AtomicBoolean updated = new AtomicBoolean(false);
-        HashKey id = new HashKey(update.getDigest().getId());
+        HashKey id = new HashKey(update.getId());
         state.compute(id, (k, v) -> {
             if (v == null) {
                 // first time, update
-                Long current = maxTimes.compute(k, (mid, max) -> Math.max(max == null ? 0 : max,
-                                                                          update.getDigest().getTime()));
-                if (current - update.getDigest().getTime() > tooOld) {
+                Long current = maxTimes.compute(k, (mid, max) -> Math.max(max == null ? 0 : max, update.getTime()));
+                if (current - update.getTime() > tooOld) {
                     // too old, discard
                     return null;
                 }
                 updated.set(true);
                 return update;
             }
-            return Message.newBuilder(v)
-                          .setDigest(MessageDigest.newBuilder(v.getDigest())
-                                                  .setAge(Math.max(v.getDigest().getAge(),
-                                                                   update.getDigest().getAge())))
-                          .build();
+            return Message.newBuilder(v).setAge(Math.max(v.getAge(), update.getAge())).build();
         });
         return updated.get();
     }
 
     private void removeOutOfDate() {
         state.entrySet().forEach(entry -> {
-            Long max = maxTimes.get(new HashKey(entry.getValue().getDigest().getSource()));
-            if (max != null && (max - entry.getValue().getDigest().getTime()) > tooOld) {
+            Long max = maxTimes.get(new HashKey(entry.getValue().getSource()));
+            if (max != null && (max - entry.getValue().getTime()) > tooOld) {
                 state.remove(entry.getKey());
                 log.trace("removing: {}", entry.getKey());
             }

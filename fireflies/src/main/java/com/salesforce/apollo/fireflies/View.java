@@ -58,7 +58,6 @@ import com.salesfoce.apollo.proto.Digests;
 import com.salesfoce.apollo.proto.EncodedCertificate;
 import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.Message;
-import com.salesfoce.apollo.proto.MessageDigest;
 import com.salesfoce.apollo.proto.NoteDigest;
 import com.salesfoce.apollo.proto.NoteGossip;
 import com.salesfoce.apollo.proto.Signed;
@@ -356,7 +355,7 @@ public class View {
             double p = 0.5;
             return Gossip.newBuilder()
                          .setRedirect(false)
-                         .setMessages(messageBuffer.process(digests.getMessagesList(), seed, p))
+                         .setMessages(messageBuffer.process(new BloomFilter(digests.getMessageBff()), seed, p))
                          .setCertificates(processCertificateDigests(from, digests.getCertificatesList(), seed, p))
                          .setNotes(processNoteDigests(from, digests.getNotesList(), seed, p))
                          .setAccusations(processAccusationDigests(digests.getAccusationsList(), seed, p))
@@ -961,7 +960,6 @@ public class View {
         HashKey seed = new HashKey(bytes);
         double p = .5;
         return Digests.newBuilder()
-                      .addAllMessages((gatherMessageDigests()))
                       .addAllCertificates(gatherCertificateDigests())
                       .addAllNotes(gatherNoteDigests())
                       .addAllAccusations(gatherAccusationDigests())
@@ -996,14 +994,6 @@ public class View {
                    .map(m -> m.getCertificateDigest())
                    .filter(e -> e != null)
                    .collect(Collectors.toList());
-    }
-
-    /**
-     * @return the MessageGossip for this view. This is the list of all message
-     *         digests of the view's messageBuffer
-     */
-    List<MessageDigest> gatherMessageDigests() {
-        return messageBuffer.getDigests();
     }
 
     /**
@@ -1094,15 +1084,13 @@ public class View {
         }
         Digests outbound = commonDigests();
         if (log.isTraceEnabled()) {
-            log.trace("outbound, certs: {}, notes: {}, accusations: {}, messages: {}", outbound.getCertificatesCount(),
-                      outbound.getNotesCount(), outbound.getAccusationsCount(), outbound.getMessagesCount());
+            log.trace("outbound, certs: {}, notes: {}, accusations: {}", outbound.getCertificatesCount(),
+                      outbound.getNotesCount(), outbound.getAccusationsCount());
         }
         Gossip gossip = link.gossip(signedNote, ring, outbound);
         if (log.isTraceEnabled()) {
-            log.trace("inbound: redirect: {} want: certs: {}, notes: {}, accusations: {}, messages: {} updates: certs: {}, notes: {}, accusations: {}, messages: {}",
-                      gossip.getRedirect(), gossip.getCertificates().getDigestsCount(),
-                      gossip.getNotes().getDigestsCount(), gossip.getAccusations().getDigestsCount(),
-                      gossip.getMessages().getDigestsCount(), gossip.getCertificates().getUpdatesCount(),
+            log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {}, messages: {}",
+                      gossip.getRedirect(), gossip.getCertificates().getUpdatesCount(),
                       gossip.getNotes().getUpdatesCount(), gossip.getAccusations().getUpdatesCount(),
                       gossip.getMessages().getUpdatesCount());
         }
@@ -1471,7 +1459,7 @@ public class View {
         Map<Integer, List<Msg>> newMessages = new HashMap<>();
 
         messageBuffer.merge(messageUpdates, message -> validate(message)).stream().map(m -> {
-            HashKey id = new HashKey(m.getDigest().getSource());
+            HashKey id = new HashKey(m.getSource());
             Participant from = view.get(id);
             if (from == null) {
                 log.trace("{} message from unknown member: {}", node, id);
@@ -1650,7 +1638,7 @@ public class View {
      */
     Update updatesForDigests(Gossip gossip) {
         com.salesfoce.apollo.proto.Update.Builder builder = Update.newBuilder();
-        builder.addAllMessages(messageBuffer.updatesFor(gossip.getMessages().getDigestsList()));
+        builder.addAllMessages(messageBuffer.updatesFor(new BloomFilter(gossip.getMessages().getBff())));
         gossip.getCertificates()
               .getDigestsList()
               .stream()
@@ -1685,7 +1673,7 @@ public class View {
      *         signature doesn't validate
      */
     boolean validate(Message message) {
-        HashKey from = new HashKey(message.getDigest().getSource());
+        HashKey from = new HashKey(message.getSource());
         Participant member = view.get(from);
         if (member == null) {
             return false;
@@ -1695,7 +1683,7 @@ public class View {
             signature.update(message.getContent().toByteArray());
             return signature.verify(message.getSignature().toByteArray());
         } catch (SignatureException e) {
-            log.debug("invalid signature for message {}", new HashKey(message.getDigest().getId()), from);
+            log.debug("invalid signature for message {}", new HashKey(message.getId()), from);
             return false;
         }
     }

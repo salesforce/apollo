@@ -118,24 +118,19 @@ message State {
     Update update = 3;
 }
 
-message MessageDigest {
+message Message {
     bytes source = 1;
     bytes id = 2;
     int32 age = 3;
     int64 time = 4;
-}
-
-message Message {
-    MessageDigest digest = 1;
-    int32 channel = 2;
-    bytes content = 3;
-    bytes signature = 4;
+    int32 channel = 5;
+    bytes content = 6;
+    bytes signature = 7;
 }
 
 message MessageGossip {
-        repeated MessageDigest digests = 1;
+        Biff bff = 1;
         repeated  Message updates = 2;
-        Biff bff = 3;
     }
 
 message Signed {
@@ -189,13 +184,12 @@ message NoteGossip {
         Biff bff = 3;
     }
 
-message Digests {
-        repeated MessageDigest messages = 1;
+message Digests { 
+        Biff messageBff = 1;
         repeated CertificateDigest certificates = 2;
         repeated NoteDigest notes = 3;
         repeated AccusationDigest accusations = 4;
         
-        Biff messageBff = 5;
         Biff certificateBff = 6;
         Biff noteBff = 7;
         Biff accusationBff = 8; 
