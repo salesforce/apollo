@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.AccusationDigest;
-import com.salesfoce.apollo.proto.CertificateDigest;
 import com.salesfoce.apollo.proto.EncodedCertificate;
 import com.salesfoce.apollo.proto.NoteDigest;
 import com.salesfoce.apollo.proto.Signed;
@@ -177,16 +176,6 @@ public class Participant extends Member {
         return validAccusations.keySet().stream().map(ring -> new AccTag(getId(), ring)).collect(Collectors.toList());
     }
 
-    CertificateDigest getCertificateDigest() {
-        Note current = note;
-        return current == null ? null
-                : CertificateDigest.newBuilder()
-                                   .setId(getId().toByteString())
-                                   .setEpoch(current.getEpoch())
-                                   .setHash(ByteString.copyFrom(certificateHash))
-                                   .build();
-    }
-
     byte[] getCertificateHash() {
         return certificateHash;
     }
@@ -204,10 +193,12 @@ public class Participant extends Member {
     }
 
     EncodedCertificate getEncodedCertificate() {
-        CertificateDigest digest = getCertificateDigest();
-        return digest == null ? null
+        Note current = note;
+        return current == null ? null
                 : EncodedCertificate.newBuilder()
-                                    .setDigest(digest)
+                                    .setId(getId().toByteString())
+                                    .setEpoch(current.getEpoch())
+                                    .setHash(ByteString.copyFrom(certificateHash))
                                     .setContent(ByteString.copyFrom(derEncodedCertificate))
                                     .build();
     }

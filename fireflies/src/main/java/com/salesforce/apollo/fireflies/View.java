@@ -21,7 +21,6 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Deque;
@@ -52,7 +51,6 @@ import com.google.common.collect.Sets;
 import com.salesfoce.apollo.proto.AccusationDigest;
 import com.salesfoce.apollo.proto.AccusationGossip;
 import com.salesfoce.apollo.proto.AccusationGossip.Builder;
-import com.salesfoce.apollo.proto.CertificateDigest;
 import com.salesfoce.apollo.proto.CertificateGossip;
 import com.salesfoce.apollo.proto.Digests;
 import com.salesfoce.apollo.proto.EncodedCertificate;
@@ -352,13 +350,15 @@ public class View {
             byte[] bytes = new byte[32];
             parameters.entropy.nextBytes(bytes);
             HashKey seed = new HashKey(bytes);
-            double p = 0.5;
             return Gossip.newBuilder()
                          .setRedirect(false)
-                         .setMessages(messageBuffer.process(new BloomFilter(digests.getMessageBff()), seed, p))
-                         .setCertificates(processCertificateDigests(from, digests.getCertificatesList(), seed, p))
-                         .setNotes(processNoteDigests(from, digests.getNotesList(), seed, p))
-                         .setAccusations(processAccusationDigests(digests.getAccusationsList(), seed, p))
+                         .setMessages(messageBuffer.process(new BloomFilter(digests.getMessageBff()), seed,
+                                                            parameters.falsePositiveRate))
+                         .setCertificates(processCertificateDigests(from, new BloomFilter(digests.getCertificateBff()),
+                                                                    seed, parameters.falsePositiveRate))
+                         .setNotes(processNoteDigests(from, digests.getNotesList(), seed, parameters.falsePositiveRate))
+                         .setAccusations(processAccusationDigests(digests.getAccusationsList(), seed,
+                                                                  parameters.falsePositiveRate))
                          .build();
         }
 
@@ -920,8 +920,7 @@ public class View {
             return null;
         }
 
-        return new CertWithHash(encoded.getDigest().getHash().toByteArray(), certificate,
-                encoded.getContent().toByteArray());
+        return new CertWithHash(encoded.getHash().toByteArray(), certificate, encoded.getContent().toByteArray());
     }
 
     /**
@@ -958,15 +957,13 @@ public class View {
         byte[] bytes = new byte[32];
         parameters.entropy.nextBytes(bytes);
         HashKey seed = new HashKey(bytes);
-        double p = .5;
         return Digests.newBuilder()
-                      .addAllCertificates(gatherCertificateDigests())
                       .addAllNotes(gatherNoteDigests())
                       .addAllAccusations(gatherAccusationDigests())
-                      .setAccusationBff(getAccusationsBff(seed, p).toBff())
-                      .setNoteBff(getNotesBff(seed, p).toBff())
-                      .setMessageBff(getMessagesBff(seed, p).toBff())
-                      .setCertificateBff(getCertificatesBff(seed, p).toBff())
+                      .setAccusationBff(getAccusationsBff(seed, parameters.falsePositiveRate).toBff())
+                      .setNoteBff(getNotesBff(seed, parameters.falsePositiveRate).toBff())
+                      .setMessageBff(getMessagesBff(seed, parameters.falsePositiveRate).toBff())
+                      .setCertificateBff(getCertificatesBff(seed, parameters.falsePositiveRate).toBff())
                       .build();
     }
 
@@ -980,19 +977,6 @@ public class View {
                    .stream()
                    .filter(m -> !m.equals(node)) // Never send accusations from the view's node
                    .flatMap(m -> m.getAccusationDigests())
-                   .collect(Collectors.toList());
-    }
-
-    /**
-     * @return the CertificateGossip for this view. This is the list of all
-     *         certicate digests of all members in the view
-     */
-    List<CertificateDigest> gatherCertificateDigests() {
-        return view.values()
-                   .stream()
-                   .filter(m -> !m.equals(node))
-                   .map(m -> m.getCertificateDigest())
-                   .filter(e -> e != null)
                    .collect(Collectors.toList());
     }
 
@@ -1083,10 +1067,6 @@ public class View {
             return true;
         }
         Digests outbound = commonDigests();
-        if (log.isTraceEnabled()) {
-            log.trace("outbound, certs: {}, notes: {}, accusations: {}", outbound.getCertificatesCount(),
-                      outbound.getNotesCount(), outbound.getAccusationsCount());
-        }
         Gossip gossip = link.gossip(signedNote, ring, outbound);
         if (log.isTraceEnabled()) {
             log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {}, messages: {}",
@@ -1305,61 +1285,20 @@ public class View {
         return gossip;
     }
 
-    /**
-     * The "second" message - response - in the anti-entropy protocol. Process the
-     * inbound certificates from the gossip. Reconcile the differences between the
-     * view's state and the digests of the gossip. Update the reply with the list of
-     * digests the view requires, as well as proposed updates based on the inbound
-     * digets that the view has more recent information for
-     * 
-     * @param from
-     * @param certificates
-     * @param p
-     * @param seed
-     * @return the CertificateGossip based on the processing
-     */
-    CertificateGossip processCertificateDigests(HashKey from, List<CertificateDigest> certificates, HashKey seed,
-                                                double p) {
-        log.trace("process cert digests: ", certificates.size());
-        Set<HashKey> received = new HashSet<>(certificates.size());
-
+    CertificateGossip processCertificateDigests(HashKey from, BloomFilter bff, HashKey seed, double p) {
+        log.trace("process cert digests");
         com.salesfoce.apollo.proto.CertificateGossip.Builder builder = CertificateGossip.newBuilder();
-
-        // Process all inbound digests
-        certificates.stream().filter(cert -> {
-            HashKey id = new HashKey(cert.getId());
-            received.add(id);
-            if (from.equals(id)) {
-                return false;
-            }
-            Participant member = view.get(id);
-            if (member == null) {
-                return true;
-            }
-            byte[] hash = cert.getHash().toByteArray();
-            // Add an update if this view has a newer version than the inbound digest
-            Long epoch = cert.getEpoch();
-            if (epoch < member.getEpoch() || !Arrays.equals(hash, member.getCertificateHash())) {
-                builder.addUpdates(member.getEncodedCertificate());
-                return false;
-            }
-            return epoch > member.getEpoch();
-        }).forEach(e -> builder.addDigests(e));
-
         // Add all updates that this view has that aren't reflected in the inbound
-        // digests
-        Sets.difference(view.keySet(), received)
+        // bff
+        view.values()
             .stream()
-            .filter(id -> id.equals(from))
-            .map(id -> view.get(id))
-            .filter(m -> m != null)
+            .filter(m -> m.getId().equals(from))
+            .filter(m -> bff.contains(new HashKey(m.getCertificateHash())))
             .map(m -> m.getEncodedCertificate())
-            .filter(cert -> cert != null)
             .forEach(cert -> builder.addUpdates(cert));
         builder.setBff(getCertificatesBff(seed, p).toBff());
         CertificateGossip gossip = builder.build();
-        log.trace("process certificates produded updates: {}, digests: {}", gossip.getUpdatesCount(),
-                  gossip.getDigestsCount());
+        log.trace("process certificates produded updates: {}, digests: {}", gossip.getUpdatesCount());
         return gossip;
     }
 
@@ -1590,26 +1529,6 @@ public class View {
     }
 
     /**
-     * gather ye certificate gossip using the common digests and the list of updates
-     * based on the inboud requested digests
-     * 
-     * @param common
-     * @param requested
-     * @return
-     */
-    CertificateGossip updateCertificates(List<CertificateDigest> common, List<CertificateDigest> requested) {
-        com.salesfoce.apollo.proto.CertificateGossip.Builder builder = CertificateGossip.newBuilder();
-        builder.addAllDigests(common);
-        requested.stream()
-                 .map(digest -> new HashKey(digest.getId()))
-                 .map(id -> view.get(id))
-                 .filter(e -> e != null)
-                 .map(m -> m.getEncodedCertificate())
-                 .forEach(e -> builder.addUpdates(e));
-        return builder.build();
-    }
-
-    /**
      * gather ye accusal note using the common digests and the list of updates based
      * on the inboud requested digests
      * 
@@ -1639,13 +1558,14 @@ public class View {
     Update updatesForDigests(Gossip gossip) {
         com.salesfoce.apollo.proto.Update.Builder builder = Update.newBuilder();
         builder.addAllMessages(messageBuffer.updatesFor(new BloomFilter(gossip.getMessages().getBff())));
-        gossip.getCertificates()
-              .getDigestsList()
-              .stream()
-              .map(digest -> view.get(new HashKey(digest.getId())))
-              .filter(member -> member != null)
-              .map(member -> member.getEncodedCertificate())
-              .forEach(e -> builder.addCertificates(e));
+        BloomFilter bff = new BloomFilter(gossip.getCertificates().getBff());
+        // Add all updates that this view has that aren't reflected in the inbound
+        // bff
+        view.values()
+            .stream()
+            .filter(m -> bff.contains(new HashKey(m.getCertificateHash())))
+            .map(m -> m.getEncodedCertificate())
+            .forEach(cert -> builder.addCertificates(cert));
         gossip.getNotes()
               .getDigestsList()
               .stream()

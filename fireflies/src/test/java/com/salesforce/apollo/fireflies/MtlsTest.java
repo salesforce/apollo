@@ -54,7 +54,7 @@ public class MtlsTest {
 
     private static final RootCertificate     ca             = getCa();
     private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters     = new FirefliesParameters(ca.getX509Certificate());
+    private static final FirefliesParameters parameters     = new FirefliesParameters(ca.getX509Certificate(), 0.5);
     private List<Communications>             communications = new ArrayList<>();
     private List<View>                       views;
 
@@ -111,14 +111,15 @@ public class MtlsTest {
 
         long then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1_000), seeds));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(300), seeds));
 
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
-        }), "view did not stabilize");
+        }), "view did not stabilize: "
+                + views.stream().map(view -> view.getLive().size()).collect(Collectors.toList()));
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + views.size() + " members");
 

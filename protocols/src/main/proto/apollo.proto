@@ -148,23 +148,18 @@ message AccusationGossip {
         repeated AccusationDigest digests = 1;
         repeated Signed updates = 2;
         Biff bff = 3;
-    }
+    } 
 
-message CertificateDigest {
+message EncodedCertificate {
         bytes id = 1;
         int64 epoch = 2;
         bytes hash = 3;
-    }
-
-message EncodedCertificate {
-        CertificateDigest digest = 1;
-        bytes content = 2; 
+        bytes content = 4; 
     }
 
 message CertificateGossip {
-        repeated CertificateDigest digests = 1; 
+        Biff bff = 1;
         repeated EncodedCertificate updates = 2;
-        Biff bff = 3;
     }
 
 message Biff {
@@ -186,11 +181,10 @@ message NoteGossip {
 
 message Digests { 
         Biff messageBff = 1;
-        repeated CertificateDigest certificates = 2;
+        Biff certificateBff = 2;
         repeated NoteDigest notes = 3;
         repeated AccusationDigest accusations = 4;
         
-        Biff certificateBff = 6;
         Biff noteBff = 7;
         Biff accusationBff = 8; 
     }

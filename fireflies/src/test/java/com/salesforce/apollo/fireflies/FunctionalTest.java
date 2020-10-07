@@ -42,15 +42,14 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class FunctionalTest {
     private static final RootCertificate     ca         = getCa();
     private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate(), 0.5);
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 11)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
-                                                   cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
     private LocalCommSimm communications;
@@ -89,11 +88,10 @@ public class FunctionalTest {
                                   .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds))
                                   .collect(Collectors.toList());
 
-        for (int i = 0; i < parameters.rings + 2; i++) {
-            views.forEach(view -> view.getService().gossip());
-        }
-        for (int i = 0; i < parameters.rings + 2; i++) {
-            views.forEach(view -> view.getService().gossip());
+        for (int j = 0; j < 20; j++) {
+            for (int i = 0; i < parameters.rings + 2; i++) {
+                views.forEach(view -> view.getService().gossip());
+            }
         }
 
         List<View> invalid = views.stream()
