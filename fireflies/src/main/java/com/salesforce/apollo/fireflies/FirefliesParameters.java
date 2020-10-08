@@ -50,6 +50,10 @@ public class FirefliesParameters {
     @JsonIgnore
     public final SecureRandom entropy;
 
+    /**
+     * The false positive rate for the bloomfilters used for the antientropy
+     * protocol
+     */
     public final double falsePositiveRate;
 
     /**
