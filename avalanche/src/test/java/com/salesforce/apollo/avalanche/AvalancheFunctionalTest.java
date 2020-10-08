@@ -166,7 +166,7 @@ abstract public class AvalancheFunctionalTest {
         int             target      = 4_000;
         Duration        ffRound     = Duration.ofMillis(500);
         int             outstanding = 400;
-        int             runtime     = (int)Duration.ofSeconds(120).toMillis();
+        int             runtime     = (int)Duration.ofSeconds(180).toMillis();
 
         communications.values().forEach(e -> e.start());
         views.parallelStream().forEach(view -> view.getService().start(ffRound, seeds));
@@ -230,7 +230,7 @@ abstract public class AvalancheFunctionalTest {
         Collections.shuffle(startUp, entropy);
         transactioneers.parallelStream().forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, txnScheduler));
 
-        boolean finalized = Utils.waitForCondition(runtime, 1_000, () -> {
+        boolean finalized = Utils.waitForCondition(runtime, 3_000, () -> {
                               return transactioneers.stream()
                                                     .mapToInt(t -> t.getSuccess())
                                                     .filter(s -> s >= target)

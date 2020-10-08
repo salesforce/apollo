@@ -971,11 +971,11 @@ public class View {
 
     BloomFilter getAccusationsBff(int seed, double p) {
         BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality * parameters.rings, p));
-        view.values()
-            .stream()
-            .flatMap(m -> m.getAccusations())
-            .filter(e -> e != null)
-            .forEach(n -> bff.add(new HashKey(n.hash())));
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(e -> e != null)
+               .forEach(n -> bff.add(new HashKey(n.hash())));
         return bff;
     }
 
@@ -1205,11 +1205,11 @@ public class View {
         Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        view.values()
-            .stream()
-            .flatMap(m -> m.getAccusations())
-            .filter(a -> !bff.contains(new HashKey(a.hash())))
-            .forEach(a -> builder.addUpdates(a.getSigned()));
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(a -> !bff.contains(new HashKey(a.hash())))
+               .forEach(a -> builder.addUpdates(a.getSigned()));
         builder.setBff(getAccusationsBff(seed, p).toBff());
         AccusationGossip gossip = builder.build();
         log.trace("process accusations produded updates: {}", gossip.getUpdatesCount());
@@ -1249,12 +1249,12 @@ public class View {
 
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        view.values()
-            .stream()
-            .filter(m -> m.getNote() != null)
-            .filter(m -> !bff.contains(new HashKey(m.getNote().hash())))
-            .map(m -> m.getSignedNote())
-            .forEach(n -> builder.addUpdates(n));
+        context.getActive()
+               .stream()
+               .filter(m -> m.getNote() != null)
+               .filter(m -> !bff.contains(new HashKey(m.getNote().hash())))
+               .map(m -> m.getSignedNote())
+               .forEach(n -> builder.addUpdates(n));
         builder.setBff(getNotesBff(seed, p).toBff());
         NoteGossip gossip = builder.build();
         log.trace("process notes produded updates: {}", gossip.getUpdatesCount());
@@ -1443,18 +1443,18 @@ public class View {
         // notes
         BloomFilter notesBff = new BloomFilter(gossip.getNotes().getBff());
         view.values()
-            .stream()
-            .filter(m -> m.getNote() != null)
-            .filter(m -> !notesBff.contains(new HashKey(m.getNote().hash())))
-            .map(m -> m.getSignedNote())
-            .forEach(n -> builder.addNotes(n));
+               .stream()
+               .filter(m -> m.getNote() != null)
+               .filter(m -> !notesBff.contains(new HashKey(m.getNote().hash())))
+               .map(m -> m.getSignedNote())
+               .forEach(n -> builder.addNotes(n));
 
         BloomFilter accBff = new BloomFilter(gossip.getAccusations().getBff());
-        view.values()
-            .stream()
-            .flatMap(m -> m.getAccusations())
-            .filter(a -> !accBff.contains(new HashKey(a.hash())))
-            .forEach(a -> builder.addAccusations(a.getSigned()));
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(a -> !accBff.contains(new HashKey(a.hash())))
+               .forEach(a -> builder.addAccusations(a.getSigned()));
 
         return builder.build();
     }

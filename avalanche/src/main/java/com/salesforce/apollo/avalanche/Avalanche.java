@@ -429,7 +429,7 @@ public class Avalanche {
     }
 
     private SecureRandom getEntropy() {
-        return getNode().getParameters().entropy;
+        return view.getParameters().entropy;
     }
 
     private void initializeProcessors(ClassLoader resolver) {
