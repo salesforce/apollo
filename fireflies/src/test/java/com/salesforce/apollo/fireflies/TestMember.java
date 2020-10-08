@@ -41,7 +41,7 @@ public class TestMember {
                                                         .build());
         Certificate certificate = ca.mintNode(csr);
 
-        FirefliesParameters parameters = new FirefliesParameters(root.getX509Certificate(), 0.25);
+        FirefliesParameters parameters = new FirefliesParameters(root.getX509Certificate());
         Participant m = new Participant(certificate.getX509Certificate(), parameters);
         HashKey id = m.getId();
         assertNotNull(id);

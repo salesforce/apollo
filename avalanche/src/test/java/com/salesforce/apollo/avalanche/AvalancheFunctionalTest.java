@@ -171,7 +171,7 @@ abstract public class AvalancheFunctionalTest {
         communications.values().forEach(e -> e.start());
         views.parallelStream().forEach(view -> view.getService().start(ffRound, seeds));
 
-        assertTrue(Utils.waitForCondition(30_000, 3_000, () -> {
+        assertTrue(Utils.waitForCondition(60_000, 3_000, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)

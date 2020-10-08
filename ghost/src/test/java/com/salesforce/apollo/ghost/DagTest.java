@@ -112,7 +112,7 @@ public class DagTest {
 
         testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds));
 
-        assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(30_000, 3_000, () -> {
             return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
         }), "view did not stabilize");
 

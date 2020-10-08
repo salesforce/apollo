@@ -100,9 +100,9 @@ public class GhostTest {
         views = members.stream().map(node -> new View(node, comms, scheduler)).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1000), seeds));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(500), seeds));
 
-        Utils.waitForCondition(15_000, 1_000, () -> {
+        Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)

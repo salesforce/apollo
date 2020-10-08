@@ -22,8 +22,12 @@ import com.salesforce.apollo.protocols.Conversion;
  */
 public class FirefliesParameters {
 
-    public static final String DEFAULT_HASH_ALGORITHM      = Conversion.SHA_256;
-    public static final String DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
+    public static final String  DEFAULT_HASH_ALGORITHM      = Conversion.SHA_256;
+    public static final String  DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
+    /**
+     * 
+     */
+    private static final double DEFAULT_FALSE_POSITIVE_RATE = 0.25;
 
     /**
      * The maximum allowed size of the message buffer
@@ -78,7 +82,7 @@ public class FirefliesParameters {
     public final int    toleranceLevel;
 
     public FirefliesParameters(X509Certificate ca) {
-        this(ca, new SecureRandom(), DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, 0.5);
+        this(ca, new SecureRandom(), DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, DEFAULT_FALSE_POSITIVE_RATE);
     }
 
     public FirefliesParameters(X509Certificate ca, double falsePositiveRate) {

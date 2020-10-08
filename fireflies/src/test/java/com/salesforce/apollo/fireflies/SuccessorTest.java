@@ -45,7 +45,7 @@ public class SuccessorTest {
 
     private static final RootCertificate     ca         = getCa();
     private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate(), 0.5);
+    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
     public static void beforeClass() {
