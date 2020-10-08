@@ -106,7 +106,7 @@ public class MtlsTest {
         communications.forEach(e -> e.start());
         views.forEach(view -> view.getService().start(Duration.ofMillis(1_000), seeds));
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)

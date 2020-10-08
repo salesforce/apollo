@@ -167,26 +167,19 @@ message Biff {
         int32 k = 2;
         int32 seed = 3;
         bytes bits = 4;
-}
-
-message NoteDigest {
-        bytes id = 1;
-        int64 epoch = 2;
-    }
+} 
 
 message NoteGossip {
-        repeated NoteDigest digests = 1;
+        Biff bff = 1;
         repeated Signed updates = 2;
-        Biff bff = 3;
     }
 
 message Digests { 
         Biff messageBff = 1;
         Biff certificateBff = 2;
-        repeated NoteDigest notes = 3;
+        Biff noteBff = 3;
         repeated AccusationDigest accusations = 4;
         
-        Biff noteBff = 7;
         Biff accusationBff = 8; 
     }
 

@@ -56,7 +56,6 @@ import com.salesfoce.apollo.proto.Digests;
 import com.salesfoce.apollo.proto.EncodedCertificate;
 import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.Message;
-import com.salesfoce.apollo.proto.NoteDigest;
 import com.salesfoce.apollo.proto.NoteGossip;
 import com.salesfoce.apollo.proto.Signed;
 import com.salesfoce.apollo.proto.Update;
@@ -354,7 +353,8 @@ public class View {
                                                             parameters.falsePositiveRate))
                          .setCertificates(processCertificateDigests(from, new BloomFilter(digests.getCertificateBff()),
                                                                     seed, parameters.falsePositiveRate))
-                         .setNotes(processNoteDigests(from, digests.getNotesList(), seed, parameters.falsePositiveRate))
+                         .setNotes(processNoteDigests(from, new BloomFilter(digests.getNoteBff()), seed,
+                                                      parameters.falsePositiveRate))
                          .setAccusations(processAccusationDigests(digests.getAccusationsList(), seed,
                                                                   parameters.falsePositiveRate))
                          .build();
@@ -954,37 +954,11 @@ public class View {
     Digests commonDigests() {
         int seed = parameters.entropy.nextInt();
         return Digests.newBuilder()
-                      .addAllNotes(gatherNoteDigests())
-                      .addAllAccusations(gatherAccusationDigests())
                       .setAccusationBff(getAccusationsBff(seed, parameters.falsePositiveRate).toBff())
                       .setNoteBff(getNotesBff(seed, parameters.falsePositiveRate).toBff())
                       .setMessageBff(getMessagesBff(seed, parameters.falsePositiveRate).toBff())
                       .setCertificateBff(getCertificatesBff(seed, parameters.falsePositiveRate).toBff())
                       .build();
-    }
-
-    /**
-     * @return the AccusationGossip for this view. This is the list of all
-     *         accusation digests in the view. Do not add accusation digests for
-     *         crashed members
-     */
-    List<AccusationDigest> gatherAccusationDigests() {
-        return view.values().stream().flatMap(m -> m.getAccusationDigests()).collect(Collectors.toList());
-    }
-
-    /**
-     * @return the NoteGossip for this view. This is the list of the current Note
-     *         digest for all members in the view
-     */
-    List<NoteDigest> gatherNoteDigests() {
-        List<NoteDigest> notes = view.values()
-                                     .stream()
-                                     .filter(m -> !m.equals(node))
-                                     .map(m -> m.getNoteDigest())
-                                     .filter(e -> e != null)
-                                     .collect(Collectors.toList());
-        log.trace("note digests: {}", notes.size());
-        return notes;
     }
 
     void gc(Participant member) {
@@ -1302,46 +1276,20 @@ public class View {
      * @param p
      * @param seed
      */
-    NoteGossip processNoteDigests(HashKey from, List<NoteDigest> digests, int seed, double p) {
-        log.trace("process note digests: ", digests.size());
+    NoteGossip processNoteDigests(HashKey from, BloomFilter bff, int seed, double p) {
         com.salesfoce.apollo.proto.NoteGossip.Builder builder = NoteGossip.newBuilder();
 
-        Set<HashKey> received = new HashSet<>(digests.size());
-
-        // Process all inbound digests
-        digests.stream().filter(note -> {
-            HashKey id = new HashKey(note.getId());
-            received.add(id);
-            if (from.equals(id)) {
-                return false;
-            }
-            Participant member = view.get(id);
-            if (member == null) {
-                return true;
-            }
-            Long epoch = note.getEpoch();
-            // Add an update if this view has a newer version than the inbound digest
-            if (epoch < member.getEpoch()) {
-                builder.addUpdates(member.getSignedNote());
-                return false;
-            }
-            return epoch > member.getEpoch();
-        }).forEach(e -> builder.addDigests(e));
-
-        // Add all digests that this view has that aren't reflected in the inbound
-        // digests
-        Sets.difference(view.keySet(), received)
+        // Add all updates that this view has that aren't reflected in the inbound
+        // bff
+        view.values()
             .stream()
-            .filter(id -> id.equals(from))
-            .map(id -> view.get(id))
-            .filter(m -> m != null)
+            .filter(m -> m.getNote() != null)
+            .filter(m -> !bff.contains(new HashKey(m.getNote().hash())))
             .map(m -> m.getSignedNote())
-            .filter(note -> note != null)
-            .forEach(note -> builder.addUpdates(note));
+            .forEach(n -> builder.addUpdates(n));
         builder.setBff(getNotesBff(seed, p).toBff());
         NoteGossip gossip = builder.build();
-        log.trace("process notes produded updates: {}, digests: {}", gossip.getUpdatesCount(),
-                  gossip.getDigestsCount());
+        log.trace("process notes produded updates: {}", gossip.getUpdatesCount());
         return gossip;
     }
 
@@ -1523,26 +1471,6 @@ public class View {
     }
 
     /**
-     * gather ye accusal note using the common digests and the list of updates based
-     * on the inboud requested digests
-     * 
-     * @param common
-     * @param requested
-     * @return
-     */
-    NoteGossip updateNotes(List<NoteDigest> common, List<NoteDigest> requested) {
-        com.salesfoce.apollo.proto.NoteGossip.Builder builder = NoteGossip.newBuilder();
-        builder.addAllDigests(common);
-        requested.stream()
-                 .map(digest -> new HashKey(digest.getId()))
-                 .map(id -> view.get(id))
-                 .filter(e -> e != null)
-                 .map(m -> m.getSignedNote())
-                 .forEach(e -> builder.addUpdates(e));
-        return builder.build();
-    }
-
-    /**
      * Process the gossip reply. Return the gossip with the updates determined from
      * the inbound digests.
      * 
@@ -1551,22 +1479,27 @@ public class View {
      */
     Update updatesForDigests(Gossip gossip) {
         com.salesfoce.apollo.proto.Update.Builder builder = Update.newBuilder();
+
+        // messages
         builder.addAllMessages(messageBuffer.updatesFor(new BloomFilter(gossip.getMessages().getBff())));
-        BloomFilter bff = new BloomFilter(gossip.getCertificates().getBff());
-        // Add all updates that this view has that aren't reflected in the inbound
-        // bff
+
+        // certificates
+        BloomFilter certBff = new BloomFilter(gossip.getCertificates().getBff());
         view.values()
             .stream()
-            .filter(m -> !bff.contains(new HashKey(m.getCertificateHash())))
+            .filter(m -> !certBff.contains(new HashKey(m.getCertificateHash())))
             .map(m -> m.getEncodedCertificate())
             .forEach(cert -> builder.addCertificates(cert));
-        gossip.getNotes()
-              .getDigestsList()
-              .stream()
-              .map(digest -> view.get(new HashKey(digest.getId())))
-              .filter(member -> member != null)
-              .map(member -> member.getSignedNote())
-              .forEach(e -> builder.addNotes(e));
+
+        // notes
+        BloomFilter notesBff = new BloomFilter(gossip.getNotes().getBff());
+        view.values()
+            .stream()
+            .filter(m -> m.getNote() != null)
+            .filter(m -> !notesBff.contains(new HashKey(m.getNote().hash())))
+            .map(m -> m.getSignedNote())
+            .forEach(n -> builder.addNotes(n));
+
         gossip.getAccusations()
               .getDigestsList()
               .stream()

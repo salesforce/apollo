@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.AccusationDigest;
 import com.salesfoce.apollo.proto.EncodedCertificate;
-import com.salesfoce.apollo.proto.NoteDigest;
 import com.salesfoce.apollo.proto.Signed;
 import com.salesforce.apollo.fireflies.View.AccTag;
 import com.salesforce.apollo.membership.Member;
@@ -213,12 +212,6 @@ public class Participant extends Member {
 
     Note getNote() {
         return note;
-    }
-
-    NoteDigest getNoteDigest() {
-        Note current = note;
-        return current == null ? null
-                : NoteDigest.newBuilder().setId(getId().toByteString()).setEpoch(current.getEpoch()).build();
     }
 
     Signed getSignedNote() {
