@@ -11,10 +11,6 @@ import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
 import static com.salesforce.apollo.fireflies.View.getStandardEpProvider;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyDouble;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -33,7 +29,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Sets;
-import com.salesfoce.apollo.proto.MessageGossip;
 import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.MtlsCommunications;
@@ -96,8 +91,6 @@ public class MtlsTest {
                 seeds.add(cert.getCertificate());
             }
         }
-        MessageBuffer messageBuffer = mock(MessageBuffer.class);
-        when(messageBuffer.process(any(), any(), anyDouble())).thenReturn(MessageGossip.getDefaultInstance());
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
@@ -111,7 +104,7 @@ public class MtlsTest {
 
         long then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
-        views.forEach(view -> view.getService().start(Duration.ofMillis(300), seeds));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(1_000), seeds));
 
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return views.stream()

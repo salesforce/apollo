@@ -10,10 +10,6 @@ import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyDouble;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.security.cert.X509Certificate;
@@ -31,7 +27,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.salesfoce.apollo.proto.MessageGossip;
 import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.membership.CertWithKey;
@@ -88,8 +83,6 @@ public class SuccessorTest {
                 seeds.add(cert.getCertificate());
             }
         }
-        MessageBuffer messageBuffer = mock(MessageBuffer.class);
-        when(messageBuffer.process(any(), any(), anyDouble())).thenReturn(MessageGossip.getDefaultInstance());
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 

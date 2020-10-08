@@ -24,8 +24,8 @@ import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.MessageGossip;
 import com.salesfoce.apollo.proto.MessageGossip.Builder;
 import com.salesforce.apollo.protocols.BloomFilter;
-import com.salesforce.apollo.protocols.BloomFilter.HashFunction;
 import com.salesforce.apollo.protocols.Conversion;
+import com.salesforce.apollo.protocols.HashFunction;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -56,7 +56,7 @@ public class MessageBuffer {
         }
     }
 
-    public BloomFilter getBff(HashKey seed, double p) {
+    public BloomFilter getBff(int seed, double p) {
         BloomFilter bff = new BloomFilter(new HashFunction(seed, bufferSize, p));
         state.keySet().forEach(h -> bff.add(h));
         return bff;
@@ -73,7 +73,7 @@ public class MessageBuffer {
         return updates.stream().filter(validator).filter(message -> put(message)).collect(Collectors.toList());
     }
 
-    public MessageGossip process(BloomFilter bff, HashKey seed, double p) {
+    public MessageGossip process(BloomFilter bff, int seed, double p) {
         Builder builder = MessageGossip.newBuilder();
         state.entrySet().forEach(entry -> {
             if (!bff.contains(entry.getKey())) {
@@ -109,7 +109,7 @@ public class MessageBuffer {
     public List<Message> updatesFor(BloomFilter bff) {
         return state.entrySet()
                     .stream()
-                    .filter(entry -> bff.contains(entry.getKey()))
+                    .filter(entry -> !bff.contains(entry.getKey()))
                     .map(entry -> entry.getValue())
                     .collect(Collectors.toList());
     }

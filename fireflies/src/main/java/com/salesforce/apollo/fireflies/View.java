@@ -71,8 +71,8 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.BloomFilter;
-import com.salesforce.apollo.protocols.BloomFilter.HashFunction;
 import com.salesforce.apollo.protocols.CaValidator;
+import com.salesforce.apollo.protocols.HashFunction;
 import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
@@ -347,9 +347,7 @@ public class View {
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
             }
-            byte[] bytes = new byte[32];
-            parameters.entropy.nextBytes(bytes);
-            HashKey seed = new HashKey(bytes);
+            int seed = parameters.entropy.nextInt();
             return Gossip.newBuilder()
                          .setRedirect(false)
                          .setMessages(messageBuffer.process(new BloomFilter(digests.getMessageBff()), seed,
@@ -954,9 +952,7 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     Digests commonDigests() {
-        byte[] bytes = new byte[32];
-        parameters.entropy.nextBytes(bytes);
-        HashKey seed = new HashKey(bytes);
+        int seed = parameters.entropy.nextInt();
         return Digests.newBuilder()
                       .addAllNotes(gatherNoteDigests())
                       .addAllAccusations(gatherAccusationDigests())
@@ -973,11 +969,7 @@ public class View {
      *         crashed members
      */
     List<AccusationDigest> gatherAccusationDigests() {
-        return view.values()
-                   .stream()
-                   .filter(m -> !m.equals(node)) // Never send accusations from the view's node
-                   .flatMap(m -> m.getAccusationDigests())
-                   .collect(Collectors.toList());
+        return view.values().stream().flatMap(m -> m.getAccusationDigests()).collect(Collectors.toList());
     }
 
     /**
@@ -1007,37 +999,34 @@ public class View {
         }));
     }
 
-    BloomFilter getAccusationsBff(HashKey seed, double p) {
+    BloomFilter getAccusationsBff(int seed, double p) {
         BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality * parameters.rings, p));
         view.values()
             .stream()
-            .filter(m -> !m.equals(node))
             .flatMap(m -> m.getAccusations())
             .filter(e -> e != null)
             .forEach(n -> bff.add(new HashKey(n.hash())));
         return bff;
     }
 
-    BloomFilter getCertificatesBff(HashKey seed, double p) {
+    BloomFilter getCertificatesBff(int seed, double p) {
         BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality, p));
         view.values()
             .stream()
-            .filter(m -> !m.equals(node))
             .map(m -> m.getCertificateHash())
             .filter(e -> e != null)
             .forEach(n -> bff.add(new HashKey(n)));
         return bff;
     }
 
-    BloomFilter getMessagesBff(HashKey seed, double p) {
+    BloomFilter getMessagesBff(int seed, double p) {
         return messageBuffer.getBff(seed, p);
     }
 
-    BloomFilter getNotesBff(HashKey seed, double p) {
+    BloomFilter getNotesBff(int seed, double p) {
         BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality, p));
         view.values()
             .stream()
-            .filter(m -> !m.equals(node))
             .map(m -> m.getNote())
             .filter(e -> e != null)
             .forEach(n -> bff.add(new HashKey(n.hash())));
@@ -1242,7 +1231,7 @@ public class View {
      * @param seed
      * @return
      */
-    AccusationGossip processAccusationDigests(List<AccusationDigest> digests, HashKey seed, double p) {
+    AccusationGossip processAccusationDigests(List<AccusationDigest> digests, int seed, double p) {
         log.trace("process accusations digests: ", digests.size());
         Set<AccTag> received = new HashSet<>(digests.size());
         Builder builder = AccusationGossip.newBuilder();
@@ -1285,7 +1274,7 @@ public class View {
         return gossip;
     }
 
-    CertificateGossip processCertificateDigests(HashKey from, BloomFilter bff, HashKey seed, double p) {
+    CertificateGossip processCertificateDigests(HashKey from, BloomFilter bff, int seed, double p) {
         log.trace("process cert digests");
         com.salesfoce.apollo.proto.CertificateGossip.Builder builder = CertificateGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
@@ -1293,12 +1282,12 @@ public class View {
         view.values()
             .stream()
             .filter(m -> m.getId().equals(from))
-            .filter(m -> bff.contains(new HashKey(m.getCertificateHash())))
+            .filter(m -> !bff.contains(new HashKey(m.getCertificateHash())))
             .map(m -> m.getEncodedCertificate())
             .forEach(cert -> builder.addUpdates(cert));
         builder.setBff(getCertificatesBff(seed, p).toBff());
         CertificateGossip gossip = builder.build();
-        log.trace("process certificates produded updates: {}, digests: {}", gossip.getUpdatesCount());
+        log.trace("process certificates produced updates: {}", gossip.getUpdatesCount());
         return gossip;
     }
 
@@ -1313,7 +1302,7 @@ public class View {
      * @param p
      * @param seed
      */
-    NoteGossip processNoteDigests(HashKey from, List<NoteDigest> digests, HashKey seed, double p) {
+    NoteGossip processNoteDigests(HashKey from, List<NoteDigest> digests, int seed, double p) {
         log.trace("process note digests: ", digests.size());
         com.salesfoce.apollo.proto.NoteGossip.Builder builder = NoteGossip.newBuilder();
 
@@ -1451,6 +1440,11 @@ public class View {
     Gossip redirectTo(Participant member, int ring, Participant successor) {
         assert member != null;
         assert successor != null;
+        if (successor.getNote() == null) {
+            log.debug("Cannot redirect from {} to {} on ring {} as note is null", node, successor, ring);
+            return Gossip.getDefaultInstance();
+        }
+
         log.debug("Redirecting from {} to {} on ring {}", node, successor, ring);
 
         return Gossip.newBuilder()
@@ -1563,7 +1557,7 @@ public class View {
         // bff
         view.values()
             .stream()
-            .filter(m -> bff.contains(new HashKey(m.getCertificateHash())))
+            .filter(m -> !bff.contains(new HashKey(m.getCertificateHash())))
             .map(m -> m.getEncodedCertificate())
             .forEach(cert -> builder.addCertificates(cert));
         gossip.getNotes()

@@ -50,8 +50,7 @@ public class SwarmTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
-                                                   cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
     private List<Node>            members;
@@ -83,7 +82,7 @@ public class SwarmTest {
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
-            }));
+            }), "views: " + testViews.stream().map(view -> view.getLive().size()).collect(Collectors.toList()));
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                     + testViews.size() + " members");

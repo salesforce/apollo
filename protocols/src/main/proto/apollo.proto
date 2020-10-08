@@ -164,8 +164,9 @@ message CertificateGossip {
 
 message Biff {
         int32 m = 1;
-        repeated bytes h = 2;
-        bytes bits = 3;
+        int32 k = 2;
+        int32 seed = 3;
+        bytes bits = 4;
 }
 
 message NoteDigest {
