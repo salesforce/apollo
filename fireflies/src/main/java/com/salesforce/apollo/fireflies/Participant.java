@@ -22,7 +22,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.AccusationDigest;
 import com.salesfoce.apollo.proto.EncodedCertificate;
 import com.salesfoce.apollo.proto.Signed;
 import com.salesforce.apollo.fireflies.View.AccTag;
@@ -155,16 +154,6 @@ public class Participant extends Member {
 
     Accusation getAccusation(int index) {
         return validAccusations.get(index);
-    }
-
-    Stream<AccusationDigest> getAccusationDigests() {
-        return validAccusations.values()
-                               .stream()
-                               .map(e -> AccusationDigest.newBuilder()
-                                                         .setId(getId().toByteString())
-                                                         .setEpoch(e.getEpoch())
-                                                         .setRing(e.getRingNumber())
-                                                         .build());
     }
 
     Stream<Accusation> getAccusations() {

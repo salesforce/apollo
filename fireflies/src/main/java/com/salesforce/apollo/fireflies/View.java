@@ -25,11 +25,9 @@ import java.util.BitSet;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -47,8 +45,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Sets;
-import com.salesfoce.apollo.proto.AccusationDigest;
 import com.salesfoce.apollo.proto.AccusationGossip;
 import com.salesfoce.apollo.proto.AccusationGossip.Builder;
 import com.salesfoce.apollo.proto.CertificateGossip;
@@ -355,7 +351,7 @@ public class View {
                                                                     seed, parameters.falsePositiveRate))
                          .setNotes(processNoteDigests(from, new BloomFilter(digests.getNoteBff()), seed,
                                                       parameters.falsePositiveRate))
-                         .setAccusations(processAccusationDigests(digests.getAccusationsList(), seed,
+                         .setAccusations(processAccusationDigests(new BloomFilter(digests.getAccusationBff()), seed,
                                                                   parameters.falsePositiveRate))
                          .build();
         }
@@ -1205,46 +1201,18 @@ public class View {
      * @param seed
      * @return
      */
-    AccusationGossip processAccusationDigests(List<AccusationDigest> digests, int seed, double p) {
-        log.trace("process accusations digests: ", digests.size());
-        Set<AccTag> received = new HashSet<>(digests.size());
+    AccusationGossip processAccusationDigests(BloomFilter bff, int seed, double p) {
         Builder builder = AccusationGossip.newBuilder();
-        digests.stream().filter(accusation -> {
-            HashKey id = new HashKey(accusation.getId());
-            Participant member = view.get(id);
-            if (member == null) {
-                return true;
-            }
-            Long epoch = accusation.getEpoch();
-            int ring = accusation.getRing();
-            received.add(new AccTag(id, ring));
-            if (epoch < member.getEpoch()) {
-                Accusation existing = member.getAccusation(ring);
-                if (existing != null && !context.isOffline(existing.getAccuser())) {
-                    builder.addUpdates(existing.getSigned());
-                    return false;
-                }
-            }
-            return epoch > member.getEpoch() || !member.isAccusedOn(ring);
-        }).forEach(e -> {
-            builder.addDigests(e);
-        });
-
-        Sets.difference(view.values().stream().flatMap(e -> e.getAccusationTags().stream()).collect(Collectors.toSet()),
-                        received)
+        // Add all updates that this view has that aren't reflected in the inbound
+        // bff
+        view.values()
             .stream()
-            .map(tag -> {
-                Participant member = view.get(tag.id);
-                return member == null ? null : member.getAccusation(tag.ring);
-            })
-            .filter(acc -> acc != null)
-            .filter(acc -> !context.isOffline(acc.getAccuser()))
-            .map(acc -> acc.getSigned())
-            .forEach(signed -> builder.addUpdates(signed));
+            .flatMap(m -> m.getAccusations())
+            .filter(a -> !bff.contains(new HashKey(a.hash())))
+            .forEach(a -> builder.addUpdates(a.getSigned()));
         builder.setBff(getAccusationsBff(seed, p).toBff());
         AccusationGossip gossip = builder.build();
-        log.trace("process accusations produded updates: {}, digests: {}", gossip.getUpdatesCount(),
-                  gossip.getDigestsCount());
+        log.trace("process accusations produded updates: {}", gossip.getUpdatesCount());
         return gossip;
     }
 
@@ -1452,25 +1420,6 @@ public class View {
     }
 
     /**
-     * gather ye accusal gossip using the common digests and the list of updates
-     * based on the inboud requested digests
-     * 
-     * @param common
-     * @param requested
-     * @return
-     */
-    AccusationGossip updateAccusations(List<AccusationDigest> common, List<AccusationDigest> requested) {
-        Builder builder = AccusationGossip.newBuilder();
-        builder.addAllDigests(common);
-        requested.stream()
-                 .filter(a -> view.get(new HashKey(a.getId())) != null)
-                 .map(a -> view.get(new HashKey(a.getId())).getEncodedAccusation(a.getRing()))
-                 .filter(e -> e != null)
-                 .forEach(e -> builder.addUpdates(e));
-        return builder.build();
-    }
-
-    /**
      * Process the gossip reply. Return the gossip with the updates determined from
      * the inbound digests.
      * 
@@ -1500,14 +1449,12 @@ public class View {
             .map(m -> m.getSignedNote())
             .forEach(n -> builder.addNotes(n));
 
-        gossip.getAccusations()
-              .getDigestsList()
-              .stream()
-              .filter(digest -> view.containsKey(new HashKey(digest.getId())))
-              .map(digest -> view.get(new HashKey(digest.getId())).getAccusation(digest.getRing()))
-              .filter(accusation -> accusation != null)
-              .map(accusation -> accusation.getSigned())
-              .forEach(e -> builder.addAccusations(e));
+        BloomFilter accBff = new BloomFilter(gossip.getAccusations().getBff());
+        view.values()
+            .stream()
+            .flatMap(m -> m.getAccusations())
+            .filter(a -> !accBff.contains(new HashKey(a.hash())))
+            .forEach(a -> builder.addAccusations(a.getSigned()));
 
         return builder.build();
     }

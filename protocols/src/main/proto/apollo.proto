@@ -137,17 +137,11 @@ message Signed {
         bytes content = 1;
         bytes signature = 2;
     }
-
-message AccusationDigest {
-        bytes id = 1;
-        int64 epoch = 2;
-        int32 ring = 3;
-    }
+ 
 
 message AccusationGossip {
-        repeated AccusationDigest digests = 1;
+        Biff bff = 1;
         repeated Signed updates = 2;
-        Biff bff = 3;
     } 
 
 message EncodedCertificate {
@@ -178,9 +172,7 @@ message Digests {
         Biff messageBff = 1;
         Biff certificateBff = 2;
         Biff noteBff = 3;
-        repeated AccusationDigest accusations = 4;
-        
-        Biff accusationBff = 8; 
+        Biff accusationBff = 4; 
     }
 
 message Gossip {
