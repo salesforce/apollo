@@ -8,8 +8,8 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Random;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,13 +25,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.After;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.Sets;
 import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
 import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.protocols.HashKey;
@@ -50,7 +48,7 @@ public class SwarmTest {
     private static Map<UUID, CertWithKey>    certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-    @BeforeClass
+    @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 101)
                          .parallel()
@@ -63,7 +61,7 @@ public class SwarmTest {
     private List<View>     views;
     private FfLocalCommSim communications;
 
-    @After
+    @AfterEach
     public void after() {
         if (views != null) {
             views.forEach(v -> v.getService().stop());
@@ -84,7 +82,7 @@ public class SwarmTest {
             long then = System.currentTimeMillis();
             testViews.forEach(view -> view.getService().start(Duration.ofMillis(100)));
 
-            assertTrue("View did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
+            assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
             }));
 
@@ -107,8 +105,7 @@ public class SwarmTest {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
             });
 
-            assertTrue("View did not stabilize to: " + testViews.size() + " found: "
-                    + testViews.stream().map(v -> v.getLive().size()).collect(Collectors.toList()), stabilized);
+            assertTrue(stabilized);
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                     + testViews.size() + " members");
@@ -120,14 +117,13 @@ public class SwarmTest {
                 testGraph.addEdge(v.getNode(), v.getRing(i).successor(v.getNode()));
             }
         }
-        assertTrue("Graph is not connected", testGraph.isSC());
-        
+        assertTrue(testGraph.isSC());
+
         for (View view : views) {
             for (int ring = 0; ring < view.getRings().size(); ring++) {
                 for (Node node : members) {
                     final NavigableSet<HashKey> membership = view.getRing(ring).members();
-                    assertTrue("Ring " + ring + " does not contain member " + node.getId(),
-                               membership.contains(node.hashFor(ring)));
+                    assertTrue(membership.contains(node.hashFor(ring)));
                 }
             }
         }
@@ -148,7 +144,7 @@ public class SwarmTest {
         long then = System.currentTimeMillis();
         views.forEach(view -> view.getService().start(Duration.ofMillis(100)));
 
-        assertTrue("View did not stabilize", Utils.waitForCondition(15_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
         }));
 
@@ -167,12 +163,7 @@ public class SwarmTest {
                                   .map(view -> view.getLive().size() != views.size() ? view : null)
                                   .filter(view -> view != null)
                                   .collect(Collectors.toList());
-        Set<UUID> expected = views.stream().map(v -> v.getNode().getId()).collect(Collectors.toSet());
-        assertEquals(invalid.stream().map(view -> {
-            Set<?> difference = Sets.difference(expected, view.getLive().keySet());
-            return "Invalid membership: " + view.getNode() + " have: " + view.getLive().keySet().size() + ", missing: "
-                    + difference.size();
-        }).collect(Collectors.toList()).toString(), 0, invalid.size());
+        assertEquals(0, invalid.size());
 
         views.forEach(view -> view.getService().stop());
 
@@ -190,14 +181,13 @@ public class SwarmTest {
                 testGraph.addEdge(v.getNode(), v.getRing(i).successor(v.getNode()));
             }
         }
-        assertTrue("Graph is not connected", testGraph.isSC());
-        
+        assertTrue(testGraph.isSC());
+
         for (View view : views) {
             for (int ring = 0; ring < view.getRings().size(); ring++) {
                 for (Node node : members) {
                     final NavigableSet<HashKey> membership = view.getRing(ring).members();
-                    assertTrue("Ring " + ring + " does not contain member " + node.getId(),
-                               membership.contains(node.hashFor(ring)));
+                    assertTrue(membership.contains(node.hashFor(ring)));
                 }
             }
         }

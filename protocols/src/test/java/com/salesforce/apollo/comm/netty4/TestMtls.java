@@ -7,7 +7,7 @@
 
 package com.salesforce.apollo.comm.netty4;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -19,7 +19,7 @@ import org.apache.avro.ipc.Responder;
 import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.apache.avro.ipc.specific.SpecificResponder;
 import org.apache.avro.specific.SpecificData;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.avro.Apollo;
 import com.salesforce.apollo.avro.DagEntry;

@@ -7,7 +7,7 @@
 
 package com.salesforce.apollo.avalanche;
 
-import org.junit.Before;
+import org.junit.jupiter.api.BeforeEach;
 
 import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
 import com.salesforce.apollo.avalanche.communications.netty.AvalancheNettyCommunications;
@@ -26,7 +26,7 @@ public class TlsFunctionalTest extends AvalancheFunctionalTest {
     private EventLoopGroup     eventLoop;
     private EventExecutorGroup executor;
 
-    @Before
+    @BeforeEach
     public void beforeTest() {
         eventLoop = new NioEventLoopGroup(20);
         executor = new DefaultEventExecutorGroup(30);

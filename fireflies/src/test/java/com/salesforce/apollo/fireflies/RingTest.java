@@ -8,8 +8,8 @@ package com.salesforce.apollo.fireflies;
 
 import static io.github.olivierlemasle.ca.CA.createCsr;
 import static io.github.olivierlemasle.ca.CA.dn;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -18,9 +18,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
 
@@ -35,7 +35,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class RingTest {
     private static List<Member> members;
 
-    @BeforeClass
+    @BeforeAll
     public static void beforeClass() {
         RootCertificate root = CertificateAuthority.mint(dn().setCn("test-ca.com")
                                                              .setO("World Company")
@@ -69,7 +69,7 @@ public class RingTest {
 
     private Ring ring;
 
-    @Before
+    @BeforeEach
     public void before() {
         int index = 0;
         ring = new Ring(index);
@@ -120,7 +120,7 @@ public class RingTest {
             if (index == members.size()) {
                 index = 0; // wrap around
             }
-            assertEquals("error at index: " + index, members.get(index), test);
+            assertEquals(members.get(index), test, "error at index: " + index);
             index++;
         }
     }
@@ -183,7 +183,7 @@ public class RingTest {
                 if (index == members.size()) {
                     index = 0; // wrap around
                 }
-                assertEquals("Member " + index + " failed", members.get(index), member);
+                assertEquals(members.get(index), member);
                 index++;
             }
         }

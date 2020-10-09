@@ -62,23 +62,23 @@ public class ClusterTesting {
 
     private static final Logger log = LoggerFactory.getLogger(ClusterTesting.class);
 
-    @Test
-    public void createGenesis() throws Exception {
-        ClientConfig configuration = new ClientConfig();
-        configuration.property(ClientProperties.CONNECT_TIMEOUT, 1000);
-        configuration.property(ClientProperties.READ_TIMEOUT, 60000);
-        Client client = ClientBuilder.newClient(configuration);
-
-        final WebTarget endpoint = client.target(new URL("http", LOAD_BALANCER, 8080, "/").toURI());
-
-        // create Genesis
-        if (CREATE_GENESIS) {
-            createGenesis(endpoint);
-        }
-
-        smokeSyncApi(endpoint);
-        smokeAsync(endpoint);
-    }
+//    @Test
+//    public void createGenesis() throws Exception {
+//        ClientConfig configuration = new ClientConfig();
+//        configuration.property(ClientProperties.CONNECT_TIMEOUT, 1000);
+//        configuration.property(ClientProperties.READ_TIMEOUT, 60000);
+//        Client client = ClientBuilder.newClient(configuration);
+//
+//        final WebTarget endpoint = client.target(new URL("http", LOAD_BALANCER, 8080, "/").toURI());
+//
+//        // create Genesis
+//        if (CREATE_GENESIS) {
+//            createGenesis(endpoint);
+//        }
+//
+//        smokeSyncApi(endpoint);
+//        smokeAsync(endpoint);
+//    }
 
     @Test
     public void loadTest() throws Exception {

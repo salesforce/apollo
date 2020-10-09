@@ -8,8 +8,8 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -28,8 +28,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.avro.MessageGossip;
 import com.salesforce.apollo.fireflies.View.Service;
@@ -48,7 +48,7 @@ public class SuccessorTest {
 	private static Map<UUID, CertWithKey> certs;
 	private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-	@BeforeClass
+	@BeforeAll
 	public static void beforeClass() {
 		certs = IntStream.range(1, 10).parallel().mapToObj(i -> getMember(i))
 				.collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));

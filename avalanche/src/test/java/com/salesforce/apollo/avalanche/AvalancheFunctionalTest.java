@@ -8,9 +8,9 @@ package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.security.cert.X509Certificate;
@@ -29,10 +29,10 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
@@ -63,7 +63,7 @@ abstract public class AvalancheFunctionalTest {
     private static Map<UUID, CertWithKey>    certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-    @BeforeClass
+    @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 14)
                          .parallel()
@@ -81,12 +81,12 @@ abstract public class AvalancheFunctionalTest {
     protected List<X509Certificate>    seeds;
     protected List<View>               views;
 
-    @After
+    @AfterEach
     public void after() {
         views.forEach(e -> e.getService().stop());
     }
 
-    @Before
+    @BeforeEach
     public void before() {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
@@ -152,12 +152,12 @@ abstract public class AvalancheFunctionalTest {
 
         views.parallelStream().forEach(view -> view.getService().start(ffRound));
 
-        assertTrue("Could not stabilize view membership)", Utils.waitForCondition(30_000, 3_000, () -> {
+        assertTrue(Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
-        }));
+        }), "Could not stabilize view membership)");
         nodes.forEach(node -> node.start());
         ScheduledExecutorService txnScheduler = Executors.newScheduledThreadPool(nodes.size());
 
@@ -195,8 +195,8 @@ abstract public class AvalancheFunctionalTest {
         long now = System.currentTimeMillis();
         HashKey k = genesisKey;
         for (Avalanche a : nodes) {
-            assertTrue("Failed to finalize genesis on: " + a.getNode().getId(),
-                       Utils.waitForCondition(10_000, () -> a.getDagDao().isFinalized(k)));
+            assertTrue(Utils.waitForCondition(10_000, () -> a.getDagDao().isFinalized(k)),
+                       "Failed to finalize genesis on: " + a.getNode().getId());
         }
 
         List<Transactioneer> transactioneers = nodes.stream()
@@ -253,7 +253,7 @@ abstract public class AvalancheFunctionalTest {
 //        FileSerializer.serialize(DagViz.visualize("smoke", nodes.get(0).getDag(), true), new File("smoke.dot"));
 
 //        Graphviz.fromGraph(DagViz.visualize("smoke", nodes.get(0).getDag(), true)).render(Format.PNG).toFile(new File("smoke.png"));
-        assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
+        assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
     }
 
     abstract protected AvalancheCommunications getCommunications();
@@ -273,7 +273,7 @@ abstract public class AvalancheFunctionalTest {
                                   .count() == transactioneers.size();
         });
 
-        assertTrue("could not seed initial txn set", seeded);
+        assertTrue(seeded, "could not seed initial txn set");
         System.out.println("seeded initial txns in " + (System.currentTimeMillis() - then) + " ms");
     }
 
