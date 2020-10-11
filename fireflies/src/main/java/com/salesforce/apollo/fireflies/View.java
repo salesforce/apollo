@@ -342,17 +342,17 @@ public class View {
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
             }
-            int seed = parameters.entropy.nextInt();
+            int seed = getParameters().entropy.nextInt();
             return Gossip.newBuilder()
                          .setRedirect(false)
                          .setMessages(messageBuffer.process(new BloomFilter(digests.getMessageBff()), seed,
-                                                            parameters.falsePositiveRate))
+                                                            getParameters().falsePositiveRate))
                          .setCertificates(processCertificateDigests(from, new BloomFilter(digests.getCertificateBff()),
-                                                                    seed, parameters.falsePositiveRate))
+                                                                    seed, getParameters().falsePositiveRate))
                          .setNotes(processNoteDigests(from, new BloomFilter(digests.getNoteBff()), seed,
-                                                      parameters.falsePositiveRate))
+                                                      getParameters().falsePositiveRate))
                          .setAccusations(processAccusationDigests(new BloomFilter(digests.getAccusationBff()), seed,
-                                                                  parameters.falsePositiveRate))
+                                                                  getParameters().falsePositiveRate))
                          .build();
         }
 
@@ -366,12 +366,12 @@ public class View {
             recover(node);
             List<HashKey> seedList = new ArrayList<>();
             seeds.stream()
-                 .map(cert -> new Participant(cert, parameters))
+                 .map(cert -> new Participant(cert, getParameters()))
                  .peek(m -> seedList.add(m.getId()))
                  .forEach(m -> addSeed(m));
 
             long interval = d.toMillis();
-            int initialDelay = parameters.entropy.nextInt((int) interval * 2);
+            int initialDelay = getParameters().entropy.nextInt((int) interval * 2);
             futureGossip = scheduler.scheduleWithFixedDelay(() -> {
                 try {
                     oneRound();
@@ -424,13 +424,13 @@ public class View {
         FfClientCommunications nextRing() {
             FfClientCommunications link = null;
             int last = lastRing;
-            int current = (last + 1) % parameters.rings;
-            for (int i = 0; i < parameters.rings; i++) {
+            int current = (last + 1) % getParameters().rings;
+            for (int i = 0; i < getParameters().rings; i++) {
                 link = linkFor(current);
                 if (link != null) {
                     break;
                 }
-                current = (current + 1) % parameters.rings;
+                current = (current + 1) % getParameters().rings;
             }
             lastRing = current;
             return link;
@@ -516,12 +516,13 @@ public class View {
      */
     private final MessageBuffer messageBuffer;
 
+    @SuppressWarnings("unused")
+    private final FireflyMetrics metrics;
+
     /**
      * This member
      */
     private final Node node;
-
-    private final FirefliesParameters parameters;
 
     /**
      * Pending rebutal timers by member id
@@ -559,12 +560,16 @@ public class View {
     private final ConcurrentMap<HashKey, Participant> view = new ConcurrentHashMap<>();
 
     public View(Node node, Communications communications, ScheduledExecutorService scheduler) {
+        this(node, communications, scheduler, null);
+    }
+
+    public View(Node node, Communications communications, ScheduledExecutorService scheduler, FireflyMetrics metrics) {
+        this.metrics = metrics;
         this.node = node;
-        this.comm = communications.create(node, getCreate(), new FfServerCommunications(service,
-                communications.getClientIdentityProvider()));
-        this.parameters = this.node.getParameters();
+        this.comm = communications.create(node, getCreate(metrics), new FfServerCommunications(service,
+                communications.getClientIdentityProvider(), metrics));
         this.scheduler = scheduler;
-        diameter = diameter(parameters);
+        diameter = diameter(getParameters());
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
         dispatcher = Executors.newSingleThreadExecutor(new ThreadFactory() {
             @Override
@@ -574,10 +579,11 @@ public class View {
                 return daemon;
             }
         });
-        this.messageBuffer = new MessageBuffer(parameters.bufferSize, parameters.toleranceLevel * diameter + 1);
-        context = new Context<>(HashKey.ORIGIN, parameters.rings);
+        this.messageBuffer = new MessageBuffer(getParameters().bufferSize,
+                getParameters().toleranceLevel * diameter + 1);
+        context = new Context<>(HashKey.ORIGIN, getParameters().rings);
         add(node);
-        log.info("View [{}]\n  Parameters: {}", node.getId(), parameters);
+        log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }
 
     /**
@@ -605,7 +611,7 @@ public class View {
      * @return the maximum number of members allowed for the view
      */
     public int getMaximumCardinality() {
-        return parameters.cardinality;
+        return getParameters().cardinality;
     }
 
     /**
@@ -619,7 +625,7 @@ public class View {
      * @return the parameters
      */
     public FirefliesParameters getParameters() {
-        return parameters;
+        return node.getParameters();
     }
 
     /**
@@ -718,7 +724,7 @@ public class View {
             return;
         }
 
-        if (accusation.getRingNumber() > parameters.rings) {
+        if (accusation.getRingNumber() > getParameters().rings) {
             log.debug("Invalid ring in accusation: {}", accusation.getRingNumber());
             return;
         }
@@ -738,7 +744,7 @@ public class View {
         // verify the accusation after all other tests pass, as it's reasonably
         // expensive and we want to filter out all the noise first, before going to all
         // the trouble (and cost) to validate the sig
-        if (!accusation.verify(accuser.forVerification(parameters.signatureAlgorithm))) {
+        if (!accusation.verify(accuser.forVerification(getParameters().signatureAlgorithm))) {
             log.debug("Accusation signature invalid ");
             return;
         }
@@ -794,7 +800,7 @@ public class View {
             update(member, cert);
             return member;
         }
-        member = new Participant(cert.certificate, cert.derEncoded, parameters, cert.certificateHash);
+        member = new Participant(cert.certificate, cert.derEncoded, getParameters(), cert.certificateHash);
         log.trace("Adding member via cert: {}", member.getId());
         return add(member);
     }
@@ -819,7 +825,7 @@ public class View {
         }
 
         BitSet mask = note.getMask();
-        if (!isValidMask(mask, parameters)) {
+        if (!isValidMask(mask, getParameters())) {
             log.debug("Note: {} mask invalid {}", note.getId(), mask);
             return false;
         }
@@ -827,7 +833,7 @@ public class View {
         // verify the note after all other tests pass, as it's reasonably expensive and
         // we want to filter out all
         // the noise first, before going to all the trouble to validate
-        if (!note.verify(m.forVerification(parameters.signatureAlgorithm))) {
+        if (!note.verify(m.forVerification(getParameters().signatureAlgorithm))) {
             log.debug("Note signature invalid: {}", note.getId());
             return false;
         }
@@ -883,8 +889,8 @@ public class View {
      * @param seed
      */
     void addSeed(Participant seed) {
-        seed.setNote(new Note(seed.getId(), -1, Node.createInitialMask(parameters.toleranceLevel, parameters.entropy),
-                node.forSigning()));
+        seed.setNote(new Note(seed.getId(), -1,
+                Node.createInitialMask(getParameters().toleranceLevel, getParameters().entropy), node.forSigning()));
         context.add(seed);
         context.activate(seed);
     }
@@ -907,7 +913,7 @@ public class View {
             return null;
         }
         try {
-            certificate.verify(parameters.ca.getPublicKey());
+            certificate.verify(getParameters().ca.getPublicKey());
         } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException | CertificateException
                 | NoSuchProviderException e) {
             log.warn("Invalid cert: {}", certificate.getSubjectDN(), e);
@@ -948,12 +954,12 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     Digests commonDigests() {
-        int seed = parameters.entropy.nextInt();
+        int seed = getParameters().entropy.nextInt();
         return Digests.newBuilder()
-                      .setAccusationBff(getAccusationsBff(seed, parameters.falsePositiveRate).toBff())
-                      .setNoteBff(getNotesBff(seed, parameters.falsePositiveRate).toBff())
-                      .setMessageBff(getMessagesBff(seed, parameters.falsePositiveRate).toBff())
-                      .setCertificateBff(getCertificatesBff(seed, parameters.falsePositiveRate).toBff())
+                      .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setMessageBff(getMessagesBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff())
                       .build();
     }
 
@@ -970,7 +976,8 @@ public class View {
     }
 
     BloomFilter getAccusationsBff(int seed, double p) {
-        BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality * parameters.rings, p));
+        BloomFilter bff = new BloomFilter(
+                new HashFunction(seed, getParameters().cardinality * getParameters().rings, p));
         context.getActive()
                .stream()
                .flatMap(m -> m.getAccusations())
@@ -980,7 +987,7 @@ public class View {
     }
 
     BloomFilter getCertificatesBff(int seed, double p) {
-        BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality, p));
+        BloomFilter bff = new BloomFilter(new HashFunction(seed, getParameters().cardinality, p));
         view.values()
             .stream()
             .map(m -> m.getCertificateHash())
@@ -994,7 +1001,7 @@ public class View {
     }
 
     BloomFilter getNotesBff(int seed, double p) {
-        BloomFilter bff = new BloomFilter(new HashFunction(seed, parameters.cardinality, p));
+        BloomFilter bff = new BloomFilter(new HashFunction(seed, getParameters().cardinality, p));
         view.values()
             .stream()
             .map(m -> m.getNote())
@@ -1175,18 +1182,28 @@ public class View {
      * monitor().
      */
     void oneRound() {
-        round.incrementAndGet();
-        try {
-            service.gossip();
-        } catch (Throwable e) {
-            log.error("unexpected error during gossip round", e);
+        com.codahale.metrics.Timer.Context timer = null;
+        if (metrics != null) {
+            timer = metrics.gossipRoundDuration().time();
         }
         try {
-            service.monitor();
-        } catch (Throwable e) {
-            log.error("unexpected error during monitor round", e);
+            round.incrementAndGet();
+            try {
+                service.gossip();
+            } catch (Throwable e) {
+                log.error("unexpected error during gossip round", e);
+            }
+            try {
+                service.monitor();
+            } catch (Throwable e) {
+                log.error("unexpected error during monitor round", e);
+            }
+            maintainTimers();
+        } finally {
+            if (timer != null) {
+                timer.stop();
+            }
         }
-        maintainTimers();
     }
 
     /**
@@ -1370,7 +1387,7 @@ public class View {
                                                        .build())
                      .setNotes(NoteGossip.newBuilder().addUpdates(successor.getSignedNote()).build())
                      .setAccusations(AccusationGossip.newBuilder()
-                                                     .addAllUpdates(member.getEncodedAccusations(parameters.rings)))
+                                                     .addAllUpdates(member.getEncodedAccusations(getParameters().rings)))
                      .build();
     }
 
@@ -1393,7 +1410,7 @@ public class View {
      */
     void startRebutalTimer(Participant m) {
         pendingRebutals.computeIfAbsent(m.getId(), id -> {
-            FutureRebutal future = new FutureRebutal(round.get() + 2 * (diameter * parameters.toleranceLevel), m);
+            FutureRebutal future = new FutureRebutal(round.get() + 2 * (diameter * getParameters().toleranceLevel), m);
             scheduledRebutals.add(future);
             return future;
         });
@@ -1438,16 +1455,17 @@ public class View {
             .stream()
             .filter(m -> !certBff.contains(new HashKey(m.getCertificateHash())))
             .map(m -> m.getEncodedCertificate())
+            .filter(ec -> ec != null)
             .forEach(cert -> builder.addCertificates(cert));
 
         // notes
         BloomFilter notesBff = new BloomFilter(gossip.getNotes().getBff());
         view.values()
-               .stream()
-               .filter(m -> m.getNote() != null)
-               .filter(m -> !notesBff.contains(new HashKey(m.getNote().hash())))
-               .map(m -> m.getSignedNote())
-               .forEach(n -> builder.addNotes(n));
+            .stream()
+            .filter(m -> m.getNote() != null)
+            .filter(m -> !notesBff.contains(new HashKey(m.getNote().hash())))
+            .map(m -> m.getSignedNote())
+            .forEach(n -> builder.addNotes(n));
 
         BloomFilter accBff = new BloomFilter(gossip.getAccusations().getBff());
         context.getActive()
@@ -1472,7 +1490,7 @@ public class View {
         if (member == null) {
             return false;
         }
-        Signature signature = member.forVerification(parameters.signatureAlgorithm);
+        Signature signature = member.forVerification(getParameters().signatureAlgorithm);
         try {
             signature.update(message.getContent().toByteArray());
             return signature.verify(message.getSignature().toByteArray());

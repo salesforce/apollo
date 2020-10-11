@@ -20,6 +20,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -27,7 +29,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
@@ -57,6 +62,8 @@ public class SwarmTest {
     private List<View>            views;
     private LocalCommSimm         communications;
     private List<X509Certificate> seeds;
+    private MetricRegistry        registry;
+    private MetricRegistry        node0Registry;
 
     @AfterEach
     public void after() {
@@ -125,6 +132,11 @@ public class SwarmTest {
                 }
             }
         }
+        ConsoleReporter.forRegistry(registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 
     @Test
@@ -173,10 +185,17 @@ public class SwarmTest {
         }
 
         views.forEach(view -> view.getService().stop());
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 
     private void initialize() {
         Random entropy = new Random(0x666);
+        registry = new MetricRegistry();
+        node0Registry = new MetricRegistry();
 
         seeds = new ArrayList<>();
         members = certs.values()
@@ -184,7 +203,8 @@ public class SwarmTest {
                        .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                        .map(cert -> new Node(cert, parameters))
                        .collect(Collectors.toList());
-        communications = new LocalCommSimm();
+        communications = new LocalCommSimm(
+                ServerConnectionCache.newBuilder().setTarget(2).setMetrics(new FireflyMetricsImpl(node0Registry)));
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -195,7 +215,10 @@ public class SwarmTest {
         }
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
-
-        views = members.stream().map(node -> new View(node, communications, scheduler)).collect(Collectors.toList());
+        AtomicBoolean frist = new AtomicBoolean(true);
+        views = members.stream()
+                       .map(node -> new View(node, communications, scheduler,
+                               new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)))
+                       .collect(Collectors.toList());
     }
 }

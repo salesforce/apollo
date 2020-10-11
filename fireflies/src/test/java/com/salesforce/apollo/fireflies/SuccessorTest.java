@@ -27,7 +27,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
@@ -67,6 +69,8 @@ public class SuccessorTest {
     @Test
     public void allSuccessors() throws Exception {
         Random entropy = new Random(0x666);
+        MetricRegistry registry = new MetricRegistry();
+        FireflyMetrics metrics = new FireflyMetricsImpl(registry);
 
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
@@ -74,7 +78,7 @@ public class SuccessorTest {
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
-        communications = new LocalCommSimm();
+        communications = new LocalCommSimm(ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics));
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -87,7 +91,7 @@ public class SuccessorTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         Map<Participant, View> views = members.stream()
-                                              .map(node -> new View(node, communications, scheduler))
+                                              .map(node -> new View(node, communications, scheduler, metrics))
                                               .collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
         views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds));

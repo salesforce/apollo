@@ -18,6 +18,10 @@
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>protocols</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.dropwizard</groupId>
+            <artifactId>dropwizard-metrics</artifactId>
+        </dependency>
 
 		<!-- Test Only Dependencies Below This Line -->
 

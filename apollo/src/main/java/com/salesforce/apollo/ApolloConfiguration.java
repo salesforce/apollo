@@ -12,6 +12,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.time.Duration;
 
+import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonSubTypes.Type;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -22,6 +23,7 @@ import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.comm.MtlsCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 
 /**
@@ -31,7 +33,7 @@ import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 public class ApolloConfiguration {
     public interface CommunicationsFactory {
 
-        Communications getComms();
+        Communications getComms(MetricRegistry metrics);
 
     }
 
@@ -76,9 +78,11 @@ public class ApolloConfiguration {
         public int target = 30;
 
         @Override
-        public Communications getComms() {
+        public Communications getComms(MetricRegistry metrics) {
             EndpointProvider ep = null;
-            return new MtlsCommunications(ServerConnectionCache.newBuilder(), ep);
+            return new MtlsCommunications(
+                    ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
+                    ep);
         }
 
     }
@@ -94,14 +98,18 @@ public class ApolloConfiguration {
         public static void reset() {
             if (LOCAL_COM != null) {
                 LOCAL_COM.close();
+                LOCAL_COM = null;
             }
-            LOCAL_COM = new LocalCommSimm();
         }
 
+        public int target = 30;
+
         @Override
-        public Communications getComms() {
+        public Communications getComms(MetricRegistry metrics) {
             if (LOCAL_COM == null) {
-                throw new IllegalStateException("SimCommunicationsFactory must be reset first");
+                LOCAL_COM = new LocalCommSimm(ServerConnectionCache.newBuilder()
+                                                                   .setTarget(target)
+                                                                   .setMetrics(new FireflyMetricsImpl(metrics)));
             }
             return LOCAL_COM;
         }

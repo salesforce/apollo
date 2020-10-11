@@ -21,6 +21,9 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.Timer;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -62,6 +65,7 @@ public class ServerConnectionCache {
         public final ManagedChannel channel;
         public final HashKey        id;
         private volatile int        borrowed   = 0;
+        private final Instant       created    = Instant.now(clock);
         private volatile Instant    lastUsed   = Instant.now(clock);
         private volatile int        usageCount = 0;
 
@@ -117,13 +121,14 @@ public class ServerConnectionCache {
     }
 
     public static class ServerConnectionCacheBuilder {
-        private Clock                   clock   = Clock.systemUTC();
-        private ServerConnectionFactory factory = null;
-        private Duration                minIdle = Duration.ofMillis(100);
-        private int                     target  = 0;
+        private Clock                        clock   = Clock.systemUTC();
+        private ServerConnectionFactory      factory = null;
+        private ServerConnectionCacheMetrics metrics;
+        private Duration                     minIdle = Duration.ofMillis(100);
+        private int                          target  = 0;
 
         public ServerConnectionCache build() {
-            return new ServerConnectionCache(factory, target, minIdle, clock);
+            return new ServerConnectionCache(factory, target, minIdle, clock, metrics);
         }
 
         public Clock getClock() {
@@ -132,6 +137,10 @@ public class ServerConnectionCache {
 
         public ServerConnectionFactory getFactory() {
             return factory;
+        }
+
+        public ServerConnectionCacheMetrics getMetrics() {
+            return metrics;
         }
 
         public Duration getMinIdle() {
@@ -152,6 +161,11 @@ public class ServerConnectionCache {
             return this;
         }
 
+        public ServerConnectionCacheBuilder setMetrics(ServerConnectionCacheMetrics metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
         public ServerConnectionCacheBuilder setMinIdle(Duration minIdle) {
             this.minIdle = minIdle;
             return this;
@@ -161,6 +175,28 @@ public class ServerConnectionCache {
             this.target = target;
             return this;
         }
+    }
+
+    public static interface ServerConnectionCacheMetrics {
+
+        Meter borrowRate();
+
+        Timer channelOpenDuration();
+
+        Meter closeConnectionRate();
+
+        Counter createConnection();
+
+        Meter createConnectionRate();
+
+        Meter failedConnectionRate();
+
+        Counter failedOpenConnection();
+
+        Counter openConnections();
+
+        Meter releaseRate();
+
     }
 
     public static interface ServerConnectionFactory {
@@ -177,33 +213,49 @@ public class ServerConnectionCache {
     private final Clock                                  clock;
     private final ServerConnectionFactory                factory;
     private final ReadWriteLock                          lock  = new ReentrantReadWriteLock(true);
+    private final ServerConnectionCacheMetrics           metrics;
     private final Duration                               minIdle;
     private final PriorityQueue<ManagedServerConnection> queue = new PriorityQueue<>();
     private final int                                    target;
 
-    public ServerConnectionCache(ServerConnectionFactory factory, int target, Duration minIdle, Clock clock) {
+    public ServerConnectionCache(ServerConnectionFactory factory, int target, Duration minIdle, Clock clock,
+            ServerConnectionCacheMetrics metrics) {
         this.factory = factory;
         this.target = target;
         this.minIdle = minIdle;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     public <T> T borrow(Member to, Member from, CreateClientCommunications<T> createFunction) {
         return lock(() -> {
             if (cache.size() >= target) {
                 log.debug("Cache target open connections exceeded: {}, opening from: {} to {}", target, from.getId(),
-                         to.getId());
+                          to.getId());
             }
-            ManagedServerConnection connection = cache.computeIfAbsent(to.getId(),
-                                                                       member -> new ManagedServerConnection(to.getId(),
-                                                                               factory.connectTo(to, from)));
+            ManagedServerConnection connection = cache.computeIfAbsent(to.getId(), member -> {
+                ManagedServerConnection conn = new ManagedServerConnection(to.getId(), factory.connectTo(to, from));
+                if (metrics != null) {
+                    metrics.createConnection().inc();
+                    metrics.openConnections().inc();
+                    metrics.createConnectionRate().mark();
+                }
+                return conn;
+            });
             if (connection == null) {
                 log.warn("Failed to open channel to {} from {}", to.getId(), from.getId());
+                if (metrics != null) {
+                    metrics.failedOpenConnection().inc();
+                    metrics.failedConnectionRate().mark();
+                }
                 return null;
             }
             if (connection.incrementBorrow()) {
                 log.debug("Opened channel to {}, last used: {}, from: {}", connection.id, connection.lastUsed,
                           from.getId());
+                if (metrics != null) {
+                    metrics.borrowRate().mark();
+                }
                 queue.remove(connection);
             }
             log.trace("Opened channel to {}, borrowed: {}, usage: {}", connection.id, connection.borrowed,
@@ -218,6 +270,10 @@ public class ServerConnectionCache {
             cache.values().forEach(conn -> {
                 try {
                     conn.channel.shutdownNow();
+                    if (metrics != null) {
+                        metrics.channelOpenDuration().update(Duration.between(conn.created, Instant.now(clock)));
+                        metrics.openConnections().dec();
+                    }
                 } catch (Throwable e) {
                     log.debug("Error closing {}", conn.id);
                 }
@@ -245,6 +301,9 @@ public class ServerConnectionCache {
             if (connection.decrementBorrow()) {
                 log.debug("Releasing connection: {}", connection.id);
                 queue.add(connection);
+                if (metrics != null) {
+                    metrics.releaseRate().mark();
+                }
                 manageConnections();
             }
             return null;
@@ -261,6 +320,11 @@ public class ServerConnectionCache {
             }
             log.debug("{} is closed", connection.id);
             cache.remove(connection.id);
+            if (metrics != null) {
+                metrics.openConnections().dec();
+                metrics.closeConnectionRate().mark();
+                metrics.channelOpenDuration().update(Duration.between(connection.created, Instant.now(clock)));
+            }
             return true;
         }
         return false;
@@ -277,6 +341,7 @@ public class ServerConnectionCache {
     }
 
     private void manageConnections() {
+//        log.info("Managing connections: " + cache.size() + " idle: " + queue.size());
         Iterator<ManagedServerConnection> connections = queue.iterator();
         while (connections.hasNext() && cache.size() > target) {
             if (close(connections.next())) {

@@ -11,6 +11,7 @@ import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.MtlsCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
+import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 
@@ -19,8 +20,11 @@ import com.salesforce.apollo.fireflies.View;
  */
 public class TlsFunctionalTest extends AvalancheFunctionalTest {
 
-    protected Communications getCommunications(Node node) {
-        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(30);
+    protected Communications getCommunications(Node node, boolean first) {
+        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder()
+                                                                    .setTarget(2)
+                                                                    .setMetrics(new FireflyMetricsImpl(
+                                                                            first ? node0registry : registry));
         return new MtlsCommunications(builder, View.getStandardEpProvider(node));
     }
 

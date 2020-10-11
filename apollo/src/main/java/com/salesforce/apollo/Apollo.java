@@ -42,7 +42,7 @@ public class Apollo {
         }
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         ApolloConfiguration configuraton = mapper.readValue(yaml.openStream(), ApolloConfiguration.class);
-        Apollo apollo = new Apollo(configuraton, null);
+        Apollo apollo = new Apollo(configuraton, new MetricRegistry());
         apollo.start();
     }
 
@@ -53,12 +53,12 @@ public class Apollo {
     private final Communications      communications;
 
     public Apollo(ApolloConfiguration config) throws SocketException, KeyStoreException {
-        this(config, null);
+        this(config, new MetricRegistry());
     }
 
     public Apollo(ApolloConfiguration c, MetricRegistry metrics) throws SocketException, KeyStoreException {
         configuration = c;
-        communications = null;
+        communications = c.communications.getComms(metrics);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(configuration.threadPool);
         view = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
                                           ApolloConfiguration.DEFAULT_IDENTITY_ALIAS)

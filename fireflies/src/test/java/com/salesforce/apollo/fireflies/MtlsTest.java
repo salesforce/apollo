@@ -21,6 +21,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -28,6 +30,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
 import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.EndpointProvider;
@@ -76,6 +80,8 @@ public class MtlsTest {
     @Test
     public void smoke() throws Exception {
         Random entropy = new Random(0x666);
+        MetricRegistry registry = new MetricRegistry();
+        MetricRegistry node0Registry = new MetricRegistry();
 
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
@@ -94,17 +100,20 @@ public class MtlsTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(30);
+        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(2);
+        AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
+            FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry : registry);
             EndpointProvider ep = getStandardEpProvider(node);
+            builder.setMetrics(metrics);
             MtlsCommunications comms = new MtlsCommunications(builder, ep);
             communications.add(comms);
-            return new View(node, comms, scheduler);
+            return new View(node, comms, scheduler, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1_000), seeds));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(500), seeds));
 
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream()
@@ -164,5 +173,11 @@ public class MtlsTest {
 
         System.out.println("Stoping views");
         views.forEach(view -> view.getService().stop());
+
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 }

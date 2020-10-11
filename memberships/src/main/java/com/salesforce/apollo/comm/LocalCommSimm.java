@@ -99,10 +99,6 @@ public class LocalCommSimm implements Communications {
     private final ServerConnectionFactory      factory = new LocalServerConnectionFactory();
     private final Map<HashKey, ServerWrapper>  servers = new ConcurrentHashMap<>();
 
-    public LocalCommSimm() {
-        this(ServerConnectionCache.newBuilder().setTarget(30));
-    }
-
     public LocalCommSimm(ServerConnectionCacheBuilder builder) {
         this.builder = builder;
     }

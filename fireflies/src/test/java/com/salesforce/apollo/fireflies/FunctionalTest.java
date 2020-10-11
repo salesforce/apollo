@@ -26,8 +26,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
 import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
@@ -64,9 +66,11 @@ public class FunctionalTest {
     @Test
     public void e2e() throws Exception {
         Random entropy = new Random(0x666);
+        MetricRegistry registry = new MetricRegistry();
+        FireflyMetrics metrics = new FireflyMetricsImpl(registry);
 
         List<X509Certificate> seeds = new ArrayList<>();
-        communications = new LocalCommSimm();
+        communications = new LocalCommSimm(ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics));
         List<Node> members = certs.values()
                                   .parallelStream()
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
@@ -84,7 +88,7 @@ public class FunctionalTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         List<View> views = members.parallelStream()
-                                  .map(node -> new View(node, communications, scheduler))
+                                  .map(node -> new View(node, communications, scheduler, metrics))
                                   .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds))
                                   .collect(Collectors.toList());
 
