@@ -169,8 +169,23 @@
 				<version>3.6.1</version>
 			</dependency>
 
+			<dependency>
+				<groupId>io.dropwizard</groupId>
+				<artifactId>dropwizard-dependencies</artifactId>
+				<version>${dropwizard.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>testcontainers-bom</artifactId>
+				<version>1.14.3</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
 			<!-- Test dependencies only below this line! -->
-			
+
 			<dependency>
 				<groupId>ch.qos.logback</groupId>
 				<artifactId>logback-classic</artifactId>
