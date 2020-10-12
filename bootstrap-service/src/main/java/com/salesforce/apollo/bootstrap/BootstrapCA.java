@@ -11,13 +11,12 @@ import static com.salesforce.apollo.boostrap.schema.Tables.ASSIGNED_IDS;
 import static com.salesforce.apollo.boostrap.schema.Tables.SETTINGS;
 import static io.github.olivierlemasle.ca.CA.dn;
 
+import java.security.SecureRandom;
+
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
-
-import com.fasterxml.uuid.Generators;
-import com.fasterxml.uuid.impl.TimeBasedGenerator;
 
 import io.dropwizard.Application;
 import io.dropwizard.setup.Environment;
@@ -27,6 +26,8 @@ import io.github.olivierlemasle.ca.RootCertificate;
  * @author hhildebrand
  */
 public class BootstrapCA extends Application<BootstrapConfiguration> {
+
+    private final SecureRandom entropy = new SecureRandom();
 
     public static void main(String[] argv) throws Exception {
         new BootstrapCA().run(argv);
@@ -48,20 +49,17 @@ public class BootstrapCA extends Application<BootstrapConfiguration> {
                                                 .build(),
                                             configuration.cardinality, configuration.probabilityByzantine,
                                             configuration.faultTolerance);
-        context = DSL.using(new H2PooledConnectionProvider(JdbcConnectionPool.create(configuration.dbConnect,
-                                                                                     "bootstrap",
-                                                                                     "")),
-                            SQLDialect.H2);
+        context = DSL.using(new H2PooledConnectionProvider(
+                JdbcConnectionPool.create(configuration.dbConnect, "bootstrap", "")), SQLDialect.H2);
         MintApi.loadSchema(context);
         initializeDb(configuration, root);
         environment.jersey()
                    .register(new MintApi(root, context,
-                                         (int)((configuration.cardinality * configuration.faultTolerance) + 1)));
+                           (int) ((configuration.cardinality * configuration.faultTolerance) + 1)));
         environment.healthChecks().register("bootstrap", new BoostrapCaHealthCheck());
     }
 
     private void initializeDb(BootstrapConfiguration configuration, RootCertificate root) {
-        TimeBasedGenerator generator = Generators.timeBasedGenerator();
         context.transaction(config -> {
             DSLContext create = DSL.using(config);
             create.insertInto(SETTINGS)
@@ -69,12 +67,13 @@ public class BootstrapCA extends Application<BootstrapConfiguration> {
                   .set(SETTINGS.CARDINALITY, configuration.cardinality)
                   .set(SETTINGS.PROBABILITY_BYZANTINE, configuration.probabilityByzantine)
                   .set(SETTINGS.FAULTTOLERANCE, configuration.faultTolerance)
-                  .set(SETTINGS.CA_CERTIFICATE,
-                       root.getX509Certificate().getEncoded())
+                  .set(SETTINGS.CA_CERTIFICATE, root.getX509Certificate().getEncoded())
                   .execute();
 
             for (int i = 0; i < configuration.cardinality; i++) {
-                create.insertInto(ASSIGNED_IDS).set(ASSIGNED_IDS.ID, generator.generate()).execute();
+                byte[] id = new byte[32];
+                entropy.nextBytes(id);
+                create.insertInto(ASSIGNED_IDS).set(ASSIGNED_IDS.ID, id).execute();
             }
         });
     }

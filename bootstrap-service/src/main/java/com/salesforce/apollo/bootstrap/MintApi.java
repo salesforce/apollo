@@ -20,12 +20,12 @@ import java.security.KeyPair;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.Base64;
 import java.util.Base64.Decoder;
 import java.util.Base64.Encoder;
@@ -38,6 +38,13 @@ import java.util.stream.Collectors;
 
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response.Status;
 
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
@@ -48,8 +55,6 @@ import org.jooq.impl.DSL;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.annotation.Timed;
-import com.fasterxml.uuid.Generators;
-import com.fasterxml.uuid.impl.TimeBasedGenerator;
 
 import io.github.olivierlemasle.ca.CA;
 import io.github.olivierlemasle.ca.Certificate;
@@ -59,13 +64,6 @@ import io.github.olivierlemasle.ca.RootCertificate;
 import io.github.olivierlemasle.ca.Signer.SignerWithSerial;
 import io.github.olivierlemasle.ca.SignerImpl;
 import io.github.olivierlemasle.ca.ext.CertExtension;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response.Status;
 import liquibase.Contexts;
 import liquibase.Liquibase;
 import liquibase.database.Database;
@@ -173,7 +171,7 @@ public class MintApi {
             liquibase.update((Contexts) null);
         } catch (Exception e) {
             throw new IllegalStateException("Cannot load schema", e);
-        } 
+        }
 
         // liquibase = new Liquibase("functions.yml", new
         // ClassLoaderResourceAccessor(MintApi.class.getClassLoader()),
@@ -184,11 +182,11 @@ public class MintApi {
         // throw new IllegalStateException("Cannot load functions", e);
         // }
 
-        try {
-            connection.commit();
-        } catch (SQLException e) {
-            throw new IllegalStateException("Cannot create trigger", e);
-        }
+//        try {
+//            connection.commit();
+//        } catch (SQLException e) {
+//            throw new IllegalStateException("Cannot create trigger", e);
+//        }
     }
 
     public static RootCertificate mint(DistinguishedName dn, int cardinality, double probabilityByzantine,
@@ -238,22 +236,17 @@ public class MintApi {
         return decoded;
     }
 
-    private final DSLContext         context;
-    private final String             country          = "US";
-    private final TimeBasedGenerator generator;
-    private final String             organization     = "World Company";
-    private final String             orginazationUnit = "IT dep";
-    private final RootCertificate    root;
-    private int                      seedCount;
-    private final String             state            = "CA";
+    private final DSLContext      context;
+    private final String          country          = "US";
+    private final String          organization     = "World Company";
+    private final String          orginazationUnit = "IT dep";
+    private final RootCertificate root;
+    private int                   seedCount;
+    private final String          state            = "CA";
+    private final SecureRandom    entropy          = new SecureRandom();
 
     public MintApi(RootCertificate root, DSLContext context, int seedCount) {
-        this(root, Generators.timeBasedGenerator(), context, seedCount);
-    }
-
-    public MintApi(RootCertificate root, TimeBasedGenerator generator, DSLContext context, int seedCount) {
         this.root = root;
-        this.generator = generator;
         this.context = context;
         this.seedCount = seedCount;
     }
@@ -299,13 +292,13 @@ public class MintApi {
 
         return context.transactionResult(config -> {
             DSLContext create = DSL.using(config);
-            UUID id = create.select(ASSIGNED_IDS.ID)
-                            .from(ASSIGNED_IDS)
-                            .where(ASSIGNED_IDS.VERSION.isNull())
-                            .orderBy(DSL.rand())
-                            .limit(1)
-                            .fetchOne()
-                            .value1();
+            byte[] id = create.select(ASSIGNED_IDS.ID)
+                              .from(ASSIGNED_IDS)
+                              .where(ASSIGNED_IDS.VERSION.isNull())
+                              .orderBy(DSL.rand())
+                              .limit(1)
+                              .fetchOne()
+                              .value1();
             int caVersion = create.select(DSL.max(SETTINGS.VERSION)).from(SETTINGS).fetchOne().value1();
             Record1<Integer> fetch = create.select(DSL.max(MEMBERS.VERSION))
                                            .from(MEMBERS)
@@ -363,13 +356,13 @@ public class MintApi {
         return signature;
     }
 
-    private List<String> chooseSeeds(UUID member, DSLContext create) {
+    private List<String> chooseSeeds(byte[] id, DSLContext create) {
         List<String> seeds = create.select(MEMBERS.CERTIFICATE)
                                    .from(MEMBERS)
                                    .where(MEMBERS.ID.in(create.select(ASSIGNED_IDS.ID)
                                                               .from(ASSIGNED_IDS)
                                                               .where(ASSIGNED_IDS.VERSION.isNotNull())
-                                                              .and(ASSIGNED_IDS.ID.ne(member))
+                                                              .and(ASSIGNED_IDS.ID.ne(id))
                                                               .orderBy(DSL.rand())))
                                    .limit(seedCount)
                                    .stream()
@@ -390,12 +383,11 @@ public class MintApi {
         return md.digest();
     }
 
-    private Certificate mintNode(PublicKey publicKey, UUID id, DistinguishedName dn) {
+    private Certificate mintNode(PublicKey publicKey, byte[] id, DistinguishedName dn) {
 
-        UUID serialNumber = generator.generate();
         ByteBuffer cereal = ByteBuffer.wrap(new byte[16]);
-        cereal.putLong(serialNumber.getMostSignificantBits());
-        cereal.putLong(serialNumber.getLeastSignificantBits());
+        cereal.putLong(entropy.nextLong());
+        cereal.putLong(entropy.nextLong());
 
         SignerWithSerial signer = new SignerImpl(
                 new KeyPair(root.getX509Certificate().getPublicKey(),
@@ -404,9 +396,7 @@ public class MintApi {
                                                                                                  .setSerialNumber(new BigInteger(
                                                                                                          cereal.array()));
 
-        ByteBuffer idBuff = ByteBuffer.wrap(new byte[16]);
-        idBuff.putLong(id.getMostSignificantBits());
-        idBuff.putLong(id.getLeastSignificantBits());
+        ByteBuffer idBuff = ByteBuffer.wrap(id);
         signer.addExtension(new CertExtension(Extension.subjectKeyIdentifier, false,
                 new SubjectKeyIdentifier(idBuff.array())));
         signer.addExtension(Extension.basicConstraints, false, new BasicConstraints(false));
