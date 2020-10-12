@@ -9,6 +9,8 @@ package com.salesforce.apollo;
 import java.net.SocketException;
 import java.net.URL;
 import java.security.KeyStoreException;
+import java.security.cert.X509Certificate;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -46,11 +48,12 @@ public class Apollo {
         apollo.start();
     }
 
-    private final Avalanche           avalanche;
-    private final ApolloConfiguration configuration;
-    private final AtomicBoolean       running = new AtomicBoolean();
-    private final View                view;
-    private final Communications      communications;
+    private final Avalanche             avalanche;
+    private final ApolloConfiguration   configuration;
+    private final AtomicBoolean         running = new AtomicBoolean();
+    private final View                  view;
+    private final Communications        communications;
+    private final List<X509Certificate> seeds;
 
     public Apollo(ApolloConfiguration config) throws SocketException, KeyStoreException {
         this(config, new MetricRegistry());
@@ -60,9 +63,10 @@ public class Apollo {
         configuration = c;
         communications = c.communications.getComms(metrics);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(configuration.threadPool);
-        view = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
-                                          ApolloConfiguration.DEFAULT_IDENTITY_ALIAS)
-                       .createView(communications, scheduler);
+        IdentitySource identitySource = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
+                                                                   ApolloConfiguration.DEFAULT_IDENTITY_ALIAS);
+        view = identitySource.createView(communications, scheduler);
+        seeds = identitySource.seeds();
         avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics));
     }
 
@@ -78,11 +82,7 @@ public class Apollo {
         if (!running.compareAndSet(false, true)) {
             return;
         }
-        view.getService()
-            .start(configuration.gossipInterval,
-                   configuration.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
-                                                          ApolloConfiguration.DEFAULT_IDENTITY_ALIAS)
-                                       .seeds());
+        view.getService().start(configuration.gossipInterval, seeds);
         avalanche.start();
     }
 

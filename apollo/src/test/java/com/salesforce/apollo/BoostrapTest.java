@@ -53,7 +53,7 @@ public class BoostrapTest {
         List<Apollo> oracles = new ArrayList<>();
         URL endpoint = new URL(String.format("http://localhost:%d/api/cnc/mint", EXT.getLocalPort()));
 
-        for (int i = 1; i <= PregenPopulation.getCardinality(); i++) {
+        for (int i = 0; i <= PregenPopulation.getCardinality(); i++) {
             ApolloConfiguration config = new ApolloConfiguration();
             config.avalanche.core.alpha = 0.6;
             config.avalanche.core.k = 6;
@@ -76,7 +76,7 @@ public class BoostrapTest {
             }
         });
 
-        assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return oracles.stream()
                           .map(o -> o.getView())
                           .map(view -> view.getLive().size() != oracles.size() ? view : null)
