@@ -173,6 +173,12 @@
 				<artifactId>commons-math3</artifactId>
 				<version>3.6.1</version>
 			</dependency>
+			<dependency>
+				<groupId>org.mapdb</groupId>
+				<artifactId>mapdb</artifactId>
+				<version>3.0.8</version>
+			</dependency>
+			
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
@@ -212,6 +218,11 @@
 				<artifactId>junit-jupiter-params</artifactId>
 				<version>5.6.2</version>
 				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>guru.nidi</groupId>
+				<artifactId>graphviz-java</artifactId>
+				<version>0.16.3</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
