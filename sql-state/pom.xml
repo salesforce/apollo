@@ -15,15 +15,7 @@
 		<dependency>
 			<groupId>org.jooq</groupId>
 			<artifactId>jooq</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apiguardian</groupId>
-			<artifactId>apiguardian-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>commons-io</groupId>
-			<artifactId>commons-io</artifactId>
-		</dependency>
+		</dependency> 
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-dbcp2</artifactId>
@@ -44,17 +36,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.apache.calcite</groupId>
-			<artifactId>calcite-server</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>commons-logging</groupId>
-					<artifactId>commons-logging</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.google.code.findbugs</groupId>
-					<artifactId>jsr305</artifactId>
-				</exclusion>
-			</exclusions>
+			<artifactId>calcite-server</artifactId> 
 		</dependency>
 		<dependency>
 			<groupId>org.apache.calcite</groupId>
