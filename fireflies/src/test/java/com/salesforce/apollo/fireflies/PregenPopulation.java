@@ -12,6 +12,9 @@ import static io.github.olivierlemasle.ca.CA.dn;
 import java.io.File;
 
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
+import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.Util;
 
 import io.github.olivierlemasle.ca.CA;
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;

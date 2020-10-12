@@ -18,31 +18,29 @@ import com.codahale.metrics.Timer;
  * @author hhildebrand
  */
 public class AvaMetrics {
-    private final Meter          failedTxnQueryRate;
-    private final Meter          finalizerRate;
-    private final Timer          finalizeTimer;
-    private final Meter          inboundQueryRate;
-    private final Timer          inboundQueryTimer;
-    private final Meter          inboundQueryUnknownRate;
-    private final Meter          inputRate;
-    private final Meter          preferRate;
-    private final Timer          preferTimer;
-    private final Meter          purgedNoOps;
-    private final Meter          queryRate;
-    private final Timer          queryTimer;
-    private final MetricRegistry registry;
-    private final Meter          resampledRate;
-    private final Meter          satisfiedRate;
-    private final Meter          submissionRate;
-    private final Timer          submissionTimer;
-    private final AtomicInteger  unknown = new AtomicInteger();
-    private final Meter          unknownLinkRate;
-    private final Meter          unknownReplacementRate;
-    private final Meter          wantedRate;
-    private Meter                noOpGeneration;
+    private final Meter         failedTxnQueryRate;
+    private final Meter         finalizerRate;
+    private final Timer         finalizeTimer;
+    private final Meter         inboundQueryRate;
+    private final Timer         inboundQueryTimer;
+    private final Meter         inboundQueryUnknownRate;
+    private final Meter         inputRate;
+    private final Meter         preferRate;
+    private final Timer         preferTimer;
+    private final Meter         purgedNoOps;
+    private final Meter         queryRate;
+    private final Timer         queryTimer;
+    private final Meter         resampledRate;
+    private final Meter         satisfiedRate;
+    private final Meter         submissionRate;
+    private final Timer         submissionTimer;
+    private final AtomicInteger unknown = new AtomicInteger();
+    private final Meter         unknownLinkRate;
+    private final Meter         unknownReplacementRate;
+    private final Meter         wantedRate;
+    private Meter               noOpGeneration;
 
-    public AvaMetrics(MetricRegistry r) {
-        registry = r;
+    public AvaMetrics(MetricRegistry registry) {
         submissionTimer = registry.timer("Txn submission duration");
         submissionRate = registry.meter("Txn submission rate");
 

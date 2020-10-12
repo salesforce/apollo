@@ -7,9 +7,9 @@
 
 package com.salesforce.apollo.bootstrap;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.ByteArrayInputStream;
 import java.security.InvalidKeyException;
@@ -34,18 +34,21 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import com.salesforce.apollo.bootstrap.MintApi.MintRequest;
 import com.salesforce.apollo.bootstrap.MintApi.MintResult;
 
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit5.DropwizardAppExtension;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import io.github.olivierlemasle.ca.KeysUtil;
 
 /**
  * @author hhildebrand
  */
+@ExtendWith(DropwizardExtensionsSupport.class)
 public class SeedTest {
     private static DropwizardAppExtension<BootstrapConfiguration> EXT     = new DropwizardAppExtension<>(
             BootstrapCA.class, ResourceHelpers.resourceFilePath("seeds.yml"));

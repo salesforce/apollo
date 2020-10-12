@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.uuid.Generators;
 import com.fasterxml.uuid.impl.TimeBasedGenerator;
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.fireflies.Member;
+import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.slush.Communications.Sink;
 import com.salesforce.apollo.slush.config.Parameters;
 
@@ -45,13 +45,13 @@ abstract public class AbstractProtocol<Params extends Parameters, T> {
      */
     protected class ProtocolSink implements Sink<T> {
         protected final UUID id = GENERATOR.generate();
-        protected final Set<Member> previous;
-        protected final HashSet<Member> replied;
+        protected final Set<Participant> previous;
+        protected final HashSet<Participant> replied;
         protected final Map<T, Integer> responses;
         protected final CompletableFuture<T> result;
         protected final int retries;
 
-        protected ProtocolSink(int retries, Set<Member> sample, CompletableFuture<T> result, Set<Member> previous) {
+        protected ProtocolSink(int retries, Set<Participant> sample, CompletableFuture<T> result, Set<Participant> previous) {
             assert sample.size() > threshold : "Sample size (" + sample.size() + ") must be > " + threshold;
             this.result = result;
             this.previous = previous;
@@ -63,7 +63,7 @@ abstract public class AbstractProtocol<Params extends Parameters, T> {
         }
 
         @Override
-        public void consume(Member from, T response) {
+        public void consume(Participant from, T response) {
             log.trace("{} consume {} from {}", communications.address(), response, from);
 
             // Only care if it's actually a new reply
@@ -117,7 +117,7 @@ abstract public class AbstractProtocol<Params extends Parameters, T> {
      * @param entropy
      * @return A subset of the supplied population, uniformly sampled.
      */
-    public static Set<Member> sample(Collection<Member> population, int sampleSize, Member from, Random entropy) {
+    public static Set<Participant> sample(Collection<Participant> population, int sampleSize, Participant from, Random entropy) {
         assert sampleSize <= population.size() : "Cannot take a sample size " + sampleSize
                 + " from a population of size " + population.size() + " members";
 
@@ -131,10 +131,10 @@ abstract public class AbstractProtocol<Params extends Parameters, T> {
         }
 
         // convert selected indexes into Addresses
-        Set<Member> subset = new HashSet<>(sampleSize);
+        Set<Participant> subset = new HashSet<>(sampleSize);
         int i = 0;
         int current = selected.first();
-        for (Member member : population) {
+        for (Participant member : population) {
             if (current == i) {
                 subset.add(member);
                 selected.remove(current);
@@ -242,8 +242,8 @@ abstract public class AbstractProtocol<Params extends Parameters, T> {
         }, parameters.interval, parameters.intervalUnit);
     }
 
-    protected AbstractProtocol<Params, T>.ProtocolSink createSink(int retries, Set<Member> sample,
-            CompletableFuture<T> result, Set<Member> previous) {
+    protected AbstractProtocol<Params, T>.ProtocolSink createSink(int retries, Set<Participant> sample,
+            CompletableFuture<T> result, Set<Participant> previous) {
         return new ProtocolSink(retries, sample, result, previous);
     }
 
@@ -276,7 +276,7 @@ abstract public class AbstractProtocol<Params extends Parameters, T> {
             return null;
         }
         CompletableFuture<T> result = new CompletableFuture<>();
-        HashSet<Member> previous = new HashSet<>();
+        HashSet<Participant> previous = new HashSet<>();
         previous.add(communications.address()); // We don't query ourselves
         query(result, previous, parameters.retries);
         return result;
@@ -292,19 +292,19 @@ abstract public class AbstractProtocol<Params extends Parameters, T> {
      * @param retries
      *            - the number of retries left
      */
-    protected void query(CompletableFuture<T> result, Set<Member> previous, int retries) {
+    protected void query(CompletableFuture<T> result, Set<Participant> previous, int retries) {
         // Consider only the population we have not previously considered
-        Collection<Member> considered = Sets.difference(communications.getPopulation(), previous);
+        Collection<Participant> considered = Sets.difference(communications.getPopulation(), previous);
 
         // Fallback to the total population, if not enough members for consideration.
         if (considered.size() < parameters.sample) {
             log.debug("{} fallback to total population", communications.address());
-            HashSet<Member> self = new HashSet<>();
+            HashSet<Participant> self = new HashSet<>();
             self.add(communications.address()); // We don't query ourselves
             considered = Sets.difference(communications.getPopulation(), self);
         }
 
-        Set<Member> sample = sample(considered, parameters.sample, communications.address(), entropy);
+        Set<Participant> sample = sample(considered, parameters.sample, communications.address(), entropy);
 
         ProtocolSink sink = createSink(retries, sample, result, previous);
         if (log.isTraceEnabled()) {

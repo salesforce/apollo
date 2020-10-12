@@ -6,10 +6,13 @@
  */
 package com.salesforce.apollo.fireflies;
 
+import static com.salesforce.apollo.protocols.Conversion.hashOf;
+
 import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
-import java.util.UUID;
+
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -20,31 +23,32 @@ public class Accusation implements Verifiable {
     private static final int ACCUSER_INDEX;
     private static final int EPOCH_INDEX = 0;
     private static final int RING_INDEX;
-    private static final int SIZE = 8 + 16 + 16 + 4;
+    private static final int SIZE        = 8 + 32 + 32 + 4;
 
     static {
         ACCUSER_INDEX = EPOCH_INDEX + 8;
-        ACCUSED_INDEX = ACCUSER_INDEX + 16;
-        RING_INDEX = ACCUSED_INDEX + 16;
+        ACCUSED_INDEX = ACCUSER_INDEX + 32;
+        RING_INDEX = ACCUSED_INDEX + 32;
     }
 
     private final byte[] content;
+    private final byte[] hash;
     private final byte[] signature;
 
     public Accusation(byte[] content, byte[] signature) {
         this.content = content;
         this.signature = signature;
+        hash = hashOf(content);
     }
 
-    public Accusation(long epoch, UUID accuser, int ringNumber, UUID accused, Signature s) {
+    public Accusation(long epoch, HashKey accuser, int ringNumber, HashKey accused, Signature s) {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[SIZE]);
         buffer.putLong(epoch);
-        buffer.putLong(accuser.getMostSignificantBits());
-        buffer.putLong(accuser.getLeastSignificantBits());
-        buffer.putLong(accused.getMostSignificantBits());
-        buffer.putLong(accused.getLeastSignificantBits());
+        buffer.put(accuser.bytes());
+        buffer.put(accused.bytes());
         buffer.putInt(ringNumber);
         content = buffer.array();
+        hash = hashOf(content);
         try {
             s.update(content);
             signature = s.sign();
@@ -61,17 +65,23 @@ public class Accusation implements Verifiable {
     /**
      * The identity of the accused
      */
-    public UUID getAccused() {
+    public HashKey getAccused() {
         ByteBuffer buffer = ByteBuffer.wrap(content);
-        return new UUID(buffer.getLong(ACCUSED_INDEX), buffer.getLong(ACCUSED_INDEX + 8));
+        byte[] buf = new byte[32];
+        buffer.position(ACCUSED_INDEX);
+        buffer.get(buf, 0, 32);
+        return new HashKey(buf);
     }
 
     /**
      * The identity of the accuser
      */
-    public UUID getAccuser() {
+    public HashKey getAccuser() {
         ByteBuffer buffer = ByteBuffer.wrap(content);
-        return new UUID(buffer.getLong(ACCUSER_INDEX), buffer.getLong(ACCUSER_INDEX + 8));
+        byte[] buf = new byte[32];
+        buffer.position(ACCUSER_INDEX);
+        buffer.get(buf, 0, 32);
+        return new HashKey(buf);
     }
 
     public byte[] getContent() {
@@ -97,5 +107,10 @@ public class Accusation implements Verifiable {
     @Override
     public byte[] getSignature() {
         return signature;
+    }
+
+    @Override
+    public byte[] hash() {
+        return hash;
     }
 }

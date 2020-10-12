@@ -6,64 +6,74 @@
  */
 package com.salesforce.apollo.ghost.communications;
 
-import java.io.IOException;
 import java.util.List;
 
-import org.apache.avro.AvroRemoteException;
-import org.apache.avro.ipc.Transceiver;
-import org.apache.avro.ipc.specific.SpecificRequestor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.salesforce.apollo.avro.Apollo;
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.avro.Interval;
-import com.salesforce.apollo.fireflies.Member;
-import com.salesforce.apollo.fireflies.communications.CommonClientCommunications;
+import com.salesfoce.apollo.proto.ADagEntry;
+import com.salesfoce.apollo.proto.Bytes;
+import com.salesfoce.apollo.proto.DagEntries;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.GhostGrpc;
+import com.salesfoce.apollo.proto.GhostGrpc.GhostBlockingStub;
+import com.salesfoce.apollo.proto.Interval;
+import com.salesfoce.apollo.proto.Intervals;
+import com.salesfoce.apollo.proto.Intervals.Builder;
+import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.fireflies.Participant;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.SpaceGhost;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public class GhostClientCommunications extends CommonClientCommunications implements SpaceGhost {
-	private static final Logger log = LoggerFactory.getLogger(GhostClientCommunications.class);
-	private final Apollo client;
-	private final Transceiver transceiver;
+public class GhostClientCommunications implements SpaceGhost {
 
-	public GhostClientCommunications(Transceiver transceiver, Member member) throws AvroRemoteException {
-		super(member);
-		this.transceiver = transceiver;
-		try {
-			client = SpecificRequestor.getClient(Apollo.class, transceiver);
-		} catch (IOException e) {
-			throw new AvroRemoteException("Cannot create proxy rpc client to: " + member + " : " + transceiver, e);
-		}
-	}
+    public static CreateClientCommunications<GhostClientCommunications> getCreate() {
+        return (t, f, c) -> new GhostClientCommunications(c, (Participant) t);
+    }
 
-	@Override
-	public void close() {
-		try {
-			transceiver.close();
-		} catch (IOException e) {
-			log.trace("error closing communications with " + member, e);
-		}
-	}
+    private final GhostBlockingStub       client;
+    private final ManagedServerConnection channel;
+    private final Member                  member;
 
-	@Override
-	public DagEntry get(HASH DagEntry) throws AvroRemoteException {
-		return client.get(DagEntry);
-	}
+    public GhostClientCommunications(ManagedServerConnection channel, Member member) {
+//        assert !(member instanceof Node) : "whoops : " + member + " is not to defined for instance of Node";
+        this.member = member;
+        this.channel = channel;
+        this.client = GhostGrpc.newBlockingStub(channel.channel);
+    }
 
-	@Override
-	public List<DagEntry> intervals(List<Interval> intervals, List<HASH> have) {
-		return client.intervals(intervals, have);
-	}
+    public Participant getMember() {
+        return (Participant) member;
+    }
 
-	@Override
-	public void put(DagEntry value) {
-		client.put(value);
-	}
+    @Override
+    public String toString() {
+        return String.format("->[%s]", member);
+    }
+
+    public void release() {
+        channel.release();
+    }
+
+    @Override
+    public DagEntry get(HashKey entry) {
+        return client.get(Bytes.newBuilder().setBites(entry.toByteString()).build());
+    }
+
+    @Override
+    public List<DagEntry> intervals(List<Interval> intervals, List<HashKey> have) {
+        Builder builder = Intervals.newBuilder();
+        intervals.forEach(e -> builder.addIntervals(e));
+        DagEntries result = client.intervals(builder.build());
+        return result.getEntriesList();
+    }
+
+    @Override
+    public void put(DagEntry value) {
+        client.put(ADagEntry.newBuilder().setEntry(value).build());
+    }
 
 }

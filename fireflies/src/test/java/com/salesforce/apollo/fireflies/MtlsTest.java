@@ -8,32 +8,39 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
 import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
+import static com.salesforce.apollo.fireflies.View.getStandardEpProvider;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.avro.MessageGossip;
-import com.salesforce.apollo.fireflies.communications.netty.FirefliesNettyCommunications;
+import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.EndpointProvider;
+import com.salesforce.apollo.comm.MtlsCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
+import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 import io.github.olivierlemasle.ca.RootCertificate;
@@ -44,9 +51,11 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class MtlsTest {
 
-    private static final RootCertificate     ca         = getCa();
-    private static Map<UUID, CertWithKey>    certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate     ca             = getCa();
+    private static Map<HashKey, CertWithKey> certs;
+    private static final FirefliesParameters parameters     = new FirefliesParameters(ca.getX509Certificate());
+    private List<Communications>             communications = new ArrayList<>();
+    private List<View>                       views;
 
     @BeforeAll
     public static void beforeClass() {
@@ -56,9 +65,23 @@ public class MtlsTest {
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
+    @AfterEach
+    public void after() {
+        if (views != null) {
+            views.forEach(e -> e.getService().stop());
+            views.clear();
+        }
+        if (communications != null) {
+            communications.forEach(e -> e.close());
+            communications.clear();
+        }
+    }
+
     @Test
     public void smoke() throws Exception {
         Random entropy = new Random(0x666);
+        MetricRegistry registry = new MetricRegistry();
+        MetricRegistry node0Registry = new MetricRegistry();
 
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
@@ -74,26 +97,31 @@ public class MtlsTest {
                 seeds.add(cert.getCertificate());
             }
         }
-        MessageBuffer messageBuffer = mock(MessageBuffer.class);
-        when(messageBuffer.process(any())).thenReturn(new MessageGossip(Collections.emptyList(),
-                Collections.emptyList()));
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        List<View> views = members.stream()
-                                  .map(node -> new View(node, new FirefliesNettyCommunications(null, 2, 2, 2, 100, 100),
-                                          seeds, scheduler))
-                                  .collect(Collectors.toList());
+        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(2);
+        AtomicBoolean frist = new AtomicBoolean(true);
+        views = members.stream().map(node -> {
+            FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry : registry);
+            EndpointProvider ep = getStandardEpProvider(node);
+            builder.setMetrics(metrics);
+            MtlsCommunications comms = new MtlsCommunications(builder, ep);
+            communications.add(comms);
+            return new View(node, comms, scheduler, metrics);
+        }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1_000)));
+        communications.forEach(e -> e.start());
+        views.forEach(view -> view.getService().start(Duration.ofMillis(500), seeds));
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream()
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
-        }), "view did not stabilize");
+        }), "view did not stabilize: "
+                + views.stream().map(view -> view.getLive().size()).collect(Collectors.toList()));
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + views.size() + " members");
 
@@ -106,7 +134,10 @@ public class MtlsTest {
             Set<?> difference = Sets.difference(views.stream()
                                                      .map(v -> v.getNode().getId())
                                                      .collect(Collectors.toSet()),
-                                                view.getLive().keySet());
+                                                view.getLive()
+                                                    .stream()
+                                                    .map(m -> m.getId())
+                                                    .collect(Collectors.toSet()));
             return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
         }).collect(Collectors.toList()).toString());
 
@@ -114,7 +145,7 @@ public class MtlsTest {
         views.forEach(view -> view.getService().stop());
 
         System.out.println("Restarting views");
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1000)));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(1000), seeds));
 
         assertTrue(Utils.waitForCondition(30_000, 100, () -> {
             return views.stream()
@@ -142,5 +173,11 @@ public class MtlsTest {
 
         System.out.println("Stoping views");
         views.forEach(view -> view.getService().stop());
+
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 }

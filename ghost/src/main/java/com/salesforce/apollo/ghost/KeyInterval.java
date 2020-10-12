@@ -8,15 +8,14 @@ package com.salesforce.apollo.ghost;
 
 import java.util.function.Predicate;
 
-import com.salesforce.apollo.avro.Interval;
-import com.salesforce.apollo.avro.HASH;
+import com.salesfoce.apollo.proto.Interval;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public class KeyInterval implements Predicate<HASH> {
+public class KeyInterval implements Predicate<HashKey> {
     private final HashKey begin;
     private final HashKey end;
 
@@ -31,9 +30,8 @@ public class KeyInterval implements Predicate<HASH> {
     }
 
     @Override
-    public boolean test(HASH t) {
-        HashKey other = new HashKey(t);
-        return begin.compareTo(other) > 0 && end.compareTo(other) > 0;
+    public boolean test(HashKey t) {
+        return begin.compareTo(t) > 0 && end.compareTo(t) > 0;
     }
 
     public HashKey getBegin() {
@@ -45,7 +43,7 @@ public class KeyInterval implements Predicate<HASH> {
     }
 
     public Interval toInterval() {
-        return new Interval(begin.toHash(), end.toHash());
+        return Interval.newBuilder().setStart(begin.toByteString()).setEnd(end.toByteString()).build();
     }
 
     @Override

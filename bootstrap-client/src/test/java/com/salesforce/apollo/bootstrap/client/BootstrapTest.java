@@ -7,7 +7,7 @@
 
 package com.salesforce.apollo.bootstrap.client;
 
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
@@ -19,7 +19,8 @@ import java.security.Signature;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.WebTarget;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import com.salesforce.apollo.bootstrap.BootstrapCA;
 import com.salesforce.apollo.bootstrap.BootstrapConfiguration;
@@ -27,11 +28,13 @@ import com.salesforce.apollo.bootstrap.MintApi;
 
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit5.DropwizardAppExtension;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import io.github.olivierlemasle.ca.KeysUtil;
 
 /**
  * @author hhildebrand
  */
+@ExtendWith(DropwizardExtensionsSupport.class)
 public class BootstrapTest {
     private static DropwizardAppExtension<BootstrapConfiguration> EXT = new DropwizardAppExtension<>(BootstrapCA.class,
             ResourceHelpers.resourceFilePath("server.yml"));
@@ -42,7 +45,7 @@ public class BootstrapTest {
         final KeyPair pair = KeysUtil.generateKeyPair();
         WebTarget targetEndpoint = client.target(String.format("http://localhost:%d/api/cnc/mint", EXT.getLocalPort()));
         Bootstrap bootstrap = new Bootstrap(targetEndpoint, pair.getPublic(),
-                forSigning(pair.getPrivate(), new SecureRandom()), "localhost", 0, 1, 2, 100, 30);
+                forSigning(pair.getPrivate(), new SecureRandom()), "localhost", 0, 1, 2);
         assertNotNull(bootstrap);
         assertNotNull(bootstrap.getCa());
         assertNotNull(bootstrap.getIdentity());

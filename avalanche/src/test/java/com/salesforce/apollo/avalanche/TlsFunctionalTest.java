@@ -7,33 +7,29 @@
 
 package com.salesforce.apollo.avalanche;
 
-import org.junit.jupiter.api.BeforeEach;
-
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
-import com.salesforce.apollo.avalanche.communications.netty.AvalancheNettyCommunications;
-
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.util.concurrent.DefaultEventExecutorGroup;
-import io.netty.util.concurrent.EventExecutorGroup;
+import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.MtlsCommunications;
+import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
+import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
+import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.fireflies.View;
 
 /**
  * @author hhildebrand
- *
  */
 public class TlsFunctionalTest extends AvalancheFunctionalTest {
 
-    private EventLoopGroup     eventLoop;
-    private EventExecutorGroup executor;
-
-    @BeforeEach
-    public void beforeTest() {
-        eventLoop = new NioEventLoopGroup(20);
-        executor = new DefaultEventExecutorGroup(30);
+    protected Communications getCommunications(Node node, boolean first) {
+        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder()
+                                                                    .setTarget(2)
+                                                                    .setMetrics(new FireflyMetricsImpl(
+                                                                            first ? node0registry : registry));
+        return new MtlsCommunications(builder, View.getStandardEpProvider(node));
     }
 
-    protected AvalancheCommunications getCommunications() {
-        return new AvalancheNettyCommunications(rpcStats, eventLoop, eventLoop, eventLoop, executor, executor);
+    @Override
+    protected int testCardinality() {
+        return 14;
     }
-
 }

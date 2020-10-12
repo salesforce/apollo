@@ -8,15 +8,12 @@ package com.salesforce.apollo.fireflies;
 
 import static io.github.olivierlemasle.ca.CA.createCsr;
 import static io.github.olivierlemasle.ca.CA.dn;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-
-import java.net.InetSocketAddress;
-import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
+import com.salesforce.apollo.protocols.HashKey;
 
 import io.github.olivierlemasle.ca.CSR;
 import io.github.olivierlemasle.ca.Certificate;
@@ -45,11 +42,8 @@ public class TestMember {
         Certificate certificate = ca.mintNode(csr);
 
         FirefliesParameters parameters = new FirefliesParameters(root.getX509Certificate());
-        Member m = new Member(certificate.getX509Certificate(), parameters);
-        InetSocketAddress address = m.getFirefliesEndpoint();
-        assertEquals("test.com", address.getHostName());
-        assertEquals(0x666, address.getPort());
-        UUID id = m.getId();
+        Participant m = new Participant(certificate.getX509Certificate(), parameters);
+        HashKey id = m.getId();
         assertNotNull(id);
     }
 }

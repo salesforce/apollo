@@ -29,8 +29,8 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
+import com.salesforce.apollo.membership.Member;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.CsrWithPrivateKey;

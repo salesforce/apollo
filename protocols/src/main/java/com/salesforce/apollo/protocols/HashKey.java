@@ -6,11 +6,13 @@
  */
 package com.salesforce.apollo.protocols;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.UUID;
 
-import com.salesforce.apollo.avro.HASH;
+import com.google.protobuf.ByteString;
 
 /**
  * @author hal.hildebrand
@@ -32,6 +34,14 @@ public class HashKey implements Comparable<HashKey> {
         LAST = new HashKey(l);
     }
 
+    public static byte[] bytes(UUID uuid) {
+        byte[] bytes = new byte[32];
+        ByteBuffer buf = ByteBuffer.wrap(bytes);
+        buf.putLong(uuid.getLeastSignificantBits());
+        buf.putLong(uuid.getMostSignificantBits());
+        return bytes;
+    }
+
     public static String bytesToHex(byte[] bytes) {
         char[] hexChars = new char[bytes.length * 2];
         for (int j = 0; j < bytes.length; j++) {
@@ -42,30 +52,46 @@ public class HashKey implements Comparable<HashKey> {
         return new String(hexChars);
     }
 
-    public static int compare(byte[] buffer1, byte[] buffer2) {
-        // Short circuit equal case
-        if (buffer1 == buffer2) {
-            return 0;
+    public static int compare(byte[] o1, byte[] o2) {
+        if (o1 == null) {
+            return o2 == null ? 0 : -1;
+        } else if (o2 == null) {
+            return 1;
         }
-        // Bring WritableComparator code local
-        for (int i = 0, j = 0; i < buffer1.length && j < buffer1.length; i++, j++) {
-            int a = (buffer1[i] & 0xff);
-            int b = (buffer2[j] & 0xff);
-            if (a != b) {
-                return a - b;
+        if (o1.length != o2.length) {
+            return o1.length - o2.length;
+        }
+        for (int i = 0; i < o1.length; i++) {
+            final int diff = (o1[i] & 0xFF) - (o2[i] & 0xFF);
+            if (diff != 0) {
+                return diff;
             }
         }
         return 0;
     }
 
     protected final byte[] itself;
+    private final int      hashCode;
 
     public HashKey(byte[] key) {
         itself = key;
+        hashCode = Base64.getEncoder().withoutPadding().encodeToString(itself).hashCode();
     }
 
-    public HashKey(HASH key) {
-        this(key.bytes());
+    public HashKey(ByteString key) {
+        this(key.toByteArray());
+    }
+
+    public HashKey(String b64Encoded) {
+        this(Base64.getUrlDecoder().decode(b64Encoded));
+    }
+
+    public HashKey(UUID uuid) {
+        this(bytes(uuid));
+    }
+
+    public HashKey(BigInteger i) {
+        this(i.toByteArray());
     }
 
     public String b64Encoded() {
@@ -74,10 +100,6 @@ public class HashKey implements Comparable<HashKey> {
 
     public byte[] bytes() {
         return itself;
-    }
-
-    public int compareTo(HASH t) {
-        return compare(itself, t.bytes());
     }
 
     @Override
@@ -93,22 +115,21 @@ public class HashKey implements Comparable<HashKey> {
             return false;
         if (getClass() != obj.getClass())
             return false;
-        HashKey other = (HashKey) obj;
-        return this.compareTo(other) == 0;
+        return Arrays.equals(itself, ((HashKey) obj).itself);
     }
 
     @Override
     public int hashCode() {
-        return new String(itself).hashCode();
+        return hashCode;
     }
 
-    public HASH toHash() {
-        return new HASH(bytes());
+    public ByteString toByteString() {
+        return ByteString.copyFrom(itself);
     }
 
     @Override
     public String toString() {
-        return "HashKey[" + b64Encoded() + "]";
+        return "[" + b64Encoded() + "]";
     }
 
     public void write(ByteBuffer dest) {

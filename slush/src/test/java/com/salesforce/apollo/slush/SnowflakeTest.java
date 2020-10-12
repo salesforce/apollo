@@ -14,7 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import com.salesforce.apollo.fireflies.Member;
+import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.slush.config.SnowflakeParameters;
 
 /**
@@ -37,7 +37,7 @@ public class SnowflakeTest extends AbstractProtocolTest {
         parameters.timeout = 200;
         parameters.unit = TimeUnit.MILLISECONDS;
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
-        Member member = mock(Member.class);
+        Participant member = mock(Participant.class);
         MockCommunications<Snowball<Color>> communications = new MockCommunications<>(member, scheduler);
         communications.setProtocol(new Snowball<Color>(communications, parameters, new Random(0x666),
                 new ArrayList<Color>() {

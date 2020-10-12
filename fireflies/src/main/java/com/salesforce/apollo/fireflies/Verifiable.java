@@ -6,13 +6,13 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
 
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.avro.Signed;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.Signed;
 
 /**
  * @author hal.hildebrand
@@ -24,8 +24,13 @@ public interface Verifiable {
     byte[] getSignature();
 
     default Signed getSigned() {
-        return new Signed(ByteBuffer.wrap(content()), ByteBuffer.wrap(getSignature()));
+        return Signed.newBuilder()
+                     .setContent(ByteString.copyFrom(content()))
+                     .setSignature(ByteString.copyFrom(getSignature()))
+                     .build();
     }
+
+    byte[] hash();
 
     default boolean verify(Signature s) {
         try {

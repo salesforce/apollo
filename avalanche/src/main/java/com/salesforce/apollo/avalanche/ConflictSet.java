@@ -11,6 +11,8 @@ import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.LoggerFactory;
+
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
 import com.salesforce.apollo.protocols.HashKey;
@@ -34,13 +36,9 @@ public class ConflictSet {
 
     public void add(KnownNode conflict) {
         if (!conflicts.isEmpty()) {
-            boolean f = false;
-            for (Node node : conflicts) {
-                if (node.isFinalized()) {
-                    f = true;
-                }
-            }
-            System.out.println("Dup detected, previous finalized: " + f);
+            LoggerFactory.getLogger(ConflictSet.class)
+                         .trace("Dup detected: {}, current: {} genesis: {}", conflict.key, conflicts,
+                                key.equals(WellKnownDescriptions.GENESIS.toHash()));
         }
         conflicts.add(conflict);
     }
@@ -69,6 +67,8 @@ public class ConflictSet {
 
     public Collection<KnownNode> getLosers() {
         conflicts.remove(getPreferred());
+        if (!conflicts.isEmpty())
+            System.out.println("confilcts: " + conflicts);
         return conflicts;
     }
 

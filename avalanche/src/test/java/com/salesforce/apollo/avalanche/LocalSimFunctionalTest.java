@@ -7,25 +7,36 @@
 
 package com.salesforce.apollo.avalanche;
 
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 
-import com.salesforce.apollo.avalanche.communications.AvalancheCommunications;
-import com.salesforce.apollo.avalanche.communications.AvalancheLocalCommSim;
+import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
+import com.salesforce.apollo.fireflies.Node;
 
 /**
  * @author hhildebrand
- *
  */
 public class LocalSimFunctionalTest extends AvalancheFunctionalTest {
 
-    private AvalancheLocalCommSim localComSim;
+    private LocalCommSimm comms;
 
-    @BeforeEach
-    public void beforeTest() {
-        localComSim = new AvalancheLocalCommSim(rpcStats);
+    @AfterEach
+    public void after() {
+        comms = null;
     }
 
-    protected AvalancheCommunications getCommunications() {
-        return localComSim;
+    protected Communications getCommunications(Node node, boolean first) {
+        if (comms == null) {
+            comms = new LocalCommSimm(
+                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(new FireflyMetricsImpl(node0registry)));
+        }
+        return comms;
+    }
+
+    @Override
+    protected int testCardinality() {
+        return 31;
     }
 }

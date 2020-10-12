@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import com.salesforce.apollo.avro.DagEntry;
+import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -17,7 +17,8 @@ import com.salesforce.apollo.protocols.HashKey;
 @FunctionalInterface
 public interface EntryProcessor {
     /**
-     * Validate the block. Answer the hash of the DAG node that represents the conflict set for the input block.
+     * Validate the block. Answer the hash of the DAG node that represents the
+     * conflict set for the input block.
      * 
      * @param block
      * @return the DAG block conflict set, null if invalid

@@ -6,40 +6,77 @@
  */
 package com.salesforce.apollo.ghost.communications;
 
-import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
-import org.apache.avro.AvroRemoteException;
-
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.avro.Interval;
+import com.salesfoce.apollo.proto.ADagEntry;
+import com.salesfoce.apollo.proto.Bytes;
+import com.salesfoce.apollo.proto.DagEntries;
+import com.salesfoce.apollo.proto.DagEntries.Builder;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.GhostGrpc.GhostImplBase;
+import com.salesfoce.apollo.proto.Intervals;
+import com.salesfoce.apollo.proto.Null;
+import com.salesforce.apollo.comm.grpc.BaseServerCommunications;
 import com.salesforce.apollo.ghost.Ghost.Service;
-import com.salesforce.apollo.protocols.SpaceGhost;
+import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.protocols.HashKey;
+
+import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public class GhostServerCommunications implements SpaceGhost {
-    private final Service ghost;
+public class GhostServerCommunications extends GhostImplBase implements BaseServerCommunications<Service> {
+    private final ClientIdentity  identity;
+    private Map<HashKey, Service> services = new ConcurrentHashMap<>();
+    private final Service         system;
 
-    public GhostServerCommunications(Service ghost) {
-        this.ghost = ghost;
+    public GhostServerCommunications(Service system, ClientIdentity identity) {
+        this.system = system;
+        this.identity = identity;
     }
 
     @Override
-    public DagEntry get(HASH key) throws AvroRemoteException {
-        return ghost.get(key);
+    public void get(Bytes request, StreamObserver<DagEntry> responseObserver) {
+        evaluate(responseObserver, request.getContext(), s -> {
+            responseObserver.onNext(s.get(new HashKey(request.getBites())));
+            responseObserver.onCompleted();
+        }, system, services);
     }
 
     @Override
-    public List<DagEntry> intervals(List<Interval> intervals, List<HASH> have) {
-        return ghost.intervals(intervals, have);
+    public ClientIdentity getClientIdentity() {
+        return identity;
     }
 
     @Override
-    public void put(DagEntry value) {
-        ghost.put(value);
+    public void intervals(Intervals request, StreamObserver<DagEntries> responseObserver) {
+        evaluate(responseObserver, request.getContext(), s -> {
+            Builder builder = DagEntries.newBuilder();
+            s.intervals(request.getIntervalsList(),
+                        request.getHaveList().stream().map(e -> new HashKey(e)).collect(Collectors.toList()))
+             .forEach(e -> builder.addEntries(e));
+            responseObserver.onNext(builder.build());
+            responseObserver.onCompleted();
+        }, system, services);
+
+    }
+
+    @Override
+    public void put(ADagEntry request, StreamObserver<Null> responseObserver) {
+        evaluate(responseObserver, request.getContext(), s -> {
+            s.put(request.getEntry());
+            responseObserver.onNext(Null.getDefaultInstance());
+            responseObserver.onCompleted();
+        }, system, services);
+    }
+
+    @Override
+    public void register(HashKey id, Service service) {
+        services.computeIfAbsent(id, m -> service);
     }
 
 }

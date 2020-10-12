@@ -6,13 +6,15 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.File;
-import java.nio.ByteBuffer;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -20,12 +22,14 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -52,14 +56,25 @@ public class DagTest {
     public void after() {
     }
 
+    public static DagEntry dag(HashKey description, byte[] data) {
+        return dag(description, data, Collections.emptyList());
+    }
+
+    public static DagEntry dag(HashKey description, byte[] data, List<HashKey> links) {
+        Builder builder = DagEntry.newBuilder();
+        if (description != null)
+            builder.setDescription(description.toByteString());
+        builder.setData(ByteString.copyFrom(data));
+        links.forEach(e -> builder.addLinks(e.toByteString()));
+        return builder.build();
+    }
+
     @BeforeEach
     public void before() throws SQLException {
         entropy = new Random(0x666);
         final AvalancheParameters parameters = new AvalancheParameters();
         workingSet = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
-        root = new DagEntry();
-        root.setDescription(WellKnownDescriptions.GENESIS.toHash());
-        root.setData(ByteBuffer.wrap("Ye root".getBytes()));
+        root = dag(WellKnownDescriptions.GENESIS.toHash(), "Ye root".getBytes());
         rootKey = workingSet.insert(root, 0);
         assertNotNull(rootKey);
     }
@@ -68,10 +83,8 @@ public class DagTest {
     public void smoke() throws Exception {
         DagEntry testRoot = workingSet.getDagEntry(rootKey);
         assertNotNull(testRoot);
-        testRoot.setDescription(WellKnownDescriptions.GENESIS.toHash());
-        assertNotNull(testRoot);
-        assertArrayEquals(root.getData().array(), testRoot.getData().array());
-        assertNull(testRoot.getLinks());
+        assertArrayEquals(root.getData().toByteArray(), testRoot.getData().toByteArray());
+        assertEquals(0, testRoot.getLinksCount());
 
         List<HashKey> ordered = new ArrayList<>();
         ordered.add(rootKey);
@@ -80,10 +93,8 @@ public class DagTest {
         stored.put(rootKey, root);
 
         for (int i = 0; i < 500; i++) {
-            DagEntry entry = new DagEntry();
-            entry.setDescription(WellKnownDescriptions.BYTE_CONTENT.toHash());
-            entry.setData(ByteBuffer.wrap(String.format("DagEntry: %s", i).getBytes()));
-            entry.setLinks(randomLinksTo(stored));
+            DagEntry entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(),
+                                 String.format("DagEntry: %s", i).getBytes(), randomLinksTo(stored));
             HashKey key = workingSet.insert(entry, 0);
             stored.put(key, entry);
             ordered.add(key);
@@ -97,24 +108,24 @@ public class DagTest {
             DagEntry found = workingSet.getDagEntry(key);
             assertNotNull(found, "Not found: " + key);
             DagEntry original = stored.get(key);
-            assertArrayEquals(original.getData().array(), found.getData().array());
-            if (original.getLinks() == null) {
-                assertNull(found.getLinks());
+            assertArrayEquals(original.getData().toByteArray(), found.getData().toByteArray());
+            if (original.getLinksList() == null) {
+                assertNull(found.getLinksList());
             } else {
-                assertEquals(original.getLinks().size(), found.getLinks().size());
+                assertEquals(original.getLinksList().size(), found.getLinksList().size());
             }
         }
     }
 
-    private List<HASH> randomLinksTo(Map<HashKey, DagEntry> stored) {
-        List<HASH> links = new ArrayList<>();
+    private List<HashKey> randomLinksTo(Map<HashKey, DagEntry> stored) {
+        List<HashKey> links = new ArrayList<>();
         Set<HashKey> keys = stored.keySet();
         for (int i = 0; i < 5; i++) {
             Iterator<HashKey> it = keys.iterator();
             for (int j = 0; j < entropy.nextInt(keys.size()); j++) {
                 it.next();
             }
-            links.add(it.next().toHash());
+            links.add(it.next());
         }
         return links;
     }

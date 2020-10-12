@@ -1,58 +1,115 @@
 /*
- * Copyright (c) 2019, salesforce.com, inc.
+ * Copyright (c) 2020, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.fireflies.communications;
 
-import java.security.cert.X509Certificate;
-import java.util.UUID;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.avro.AvroRemoteException;
-
-import com.salesforce.apollo.avro.Digests;
-import com.salesforce.apollo.avro.Gossip;
-import com.salesforce.apollo.avro.Signed;
-import com.salesforce.apollo.avro.Update;
-import com.salesforce.apollo.fireflies.Member;
+import com.codahale.metrics.Timer.Context;
+import com.salesfoce.apollo.proto.FirefliesGrpc.FirefliesImplBase;
+import com.salesfoce.apollo.proto.Gossip;
+import com.salesfoce.apollo.proto.Null;
+import com.salesfoce.apollo.proto.SayWhat;
+import com.salesfoce.apollo.proto.State;
+import com.salesforce.apollo.comm.grpc.BaseServerCommunications;
+import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.View.Service;
-import com.salesforce.apollo.protocols.Fireflies;
+import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.protocols.HashKey;
+
+import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- * @since 220
+ *
  */
-public class FfServerCommunications implements Fireflies {
+public class FfServerCommunications extends FirefliesImplBase implements BaseServerCommunications<Service> {
+    private Service               system;
+    private ClientIdentity        identity;
+    private Map<HashKey, Service> services = new ConcurrentHashMap<>();
+    private final FireflyMetrics  metrics;
 
-    private final X509Certificate certificate;
-    private final UUID remoteMemberId;
-    private final Service service;
-
-    public FfServerCommunications(Service view, X509Certificate certificate) {
-        assert view != null : "View cannot be null";
-        assert certificate != null : "Certificate cannot be null";
-        this.service = view;
-        this.remoteMemberId = Member.getMemberId(certificate);
-        this.certificate = certificate;
-    }
-
-    public UUID getRemoteMemberId() {
-        return remoteMemberId;
+    public FfServerCommunications(Service system, ClientIdentity identity, FireflyMetrics metrics) {
+        this.metrics = metrics;
+        this.system = system;
+        this.identity = identity;
     }
 
     @Override
-    public Gossip gossip(Signed note, int ring, Digests digests) throws AvroRemoteException {
-        return service.rumors(ring, digests, remoteMemberId, certificate, note);
+    public void gossip(SayWhat request, StreamObserver<Gossip> responseObserver) {
+        evaluate(responseObserver, request.getContext(), s -> {
+            Context timer = null;
+            if (metrics != null) {
+                timer = metrics.inboundGossipTimer().time();
+            }
+            try {
+                Gossip gossip = s.rumors(request.getRing(), request.getGossip(), getFrom(), getCert(),
+                                         request.getNote());
+                responseObserver.onNext(gossip);
+                responseObserver.onCompleted();
+                if (metrics != null) {
+                    metrics.inboundGossipRate().mark();
+                    metrics.inboundBandwidth().inc(request.getSerializedSize());
+                    metrics.outboundBandwidth().inc(gossip.getSerializedSize());
+                    metrics.inboundGossip().update(request.getSerializedSize());
+                    metrics.gossipReply().update(gossip.getSerializedSize());
+                }
+            } finally {
+                if (timer != null) {
+                    timer.stop();
+                }
+            }
+        }, system, services);
     }
 
     @Override
-    public int ping(int ping) throws AvroRemoteException {
-        return 200; // we handle the ping here - no need for the view to get involved
+    public void ping(Null request, StreamObserver<Null> responseObserver) {
+        evaluate(responseObserver, request.getContext(), s -> {
+            responseObserver.onNext(Null.getDefaultInstance());
+            responseObserver.onCompleted();
+            if (metrics != null) {
+                metrics.inboundPingRate().mark();
+            }
+        }, system, services);
     }
 
     @Override
-    public void update(int ring, Update update) {
-        service.update(ring, update, remoteMemberId);
+    public void register(HashKey id, Service service) {
+        services.computeIfAbsent(id, m -> service);
     }
+
+    @Override
+    public void update(State request, StreamObserver<Null> responseObserver) {
+        evaluate(responseObserver, request.getContext(), s -> {
+            Context timer = null;
+            if (metrics != null) {
+                timer = metrics.inboundUpdateTimer().time();
+            }
+            try {
+                s.update(request.getRing(), request.getUpdate(), getFrom());
+                responseObserver.onNext(Null.getDefaultInstance());
+                responseObserver.onCompleted();
+                if (metrics != null) {
+                    metrics.inboundBandwidth().inc(request.getSerializedSize());
+                    metrics.outboundBandwidth().inc(Null.getDefaultInstance().getSerializedSize());
+                    metrics.inboundUpdate().update(request.getSerializedSize());
+                    metrics.inboundUpdateRate().mark();
+                }
+            } finally {
+                if (timer != null) {
+                    timer.stop();
+                }
+            }
+        }, system, services);
+    }
+
+    @Override
+    public ClientIdentity getClientIdentity() {
+        return identity;
+    }
+
 }

@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -31,14 +30,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.MetricRegistry;
+import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.View.MembershipListener;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler;
-import com.salesforce.apollo.fireflies.communications.FfLocalCommSim;
-import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
+import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 import io.github.olivierlemasle.ca.RootCertificate;
@@ -50,11 +53,11 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class MessageTest {
 
     class Receiver implements MessageChannelHandler, MembershipListener {
-        final Set<Member>       counted    = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Set<Participant>  counted    = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger     current;
-        final Set<Member>       discovered = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Set<Participant>  discovered = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger     dups       = new AtomicInteger(0);
-        final Set<Member>       live       = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Set<Participant>  live       = Collections.newSetFromMap(new ConcurrentHashMap<>());
         volatile CountDownLatch round;
 
         Receiver(int cardinality, AtomicInteger current) {
@@ -62,7 +65,7 @@ public class MessageTest {
         }
 
         @Override
-        public void fail(Member member) {
+        public void fail(Participant member) {
             live.add(member);
         }
 
@@ -88,7 +91,7 @@ public class MessageTest {
         }
 
         @Override
-        public void recover(Member member) {
+        public void recover(Participant member) {
             discovered.add(member);
             live.add(member);
         }
@@ -105,7 +108,7 @@ public class MessageTest {
     }
 
     private static final RootCertificate     ca         = getCa();
-    private static Map<UUID, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -113,14 +116,26 @@ public class MessageTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
+                                                   cert -> cert));
     }
 
+    private LocalCommSimm communications;
+
     private final AtomicInteger totalReceived = new AtomicInteger(0);
+
+    @AfterEach
+    public void after() {
+        if (communications != null) {
+            communications.close();
+        }
+    }
 
     @Test
     public void broadcast() throws Exception {
         Random entropy = new Random(0x666);
+        MetricRegistry registry = new MetricRegistry();
+        FireflyMetrics metrics = new FireflyMetricsImpl(registry);
 
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
@@ -128,8 +143,7 @@ public class MessageTest {
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
-        MetricRegistry registry = new MetricRegistry();
-        FfLocalCommSim communications = new FfLocalCommSim(new DropWizardStatsPlugin(registry));
+        communications = new LocalCommSimm(ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics));
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -141,49 +155,53 @@ public class MessageTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         List<View> views = members.stream()
-                                  .map(node -> new View(node, communications, seeds, scheduler))
+                                  .map(node -> new View(node, communications, scheduler, metrics))
                                   .collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(100)));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds));
 
-        Utils.waitForCondition(15_000, 1_000, () -> {
-            return views.stream()
-                        .map(view -> view.getLive().size() != views.size() ? view : null)
-                        .filter(view -> view != null)
-                        .count() == 0;
-        });
+        try {
+            Utils.waitForCondition(15_000, 1_000, () -> {
+                return views.stream()
+                            .map(view -> view.getLive().size() != views.size() ? view : null)
+                            .filter(view -> view != null)
+                            .count() == 0;
+            });
 
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + views.size() + " members");
+            System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+                    + views.size() + " members");
 
-        Map<Member, Receiver> receivers = new HashMap<>();
-        AtomicInteger current = new AtomicInteger(-1);
-        for (View view : views) {
-            Receiver receiver = new Receiver(views.size(), current);
-            view.register(0, receiver);
-            view.register(receiver);
-            receivers.put(view.getNode(), receiver);
-        }
-        int rounds = 5;
-        for (int r = 0; r < rounds; r++) {
-            CountDownLatch round = new CountDownLatch(views.size());
-            for (Receiver receiver : receivers.values()) {
-                receiver.setRound(round);
+            Map<Participant, Receiver> receivers = new HashMap<>();
+            AtomicInteger current = new AtomicInteger(-1);
+            for (View view : views) {
+                Receiver receiver = new Receiver(views.size(), current);
+                view.register(0, receiver);
+                view.register(receiver);
+                receivers.put(view.getNode(), receiver);
             }
-            ByteBuffer buf = ByteBuffer.wrap(new byte[4]);
-            buf.putInt(r);
-            views.parallelStream().forEach(view -> view.publish(0, buf.array()));
-            boolean success = round.await(10, TimeUnit.SECONDS);
-            assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
+            int rounds = 5;
+            for (int r = 0; r < rounds; r++) {
+                CountDownLatch round = new CountDownLatch(views.size());
+                for (Receiver receiver : receivers.values()) {
+                    receiver.setRound(round);
+                }
+                ByteBuffer buf = ByteBuffer.wrap(new byte[4]);
+                buf.putInt(r);
+                views.parallelStream().forEach(view -> view.publish(0, buf.array()));
+                boolean success = round.await(10, TimeUnit.SECONDS);
+                assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
 
-            round = new CountDownLatch(views.size());
-            current.incrementAndGet();
-            for (Receiver receiver : receivers.values()) {
-                assertEquals(0, receiver.dups.get());
-                receiver.reset();
+                round = new CountDownLatch(views.size());
+                current.incrementAndGet();
+                for (Receiver receiver : receivers.values()) {
+                    assertEquals(0, receiver.dups.get());
+                    receiver.reset();
+                }
             }
+            System.out.println();
+        } finally {
+            views.forEach(e -> e.getService().stop());
         }
-        System.out.println();
     }
 }

@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import com.salesforce.apollo.avro.HASH;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hhildebrand
@@ -14,25 +14,26 @@ import com.salesforce.apollo.avro.HASH;
 public enum WellKnownDescriptions {
     BYTE_CONTENT {
         @Override
-        public HASH toHash() {
+        public HashKey toHash() {
             return UNCONSTRAINED_HASH;
         }
     },
     GENESIS {
 
         @Override
-        public HASH toHash() {
+        public HashKey toHash() {
             return GENESIS_HASH;
         }
     };
-    private final static HASH GENESIS_HASH = new HASH(new byte[32]);
-    private final static HASH UNCONSTRAINED_HASH;
+
+    private final static HashKey GENESIS_HASH = new HashKey(new byte[32]);
+    private final static HashKey UNCONSTRAINED_HASH;
 
     static {
         byte[] bytes = new byte[32];
         bytes[31] = 1;
-        UNCONSTRAINED_HASH = new HASH(bytes);
+        UNCONSTRAINED_HASH = new HashKey(bytes);
     }
 
-    abstract public HASH toHash();
+    abstract public HashKey toHash();
 }

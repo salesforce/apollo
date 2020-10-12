@@ -74,6 +74,8 @@ public class DagWood {
     }
 
     public void put(byte[] key, byte[] entry) {
+        assert key.length > 0 : "Must have > 0 byte[] key";
+        assert entry.length > 0 : "Must have >0 byte[] entry";
         cache.putIfAbsent(key, entry);
     }
 

@@ -123,6 +123,7 @@ public class ByteTransactionApi {
         return result == null ? new TransactionResult(null, true, "Timed out") : new TransactionResult(result);
     }
 
+    @SuppressWarnings("resource")
     @POST()
     @Path("submitAll")
     @Timed

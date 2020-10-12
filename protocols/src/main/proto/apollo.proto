@@ -1,0 +1,218 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.proto";
+option java_outer_classname = "ApolloProto";
+option objc_class_prefix = "Ap";
+
+package apollo;
+
+service Orderer {
+    /**
+     * The batch ordering of transactions
+     */
+     rpc submit(Submission) returns (SubmitResolution) {}
+     
+}
+
+service Fireflies {
+    /*
+     * Fireflies 3 phase gossip
+     */
+    rpc gossip (SayWhat) returns (Gossip) {}
+    rpc update (State) returns (Null) {}
+
+    /**
+     * Fireflies liveness ping
+     */
+    rpc ping (Null) returns (Null) {}
+}
+
+service Avalanche {
+    /**
+     * Avalanche query
+     */
+    rpc query (Query) returns (QueryResult) {}
+    
+    /**
+     * parent gossip
+     */
+    rpc requestDag ( DagNodes ) returns (DagNodes) {}
+}
+
+service Ghost {
+
+    /*
+     * Ghost API
+     */
+    rpc get ( Bytes ) returns (DagEntry) {}
+    rpc put ( ADagEntry ) returns (Null) {}
+
+    /**
+     * Ghost interval gossip
+     */
+    rpc intervals (Intervals) returns (DagEntries) {} 
+}
+
+message Submission {
+    bytes context = 1;
+    bytes source = 2;
+    repeated bytes batch = 3;
+    bytes signature = 4;
+}
+
+message SubmitResolution {
+    bool accepted = 1;
+    string failureMessage = 2;
+    bytes prev = 3;
+    bytes block = 4;
+    
+}
+
+message DagNodes {
+    bytes context = 1;
+    repeated bytes entries = 2;
+}
+
+message DagEntries {
+    bytes context = 1;
+    repeated DagEntry entries = 2;
+}
+
+message Bytes {
+    bytes context = 1;
+    bytes bites = 2;
+}
+
+message ADagEntry {
+    bytes context = 1;
+    DagEntry entry = 2;
+}
+
+message Intervals {
+    bytes context = 1;
+    repeated Interval intervals = 2;
+    repeated bytes have = 3;
+}
+
+message Query {
+    bytes context = 1;
+    repeated bytes transactions = 2;
+    repeated bytes wanted = 3;
+}
+
+message Null {
+    bytes context = 1;
+}
+
+message SayWhat {
+    bytes context = 1;
+    Signed note = 2;
+    int32 ring = 3;
+    Digests gossip = 4;
+}
+
+message State {
+    bytes context = 1;
+    int32 ring = 2;
+    Update update = 3;
+}
+
+message Message {
+    bytes source = 1;
+    bytes id = 2;
+    int32 age = 3;
+    int64 time = 4;
+    int32 channel = 5;
+    bytes content = 6;
+    bytes signature = 7;
+}
+
+message MessageGossip {
+        Biff bff = 1;
+        repeated  Message updates = 2;
+    }
+
+message Signed {
+        bytes content = 1;
+        bytes signature = 2;
+    }
+ 
+
+message AccusationGossip {
+        Biff bff = 1;
+        repeated Signed updates = 2;
+    } 
+
+message EncodedCertificate {
+        bytes id = 1;
+        int64 epoch = 2;
+        bytes hash = 3;
+        bytes content = 4; 
+    }
+
+message CertificateGossip {
+        Biff bff = 1;
+        repeated EncodedCertificate updates = 2;
+    }
+
+message Biff {
+        int32 m = 1;
+        int32 k = 2;
+        int32 seed = 3;
+        bytes bits = 4;
+} 
+
+message NoteGossip {
+        Biff bff = 1;
+        repeated Signed updates = 2;
+    }
+
+message Digests { 
+        Biff messageBff = 1;
+        Biff certificateBff = 2;
+        Biff noteBff = 3;
+        Biff accusationBff = 4; 
+    }
+
+message Gossip {
+        bool redirect = 1;
+        MessageGossip messages = 2;
+        CertificateGossip certificates = 3;
+        NoteGossip notes = 4;
+        AccusationGossip accusations = 5;
+    }
+
+message Update {
+        repeated Message messages = 1;
+        repeated EncodedCertificate certificates = 2;
+        repeated Signed notes = 3;
+        repeated Signed accusations = 4;
+        repeated Signed signedMessages = 5;
+    }
+
+message DagEntry {
+        bytes description = 1;
+        repeated bytes links = 2;
+        bytes data = 3;
+    }
+
+message Interval {
+        bytes start = 1;
+        bytes end = 2;
+    }
+
+message JoinResponse {
+        Signed forward = 1;
+        repeated bytes interval = 2;
+    }
+
+message QueryResult {
+    enum Vote {
+        TRUE = 0;
+        FALSE = 1;
+        UNKNOWN = 2; 
+    } 
+    repeated Vote result = 1;
+    repeated bytes wanted = 2;
+}

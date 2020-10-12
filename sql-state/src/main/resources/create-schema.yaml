@@ -1,0 +1,13 @@
+databaseChangeLog:
+-  preConditions:
+   -  runningAs:
+         username: bootstrap
+-  changeSet:
+      id: 0
+      author: hhildebrand
+      changes: 
+        -  sql:
+            sql: DROP SCHEMA IF EXISTS kernel 
+        -  sql:
+            sql: CREATE schema kernel
+            

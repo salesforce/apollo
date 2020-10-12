@@ -12,7 +12,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetSocketAddress;
 import java.net.URL;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -27,11 +26,11 @@ import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.salesforce.apollo.bootstrap.client.Bootstrap;
-import com.salesforce.apollo.fireflies.CertWithKey;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
+import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.protocols.Utils;
 
 /**
@@ -40,7 +39,7 @@ import com.salesforce.apollo.protocols.Utils;
 public interface IdentitySource {
 
     class BootstrapIdentitySource implements IdentitySource {
-        private final Bootstrap bootstrap;
+        private final Bootstrap  bootstrap;
         private final PrivateKey privateKey;
 
         public BootstrapIdentitySource(Bootstrap bootstrap, PrivateKey privateKey) {
@@ -98,7 +97,9 @@ public interface IdentitySource {
             } catch (IOException e) {
                 throw new IllegalArgumentException("KeyStore not found: " + store, e);
             }
-            if (url == null) { throw new IllegalArgumentException("KeyStore not found: " + store); }
+            if (url == null) {
+                throw new IllegalArgumentException("KeyStore not found: " + store);
+            }
             try (InputStream is = url.openStream()) {
                 return getKeystore(type, is, password);
             } catch (IOException e) {
@@ -118,7 +119,7 @@ public interface IdentitySource {
                 String alias = aliases.nextElement();
                 if (alias.startsWith(SEED_PREFIX)) {
                     try {
-                        seeds.add((X509Certificate)ks.getCertificate(alias));
+                        seeds.add((X509Certificate) ks.getCertificate(alias));
                     } catch (KeyStoreException e) {
                         throw new IllegalStateException("Unable to get seed certificate for alias: " + alias, e);
                     }
@@ -127,8 +128,8 @@ public interface IdentitySource {
             return seeds;
         }
 
-        private final X509Certificate ca;
-        private final CertWithKey identity;
+        private final X509Certificate       ca;
+        private final CertWithKey           identity;
         private final List<X509Certificate> seeds;
 
         public DefaultIdentitySource(CertWithKey identity, List<X509Certificate> seeds, X509Certificate ca) {
@@ -149,13 +150,12 @@ public interface IdentitySource {
 
         public DefaultIdentitySource(String caAlias, KeyStore keystore, String identityAlias, char[] password)
                 throws UnrecoverableKeyException, KeyStoreException, NoSuchAlgorithmException {
-            this(new CertWithKey((X509Certificate)keystore.getCertificate(identityAlias),
-                                 (PrivateKey)keystore.getKey(identityAlias, password)),
-                    seedsFrom(keystore), (X509Certificate)keystore.getCertificate(caAlias));
+            this(new CertWithKey((X509Certificate) keystore.getCertificate(identityAlias),
+                    (PrivateKey) keystore.getKey(identityAlias, password)), seedsFrom(keystore),
+                    (X509Certificate) keystore.getCertificate(caAlias));
         }
 
-        public DefaultIdentitySource(String caAlias, String store, String type, String identityAlias,
-                char[] password)
+        public DefaultIdentitySource(String caAlias, String store, String type, String identityAlias, char[] password)
                 throws UnrecoverableKeyException, KeyStoreException, NoSuchAlgorithmException {
             this(caAlias, getKeystore(type, store, password), identityAlias, password);
         }
@@ -178,49 +178,30 @@ public interface IdentitySource {
     }
 
     class MappingIdentitySource extends BootstrapIdentitySource {
-        private final int avalanchePort;
-        private final int firefliesPort;
-        private final int ghostPort;
-        private final String hostName;
 
         /**
          * @param bootstrap
          * @param privateKey
          */
-        public MappingIdentitySource(Bootstrap bootstrap, PrivateKey privateKey, String hostName, int firefliesPort,
-                int ghostPort,
-                int avalanchePort) {
+        public MappingIdentitySource(Bootstrap bootstrap, PrivateKey privateKey) {
             super(bootstrap, privateKey);
-            this.hostName = hostName;
-            this.firefliesPort = firefliesPort;
-            this.ghostPort = ghostPort;
-            this.avalanchePort = avalanchePort;
         }
 
         @Override
-        public View createView(FirefliesCommunications communications,
-                ScheduledExecutorService scheduler) {
+        public View createView(Communications communications, ScheduledExecutorService scheduler) {
             FirefliesParameters parameters = new FirefliesParameters(getCA());
-
-            InetSocketAddress[] boundPorts = new InetSocketAddress[] {
-                    new InetSocketAddress(hostName, firefliesPort), new InetSocketAddress(hostName, ghostPort),
-                    new InetSocketAddress(hostName, avalanchePort)
-            };
-
-            return new View(communications.newNode(identity(), parameters, boundPorts), communications, seeds(),
-                            scheduler);
+            return new View(new Node(identity(), parameters), communications, scheduler);
         }
     }
 
-    public static final String DEFAULT_CA_ALIAS = "CA";
+    public static final String DEFAULT_CA_ALIAS       = "CA";
     public static final String DEFAULT_IDENTITY_ALIAS = "identity";
-    public static final String SEED_PREFIX = "seed.";
+    public static final String SEED_PREFIX            = "seed.";
 
-    default <T extends Node> View createView(FirefliesCommunications communications,
-            ScheduledExecutorService scheduler) {
+    default <T extends Node> View createView(Communications communications, ScheduledExecutorService scheduler) {
         FirefliesParameters parameters = new FirefliesParameters(getCA());
 
-        return new View(communications.newNode(identity(), parameters), communications, seeds(), scheduler);
+        return new View(new Node(identity(), parameters), communications, scheduler);
     }
 
     X509Certificate getCA();

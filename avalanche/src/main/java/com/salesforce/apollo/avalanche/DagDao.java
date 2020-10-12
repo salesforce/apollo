@@ -9,7 +9,7 @@ package com.salesforce.apollo.avalanche;
 
 import java.util.List;
 
-import com.salesforce.apollo.avro.DagEntry;
+import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**

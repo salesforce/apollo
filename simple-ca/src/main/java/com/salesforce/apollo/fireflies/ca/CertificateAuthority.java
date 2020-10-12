@@ -9,12 +9,11 @@ package com.salesforce.apollo.fireflies.ca;
 import static io.github.olivierlemasle.ca.CA.dn;
 
 import java.math.BigInteger;
-import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.UUID;
 
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
@@ -22,9 +21,6 @@ import javax.naming.ldap.LdapName;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
-
-import com.fasterxml.uuid.Generators;
-import com.fasterxml.uuid.impl.TimeBasedGenerator;
 
 import io.github.olivierlemasle.ca.CA;
 import io.github.olivierlemasle.ca.CSR;
@@ -49,12 +45,12 @@ public class CertificateAuthority {
             throw new IllegalArgumentException("invalid DN: " + dn, e);
         }
         Map<String, String> decoded = new HashMap<>();
-        ldapDN.getRdns().forEach(rdn -> decoded.put(rdn.getType(), (String)rdn.getValue()));
+        ldapDN.getRdns().forEach(rdn -> decoded.put(rdn.getType(), (String) rdn.getValue()));
         return decoded;
     }
 
     public static RootCertificate mint(DistinguishedName dn, int cardinality, double probabilityByzantine,
-            double faultTolerance, String crlUri) {
+                                       double faultTolerance, String crlUri) {
 
         DnBuilder builder = dn();
         decodeDN(dn.getName()).entrySet().stream().filter(e -> !e.getKey().equals("O")).forEach(e -> {
@@ -88,17 +84,17 @@ public class CertificateAuthority {
         }
     }
 
-    private final TimeBasedGenerator generator;
+    private final SecureRandom entropy;
 
     private final RootCertificate root;
 
     public CertificateAuthority(RootCertificate root) {
-        this(root, Generators.timeBasedGenerator());
+        this(root, new SecureRandom());
     }
 
-    public CertificateAuthority(RootCertificate root, TimeBasedGenerator generator) {
+    public CertificateAuthority(RootCertificate root, SecureRandom entropy) {
         this.root = root;
-        this.generator = generator;
+        this.entropy = entropy;
     }
 
     public X509Certificate getRoot() {
@@ -106,29 +102,25 @@ public class CertificateAuthority {
     }
 
     /**
-     * Mint a certificate request for a new node. Validate the request, assign the generated Certificate the supplied
-     * serialNumber. Generate a new id for this request and place that value in the "subject key identifier" of the
+     * Mint a certificate request for a new node. Validate the request, assign the
+     * generated Certificate the supplied serialNumber. Generate a new id for this
+     * request and place that value in the "subject key identifier" of the
      * certificate.
      * 
-     * @param request
-     *            - the CSR
+     * @param request - the CSR
      * @return Certificate - the signed certificate
      */
     public Certificate mintNode(CSR request) {
 
-        UUID serialNumber = generator.generate();
-        ByteBuffer cereal = ByteBuffer.wrap(new byte[16]);
-        cereal.putLong(serialNumber.getMostSignificantBits());
-        cereal.putLong(serialNumber.getLeastSignificantBits());
-        SignerWithSerial signer = root.signCsr(request).setSerialNumber(new BigInteger(cereal.array()));
+        byte[] cereal = new byte[16];
+        entropy.nextBytes(cereal);
+        SignerWithSerial signer = root.signCsr(request).setSerialNumber(new BigInteger(cereal));
 
-        UUID id = generator.generate();
-        ByteBuffer idBuff = ByteBuffer.wrap(new byte[16]);
-        idBuff.putLong(id.getMostSignificantBits());
-        idBuff.putLong(id.getLeastSignificantBits());
-        signer.addExtension(new CertExtension(Extension.subjectKeyIdentifier, false,
-                                              new SubjectKeyIdentifier(idBuff.array())));
+        byte[] id = new byte[32];
+        entropy.nextBytes(id);
+        signer.addExtension(new CertExtension(Extension.subjectKeyIdentifier, false, new SubjectKeyIdentifier(id)));
         signer.addExtension(Extension.basicConstraints, false, new BasicConstraints(false));
-        return signer.sign(false);
+        Certificate cert = signer.sign(false);
+        return cert;
     }
 }

@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -24,7 +23,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -36,17 +34,17 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
-import com.salesforce.apollo.fireflies.CertWithKey;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.DagEntry.Builder;
+import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Member;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.stats.DropWizardStatsPlugin;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
-import com.salesforce.apollo.ghost.communications.GhostLocalCommSim;
+import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -55,7 +53,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
 public class DagTest {
 
     private static final RootCertificate     ca         = getCa();
-    private static Map<UUID, CertWithKey>    certs;
+    private static Map<HashKey, CertWithKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -63,7 +61,8 @@ public class DagTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
+                                                   cert -> cert));
     }
 
     private List<Node>               members;
@@ -71,10 +70,12 @@ public class DagTest {
     private List<X509Certificate>    seeds;
     private List<View>               views;
     private Random                   entropy;
+    private LocalCommSimm            comms;
 
     @AfterEach
     public void after() {
         views.forEach(e -> e.getService().stop());
+        comms.close();
     }
 
     @BeforeEach
@@ -83,9 +84,7 @@ public class DagTest {
 
         seeds = new ArrayList<>();
         members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        MetricRegistry registry = new MetricRegistry();
-        com.salesforce.apollo.fireflies.communications.FfLocalCommSim ffComms = new com.salesforce.apollo.fireflies.communications.FfLocalCommSim(
-                new DropWizardStatsPlugin(registry));
+        comms = new LocalCommSimm(ServerConnectionCache.newBuilder());
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -95,10 +94,11 @@ public class DagTest {
             }
         }
 
-        System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
+        System.out.println("Seeds: "
+                + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(members.size() * 3);
 
-        views = members.stream().map(node -> new View(node, ffComms, seeds, scheduler)).collect(Collectors.toList());
+        views = members.stream().map(node -> new View(node, comms, scheduler)).collect(Collectors.toList());
     }
 
     @Test
@@ -111,19 +111,17 @@ public class DagTest {
             testViews.add(views.get(i));
         }
 
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000)));
+        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds));
 
-        assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(30_000, 3_000, () -> {
             return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
         }), "view did not stabilize");
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + testViews.size() + " members");
 
-        GhostLocalCommSim communications = new GhostLocalCommSim();
         List<Ghost> ghosties = testViews.stream()
-                                        .map(view -> new Ghost(new GhostParameters(), communications, view,
-                                                new MemoryStore()))
+                                        .map(view -> new Ghost(new GhostParameters(), comms, view, new MemoryStore()))
                                         .collect(Collectors.toList());
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
@@ -135,18 +133,20 @@ public class DagTest {
 
         Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
 
-        DagEntry root = new DagEntry();
-        root.setData(ByteBuffer.wrap("root node".getBytes()));
+        Builder builder = DagEntry.newBuilder().setData(ByteString.copyFrom("root node".getBytes()));
+        DagEntry root = builder.build();
         stored.put(ghosties.get(0).putDagEntry(root), root);
 
         int rounds = 10;
 
         for (int i = 0; i < rounds; i++) {
             for (Ghost ghost : ghosties) {
-                DagEntry entry = new DagEntry();
-                entry.setData(ByteBuffer.wrap(String.format("Member: %s round: %s", ghost.getNode().getId(), i)
+                Builder b = DagEntry.newBuilder().setData(ByteString.copyFrom("root node".getBytes()));
+                b.setData(ByteString.copyFrom(String.format("Member: %s round: %s", ghost.getNode().getId(), i)
                                                     .getBytes()));
-                entry.setLinks(randomLinksTo(stored));
+                randomLinksTo(stored).forEach(e -> b.addLinks(e.toByteString()));
+
+                DagEntry entry = builder.build();
                 stored.put(ghost.putDagEntry(entry), entry);
             }
         }
@@ -155,7 +155,7 @@ public class DagTest {
             for (Ghost ghost : ghosties) {
                 DagEntry found = ghost.getDagEntry(entry.getKey());
                 assertNotNull(found);
-                assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
+                assertArrayEquals(entry.getValue().getData().toByteArray(), found.getData().toByteArray());
             }
         }
         int start = testViews.size();
@@ -164,11 +164,11 @@ public class DagTest {
         for (int i = 0; i < add; i++) {
             View view = views.get(i + start);
             testViews.add(view);
-            ghosties.add(new Ghost(new GhostParameters(), communications, view, new MemoryStore()));
+            ghosties.add(new Ghost(new GhostParameters(), comms, view, new MemoryStore()));
         }
 
         then = System.currentTimeMillis();
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000)));
+        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds));
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
                      ghosties.parallelStream()
@@ -188,25 +188,25 @@ public class DagTest {
             for (Ghost ghost : ghosties) {
                 DagEntry found = ghost.getDagEntry(entry.getKey());
                 assertNotNull(found, ghost.getNode() + " not found: " + entry.getKey());
-                assertArrayEquals(entry.getValue().getData().array(), found.getData().array());
-                if (entry.getValue().getLinks() == null) {
-                    assertNull(found.getLinks());
+                assertArrayEquals(entry.getValue().getData().toByteArray(), found.getData().toByteArray());
+                if (entry.getValue().getLinksList() == null) {
+                    assertNull(found.getLinksList());
                 } else {
-                    assertEquals(entry.getValue().getLinks().size(), found.getLinks().size());
+                    assertEquals(entry.getValue().getLinksList().size(), found.getLinksList().size());
                 }
             }
         }
     }
 
-    private List<HASH> randomLinksTo(Map<HashKey, DagEntry> stored) {
-        List<HASH> links = new ArrayList<>();
+    private List<HashKey> randomLinksTo(Map<HashKey, DagEntry> stored) {
+        List<HashKey> links = new ArrayList<>();
         Set<HashKey> keys = stored.keySet();
         for (int i = 0; i < entropy.nextInt(10); i++) {
             Iterator<HashKey> it = keys.iterator();
             for (int j = 0; j < entropy.nextInt(keys.size()); j++) {
                 it.next();
             }
-            links.add(it.next().toHash());
+            links.add(it.next());
         }
         return links;
     }

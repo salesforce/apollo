@@ -6,12 +6,13 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.Member.getMemberId;
+import static com.salesforce.apollo.fireflies.communications.FfClientCommunications.getCreate;
 
 import java.io.ByteArrayInputStream;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.cert.CertificateException;
@@ -20,22 +21,17 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -46,37 +42,35 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import org.apache.avro.AvroRemoteException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.CacheLoader.InvalidCacheLoadException;
-import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
-import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.UncheckedExecutionException;
-import com.salesforce.apollo.avro.AccusationDigest;
-import com.salesforce.apollo.avro.AccusationGossip;
-import com.salesforce.apollo.avro.CertificateDigest;
-import com.salesforce.apollo.avro.CertificateGossip;
-import com.salesforce.apollo.avro.Digests;
-import com.salesforce.apollo.avro.EncodedCertificate;
-import com.salesforce.apollo.avro.Gossip;
-import com.salesforce.apollo.avro.Message;
-import com.salesforce.apollo.avro.MessageDigest;
-import com.salesforce.apollo.avro.MessageGossip;
-import com.salesforce.apollo.avro.NoteDigest;
-import com.salesforce.apollo.avro.NoteGossip;
-import com.salesforce.apollo.avro.Signed;
-import com.salesforce.apollo.avro.Update;
-import com.salesforce.apollo.avro.Uuid;
+import com.salesfoce.apollo.proto.AccusationGossip;
+import com.salesfoce.apollo.proto.AccusationGossip.Builder;
+import com.salesfoce.apollo.proto.CertificateGossip;
+import com.salesfoce.apollo.proto.Digests;
+import com.salesfoce.apollo.proto.EncodedCertificate;
+import com.salesfoce.apollo.proto.Gossip;
+import com.salesfoce.apollo.proto.Message;
+import com.salesfoce.apollo.proto.NoteGossip;
+import com.salesfoce.apollo.proto.Signed;
+import com.salesfoce.apollo.proto.Update;
+import com.salesforce.apollo.comm.CommonCommunications;
+import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.EndpointProvider;
+import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.fireflies.View.MessageChannelHandler.Msg;
 import com.salesforce.apollo.fireflies.communications.FfClientCommunications;
-import com.salesforce.apollo.fireflies.communications.FirefliesCommunications;
-import com.salesforce.apollo.protocols.Conversion;
+import com.salesforce.apollo.fireflies.communications.FfServerCommunications;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.protocols.BloomFilter;
+import com.salesforce.apollo.protocols.CaValidator;
+import com.salesforce.apollo.protocols.HashFunction;
+import com.salesforce.apollo.protocols.HashKey;
+
+import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
 /**
  * The View is the active representation view of all members - failed and live -
@@ -96,10 +90,10 @@ public class View {
      * Used in set reconcillation of Accusation Digests
      */
     public static class AccTag {
-        public final UUID id;
-        public final int  ring;
+        public final HashKey id;
+        public final int     ring;
 
-        public AccTag(UUID id, int ring) {
+        public AccTag(HashKey id, int ring) {
             this.id = id;
             this.ring = ring;
         }
@@ -146,10 +140,10 @@ public class View {
     }
 
     public class FutureRebutal implements Comparable<FutureRebutal> {
-        public final Member member;
-        public final long   targetRound;
+        public final Participant member;
+        public final long        targetRound;
 
-        public FutureRebutal(long targetRound, Member member) {
+        public FutureRebutal(long targetRound, Participant member) {
             this.targetRound = targetRound;
             this.member = member;
         }
@@ -176,24 +170,24 @@ public class View {
          * 
          * @param member
          */
-        void fail(Member member);
+        void fail(Participant member);
 
         /**
          * A new member has recovered and is now live
          * 
          * @param member
          */
-        void recover(Member member);
+        void recover(Participant member);
     }
 
     @FunctionalInterface
     public interface MessageChannelHandler {
         class Msg {
-            public final int    channel;
-            public final byte[] content;
-            public final Member from;
+            public final int         channel;
+            public final byte[]      content;
+            public final Participant from;
 
-            public Msg(Member from, int channel, byte[] content) {
+            public Msg(Participant from, int channel, byte[] content) {
                 this.channel = channel;
                 this.from = from;
                 this.content = content;
@@ -240,10 +234,11 @@ public class View {
             boolean success;
             try {
                 success = View.this.gossip(lastRing, link);
-            } catch (AvroRemoteException e) {
-                connections.invalidate(link.getMember());
+            } catch (Exception e) {
                 log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing, e);
                 return;
+            } finally {
+                link.release();
             }
             if (!success) {
                 try {
@@ -253,10 +248,11 @@ public class View {
                         return;
                     }
                     success = View.this.gossip(lastRing, link);
-                } catch (AvroRemoteException e) {
-                    connections.invalidate(link.getMember());
+                } catch (Exception e) {
                     log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing);
                     return;
+                } finally {
+                    link.release();
                 }
                 if (!success) {
                     log.trace("Partial redirect round of gossip with {}, ring {} not redirecting further",
@@ -289,7 +285,7 @@ public class View {
             if (ring < 0) {
                 return;
             }
-            Member successor = rings.get(ring).successor(node, m -> !m.isFailed() && !m.isAccused());
+            Participant successor = context.ring(ring).successor(node, m -> !m.isFailed() && !m.isAccused());
             if (successor == null) {
                 log.info("No successor to node on ring: {}", ring);
                 return;
@@ -320,13 +316,13 @@ public class View {
          *         is out of touch with, and digests from the sender that this node
          *         would like updated.
          */
-        public Gossip rumors(int ring, Digests digests, UUID from, X509Certificate certificate, Signed note) {
-            if (ring >= rings.size() || ring < 0) {
+        public Gossip rumors(int ring, Digests digests, HashKey from, X509Certificate certificate, Signed note) {
+            if (ring >= context.getRings().length || ring < 0) {
                 log.info("invalid ring {} from {}", ring, from);
                 return emptyGossip();
             }
 
-            Member member = view.get(from);
+            Participant member = view.get(from);
             if (member == null) {
                 add(certificate);
                 member = view.get(from);
@@ -337,20 +333,30 @@ public class View {
                 }
             }
 
-            add(new Note(note.getContent().array(), note.getSignature().array()));
+            add(new Note(note.getContent().toByteArray(), note.getSignature().toByteArray()));
 
-            Member successor = getRing(ring).successor(member, m -> !m.isFailed());
+            Participant successor = getRing(ring).successor(member, m -> !m.isFailed());
             if (successor == null) {
                 return emptyGossip();
             }
-            return !successor.equals(node) ? redirectTo(member, ring, successor)
-                    : new Gossip(false, messageBuffer.process(digests.getMessages()),
-                            processCertificateDigests(from, digests.getCertificates()),
-                            processNoteDigests(from, digests.getNotes()),
-                            processAccusationDigests(digests.getAccusations()));
+            if (!successor.equals(node)) {
+                redirectTo(member, ring, successor);
+            }
+            int seed = getParameters().entropy.nextInt();
+            return Gossip.newBuilder()
+                         .setRedirect(false)
+                         .setMessages(messageBuffer.process(new BloomFilter(digests.getMessageBff()), seed,
+                                                            getParameters().falsePositiveRate))
+                         .setCertificates(processCertificateDigests(from, new BloomFilter(digests.getCertificateBff()),
+                                                                    seed, getParameters().falsePositiveRate))
+                         .setNotes(processNoteDigests(from, new BloomFilter(digests.getNoteBff()), seed,
+                                                      getParameters().falsePositiveRate))
+                         .setAccusations(processAccusationDigests(new BloomFilter(digests.getAccusationBff()), seed,
+                                                                  getParameters().falsePositiveRate))
+                         .build();
         }
 
-        public void start(Duration d) {
+        public void start(Duration d, List<X509Certificate> seeds) {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
@@ -358,16 +364,14 @@ public class View {
             node.setFailed(false);
             node.nextNote();
             recover(node);
-            List<UUID> seedList = new ArrayList<>();
+            List<HashKey> seedList = new ArrayList<>();
             seeds.stream()
-                 .map(cert -> new Member(cert, parameters))
+                 .map(cert -> new Participant(cert, getParameters()))
                  .peek(m -> seedList.add(m.getId()))
                  .forEach(m -> addSeed(m));
 
-            comm.initialize(View.this);
-            comm.start();
             long interval = d.toMillis();
-            int initialDelay = parameters.entropy.nextInt((int) interval * 2);
+            int initialDelay = getParameters().entropy.nextInt((int) interval * 2);
             futureGossip = scheduler.scheduleWithFixedDelay(() -> {
                 try {
                     oneRound();
@@ -392,11 +396,11 @@ public class View {
             }
             scheduledRebutals.clear();
             pendingRebutals.clear();
-            failed.putAll(live);
-            live.values().forEach(m -> m.setFailed(true));
-            live.clear();
-            connections.invalidateAll();
-            comm.close();
+            context.getActive().forEach(m -> {
+                m.setFailed(true);
+                context.offline(m);
+            });
+            context.clear();
             messageBuffer.clear();
         }
 
@@ -408,9 +412,9 @@ public class View {
          * @param update
          * @param from
          */
-        public void update(int ring, Update update, UUID from) {
-            assert from != null;
-            processUpdates(update.getCertificates(), update.getNotes(), update.getAccusations(), update.getMessages());
+        public void update(int ring, Update update, HashKey from) {
+            processUpdates(update.getCertificatesList(), update.getNotesList(), update.getAccusationsList(),
+                           update.getMessagesList());
 
         }
 
@@ -420,13 +424,13 @@ public class View {
         FfClientCommunications nextRing() {
             FfClientCommunications link = null;
             int last = lastRing;
-            int current = (last + 1) % parameters.rings;
-            for (int i = 0; i < parameters.rings; i++) {
+            int current = (last + 1) % getParameters().rings;
+            for (int i = 0; i < getParameters().rings; i++) {
                 link = linkFor(current);
                 if (link != null) {
                     break;
                 }
-                current = (current + 1) % parameters.rings;
+                current = (current + 1) % getParameters().rings;
             }
             lastRing = current;
             return link;
@@ -434,8 +438,8 @@ public class View {
     }
 
     private static final CertificateFactory cf;
-    private static Logger                   log = LoggerFactory.getLogger(View.class);
 
+    private static Logger log = LoggerFactory.getLogger(View.class);
     static {
         try {
             cf = CertificateFactory.getInstance("X.509");
@@ -451,10 +455,14 @@ public class View {
     }
 
     public static Gossip emptyGossip() {
-        return new Gossip(true, new MessageGossip(Collections.emptyList(), Collections.emptyList()),
-                new CertificateGossip(Collections.emptyList(), Collections.emptyList()),
-                new NoteGossip(Collections.emptyList(), Collections.emptyList()),
-                new AccusationGossip(Collections.emptyList(), Collections.emptyList()));
+        return Gossip.getDefaultInstance();
+    }
+
+    public static EndpointProvider getStandardEpProvider(Node member) {
+
+        X509Certificate certificate = member.getCertificate();
+        return new StandardEpProvider(Member.portsFrom(certificate), certificate, member.privateKey, ClientAuth.REQUIRE,
+                new CaValidator(member.getCA()));
     }
 
     /**
@@ -473,10 +481,6 @@ public class View {
         return mask.cardinality() == parameters.toleranceLevel + 1;
     }
 
-    public static UUID uuid(Uuid bits) {
-        return Conversion.uuid(bits);
-    }
-
     /**
      * Message channel handlers
      */
@@ -485,13 +489,12 @@ public class View {
     /**
      * Communications with other members
      */
-    private final FirefliesCommunications comm;
+    private final CommonCommunications<FfClientCommunications> comm;
 
     /**
-     * The mapped set of open outbound connections with other members, mapped by
-     * member
+     * View context
      */
-    private final LoadingCache<Member, FfClientCommunications> connections;
+    private final Context<Participant> context;
 
     /**
      * The analytical diameter of the graph of members
@@ -504,16 +507,6 @@ public class View {
     private final ExecutorService dispatcher;
 
     /**
-     * The set of failed members
-     */
-    private final ConcurrentMap<UUID, Member> failed = new ConcurrentHashMap<>();
-
-    /**
-     * The set of live members
-     */
-    private final ConcurrentMap<UUID, Member> live = new ConcurrentHashMap<>();
-
-    /**
      * Membership listeners
      */
     private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
@@ -523,23 +516,18 @@ public class View {
      */
     private final MessageBuffer messageBuffer;
 
+    @SuppressWarnings("unused")
+    private final FireflyMetrics metrics;
+
     /**
      * This member
      */
     private final Node node;
 
-    private final FirefliesParameters parameters;
-
     /**
      * Pending rebutal timers by member id
      */
-    private final ConcurrentMap<UUID, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>();
-
-    /**
-     * Gossip rings - the list of rings that determine the magical low diameter
-     * connectivity
-     */
-    private final List<Ring> rings = new ArrayList<>();
+    private final ConcurrentMap<HashKey, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>();
 
     /**
      * Current gossip round
@@ -569,17 +557,19 @@ public class View {
     /**
      * The view of all known members
      */
-    private final ConcurrentMap<UUID, Member> view = new ConcurrentHashMap<>();
-    private final List<X509Certificate>       seeds;
+    private final ConcurrentMap<HashKey, Participant> view = new ConcurrentHashMap<>();
 
-    public View(Node node, FirefliesCommunications communications, List<X509Certificate> s,
-            ScheduledExecutorService scheduler) {
+    public View(Node node, Communications communications, ScheduledExecutorService scheduler) {
+        this(node, communications, scheduler, null);
+    }
+
+    public View(Node node, Communications communications, ScheduledExecutorService scheduler, FireflyMetrics metrics) {
+        this.metrics = metrics;
         this.node = node;
-        this.comm = communications;
-        this.parameters = this.node.getParameters();
+        this.comm = communications.create(node, getCreate(metrics), new FfServerCommunications(service,
+                communications.getClientIdentityProvider(), metrics));
         this.scheduler = scheduler;
-        this.seeds = s;
-        diameter = diameter(parameters);
+        diameter = diameter(getParameters());
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
         dispatcher = Executors.newSingleThreadExecutor(new ThreadFactory() {
             @Override
@@ -589,20 +579,11 @@ public class View {
                 return daemon;
             }
         });
-        this.messageBuffer = new MessageBuffer(parameters.bufferSize, parameters.toleranceLevel * diameter + 1);
-
-        connections = cacheBuilder().build(new CacheLoader<Member, FfClientCommunications>() {
-            @Override
-            public FfClientCommunications load(Member to) throws Exception {
-                return comm.connectTo(to, node);
-            }
-        });
-
-        for (int i = 0; i < parameters.rings; i++) {
-            rings.add(new Ring(i));
-        }
+        this.messageBuffer = new MessageBuffer(getParameters().bufferSize,
+                getParameters().toleranceLevel * diameter + 1);
+        context = new Context<>(HashKey.ORIGIN, getParameters().rings);
         add(node);
-        log.info("View [{}]\n  Parameters: {}", node.getId(), parameters);
+        log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }
 
     /**
@@ -613,24 +594,24 @@ public class View {
     }
 
     /**
-     * @return the Map of all failed members
+     * @return the collection of all failed members
      */
-    public Map<UUID, Member> getFailed() {
-        return failed;
+    public Collection<Participant> getFailed() {
+        return context.getOffline();
     }
 
     /**
-     * @return the Map of all live members
+     * @return the collection of all live members
      */
-    public Map<UUID, Member> getLive() {
-        return live;
+    public Collection<Participant> getLive() {
+        return context.getActive();
     }
 
     /**
      * @return the maximum number of members allowed for the view
      */
     public int getMaximumCardinality() {
-        return parameters.cardinality;
+        return getParameters().cardinality;
     }
 
     /**
@@ -644,22 +625,22 @@ public class View {
      * @return the parameters
      */
     public FirefliesParameters getParameters() {
-        return parameters;
+        return node.getParameters();
     }
 
     /**
      * @param ring
      * @return the Ring corresponding to the index
      */
-    public Ring getRing(int ring) {
-        return rings.get(ring);
+    public Ring<Participant> getRing(int ring) {
+        return context.ring(ring);
     }
 
     /**
      * @return the List of Rings that this view maintains
      */
-    public List<Ring> getRings() {
-        return rings;
+    public List<Ring<Participant>> getRings() {
+        return context.rings().collect(Collectors.toList());
     }
 
     /**
@@ -686,7 +667,7 @@ public class View {
     /**
      * @return the entire view - members both failed and live
      */
-    public ConcurrentMap<UUID, Member> getView() {
+    public ConcurrentMap<HashKey, Participant> getView() {
         return view;
     }
 
@@ -711,6 +692,10 @@ public class View {
         roundListeners.add(callback);
     }
 
+    public Collection<? extends Member> sample(int range, SecureRandom entropy, Member excluded) {
+        return context.sample(range, entropy, excluded);
+    }
+
     /**
      * Accuse the member on the list of rings. If the member has disabled the ring
      * in its mask, do not issue the accusation
@@ -718,7 +703,7 @@ public class View {
      * @param member
      * @param ring
      */
-    void accuseOn(Member member, int ring) {
+    void accuseOn(Participant member, int ring) {
         Note note = member.getNote();
         if (note != null && note.getMask().get(ring)) {
             log.info("{} accusing {} on {}", node.getId(), member.getId(), ring);
@@ -732,14 +717,14 @@ public class View {
      * @param accusation
      */
     void add(Accusation accusation) {
-        Member accuser = view.get(accusation.getAccuser());
-        Member accused = view.get(accusation.getAccused());
+        Participant accuser = view.get(accusation.getAccuser());
+        Participant accused = view.get(accusation.getAccused());
         if (accuser == null || accused == null) {
             log.info("Accusation discarded, accused or accuser do not exist in view");
             return;
         }
 
-        if (accusation.getRingNumber() > parameters.rings) {
+        if (accusation.getRingNumber() > getParameters().rings) {
             log.debug("Invalid ring in accusation: {}", accusation.getRingNumber());
             return;
         }
@@ -759,7 +744,7 @@ public class View {
         // verify the accusation after all other tests pass, as it's reasonably
         // expensive and we want to filter out all the noise first, before going to all
         // the trouble (and cost) to validate the sig
-        if (!accusation.verify(accuser.forVerification(parameters.signatureAlgorithm))) {
+        if (!accusation.verify(accuser.forVerification(getParameters().signatureAlgorithm))) {
             log.debug("Accusation signature invalid ");
             return;
         }
@@ -774,12 +759,12 @@ public class View {
      * @param accuser
      * @param accused
      */
-    void add(Accusation accusation, Member accuser, Member accused) {
-        Ring ring = rings.get(accusation.getRingNumber());
+    void add(Accusation accusation, Participant accuser, Participant accused) {
+        Ring<Participant> ring = context.ring(accusation.getRingNumber());
 
         if (accused.isAccusedOn(ring.getIndex())) {
             Accusation currentAccusation = accused.getAccusation(ring.getIndex());
-            Member currentAccuser = view.get(currentAccusation.getAccuser());
+            Participant currentAccuser = view.get(currentAccusation.getAccuser());
 
             if (!currentAccuser.equals(accuser) && ring.isBetween(currentAccuser, accuser, accused)) {
                 accused.addAccusation(accusation);
@@ -787,7 +772,7 @@ public class View {
                          currentAccuser);
             }
         } else {
-            Member predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
+            Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
                 if (!accused.equals(node) && !pendingRebutals.containsKey(accused.getId()) && accused.isLive()) {
@@ -808,35 +793,16 @@ public class View {
      * @param cert
      * @return the added member or the real member associated with this certificate
      */
-    Member add(CertWithHash cert) {
-        UUID id = getMemberId(cert.certificate);
-        Member member = view.get(id);
+    Participant add(CertWithHash cert) {
+        HashKey id = Member.getMemberId(cert.certificate);
+        Participant member = view.get(id);
         if (member != null) {
             update(member, cert);
             return member;
         }
-        member = new Member(cert.certificate, cert.derEncoded, parameters, cert.certificateHash);
+        member = new Participant(cert.certificate, cert.derEncoded, getParameters(), cert.certificateHash);
+        log.trace("Adding member via cert: {}", member.getId());
         return add(member);
-    }
-
-    /**
-     * Add a new member to the view
-     * 
-     * @param member
-     */
-    Member add(Member member) {
-        Member previous = view.putIfAbsent(member.getId(), member);
-        if (previous == null) {
-            log.trace("Adding member: {}", member.getId(), member.getCertificate().getSubjectDN());
-            rings.forEach(ring -> ring.insert(member));
-            if (!member.isFailed()) {
-                recover(member);
-            } else {
-                failed.put(member.getId(), member);
-            }
-            return member;
-        }
-        return previous;
     }
 
     /**
@@ -845,20 +811,21 @@ public class View {
      * @param note
      */
     boolean add(Note note) {
-        Member m = view.get(note.getId());
+        log.trace("Adding note {} : {} ", note.getId(), note.getEpoch());
+        Participant m = view.get(note.getId());
         if (m == null) {
             log.debug("No member for note: " + note.getId());
             return false;
         }
 
         if (m.getEpoch() >= note.getEpoch()) {
-            // log.trace("Note redundant in epoch: {} for: {}", note.getEpoch(),
-            // note.getId());
+            log.trace("Note redundant in epoch: {} (<= {} ) for: {}, failed: {}", note.getEpoch(), m.getEpoch(),
+                      note.getId(), m.isFailed());
             return false;
         }
 
         BitSet mask = note.getMask();
-        if (!isValidMask(mask, parameters)) {
+        if (!isValidMask(mask, getParameters())) {
             log.debug("Note: {} mask invalid {}", note.getId(), mask);
             return false;
         }
@@ -866,21 +833,41 @@ public class View {
         // verify the note after all other tests pass, as it's reasonably expensive and
         // we want to filter out all
         // the noise first, before going to all the trouble to validate
-        if (!note.verify(m.forVerification(parameters.signatureAlgorithm))) {
+        if (!note.verify(m.forVerification(getParameters().signatureAlgorithm))) {
             log.debug("Note signature invalid: {}", note.getId());
             return false;
         }
+
+        log.trace("Adding member via note {} ", m);
 
         if (m.isAccused()) {
             stopRebutalTimer(m);
             checkInvalidations(m);
         }
- 
-            recover(m); 
+
+        recover(m);
 
         m.setNote(note);
 
         return true;
+    }
+
+    /**
+     * Add a new member to the view
+     * 
+     * @param member
+     */
+    Participant add(Participant member) {
+        Participant previous = view.putIfAbsent(member.getId(), member);
+        if (previous == null) {
+            context.add(member);
+            if (!member.isFailed()) {
+                recover(member);
+            }
+            log.trace("Adding member: {}, recovering: {}", member.getId(), !member.isFailed());
+            return member;
+        }
+        return previous;
     }
 
     /**
@@ -901,10 +888,11 @@ public class View {
      * 
      * @param seed
      */
-    void addSeed(Member seed) {
-        seed.setNote(new Note(seed.getId(), -1, Node.createInitialMask(parameters.toleranceLevel, parameters.entropy),
-                node.forSigning()));
-        rings.forEach(ring -> ring.insert(seed));
+    void addSeed(Participant seed) {
+        seed.setNote(new Note(seed.getId(), -1,
+                Node.createInitialMask(getParameters().toleranceLevel, getParameters().entropy), node.forSigning()));
+        context.add(seed);
+        context.activate(seed);
     }
 
     /**
@@ -919,20 +907,20 @@ public class View {
         X509Certificate certificate;
         try {
             certificate = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(
-                    encoded.getContent().array()));
+                    encoded.getContent().toByteArray()));
         } catch (CertificateException e) {
             log.warn("Invalid DER encoded certificate", e);
             return null;
         }
         try {
-            certificate.verify(parameters.ca.getPublicKey());
+            certificate.verify(getParameters().ca.getPublicKey());
         } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException | CertificateException
                 | NoSuchProviderException e) {
             log.warn("Invalid cert: {}", certificate.getSubjectDN(), e);
             return null;
         }
 
-        return new CertWithHash(encoded.getDigest().getHash().array(), certificate, encoded.getContent().array());
+        return new CertWithHash(encoded.getHash().toByteArray(), certificate, encoded.getContent().toByteArray());
     }
 
     /**
@@ -947,18 +935,18 @@ public class View {
      * 
      * @param m
      */
-    void checkInvalidations(Member m) {
-        Deque<Member> check = new ArrayDeque<>();
+    void checkInvalidations(Participant m) {
+        Deque<Participant> check = new ArrayDeque<>();
         check.add(m);
         while (!check.isEmpty()) {
-            Member checked = check.pop();
-            for (Ring ring : rings) {
-                for (Member q : ring.successors(checked, member -> !member.isAccused())) {
+            Participant checked = check.pop();
+            context.rings().forEach(ring -> {
+                for (Participant q : ring.successors(checked, member -> !member.isAccused())) {
                     if (q.isAccusedOn(ring.getIndex())) {
                         invalidate(q, ring, check);
                     }
                 }
-            }
+            });
         }
     }
 
@@ -966,61 +954,17 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     Digests commonDigests() {
-        return new Digests(gatherMessageDigests(), gatherCertificateDigests(), gatherNoteDigests(),
-                gatherAccusationDigests());
+        int seed = getParameters().entropy.nextInt();
+        return Digests.newBuilder()
+                      .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setMessageBff(getMessagesBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff())
+                      .build();
     }
 
-    /**
-     * @return the AccusationGossip for this view. This is the list of all
-     *         accusation digests in the view. Do not add accusation digests for
-     *         crashed members
-     */
-    List<AccusationDigest> gatherAccusationDigests() {
-        return view.values()
-                   .stream()
-                   .filter(m -> !m.equals(node)) // Never send accusations from the view's node
-                   .flatMap(m -> m.getAccusationDigests())
-                   .filter(digest -> !failed.containsKey(uuid(digest.getId())))
-                   .collect(Collectors.toList());
-    }
-
-    /**
-     * @return the CertificateGossip for this view. This is the list of all
-     *         certicate digests of all members in the view
-     */
-    List<CertificateDigest> gatherCertificateDigests() {
-        return view.values()
-                   .stream()
-                   .filter(m -> !m.equals(node))
-                   .map(m -> m.getCertificateDigest())
-                   .filter(e -> e != null)
-                   .collect(Collectors.toList());
-    }
-
-    /**
-     * @return the MessageGossip for this view. This is the list of all message
-     *         digests of the view's messageBuffer
-     */
-    List<MessageDigest> gatherMessageDigests() {
-        return messageBuffer.getDigests();
-    }
-
-    /**
-     * @return the NoteGossip for this view. This is the list of the current Note
-     *         digest for all members in the view
-     */
-    List<NoteDigest> gatherNoteDigests() {
-        return view.values()
-                   .stream()
-                   .filter(m -> !m.equals(node))
-                   .map(m -> m.getNoteDigest())
-                   .filter(e -> e != null)
-                   .collect(Collectors.toList());
-    }
-
-    void gc(Member member) {
-        failed.put(member.getId(), member);
-        live.remove(member.getId());
+    void gc(Participant member) {
+        context.offline(member);
         member.setFailed(true);
         dispatcher.execute(() -> membershipListeners.parallelStream().forEach(l -> {
             try {
@@ -1031,12 +975,47 @@ public class View {
         }));
     }
 
+    BloomFilter getAccusationsBff(int seed, double p) {
+        BloomFilter bff = new BloomFilter(
+                new HashFunction(seed, getParameters().cardinality * getParameters().rings, p));
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(e -> e != null)
+               .forEach(n -> bff.add(new HashKey(n.hash())));
+        return bff;
+    }
+
+    BloomFilter getCertificatesBff(int seed, double p) {
+        BloomFilter bff = new BloomFilter(new HashFunction(seed, getParameters().cardinality, p));
+        view.values()
+            .stream()
+            .map(m -> m.getCertificateHash())
+            .filter(e -> e != null)
+            .forEach(n -> bff.add(new HashKey(n)));
+        return bff;
+    }
+
+    BloomFilter getMessagesBff(int seed, double p) {
+        return messageBuffer.getBff(seed, p);
+    }
+
+    BloomFilter getNotesBff(int seed, double p) {
+        BloomFilter bff = new BloomFilter(new HashFunction(seed, getParameters().cardinality, p));
+        view.values()
+            .stream()
+            .map(m -> m.getNote())
+            .filter(e -> e != null)
+            .forEach(n -> bff.add(new HashKey(n.hash())));
+        return bff;
+    }
+
     /**
      * for testing
      * 
      * @return
      */
-    Map<UUID, FutureRebutal> getPendingRebutals() {
+    Map<HashKey, FutureRebutal> getPendingRebutals() {
         return pendingRebutals;
     }
 
@@ -1046,51 +1025,49 @@ public class View {
      * @param ring - the index of the gossip ring the gossip is originating from in
      *             this view
      * @param link - the outbound communications to the paired member
-     * @throws AvroRemoteException
+     * @throws Exception
      */
-    boolean gossip(int ring, FfClientCommunications link) throws AvroRemoteException {
-        Digests outbound = commonDigests();
-        if (log.isTraceEnabled()) {
-            log.trace("outbound, certs: {}, notes: {}, accusations: {}, messages: {}",
-                      outbound.getCertificates().size(), outbound.getNotes().size(), outbound.getAccusations().size(),
-                      outbound.getMessages().size());
+    boolean gossip(int ring, FfClientCommunications link) throws Exception {
+        Signed signedNote = node.getSignedNote();
+        if (signedNote == null) {
+            return true;
         }
-        Gossip gossip = link.gossip(node.getSignedNote(), ring, outbound);
+        Digests outbound = commonDigests();
+        Gossip gossip = link.gossip(signedNote, ring, outbound);
         if (log.isTraceEnabled()) {
-            log.trace("inbound\nwant: certs: {}, notes: {}, accusations: {}, messages: {}\nupdates: certs: {}, notes: {}, accusations: {}, messages: {}",
-                      gossip.getCertificates().getDigests().size(), gossip.getNotes().getDigests().size(),
-                      gossip.getAccusations().getDigests().size(), gossip.getMessages().getDigests().size(),
-                      gossip.getCertificates().getUpdates().size(), gossip.getNotes().getUpdates().size(),
-                      gossip.getAccusations().getUpdates().size(), gossip.getMessages().getUpdates().size());
+            log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {}, messages: {}",
+                      gossip.getRedirect(), gossip.getCertificates().getUpdatesCount(),
+                      gossip.getNotes().getUpdatesCount(), gossip.getAccusations().getUpdatesCount(),
+                      gossip.getMessages().getUpdatesCount());
         }
         if (gossip.getRedirect()) {
-            if (gossip.getCertificates().getUpdates().size() != 1 && gossip.getNotes().getUpdates().size() != 1) {
+            if (gossip.getCertificates().getUpdatesCount() != 1 && gossip.getNotes().getUpdatesCount() != 1) {
                 log.warn("Redirect response from {} on ring {} did not contain redirect member certificate and note",
                          link.getMember(), ring);
                 return false;
             }
-            if (gossip.getAccusations().getUpdates().size() > 0) {
+            if (gossip.getAccusations().getUpdatesCount() > 0) {
                 // Reset our epoch to whatever the group has recorded for this recovering node
                 long max = gossip.getAccusations()
-                                 .getUpdates()
+                                 .getUpdatesList()
                                  .stream()
-                                 .map(signed -> new Accusation(signed.getContent().array(),
-                                         signed.getSignature().array()))
+                                 .map(signed -> new Accusation(signed.getContent().toByteArray(),
+                                         signed.getSignature().toByteArray()))
                                  .mapToLong(a -> a.getEpoch())
                                  .max()
                                  .orElse(-1);
                 node.nextNote(max + 1);
             }
-            CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates().get(0));
+            CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates(0));
             if (certificate != null) {
-                connections.invalidate(link.getMember());
+                link.release();
                 add(certificate);
-                Signed signed = gossip.getNotes().getUpdates().get(0);
-                Note note = new Note(signed.getContent().array(), signed.getSignature().array());
+                Signed signed = gossip.getNotes().getUpdates(0);
+                Note note = new Note(signed.getContent().toByteArray(), signed.getSignature().toByteArray());
                 add(note);
                 gossip.getAccusations()
-                      .getUpdates()
-                      .forEach(s -> add(new Accusation(s.getContent().array(), s.getSignature().array())));
+                      .getUpdatesList()
+                      .forEach(s -> add(new Accusation(s.getContent().toByteArray(), s.getSignature().toByteArray())));
                 log.debug("Redirected from {} to {} on ring {}", link.getMember(), note.getId(), ring);
                 return false;
             } else {
@@ -1113,10 +1090,10 @@ public class View {
      * @param ring
      * @param check
      */
-    void invalidate(Member q, Ring ring, Deque<Member> check) {
+    void invalidate(Participant q, Ring<Participant> ring, Deque<Participant> check) {
         Accusation qa = q.getAccusation(ring.getIndex());
-        Member accuser = view.get(qa.getAccuser());
-        Member accused = view.get(qa.getAccused());
+        Participant accuser = view.get(qa.getAccuser());
+        Participant accused = view.get(qa.getAccused());
         if (ring.isBetween(accuser, q, accused)) {
             assert q.isAccused();
             assert q.isAccusedOn(ring.getIndex());
@@ -1136,8 +1113,8 @@ public class View {
     }
 
     boolean isEmpty(Update update) {
-        return update.getAccusations().isEmpty() && update.getCertificates().isEmpty() && update.getMessages().isEmpty()
-                && update.getNotes().isEmpty();
+        return update.getAccusationsCount() == 0 && update.getCertificatesCount() == 0 && update.getMessagesCount() == 0
+                && update.getNotesCount() == 0;
     }
 
     /**
@@ -1146,12 +1123,11 @@ public class View {
      *         state
      */
     FfClientCommunications linkFor(Integer ring) {
-        Member successor = rings.get(ring).successor(node, m -> !m.isFailed());
+        Participant successor = context.ring(ring).successor(node, m -> !m.isFailed());
         if (successor == null) {
-            log.debug("No successor to node on ring: {}", ring);
+            log.debug("No successor to node on ring: {} members: {}", ring, context.ring(ring).size());
             return null;
         }
-
         return linkFor(successor);
     }
 
@@ -1192,27 +1168,13 @@ public class View {
         try {
             link.ping(200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
-        } catch (AvroRemoteException e) {
-            connections.invalidate(link.getMember());
-            log.error("Exception pinging {} -> {} : {}", link.getMember(), link.getMember().getFirefliesEndpoint(),
-                      e.toString());
+        } catch (Exception e) {
+            log.error("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(),
+                      e.getCause().getMessage());
             accuseOn(link.getMember(), lastRing);
+        } finally {
+            link.release();
         }
-    }
-
-    /**
-     * @param ring - the ring to gossip on
-     * @return the communication link for this ring, based on current membership
-     *         state
-     */
-    FfClientCommunications monitorLinkFor(Integer ring) {
-        Member successor = rings.get(ring).successor(node, m -> !m.isFailed() && !m.isAccused());
-        if (successor == null) {
-            log.debug("No successor to node on ring: {}", ring);
-            return null;
-        }
-
-        return linkFor(successor);
     }
 
     /**
@@ -1220,19 +1182,28 @@ public class View {
      * monitor().
      */
     void oneRound() {
-        round.incrementAndGet();
-        comm.logDiag();
-        try {
-            service.gossip();
-        } catch (Throwable e) {
-            log.error("unexpected error during gossip round", e);
+        com.codahale.metrics.Timer.Context timer = null;
+        if (metrics != null) {
+            timer = metrics.gossipRoundDuration().time();
         }
         try {
-            service.monitor();
-        } catch (Throwable e) {
-            log.error("unexpected error during monitor round", e);
+            round.incrementAndGet();
+            try {
+                service.gossip();
+            } catch (Throwable e) {
+                log.error("unexpected error during gossip round", e);
+            }
+            try {
+                service.monitor();
+            } catch (Throwable e) {
+                log.error("unexpected error during monitor round", e);
+            }
+            maintainTimers();
+        } finally {
+            if (timer != null) {
+                timer.stop();
+            }
         }
-        maintainTimers();
     }
 
     /**
@@ -1243,93 +1214,39 @@ public class View {
      * accusations from crashed members
      * 
      * @param digests
+     * @param p
+     * @param seed
      * @return
      */
-    AccusationGossip processAccusationDigests(List<AccusationDigest> digests) {
-        Set<AccTag> received = new HashSet<>(digests.size());
-        List<Signed> updates = new ArrayList<>();
-        AccusationGossip accusations = new AccusationGossip();
-        accusations.setDigests(digests.stream().filter(accusation -> {
-            UUID id = uuid(accusation.getId());
-            Member member = view.get(id);
-            if (member == null) {
-                return true;
-            }
-            Long epoch = accusation.getEpoch();
-            int ring = accusation.getRing();
-            received.add(new AccTag(id, ring));
-            if (epoch < member.getEpoch()) {
-                Accusation existing = member.getAccusation(ring);
-                if (existing != null && !failed.containsKey(existing.getAccuser())) {
-                    updates.add(existing.getSigned());
-                    return false;
-                }
-            }
-            return epoch > member.getEpoch() || !member.isAccusedOn(ring);
-        }).collect(Collectors.toList()));
-        Sets.difference(view.values().stream().flatMap(e -> e.getAccusationTags().stream()).collect(Collectors.toSet()),
-                        received)
-            .stream()
-            .map(tag -> {
-                Member member = view.get(tag.id);
-                return member == null ? null : member.getAccusation(tag.ring);
-            })
-            .filter(acc -> acc != null)
-            .filter(acc -> !failed.containsKey(acc.getAccuser()))
-            .map(acc -> acc.getSigned())
-            .forEach(signed -> updates.add(signed));
-        accusations.setUpdates(updates);
-        return accusations;
+    AccusationGossip processAccusationDigests(BloomFilter bff, int seed, double p) {
+        Builder builder = AccusationGossip.newBuilder();
+        // Add all updates that this view has that aren't reflected in the inbound
+        // bff
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(a -> !bff.contains(new HashKey(a.hash())))
+               .forEach(a -> builder.addUpdates(a.getSigned()));
+        builder.setBff(getAccusationsBff(seed, p).toBff());
+        AccusationGossip gossip = builder.build();
+        log.trace("process accusations produded updates: {}", gossip.getUpdatesCount());
+        return gossip;
     }
 
-    /**
-     * The "second" message - response - in the anti-entropy protocol. Process the
-     * inbound certificates from the gossip. Reconcile the differences between the
-     * view's state and the digests of the gossip. Update the reply with the list of
-     * digests the view requires, as well as proposed updates based on the inbound
-     * digets that the view has more recent information for
-     * 
-     * @param from
-     * @param certificates
-     * @return the CertificateGossip based on the processing
-     */
-    CertificateGossip processCertificateDigests(UUID from, List<CertificateDigest> certificates) {
-        Set<UUID> received = new HashSet<>(certificates.size());
-        List<EncodedCertificate> updates = new ArrayList<>();
-        CertificateGossip gossip = new CertificateGossip();
-
-        // Process all inbound digests
-        gossip.setDigests(certificates.stream().filter(cert -> {
-            UUID id = uuid(cert.getId());
-            received.add(id);
-            if (from.equals(id)) {
-                return false;
-            }
-            Member member = view.get(id);
-            if (member == null) {
-                return true;
-            }
-            byte[] hash = cert.getHash().array();
-            // Add an update if this view has a newer version than the inbound digest
-            Long epoch = cert.getEpoch();
-            if (epoch < member.getEpoch() || !Arrays.equals(hash, member.getCertificateHash())) {
-                updates.add(member.getEncodedCertificate());
-                return false;
-            }
-            return epoch > member.getEpoch();
-        }).collect(Collectors.toList()));
-
+    CertificateGossip processCertificateDigests(HashKey from, BloomFilter bff, int seed, double p) {
+        log.trace("process cert digests");
+        com.salesfoce.apollo.proto.CertificateGossip.Builder builder = CertificateGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
-        // digests
-        Sets.difference(view.keySet(), received)
+        // bff
+        view.values()
             .stream()
-            .filter(id -> id.equals(from))
-            .map(id -> view.get(id))
-            .filter(m -> m != null)
+            .filter(m -> m.getId().equals(from))
+            .filter(m -> !bff.contains(new HashKey(m.getCertificateHash())))
             .map(m -> m.getEncodedCertificate())
-            .filter(cert -> cert != null)
-            .forEach(cert -> updates.add(cert));
-        gossip.setUpdates(updates);
+            .forEach(cert -> builder.addUpdates(cert));
+        builder.setBff(getCertificatesBff(seed, p).toBff());
+        CertificateGossip gossip = builder.build();
+        log.trace("process certificates produced updates: {}", gossip.getUpdatesCount());
         return gossip;
     }
 
@@ -1341,42 +1258,24 @@ public class View {
      * 
      * @param from
      * @param digests
+     * @param p
+     * @param seed
      */
-    NoteGossip processNoteDigests(UUID from, List<NoteDigest> digests) {
-        NoteGossip notes = new NoteGossip();
-        List<Signed> updates = new ArrayList<>();
-        Set<UUID> received = new HashSet<>(digests.size());
-        // Process all inbound digests
-        notes.setDigests(digests.stream().filter(note -> {
-            UUID id = uuid(note.getId());
-            received.add(id);
-            if (from.equals(id)) {
-                return false;
-            }
-            Member member = view.get(id);
-            if (member == null) {
-                return true;
-            }
-            Long epoch = note.getEpoch();
-            // Add an update if this view has a newer version than the inbound digest
-            if (epoch < member.getEpoch()) {
-                updates.add(member.getSignedNote());
-                return false;
-            }
-            return epoch > member.getEpoch();
-        }).collect(Collectors.toList()));
-        // Add all digests that this view has that aren't reflected in the inbound
-        // digests
-        Sets.difference(view.keySet(), received)
-            .stream()
-            .filter(id -> id.equals(from))
-            .map(id -> view.get(id))
-            .filter(m -> m != null)
-            .map(m -> m.getSignedNote())
-            .filter(note -> note != null)
-            .forEach(note -> updates.add(note));
-        notes.setUpdates(updates);
-        return notes;
+    NoteGossip processNoteDigests(HashKey from, BloomFilter bff, int seed, double p) {
+        com.salesfoce.apollo.proto.NoteGossip.Builder builder = NoteGossip.newBuilder();
+
+        // Add all updates that this view has that aren't reflected in the inbound
+        // bff
+        context.getActive()
+               .stream()
+               .filter(m -> m.getNote() != null)
+               .filter(m -> !bff.contains(new HashKey(m.getNote().hash())))
+               .map(m -> m.getSignedNote())
+               .forEach(n -> builder.addUpdates(n));
+        builder.setBff(getNotesBff(seed, p).toBff());
+        NoteGossip gossip = builder.build();
+        log.trace("process notes produded updates: {}", gossip.getUpdatesCount());
+        return gossip;
     }
 
     /**
@@ -1386,8 +1285,8 @@ public class View {
      * @param gossip
      */
     void processUpdates(Gossip gossip) {
-        processUpdates(gossip.getCertificates().getUpdates(), gossip.getNotes().getUpdates(),
-                       gossip.getAccusations().getUpdates(), gossip.getMessages().getUpdates());
+        processUpdates(gossip.getCertificates().getUpdatesList(), gossip.getNotes().getUpdatesList(),
+                       gossip.getAccusations().getUpdatesList(), gossip.getMessages().getUpdatesList());
     }
 
     /**
@@ -1406,10 +1305,10 @@ public class View {
                          .filter(cert -> cert != null)
                          .forEach(cert -> add(cert));
         noteUpdates.stream()
-                   .map(s -> new Note(s.getContent().array(), s.getSignature().array()))
+                   .map(s -> new Note(s.getContent().toByteArray(), s.getSignature().toByteArray()))
                    .forEach(note -> add(note));
         accusationUpdates.stream()
-                         .map(s -> new Accusation(s.getContent().array(), s.getSignature().array()))
+                         .map(s -> new Accusation(s.getContent().toByteArray(), s.getSignature().toByteArray()))
                          .forEach(accusation -> add(accusation));
 
         if (node.isAccused()) {
@@ -1421,13 +1320,13 @@ public class View {
         Map<Integer, List<Msg>> newMessages = new HashMap<>();
 
         messageBuffer.merge(messageUpdates, message -> validate(message)).stream().map(m -> {
-            UUID id = uuid(m.getDigest().getSource());
-            Member from = view.get(id);
+            HashKey id = new HashKey(m.getSource());
+            Participant from = view.get(id);
             if (from == null) {
                 log.trace("{} message from unknown member: {}", node, id);
                 return null;
             } else {
-                return new Msg(from, m.getChannel(), m.getContent().array());
+                return new Msg(from, m.getChannel(), m.getContent().toByteArray());
             }
         }).filter(m -> m != null).forEach(msg -> {
             newMessages.computeIfAbsent(msg.channel, i -> new ArrayList<>()).add(msg);
@@ -1445,17 +1344,11 @@ public class View {
      * 
      * @param member
      */
-    void recover(Member member) {
-        AtomicBoolean notify = new AtomicBoolean();
-        live.computeIfAbsent(member.getId(), k -> {
+    void recover(Participant member) {
+        if (context.isOffline(member)) {
+            context.activate(member);
             member.setFailed(false);
-            failed.remove(member.getId());
-            rings.forEach(ring -> ring.insert(member));
             log.info("Recovering: {}", member.getId());
-            notify.set(true);
-            return member;
-        });
-        if (notify.get()) {
             dispatcher.execute(() -> membershipListeners.parallelStream().forEach(l -> {
                 try {
                     l.recover(member);
@@ -1463,6 +1356,8 @@ public class View {
                     log.error("error recoving member in listener: " + l, e);
                 }
             }));
+        } else {
+            log.trace("Already active: {}", member.getId());
         }
     }
 
@@ -1475,15 +1370,25 @@ public class View {
      * @return the Gossip containing the successor's Certificate and Note from this
      *         view
      */
-    Gossip redirectTo(Member member, int ring, Member successor) {
+    Gossip redirectTo(Participant member, int ring, Participant successor) {
         assert member != null;
         assert successor != null;
+        if (successor.getNote() == null) {
+            log.debug("Cannot redirect from {} to {} on ring {} as note is null", node, successor, ring);
+            return Gossip.getDefaultInstance();
+        }
+
         log.debug("Redirecting from {} to {} on ring {}", node, successor, ring);
-        return new Gossip(true, new MessageGossip(Collections.emptyList(), Collections.emptyList()),
-                new CertificateGossip(Collections.emptyList(),
-                        Collections.singletonList(successor.getEncodedCertificate())),
-                new NoteGossip(Collections.emptyList(), Collections.singletonList(successor.getSignedNote())),
-                new AccusationGossip(Collections.emptyList(), member.getEncodedAccusations()));
+
+        return Gossip.newBuilder()
+                     .setRedirect(true)
+                     .setCertificates(CertificateGossip.newBuilder()
+                                                       .addUpdates(successor.getEncodedCertificate())
+                                                       .build())
+                     .setNotes(NoteGossip.newBuilder().addUpdates(successor.getSignedNote()).build())
+                     .setAccusations(AccusationGossip.newBuilder()
+                                                     .addAllUpdates(member.getEncodedAccusations(getParameters().rings)))
+                     .build();
     }
 
     /**
@@ -1503,15 +1408,15 @@ public class View {
      * 
      * @param m
      */
-    void startRebutalTimer(Member m) {
+    void startRebutalTimer(Participant m) {
         pendingRebutals.computeIfAbsent(m.getId(), id -> {
-            FutureRebutal future = new FutureRebutal(round.get() + 2 * (diameter * parameters.toleranceLevel), m);
+            FutureRebutal future = new FutureRebutal(round.get() + 2 * (diameter * getParameters().toleranceLevel), m);
             scheduledRebutals.add(future);
             return future;
         });
     }
 
-    void stopRebutalTimer(Member m) {
+    void stopRebutalTimer(Participant m) {
         m.clearAccusations();
         log.info("New note, epoch {}, clearing accusations on {}", m.getEpoch(), m.getId());
         FutureRebutal pending = pendingRebutals.remove(m.getId());
@@ -1526,62 +1431,9 @@ public class View {
      * @param member
      * @param cert
      */
-    void update(Member member, CertWithHash cert) {
+    void update(Participant member, CertWithHash cert) {
         // TODO Auto-generated method stub
 
-    }
-
-    /**
-     * gather ye accusal gossip using the common digests and the list of updates
-     * based on the inboud requested digests
-     * 
-     * @param common
-     * @param requested
-     * @return
-     */
-    AccusationGossip updateAccusations(List<AccusationDigest> common, List<AccusationDigest> requested) {
-        return new AccusationGossip(common,
-                requested.stream()
-                         .filter(a -> view.get(uuid(a.getId())) != null)
-                         .map(a -> view.get(uuid(a.getId())).getEncodedAccusation(a.getRing()))
-                         .filter(e -> e != null)
-                         .collect(Collectors.toList()));
-    }
-
-    /**
-     * gather ye certificate gossip using the common digests and the list of updates
-     * based on the inboud requested digests
-     * 
-     * @param common
-     * @param requested
-     * @return
-     */
-    CertificateGossip updateCertificates(List<CertificateDigest> common, List<CertificateDigest> requested) {
-        return new CertificateGossip(common,
-                requested.stream()
-                         .map(digest -> uuid(digest.getId()))
-                         .map(id -> view.get(id))
-                         .filter(e -> e != null)
-                         .map(m -> m.getEncodedCertificate())
-                         .collect(Collectors.toList()));
-    }
-
-    /**
-     * gather ye accusal note using the common digests and the list of updates based
-     * on the inboud requested digests
-     * 
-     * @param common
-     * @param requested
-     * @return
-     */
-    NoteGossip updateNotes(List<NoteDigest> common, List<NoteDigest> requested) {
-        return new NoteGossip(common,
-                requested.stream()
-                         .map(digest -> uuid(digest.getId()))
-                         .map(id -> view.get(id))
-                         .filter(e -> e != null)
-                         .map(m -> m.getSignedNote())
-                         .collect(Collectors.toList()));
     }
 
     /**
@@ -1592,29 +1444,37 @@ public class View {
      * @return
      */
     Update updatesForDigests(Gossip gossip) {
-        return new Update(messageBuffer.updatesFor(gossip.getMessages().getDigests()),
-                gossip.getCertificates()
-                      .getDigests()
-                      .stream()
-                      .map(digest -> view.get(uuid(digest.getId())))
-                      .filter(member -> member != null)
-                      .map(member -> member.getEncodedCertificate())
-                      .collect(Collectors.toList()),
-                gossip.getNotes()
-                      .getDigests()
-                      .stream()
-                      .map(digest -> view.get(uuid(digest.getId())))
-                      .filter(member -> member != null)
-                      .map(member -> member.getSignedNote())
-                      .collect(Collectors.toList()),
-                gossip.getAccusations()
-                      .getDigests()
-                      .stream()
-                      .filter(digest -> view.containsKey(uuid(digest.getId())))
-                      .map(digest -> view.get(uuid(digest.getId())).getAccusation(digest.getRing()))
-                      .filter(accusation -> accusation != null)
-                      .map(accusation -> accusation.getSigned())
-                      .collect(Collectors.toList()));
+        com.salesfoce.apollo.proto.Update.Builder builder = Update.newBuilder();
+
+        // messages
+        builder.addAllMessages(messageBuffer.updatesFor(new BloomFilter(gossip.getMessages().getBff())));
+
+        // certificates
+        BloomFilter certBff = new BloomFilter(gossip.getCertificates().getBff());
+        view.values()
+            .stream()
+            .filter(m -> !certBff.contains(new HashKey(m.getCertificateHash())))
+            .map(m -> m.getEncodedCertificate())
+            .filter(ec -> ec != null)
+            .forEach(cert -> builder.addCertificates(cert));
+
+        // notes
+        BloomFilter notesBff = new BloomFilter(gossip.getNotes().getBff());
+        view.values()
+            .stream()
+            .filter(m -> m.getNote() != null)
+            .filter(m -> !notesBff.contains(new HashKey(m.getNote().hash())))
+            .map(m -> m.getSignedNote())
+            .forEach(n -> builder.addNotes(n));
+
+        BloomFilter accBff = new BloomFilter(gossip.getAccusations().getBff());
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(a -> !accBff.contains(new HashKey(a.hash())))
+               .forEach(a -> builder.addAccusations(a.getSigned()));
+
+        return builder.build();
     }
 
     /**
@@ -1625,45 +1485,25 @@ public class View {
      *         signature doesn't validate
      */
     boolean validate(Message message) {
-        UUID from = uuid(message.getDigest().getSource());
-        Member member = view.get(from);
+        HashKey from = new HashKey(message.getSource());
+        Participant member = view.get(from);
         if (member == null) {
             return false;
         }
-        Signature signature = member.forVerification(parameters.signatureAlgorithm);
+        Signature signature = member.forVerification(getParameters().signatureAlgorithm);
         try {
-            signature.update(message.getContent().array());
-            return signature.verify(message.getSignature().array());
+            signature.update(message.getContent().toByteArray());
+            return signature.verify(message.getSignature().toByteArray());
         } catch (SignatureException e) {
-            log.debug("invalid signature for message {}", uuid(message.getDigest().getId()), from);
+            log.debug("invalid signature for message {}", new HashKey(message.getId()), from);
             return false;
         }
     }
 
-    private CacheBuilder<Member, FfClientCommunications> cacheBuilder() {
-        CacheBuilder<?, ?> builder = CacheBuilder.newBuilder();
-        @SuppressWarnings("unchecked")
-        CacheBuilder<Member, FfClientCommunications> castBuilder = (CacheBuilder<Member, FfClientCommunications>) builder;
-        castBuilder.maximumSize(parameters.rings + 2)
-                   .removalListener(new RemovalListener<Member, FfClientCommunications>() {
-                       @Override
-                       public void onRemoval(RemovalNotification<Member, FfClientCommunications> notification) {
-                           notification.getValue().close();
-                       }
-                   });
-        return castBuilder;
-    }
-
-    private FfClientCommunications linkFor(Member m) {
+    private FfClientCommunications linkFor(Participant m) {
         try {
-            return connections.get(m);
-        } catch (UncheckedExecutionException e) {
-            log.debug("error opening connection to {}: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
-        } catch (InvalidCacheLoadException e) {
-            log.debug("error opening connection to {}: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
-        } catch (ExecutionException e) {
+            return comm.apply(m, node);
+        } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", m.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
         }

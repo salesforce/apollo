@@ -19,6 +19,8 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.protocols.HashKey;
+
 /**
  * @author hal.hildebrand
  * @since 220
@@ -31,7 +33,7 @@ public class NoteTest {
         gen.initialize(2048);
         KeyPair keyPair = gen.generateKeyPair();
 
-        UUID id = UUID.randomUUID();
+        HashKey id = new HashKey(UUID.randomUUID());
         int epoch = 456423456;
         BitSet mask = new BitSet(40);
         mask.set(0);

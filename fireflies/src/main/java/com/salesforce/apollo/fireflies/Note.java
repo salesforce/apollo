@@ -6,28 +6,32 @@
  */
 package com.salesforce.apollo.fireflies;
 
+import static com.salesforce.apollo.protocols.Conversion.hashOf;
+
 import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.util.BitSet;
-import java.util.UUID;
+
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
- * Members issue notes to signal to other members that they are alive. In particular, a member will issue a new note as
- * a rebuttal to a false accusation. Notes are immutable after they are signed.
+ * Members issue notes to signal to other members that they are alive. In
+ * particular, a member will issue a new note as a rebuttal to a false
+ * accusation. Notes are immutable after they are signed.
  * 
  * @author hal.hildebrand
  * @since 218
  */
 public class Note implements Verifiable {
+    private static final int BASE_SIZE   = 8 + 32;
     private static final int EPOCH_INDEX = 0;
     private static final int ID_INDEX;
     private static final int MASK_INDEX;
-    private static final int BASE_SIZE = 8 + 16;
 
     static {
         ID_INDEX = EPOCH_INDEX + 8;
-        MASK_INDEX = ID_INDEX + 16;
+        MASK_INDEX = ID_INDEX + 32;
     }
 
     /**
@@ -35,17 +39,24 @@ public class Note implements Verifiable {
      */
     private final byte[] content;
 
+    private final byte[] hash;
+
     /**
      * Signed with the member's private key.
      */
     private final byte[] signature;
 
-    public Note(UUID id, long epoch, BitSet mask, Signature s) {
+    public Note(byte[] content, byte[] signature) {
+        this.content = content;
+        this.signature = signature;
+        hash = hashOf(content);
+    }
+
+    public Note(HashKey id, long epoch, BitSet mask, Signature s) {
         byte[] maskBytes = mask.toByteArray();
         ByteBuffer buffer = ByteBuffer.wrap(new byte[BASE_SIZE + maskBytes.length]);
         buffer.putLong(epoch);
-        buffer.putLong(id.getMostSignificantBits());
-        buffer.putLong(id.getLeastSignificantBits());
+        buffer.put(id.bytes());
         buffer.put(maskBytes);
         content = buffer.array();
         try {
@@ -54,11 +65,7 @@ public class Note implements Verifiable {
         } catch (SignatureException e) {
             throw new IllegalStateException("Unable to sign content", e);
         }
-    }
-
-    public Note(byte[] content, byte[] signature) {
-        this.content = content;
-        this.signature = signature;
+        hash = hashOf(content);
     }
 
     @Override
@@ -70,8 +77,12 @@ public class Note implements Verifiable {
         return getBuffer().getLong(EPOCH_INDEX);
     }
 
-    public UUID getId() {
-        return new UUID(getBuffer().getLong(ID_INDEX), getBuffer().getLong(ID_INDEX + 8));
+    public HashKey getId() {
+        byte[] buf = new byte[32];
+        ByteBuffer buffer = getBuffer();
+        buffer.position(ID_INDEX);
+        buffer.get(buf);
+        return new HashKey(buf);
     }
 
     public BitSet getMask() {
@@ -83,6 +94,11 @@ public class Note implements Verifiable {
     @Override
     public byte[] getSignature() {
         return signature;
+    }
+
+    @Override
+    public byte[] hash() {
+        return hash;
     }
 
     private ByteBuffer getBuffer() {

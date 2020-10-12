@@ -18,8 +18,8 @@ import org.jooq.Record1;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 
-import com.salesforce.apollo.avro.DagEntry;
-import com.salesforce.apollo.avro.HASH;
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesforce.apollo.protocols.HashKey;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -46,17 +46,17 @@ public class H2Store implements Store {
     }
 
     @Override
-    public void add(List<DagEntry> entries, List<HASH> total) {
+    public void add(List<DagEntry> entries, List<HashKey> total) {
     }
 
     @Override
-    public List<DagEntry> entriesIn(CombinedIntervals combinedIntervals, List<HASH> have) {
+    public List<DagEntry> entriesIn(CombinedIntervals combinedIntervals, List<HashKey> have) {
         // TODO Auto-generated method stub
         return null;
     }
 
     @Override
-    public DagEntry get(HASH key) {
+    public DagEntry get(HashKey key) {
         return context.transactionResult(config -> {
             Record1<byte[]> DagEntry = DSL.using(config)
                                           .select(DAG.DATA)
@@ -68,35 +68,35 @@ public class H2Store implements Store {
     }
 
     @Override
-    public List<DagEntry> getUpdates(List<HASH> want) {
+    public List<DagEntry> getUpdates(List<HashKey> want) {
         // TODO Auto-generated method stub
         return null;
     }
 
     @Override
-    public List<HASH> have(CombinedIntervals keyIntervals) {
+    public List<HashKey> have(CombinedIntervals keyIntervals) {
         // TODO Auto-generated method stub
         return null;
     }
 
     @Override
-    public List<HASH> keySet() {
+    public List<HashKey> keySet() {
         return context.transactionResult(config -> {
             return DSL.using(config)
                       .select(DAG.HASH)
                       .from(DAG)
                       .fetchStream()
-                      .map(r -> new HASH(r.value1()))
+                      .map(r -> new HashKey(r.value1()))
                       .collect(Collectors.toList());
         });
     }
 
     @Override
-    public void put(HASH key, DagEntry value) {
+    public void put(HashKey key, DagEntry value) {
         context.transaction(config -> {
             DSL.using(config)
                .insertInto(DAG, DAG.HASH, DAG.DATA)
-               .values(key.bytes(), value.getData().array())
+               .values(key.bytes(), value.getData().toByteArray())
                .execute();
         });
     }

@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.fireflies.Member;
+import com.salesforce.apollo.fireflies.Participant;
 
 /**
  * @author hal.hildebrand
@@ -40,14 +40,14 @@ public class MockCommunications<Protocol extends AbstractProtocol<?, ?>> impleme
 
     private static Logger log = LoggerFactory.getLogger(MockCommunications.class);
 
-    protected final Member                                    address;
+    protected final Participant                                    address;
     protected final ConcurrentMap<UUID, TimeSink>             outstanding = new ConcurrentHashMap<>();
-    protected final ConcurrentMap<Member, MockCommunications> peers       = new ConcurrentHashMap<>();
+    protected final ConcurrentMap<Participant, MockCommunications> peers       = new ConcurrentHashMap<>();
     protected final ScheduledExecutorService                  scheduler;
 
     private Protocol protocol;
 
-    public MockCommunications(Member address, ScheduledExecutorService scheduler) {
+    public MockCommunications(Participant address, ScheduledExecutorService scheduler) {
         this.address = address;
         this.scheduler = scheduler;
     }
@@ -58,7 +58,7 @@ public class MockCommunications<Protocol extends AbstractProtocol<?, ?>> impleme
     }
 
     @Override
-    public Member address() {
+    public Participant address() {
         return address;
     }
 
@@ -90,7 +90,7 @@ public class MockCommunications<Protocol extends AbstractProtocol<?, ?>> impleme
     }
 
     @Override
-    public Set<Member> getPopulation() {
+    public Set<Participant> getPopulation() {
         return peers.keySet();
     }
 
@@ -99,7 +99,7 @@ public class MockCommunications<Protocol extends AbstractProtocol<?, ?>> impleme
     }
 
     @Override
-    public <T> Communications query(Supplier<T> message, Collection<Member> to, UUID sink) {
+    public <T> Communications query(Supplier<T> message, Collection<Participant> to, UUID sink) {
         scheduler.execute(() -> {
             try {
                 to.stream().map(peer -> peers.get(peer)).filter(c -> c != null).forEach(coms -> {

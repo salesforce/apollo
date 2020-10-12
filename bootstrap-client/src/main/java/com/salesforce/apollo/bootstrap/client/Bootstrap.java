@@ -34,35 +34,23 @@ import org.slf4j.LoggerFactory;
  */
 public class Bootstrap {
     public static class MintRequest {
-        private int avalanchePort;
-        private int firefliesPort;
-        private int ghostPort;
         private String hostname;
         private String publicKey;
         private String signature;
+        private int    grpcPort;
 
-        public MintRequest() {}
+        public MintRequest() {
+        }
 
-        public MintRequest(String hostname, int firefliesPort, int ghostPort, int avalanchePort, String publicKey,
-                String signature) {
+        public MintRequest(String hostname, int grpcPort, String publicKey, String signature) {
             this.hostname = hostname;
-            this.firefliesPort = firefliesPort;
-            this.ghostPort = ghostPort;
-            this.avalanchePort = avalanchePort;
+            this.grpcPort = grpcPort;
             this.publicKey = publicKey;
             this.signature = signature;
         }
 
-        public int getAvalanchePort() {
-            return avalanchePort;
-        }
-
-        public int getFirefliesPort() {
-            return firefliesPort;
-        }
-
-        public int getGhostPort() {
-            return ghostPort;
+        public int getGrpcPort() {
+            return grpcPort;
         }
 
         public String getHostname() {
@@ -79,18 +67,18 @@ public class Bootstrap {
 
         @Override
         public String toString() {
-            return "MintRequest [hostname=" + hostname + ", avalanchePort=" + avalanchePort + ", firefliesPort="
-                    + firefliesPort + ", ghostPort=" + ghostPort + "]";
+            return "MintRequest [hostname=" + hostname + ", grpcPort=" + grpcPort + "]";
         }
 
     }
 
     public static class MintResult {
-        private String encodedCA;
-        private String encodedIdentity;
+        private String       encodedCA;
+        private String       encodedIdentity;
         private List<String> encodedSeeds;
 
-        public MintResult() {};
+        public MintResult() {
+        };
 
         public MintResult(String encodedCA, String encodedIdentity, List<String> encodedSeeds) {
             this.encodedCA = encodedCA;
@@ -114,27 +102,24 @@ public class Bootstrap {
     private static final Decoder DECODER = Base64.getUrlDecoder();
 
     private static final Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
-    private static final Logger log = LoggerFactory.getLogger(Bootstrap.class);
+    private static final Logger  log     = LoggerFactory.getLogger(Bootstrap.class);
 
-    private final X509Certificate ca;
-    private final X509Certificate identity;
+    private final X509Certificate       ca;
+    private final X509Certificate       identity;
     private final List<X509Certificate> seeds;
 
-    public Bootstrap(WebTarget targetEndpoint, PublicKey publicKey, Signature s, String hostName, int firefliesPort,
-            int ghostPort,
-            int avalanchePort, long checkPeriod, int retries) {
+    public Bootstrap(WebTarget targetEndpoint, PublicKey publicKey, Signature s, String hostName, int grpcPort,
+            long checkPeriod, int retries) {
 
-        MintRequest request = new MintRequest(hostName, firefliesPort, ghostPort, avalanchePort,
-                                              ENCODER.encodeToString(publicKey.getEncoded()),
-                                              ENCODER.encodeToString(sign(publicKey, s)));
+        MintRequest request = new MintRequest(hostName, grpcPort, ENCODER.encodeToString(publicKey.getEncoded()),
+                ENCODER.encodeToString(sign(publicKey, s)));
         log.info("Request: {}", request);
 
         Response response = null;
         int retry = retries;
         do {
             try {
-                response = targetEndpoint.request(MediaType.APPLICATION_JSON)
-                                         .post(Entity.json(request));
+                response = targetEndpoint.request(MediaType.APPLICATION_JSON).post(Entity.json(request));
                 break;
             } catch (Throwable e) {
                 retry--;
@@ -142,16 +127,16 @@ public class Bootstrap {
                          checkPeriod, retry, e.toString());
                 try {
                     Thread.sleep(checkPeriod);
-                } catch (InterruptedException e1) {}
+                } catch (InterruptedException e1) {
+                }
             }
         } while (retry != 0);
         if (response == null) {
-            throw new IllegalStateException("Unable to acquire bootstrap certificate from : "
-                    + targetEndpoint.getUri());
+            throw new IllegalStateException(
+                    "Unable to acquire bootstrap certificate from : " + targetEndpoint.getUri());
         }
         if (response.getStatus() != Status.OK.getStatusCode()) {
-            throw new IllegalStateException("Invalid response from server when minting: " +
-                    response.getStatusInfo());
+            throw new IllegalStateException("Invalid response from server when minting: " + response.getStatusInfo());
         }
         MintResult result = response.readEntity(MintResult.class);
 
@@ -162,19 +147,21 @@ public class Bootstrap {
             throw new IllegalStateException("Cannot load X.509 certificate factory", e);
         }
         try {
-            ca = (X509Certificate)cf.generateCertificate(new ByteArrayInputStream(DECODER.decode(result.getEncodedCA())));
+            ca = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(
+                    DECODER.decode(result.getEncodedCA())));
         } catch (CertificateException e) {
             throw new IllegalStateException("Cannot decode CA certificate", e);
         }
         try {
-            identity = (X509Certificate)cf.generateCertificate(new ByteArrayInputStream(DECODER.decode(result.getEncodedIdentity())));
+            identity = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(
+                    DECODER.decode(result.getEncodedIdentity())));
         } catch (CertificateException e) {
             throw new IllegalStateException("Cannot decode Identity certificate", e);
         }
 
         seeds = result.getEncodedSeeds().stream().map(encoded -> {
             try {
-                return (X509Certificate)cf.generateCertificate(new ByteArrayInputStream(DECODER.decode(encoded)));
+                return (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(DECODER.decode(encoded)));
             } catch (CertificateException e) {
                 throw new IllegalStateException("Cannot transform cert: " + e);
             }
