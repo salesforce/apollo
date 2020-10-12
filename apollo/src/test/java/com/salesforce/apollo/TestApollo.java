@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.time.Duration;
@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -106,13 +106,13 @@ public class TestApollo {
             }
         });
 
-        assertTrue("Did not stabilize the view", Utils.waitForCondition(15_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return oracles.stream()
                           .map(o -> o.getView())
                           .map(view -> view.getLive().size() != oracles.size() ? view : null)
                           .filter(view -> view != null)
                           .count() == 0;
-        }));
+        }), "Did not stabilize the view");
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
@@ -132,8 +132,8 @@ public class TestApollo {
         List<Transactioneer> transactioneers = new ArrayList<>();
         HashKey k = genesisKey;
         for (Apollo o : oracles) {
-            assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
-                       Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)));
+            assertTrue(Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)),
+                       "Failed to finalize genesis on: " + o.getAvalanche().getNode().getId());
             transactioneers.add(new Transactioneer(o.getAvalanche()));
         }
 
@@ -160,7 +160,7 @@ public class TestApollo {
         System.out.println(master.getDag().getWanted().stream().collect(Collectors.toList()));
         System.out.println();
         System.out.println();
-        assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
+        assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
         transactioneers.forEach(t -> {
             System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
         });

@@ -7,8 +7,8 @@
 
 package com.salesforce.apollo;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.net.URL;
@@ -22,7 +22,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.bootstrap.BootstrapCA;
@@ -32,10 +33,12 @@ import com.salesforce.apollo.protocols.Utils;
 
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit5.DropwizardAppExtension;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 
 /**
  * @author hhildebrand
  */
+@ExtendWith(DropwizardExtensionsSupport.class)
 public class BoostrapTest {
 
     private static DropwizardAppExtension<BootstrapConfiguration> EXT = new DropwizardAppExtension<BootstrapConfiguration>(
@@ -73,13 +76,13 @@ public class BoostrapTest {
             }
         });
 
-        assertTrue("Did not stabilize the view", Utils.waitForCondition(15_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return oracles.stream()
                           .map(o -> o.getView())
                           .map(view -> view.getLive().size() != oracles.size() ? view : null)
                           .filter(view -> view != null)
                           .count() == 0;
-        }));
+        }), "Did not stabilize the view");
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
@@ -99,8 +102,8 @@ public class BoostrapTest {
         List<Transactioneer> transactioneers = new ArrayList<>();
         HashKey key = genesisKey;
         for (Apollo o : oracles) {
-            assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
-                       Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(key)));
+            assertTrue(Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(key)),
+                       "Failed to finalize genesis on: " + o.getAvalanche().getNode().getId());
             transactioneers.add(new Transactioneer(o.getAvalanche()));
         }
 
@@ -127,7 +130,7 @@ public class BoostrapTest {
         System.out.println(master.getDag().getWanted().stream().collect(Collectors.toList()));
         System.out.println();
         System.out.println();
-        assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);
+        assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
         transactioneers.forEach(t -> {
             System.out.println("failed to finalize " + t.getFailed() + " for " + t.getId());
         });

@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.web;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -23,8 +23,9 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import org.junit.After;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import com.salesforce.apollo.Apollo;
 import com.salesforce.apollo.ApolloConfiguration;
@@ -38,10 +39,12 @@ import com.salesforce.apollo.web.resources.GenesisBlockApi.Result;
 
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit5.DropwizardAppExtension;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 
 /**
  * @author hhildebrand
  */
+@ExtendWith(DropwizardExtensionsSupport.class)
 public class ApolloServiceTest {
 
     private static File baseDir;
@@ -52,7 +55,7 @@ public class ApolloServiceTest {
         ApolloConfiguration.SimCommunicationsFactory.reset();
     }
 
-    @BeforeClass
+    @BeforeAll
     public static void before() {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
@@ -97,7 +100,7 @@ public class ApolloServiceTest {
                           .filter(view -> view != null)
                           .count() == 0;
         });
-        assertTrue("View did not stabilize", stabilized);
+        assertTrue(stabilized, "View did not stabilize");
         System.out.println("View stabilized across " + (oracles.size() + 1) + " members in "
                 + (System.currentTimeMillis() - then) + " millis");
 
@@ -109,7 +112,7 @@ public class ApolloServiceTest {
         assertEquals(200, response.getStatus());
         Result genesisResult = response.readEntity(Result.class);
         assertNotNull(genesisResult);
-        assertFalse(genesisResult.errorMessage, genesisResult.error);
+        assertFalse(genesisResult.error, genesisResult.errorMessage);
 
         response = client.target(String.format("http://localhost:%d/api/byteTransaction/submit", EXT.getLocalPort()))
                          .request(MediaType.APPLICATION_JSON)
@@ -118,7 +121,7 @@ public class ApolloServiceTest {
         assertEquals(200, response.getStatus());
         TransactionResult result = response.readEntity(TransactionResult.class);
         assertNotNull(result);
-        assertFalse(result.errorMessage, result.error);
+        assertFalse(result.error, result.errorMessage);
 
         response = client.target(String.format("http://localhost:%d/api/dag/fetch", EXT.getLocalPort()))
                          .request()
