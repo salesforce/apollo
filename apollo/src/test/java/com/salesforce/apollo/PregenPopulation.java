@@ -30,7 +30,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
-import com.salesforce.apollo.membership.Member;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.CsrWithPrivateKey;
@@ -44,14 +43,14 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class PregenPopulation {
 
-    public static final File caDir = new File("src/test/resources/ca");
+    public static final File   caDir          = new File("src/test/resources/ca");
     public static final String caKeystoreFile = "ca.p12";
-    public static final int cardinality = 9;
-    public static final File memberDir = new File("src/test/resources/members");
+    public static final int    cardinality    = 9;
+    public static final File   memberDir      = new File("src/test/resources/members");
 
-    private static final String crlUri = null;
-    private static final double faultTolerance = 0.01;
-    private static final String MEMBER_P12_TEMPLATE = "member-%s.p12";
+    private static final String crlUri               = null;
+    private static final double faultTolerance       = 0.01;
+    private static final String MEMBER_P12_TEMPLATE  = "member-%s.p12";
     private static final double probabilityByzantine = .25;
 
     public static int getCardinality() {
@@ -83,18 +82,14 @@ public class PregenPopulation {
         String host = "localhost";
         for (int i = 1; i <= cardinality; i++) {
             int ffPort = startPort--;
-            int gPort = startPort--;
-            int aPort = startPort--;
             CsrWithPrivateKey request = createCsr().generateRequest(dn().setCn(host)
-                                                                        .setL(String.format(Member.PORT_TEMPLATE,
-                                                                                            ffPort, gPort, aPort))
+                                                                        .setL(Integer.toString(ffPort))
                                                                         .setO("World Company")
                                                                         .setOu("IT dep")
                                                                         .setSt("CA")
                                                                         .setC("US")
                                                                         .build());
-            CertificateWithPrivateKey cert = ca.mintNode(request)
-                                               .attachPrivateKey(request.getPrivateKey());
+            CertificateWithPrivateKey cert = ca.mintNode(request).attachPrivateKey(request.getPrivateKey());
             memberCerts.add(cert);
             KeyStore keyStore = KeyStore.getInstance(ApolloConfiguration.DEFAULT_TYPE);
             keyStore.load(null, null);

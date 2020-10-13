@@ -13,7 +13,6 @@ import java.io.File;
 
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
 import com.salesforce.apollo.membership.CertWithKey;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Util;
 
 import io.github.olivierlemasle.ca.CA;
@@ -29,15 +28,15 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class PregenPopulation {
 
-    private static final String alias = "foo";
-    private static final File caDir = new File("src/test/resources/ca");
-    private static final String caKeystoreFile = "ca.p12";
-    private static final int cardinality = 100;
-    private static final String crlUri = null;
-    private static final double faultTolerance = 0.01;
-    private static final char[] keystorePassword = "".toCharArray();
-    private static final String MEMBER_P12_TEMPLATE = "member-%s.p12";
-    private static final File memberDir = new File("src/test/resources/members");
+    private static final String alias                = "foo";
+    private static final File   caDir                = new File("src/test/resources/ca");
+    private static final String caKeystoreFile       = "ca.p12";
+    private static final int    cardinality          = 100;
+    private static final String crlUri               = null;
+    private static final double faultTolerance       = 0.01;
+    private static final char[] keystorePassword     = "".toCharArray();
+    private static final String MEMBER_P12_TEMPLATE  = "member-%s.p12";
+    private static final File   memberDir            = new File("src/test/resources/members");
     private static final double probabilityByzantine = .25;
 
     public static RootCertificate getCa() {
@@ -68,11 +67,8 @@ public class PregenPopulation {
         String host = "localhost";
         for (int i = 1; i <= cardinality; i++) {
             int ffPort = startPort--;
-            int gPort = startPort--;
-            int aPort = startPort--;
             CsrWithPrivateKey request = createCsr().generateRequest(dn().setCn(host)
-                                                                        .setL(String.format(Member.PORT_TEMPLATE,
-                                                                                            ffPort, gPort, aPort))
+                                                                        .setL(Integer.toString(ffPort))
                                                                         .setO("World Company")
                                                                         .setOu("IT dep")
                                                                         .setSt("CA")
