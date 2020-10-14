@@ -32,11 +32,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -262,7 +260,7 @@ public class View {
                 }
             }
 
-            dispatcher.execute(() -> roundListeners.parallelStream().forEach(l -> {
+            ForkJoinPool.commonPool().execute(() -> roundListeners.parallelStream().forEach(l -> {
                 try {
                     l.run();
                 } catch (Throwable e) {
@@ -502,11 +500,6 @@ public class View {
     private final int diameter;
 
     /**
-     * Single threaded event dispatcher
-     */
-    private final ExecutorService dispatcher;
-
-    /**
      * Membership listeners
      */
     private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
@@ -571,14 +564,6 @@ public class View {
         this.scheduler = scheduler;
         diameter = diameter(getParameters());
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
-        dispatcher = Executors.newSingleThreadExecutor(new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-                Thread daemon = new Thread(r, "Event dispatcher " + node);
-                daemon.setDaemon(true);
-                return daemon;
-            }
-        });
         this.messageBuffer = new MessageBuffer(getParameters().bufferSize,
                 getParameters().toleranceLevel * diameter + 1);
         context = new Context<>(HashKey.ORIGIN, getParameters().rings);
@@ -966,7 +951,7 @@ public class View {
     void gc(Participant member) {
         context.offline(member);
         member.setFailed(true);
-        dispatcher.execute(() -> membershipListeners.parallelStream().forEach(l -> {
+        ForkJoinPool.commonPool().execute(() -> membershipListeners.parallelStream().forEach(l -> {
             try {
                 l.fail(member);
             } catch (Throwable e) {
@@ -1332,7 +1317,7 @@ public class View {
         }).filter(m -> m != null).forEach(msg -> {
             newMessages.computeIfAbsent(msg.channel, i -> new ArrayList<>()).add(msg);
         });
-        newMessages.entrySet().forEach(e -> dispatcher.execute(() -> {
+        newMessages.entrySet().forEach(e -> ForkJoinPool.commonPool().execute(() -> {
             MessageChannelHandler handler = channelHandlers.get(e.getKey());
             if (handler != null) {
                 handler.message(e.getValue());
@@ -1350,7 +1335,7 @@ public class View {
             context.activate(member);
             member.setFailed(false);
             log.info("Recovering: {}", member.getId());
-            dispatcher.execute(() -> membershipListeners.parallelStream().forEach(l -> {
+            ForkJoinPool.commonPool().execute(() -> membershipListeners.parallelStream().forEach(l -> {
                 try {
                     l.recover(member);
                 } catch (Throwable e) {
