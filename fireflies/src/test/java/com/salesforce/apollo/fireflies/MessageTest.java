@@ -35,6 +35,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.MetricRegistry;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.View.MembershipListener;
@@ -116,19 +117,16 @@ public class MessageTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
-                                                   cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
-    private LocalCommSimm communications;
+    private final List<Communications> communications = new ArrayList<>();
 
     private final AtomicInteger totalReceived = new AtomicInteger(0);
 
     @AfterEach
     public void after() {
-        if (communications != null) {
-            communications.close();
-        }
+        communications.forEach(e -> e.close());
     }
 
     @Test
@@ -143,7 +141,6 @@ public class MessageTest {
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
-        communications = new LocalCommSimm(ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics));
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -154,9 +151,11 @@ public class MessageTest {
         }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        List<View> views = members.stream()
-                                  .map(node -> new View(node, communications, scheduler, metrics))
-                                  .collect(Collectors.toList());
+        List<View> views = members.stream().map(node -> {
+            Communications comms = new LocalCommSimm(
+                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics), node.getId());
+            return new View(node, comms, scheduler, metrics);
+        }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
         views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds));

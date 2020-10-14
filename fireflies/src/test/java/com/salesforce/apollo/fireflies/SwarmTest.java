@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.CertWithKey;
@@ -60,7 +61,7 @@ public class SwarmTest {
 
     private List<Node>            members;
     private List<View>            views;
-    private LocalCommSimm         communications;
+    private List<Communications>  communications = new ArrayList<>();
     private List<X509Certificate> seeds;
     private MetricRegistry        registry;
     private MetricRegistry        node0Registry;
@@ -69,8 +70,11 @@ public class SwarmTest {
     public void after() {
         if (views != null) {
             views.forEach(v -> v.getService().stop());
+            views.clear();
         }
-        communications.close();
+
+        communications.forEach(e -> e.close());
+        communications.clear();
     }
 
     @Test
@@ -203,8 +207,6 @@ public class SwarmTest {
                        .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
                        .map(cert -> new Node(cert, parameters))
                        .collect(Collectors.toList());
-        communications = new LocalCommSimm(
-                ServerConnectionCache.newBuilder().setTarget(2).setMetrics(new FireflyMetricsImpl(node0Registry)));
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -216,9 +218,13 @@ public class SwarmTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
         AtomicBoolean frist = new AtomicBoolean(true);
-        views = members.stream()
-                       .map(node -> new View(node, communications, scheduler,
-                               new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)))
-                       .collect(Collectors.toList());
+        views = members.stream().map(node -> {
+            FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
+                    frist.getAndSet(false) ? node0Registry : registry);
+            Communications comms = new LocalCommSimm(
+                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl), node.getId());
+            communications.add(comms);
+            return new View(node, comms, scheduler, fireflyMetricsImpl);
+        }).collect(Collectors.toList());
     }
 }

@@ -25,6 +25,7 @@ import com.salesforce.apollo.comm.MtlsCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -33,7 +34,7 @@ import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 public class ApolloConfiguration {
     public interface CommunicationsFactory {
 
-        Communications getComms(MetricRegistry metrics);
+        Communications getComms(MetricRegistry metrics, HashKey id);
 
     }
 
@@ -78,7 +79,7 @@ public class ApolloConfiguration {
         public int target = 30;
 
         @Override
-        public Communications getComms(MetricRegistry metrics) {
+        public Communications getComms(MetricRegistry metrics, HashKey id) {
             EndpointProvider ep = null;
             return new MtlsCommunications(
                     ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
@@ -89,29 +90,13 @@ public class ApolloConfiguration {
 
     public static class SimCommunicationsFactory implements CommunicationsFactory {
 
-        public static LocalCommSimm LOCAL_COM;
-
-        static {
-            reset();
-        }
-
-        public static void reset() {
-            if (LOCAL_COM != null) {
-                LOCAL_COM.close();
-                LOCAL_COM = null;
-            }
-        }
-
         public int target = 30;
 
         @Override
-        public Communications getComms(MetricRegistry metrics) {
-            if (LOCAL_COM == null) {
-                LOCAL_COM = new LocalCommSimm(ServerConnectionCache.newBuilder()
-                                                                   .setTarget(target)
-                                                                   .setMetrics(new FireflyMetricsImpl(metrics)));
-            }
-            return LOCAL_COM;
+        public Communications getComms(MetricRegistry metrics, HashKey id) {
+            return new LocalCommSimm(
+                    ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
+                    id);
         }
 
     }

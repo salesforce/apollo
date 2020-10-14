@@ -1243,6 +1243,7 @@ public class View {
             .filter(m -> m.getId().equals(from))
             .filter(m -> !bff.contains(new HashKey(m.getCertificateHash())))
             .map(m -> m.getEncodedCertificate())
+            .filter(cert -> cert != null)
             .forEach(cert -> builder.addUpdates(cert));
         builder.setBff(getCertificatesBff(seed, p).toBff());
         CertificateGossip gossip = builder.build();

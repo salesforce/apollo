@@ -11,9 +11,8 @@ import static com.salesforce.apollo.comm.grpc.MtlsServer.getMemberId;
 import java.io.IOException;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
@@ -40,6 +39,7 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 public class LocalCommSimm implements Communications {
+    private static final Logger logger = LoggerFactory.getLogger(LocalCommSimm.class);
 
     public static class LocalServerConnectionFactory implements ServerConnectionFactory {
 
@@ -58,18 +58,6 @@ public class LocalCommSimm implements Communications {
                                           .directExecutor()
                                           .intercept(clientInterceptor)
                                           .build();
-        }
-    }
-
-    private static class ServerWrapper {
-        private final MutableHandlerRegistry registry;
-        private final Server                 server;
-        private final ServerConnectionCache  cache;
-
-        public ServerWrapper(MutableHandlerRegistry registry, Server server, ServerConnectionCache cache) {
-            this.registry = registry;
-            this.server = server;
-            this.cache = cache;
         }
     }
 
@@ -95,42 +83,39 @@ public class LocalCommSimm implements Communications {
     public static ThreadLocal<X509Certificate> callCertificate = new ThreadLocal<>();
     public static final ThreadIdentity         LOCAL_IDENTITY  = new ThreadIdentity();
 
-    private final ServerConnectionCacheBuilder builder;
-    private final ServerConnectionFactory      factory = new LocalServerConnectionFactory();
-    private final Map<HashKey, ServerWrapper>  servers = new ConcurrentHashMap<>();
+    private final ServerConnectionFactory factory  = new LocalServerConnectionFactory();
+    private final MutableHandlerRegistry  registry = new MutableHandlerRegistry();
+    private final Server                  server;
+    private final ServerConnectionCache   cache;
+    private final HashKey                 id;
 
-    public LocalCommSimm(ServerConnectionCacheBuilder builder) {
-        this.builder = builder;
+    public LocalCommSimm(ServerConnectionCacheBuilder builder, HashKey id) {
+        this.id = id;
+        cache = builder.setFactory(factory).build();
+        server = InProcessServerBuilder.forName(id.b64Encoded())
+                                       .directExecutor() // directExecutor is fine for unit tests
+                                       .fallbackHandlerRegistry(registry)
+                                       .build();
+        try {
+            server.start();
+        } catch (IOException e) {
+            logger.error("Cannot start in process server for: " + id, e);
+        }
+        logger.info("Starting server for: " + id);
     }
 
     @Override
     public void close() {
-        servers.values().forEach(e -> {
-            e.server.shutdownNow();
-        });
+        server.shutdownNow();
     }
 
     @Override
     public <T> CommonCommunications<T> create(Member member, CreateClientCommunications<T> createFunction,
                                               BindableService service) {
-        ServerWrapper wrapper = servers.computeIfAbsent(member.getId(), id -> {
-            Server s;
-            MutableHandlerRegistry registry = new MutableHandlerRegistry();
-            try {
-                s = InProcessServerBuilder.forName(member.getId().b64Encoded())
-                                          .directExecutor() // directExecutor is fine for unit tests
-                                          .fallbackHandlerRegistry(registry)
-                                          .build()
-                                          .start();
-            } catch (IOException e) {
-                throw new IllegalStateException("Unable to start in process server for " + id, e);
-            }
-            LoggerFactory.getLogger(LocalCommSimm.class).info("Starting server for: " + member.getId());
-            return new ServerWrapper(registry, s, builder.setFactory(factory).build());
-        });
-        wrapper.registry.addService(service);
-        LoggerFactory.getLogger(LocalCommSimm.class).info("Communications created for: " + member.getId());
-        return new CommonCommunications<T>(wrapper.cache, createFunction);
+
+        registry.addService(service);
+        logger.info("Communications created for: " + member.getId());
+        return new CommonCommunications<T>(cache, createFunction);
     }
 
     @Override
@@ -140,15 +125,12 @@ public class LocalCommSimm implements Communications {
 
     @Override
     public void start() {
-        servers.entrySet().forEach(entry -> {
-            try {
-                Server server = entry.getValue().server;
-                if (server.isShutdown() || server.isTerminated()) {
-                    server.start();
-                }
-            } catch (IOException ex) {
-                LoggerFactory.getLogger(LocalCommSimm.class).info("Server start failed for: ", entry.getKey());
+        try {
+            if (server.isShutdown() || server.isTerminated()) {
+                server.start();
             }
-        });
+        } catch (IOException ex) {
+            logger.info("Server start failed for: " + id);
+        }
     }
 }

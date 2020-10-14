@@ -28,12 +28,8 @@ import com.salesforce.apollo.protocols.Utils;
  */
 public class E2ETest {
 
-	static {
-		ApolloConfiguration.SimCommunicationsFactory.reset();
-	}
-	
     class StreamGobbler implements Runnable {
-        private InputStream inputStream;
+        private InputStream      inputStream;
         private Consumer<String> consumeInputLine;
 
         public StreamGobbler(InputStream inputStream, Consumer<String> consumeInputLine) {
@@ -64,7 +60,8 @@ public class E2ETest {
         baseDir.mkdirs();
         String java = System.getProperty("java.home") + "/bin/java";
         ProcessBuilder builder = new ProcessBuilder();
-        builder.command(java, "--illegal-access=permit", "-jar", "target/apollo-web.jar", "server", "target/test-classes/server.yml");
+        builder.command(java, "--illegal-access=permit", "-jar", "target/apollo-web.jar", "server",
+                        "target/test-classes/server.yml");
         process = builder.start();
         StreamGobbler outputGobbler = new StreamGobbler(process.getInputStream(), string -> {
             try {
@@ -86,15 +83,15 @@ public class E2ETest {
         thread.start();
         thread = new Thread(errorGobbler);
         thread.setDaemon(true);
-        thread.start(); 
+        thread.start();
     }
 
     @Test
     public void e2eTest() throws Exception {
-        
+
         Thread.sleep(5_000);
         process.destroyForcibly();
-        
+
         assertEquals(137, process.waitFor());
     }
 }

@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
@@ -61,21 +62,22 @@ public class DagTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()),
-                                                   cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
-    private List<Node>               members;
-    private ScheduledExecutorService scheduler;
-    private List<X509Certificate>    seeds;
-    private List<View>               views;
-    private Random                   entropy;
-    private LocalCommSimm            comms;
+    private List<Node>                 members;
+    private ScheduledExecutorService   scheduler;
+    private List<X509Certificate>      seeds;
+    private List<View>                 views;
+    private Random                     entropy;
+    private final List<Communications> comms = new ArrayList<>();
 
     @AfterEach
     public void after() {
         views.forEach(e -> e.getService().stop());
-        comms.close();
+        views.clear();
+        comms.forEach(e -> e.close());
+        comms.clear();
     }
 
     @BeforeEach
@@ -84,7 +86,6 @@ public class DagTest {
 
         seeds = new ArrayList<>();
         members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        comms = new LocalCommSimm(ServerConnectionCache.newBuilder());
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
@@ -94,11 +95,15 @@ public class DagTest {
             }
         }
 
-        System.out.println("Seeds: "
-                + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
+        System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(members.size() * 3);
 
-        views = members.stream().map(node -> new View(node, comms, scheduler)).collect(Collectors.toList());
+        views = members.stream().map(node -> {
+            Communications comm = new LocalCommSimm(ServerConnectionCache.newBuilder(), node.getId());
+            comms.add(comm);
+            View view = new View(node, comm, scheduler);
+            return view;
+        }).collect(Collectors.toList());
     }
 
     @Test
@@ -120,8 +125,11 @@ public class DagTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + testViews.size() + " members");
 
+        Iterator<Communications> communicatons = comms.iterator();
+
         List<Ghost> ghosties = testViews.stream()
-                                        .map(view -> new Ghost(new GhostParameters(), comms, view, new MemoryStore()))
+                                        .map(view -> new Ghost(new GhostParameters(), communicatons.next(), view,
+                                                new MemoryStore()))
                                         .collect(Collectors.toList());
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
@@ -164,7 +172,7 @@ public class DagTest {
         for (int i = 0; i < add; i++) {
             View view = views.get(i + start);
             testViews.add(view);
-            ghosties.add(new Ghost(new GhostParameters(), comms, view, new MemoryStore()));
+            ghosties.add(new Ghost(new GhostParameters(), communicatons.next(), view, new MemoryStore()));
         }
 
         then = System.currentTimeMillis();

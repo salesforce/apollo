@@ -22,6 +22,8 @@ import com.salesforce.apollo.avalanche.AvaMetrics;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 /**
@@ -61,10 +63,11 @@ public class Apollo {
 
     public Apollo(ApolloConfiguration c, MetricRegistry metrics) throws SocketException, KeyStoreException {
         configuration = c;
-        communications = c.communications.getComms(metrics);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(configuration.threadPool);
         IdentitySource identitySource = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
                                                                    ApolloConfiguration.DEFAULT_IDENTITY_ALIAS);
+        HashKey id = Member.getMemberId(identitySource.identity().getCertificate());
+        communications = c.communications.getComms(metrics, id);
         view = identitySource.createView(communications, scheduler);
         seeds = identitySource.seeds();
         avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics));
