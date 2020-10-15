@@ -240,7 +240,7 @@ public class Avalanche {
         return service;
     }
 
-    public void start() {
+    public void start(ScheduledExecutorService timer) {
         if (!running.compareAndSet(false, true)) {
             return;
         }
@@ -258,8 +258,7 @@ public class Avalanche {
         queryThread.setDaemon(true);
 
         queryThread.start();
-
-        ScheduledExecutorService timer = Executors.newScheduledThreadPool(1);
+ 
         scheduledNoOpsCull = timer.scheduleWithFixedDelay(() -> dag.purgeNoOps(), parameters.noOpGenerationCullMillis,
                                                           parameters.noOpGenerationCullMillis, TimeUnit.MILLISECONDS);
     }

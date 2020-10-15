@@ -7,6 +7,7 @@
 package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.communications.FfClientCommunications.getCreate;
+import static java.util.concurrent.ForkJoinPool.commonPool;
 
 import java.io.ByteArrayInputStream;
 import java.security.InvalidKeyException;
@@ -32,7 +33,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -222,6 +222,9 @@ public class View {
          * 2 * tolerance + 1 gossip rounds across all rings.
          */
         public void gossip() {
+            if (!started.get()) {
+                return;
+            }
             FfClientCommunications link = nextRing();
 
             if (link == null) {
@@ -259,14 +262,6 @@ public class View {
                     log.trace("Successful redirect round of gossip with {}, ring {}", link.getMember(), lastRing);
                 }
             }
-
-            ForkJoinPool.commonPool().execute(() -> roundListeners.parallelStream().forEach(l -> {
-                try {
-                    l.run();
-                } catch (Throwable e) {
-                    log.error("error sending round() to listener: " + l, e);
-                }
-            }));
         }
 
         public boolean isStarted() {
@@ -279,6 +274,9 @@ public class View {
          * rings of this view.
          */
         public void monitor() {
+            if (!started.get()) {
+                return;
+            }
             int ring = lastRing;
             if (ring < 0) {
                 return;
@@ -354,7 +352,7 @@ public class View {
                          .build();
         }
 
-        public void start(Duration d, List<X509Certificate> seeds) {
+        public void start(Duration d, List<X509Certificate> seeds, ScheduledExecutorService scheduler) {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
@@ -538,11 +536,6 @@ public class View {
     private final ConcurrentSkipListSet<FutureRebutal> scheduledRebutals = new ConcurrentSkipListSet<>();
 
     /**
-     * Scheduler for the view
-     */
-    private final ScheduledExecutorService scheduler;
-
-    /**
      * The gossip service
      */
     private final Service service = new Service();
@@ -552,16 +545,11 @@ public class View {
      */
     private final ConcurrentMap<HashKey, Participant> view = new ConcurrentHashMap<>();
 
-    public View(Node node, Communications communications, ScheduledExecutorService scheduler) {
-        this(node, communications, scheduler, null);
-    }
-
-    public View(Node node, Communications communications, ScheduledExecutorService scheduler, FireflyMetrics metrics) {
+    public View(Node node, Communications communications, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.node = node;
         this.comm = communications.create(node, getCreate(metrics), new FfServerCommunications(service,
                 communications.getClientIdentityProvider(), metrics));
-        this.scheduler = scheduler;
         diameter = diameter(getParameters());
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
         this.messageBuffer = new MessageBuffer(getParameters().bufferSize,
@@ -951,13 +939,15 @@ public class View {
     void gc(Participant member) {
         context.offline(member);
         member.setFailed(true);
-        ForkJoinPool.commonPool().execute(() -> membershipListeners.parallelStream().forEach(l -> {
-            try {
-                l.fail(member);
-            } catch (Throwable e) {
-                log.error("error sending fail to listener: " + l, e);
-            }
-        }));
+        membershipListeners.stream().forEach(l -> {
+            commonPool().execute(() -> {
+                try {
+                    l.fail(member);
+                } catch (Throwable e) {
+                    log.error("error sending fail to listener: " + l, e);
+                }
+            });
+        });
     }
 
     BloomFilter getAccusationsBff(int seed, double p) {
@@ -1189,6 +1179,16 @@ public class View {
                 timer.stop();
             }
         }
+
+        roundListeners.forEach(l -> {
+            commonPool().execute(() -> {
+                try {
+                    l.run();
+                } catch (Throwable e) {
+                    log.error("error sending round() to listener: " + l, e);
+                }
+            });
+        });
     }
 
     /**
@@ -1317,12 +1317,9 @@ public class View {
         }).filter(m -> m != null).forEach(msg -> {
             newMessages.computeIfAbsent(msg.channel, i -> new ArrayList<>()).add(msg);
         });
-        newMessages.entrySet().forEach(e -> ForkJoinPool.commonPool().execute(() -> {
-            MessageChannelHandler handler = channelHandlers.get(e.getKey());
-            if (handler != null) {
-                handler.message(e.getValue());
-            }
-        }));
+        channelHandlers.values()
+                       .forEach(handler -> commonPool().execute(() -> newMessages.entrySet()
+                                                                                 .forEach(e -> handler.message(e.getValue()))));
     }
 
     /**
@@ -1335,13 +1332,15 @@ public class View {
             context.activate(member);
             member.setFailed(false);
             log.info("Recovering: {}", member.getId());
-            ForkJoinPool.commonPool().execute(() -> membershipListeners.parallelStream().forEach(l -> {
-                try {
-                    l.recover(member);
-                } catch (Throwable e) {
-                    log.error("error recoving member in listener: " + l, e);
-                }
-            }));
+            membershipListeners.stream().forEach(l -> {
+                commonPool().execute(() -> {
+                    try {
+                        l.recover(member);
+                    } catch (Throwable e) {
+                        log.error("error recoving member in listener: " + l, e);
+                    }
+                });
+            });
         } else {
             log.trace("Already active: {}", member.getId());
         }

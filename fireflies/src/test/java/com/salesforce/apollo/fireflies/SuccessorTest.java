@@ -93,10 +93,10 @@ public class SuccessorTest {
         ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics);
         Map<Participant, View> views = members.stream()
                                               .map(node -> new View(node, new LocalCommSimm(builder, node.getId()),
-                                                      scheduler, metrics))
+                                                      metrics))
                                               .collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
-        views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds));
+        views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds, scheduler));
 
         try {
             Utils.waitForCondition(15_000, 1_000, () -> {

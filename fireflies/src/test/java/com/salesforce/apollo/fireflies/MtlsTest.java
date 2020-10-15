@@ -108,12 +108,12 @@ public class MtlsTest {
             builder.setMetrics(metrics);
             MtlsCommunications comms = new MtlsCommunications(builder, ep);
             communications.add(comms);
-            return new View(node, comms, scheduler, metrics);
+            return new View(node, comms, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
-        views.forEach(view -> view.getService().start(Duration.ofMillis(500), seeds));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(500), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream()
@@ -145,7 +145,7 @@ public class MtlsTest {
         views.forEach(view -> view.getService().stop());
 
         System.out.println("Restarting views");
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1000), seeds));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(1000), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(30_000, 100, () -> {
             return views.stream()

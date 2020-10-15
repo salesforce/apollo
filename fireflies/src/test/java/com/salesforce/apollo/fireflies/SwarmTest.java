@@ -82,6 +82,7 @@ public class SwarmTest {
         initialize();
 
         List<View> testViews = new ArrayList<>();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         for (int i = 0; i < 4; i++) {
             int start = testViews.size();
@@ -89,7 +90,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds));
+            testViews.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds, scheduler));
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
@@ -108,7 +109,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(10), seeds));
+            testViews.forEach(view -> view.getService().start(Duration.ofMillis(10), seeds, scheduler));
 
             boolean stabilized = Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
@@ -146,9 +147,10 @@ public class SwarmTest {
     @Test
     public void swarm() throws Exception {
         initialize();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
@@ -216,7 +218,6 @@ public class SwarmTest {
             }
         }
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
@@ -224,7 +225,7 @@ public class SwarmTest {
             Communications comms = new LocalCommSimm(
                     ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl), node.getId());
             communications.add(comms);
-            return new View(node, comms, scheduler, fireflyMetricsImpl);
+            return new View(node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

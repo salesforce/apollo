@@ -28,7 +28,6 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
@@ -83,7 +82,8 @@ public class LargeTest {
         initialize();
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(10_000), seeds));
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(100);
+        views.forEach(view -> view.getService().start(Duration.ofMillis(10_000), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(600_000, 10_000, () -> {
             return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
@@ -152,7 +152,6 @@ public class LargeTest {
             }
         }
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(100);
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
@@ -160,7 +159,7 @@ public class LargeTest {
             Communications comms = new LocalCommSimm(
                     ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl), node.getId());
             communications.add(comms);
-            return new View(node, comms, scheduler, fireflyMetricsImpl);
+            return new View(node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

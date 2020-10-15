@@ -154,11 +154,12 @@ public class MessageTest {
         List<View> views = members.stream().map(node -> {
             Communications comms = new LocalCommSimm(
                     ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics), node.getId());
-            return new View(node, comms, scheduler, metrics);
+            communications.add(comms);
+            return new View(node, comms, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds, scheduler));
 
         try {
             Utils.waitForCondition(15_000, 1_000, () -> {

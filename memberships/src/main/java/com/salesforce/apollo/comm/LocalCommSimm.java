@@ -107,6 +107,7 @@ public class LocalCommSimm implements Communications {
     @Override
     public void close() {
         server.shutdownNow();
+        cache.close();
     }
 
     @Override

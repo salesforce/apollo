@@ -94,17 +94,17 @@ public class GhostTest {
             }
         }
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         views = members.stream().map(node -> {
             Communications com = new LocalCommSimm(ServerConnectionCache.newBuilder(), node.getId());
             comms.add(com);
-            View view = new View(node, com, scheduler);
+            View view = new View(node, com, null);
             return view;
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(500), seeds));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(500), seeds, scheduler));
 
         Utils.waitForCondition(30_000, 3_000, () -> {
             return views.stream()
@@ -124,7 +124,7 @@ public class GhostTest {
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
                      ghosties.parallelStream()
-                             .map(g -> Utils.waitForCondition(5_000, () -> g.joined()))
+                             .map(g -> Utils.waitForCondition(150_000, () -> g.joined()))
                              .filter(e -> e)
                              .count(),
                      "Not all nodes joined the cluster");

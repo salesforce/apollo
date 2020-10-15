@@ -96,12 +96,12 @@ public class DagTest {
         }
 
         System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
-        scheduler = Executors.newScheduledThreadPool(members.size() * 3);
+        scheduler = Executors.newScheduledThreadPool(100);
 
         views = members.stream().map(node -> {
             Communications comm = new LocalCommSimm(ServerConnectionCache.newBuilder(), node.getId());
             comms.add(comm);
-            View view = new View(node, comm, scheduler);
+            View view = new View(node, comm, null);
             return view;
         }).collect(Collectors.toList());
     }
@@ -116,7 +116,7 @@ public class DagTest {
             testViews.add(views.get(i));
         }
 
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds));
+        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(30_000, 3_000, () -> {
             return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
@@ -134,7 +134,7 @@ public class DagTest {
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
                      ghosties.parallelStream()
-                             .map(g -> Utils.waitForCondition(30_000, () -> g.joined()))
+                             .map(g -> Utils.waitForCondition(60_000, () -> g.joined()))
                              .filter(e -> e)
                              .count(),
                      "Not all nodes joined the cluster");
@@ -176,7 +176,7 @@ public class DagTest {
         }
 
         then = System.currentTimeMillis();
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds));
+        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds, scheduler));
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
                      ghosties.parallelStream()
