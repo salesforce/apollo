@@ -24,7 +24,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ghost" level="INFO"
+    <logger name="com.salesforce.apollo.ghost" level="TRACE"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

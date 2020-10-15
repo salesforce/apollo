@@ -28,7 +28,6 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
@@ -76,7 +75,7 @@ public class GhostTest {
         comms.forEach(e -> e.close());
     }
 
-    @Test
+    // @Test
     public void smoke() throws Exception {
         Random entropy = new Random(0x666);
 

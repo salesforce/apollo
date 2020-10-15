@@ -32,7 +32,6 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
@@ -106,7 +105,7 @@ public class DagTest {
         }).collect(Collectors.toList());
     }
 
-    @Test
+    //@Test
     public void smoke() {
         long then = System.currentTimeMillis();
 
@@ -134,7 +133,7 @@ public class DagTest {
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
                      ghosties.parallelStream()
-                             .map(g -> Utils.waitForCondition(60_000, () -> g.joined()))
+                             .map(g -> Utils.waitForCondition(15_000, () -> g.joined()))
                              .filter(e -> e)
                              .count(),
                      "Not all nodes joined the cluster");
