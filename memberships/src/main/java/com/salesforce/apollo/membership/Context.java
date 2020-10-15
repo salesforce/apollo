@@ -295,7 +295,7 @@ public class Context<T extends Member> {
      *         number of active members.
      */
     public List<T> sample(int range, SecureRandom entropy, T excluded) {
-        return active.values().stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
+        return rings[entropy.nextInt(rings.length)].stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
     }
 
     /**

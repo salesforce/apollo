@@ -326,6 +326,10 @@ public class Ring<T extends Member> implements Iterable<T> {
         return ring.size();
     }
 
+    public Stream<T> stream() {
+        return ring.values().stream();
+    }
+
     /**
      * @param start
      * @param predicate
