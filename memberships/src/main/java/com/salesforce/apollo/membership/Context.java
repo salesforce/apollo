@@ -13,16 +13,19 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
+import java.util.function.BinaryOperator;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.stream.Collector;
 import java.util.stream.Stream;
 
 import com.salesforce.apollo.protocols.HashKey;
@@ -40,6 +43,7 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class Context<T extends Member> {
+
     public static class Counter {
         private Integer       current = 0;
         private List<Integer> indices;
@@ -57,6 +61,63 @@ public class Context<T extends Member> {
             current = current + 1;
             return accepted;
         }
+    }
+
+    private static class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
+
+        private int                c = 0;
+        private T                  exclude;
+        private final SecureRandom rand;
+        private final int          sz;
+
+        public ReservoirSampler(T exclude, int size, SecureRandom entropy) {
+            this.exclude = exclude;
+            this.sz = size;
+            rand = entropy;
+        }
+
+        @Override
+        public BiConsumer<List<T>, T> accumulator() {
+            return this::addIt;
+        }
+
+        @Override
+        public Set<java.util.stream.Collector.Characteristics> characteristics() {
+            return EnumSet.of(Collector.Characteristics.UNORDERED, Collector.Characteristics.IDENTITY_FINISH);
+        }
+
+        @Override
+        public BinaryOperator<List<T>> combiner() {
+            return (left, right) -> {
+                left.addAll(right);
+                return left;
+            };
+        }
+
+        @Override
+        public Function<List<T>, List<T>> finisher() {
+            return (i) -> i;
+        }
+
+        @Override
+        public Supplier<List<T>> supplier() {
+            return ArrayList::new;
+        }
+
+        private void addIt(final List<T> in, T s) {
+            if (exclude.equals(s)) {
+                return;
+            }
+            if (in.size() < sz) {
+                in.add(s);
+            } else {
+                int replaceInIndex = (int) (rand.nextDouble() * (sz + (c++) + 1));
+                if (replaceInIndex < sz) {
+                    in.set(replaceInIndex, s);
+                }
+            }
+        }
+
     }
 
     public static final ThreadLocal<MessageDigest> DIGEST_CACHE          = ThreadLocal.withInitial(() -> {
@@ -102,6 +163,13 @@ public class Context<T extends Member> {
 
     public void add(T m) {
         offline(m);
+    }
+
+    public void clear() {
+        for (Ring<T> ring : rings) {
+            ring.clear();
+        }
+        hashes.clear();
     }
 
     @Override
@@ -226,49 +294,8 @@ public class Context<T extends Member> {
      * @return a random sample set of the view's live members. May be limited by the
      *         number of active members.
      */
-    public Collection<T> sample(int range, SecureRandom entropy, Member excluded) {
- 
-        if (active.size() <= range) {
-            return active.values();
-        }
-        Set<Integer> indices = new HashSet<>(range);
-        while (indices.size() < range && indices.size() < active.size()) {
-            indices.add(entropy.nextInt(active.size()));
-        }
-        Set<T> sample = new HashSet<>(range);
-        Counter index = new Counter(indices);
-        for (Entry<HashKey, T> entry : active.entrySet()) {
-            if (index.accept()) {
-                // only add if not equals the excluded member
-                if (!entry.getValue().equals(excluded)) {
-                    sample.add(entry.getValue());
-                }
-            }
-            if (sample.size() == range) {
-                break;
-            }
-        }
-
-        // If the excluded was included in the sample, traverse a random ring in random order to fill remainging sample
-        if (sample.size() < range && range < active.size()) {
-            Ring<T> ring = rings[entropy.nextInt(rings.length)];
-            @SuppressWarnings("unchecked")
-            T typeCast = (T) excluded;
-            HashKey hash = hashFor(typeCast, ring.getIndex());
-            Predicate<T> predicate = m -> sample.size() < range;
-            Consumer<? super T> add = e -> {
-                if (entropy.nextBoolean()) {
-                    sample.add(e);
-                }
-            };
-            
-            if (entropy.nextBoolean()) {
-                ring.streamPredecessors(hash, predicate).forEach(add);
-            } else {
-                ring.streamSuccessors(hash, predicate).forEach(add);
-            }
-        }
-        return sample;
+    public List<T> sample(int range, SecureRandom entropy, T excluded) {
+        return active.values().stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
     }
 
     /**
@@ -312,12 +339,5 @@ public class Context<T extends Member> {
         md.reset();
         md.update(String.format(CONTEXT_HASH_TEMPLATE, ring).getBytes());
         return new HashKey(md.digest());
-    }
-
-    public void clear() {
-        for (Ring<T> ring : rings) {
-            ring.clear();
-        }
-        hashes.clear();
     }
 }

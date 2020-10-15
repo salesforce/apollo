@@ -665,7 +665,7 @@ public class View {
         roundListeners.add(callback);
     }
 
-    public Collection<? extends Member> sample(int range, SecureRandom entropy, Member excluded) {
+    public List<Participant> sample(int range, SecureRandom entropy, Participant excluded) {
         return context.sample(range, entropy, excluded);
     }
 
