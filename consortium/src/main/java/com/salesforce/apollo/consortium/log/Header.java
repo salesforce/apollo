@@ -13,11 +13,45 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class Header {
-    private long    blockNumber;
-    private long    lastReconfig;
-    private long    lastCheckpoint;
-    private byte[]  hashTransactions;
-    private byte[]  hashResults;
-    private HashKey lastBlock;
+    private final long    blockNumber;
+    private final byte[]  hashResults;
+    private final byte[]  hashTransactions;
+    private final HashKey lastBlock;
+    private final long    lastCheckpoint;
+    private final long    lastReconfig;
+
+    public Header(long blockNumber, long lastReconfig, long lastCheckpoint, byte[] hashTransactions, byte[] hashResults,
+            HashKey lastBlock) {
+        this.blockNumber = blockNumber;
+        this.lastReconfig = lastReconfig;
+        this.lastCheckpoint = lastCheckpoint;
+        this.hashTransactions = hashTransactions;
+        this.hashResults = hashResults;
+        this.lastBlock = lastBlock;
+    }
+
+    public long getBlockNumber() {
+        return blockNumber;
+    }
+
+    public byte[] getHashResults() {
+        return hashResults;
+    }
+
+    public byte[] getHashTransactions() {
+        return hashTransactions;
+    }
+
+    public HashKey getLastBlock() {
+        return lastBlock;
+    }
+
+    public long getLastCheckpoint() {
+        return lastCheckpoint;
+    }
+
+    public long getLastReconfig() {
+        return lastReconfig;
+    }
 
 }
