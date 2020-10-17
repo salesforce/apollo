@@ -18,6 +18,7 @@ import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.Query.Builder;
 import com.salesfoce.apollo.proto.QueryResult;
+import com.salesforce.apollo.avalanche.AvalancheMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.fireflies.Node;
@@ -32,20 +33,22 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class AvalancheClientCommunications implements Avalanche {
 
-    public static CreateClientCommunications<AvalancheClientCommunications> getCreate() {
-        return (t, f, c) -> new AvalancheClientCommunications(c, (Participant) t);
+    public static CreateClientCommunications<AvalancheClientCommunications> getCreate(AvalancheMetrics metrics) {
+        return (t, f, c) -> new AvalancheClientCommunications(c, (Participant) t, metrics);
 
     }
 
     private final ManagedServerConnection channel;
     private final AvalancheBlockingStub   client;
     private final Member                  member;
+    private final AvalancheMetrics        metrics;
 
-    public AvalancheClientCommunications(ManagedServerConnection conn, Member member) {
+    public AvalancheClientCommunications(ManagedServerConnection conn, Member member, AvalancheMetrics metrics) {
         assert !(member instanceof Node) : "whoops : " + member + " is not to defined for instance of Node";
         this.channel = conn;
         this.member = member;
         this.client = AvalancheGrpc.newBlockingStub(conn.channel);
+        this.metrics = metrics;
     }
 
     public Participant getMember() {
@@ -60,7 +63,15 @@ public class AvalancheClientCommunications implements Avalanche {
                     .forEach(e -> builder.addTransactions(ByteString.copyFrom(e.array())));
         wanted.forEach(e -> builder.addWanted(e.toByteString()));
         try {
-            return client.query(builder.build());
+            Query query = builder.build();
+            QueryResult result = client.query(query);
+            if (metrics != null) {
+                metrics.outboundBandwidth().mark(query.getSerializedSize());
+                metrics.inboundBandwidth().mark(result.getSerializedSize());
+                metrics.outboundQuery().update(query.getSerializedSize());
+                metrics.queryResponse().update(result.getSerializedSize());
+            }
+            return result;
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         }
@@ -75,7 +86,14 @@ public class AvalancheClientCommunications implements Avalanche {
         com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder();
         want.forEach(e -> builder.addEntries(e.toByteString()));
         try {
-            DagNodes requested = client.requestDag(builder.build());
+            DagNodes request = builder.build();
+            DagNodes requested = client.requestDag(request);
+            if (metrics != null) {
+                metrics.outboundBandwidth().mark(request.getSerializedSize());
+                metrics.inboundBandwidth().mark(requested.getSerializedSize());
+                metrics.outboundRequestDag().update(request.getSerializedSize());
+                metrics.requestDagResponse().update(requested.getSerializedSize());
+            }
             return requested.getEntriesList().stream().map(e -> e.asReadOnlyByteBuffer()).collect(Collectors.toList());
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);

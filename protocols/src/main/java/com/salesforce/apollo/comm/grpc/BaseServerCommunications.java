@@ -45,7 +45,7 @@ public abstract interface BaseServerCommunications<T> {
     }
 
     default T getService(ByteString context, T system, Map<HashKey, T> services) {
-        return (context.isEmpty() && system != null) ? system : services.get(new HashKey(context));
+        return ((context == null || context.isEmpty()) && system != null) ? system : services.get(new HashKey(context));
     }
 
     void register(HashKey id, T service);

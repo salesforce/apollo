@@ -143,7 +143,7 @@ public class Avalanche {
     private final WorkingSet                                          dag;
     private final ExecutorService                                     finalizer;
     private final int                                                 invalidThreshold;
-    private final AvaMetrics                                          metrics;
+    private final AvalancheMetrics                                    metrics;
     private final AvalancheParameters                                 parameters;
     private final Deque<HashKey>                                      parentSample        = new LinkedBlockingDeque<>();
     private final ConcurrentMap<HashKey, PendingTransaction>          pendingTransactions = new ConcurrentSkipListMap<>();
@@ -159,17 +159,18 @@ public class Avalanche {
         this(view, communications, p, null, null);
     }
 
-    public Avalanche(View view, Communications communications, AvalancheParameters p, AvaMetrics metrics) {
+    public Avalanche(View view, Communications communications, AvalancheParameters p, AvalancheMetrics metrics) {
         this(view, communications, p, metrics, null);
     }
 
-    public Avalanche(View view, Communications communications, AvalancheParameters p, AvaMetrics metrics,
+    public Avalanche(View view, Communications communications, AvalancheParameters p, AvalancheMetrics metrics,
             ClassLoader resolver) {
         this.metrics = metrics;
         parameters = p;
-        this.view = view; 
-        this.comm = communications.create(getNode(), AvalancheClientCommunications.getCreate(), new AvalancheServerCommunications(service,
-                communications.getClientIdentityProvider()));
+        this.view = view;
+        this.comm = communications.create(getNode(), AvalancheClientCommunications.getCreate(metrics),
+                                          new AvalancheServerCommunications(service,
+                                                  communications.getClientIdentityProvider(), metrics));
         this.dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), metrics);
 
         required = (int) (parameters.core.k * parameters.core.alpha);
@@ -258,7 +259,7 @@ public class Avalanche {
         queryThread.setDaemon(true);
 
         queryThread.start();
- 
+
         scheduledNoOpsCull = timer.scheduleWithFixedDelay(() -> dag.purgeNoOps(), parameters.noOpGenerationCullMillis,
                                                           parameters.noOpGenerationCullMillis, TimeUnit.MILLISECONDS);
     }
@@ -551,6 +552,41 @@ public class Avalanche {
         return results.size();
     }
 
+    @SuppressWarnings("unused")
+    private EntryProcessor resolve(String processor, ClassLoader resolver) {
+        try {
+            return (EntryProcessor) resolver.loadClass(processor).getConstructor(new Class[0]).newInstance();
+        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | IllegalArgumentException
+                | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+            log.warn("Unresolved processor configured: {} : {}", processor, e);
+            return null;
+        }
+    }
+
+    private void round() {
+        try {
+            query();
+            generateNoOpTxns();
+            Thread.sleep(0, 500);
+        } catch (Throwable t) {
+            log.error("Error performing Avalanche batch round", t);
+        }
+    }
+
+    /**
+     * Timeout the pending transaction
+     * 
+     * @param key
+     */
+    private void timeout(HashKey key) {
+        PendingTransaction pending = pendingTransactions.remove(key);
+        if (pending == null) {
+            return;
+        }
+        pending.timer.cancel(true);
+        pending.pending.completeExceptionally(new TimeoutException("Transaction timeout"));
+    }
+
     /**
      * Query the sample of members for their boolean opinion on the query of
      * transaction entries
@@ -667,40 +703,5 @@ public class Avalanche {
         log.debug("query results: {} in: {} ms", queryResults.size(), System.currentTimeMillis() - now);
 
         return queryResults;
-    }
-
-    @SuppressWarnings("unused")
-    private EntryProcessor resolve(String processor, ClassLoader resolver) {
-        try {
-            return (EntryProcessor) resolver.loadClass(processor).getConstructor(new Class[0]).newInstance();
-        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | IllegalArgumentException
-                | InvocationTargetException | NoSuchMethodException | SecurityException e) {
-            log.warn("Unresolved processor configured: {} : {}", processor, e);
-            return null;
-        }
-    }
-
-    private void round() {
-        try {
-            query();
-            generateNoOpTxns();
-            Thread.sleep(0, 500);
-        } catch (Throwable t) {
-            log.error("Error performing Avalanche batch round", t);
-        }
-    }
-
-    /**
-     * Timeout the pending transaction
-     * 
-     * @param key
-     */
-    private void timeout(HashKey key) {
-        PendingTransaction pending = pendingTransactions.remove(key);
-        if (pending == null) {
-            return;
-        }
-        pending.timer.cancel(true);
-        pending.pending.completeExceptionally(new TimeoutException("Transaction timeout"));
     }
 }

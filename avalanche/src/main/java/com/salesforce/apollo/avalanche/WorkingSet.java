@@ -740,13 +740,13 @@ public class WorkingSet {
     private final NavigableMap<HashKey, ConflictSet> conflictSets = new ConcurrentSkipListMap<>();
     private final DagWood                            finalized;
     private final ReentrantLock                      lock         = new ReentrantLock(true);
-    private final AvaMetrics                         metrics;
+    private final AvalancheMetrics                         metrics;
     private final AvalancheParameters                parameters;
     private final NavigableMap<HashKey, Node>        unfinalized  = new ConcurrentSkipListMap<>();
     private final Set<HashKey>                       unknown      = new ConcurrentSkipListSet<>();
     private final BlockingDeque<HashKey>             unqueried    = new LinkedBlockingDeque<>();
 
-    public WorkingSet(AvalancheParameters parameters, DagWood wood, AvaMetrics metrics) {
+    public WorkingSet(AvalancheParameters parameters, DagWood wood, AvalancheMetrics metrics) {
         this.parameters = parameters;
         finalized = wood;
         this.metrics = metrics;

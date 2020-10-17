@@ -53,8 +53,8 @@ public class FfServerCommunications extends FirefliesImplBase implements BaseSer
                 responseObserver.onCompleted();
                 if (metrics != null) {
                     metrics.inboundGossipRate().mark();
-                    metrics.inboundBandwidth().inc(request.getSerializedSize());
-                    metrics.outboundBandwidth().inc(gossip.getSerializedSize());
+                    metrics.inboundBandwidth().mark(request.getSerializedSize());
+                    metrics.outboundBandwidth().mark(gossip.getSerializedSize());
                     metrics.inboundGossip().update(request.getSerializedSize());
                     metrics.gossipReply().update(gossip.getSerializedSize());
                 }
@@ -94,8 +94,8 @@ public class FfServerCommunications extends FirefliesImplBase implements BaseSer
                 responseObserver.onNext(Null.getDefaultInstance());
                 responseObserver.onCompleted();
                 if (metrics != null) {
-                    metrics.inboundBandwidth().inc(request.getSerializedSize());
-                    metrics.outboundBandwidth().inc(Null.getDefaultInstance().getSerializedSize());
+                    metrics.inboundBandwidth().mark(request.getSerializedSize());
+                    metrics.outboundBandwidth().mark(Null.getDefaultInstance().getSerializedSize());
                     metrics.inboundUpdate().update(request.getSerializedSize());
                     metrics.inboundUpdateRate().mark();
                 }

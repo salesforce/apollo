@@ -120,7 +120,7 @@ abstract public class AvalancheFunctionalTest {
 
         System.out.println("Test cardinality: " + testCardinality + " seeds: "
                 + seeds.stream().map(e -> MtlsServer.getMemberId(e)).collect(Collectors.toList()));
-        scheduler = Executors.newScheduledThreadPool(members.size());
+        scheduler = Executors.newScheduledThreadPool(20);
 
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {

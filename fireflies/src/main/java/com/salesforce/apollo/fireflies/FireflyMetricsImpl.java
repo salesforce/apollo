@@ -16,8 +16,7 @@ import com.codahale.metrics.Timer;
  * @author hal.hildebrand
  *
  */
-public class FireflyMetricsImpl implements FireflyMetrics {
-
+public class FireflyMetricsImpl implements FireflyMetrics, BandwidthMetrics {
     private final Meter     borrowRate;
     private final Timer     channelOpenDuration;
     private final Meter     closeConnectionRate;
@@ -28,7 +27,7 @@ public class FireflyMetricsImpl implements FireflyMetrics {
     private final Histogram gossipReply;
     private final Histogram gossipResponse;
     private final Timer     gossipRoundDuration;
-    private final Counter   inboundBandwidth;
+    private final Meter inboundBandwidth;
     private final Histogram inboundGossip;
     private final Meter     inboundGossipRate;
     private final Timer     inboundGossipTimer;
@@ -37,7 +36,7 @@ public class FireflyMetricsImpl implements FireflyMetrics {
     private final Meter     inboundUpdateRate;
     private final Timer     inboundUpdateTimer;
     private final Counter   openConnections;
-    private final Counter   outboundBandwidth;
+    private final Meter outboundBandwidth;
     private final Histogram outboundGossip;
     private final Meter     outboundGossipRate;
     private final Timer     outboundGossipTimer;
@@ -49,8 +48,8 @@ public class FireflyMetricsImpl implements FireflyMetrics {
     private final Meter     releaseRate;
 
     public FireflyMetricsImpl(MetricRegistry registry) {
-        inboundBandwidth = registry.counter("Total Inbound Bytes");
-        outboundBandwidth = registry.counter("Total Outbound Bytes");
+        inboundBandwidth = registry.meter(INBOUND_BANDWIDTH);
+        outboundBandwidth = registry.meter(OUTBOUND_BANDWIDTH);
 
         outboundPingRate = registry.meter("Outbound Ping Rate");
         inboundPingRate = registry.meter("Inbound Ping Rate");
@@ -137,7 +136,7 @@ public class FireflyMetricsImpl implements FireflyMetrics {
     }
 
     @Override
-    public Counter inboundBandwidth() {
+    public Meter inboundBandwidth() {
         return inboundBandwidth;
     }
 
@@ -182,7 +181,7 @@ public class FireflyMetricsImpl implements FireflyMetrics {
     }
 
     @Override
-    public Counter outboundBandwidth() {
+    public Meter outboundBandwidth() {
         return outboundBandwidth;
     }
 
