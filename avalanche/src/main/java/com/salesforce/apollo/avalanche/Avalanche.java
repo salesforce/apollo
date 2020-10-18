@@ -24,7 +24,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
@@ -140,8 +139,7 @@ public class Avalanche {
     private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
 
     private final CommonCommunications<AvalancheClientCommunications> comm;
-    private final WorkingSet                                          dag;
-    private final ExecutorService                                     finalizer;
+    private final WorkingSet                                          dag; 
     private volatile boolean                                          inRound             = false;
     private final int                                                 invalidThreshold;
     private final AvalancheMetrics                                    metrics;
@@ -187,12 +185,7 @@ public class Avalanche {
         }
 
         initializeProcessors(loader);
-        AtomicInteger i = new AtomicInteger();
-        finalizer = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "Finalizer[" + getNode().getId() + "] : " + i.incrementAndGet());
-            t.setDaemon(true);
-            return t;
-        });
+        AtomicInteger i = new AtomicInteger(); 
         queryPool = Executors.newFixedThreadPool(parameters.outstandingQueries, r -> {
             Thread t = new Thread(r, "Outbound Query[" + getNode().getId() + "] : " + i.incrementAndGet());
             t.setDaemon(true);
@@ -535,7 +528,7 @@ public class Avalanche {
                 unpreferings.add(key);
             }
         }
-        finalizer.execute(() -> {
+        ForkJoinPool.commonPool().execute(() -> {
             if (running.get()) {
                 prefer(preferings);
                 finalize(preferings);
