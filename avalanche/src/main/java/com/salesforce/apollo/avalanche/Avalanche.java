@@ -22,9 +22,7 @@ import java.util.concurrent.CompletionService;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -146,8 +144,7 @@ public class Avalanche {
     private final AvalancheParameters                                 parameters;
     private final Deque<HashKey>                                      parentSample        = new LinkedBlockingDeque<>();
     private final ConcurrentMap<HashKey, PendingTransaction>          pendingTransactions = new ConcurrentSkipListMap<>();
-    private volatile ScheduledFuture<?>                               queryFuture;
-    private final Executor                                            queryPool;
+    private volatile ScheduledFuture<?>                               queryFuture; 
     private final AtomicLong                                          queryRounds         = new AtomicLong();
     private final int                                                 required;
     private final AtomicBoolean                                       running             = new AtomicBoolean();
@@ -185,12 +182,6 @@ public class Avalanche {
         }
 
         initializeProcessors(loader);
-        AtomicInteger i = new AtomicInteger(); 
-        queryPool = Executors.newFixedThreadPool(parameters.outstandingQueries, r -> {
-            Thread t = new Thread(r, "Outbound Query[" + getNode().getId() + "] : " + i.incrementAndGet());
-            t.setDaemon(true);
-            return t;
-        });
     }
 
     /**
@@ -571,7 +562,7 @@ public class Avalanche {
             metrics.getWantedRate().mark(want.size());
         }
 
-        CompletionService<Boolean> frist = new ExecutorCompletionService<>(queryPool);
+        CompletionService<Boolean> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
         List<Future<Boolean>> futures;
         Member wanted = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size()));
         futures = sample.stream().map(m -> frist.submit(() -> {
