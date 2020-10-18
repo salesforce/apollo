@@ -43,7 +43,7 @@ public class FfClientCommunications implements Fireflies {
         this.member = member;
         assert !(member instanceof Node) : "whoops : " + member;
         this.channel = channel;
-        this.client = FirefliesGrpc.newBlockingStub(channel.channel);
+        this.client = FirefliesGrpc.newBlockingStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
     }
 

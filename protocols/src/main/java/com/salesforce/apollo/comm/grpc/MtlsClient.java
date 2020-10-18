@@ -16,6 +16,7 @@ import com.salesforce.apollo.protocols.Validator;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.shaded.io.netty.channel.ChannelOption;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
 /**
@@ -31,6 +32,7 @@ public class MtlsClient {
 
         channel = NettyChannelBuilder.forAddress(address)
                                      .sslContext(forClient(clientAuth, alias, certificate, privateKey, validator))
+                                     .withOption(ChannelOption.TCP_NODELAY, true)
                                      .build();
 
     }

@@ -54,9 +54,9 @@ import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
-import io.grpc.ServerInterceptors;
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.shaded.io.netty.channel.ChannelOption;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
@@ -73,6 +73,23 @@ public class MtlsServer implements ClientIdentity {
             super(new NodeKeyManagerFactorySpi(alias, certificate, privateKey), PROVIDER, "Keys");
         }
 
+    }
+
+    /**
+     * Currently grpc-java doesn't return compressed responses, even if the client
+     * has sent a compressed payload. This turns on gzip compression for all
+     * responses.
+     */
+    public static class EnableCompressionInterceptor implements ServerInterceptor {
+        public final static EnableCompressionInterceptor SINGLETON = new EnableCompressionInterceptor();
+
+        @Override
+        public <ReqT, RespT> io.grpc.ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                                                                             Metadata headers,
+                                                                             ServerCallHandler<ReqT, RespT> next) {
+            call.setCompression("gzip");
+            return next.startCall(call, headers);
+        }
     }
 
     public static class NodeKeyManagerFactorySpi extends KeyManagerFactorySpi {
@@ -294,7 +311,7 @@ public class MtlsServer implements ClientIdentity {
 
     }
 
-    private final TlsInterceptor          interceptor;
+    private final TlsInterceptor          interceptor       = new TlsInterceptor();
     private final MutableHandlerRegistry  registry;
     private final Server                  server;
     private final Context.Key<SSLSession> sslSessionContext = Context.key("SSLSession");
@@ -302,12 +319,14 @@ public class MtlsServer implements ClientIdentity {
     public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
             PrivateKey privateKey, Validator validator) {
         registry = new MutableHandlerRegistry();
-        interceptor = new TlsInterceptor();
 
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
                                                        .sslContext(forServer(clientAuth, alias, certificate, privateKey,
-                                                                             validator));
-        builder.fallbackHandlerRegistry(registry);
+                                                                             validator))
+                                                       .fallbackHandlerRegistry(registry)
+                                                       .withChildOption(ChannelOption.TCP_NODELAY, true)
+                                                       .intercept(interceptor)
+                                                       .intercept(EnableCompressionInterceptor.SINGLETON);
         server = builder.build();
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -318,7 +337,7 @@ public class MtlsServer implements ClientIdentity {
     }
 
     public void bind(BindableService service) {
-        registry.addService(ServerInterceptors.intercept(service, interceptor));
+        registry.addService(service);
     }
 
     @Override

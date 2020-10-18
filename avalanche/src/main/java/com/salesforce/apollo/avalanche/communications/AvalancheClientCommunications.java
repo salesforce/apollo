@@ -47,7 +47,7 @@ public class AvalancheClientCommunications implements Avalanche {
         assert !(member instanceof Node) : "whoops : " + member + " is not to defined for instance of Node";
         this.channel = conn;
         this.member = member;
-        this.client = AvalancheGrpc.newBlockingStub(conn.channel);
+        this.client = AvalancheGrpc.newBlockingStub(conn.channel).withCompression("gzip");
         this.metrics = metrics;
     }
 

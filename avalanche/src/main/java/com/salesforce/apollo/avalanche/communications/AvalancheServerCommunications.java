@@ -39,7 +39,7 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
     public AvalancheServerCommunications(Service avalanche, ClientIdentity identity, AvalancheMetrics metrics) {
         this.system = avalanche;
         this.identity = identity;
-        this.metrics = metrics;
+        this.metrics = metrics; 
     }
 
     @Override
