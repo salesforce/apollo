@@ -41,7 +41,6 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.Node;
@@ -67,7 +66,7 @@ abstract public class AvalancheFunctionalTest {
         certs = IntStream.range(1, 100)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> MtlsServer.getMemberId(cert.getCertificate()),
+                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getCertificate()),
                                                    cert -> cert));
     }
 
@@ -119,7 +118,7 @@ abstract public class AvalancheFunctionalTest {
         }
 
         System.out.println("Test cardinality: " + testCardinality + " seeds: "
-                + seeds.stream().map(e -> MtlsServer.getMemberId(e)).collect(Collectors.toList()));
+                + seeds.stream().map(e -> Utils.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(20);
 
         AtomicBoolean frist = new AtomicBoolean(true);

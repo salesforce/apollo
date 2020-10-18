@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.comm;
 
-import static com.salesforce.apollo.comm.grpc.MtlsServer.getMemberId;
-
 import java.io.IOException;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
@@ -21,6 +19,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 import io.grpc.BindableService;
 import io.grpc.CallOptions;
@@ -75,7 +74,7 @@ public class LocalCommSimm implements Communications {
 
         @Override
         public HashKey getFrom() {
-            return getMemberId(getCert());
+            return Utils.getMemberId(getCert());
         }
 
     }

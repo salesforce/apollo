@@ -142,11 +142,13 @@ public class Avalanche {
     private final CommonCommunications<AvalancheClientCommunications> comm;
     private final WorkingSet                                          dag;
     private final ExecutorService                                     finalizer;
+    private volatile boolean                                          inRound             = false;
     private final int                                                 invalidThreshold;
     private final AvalancheMetrics                                    metrics;
     private final AvalancheParameters                                 parameters;
     private final Deque<HashKey>                                      parentSample        = new LinkedBlockingDeque<>();
     private final ConcurrentMap<HashKey, PendingTransaction>          pendingTransactions = new ConcurrentSkipListMap<>();
+    private volatile ScheduledFuture<?>                               queryFuture;
     private final Executor                                            queryPool;
     private final AtomicLong                                          queryRounds         = new AtomicLong();
     private final int                                                 required;
@@ -247,18 +249,14 @@ public class Avalanche {
         }
         queryRounds.set(0);
 
-        Thread queryThread = new Thread(() -> {
-            while (running.get()) {
-                round();
-                try {
-                    Thread.sleep(0, 50);
-                } catch (InterruptedException e) {
+        queryFuture = timer.scheduleWithFixedDelay(() -> {
+            if (running.get()) {
+                final boolean executing = inRound;
+                if (!executing) {
+                    round();
                 }
             }
-        }, "Query[" + view.getNode().getId() + "]");
-        queryThread.setDaemon(true);
-
-        queryThread.start();
+        }, 10, 10, TimeUnit.MICROSECONDS);
 
         scheduledNoOpsCull = timer.scheduleWithFixedDelay(() -> dag.purgeNoOps(), parameters.noOpGenerationCullMillis,
                                                           parameters.noOpGenerationCullMillis, TimeUnit.MILLISECONDS);
@@ -269,6 +267,11 @@ public class Avalanche {
             return;
         }
         pendingTransactions.values().clear();
+        ScheduledFuture<?> currenQuery = queryFuture;
+        queryFuture = null;
+        if (currenQuery != null) {
+            currenQuery.cancel(true);
+        }
         ScheduledFuture<?> current = scheduledNoOpsCull;
         scheduledNoOpsCull = null;
         if (current != null) {
@@ -552,41 +555,6 @@ public class Avalanche {
         return results.size();
     }
 
-    @SuppressWarnings("unused")
-    private EntryProcessor resolve(String processor, ClassLoader resolver) {
-        try {
-            return (EntryProcessor) resolver.loadClass(processor).getConstructor(new Class[0]).newInstance();
-        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | IllegalArgumentException
-                | InvocationTargetException | NoSuchMethodException | SecurityException e) {
-            log.warn("Unresolved processor configured: {} : {}", processor, e);
-            return null;
-        }
-    }
-
-    private void round() {
-        try {
-            query();
-            generateNoOpTxns();
-            Thread.sleep(0, 500);
-        } catch (Throwable t) {
-            log.error("Error performing Avalanche batch round", t);
-        }
-    }
-
-    /**
-     * Timeout the pending transaction
-     * 
-     * @param key
-     */
-    private void timeout(HashKey key) {
-        PendingTransaction pending = pendingTransactions.remove(key);
-        if (pending == null) {
-            return;
-        }
-        pending.timer.cancel(true);
-        pending.pending.completeExceptionally(new TimeoutException("Transaction timeout"));
-    }
-
     /**
      * Query the sample of members for their boolean opinion on the query of
      * transaction entries
@@ -703,5 +671,42 @@ public class Avalanche {
         log.debug("query results: {} in: {} ms", queryResults.size(), System.currentTimeMillis() - now);
 
         return queryResults;
+    }
+
+    @SuppressWarnings("unused")
+    private EntryProcessor resolve(String processor, ClassLoader resolver) {
+        try {
+            return (EntryProcessor) resolver.loadClass(processor).getConstructor(new Class[0]).newInstance();
+        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | IllegalArgumentException
+                | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+            log.warn("Unresolved processor configured: {} : {}", processor, e);
+            return null;
+        }
+    }
+
+    private void round() {
+        inRound = true;
+        try {
+            query();
+            generateNoOpTxns();
+        } catch (Throwable t) {
+            log.error("Error performing Avalanche batch round", t);
+        } finally {
+            inRound = false;
+        }
+    }
+
+    /**
+     * Timeout the pending transaction
+     * 
+     * @param key
+     */
+    private void timeout(HashKey key) {
+        PendingTransaction pending = pendingTransactions.remove(key);
+        if (pending == null) {
+            return;
+        }
+        pending.timer.cancel(true);
+        pending.pending.completeExceptionally(new TimeoutException("Transaction timeout"));
     }
 }

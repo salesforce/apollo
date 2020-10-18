@@ -19,7 +19,6 @@ import java.security.Provider;
 import java.security.Security;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -39,13 +38,11 @@ import javax.net.ssl.TrustManagerFactorySpi;
 import javax.net.ssl.X509ExtendedKeyManager;
 import javax.net.ssl.X509ExtendedTrustManager;
 
-import org.bouncycastle.asn1.ASN1OctetString;
-import org.bouncycastle.asn1.x509.Extension;
-import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 import com.salesforce.apollo.protocols.Validator;
 
 import io.grpc.BindableService;
@@ -297,19 +294,6 @@ public class MtlsServer implements ClientIdentity {
 
     }
 
-    public static HashKey getMemberId(X509Certificate c) {
-        X509CertificateHolder holder;
-        try {
-            holder = new X509CertificateHolder(c.getEncoded());
-        } catch (CertificateEncodingException | IOException e) {
-            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
-        }
-        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
-
-        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
-        return new HashKey(id);
-    }
-
     private final TlsInterceptor          interceptor;
     private final MutableHandlerRegistry  registry;
     private final Server                  server;
@@ -353,7 +337,7 @@ public class MtlsServer implements ClientIdentity {
 
     @Override
     public HashKey getFrom() {
-        return getMemberId(getCert());
+        return Utils.getMemberId(getCert());
     }
 
     public void start() throws IOException {

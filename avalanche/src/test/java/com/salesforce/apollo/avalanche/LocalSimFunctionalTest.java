@@ -25,7 +25,7 @@ import com.salesforce.apollo.fireflies.Node;
 public class LocalSimFunctionalTest extends AvalancheFunctionalTest {
 
     private final List<Communications>   comms   = new ArrayList<>();
-    private ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(15);
+    private ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(30);
 
     @AfterEach
     public void after() {

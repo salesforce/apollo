@@ -41,6 +41,8 @@ import java.net.SocketException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.channels.ClosedChannelException;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -53,6 +55,10 @@ import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
+
+import org.bouncycastle.asn1.ASN1OctetString;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.cert.X509CertificateHolder;
 
 /**
  * 
@@ -998,5 +1004,18 @@ public class Utils {
             }
         }
         return false;
+    }
+
+    public static HashKey getMemberId(X509Certificate c) {
+        X509CertificateHolder holder;
+        try {
+            holder = new X509CertificateHolder(c.getEncoded());
+        } catch (CertificateEncodingException | IOException e) {
+            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
+        }
+        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
+    
+        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
+        return new HashKey(id);
     }
 }

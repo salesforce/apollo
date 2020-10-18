@@ -9,11 +9,11 @@ package com.salesforce.apollo.avalanche;
 import static guru.nidi.graphviz.model.Factory.mutGraph;
 import static guru.nidi.graphviz.model.Factory.mutNode;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Stack;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.BiConsumer;
@@ -50,18 +50,18 @@ public class DagViz {
     }
 
     public static void traverseClosure(DagEntry entry, WorkingSet dag, BiConsumer<HashKey, DagEntry> p) {
-        Stack<DagEntry> stack = new Stack<>();
-        stack.push(entry);
+        List<DagEntry> stack = new ArrayList<>();
+        stack.add(entry);
         Set<HashKey> visited = new TreeSet<>();
 
         while (!stack.isEmpty()) {
-            final DagEntry node = stack.pop();
+            final DagEntry node = stack.remove(stack.size() - 1);
             final List<ByteString> links = node.getLinksList() == null ? Collections.emptyList() : node.getLinksList();
             for (HashKey e : links.stream().map(e -> new HashKey(e)).collect(Collectors.toList())) {
                 if (visited.add(e)) {
                     DagEntry child = dag.getDagEntry(e);
                     p.accept(e, child);
-                    stack.push(child);
+                    stack.add(child);
                 }
             }
         }
