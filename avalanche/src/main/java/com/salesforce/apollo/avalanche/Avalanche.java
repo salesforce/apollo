@@ -515,12 +515,6 @@ public class Avalanche {
                 unpreferings.add(key);
             }
         }
-        ForkJoinPool.commonPool().execute(() -> {
-            if (running.get()) {
-                prefer(preferings);
-                finalize(preferings);
-            }
-        });
 
         if (metrics != null) {
             metrics.getFailedTxnQueryRate().mark(unpreferings.size());
@@ -531,6 +525,11 @@ public class Avalanche {
         }
         log.trace("querying {} txns in {} ms ({} Query) ({} Sample)", unqueried.size(),
                   System.currentTimeMillis() - start, retrieveTime, sampleTime);
+        
+        if (running.get()) {
+            prefer(preferings);
+            finalize(preferings);
+        }
 
         return results.size();
     }
