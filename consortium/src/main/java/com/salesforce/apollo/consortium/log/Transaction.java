@@ -11,5 +11,11 @@ package com.salesforce.apollo.consortium.log;
  *
  */
 public interface Transaction {
+    class Genesis implements Transaction {
 
+    }
+
+    class UserTxn implements Transaction {
+        
+    }
 }

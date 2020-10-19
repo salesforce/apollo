@@ -15,7 +15,7 @@
 		</encoder>
 	</appender> 
     
-	<logger name="com.salesforce.apollo" level="INFO"
+	<logger name="com.salesforce.apollo" level="WARN"
 		additivity="false">
 		<appender-ref ref="STDOUT" />
 	</logger> 

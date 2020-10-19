@@ -49,7 +49,6 @@ public class BoostrapTest {
         File baseDir = new File("target/bootstrap");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        ApolloConfiguration.SimCommunicationsFactory.reset();
         List<Apollo> oracles = new ArrayList<>();
         URL endpoint = new URL(String.format("http://localhost:%d/api/cnc/mint", EXT.getLocalPort()));
 

@@ -28,7 +28,6 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Member implements Comparable<Member> {
-    private static final String PORT_SEPARATOR = ":";
 
     /**
      * Signing identity
@@ -39,8 +38,6 @@ public class Member implements Comparable<Member> {
      * Unique ID of the memmber
      */
     private final HashKey id;
-
-    public static final String  PORT_TEMPLATE       = "%s:%s:%s";
 
     protected Member(HashKey id, X509Certificate c) {
         certificate = c;
@@ -135,11 +132,7 @@ public class Member implements Comparable<Member> {
         if (portString == null) {
             throw new IllegalArgumentException("Invalid certificate, no port encodings in \"L\" of dn= " + dn);
         }
-        String[] ports = portString.split(PORT_SEPARATOR);
-        if (ports.length != 3) {
-            throw new IllegalArgumentException("Invalid port encodings (not == 3 ports) in \"L\" of dn= " + dn);
-        }
-        int ffPort = Integer.parseInt(ports[0]);
+        int ffPort = Integer.parseInt(portString);
 
         String hostName = decoded.get("CN");
         if (hostName == null) {

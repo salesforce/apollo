@@ -77,10 +77,8 @@ import liquibase.resource.ClassLoaderResourceAccessor;
  */
 @Path("/api/cnc")
 public class MintApi {
-    public static class MintRequest {
-        private int    avalanchePort;
-        private int    firefliesPort;
-        private int    ghostPort;
+    public static class MintRequest { 
+        private int    firefliesPort; 
         private String hostname;
         private String publicKey;
         private String signature;
@@ -91,24 +89,14 @@ public class MintApi {
         public MintRequest(String hostname, int firefliesPort, int ghostPort, int avalanchePort, String publicKey,
                 String signature) {
             this.hostname = hostname;
-            this.firefliesPort = firefliesPort;
-            this.ghostPort = ghostPort;
-            this.avalanchePort = avalanchePort;
+            this.firefliesPort = firefliesPort; 
             this.publicKey = publicKey;
             this.signature = signature;
         }
-
-        public int getAvalanchePort() {
-            return avalanchePort;
-        }
-
+ 
         public int getFirefliesPort() {
             return firefliesPort;
-        }
-
-        public int getGhostPort() {
-            return ghostPort;
-        }
+        } 
 
         public String getHostname() {
             return hostname;
@@ -150,8 +138,7 @@ public class MintApi {
             return encodedSeeds;
         }
     }
-
-    public static final String   PORT_TEMPLATE       = "%s:%s:%s";
+ 
     public static final String   SHA_256             = "sha-256";
     public static final String   SIGNATURE_ALGORITHM = "SHA256withRSA";
     private static final Decoder DECODER             = Base64.getUrlDecoder();
@@ -260,13 +247,11 @@ public class MintApi {
      * @return the MintResult
      */
     public MintResult mint(MintRequest mintRequest) {
-        if (!validatePorts(mintRequest.getHostname(), mintRequest.getFirefliesPort(), mintRequest.getGhostPort(),
-                           mintRequest.getAvalanchePort())) {
+        if (!validatePorts(mintRequest.getHostname(), mintRequest.getFirefliesPort())) {
             throw new WebApplicationException("Invalid host/ports", Status.BAD_REQUEST);
         }
         DistinguishedName dn = dn().setCn(mintRequest.hostname)
-                                   .setL(String.format(PORT_TEMPLATE, mintRequest.firefliesPort, mintRequest.ghostPort,
-                                                       mintRequest.avalanchePort))
+                                   .setL(Integer.toString(mintRequest.getFirefliesPort()))
                                    .setO(organization)
                                    .setOu(orginazationUnit)
                                    .setSt(state)
@@ -319,8 +304,6 @@ public class MintApi {
                   .set(MEMBERS.CERTIFICATE_HASH, hashOf(derEncoded))
                   .set(MEMBERS.HOST, mintRequest.getHostname())
                   .set(MEMBERS.FIREFLIES_PORT, mintRequest.getFirefliesPort())
-                  .set(MEMBERS.GHOST_PORT, mintRequest.getGhostPort())
-                  .set(MEMBERS.AVALANCHE_PORT, mintRequest.getAvalanchePort())
                   .where(MEMBERS.ID.eq(id))
                   .and(MEMBERS.VERSION.eq(thisVersion))
                   .execute();
@@ -403,7 +386,7 @@ public class MintApi {
         return signer.sign(false);
     }
 
-    private boolean validatePorts(String hostString, int fPort, int gPort, int aPort) {
+    private boolean validatePorts(String hostString, int fPort) {
         // no op for now. should be checked for validity in realsies - HSH
         return true;
     }

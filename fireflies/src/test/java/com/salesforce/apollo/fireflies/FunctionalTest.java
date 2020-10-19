@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.LocalCommSimm;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.CertWithKey;
@@ -54,13 +55,17 @@ public class FunctionalTest {
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
-    private LocalCommSimm communications;
+    private final List<Communications> communications = new ArrayList<>();
+    private  List<View> views;
 
     @AfterEach
     public void after() {
-        if (communications != null) {
-            communications.close();
+        if (views != null) {
+            views.forEach(e -> e.getService().stop());
+            views.clear();
         }
+        communications.forEach(e -> e.close());
+        communications.clear();
     }
 
     @Test
@@ -70,7 +75,6 @@ public class FunctionalTest {
         FireflyMetrics metrics = new FireflyMetricsImpl(registry);
 
         List<X509Certificate> seeds = new ArrayList<>();
-        communications = new LocalCommSimm(ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics));
         List<Node> members = certs.values()
                                   .parallelStream()
                                   .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
@@ -87,9 +91,13 @@ public class FunctionalTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
-        List<View> views = members.parallelStream()
-                                  .map(node -> new View(node, communications, scheduler, metrics))
-                                  .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds))
+        views = members.parallelStream().map(node -> {
+            Communications comms = new LocalCommSimm(
+                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics), node.getId());
+            communications.add(comms);
+            return new View(node, comms, metrics);
+        })
+                                  .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds, scheduler))
                                   .collect(Collectors.toList());
 
         for (int j = 0; j < 20; j++) {

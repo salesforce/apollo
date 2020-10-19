@@ -34,16 +34,15 @@ public class MtlsCommunications implements Communications {
         }
     }
 
-    private final EndpointProvider            epProvider;
-    private final ServerConnectionCache       cache;
-    private final MtlsServerConnectionFactory factory = new MtlsServerConnectionFactory();
-    private final MtlsServer                  server;
+    private final EndpointProvider      epProvider;
+    private final ServerConnectionCache cache;
+    private final MtlsServer            server;
 
     public MtlsCommunications(ServerConnectionCacheBuilder builder, EndpointProvider ep) {
         epProvider = ep;
         this.server = new MtlsServer(epProvider.getBindAddress(), epProvider.getClientAuth(), epProvider.getAlias(),
                 epProvider.getCertificate(), epProvider.getPrivateKey(), epProvider.getValiator());
-        this.cache = builder.setFactory(factory).build();
+        this.cache = builder.setFactory(new MtlsServerConnectionFactory()).build();
     }
 
     @Override

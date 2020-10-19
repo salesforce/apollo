@@ -21,7 +21,10 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.AvaMetrics;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 /**
@@ -48,12 +51,13 @@ public class Apollo {
         apollo.start();
     }
 
-    private final Avalanche             avalanche;
-    private final ApolloConfiguration   configuration;
-    private final AtomicBoolean         running = new AtomicBoolean();
-    private final View                  view;
-    private final Communications        communications;
-    private final List<X509Certificate> seeds;
+    private final Avalanche                 avalanche;
+    private final ApolloConfiguration       configuration;
+    private final AtomicBoolean             running = new AtomicBoolean();
+    private final View                      view;
+    private final Communications            communications;
+    private final List<X509Certificate>     seeds;
+    private static ScheduledExecutorService scheduler;
 
     public Apollo(ApolloConfiguration config) throws SocketException, KeyStoreException {
         this(config, new MetricRegistry());
@@ -61,11 +65,12 @@ public class Apollo {
 
     public Apollo(ApolloConfiguration c, MetricRegistry metrics) throws SocketException, KeyStoreException {
         configuration = c;
-        communications = c.communications.getComms(metrics);
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(configuration.threadPool);
+        scheduler = Executors.newScheduledThreadPool(configuration.threadPool);
         IdentitySource identitySource = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
                                                                    ApolloConfiguration.DEFAULT_IDENTITY_ALIAS);
-        view = identitySource.createView(communications, scheduler);
+        HashKey id = Member.getMemberId(identitySource.identity().getCertificate());
+        communications = c.communications.getComms(metrics, id);
+        view = identitySource.createView(communications, new FireflyMetricsImpl(metrics));
         seeds = identitySource.seeds();
         avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics));
     }
@@ -82,8 +87,8 @@ public class Apollo {
         if (!running.compareAndSet(false, true)) {
             return;
         }
-        view.getService().start(configuration.gossipInterval, seeds);
-        avalanche.start();
+        view.getService().start(configuration.gossipInterval, seeds, scheduler);
+        avalanche.start(scheduler);
     }
 
     public void stop() {

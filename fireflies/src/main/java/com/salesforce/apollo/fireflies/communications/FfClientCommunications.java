@@ -43,7 +43,7 @@ public class FfClientCommunications implements Fireflies {
         this.member = member;
         assert !(member instanceof Node) : "whoops : " + member;
         this.channel = channel;
-        this.client = FirefliesGrpc.newBlockingStub(channel.channel);
+        this.client = FirefliesGrpc.newBlockingStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -61,8 +61,8 @@ public class FfClientCommunications implements Fireflies {
             SayWhat sw = SayWhat.newBuilder().setNote(note).setRing(ring).setGossip(digests).build();
             Gossip result = client.gossip(sw);
             if (metrics != null) {
-                metrics.outboundBandwidth().inc(sw.getSerializedSize());
-                metrics.inboundBandwidth().inc(result.getSerializedSize());
+                metrics.outboundBandwidth().mark(sw.getSerializedSize());
+                metrics.inboundBandwidth().mark(result.getSerializedSize());
                 metrics.outboundGossip().update(sw.getSerializedSize());
                 metrics.gossipResponse().update(result.getSerializedSize());
                 metrics.outboundGossipRate().mark();
@@ -121,7 +121,7 @@ public class FfClientCommunications implements Fireflies {
             State state = State.newBuilder().setRing(ring).setUpdate(update).build();
             client.update(state);
             if (metrics != null) {
-                metrics.outboundBandwidth().inc(state.getSerializedSize());
+                metrics.outboundBandwidth().mark(state.getSerializedSize());
                 metrics.outboundUpdate().update(state.getSerializedSize());
                 metrics.outboundUpdateRate().mark();
             }

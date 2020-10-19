@@ -51,10 +51,6 @@ public class ApolloServiceTest {
 
     private static final Decoder DECODER = Base64.getUrlDecoder();
 
-    static {
-        ApolloConfiguration.SimCommunicationsFactory.reset();
-    }
-
     @BeforeAll
     public static void before() {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");

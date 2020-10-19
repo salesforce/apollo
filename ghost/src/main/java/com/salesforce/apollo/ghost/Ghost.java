@@ -114,6 +114,7 @@ public class Ghost {
         }
 
         public void round() {
+            log.debug("{} round", view.getNode().getId());
             if (!joined()) {
                 service.join();
                 return;
@@ -137,6 +138,7 @@ public class Ghost {
             if (!started.get()) {
                 return;
             }
+            log.debug("{} joining", view.getNode().getId());
 
             if (!busy.compareAndSet(false, true)) {
                 log.trace("Busy");
@@ -176,6 +178,7 @@ public class Ghost {
                 if (zeros == view.getRings().size()) {
                     joined.set(true);
                     view.publish(JOIN_MESSAGE_CHANNEL, "joined".getBytes());
+                    log.info("{} joined", view.getNode().getId());
                 }
             } finally {
                 busy.set(false);

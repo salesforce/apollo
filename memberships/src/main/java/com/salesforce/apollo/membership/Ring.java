@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Predicate;
@@ -19,7 +20,8 @@ import java.util.stream.StreamSupport;
 
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.protocols.HashKey; 
+import com.google.common.collect.Sets;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * A ring of members. Also, too, addressable functions by HashKey, for ring
@@ -119,6 +121,10 @@ public class Ring<T extends Member> implements Iterable<T> {
 
     public void clear() {
         ring.clear();
+    }
+
+    public Set<HashKey> difference(Ring<T> r) {
+        return Sets.difference(ring.keySet(), r.ring.keySet());
     }
 
     public int getIndex() {
@@ -318,6 +324,10 @@ public class Ring<T extends Member> implements Iterable<T> {
 
     public int size() {
         return ring.size();
+    }
+
+    public Stream<T> stream() {
+        return ring.values().stream();
     }
 
     /**

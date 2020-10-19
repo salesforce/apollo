@@ -10,6 +10,7 @@ package com.salesforce.apollo.avalanche;
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
 import static com.salesforce.apollo.protocols.Conversion.manifestDag;
 import static com.salesforce.apollo.protocols.Conversion.serialize;
+import static java.util.concurrent.ConcurrentHashMap.newKeySet;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -21,14 +22,11 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
-import java.util.Stack;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -68,7 +66,7 @@ public class WorkingSet {
             this.noOp = noOp;
         }
 
-        public void topologicalSort(Map<HashKey, DagInsert> set, Set<DagInsert> visited, Stack<DagInsert> stack) {
+        public void topologicalSort(Map<HashKey, DagInsert> set, Set<DagInsert> visited, List<DagInsert> stack) {
             if (!visited.add(this)) {
                 return;
             }
@@ -83,7 +81,7 @@ public class WorkingSet {
                     n.topologicalSort(set, visited, stack);
                 }
             });
-            stack.push(this);
+            stack.add(this);
         }
     }
 
@@ -313,7 +311,9 @@ public class WorkingSet {
 
         public void invalidate() {
             isStronglyPreferred = null;
-            dependents().forEach(e -> e.invalidate());
+            synchronized (this) {
+                dependents().forEach(e -> e.invalidate());
+            }
         }
 
         @Override
@@ -407,12 +407,12 @@ public class WorkingSet {
         }
 
         public Boolean traverseClosure(Function<Node, Boolean> test, Consumer<Node> post) {
-            Stack<Node> stack = new Stack<>();
-            stack.push(this);
+            List<Node> stack = new ArrayList<>();
+            stack.add(this);
             Set<Node> visited = Collections.newSetFromMap(new IdentityHashMap<>(2048));
 
             while (!stack.isEmpty()) {
-                final Node node = stack.pop();
+                final Node node = stack.remove(stack.size() - 1);
                 final List<Node> l;
                 synchronized (node) {
                     l = new ArrayList<>(node.links());
@@ -426,7 +426,7 @@ public class WorkingSet {
                         if (!result) {
                             return false;
                         }
-                        stack.push(e);
+                        stack.add(e);
                     }
                 }
                 if (post != null) {
@@ -737,16 +737,16 @@ public class WorkingSet {
     public static Logger                 log                  = LoggerFactory.getLogger(WorkingSet.class);
     private static final ArrayList<Node> EMPTY_ARRAY_LIST     = new ArrayList<>();
 
-    private final NavigableMap<HashKey, ConflictSet> conflictSets = new ConcurrentSkipListMap<>();
-    private final DagWood                            finalized;
-    private final ReentrantLock                      lock         = new ReentrantLock(true);
-    private final AvaMetrics                         metrics;
-    private final AvalancheParameters                parameters;
-    private final NavigableMap<HashKey, Node>        unfinalized  = new ConcurrentSkipListMap<>();
-    private final Set<HashKey>                       unknown      = new ConcurrentSkipListSet<>();
-    private final BlockingDeque<HashKey>             unqueried    = new LinkedBlockingDeque<>();
+    private final Map<HashKey, ConflictSet> conflictSets = new ConcurrentHashMap<>();
+    private final DagWood                   finalized;
+    private final ReentrantLock             lock         = new ReentrantLock(true);
+    private final AvalancheMetrics          metrics;
+    private final AvalancheParameters       parameters;
+    private final Map<HashKey, Node>        unfinalized  = new ConcurrentHashMap<>();
+    private final Set<HashKey>              unknown      = newKeySet();
+    private final BlockingDeque<HashKey>    unqueried    = new LinkedBlockingDeque<>();
 
-    public WorkingSet(AvalancheParameters parameters, DagWood wood, AvaMetrics metrics) {
+    public WorkingSet(AvalancheParameters parameters, DagWood wood, AvalancheMetrics metrics) {
         this.parameters = parameters;
         finalized = wood;
         this.metrics = metrics;
@@ -809,7 +809,7 @@ public class WorkingSet {
         return node.getConflictSet();
     }
 
-    public NavigableMap<HashKey, ConflictSet> getConflictSets() {
+    public Map<HashKey, ConflictSet> getConflictSets() {
         return conflictSets;
     }
 
@@ -843,17 +843,17 @@ public class WorkingSet {
 
     public List<ByteBuffer> getQuerySerializedEntries(List<HashKey> keys) {
         List<ByteBuffer> entries = keys.stream()
-                   .map(key -> getBytes(key))
-                   .filter(entry -> entry != null)
-                   .map(entry -> ByteBuffer.wrap(entry)) 
-                   .collect(Collectors.toList());
-        for (ByteBuffer entry: entries) {
+                                       .map(key -> getBytes(key))
+                                       .filter(entry -> entry != null)
+                                       .map(entry -> ByteBuffer.wrap(entry))
+                                       .collect(Collectors.toList());
+        for (ByteBuffer entry : entries) {
             assert entry.hasRemaining() : "Whoops!";
         }
         return entries;
     }
 
-    public NavigableMap<HashKey, Node> getUnfinalized() {
+    public Map<HashKey, Node> getUnfinalized() {
         return unfinalized;
     }
 

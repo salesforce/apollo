@@ -23,11 +23,11 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
 
 import com.salesforce.apollo.bootstrap.client.Bootstrap;
 import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
+import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.CertWithKey;
@@ -188,9 +188,9 @@ public interface IdentitySource {
         }
 
         @Override
-        public View createView(Communications communications, ScheduledExecutorService scheduler) {
+        public View createView(Communications communications, FireflyMetrics metrics) {
             FirefliesParameters parameters = new FirefliesParameters(getCA());
-            return new View(new Node(identity(), parameters), communications, scheduler);
+            return new View(new Node(identity(), parameters), communications, metrics);
         }
     }
 
@@ -198,10 +198,10 @@ public interface IdentitySource {
     public static final String DEFAULT_IDENTITY_ALIAS = "identity";
     public static final String SEED_PREFIX            = "seed.";
 
-    default <T extends Node> View createView(Communications communications, ScheduledExecutorService scheduler) {
+    default <T extends Node> View createView(Communications communications, FireflyMetrics metrics) {
         FirefliesParameters parameters = new FirefliesParameters(getCA());
 
-        return new View(new Node(identity(), parameters), communications, scheduler);
+        return new View(new Node(identity(), parameters), communications, metrics);
     }
 
     X509Certificate getCA();

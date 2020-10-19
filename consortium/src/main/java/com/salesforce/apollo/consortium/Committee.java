@@ -21,18 +21,19 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  *
  */
-public class Committee {
+@SuppressWarnings("unused")
+public class Committee<T extends Member> {
 
     private final Map<Long, Block> cache               = new ConcurrentHashMap<>();
-    private final Context<Member>  context;
+    private final Context<T>       context;
     private final HashKey          id;
-    private HashKey                lastBlock           = HashKey.ORIGIN;
-    private long                   lastCheckpoint      = 1;
-    private long                   lastReconfiguration = 1;
-    private StateSnapshot          lastSnapshot        = new StateSnapshot();
-    private long                   next                = 1;
+    private volatile HashKey       lastBlock           = HashKey.ORIGIN;
+    private volatile long          lastCheckpoint      = 1;
+    private volatile long          lastReconfiguration = 1;
+    private volatile StateSnapshot lastSnapshot        = new StateSnapshot();
+    private volatile long          next                = 1;
 
-    public Committee(HashKey id, Context<Member> context) {
+    public Committee(HashKey id, Context<T> context) {
         this.context = context;
         this.id = null;
     }
@@ -48,7 +49,7 @@ public class Committee {
     }
 
     void resetCached() {
-
+        cache.clear();
     }
 
     void writeGenesisBlock() {

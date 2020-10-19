@@ -13,7 +13,25 @@ import com.salesforce.apollo.consortium.Certification;
  *
  */
 public class Block {
-    private Header        header;
-    private Body          body;
-    private Certification cert;
+    private final Body          body;
+    private final Certification cert;
+    private final Header        header;
+
+    public Block(Header header, Body body, Certification cert) {
+        this.header = header;
+        this.body = body;
+        this.cert = cert;
+    }
+
+    public Body getBody() {
+        return body;
+    }
+
+    public Certification getCert() {
+        return cert;
+    }
+
+    public Header getHeader() {
+        return header;
+    }
 }

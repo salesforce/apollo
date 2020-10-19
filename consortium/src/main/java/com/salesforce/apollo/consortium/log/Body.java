@@ -13,8 +13,31 @@ import java.util.List;
  *
  */
 public class Body {
-    private long              consensusId;
-    private List<Transaction> transactions;
-    private List<Proof> proofs;
-    private List<Response>    responses;
+    private final long              consensusId;
+    private final List<Proof>       proofs;
+    private final List<Response>    responses;
+    private final List<Transaction> transactions;
+
+    public Body(long consensusId, List<Transaction> transactions, List<Proof> proofs, List<Response> responses) {
+        this.consensusId = consensusId;
+        this.transactions = transactions;
+        this.proofs = proofs;
+        this.responses = responses;
+    }
+
+    public long getConsensusId() {
+        return consensusId;
+    }
+
+    public List<Proof> getProofs() {
+        return proofs;
+    }
+
+    public List<Response> getResponses() {
+        return responses;
+    }
+
+    public List<Transaction> getTransactions() {
+        return transactions;
+    }
 }

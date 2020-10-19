@@ -19,6 +19,7 @@ import com.salesfoce.apollo.proto.DagNodes.Builder;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesforce.apollo.avalanche.Avalanche.Service;
+import com.salesforce.apollo.avalanche.AvalancheMetrics;
 import com.salesforce.apollo.comm.grpc.BaseServerCommunications;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
@@ -33,10 +34,12 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
     private final ClientIdentity        identity;
     private final Map<HashKey, Service> services = new ConcurrentHashMap<>();
     private final Service               system;
+    private final AvalancheMetrics      metrics;
 
-    public AvalancheServerCommunications(Service avalanche, ClientIdentity identity) {
+    public AvalancheServerCommunications(Service avalanche, ClientIdentity identity, AvalancheMetrics metrics) {
         this.system = avalanche;
         this.identity = identity;
+        this.metrics = metrics; 
     }
 
     @Override
@@ -57,6 +60,12 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
                                                   .collect(Collectors.toList()));
             responseObserver.onNext(result);
             responseObserver.onCompleted();
+            if (metrics != null) {
+                metrics.inboundBandwidth().mark(request.getSerializedSize());
+                metrics.outboundBandwidth().mark(result.getSerializedSize());
+                metrics.inboundQuery().update(request.getSerializedSize());
+                metrics.queryReply().update(result.getSerializedSize());
+            }
         }, system, services);
     }
 
@@ -74,8 +83,15 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
                                                           .collect(Collectors.toList()));
             Builder builder = DagNodes.newBuilder();
             result.forEach(e -> builder.addEntries(ByteString.copyFrom(e)));
-            responseObserver.onNext(builder.build());
+            DagNodes dags = builder.build();
+            responseObserver.onNext(dags);
             responseObserver.onCompleted();
-        }, null, null);
+            if (metrics != null) {
+                metrics.inboundBandwidth().mark(request.getSerializedSize());
+                metrics.outboundBandwidth().mark(dags.getSerializedSize());
+                metrics.inboundRequestDag().update(request.getSerializedSize());
+                metrics.requestDagReply().update(dags.getSerializedSize());
+            }
+        }, system, services);
     }
 }

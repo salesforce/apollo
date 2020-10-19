@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import com.codahale.metrics.Counter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
@@ -16,15 +15,13 @@ import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheMet
  * @author hal.hildebrand
  *
  */
-public interface FireflyMetrics extends ServerConnectionCacheMetrics {
+public interface FireflyMetrics extends ServerConnectionCacheMetrics, BandwidthMetrics {
 
     Histogram gossipReply();
 
     Histogram gossipResponse();
 
     Timer gossipRoundDuration();
-
-    Counter inboundBandwidth();
 
     Histogram inboundGossip();
 
@@ -39,8 +36,6 @@ public interface FireflyMetrics extends ServerConnectionCacheMetrics {
     Meter inboundUpdateRate();
 
     Timer inboundUpdateTimer();
-
-    Counter outboundBandwidth();
 
     Histogram outboundGossip();
 

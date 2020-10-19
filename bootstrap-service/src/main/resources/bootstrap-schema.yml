@@ -61,12 +61,6 @@ databaseChangeLog:
                   name: fireflies_port
                   type: INT
             -  column:
-                  name: ghost_port
-                  type: INT
-            -  column:
-                  name: avalanche_port
-                  type: INT
-            -  column:
                   name: certificate
                   type: BINARY
             -  column:

@@ -33,12 +33,7 @@ import com.salesforce.apollo.protocols.Utils;
  * @since 218
  */
 @Ignore
-public class TestApollo {
-
-    static {
-        ApolloConfiguration.SimCommunicationsFactory.reset();
-    }
-
+public class TestApollo { 
     public static void summarize(List<Apollo> nodes) {
         int finalized = nodes.stream()
                              .map(a -> a.getAvalanche())

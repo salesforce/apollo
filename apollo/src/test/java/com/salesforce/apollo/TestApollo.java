@@ -80,7 +80,6 @@ public class TestApollo {
         File baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        ApolloConfiguration.SimCommunicationsFactory.reset();
         List<Apollo> oracles = new ArrayList<>();
 
         for (int i = 1; i < PregenPopulation.getCardinality() + 1; i++) {
