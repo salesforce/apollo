@@ -311,7 +311,9 @@ public class WorkingSet {
 
         public void invalidate() {
             isStronglyPreferred = null;
-            dependents().forEach(e -> e.invalidate());
+            synchronized (this) {
+                dependents().forEach(e -> e.invalidate());
+            }
         }
 
         @Override

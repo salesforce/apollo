@@ -82,7 +82,7 @@ public class AvalancheClientCommunications implements Avalanche {
     }
 
     @Override
-    public List<ByteBuffer> requestDAG(Collection<HashKey> want) {
+    public List<byte[]> requestDAG(Collection<HashKey> want) {
         com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder();
         want.forEach(e -> builder.addEntries(e.toByteString()));
         try {
@@ -94,7 +94,7 @@ public class AvalancheClientCommunications implements Avalanche {
                 metrics.outboundRequestDag().update(request.getSerializedSize());
                 metrics.requestDagResponse().update(requested.getSerializedSize());
             }
-            return requested.getEntriesList().stream().map(e -> e.asReadOnlyByteBuffer()).collect(Collectors.toList());
+            return requested.getEntriesList().stream().map(e -> e.toByteArray()).collect(Collectors.toList());
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         }

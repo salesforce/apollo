@@ -20,6 +20,6 @@ public interface Avalanche {
 
     QueryResult query(List<ByteBuffer> transactions, Collection<HashKey> wanted);
 
-    List<ByteBuffer> requestDAG(Collection<HashKey> want);
+    List<byte[]> requestDAG(Collection<HashKey> want);
 
 }

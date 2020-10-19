@@ -466,8 +466,8 @@ public class Avalanche {
                 log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
             }
             try {
-                List<ByteBuffer> entries = connection.requestDAG(wanted);
-                dag.insertSerialized(entries, System.currentTimeMillis());
+                List<byte[]> entries = connection.requestDAG(wanted);
+                dag.insertSerializedRaw(entries, System.currentTimeMillis());
                 if (metrics != null) {
                     metrics.getWantedRate().mark(wanted.size());
                     metrics.getSatisfiedRate().mark(entries.size());
