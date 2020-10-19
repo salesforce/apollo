@@ -137,14 +137,13 @@ public class Avalanche {
     private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
 
     private final CommonCommunications<AvalancheClientCommunications> comm;
-    private final WorkingSet                                          dag; 
-    private volatile boolean                                          inRound             = false;
+    private final WorkingSet                                          dag;
     private final int                                                 invalidThreshold;
     private final AvalancheMetrics                                    metrics;
     private final AvalancheParameters                                 parameters;
     private final Deque<HashKey>                                      parentSample        = new LinkedBlockingDeque<>();
     private final ConcurrentMap<HashKey, PendingTransaction>          pendingTransactions = new ConcurrentSkipListMap<>();
-    private volatile ScheduledFuture<?>                               queryFuture; 
+    private volatile ScheduledFuture<?>                               queryFuture;
     private final AtomicLong                                          queryRounds         = new AtomicLong();
     private final int                                                 required;
     private final AtomicBoolean                                       running             = new AtomicBoolean();
@@ -233,14 +232,11 @@ public class Avalanche {
         }
         queryRounds.set(0);
 
-        queryFuture = timer.scheduleWithFixedDelay(() -> {
+        queryFuture = timer.schedule(() -> {
             if (running.get()) {
-                final boolean executing = inRound;
-                if (!executing) {
-                    round();
-                }
+                round(timer);
             }
-        }, 10, 10, TimeUnit.MICROSECONDS);
+        }, 50, TimeUnit.MICROSECONDS);
 
         scheduledNoOpsCull = timer.scheduleWithFixedDelay(() -> dag.purgeNoOps(), parameters.noOpGenerationCullMillis,
                                                           parameters.noOpGenerationCullMillis, TimeUnit.MILLISECONDS);
@@ -668,15 +664,18 @@ public class Avalanche {
         }
     }
 
-    private void round() {
-        inRound = true;
+    private void round(ScheduledExecutorService timer) {
         try {
             query();
             generateNoOpTxns();
         } catch (Throwable t) {
             log.error("Error performing Avalanche batch round", t);
         } finally {
-            inRound = false;
+            queryFuture = timer.schedule(() -> {
+                if (running.get()) {
+                    round(timer);
+                }
+            }, 50, TimeUnit.MICROSECONDS);
         }
     }
 

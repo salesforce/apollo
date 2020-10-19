@@ -92,6 +92,6 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
                 metrics.inboundRequestDag().update(request.getSerializedSize());
                 metrics.requestDagReply().update(dags.getSerializedSize());
             }
-        }, null, null);
+        }, system, services);
     }
 }

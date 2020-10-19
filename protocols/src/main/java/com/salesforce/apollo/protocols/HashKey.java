@@ -75,7 +75,7 @@ public class HashKey implements Comparable<HashKey> {
 
     public HashKey(byte[] key) {
         itself = key;
-        hashCode = Base64.getEncoder().withoutPadding().encodeToString(itself).hashCode();
+        hashCode = new String(itself).hashCode();
     }
 
     public HashKey(ByteString key) {

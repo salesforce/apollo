@@ -22,7 +22,7 @@ public class TlsFunctionalTest extends AvalancheFunctionalTest {
 
     protected Communications getCommunications(Node node, boolean first) {
         ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder()
-                                                                    .setTarget(2)
+                                                                    .setTarget(30)
                                                                     .setMetrics(new FireflyMetricsImpl(
                                                                             first ? node0registry : registry));
         return new MtlsCommunications(builder, View.getStandardEpProvider(node));
