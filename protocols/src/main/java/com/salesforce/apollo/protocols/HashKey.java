@@ -75,7 +75,7 @@ public class HashKey implements Comparable<HashKey> {
 
     public HashKey(byte[] key) {
         itself = key;
-        hashCode = new String(itself).hashCode();
+        hashCode = ByteBuffer.wrap(itself).getInt();
     }
 
     public HashKey(ByteString key) {
