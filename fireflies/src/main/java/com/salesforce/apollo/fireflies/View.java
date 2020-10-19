@@ -13,7 +13,6 @@ import java.io.ByteArrayInputStream;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
-import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.cert.CertificateException;
@@ -559,6 +558,10 @@ public class View {
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }
 
+    public Context<? extends Member> getContext() {
+        return context;
+    }
+
     /**
      * @return the analytical diameter of the graph of members
      */
@@ -663,10 +666,6 @@ public class View {
 
     public void registerRoundListener(Runnable callback) {
         roundListeners.add(callback);
-    }
-
-    public List<Participant> sample(int range, SecureRandom entropy, Participant excluded) {
-        return context.sample(range, entropy, excluded);
     }
 
     /**

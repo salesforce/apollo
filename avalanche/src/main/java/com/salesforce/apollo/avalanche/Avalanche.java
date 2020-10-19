@@ -136,34 +136,31 @@ public class Avalanche {
 
     private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
 
-    private final CommonCommunications<AvalancheClientCommunications> comm;
-    private final WorkingSet                                          dag;
-    private final int                                                 invalidThreshold;
-    private final AvalancheMetrics                                    metrics;
-    private final AvalancheParameters                                 parameters;
-    private final Deque<HashKey>                                      parentSample        = new LinkedBlockingDeque<>();
-    private final ConcurrentMap<HashKey, PendingTransaction>          pendingTransactions = new ConcurrentSkipListMap<>();
-    private volatile ScheduledFuture<?>                               queryFuture;
-    private final AtomicLong                                          queryRounds         = new AtomicLong();
-    private final int                                                 required;
-    private final AtomicBoolean                                       running             = new AtomicBoolean();
-    private volatile ScheduledFuture<?>                               scheduledNoOpsCull;
-    private final Service                                             service             = new Service();
-    private final View                                                view;
+    private final CommonCommunications<AvalancheClientCommunications>  comm;
+    private com.salesforce.apollo.membership.Context<? extends Member> context;
+    private final WorkingSet                                           dag;
+    private final SecureRandom                                         entropy;
+    private final int                                                  invalidThreshold;
+    private final AvalancheMetrics                                     metrics;
+    private final Node                                                 node;
+    private final AvalancheParameters                                  parameters;
+    private final Deque<HashKey>                                       parentSample        = new LinkedBlockingDeque<>();
+    private final ConcurrentMap<HashKey, PendingTransaction>           pendingTransactions = new ConcurrentSkipListMap<>();
+    private volatile ScheduledFuture<?>                                queryFuture;
+    private final AtomicLong                                           queryRounds         = new AtomicLong();
+    private final int                                                  required;
+    private final AtomicBoolean                                        running             = new AtomicBoolean();
+    private volatile ScheduledFuture<?>                                scheduledNoOpsCull;
+    private final Service                                              service             = new Service();
 
-    public Avalanche(View view, Communications communications, AvalancheParameters p) {
-        this(view, communications, p, null, null);
-    }
-
-    public Avalanche(View view, Communications communications, AvalancheParameters p, AvalancheMetrics metrics) {
-        this(view, communications, p, metrics, null);
-    }
-
-    public Avalanche(View view, Communications communications, AvalancheParameters p, AvalancheMetrics metrics,
+    public Avalanche(Node node, com.salesforce.apollo.membership.Context<? extends Member> context,
+            SecureRandom entropy, Communications communications, AvalancheParameters p, AvalancheMetrics metrics,
             ClassLoader resolver) {
         this.metrics = metrics;
         parameters = p;
-        this.view = view;
+        this.node = node;
+        this.context = context;
+        this.entropy = entropy;
         this.comm = communications.create(getNode(), AvalancheClientCommunications.getCreate(metrics),
                                           new AvalancheServerCommunications(service,
                                                   communications.getClientIdentityProvider(), metrics));
@@ -181,6 +178,14 @@ public class Avalanche {
         }
 
         initializeProcessors(loader);
+    }
+
+    public Avalanche(View view, Communications communications, AvalancheParameters p) {
+        this(view, communications, p, null);
+    }
+
+    public Avalanche(View view, Communications communications, AvalancheParameters p, AvalancheMetrics metrics) {
+        this(view.getNode(), view.getContext(), view.getParameters().entropy, communications, p, metrics, null);
     }
 
     /**
@@ -219,7 +224,7 @@ public class Avalanche {
     }
 
     public Node getNode() {
-        return view.getNode();
+        return node;
     }
 
     public Service getService() {
@@ -412,7 +417,7 @@ public class Avalanche {
     }
 
     private SecureRandom getEntropy() {
-        return view.getParameters().entropy;
+        return entropy;
     }
 
     private void initializeProcessors(ClassLoader resolver) {
@@ -437,7 +442,7 @@ public class Avalanche {
     private int query() {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        Collection<? extends Member> sample = view.sample(parameters.core.k, getEntropy(), view.getNode());
+        Collection<? extends Member> sample = context.sample(parameters.core.k, getEntropy(), node.getId());
 
         if (sample.isEmpty()) {
             return 0;
@@ -525,7 +530,7 @@ public class Avalanche {
         }
         log.trace("querying {} txns in {} ms ({} Query) ({} Sample)", unqueried.size(),
                   System.currentTimeMillis() - start, retrieveTime, sampleTime);
-        
+
         if (running.get()) {
             prefer(preferings);
             finalize(preferings);

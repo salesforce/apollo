@@ -66,12 +66,12 @@ public class Context<T extends Member> {
     private static class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
 
         private int                c = 0;
-        private T                  exclude;
+        private Object             exclude;
         private final SecureRandom rand;
         private final int          sz;
 
-        public ReservoirSampler(T exclude, int size, SecureRandom entropy) {
-            this.exclude = exclude;
+        public ReservoirSampler(Object excluded, int size, SecureRandom entropy) {
+            this.exclude = excluded;
             this.sz = size;
             rand = entropy;
         }
@@ -291,7 +291,7 @@ public class Context<T extends Member> {
      * @return a random sample set of the view's live members. May be limited by the
      *         number of active members.
      */
-    public List<T> sample(int range, SecureRandom entropy, T excluded) {
+    public <N extends T> List<T> sample(int range, SecureRandom entropy, HashKey excluded) {
         return rings[entropy.nextInt(rings.length)].stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
     }
 
