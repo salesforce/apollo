@@ -161,7 +161,9 @@ abstract public class AvalancheFunctionalTest {
             AvaMetrics avaMetrics = new AvaMetrics(frist.get() ? node0registry : registry);
             frist.set(false);
             TimedProcessor processor = new TimedProcessor();
-            new Avalanche(view, communications.get(view.getNode().getId()), aParams, avaMetrics, processor);
+            Avalanche avalanche = new Avalanche(view, communications.get(view.getNode().getId()), aParams, avaMetrics,
+                    processor);
+            processor.setAvalanche(avalanche);
             return processor;
         }).collect(Collectors.toList());
 

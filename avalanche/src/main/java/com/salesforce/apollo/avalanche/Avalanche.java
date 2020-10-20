@@ -147,7 +147,6 @@ public class Avalanche {
         required = (int) (parameters.core.k * parameters.core.alpha);
         invalidThreshold = parameters.core.k - required - 1;
         this.processor = processor;
-        this.processor.setAvalanche(this);
     }
 
     public Avalanche(View view, Communications communications, AvalancheParameters p, AvalancheMetrics metrics,

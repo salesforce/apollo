@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.consortium.proto";
+option java_outer_classname = "ConsortiumProto";
+option objc_class_prefix = "Cp";
+
+package apollo;
+
+service Orderer {
+    /**
+     * The batch ordering of transactions
+     */
+     rpc submit(Submission) returns (SubmitResolution) {}
+     
+}
+
+enum TransactionType {
+    GENESIS = 0;
+    USER = 1;
+    RECONFIGURE = 2;
+    CHECKPOINT = 3;
+} 
+
+message Block {
+    Header header = 1;
+    Body body = 2;
+    Certification cert = 3;
+}
+
+message Header {
+    repeated bytes previous = 1;
+    int64 height = 2;
+    int64 lastCheckpoint = 3;
+    int64 lastReconfig = 4;
+    repeated bytes hashTransactions = 5;
+    repeated bytes hashResults = 6; 
+}
+
+message Body {
+    int64 consensusId = 1;
+    repeated Transaction transactions = 2;
+    repeated Response responses = 3;
+    repeated Proof proofs = 4;
+}
+
+message Certification {
+}
+
+message Proof {
+}
+
+message Response {
+}
+
+message Transaction {
+    TransactionType type = 1;
+    bytes content = 2;
+}
+
+message Genesis {
+}
+
+message User {
+}
+
+message Reconfigure {
+}
+
+message Checkpoint {
+}
+
+message Submission {
+    bytes context = 1;
+    bytes source = 2;
+    repeated bytes batch = 3;
+    bytes signature = 4;
+}
+
+message SubmitResolution {
+    bool accepted = 1;
+    string failureMessage = 2;
+    bytes prev = 3;
+    bytes block = 4;
+    
+}

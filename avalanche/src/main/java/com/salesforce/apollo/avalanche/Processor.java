@@ -141,6 +141,4 @@ public interface Processor {
 
     void finalize(HashKey txn);
 
-    void setAvalanche(Avalanche avalanche);
-
 }

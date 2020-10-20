@@ -5,15 +5,7 @@ option java_package = "com.salesfoce.apollo.proto";
 option java_outer_classname = "ApolloProto";
 option objc_class_prefix = "Ap";
 
-package apollo;
-
-service Orderer {
-    /**
-     * The batch ordering of transactions
-     */
-     rpc submit(Submission) returns (SubmitResolution) {}
-     
-}
+package apollo; 
 
 service Fireflies {
     /*
@@ -52,21 +44,6 @@ service Ghost {
      * Ghost interval gossip
      */
     rpc intervals (Intervals) returns (DagEntries) {} 
-}
-
-message Submission {
-    bytes context = 1;
-    bytes source = 2;
-    repeated bytes batch = 3;
-    bytes signature = 4;
-}
-
-message SubmitResolution {
-    bool accepted = 1;
-    string failureMessage = 2;
-    bytes prev = 3;
-    bytes block = 4;
-    
 }
 
 message DagNodes {

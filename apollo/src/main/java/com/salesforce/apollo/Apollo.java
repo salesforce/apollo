@@ -77,6 +77,7 @@ public class Apollo {
         seeds = identitySource.seeds();
         avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics),
                 processor);
+        processor.setAvalanche(avalanche);
     }
 
     public Avalanche getAvalanche() {
