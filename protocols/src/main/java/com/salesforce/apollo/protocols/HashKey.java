@@ -20,6 +20,10 @@ import com.google.protobuf.ByteString;
  */
 public class HashKey implements Comparable<HashKey> {
 
+    /**
+     * 
+     */
+    private static final int    KEY_BYTE_SIZE = 32;
     public static final HashKey LAST;
     public static final HashKey ORIGIN;
 
@@ -74,7 +78,19 @@ public class HashKey implements Comparable<HashKey> {
     private final int      hashCode;
 
     public HashKey(byte[] key) {
-        itself = key;
+        if (key == null) {
+            throw new IllegalArgumentException("Cannot be null");
+        } else if (key.length < 32) {
+            itself = new byte[32];
+            int start = itself.length - key.length;
+            for (int i = 0; i < key.length; i++) {
+                itself[i + start] = key[i];
+            }
+        } else if (key.length > KEY_BYTE_SIZE) {
+            throw new IllegalArgumentException("Cannot be larger than " + KEY_BYTE_SIZE + " bytes: " + key.length);
+        } else {
+            itself = key;
+        }
         hashCode = ByteBuffer.wrap(itself).getInt();
     }
 

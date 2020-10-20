@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.comm.Communications;
@@ -66,8 +67,7 @@ abstract public class AvalancheFunctionalTest {
         certs = IntStream.range(1, 100)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getCertificate()),
-                                                   cert -> cert));
+                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getCertificate()), cert -> cert));
     }
 
     protected File                       baseDir;
@@ -136,7 +136,7 @@ abstract public class AvalancheFunctionalTest {
     @Test
     public void smoke() throws Exception {
         AtomicBoolean frist = new AtomicBoolean(true);
-        List<Avalanche> nodes = views.stream().map(view -> {
+        List<TimedProcessor> processors = views.stream().map(view -> {
             AvalancheParameters aParams = new AvalancheParameters();
             aParams.dagWood.maxCache = 1_000_000;
 
@@ -160,7 +160,9 @@ abstract public class AvalancheFunctionalTest {
 
             AvaMetrics avaMetrics = new AvaMetrics(frist.get() ? node0registry : registry);
             frist.set(false);
-            return new Avalanche(view, communications.get(view.getNode().getId()), aParams, avaMetrics);
+            TimedProcessor processor = new TimedProcessor();
+            new Avalanche(view, communications.get(view.getNode().getId()), aParams, avaMetrics, processor);
+            return processor;
         }).collect(Collectors.toList());
 
         // # of txns per node
@@ -178,18 +180,18 @@ abstract public class AvalancheFunctionalTest {
                         .filter(view -> view != null)
                         .count() == 0;
         }), "Could not stabilize view membership)");
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nodes.size());
-        nodes.forEach(node -> node.start(scheduler));
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(processors.size());
+        processors.forEach(p -> p.getAvalanche().start(scheduler));
 
         // generate the genesis transaction
-        Avalanche master = nodes.get(0);
+        TimedProcessor master = processors.get(0);
         CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
                                                                   scheduler);
         HashKey genesisKey = null;
         try {
             genesisKey = genesis.get(10, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
-            nodes.forEach(node -> node.stop());
+            processors.forEach(p -> p.getAvalanche().stop());
             views.forEach(v -> v.getService().stop());
             communications.values().forEach(c -> c.close());
             fail("Genesis timeout");
@@ -200,18 +202,18 @@ abstract public class AvalancheFunctionalTest {
         }
         assertNotNull(genesisKey);
 
-        seed(nodes);
+        seed(processors);
 
         long now = System.currentTimeMillis();
         HashKey k = genesisKey;
-        for (Avalanche a : nodes) {
+        processors.stream().map(e -> e.getAvalanche()).forEach(a -> {
             assertTrue(Utils.waitForCondition(90_000, () -> a.getDagDao().isFinalized(k)),
                        "Failed to finalize genesis on: " + a.getNode().getId());
-        }
+        });
 
-        List<Transactioneer> transactioneers = nodes.stream()
-                                                    .map(a -> new Transactioneer(a, 700_000))
-                                                    .collect(Collectors.toList());
+        List<Transactioneer> transactioneers = processors.stream()
+                                                         .map(a -> new Transactioneer(a, 700_000))
+                                                         .collect(Collectors.toList());
 
         ArrayList<Transactioneer> startUp = new ArrayList<>(transactioneers);
         Collections.shuffle(startUp, entropy);
@@ -229,18 +231,19 @@ abstract public class AvalancheFunctionalTest {
         System.out.println("Completed in " + duration + " ms");
         transactioneers.forEach(t -> t.stop());
         views.forEach(v -> v.getService().stop());
-        nodes.forEach(node -> node.stop());
+        processors.forEach(p -> p.getAvalanche().stop());
         Thread.sleep(2_000); // drain the swamp
 
         System.out.println("Global tps: "
                 + transactioneers.stream().mapToInt(e -> e.getSuccess()).sum() / (duration / 1000));
 
         System.out.println("Max tps per node: "
-                + nodes.stream().mapToInt(n -> n.getDag().getFinalized().size()).max().orElse(0) / (duration / 1000));
-        nodes.forEach(node -> summary(node));
+                + processors.stream().mapToInt(p -> p.getAvalanche().getDag().getFinalized().size()).max().orElse(0)
+                        / (duration / 1000));
+        processors.forEach(p -> summary(p.getAvalanche()));
 
         System.out.println("wanted: ");
-        System.out.println(master.getDag().getWanted());
+        System.out.println(master.getAvalanche().getDag().getWanted());
         System.out.println();
         transactioneers.forEach(t -> {
             System.out.println("finalized " + t.getSuccess() + " and failed to finalize " + t.getFailed() + " for "
@@ -271,7 +274,7 @@ abstract public class AvalancheFunctionalTest {
 
     abstract protected Communications getCommunications(Node node, boolean first);
 
-    private void seed(List<Avalanche> nodes) {
+    private void seed(List<TimedProcessor> nodes) {
         long then = System.currentTimeMillis();
         List<Transactioneer> transactioneers = nodes.stream()
                                                     .map(a -> new Transactioneer(a, 5))

@@ -23,7 +23,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
 import com.codahale.metrics.annotation.Timed;
-import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.protocols.HashKey;
 
 @Path("/api/genesisBlock")
@@ -31,10 +31,11 @@ public class GenesisBlockApi {
 
     public static class Result {
         public boolean error;
-        public String errorMessage;
-        public String hash;
+        public String  errorMessage;
+        public String  hash;
 
-        public Result() {}
+        public Result() {
+        }
 
         public Result(HashKey hash, boolean error, String errorMessage) {
             this.hash = hash == null ? null : new String(Base64.getUrlEncoder().withoutPadding().encode(hash.bytes()));
@@ -43,11 +44,11 @@ public class GenesisBlockApi {
         }
     }
 
-    private final Avalanche avalanche;
+    private final TimedProcessor           processor;
     private final ScheduledExecutorService scheduler;
 
-    public GenesisBlockApi(Avalanche avalanche, ScheduledExecutorService scheduler) {
-        this.avalanche = avalanche;
+    public GenesisBlockApi(TimedProcessor avalanche, ScheduledExecutorService scheduler) {
+        this.processor = avalanche;
         this.scheduler = scheduler;
     }
 
@@ -57,23 +58,19 @@ public class GenesisBlockApi {
     @Timed
     public Result create(String encoded) {
         if (encoded == null) {
-            throw new WebApplicationException(Response.status(Status.BAD_REQUEST)
-                                                      .entity("Encoded transaction content cannot be null")
-                                                      .build());
+            throw new WebApplicationException(
+                    Response.status(Status.BAD_REQUEST).entity("Encoded transaction content cannot be null").build());
         }
 
         byte[] data;
         try {
             data = Base64.getDecoder().decode(encoded);
         } catch (IllegalArgumentException e) {
-            throw new WebApplicationException(Response.status(Status.BAD_REQUEST)
-                                                      .entity("Cannot decode B64 url encoded content")
-                                                      .build());
+            throw new WebApplicationException(
+                    Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
         }
 
-        CompletableFuture<HashKey> submitted = avalanche.createGenesis(data,
-                                                                       Duration.ofMillis(30_000),
-                                                                       scheduler);
+        CompletableFuture<HashKey> submitted = processor.createGenesis(data, Duration.ofMillis(30_000), scheduler);
         HashKey result;
         try {
             result = submitted.get(30_000, TimeUnit.MILLISECONDS);

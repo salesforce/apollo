@@ -7,7 +7,7 @@
 package com.salesforce.apollo.web.resources;
 
 import com.codahale.metrics.health.HealthCheck;
-import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 
 /**
  * @author hhildebrand
@@ -15,10 +15,10 @@ import com.salesforce.apollo.avalanche.Avalanche;
 public class AvalancheHealthCheck extends HealthCheck {
 
     @SuppressWarnings("unused")
-    private final Avalanche avalanche;
+    private final TimedProcessor processor;
 
-    public AvalancheHealthCheck(Avalanche avalanche) {
-        this.avalanche = avalanche;
+    public AvalancheHealthCheck(TimedProcessor procesor) {
+        this.processor = procesor;
     }
 
     @Override

@@ -14,13 +14,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionService;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ForkJoinPool;
@@ -29,7 +27,6 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -61,25 +58,6 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Avalanche {
-
-    public static class PendingTransaction {
-        public final CompletableFuture<HashKey> pending;
-        public final ScheduledFuture<?>         timer;
-
-        public PendingTransaction(CompletableFuture<HashKey> pending, ScheduledFuture<?> timer) {
-            this.pending = pending;
-            this.timer = timer;
-        }
-
-        public void complete(HashKey key) {
-            log.trace("Finalizing transaction: {}", key);
-            timer.cancel(true);
-            if (pending != null) {
-                pending.complete(key);
-            }
-        }
-
-    }
 
     public class Service {
 
@@ -144,18 +122,18 @@ public class Avalanche {
     private final AvalancheMetrics                                     metrics;
     private final Node                                                 node;
     private final AvalancheParameters                                  parameters;
-    private final Deque<HashKey>                                       parentSample        = new LinkedBlockingDeque<>();
-    private final ConcurrentMap<HashKey, PendingTransaction>           pendingTransactions = new ConcurrentSkipListMap<>();
+    private final Deque<HashKey>                                       parentSample = new LinkedBlockingDeque<>();
+    private final Processor                                            processor;
     private volatile ScheduledFuture<?>                                queryFuture;
-    private final AtomicLong                                           queryRounds         = new AtomicLong();
+    private final AtomicLong                                           queryRounds  = new AtomicLong();
     private final int                                                  required;
-    private final AtomicBoolean                                        running             = new AtomicBoolean();
+    private final AtomicBoolean                                        running      = new AtomicBoolean();
     private volatile ScheduledFuture<?>                                scheduledNoOpsCull;
-    private final Service                                              service             = new Service();
+    private final Service                                              service      = new Service();
 
     public Avalanche(Node node, com.salesforce.apollo.membership.Context<? extends Member> context,
             SecureRandom entropy, Communications communications, AvalancheParameters p, AvalancheMetrics metrics,
-            ClassLoader resolver) {
+            Processor processor) {
         this.metrics = metrics;
         parameters = p;
         this.node = node;
@@ -168,24 +146,17 @@ public class Avalanche {
 
         required = (int) (parameters.core.k * parameters.core.alpha);
         invalidThreshold = parameters.core.k - required - 1;
-
-        ClassLoader loader = resolver;
-        if (resolver == null) {
-            loader = Thread.currentThread().getContextClassLoader();
-            if (loader == null) {
-                loader = getClass().getClassLoader();
-            }
-        }
-
-        initializeProcessors(loader);
+        this.processor = processor;
+        this.processor.setAvalanche(this);
     }
 
-    public Avalanche(View view, Communications communications, AvalancheParameters p) {
-        this(view, communications, p, null);
+    public Avalanche(View view, Communications communications, AvalancheParameters p, AvalancheMetrics metrics,
+            Processor processor) {
+        this(view.getNode(), view.getContext(), view.getParameters().entropy, communications, p, metrics, processor);
     }
 
-    public Avalanche(View view, Communications communications, AvalancheParameters p, AvalancheMetrics metrics) {
-        this(view.getNode(), view.getContext(), view.getParameters().entropy, communications, p, metrics, null);
+    public Avalanche(View view, Communications communications, AvalancheParameters p, Processor processor) {
+        this(view, communications, p, null, processor);
     }
 
     /**
@@ -198,11 +169,10 @@ public class Avalanche {
      *         The returned HashKey is the hash key of the the finalized genesis
      *         transaction in the DAG
      */
-    public CompletableFuture<HashKey> createGenesis(byte[] data, Duration timeout, ScheduledExecutorService scheduler) {
+    public HashKey createGenesis(byte[] data, Duration timeout, ScheduledExecutorService scheduler) {
         if (!running.get()) {
             throw new IllegalStateException("Service is not running");
         }
-        CompletableFuture<HashKey> futureSailor = new CompletableFuture<>();
         DagEntry dagEntry = DagEntry.newBuilder()
                                     .setDescription(WellKnownDescriptions.GENESIS.toHash().toByteString())
                                     .setData(ByteString.copyFrom(data))
@@ -210,9 +180,7 @@ public class Avalanche {
         // genesis has no parents
         HashKey key = dag.insert(dagEntry, WellKnownDescriptions.GENESIS.toHash(), System.currentTimeMillis());
         log.info("Genesis added: {}", key);
-        pendingTransactions.put(key, new PendingTransaction(futureSailor,
-                scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
-        return futureSailor;
+        return key;
     }
 
     public WorkingSet getDag() {
@@ -251,11 +219,10 @@ public class Avalanche {
         if (!running.compareAndSet(true, false)) {
             return;
         }
-        pendingTransactions.values().clear();
-        ScheduledFuture<?> currenQuery = queryFuture;
+        ScheduledFuture<?> currentQuery = queryFuture;
         queryFuture = null;
-        if (currenQuery != null) {
-            currenQuery.cancel(true);
+        if (currentQuery != null) {
+            currentQuery.cancel(true);
         }
         ScheduledFuture<?> current = scheduledNoOpsCull;
         scheduledNoOpsCull = null;
@@ -264,8 +231,8 @@ public class Avalanche {
         }
     }
 
-    public HashKey submitTransaction(HashKey description, byte[] data) {
-        return submitTransaction(description, data, null, null, null);
+    public HashKey submitGenesis(byte[] data) {
+        return submit(WellKnownDescriptions.GENESIS.toHash(), data, true);
     }
 
     /**
@@ -276,77 +243,8 @@ public class Avalanche {
      * @param future  - optional future to be notified of finalization
      * @return the HashKey of the transaction, null if invalid
      */
-    public HashKey submitTransaction(HashKey description, byte[] data, Duration timeout,
-                                     CompletableFuture<HashKey> future, ScheduledExecutorService scheduler) {
-        if (!running.get()) {
-            throw new IllegalStateException("Service is not running");
-        }
-        if (parentSample.isEmpty()) {
-            dag.sampleParents(parentSample, getEntropy());
-        }
-        TreeSet<HashKey> parents = new TreeSet<>();
-        while (parents.size() < parameters.parentCount) {
-            HashKey parent = parentSample.poll();
-            if (parent == null) {
-                break;
-            }
-            parents.add(parent);
-        }
-        if (parents.isEmpty()) {
-            log.info("No parents available for txn");
-            if (future != null) {
-                future.completeExceptionally(new IllegalStateException("No parents available for transaction"));
-            }
-            return null;
-        }
-        Context timer = metrics == null ? null : metrics.getSubmissionTimer().time();
-        try {
-
-            Builder builder = DagEntry.newBuilder()
-                                      .setDescription(description.toByteString())
-                                      .setData(ByteString.copyFrom(data));
-            parents.stream().map(e -> e.toByteString()).forEach(e -> builder.addLinks(e));
-            DagEntry dagEntry = builder.build();
-
-            HashKey key = dag.insert(dagEntry, System.currentTimeMillis());
-            if (future != null) {
-                pendingTransactions.put(key, new PendingTransaction(future,
-                        scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
-            }
-            if (metrics != null) {
-                metrics.getSubmissionRate().mark();
-                metrics.getInputRate().mark();
-            }
-            return key;
-        } finally {
-            if (timer != null) {
-                timer.close();
-            }
-        }
-    }
-
-    /**
-     * Submit a transaction to the group.
-     * 
-     * @param data    - the transaction content
-     * @param timeout -how long to wait for finalization of the transaction
-     * @return a CompleteableFuture indicating whether the transaction is finalized
-     *         or not, or whether an exception occurred that prevented processing.
-     *         The returned HashKey is the hash key of the the finalized transaction
-     *         in the DAG
-     */
-    public CompletableFuture<HashKey> submitTransaction(HashKey description, byte[] data, Duration timeout,
-                                                        ScheduledExecutorService scheduler) {
-        CompletableFuture<HashKey> futureSailor = new CompletableFuture<>();
-        submitTransaction(description, data, timeout, futureSailor, scheduler);
-        return futureSailor;
-    }
-
-    /**
-     * for test access
-     */
-    ConcurrentMap<HashKey, PendingTransaction> getPendingTransactions() {
-        return pendingTransactions;
+    public HashKey submitTransaction(HashKey description, byte[] data) {
+        return submit(description, data, false);
     }
 
     private void finalize(List<HashKey> preferings) {
@@ -360,21 +258,8 @@ public class Avalanche {
             metrics.getFinalizerRate().mark(finalized.finalized.size());
         }
         ForkJoinPool.commonPool().execute(() -> {
-            finalized.finalized.forEach(key -> {
-                assert key != null;
-                PendingTransaction pending = pendingTransactions.remove(key);
-                if (pending != null) {
-                    pending.complete(key);
-                }
-            });
-
-            finalized.deleted.forEach(key -> {
-                PendingTransaction pending = pendingTransactions.remove(key);
-                if (pending != null) {
-                    pending.pending.completeExceptionally(new TransactionRejected(
-                            "Transaction rejected due to conflict resolution"));
-                }
-            });
+            finalized.finalized.forEach(key -> processor.finalize(key));
+            finalized.deleted.forEach(key -> processor.fail(key));
         });
         log.debug("Finalizing: {}, deleting: {} in {} ms", finalized.finalized.size(), finalized.deleted.size(),
                   System.currentTimeMillis() - then);
@@ -418,9 +303,6 @@ public class Avalanche {
 
     private SecureRandom getEntropy() {
         return entropy;
-    }
-
-    private void initializeProcessors(ClassLoader resolver) {
     }
 
     private void prefer(List<HashKey> preferings) {
@@ -683,17 +565,54 @@ public class Avalanche {
         }
     }
 
-    /**
-     * Timeout the pending transaction
-     * 
-     * @param key
-     */
-    private void timeout(HashKey key) {
-        PendingTransaction pending = pendingTransactions.remove(key);
-        if (pending == null) {
-            return;
+    private HashKey submit(HashKey description, byte[] data, boolean genesis) {
+        if (!running.get()) {
+            throw new IllegalStateException("Service is not running");
         }
-        pending.timer.cancel(true);
-        pending.pending.completeExceptionally(new TimeoutException("Transaction timeout"));
+        if (parentSample.isEmpty()) {
+            dag.sampleParents(parentSample, getEntropy());
+        }
+        Set<HashKey> parents;
+
+        if (genesis) {
+            if (!WellKnownDescriptions.GENESIS.toHash().equals(description)) {
+                throw new IllegalArgumentException("Must use GENESIS description for genesis block");
+            }
+            parents = Collections.emptySet();
+        } else {
+            parents = new HashSet<>();
+            while (parents.size() < parameters.parentCount) {
+                HashKey parent = parentSample.poll();
+                if (parent == null) {
+                    break;
+                }
+                parents.add(parent);
+            }
+            if (parents.isEmpty()) {
+                log.error("No parents available for txn");
+                throw new IllegalStateException("No parents avaialable for transaction");
+            }
+        }
+
+        Context timer = metrics == null ? null : metrics.getSubmissionTimer().time();
+        try {
+
+            Builder builder = DagEntry.newBuilder()
+                                      .setDescription(description.toByteString())
+                                      .setData(ByteString.copyFrom(data));
+            parents.stream().map(e -> e.toByteString()).forEach(e -> builder.addLinks(e));
+            DagEntry dagEntry = builder.build();
+
+            HashKey key = dag.insert(dagEntry, System.currentTimeMillis());
+            if (metrics != null) {
+                metrics.getSubmissionRate().mark();
+                metrics.getInputRate().mark();
+            }
+            return key;
+        } finally {
+            if (timer != null) {
+                timer.close();
+            }
+        }
     }
 }

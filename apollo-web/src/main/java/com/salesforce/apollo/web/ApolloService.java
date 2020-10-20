@@ -10,7 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.salesforce.apollo.Apollo;
-import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.web.resources.ApolloHealthCheck;
 import com.salesforce.apollo.web.resources.AvalancheHealthCheck;
 import com.salesforce.apollo.web.resources.ByteTransactionApi;
@@ -45,15 +45,15 @@ public class ApolloService extends Application<ApolloServiceConfiguration> {
             Thread daemon = new Thread(r, "Apollo Txn Timeout Scheduler");
             return daemon;
         });
-        Avalanche avalanche = apollo.getAvalanche();
+        TimedProcessor processor = apollo.getProcessor();
 
         environment.healthChecks().register("fireflies", new FirefliesHealthCheck(apollo.getView()));
-        environment.healthChecks().register("avalanche", new AvalancheHealthCheck(avalanche));
+        environment.healthChecks().register("avalanche", new AvalancheHealthCheck(processor));
         environment.healthChecks().register("Apollo", new ApolloHealthCheck(apollo));
 
-        environment.jersey().register(new ByteTransactionApi(avalanche, scheduler));
-        environment.jersey().register(new GenesisBlockApi(avalanche, scheduler));
-        environment.jersey().register(new DagApi(avalanche.getDagDao()));
+        environment.jersey().register(new ByteTransactionApi(processor, scheduler));
+        environment.jersey().register(new GenesisBlockApi(processor, scheduler));
+        environment.jersey().register(new DagApi(apollo.getAvalanche().getDagDao()));
     }
 
     public void start() {
