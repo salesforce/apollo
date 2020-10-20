@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -536,17 +535,6 @@ public class Avalanche {
         log.debug("query results: {} in: {} ms", queryResults.size(), System.currentTimeMillis() - now);
 
         return queryResults;
-    }
-
-    @SuppressWarnings("unused")
-    private EntryProcessor resolve(String processor, ClassLoader resolver) {
-        try {
-            return (EntryProcessor) resolver.loadClass(processor).getConstructor(new Class[0]).newInstance();
-        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | IllegalArgumentException
-                | InvocationTargetException | NoSuchMethodException | SecurityException e) {
-            log.warn("Unresolved processor configured: {} : {}", processor, e);
-            return null;
-        }
     }
 
     private void round(ScheduledExecutorService timer) {

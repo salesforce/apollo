@@ -19,17 +19,16 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  *
  */
-abstract public class Committee {
+abstract public class CommitteeMember {
 
-    protected final Map<Long, Block> cache               = new ConcurrentHashMap<>();
-    protected volatile HashKey       lastBlock           = HashKey.ORIGIN;
+    protected final Map<Long, Block> cache               = new ConcurrentHashMap<>(); 
     protected volatile long          lastCheckpoint      = 1;
     protected volatile long          lastReconfiguration = 1;
     protected volatile StateSnapshot lastSnapshot        = new StateSnapshot();
     protected volatile long          next                = 1;
+    protected volatile HashKey       leader;
 
     void initialize() {
-        lastBlock = HashKey.ORIGIN;
         lastCheckpoint = 1;
         lastReconfiguration = 1;
         lastSnapshot = new StateSnapshot();
