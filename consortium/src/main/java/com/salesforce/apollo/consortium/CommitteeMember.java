@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.Proof;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -46,7 +45,7 @@ abstract public class CommitteeMember {
 
     }
 
-    void deliverTranssactions(long consensusId, List<Transaction> transactions, List<Proof> proofs) {
+    void deliverTranssactions(long consensusId, List<Transaction> transactions) {
 
     }
 }

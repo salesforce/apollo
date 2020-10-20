@@ -10,10 +10,14 @@ package apollo.consortium;
 service Consortium { 
 }
 
+message CertifiedBlock {
+    Block block = 1;
+    repeated Certification certifications = 2;
+}
+
 message Block {
     Header header = 1;
     Body body = 2;
-    repeated bytes certifications = 3;
 }
 
 message Header {
@@ -22,33 +26,26 @@ message Header {
     int64 lastCheckpoint = 3;
     int64 lastReconfig = 4;
     repeated bytes hashTransactions = 5;
-    repeated bytes hashResults = 6; 
+    repeated bytes hashResults = 6;
+    bytes nonce = 7;
 }
 
 message Body {
     int64 consensusId = 1;
-    repeated Transaction transactions = 2;
-    repeated Response responses = 3;
-    repeated Proof proofs = 4;
+    BodyType type = 2;
+    bytes contents = 3;
 }
 
-message Proof {
+message Certification {
+    bytes id = 1;
+    bytes signature = 2;
 }
 
-message Response {
-    repeated bytes cdcEvents = 1;
-}
-
-enum TransactionType {
+enum BodyType {
     GENESIS = 0;
     USER = 1;
     RECONFIGURE = 2;
     CHECKPOINT = 3;
-} 
-
-message Transaction {
-    TransactionType type = 1;
-    bytes content = 2;
 }
 
 message Genesis {
@@ -57,15 +54,33 @@ message Genesis {
 }
 
 message User {
+    repeated Transaction transactions = 1;
+    repeated bytes responses = 2;
 }
 
 message Reconfigure {
     bytes id = 1;
-    int32 maxBlocks = 2;
+    int32 checkpointBlocks = 2;
     repeated bytes view = 3;
-    repeated bytes threads = 4;
+    repeated bytes consensusKeys = 5;
 }
 
 message Checkpoint {
+    repeated Transaction transactions = 1;
+    repeated Response responses = 2;
+} 
+
+message Transaction {
+    Batch batch = 1;
+    bytes signature = 2;
+}
+
+message Batch {  
+    bytes originator = 1;
+    repeated bytes batch = 2;
+}
+
+message Response {
+    repeated bytes responses = 1;
 }
  

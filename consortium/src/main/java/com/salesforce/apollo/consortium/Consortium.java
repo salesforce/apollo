@@ -9,8 +9,9 @@ package com.salesforce.apollo.consortium;
 import static com.salesforce.apollo.consortium.grpc.ConsortiumClientCommunications.getCreate;
 
 import java.security.SecureRandom;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +27,6 @@ import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.consortium.grpc.ConsortiumClientCommunications;
 import com.salesforce.apollo.consortium.grpc.ConsortiumServerCommunications;
 import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
@@ -36,8 +36,6 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class Consortium implements Processor {
-    private final static Logger log = LoggerFactory.getLogger(Consortium.class);
-
     public class Service {
 
     }
@@ -58,14 +56,15 @@ public class Consortium implements Processor {
 
     }
 
+    private final static Logger log = LoggerFactory.getLogger(Consortium.class);
+
     private final Avalanche                                            avalanche;
+    private final CommonCommunications<ConsortiumClientCommunications> comm;
     @SuppressWarnings("unused")
     private volatile Block                                             current;
-    @SuppressWarnings("unused")
-    private final List<HashKey>                                        currentView = new ArrayList<>();
-    private volatile State                                             state       = new Client();
-    private final CommonCommunications<ConsortiumClientCommunications> comm;
+    private final AtomicReference<List<Member>>                        currentView = new AtomicReference<>();
     private final Service                                              service     = new Service();
+    private volatile State                                             state       = new Client();
 
     public Consortium(Node node, Context<? extends Member> context, SecureRandom entropy, Communications communications,
             AvalancheParameters p, MetricRegistry metrics) {
@@ -74,17 +73,6 @@ public class Consortium implements Processor {
         comm = communications.create(node, getCreate((ConsortiumMetrics) null), new ConsortiumServerCommunications(
                 service, communications.getClientIdentityProvider(), null));
 
-    }
-
-    @SuppressWarnings("unused")
-    private ConsortiumClientCommunications linkFor(Participant m) {
-        try {
-            return comm.apply(m, avalanche.getNode());
-        } catch (Throwable e) {
-            log.debug("error opening connection to {}: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
-        }
-        return null;
     }
 
     @Override
@@ -119,5 +107,27 @@ public class Consortium implements Processor {
     private State getState() {
         final State get = state;
         return get;
+    }
+
+    private ConsortiumClientCommunications linkFor(Member m) {
+        try {
+            return comm.apply(m, avalanche.getNode());
+        } catch (Throwable e) {
+            log.debug("error opening connection to {}: {}", m.getId(),
+                      (e.getCause() != null ? e.getCause() : e).getMessage());
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unused")
+    private void multicast(Consumer<ConsortiumClientCommunications> broadcast) {
+        currentView.get().forEach(e -> {
+            ConsortiumClientCommunications ch = linkFor(e);
+            try {
+                broadcast.accept(ch);
+            } finally {
+                ch.release();
+            }
+        });
     }
 }
