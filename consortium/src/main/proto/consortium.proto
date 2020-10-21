@@ -21,13 +21,12 @@ message Block {
 }
 
 message Header {
-    repeated bytes previous = 1;
+    bytes previous = 1;
     int64 height = 2;
     int64 lastCheckpoint = 3;
     int64 lastReconfig = 4;
-    repeated bytes hashTransactions = 5;
-    repeated bytes hashResults = 6;
-    bytes nonce = 7;
+    bytes bodyHash = 5;
+    bytes nonce = 6;
 }
 
 message Body {

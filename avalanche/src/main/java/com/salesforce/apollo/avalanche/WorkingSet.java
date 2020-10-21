@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -42,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.DagEntry;
+import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -86,8 +86,8 @@ public class WorkingSet {
     }
 
     public static class FinalizationData {
-        public final Set<HashKey> deleted   = new TreeSet<>();
-        public final Set<HashKey> finalized = new TreeSet<>();
+        public final Set<HashKey>   deleted   = new HashSet<>();
+        public final Set<Finalized> finalized = new HashSet<>();
     }
 
     public class KnownNode extends MaterializedNode {
@@ -742,14 +742,16 @@ public class WorkingSet {
     private final ReentrantLock             lock         = new ReentrantLock(true);
     private final AvalancheMetrics          metrics;
     private final AvalancheParameters       parameters;
+    private final Processor                 processor;
     private final Map<HashKey, Node>        unfinalized  = new ConcurrentHashMap<>();
     private final Set<HashKey>              unknown      = newKeySet();
     private final BlockingDeque<HashKey>    unqueried    = new LinkedBlockingDeque<>();
 
-    public WorkingSet(AvalancheParameters parameters, DagWood wood, AvalancheMetrics metrics) {
+    public WorkingSet(Processor processor, AvalancheParameters parameters, DagWood wood, AvalancheMetrics metrics) {
         this.parameters = parameters;
         finalized = wood;
         this.metrics = metrics;
+        this.processor = processor;
     }
 
     public List<HashKey> allFinalized() {
@@ -774,6 +776,14 @@ public class WorkingSet {
             }
         }
         return l;
+    }
+
+    public List<HashKey> frontier() {
+        return unfinalized.values()
+                          .stream()
+                          .filter(node -> node.isFrontier())
+                          .map(node -> node.getKey())
+                          .collect(Collectors.toList());
     }
 
     public List<HashKey> frontier(Random entropy) {
@@ -807,10 +817,6 @@ public class WorkingSet {
             return null;
         }
         return node.getConflictSet();
-    }
-
-    public Map<HashKey, ConflictSet> getConflictSets() {
-        return conflictSets;
     }
 
     public DagEntry getDagEntry(HashKey key) {
@@ -900,7 +906,8 @@ public class WorkingSet {
             Node node = unfinalized.get(key);
             if (node == null || node.isUnknown()) {
                 DagEntry entry = manifestDag(t);
-                HashKey conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET : key;
+                HashKey conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
+                        : processor.conflictSetOf(key, entry);
                 if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
                     assert new HashKey(entry.getDescription()).equals(GENESIS_CONFLICT_SET) : "Not in the genesis set";
                 }
@@ -1104,7 +1111,7 @@ public class WorkingSet {
                 data.deleted.add(loser.getKey());
                 unfinalized.remove(loser.getKey());
             });
-            data.finalized.add(node.getKey());
+            data.finalized.add(new Finalized(node.getKey(), node.getEntry()));
         }
     }
 
@@ -1174,14 +1181,6 @@ public class WorkingSet {
             unknown.add(key);
         }
         return exist;
-    }
-
-    public List<HashKey> frontier() {
-        return unfinalized.values()
-                          .stream()
-                          .filter(node -> node.isFrontier())
-                          .map(node -> node.getKey())
-                          .collect(Collectors.toList());
     }
 
     private byte[] getBytes(HashKey key) {

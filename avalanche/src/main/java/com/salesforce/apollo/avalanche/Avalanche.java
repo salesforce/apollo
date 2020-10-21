@@ -8,7 +8,6 @@ package com.salesforce.apollo.avalanche;
 
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -57,6 +56,16 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Avalanche {
+
+    public static class Finalized {
+        public final byte[]  entry;
+        public final HashKey hash;
+
+        public Finalized(HashKey hash, byte[] entry) {
+            this.hash = hash;
+            this.entry = entry;
+        }
+    }
 
     public class Service {
 
@@ -141,7 +150,7 @@ public class Avalanche {
         this.comm = communications.create(getNode(), AvalancheClientCommunications.getCreate(metrics),
                                           new AvalancheServerCommunications(service,
                                                   communications.getClientIdentityProvider(), metrics));
-        this.dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), metrics);
+        this.dag = new WorkingSet(processor, parameters, new DagWood(parameters.dagWood), metrics);
 
         required = (int) (parameters.core.k * parameters.core.alpha);
         invalidThreshold = parameters.core.k - required - 1;
@@ -155,30 +164,6 @@ public class Avalanche {
 
     public Avalanche(View view, Communications communications, AvalancheParameters p, Processor processor) {
         this(view, communications, p, null, processor);
-    }
-
-    /**
-     * Create the genesis block for this view
-     * 
-     * @param data    - the genesis transaction content
-     * @param timeout -how long to wait for finalization of the transaction
-     * @return a CompleteableFuture indicating whether the transaction is finalized
-     *         or not, or whether an exception occurred that prevented processing.
-     *         The returned HashKey is the hash key of the the finalized genesis
-     *         transaction in the DAG
-     */
-    public HashKey createGenesis(byte[] data, Duration timeout, ScheduledExecutorService scheduler) {
-        if (!running.get()) {
-            throw new IllegalStateException("Service is not running");
-        }
-        DagEntry dagEntry = DagEntry.newBuilder()
-                                    .setDescription(WellKnownDescriptions.GENESIS.toHash().toByteString())
-                                    .setData(ByteString.copyFrom(data))
-                                    .build();
-        // genesis has no parents
-        HashKey key = dag.insert(dagEntry, WellKnownDescriptions.GENESIS.toHash(), System.currentTimeMillis());
-        log.info("Genesis added: {}", key);
-        return key;
     }
 
     public WorkingSet getDag() {
@@ -256,8 +241,7 @@ public class Avalanche {
             metrics.getFinalizerRate().mark(finalized.finalized.size());
         }
         ForkJoinPool.commonPool().execute(() -> {
-            finalized.finalized.forEach(key -> processor.finalize(key));
-            finalized.deleted.forEach(key -> processor.fail(key));
+            processor.finalize(finalized);
         });
         log.debug("Finalizing: {}, deleting: {} in {} ms", finalized.finalized.size(), finalized.deleted.size(),
                   System.currentTimeMillis() - then);
@@ -365,10 +349,6 @@ public class Avalanche {
             return 0;
         }
         List<ByteBuffer> query = dag.getQuerySerializedEntries(unqueried);
-
-        for (ByteBuffer e : query) {
-            assert e.hasRemaining() : "whoopsie";
-        }
         long sampleTime = System.currentTimeMillis() - now;
 
         now = System.currentTimeMillis();
@@ -468,9 +448,9 @@ public class Avalanche {
             }
             log.trace("queried: {} for: {} result: {}", m, batch.size(), result.getResultList());
             dag.insertSerializedRaw(result.getWantedList()
-                                          .stream()
-                                          .map(e -> e.toByteArray())
-                                          .collect(Collectors.toList()),
+                  .stream()
+                  .map(e -> e.toByteArray())
+                  .collect(Collectors.toList()),
                                     System.currentTimeMillis());
             if (want.size() > 0 && metrics != null && m == wanted) {
                 metrics.getSatisfiedRate().mark(want.size());

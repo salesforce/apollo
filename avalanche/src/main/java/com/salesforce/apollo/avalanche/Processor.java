@@ -18,9 +18,25 @@ import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesfoce.apollo.proto.DagEntry;
+import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.protocols.HashKey;
 
 public interface Processor {
+
+    class NullProcessor implements Processor {
+
+        @Override
+        public HashKey conflictSetOf(HashKey key, DagEntry entry) {
+            return key;
+        }
+
+        @Override
+        public void finalize(FinalizationData finalized) {
+            // do nothing
+        }
+
+    }
 
     class TimedProcessor implements Processor {
         public static class PendingTransaction {
@@ -47,6 +63,11 @@ public interface Processor {
         private Avalanche                                        avalanche;
         private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentHashMap<>();
 
+        @Override
+        public HashKey conflictSetOf(HashKey key, DagEntry entry) {
+            return key;
+        }
+
         /**
          * Create the genesis block for this view
          * 
@@ -68,20 +89,21 @@ public interface Processor {
         }
 
         @Override
-        public void fail(HashKey key) {
-            PendingTransaction pending = pendingTransactions.remove(key);
-            if (pending != null) {
-                pending.pending.completeExceptionally(new TransactionRejected(
-                        "Transaction rejected due to conflict resolution"));
-            }
-        }
-
-        @Override
-        public void finalize(HashKey key) {
-            PendingTransaction pending = pendingTransactions.remove(key);
-            if (pending != null) {
-                pending.complete(key);
-            }
+        public void finalize(FinalizationData finalized) {
+            finalized.finalized.forEach(e -> {
+                HashKey hash = e.hash;
+                PendingTransaction pending = pendingTransactions.remove(hash);
+                if (pending != null) {
+                    pending.complete(hash);
+                }
+            });
+            finalized.deleted.forEach(e -> {
+                PendingTransaction pending = pendingTransactions.remove(e);
+                if (pending != null) {
+                    pending.pending.completeExceptionally(new TransactionRejected(
+                            "Transaction rejected due to conflict resolution"));
+                }
+            });
         }
 
         public Avalanche getAvalanche() {
@@ -137,8 +159,8 @@ public interface Processor {
 
     }
 
-    void fail(HashKey txn);
+    HashKey conflictSetOf(HashKey key, DagEntry entry);
 
-    void finalize(HashKey txn);
+    void finalize(FinalizationData finalized);
 
 }

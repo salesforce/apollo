@@ -35,6 +35,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.proto.DagEntry;
+import com.salesforce.apollo.avalanche.Avalanche.Finalized;
+import com.salesforce.apollo.avalanche.Processor.NullProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
 import com.salesforce.apollo.protocols.HashKey;
@@ -65,7 +67,7 @@ public class TransactionsTest {
     public void before() throws Exception {
         entropy = new Random(0x1638);
         parameters = new AvalancheParameters();
-        dag = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
+        dag = new WorkingSet(new NullProcessor(), parameters, new DagWood(parameters.dagWood), null);
         root = dag(WellKnownDescriptions.GENESIS.toHash(), "Ye root".getBytes());
         rootKey = dag.insert(root, 0);
         assertNotNull(rootKey);
@@ -185,8 +187,8 @@ public class TransactionsTest {
         assertNotNull(finalized);
         assertEquals(3, finalized.finalized.size());
         assertEquals(0, finalized.deleted.size());
-        for (HashKey key : finalized.finalized) {
-            assertTrue(dag.isFinalized(key), "not finalized: " + key);
+        for (Finalized f : finalized.finalized) {
+            assertTrue(dag.isFinalized(f.hash), "not finalized: " + f.hash);
         }
     }
 
