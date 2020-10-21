@@ -35,7 +35,6 @@
 		<dependency> <!-- necessary for Java 9+ -->
 			<groupId>org.apache.tomcat</groupId>
 			<artifactId>annotations-api</artifactId>
-			<scope>provided</scope>
 		</dependency>
 
 		<!-- Test only deps below this line -->

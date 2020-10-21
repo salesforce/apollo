@@ -182,7 +182,6 @@
 				<groupId>org.apache.tomcat</groupId>
 				<artifactId>annotations-api</artifactId>
 				<version>6.0.53</version>
-				<scope>provided</scope>
 			</dependency>
 			<dependency>
 				<groupId>org.apache.commons</groupId>

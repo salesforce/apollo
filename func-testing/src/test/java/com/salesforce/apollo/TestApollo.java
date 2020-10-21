@@ -23,6 +23,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.protocols.HashKey;
@@ -33,7 +34,7 @@ import com.salesforce.apollo.protocols.Utils;
  * @since 218
  */
 @Ignore
-public class TestApollo { 
+public class TestApollo {
     public static void summarize(List<Apollo> nodes) {
         int finalized = nodes.stream()
                              .map(a -> a.getAvalanche())
@@ -98,7 +99,7 @@ public class TestApollo {
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
-        Avalanche master = oracles.get(0).getAvalanche();
+        TimedProcessor master = oracles.get(0).getProcessor();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
                                                                   scheduler);
@@ -116,7 +117,7 @@ public class TestApollo {
         for (Apollo o : oracles) {
             assertTrue("Failed to finalize genesis on: " + o.getAvalanche().getNode().getId(),
                        Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)));
-            transactioneers.add(new Transactioneer(o.getAvalanche()));
+            transactioneers.add(new Transactioneer(o.getProcessor()));
         }
 
         // # of txns per node
@@ -139,7 +140,7 @@ public class TestApollo {
         oracles.forEach(node -> summary(node.getAvalanche()));
 
         System.out.println("wanted: ");
-        System.out.println(master.getDag().getWanted().stream().collect(Collectors.toList()));
+        System.out.println(master.getAvalanche().getDag().getWanted().stream().collect(Collectors.toList()));
         System.out.println();
         System.out.println();
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);

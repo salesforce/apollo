@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.AvaMetrics;
 import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.View;
@@ -34,6 +35,8 @@ import com.salesforce.apollo.protocols.Utils;
 public class Apollo {
 
     public static final String SEED_PREFIX = "seed.";
+
+    private static ScheduledExecutorService scheduler;
 
     public static void main(String[] argv) throws Exception {
         if (argv.length != 1) {
@@ -51,13 +54,13 @@ public class Apollo {
         apollo.start();
     }
 
-    private final Avalanche                 avalanche;
-    private final ApolloConfiguration       configuration;
-    private final AtomicBoolean             running = new AtomicBoolean();
-    private final View                      view;
-    private final Communications            communications;
-    private final List<X509Certificate>     seeds;
-    private static ScheduledExecutorService scheduler;
+    private final Avalanche             avalanche;
+    private final Communications        communications;
+    private final ApolloConfiguration   configuration;
+    private final TimedProcessor        processor = new TimedProcessor();
+    private final AtomicBoolean         running   = new AtomicBoolean();
+    private final List<X509Certificate> seeds;
+    private final View                  view;
 
     public Apollo(ApolloConfiguration config) throws SocketException, KeyStoreException {
         this(config, new MetricRegistry());
@@ -72,11 +75,29 @@ public class Apollo {
         communications = c.communications.getComms(metrics, id);
         view = identitySource.createView(communications, new FireflyMetricsImpl(metrics));
         seeds = identitySource.seeds();
-        avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics));
+        avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics),
+                processor);
+        processor.setAvalanche(avalanche);
     }
 
     public Avalanche getAvalanche() {
         return avalanche;
+    }
+
+    public ApolloConfiguration getConfiguration() {
+        return configuration;
+    }
+
+    public TimedProcessor getProcessor() {
+        return processor;
+    }
+
+    public boolean getRunning() {
+        return running.get();
+    }
+
+    public List<X509Certificate> getSeeds() {
+        return seeds;
     }
 
     public View getView() {

@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WellKnownDescriptions;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -29,12 +29,12 @@ public class Transactioneer {
     private final AtomicInteger                    counter     = new AtomicInteger();
     private final AtomicInteger                    failed      = new AtomicInteger();
     private volatile ScheduledFuture<?>            futureSailor;
-    private final Avalanche                        node;
+    private final TimedProcessor                   processor;
     private final List<CompletableFuture<HashKey>> outstanding = new CopyOnWriteArrayList<>();
     private final AtomicInteger                    success     = new AtomicInteger();
 
-    public Transactioneer(Avalanche node) {
-        this.node = node;
+    public Transactioneer(TimedProcessor processor) {
+        this.processor = processor;
     }
 
     public int getFailed() {
@@ -42,7 +42,7 @@ public class Transactioneer {
     }
 
     public HashKey getId() {
-        return node.getNode().getId();
+        return processor.getAvalanche().getNode().getId();
     }
 
     public int getSuccess() {
@@ -88,7 +88,9 @@ public class Transactioneer {
     }
 
     private void addTransaction(Duration txnWait, ScheduledExecutorService scheduler) {
-        outstanding.add(node.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), ("transaction for: "
-                + node.getNode().getId() + " : " + counter.incrementAndGet()).getBytes(), txnWait, scheduler));
+        outstanding.add(processor.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
+                                                    ("transaction for: " + processor.getAvalanche().getNode().getId()
+                                                            + " : " + counter.incrementAndGet()).getBytes(),
+                                                    txnWait, scheduler));
     }
 }

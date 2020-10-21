@@ -24,6 +24,8 @@ public class CombinedIntervalsTest {
     @Test
     public void smoke() {
         List<KeyInterval> intervals = new ArrayList<>();
+        byte[] bytes = new byte[32];
+        
         intervals.add(new KeyInterval(new HashKey(new byte[] { 0, (byte)200 }),
                                       new HashKey(new byte[] { 0, (byte)241 })));
         intervals.add(new KeyInterval(new HashKey(new byte[] { 0, 50 }), new HashKey(new byte[] { 0, 75 })));

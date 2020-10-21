@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
+import com.salesforce.apollo.avalanche.Processor.NullProcessor;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -73,7 +74,7 @@ public class DagTest {
     public void before() throws SQLException {
         entropy = new Random(0x666);
         final AvalancheParameters parameters = new AvalancheParameters();
-        workingSet = new WorkingSet(parameters, new DagWood(parameters.dagWood), null);
+        workingSet = new WorkingSet(new NullProcessor(), parameters, new DagWood(parameters.dagWood), null);
         root = dag(WellKnownDescriptions.GENESIS.toHash(), "Ye root".getBytes());
         rootKey = workingSet.insert(root, 0);
         assertNotNull(rootKey);

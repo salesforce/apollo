@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.protocols.HashKey;
@@ -115,7 +116,7 @@ public class TestApollo {
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
-        Avalanche master = oracles.get(0).getAvalanche();
+        TimedProcessor master = oracles.get(0).getProcessor();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
                                                                   scheduler);
@@ -133,7 +134,7 @@ public class TestApollo {
         for (Apollo o : oracles) {
             assertTrue(Utils.waitForCondition(15_000, () -> o.getAvalanche().getDagDao().isFinalized(k)),
                        "Failed to finalize genesis on: " + o.getAvalanche().getNode().getId());
-            transactioneers.add(new Transactioneer(o.getAvalanche()));
+            transactioneers.add(new Transactioneer(o.getProcessor()));
         }
 
         // # of txns per node
@@ -156,7 +157,7 @@ public class TestApollo {
         oracles.forEach(node -> summary(node.getAvalanche()));
 
         System.out.println("wanted: ");
-        System.out.println(master.getDag().getWanted().stream().collect(Collectors.toList()));
+        System.out.println(master.getAvalanche().getDag().getWanted().stream().collect(Collectors.toList()));
         System.out.println();
         System.out.println();
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);

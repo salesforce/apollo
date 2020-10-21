@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.consortium.proto";
+option java_outer_classname = "ConsortiumProto";
+option objc_class_prefix = "Cp";
+
+package apollo.consortium;
+
+service Consortium { 
+}
+
+message CertifiedBlock {
+    Block block = 1;
+    repeated Certification certifications = 2;
+}
+
+message Block {
+    Header header = 1;
+    Body body = 2;
+}
+
+message Header {
+    bytes previous = 1;
+    int64 height = 2;
+    int64 lastCheckpoint = 3;
+    int64 lastReconfig = 4;
+    bytes bodyHash = 5;
+    bytes nonce = 6;
+}
+
+message Body {
+    int64 consensusId = 1;
+    BodyType type = 2;
+    bytes contents = 3;
+}
+
+message Certification {
+    bytes id = 1;
+    bytes signature = 2;
+}
+
+enum BodyType {
+    GENESIS = 0;
+    USER = 1;
+    RECONFIGURE = 2;
+    CHECKPOINT = 3;
+}
+
+message Genesis {
+    bytes genesisData = 1;
+    Reconfigure initialView = 2;
+}
+
+message User {
+    repeated Transaction transactions = 1;
+    repeated bytes responses = 2;
+}
+
+message Reconfigure {
+    bytes id = 1;
+    int32 checkpointBlocks = 2;
+    repeated bytes view = 3;
+    repeated bytes consensusKeys = 5;
+}
+
+message Checkpoint {
+    repeated Transaction transactions = 1;
+    repeated Response responses = 2;
+} 
+
+message Transaction {
+    Batch batch = 1;
+    bytes signature = 2;
+}
+
+message Batch {  
+    bytes originator = 1;
+    repeated bytes batch = 2;
+}
+
+message Response {
+    repeated bytes responses = 1;
+}
+ 
