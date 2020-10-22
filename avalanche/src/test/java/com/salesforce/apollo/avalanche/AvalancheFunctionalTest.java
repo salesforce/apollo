@@ -150,7 +150,7 @@ abstract public class AvalancheFunctionalTest {
             // parent selection target for avalanche dag voting
             aParams.parentCount = 5;
             aParams.queryBatchSize = 400;
-            aParams.noOpsPerRound = 10;
+            aParams.noOpsPerRound = 2;
             aParams.maxNoOpParents = 10;
             aParams.outstandingQueries = 5;
             aParams.noOpQueryFactor = 40;
@@ -171,7 +171,7 @@ abstract public class AvalancheFunctionalTest {
         int target = 4_000;
         Duration ffRound = Duration.ofMillis(1_00);
         int outstanding = 400;
-        int runtime = (int) Duration.ofSeconds(180).toMillis();
+        int runtime = (int) Duration.ofSeconds(400).toMillis();
 
         communications.values().forEach(e -> e.start());
         views.parallelStream().forEach(view -> view.getService().start(ffRound, seeds, scheduler));
@@ -284,7 +284,7 @@ abstract public class AvalancheFunctionalTest {
 
         transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 2, scheduler));
 
-        boolean seeded = Utils.waitForCondition(10_000, 500, () -> {
+        boolean seeded = Utils.waitForCondition(30_000, 500, () -> {
             return transactioneers.stream()
                                   .mapToInt(t -> t.getSuccess())
                                   .filter(s -> s >= 2)

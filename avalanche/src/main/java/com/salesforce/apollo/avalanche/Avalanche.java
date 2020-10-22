@@ -69,10 +69,10 @@ public class Avalanche {
 
     public class Service {
 
-        public QueryResult onQuery(List<ByteBuffer> transactions, List<HashKey> wanted) {
+        public QueryResult onQuery(List<byte[]> list, List<HashKey> wanted) {
             if (!running.get()) {
                 ArrayList<Vote> results = new ArrayList<>();
-                for (int i = 0; i < transactions.size(); i++) {
+                for (int i = 0; i < list.size(); i++) {
                     results.add(Vote.UNKNOWN);
                     if (metrics != null) {
                         metrics.getInboundQueryUnknownRate().mark();
@@ -83,7 +83,7 @@ public class Avalanche {
             long now = System.currentTimeMillis();
             Context timer = metrics == null ? null : metrics.getInboundQueryTimer().time();
 
-            final List<HashKey> inserted = dag.insertSerialized(transactions, System.currentTimeMillis());
+            final List<HashKey> inserted = dag.insertSerializedRaw(list, System.currentTimeMillis());
             List<Boolean> stronglyPreferred = dag.isStronglyPreferred(inserted);
             log.trace("onquery {} txn in {} ms", stronglyPreferred, System.currentTimeMillis() - now);
             List<Vote> queried = stronglyPreferred.stream().map(r -> {
@@ -101,10 +101,9 @@ public class Avalanche {
 
             if (timer != null) {
                 timer.close();
-                metrics.getInboundQueryRate().mark(transactions.size());
+                metrics.getInboundQueryRate().mark(list.size());
             }
-            assert queried.size() == transactions.size() : "on query results " + queried.size() + " != "
-                    + transactions.size();
+            assert queried.size() == list.size() : "on query results " + queried.size() + " != " + list.size();
 
             return QueryResult.newBuilder()
                               .addAllResult(queried)
@@ -448,9 +447,9 @@ public class Avalanche {
             }
             log.trace("queried: {} for: {} result: {}", m, batch.size(), result.getResultList());
             dag.insertSerializedRaw(result.getWantedList()
-                  .stream()
-                  .map(e -> e.toByteArray())
-                  .collect(Collectors.toList()),
+                                          .stream()
+                                          .map(e -> e.toByteArray())
+                                          .collect(Collectors.toList()),
                                     System.currentTimeMillis());
             if (want.size() > 0 && metrics != null && m == wanted) {
                 metrics.getSatisfiedRate().mark(want.size());

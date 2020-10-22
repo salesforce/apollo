@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.protocols;
+package com.salesforce.apollo.snow.ids;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -18,25 +18,25 @@ import com.google.protobuf.ByteString;
  * @author hal.hildebrand
  * @since 220
  */
-public class HashKey implements Comparable<HashKey> {
- 
-    private static final int    KEY_BYTE_SIZE = 32;
-    public static final HashKey LAST;
-    public static final HashKey ORIGIN;
+public class ID implements Comparable<ID> {
+
+    private static final int KEY_BYTE_SIZE = 32;
+    public static final ID   LAST;
+    public static final ID   ORIGIN;
 
     private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
 
     static {
-        byte[] o = new byte[32];
+        byte[] o = new byte[KEY_BYTE_SIZE];
         Arrays.fill(o, (byte) 0);
-        ORIGIN = new HashKey(o);
-        byte[] l = new byte[32];
+        ORIGIN = new ID(o);
+        byte[] l = new byte[KEY_BYTE_SIZE];
         Arrays.fill(l, (byte) 255);
-        LAST = new HashKey(l);
+        LAST = new ID(l);
     }
 
     public static byte[] bytes(UUID uuid) {
-        byte[] bytes = new byte[32];
+        byte[] bytes = new byte[KEY_BYTE_SIZE];
         ByteBuffer buf = ByteBuffer.wrap(bytes);
         buf.putLong(uuid.getLeastSignificantBits());
         buf.putLong(uuid.getMostSignificantBits());
@@ -74,7 +74,7 @@ public class HashKey implements Comparable<HashKey> {
     protected final byte[] itself;
     private final int      hashCode;
 
-    public HashKey(byte[] key) {
+    public ID(byte[] key) {
         if (key == null) {
             throw new IllegalArgumentException("Cannot be null");
         } else if (key.length < 32) {
@@ -91,19 +91,19 @@ public class HashKey implements Comparable<HashKey> {
         hashCode = ByteBuffer.wrap(itself).getInt();
     }
 
-    public HashKey(ByteString key) {
+    public ID(ByteString key) {
         this(key.toByteArray());
     }
 
-    public HashKey(String b64Encoded) {
+    public ID(String b64Encoded) {
         this(Base64.getUrlDecoder().decode(b64Encoded));
     }
 
-    public HashKey(UUID uuid) {
+    public ID(UUID uuid) {
         this(bytes(uuid));
     }
 
-    public HashKey(BigInteger i) {
+    public ID(BigInteger i) {
         this(i.toByteArray());
     }
 
@@ -116,7 +116,7 @@ public class HashKey implements Comparable<HashKey> {
     }
 
     @Override
-    public int compareTo(HashKey o) {
+    public int compareTo(ID o) {
         return compare(itself, o.itself);
     }
 
@@ -128,7 +128,7 @@ public class HashKey implements Comparable<HashKey> {
             return false;
         if (getClass() != obj.getClass())
             return false;
-        return Arrays.equals(itself, ((HashKey) obj).itself);
+        return Arrays.equals(itself, ((ID) obj).itself);
     }
 
     @Override

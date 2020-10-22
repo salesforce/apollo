@@ -1285,14 +1285,14 @@ public class View {
      */
     void processUpdates(List<EncodedCertificate> certificatUpdates, List<Signed> noteUpdates,
                         List<Signed> accusationUpdates, List<Message> messageUpdates) {
-        certificatUpdates.stream()
+        certificatUpdates.parallelStream()
                          .map(cert -> certificateFrom(cert))
                          .filter(cert -> cert != null)
                          .forEach(cert -> add(cert));
-        noteUpdates.stream()
+        noteUpdates.parallelStream()
                    .map(s -> new Note(s.getContent().toByteArray(), s.getSignature().toByteArray()))
                    .forEach(note -> add(note));
-        accusationUpdates.stream()
+        accusationUpdates.parallelStream()
                          .map(s -> new Accusation(s.getContent().toByteArray(), s.getSignature().toByteArray()))
                          .forEach(accusation -> add(accusation));
 

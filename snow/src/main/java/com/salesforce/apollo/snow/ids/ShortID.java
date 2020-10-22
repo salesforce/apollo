@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2019, salesforce.com, inc.
+ * Copyright (c) 2020, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.protocols;
+package com.salesforce.apollo.snow.ids;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -13,24 +13,24 @@ import java.util.Base64;
 import java.util.UUID;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
- * @since 220
+ *
  */
-public class HashKey implements Comparable<HashKey> {
- 
-    private static final int    KEY_BYTE_SIZE = 32;
+public class ShortID implements Comparable<ShortID> {
     public static final HashKey LAST;
     public static final HashKey ORIGIN;
 
-    private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
+    private static final int BYTE_SIZE = 20;
 
+    private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
     static {
-        byte[] o = new byte[32];
+        byte[] o = new byte[BYTE_SIZE];
         Arrays.fill(o, (byte) 0);
         ORIGIN = new HashKey(o);
-        byte[] l = new byte[32];
+        byte[] l = new byte[BYTE_SIZE];
         Arrays.fill(l, (byte) 255);
         LAST = new HashKey(l);
     }
@@ -71,40 +71,30 @@ public class HashKey implements Comparable<HashKey> {
         return 0;
     }
 
-    protected final byte[] itself;
-    private final int      hashCode;
+    private final int hashCode;
 
-    public HashKey(byte[] key) {
-        if (key == null) {
-            throw new IllegalArgumentException("Cannot be null");
-        } else if (key.length < 32) {
-            itself = new byte[32];
-            int start = itself.length - key.length;
-            for (int i = 0; i < key.length; i++) {
-                itself[i + start] = key[i];
-            }
-        } else if (key.length > KEY_BYTE_SIZE) {
-            throw new IllegalArgumentException("Cannot be larger than " + KEY_BYTE_SIZE + " bytes: " + key.length);
-        } else {
-            itself = key;
-        }
+    private final byte[] itself;
+
+    public ShortID(BigInteger i) {
+        this(i.toByteArray());
+    }
+
+    public ShortID(byte[] bytes) {
+        assert bytes.length == BYTE_SIZE;
+        itself = Arrays.copyOf(bytes, 20);
         hashCode = ByteBuffer.wrap(itself).getInt();
     }
 
-    public HashKey(ByteString key) {
+    public ShortID(ByteString key) {
         this(key.toByteArray());
     }
 
-    public HashKey(String b64Encoded) {
+    public ShortID(String b64Encoded) {
         this(Base64.getUrlDecoder().decode(b64Encoded));
     }
 
-    public HashKey(UUID uuid) {
+    public ShortID(UUID uuid) {
         this(bytes(uuid));
-    }
-
-    public HashKey(BigInteger i) {
-        this(i.toByteArray());
     }
 
     public String b64Encoded() {
@@ -116,7 +106,7 @@ public class HashKey implements Comparable<HashKey> {
     }
 
     @Override
-    public int compareTo(HashKey o) {
+    public int compareTo(ShortID o) {
         return compare(itself, o.itself);
     }
 
@@ -128,7 +118,7 @@ public class HashKey implements Comparable<HashKey> {
             return false;
         if (getClass() != obj.getClass())
             return false;
-        return Arrays.equals(itself, ((HashKey) obj).itself);
+        return Arrays.equals(itself, ((ShortID) obj).itself);
     }
 
     @Override
@@ -148,4 +138,5 @@ public class HashKey implements Comparable<HashKey> {
     public void write(ByteBuffer dest) {
         dest.put(itself);
     }
+
 }
