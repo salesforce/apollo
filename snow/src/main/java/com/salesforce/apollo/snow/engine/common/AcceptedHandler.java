@@ -4,18 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.snow.common;
+package com.salesforce.apollo.snow.engine.common;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface VM {
-    /**
-     * Called when the node is starting to bootstrap this chain
-     */
-    void bootstrapping();
+public interface AcceptedHandler {
 
-    // Called when the node is shutting down
-    void shutdown();
 }

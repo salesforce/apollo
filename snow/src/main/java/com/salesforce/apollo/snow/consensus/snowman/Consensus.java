@@ -4,18 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.snow.common.engine;
-
-import com.salesforce.apollo.snow.Context;
+package com.salesforce.apollo.snow.consensus.snowman;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface Engine extends Handler { 
-    Context ggetContext();
+public class Consensus {
 
-    boolean isBootstrapped();
-
-    Object health();
-} 
+}

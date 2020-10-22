@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.snow;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.slf4j.Logger;
 
 import com.codahale.metrics.MetricRegistry;
@@ -24,12 +26,12 @@ public class Context {
     public final ID             xchainID;
     public final ID             avaxAssetID;
     public final Logger         log;
-    public final int            bootstrapped;
+    private final AtomicBoolean bootstrapped = new AtomicBoolean();
     public final String         namespace;
     public final MetricRegistry metrics;
 
     public Context(int networkID, int subnetID, int chainID, ShortID nodeID, ID xchainID, ID avaxAssetID, Logger log,
-            int bootstrapped, String namespace, MetricRegistry metrics) {
+            String namespace, MetricRegistry metrics) {
         this.networkID = networkID;
         this.subnetID = subnetID;
         this.chainID = chainID;
@@ -37,9 +39,15 @@ public class Context {
         this.xchainID = xchainID;
         this.avaxAssetID = avaxAssetID;
         this.log = log;
-        this.bootstrapped = bootstrapped;
         this.namespace = namespace;
         this.metrics = metrics;
     }
 
+    public boolean isBootstrapped() {
+        return bootstrapped.get();
+    }
+
+    public void bootstrap() {
+        bootstrapped.set(true);
+    }
 }
