@@ -12,8 +12,6 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.UUID;
 
-import com.google.protobuf.ByteString;
-
 /**
  * @author hal.hildebrand
  * @since 220
@@ -91,10 +89,6 @@ public class ID implements Comparable<ID> {
         hashCode = ByteBuffer.wrap(itself).getInt();
     }
 
-    public ID(ByteString key) {
-        this(key.toByteArray());
-    }
-
     public ID(String b64Encoded) {
         this(Base64.getUrlDecoder().decode(b64Encoded));
     }
@@ -134,10 +128,6 @@ public class ID implements Comparable<ID> {
     @Override
     public int hashCode() {
         return hashCode;
-    }
-
-    public ByteString toByteString() {
-        return ByteString.copyFrom(itself);
     }
 
     @Override

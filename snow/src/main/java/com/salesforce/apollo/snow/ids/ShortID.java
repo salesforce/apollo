@@ -12,16 +12,13 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.UUID;
 
-import com.google.protobuf.ByteString;
-import com.salesforce.apollo.protocols.HashKey;
-
 /**
  * @author hal.hildebrand
  *
  */
 public class ShortID implements Comparable<ShortID> {
-    public static final HashKey LAST;
-    public static final HashKey ORIGIN;
+    public static final ShortID LAST;
+    public static final ShortID ORIGIN;
 
     private static final int BYTE_SIZE = 20;
 
@@ -29,10 +26,10 @@ public class ShortID implements Comparable<ShortID> {
     static {
         byte[] o = new byte[BYTE_SIZE];
         Arrays.fill(o, (byte) 0);
-        ORIGIN = new HashKey(o);
+        ORIGIN = new ShortID(o);
         byte[] l = new byte[BYTE_SIZE];
         Arrays.fill(l, (byte) 255);
-        LAST = new HashKey(l);
+        LAST = new ShortID(l);
     }
 
     public static byte[] bytes(UUID uuid) {
@@ -85,10 +82,6 @@ public class ShortID implements Comparable<ShortID> {
         hashCode = ByteBuffer.wrap(itself).getInt();
     }
 
-    public ShortID(ByteString key) {
-        this(key.toByteArray());
-    }
-
     public ShortID(String b64Encoded) {
         this(Base64.getUrlDecoder().decode(b64Encoded));
     }
@@ -124,10 +117,6 @@ public class ShortID implements Comparable<ShortID> {
     @Override
     public int hashCode() {
         return hashCode;
-    }
-
-    public ByteString toByteString() {
-        return ByteString.copyFrom(itself);
     }
 
     @Override

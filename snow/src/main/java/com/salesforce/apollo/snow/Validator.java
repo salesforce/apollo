@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.snow;
 
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.snow.ids.ID;
 
 /**
  * @author hal.hildebrand
@@ -15,16 +15,16 @@ import com.salesforce.apollo.protocols.HashKey;
 public interface Validator {
     class AbstractValidator implements Validator {
 
-        private final HashKey id;
+        private final ID      id;
         private volatile long weight;
 
-        public AbstractValidator(HashKey id, long weight) {
+        public AbstractValidator(ID id, long weight) {
             this.id = id;
             this.weight = weight;
         }
 
         @Override
-        public HashKey id() {
+        public ID id() {
             return id;
         }
 
@@ -52,7 +52,7 @@ public interface Validator {
 
     }
 
-    HashKey id();
+    ID id();
 
     long weight();
 }

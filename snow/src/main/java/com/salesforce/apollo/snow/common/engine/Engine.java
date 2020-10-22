@@ -4,20 +4,18 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.snow.choices;
+package com.salesforce.apollo.snow.common.engine;
 
-import com.salesforce.apollo.snow.ids.ID;
+import com.salesforce.apollo.snow.Context;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface Decidable {
-    ID id();
+public interface Engine extends Handler { 
+    Context ggetContext();
 
-    void accept();
+    boolean isBootstrapped();
 
-    void reject();
-
-    Status status();
-}
+    Object health();
+} 
