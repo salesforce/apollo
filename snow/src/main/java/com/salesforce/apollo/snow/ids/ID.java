@@ -17,24 +17,24 @@ import java.util.UUID;
  * @since 220
  */
 public class ID implements Comparable<ID> {
-
-    private static final int KEY_BYTE_SIZE = 32;
-    public static final ID   LAST;
-    public static final ID   ORIGIN;
-
-    private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
+    public static final ID      LAST;
+    public static final ID      ORIGIN;
+    private static final int    BYTE_SIZE;
+    private final static char[] hexArray  = "0123456789ABCDEF".toCharArray();
+    private static final int    LONG_SIZE = 4;
 
     static {
-        byte[] o = new byte[KEY_BYTE_SIZE];
-        Arrays.fill(o, (byte) 0);
+        BYTE_SIZE = LONG_SIZE * 8;
+        long[] o = new long[LONG_SIZE];
+        Arrays.fill(o, 0);
         ORIGIN = new ID(o);
-        byte[] l = new byte[KEY_BYTE_SIZE];
-        Arrays.fill(l, (byte) 255);
+        long[] l = new long[LONG_SIZE];
+        Arrays.fill(l, 0xffffffffffffffffL);
         LAST = new ID(l);
     }
 
     public static byte[] bytes(UUID uuid) {
-        byte[] bytes = new byte[KEY_BYTE_SIZE];
+        byte[] bytes = new byte[32];
         ByteBuffer buf = ByteBuffer.wrap(bytes);
         buf.putLong(uuid.getLeastSignificantBits());
         buf.putLong(uuid.getMostSignificantBits());
@@ -69,24 +69,39 @@ public class ID implements Comparable<ID> {
         return 0;
     }
 
-    protected final byte[] itself;
-    private final int      hashCode;
+    protected final long[] itself;
+
+    public ID(BigInteger i) {
+        this(i.toByteArray());
+    }
 
     public ID(byte[] key) {
         if (key == null) {
             throw new IllegalArgumentException("Cannot be null");
-        } else if (key.length < 32) {
-            itself = new byte[32];
-            int start = itself.length - key.length;
+        } else if (key.length < BYTE_SIZE) {
+            byte[] normalized = new byte[BYTE_SIZE];
+            int start = BYTE_SIZE - key.length;
             for (int i = 0; i < key.length; i++) {
-                itself[i + start] = key[i];
+                normalized[i + start] = key[i];
             }
-        } else if (key.length > KEY_BYTE_SIZE) {
-            throw new IllegalArgumentException("Cannot be larger than " + KEY_BYTE_SIZE + " bytes: " + key.length);
-        } else {
-            itself = key;
+            key = normalized;
+        } else if (key.length > BYTE_SIZE) {
+            throw new IllegalArgumentException("Cannot be larger than " + BYTE_SIZE + " bytes: " + key.length);
         }
-        hashCode = ByteBuffer.wrap(itself).getInt();
+
+        itself = new long[4];
+        ByteBuffer buff = ByteBuffer.wrap(key);
+        for (int i = 0; i < 4; i++) {
+            itself[i] = buff.getLong();
+        }
+    }
+
+    /**
+     * @param itself
+     */
+    public ID(long[] itself) {
+        assert itself.length == LONG_SIZE;
+        this.itself = itself;
     }
 
     public ID(String b64Encoded) {
@@ -97,21 +112,28 @@ public class ID implements Comparable<ID> {
         this(bytes(uuid));
     }
 
-    public ID(BigInteger i) {
-        this(i.toByteArray());
-    }
-
     public String b64Encoded() {
-        return Base64.getEncoder().withoutPadding().encodeToString(itself);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes());
     }
 
     public byte[] bytes() {
-        return itself;
+        byte[] bytes = new byte[32];
+        ByteBuffer buff = ByteBuffer.wrap(bytes);
+        for (int i = 0; i < itself.length; i++) {
+            buff.putLong(itself[i]);
+        }
+        return bytes;
     }
 
     @Override
     public int compareTo(ID o) {
-        return compare(itself, o.itself);
+        for (int i = 0; i < 4; i++) {
+            int compare = Long.compareUnsigned(itself[i], o.itself[i]);
+            if (compare != 0) {
+                return compare;
+            }
+        }
+        return 0;
     }
 
     @Override
@@ -122,12 +144,22 @@ public class ID implements Comparable<ID> {
             return false;
         if (getClass() != obj.getClass())
             return false;
-        return Arrays.equals(itself, ((ID) obj).itself);
+        long[] other = ((ID) obj).itself;
+        for (int i = 0; i < 4; i++) {
+            if (itself[i] != other[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return hashCode;
+        return (int) (itself[0] & 0xFFFFFFFF);
+    }
+
+    public long[] longs() {
+        return itself;
     }
 
     @Override
@@ -136,6 +168,8 @@ public class ID implements Comparable<ID> {
     }
 
     public void write(ByteBuffer dest) {
-        dest.put(itself);
+        for (long l : itself) {
+            dest.putLong(l);
+        }
     }
 }

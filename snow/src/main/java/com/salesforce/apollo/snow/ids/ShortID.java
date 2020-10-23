@@ -19,16 +19,17 @@ import java.util.UUID;
 public class ShortID implements Comparable<ShortID> {
     public static final ShortID LAST;
     public static final ShortID ORIGIN;
-
-    private static final int BYTE_SIZE = 20;
-
+    private static final int    BYTE_SIZE;
     private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
+    private static final int    INT_SIZE = 5;
+
     static {
-        byte[] o = new byte[BYTE_SIZE];
-        Arrays.fill(o, (byte) 0);
+        BYTE_SIZE = INT_SIZE * 4;
+        int[] o = new int[INT_SIZE];
+        Arrays.fill(o, 0);
         ORIGIN = new ShortID(o);
-        byte[] l = new byte[BYTE_SIZE];
-        Arrays.fill(l, (byte) 255);
+        int[] l = new int[INT_SIZE];
+        Arrays.fill(l, 0xffffffff);
         LAST = new ShortID(l);
     }
 
@@ -68,18 +69,39 @@ public class ShortID implements Comparable<ShortID> {
         return 0;
     }
 
-    private final int hashCode;
-
-    private final byte[] itself;
+    protected final int[] itself;
 
     public ShortID(BigInteger i) {
         this(i.toByteArray());
     }
 
-    public ShortID(byte[] bytes) {
-        assert bytes.length == BYTE_SIZE;
-        itself = Arrays.copyOf(bytes, 20);
-        hashCode = ByteBuffer.wrap(itself).getInt();
+    public ShortID(byte[] key) {
+        if (key == null) {
+            throw new IllegalArgumentException("Cannot be null");
+        } else if (key.length < BYTE_SIZE) {
+            byte[] normalized = new byte[BYTE_SIZE];
+            int start = BYTE_SIZE - key.length;
+            for (int i = 0; i < key.length; i++) {
+                normalized[i + start] = key[i];
+            }
+            key = normalized;
+        } else if (key.length > BYTE_SIZE) {
+            throw new IllegalArgumentException("Cannot be larger than " + BYTE_SIZE + " bytes: " + key.length);
+        }
+
+        itself = new int[5];
+        ByteBuffer buff = ByteBuffer.wrap(key);
+        for (int i = 0; i < INT_SIZE; i++) {
+            itself[i] = buff.getInt();
+        }
+    }
+
+    /**
+     * @param itself
+     */
+    public ShortID(int[] itself) {
+        assert itself.length == INT_SIZE;
+        this.itself = itself;
     }
 
     public ShortID(String b64Encoded) {
@@ -91,16 +113,27 @@ public class ShortID implements Comparable<ShortID> {
     }
 
     public String b64Encoded() {
-        return Base64.getEncoder().withoutPadding().encodeToString(itself);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes());
     }
 
     public byte[] bytes() {
-        return itself;
+        byte[] bytes = new byte[32];
+        ByteBuffer buff = ByteBuffer.wrap(bytes);
+        for (int i = 0; i < itself.length; i++) {
+            buff.putLong(itself[i]);
+        }
+        return bytes;
     }
 
     @Override
     public int compareTo(ShortID o) {
-        return compare(itself, o.itself);
+        for (int i = 0; i < 4; i++) {
+            int compare = Long.compareUnsigned(itself[i], o.itself[i]);
+            if (compare != 0) {
+                return compare;
+            }
+        }
+        return 0;
     }
 
     @Override
@@ -111,12 +144,22 @@ public class ShortID implements Comparable<ShortID> {
             return false;
         if (getClass() != obj.getClass())
             return false;
-        return Arrays.equals(itself, ((ShortID) obj).itself);
+        int[] other = ((ShortID) obj).itself;
+        for (int i = 0; i < 4; i++) {
+            if (itself[i] != other[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return hashCode;
+        return (int) (itself[0] & 0xFFFFFFFF);
+    }
+
+    public int[] ints() {
+        return itself;
     }
 
     @Override
@@ -125,7 +168,8 @@ public class ShortID implements Comparable<ShortID> {
     }
 
     public void write(ByteBuffer dest) {
-        dest.put(itself);
+        for (int l : itself) {
+            dest.putInt(l);
+        }
     }
-
 }
