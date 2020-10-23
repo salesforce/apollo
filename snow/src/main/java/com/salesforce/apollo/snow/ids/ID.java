@@ -17,10 +17,24 @@ import java.util.UUID;
  * @since 220
  */
 public class ID implements Comparable<ID> {
-    public static final ID   LAST;
-    public static final ID   ORIGIN;
+    public static final ID LAST;
+    public static final ID ORIGIN;
+
+    private static final int ADDRESS_BITS_PER_WORD = 6;
     private static final int BYTE_SIZE;
-    private static final int LONG_SIZE = 4;
+    private static final int LONG_SIZE             = 4;
+
+    // NumBits is the number of bits this patricia tree manages
+    public static final int NumBits = 256;
+
+    // EqualSubset takes in two indices and two ids and returns if the ids are
+    // equal from bit start to bit end (non-inclusive). Bit indices are defined as:
+    // [7 6 5 4 3 2 1 0] [15 14 13 12 11 10 9 8] ... [255 254 253 252 251 250 249
+    // 248]
+    // Where index 7 is the MSB of byte 0.
+    static boolean equalSubset(int start, int stop, ID id1, ID id2) {
+        return true; // TODO
+    }
 
     static {
         BYTE_SIZE = LONG_SIZE * 8;
@@ -38,6 +52,13 @@ public class ID implements Comparable<ID> {
         buf.putLong(uuid.getLeastSignificantBits());
         buf.putLong(uuid.getMostSignificantBits());
         return bytes;
+    }
+
+    /**
+     * Given a bit index, return word index containing it.
+     */
+    private static int wordIndex(int bitIndex) {
+        return bitIndex >> ADDRESS_BITS_PER_WORD;
     }
 
     protected final long[] itself;
@@ -85,6 +106,13 @@ public class ID implements Comparable<ID> {
 
     public String b64Encoded() {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes());
+    }
+
+    public boolean bit(int bitIndex) {
+        if (bitIndex < 0)
+            throw new IndexOutOfBoundsException("bitIndex < 0: " + bitIndex);
+        int wordIndex = wordIndex(bitIndex);
+        return (wordIndex < LONG_SIZE) && ((itself[wordIndex] & (1L << bitIndex)) != 0);
     }
 
     public byte[] bytes() {

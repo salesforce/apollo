@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.snow.consensus.snowman;
+package com.salesforce.apollo.snow.consensus.snowball;
 
-import com.salesforce.apollo.snow.Context;
-import com.salesforce.apollo.snow.consensus.snowball.Parameters;
 import com.salesforce.apollo.snow.ids.Bag;
 import com.salesforce.apollo.snow.ids.ID;
 
@@ -16,23 +14,21 @@ import com.salesforce.apollo.snow.ids.ID;
  *
  */
 public interface Consensus {
-
     interface Factory {
-        Consensus construct();
+        public Consensus construct();
     }
 
-    void add(Block b);
+    void add(ID newChoice);
 
     boolean finalized();
 
-    void initialize(Context context, Parameters params, ID id);
-
-    boolean issued(Block b);
+    void initialize(Parameters parameters, ID initialPreference);
 
     Parameters parameters();
 
     ID preference();
 
-    void recordPoll(Bag poll);
+    void recordPoll(Bag votes);
 
+    void recordUnsuccessfulPoll();
 }
