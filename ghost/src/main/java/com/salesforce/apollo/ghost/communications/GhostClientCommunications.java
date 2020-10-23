@@ -9,9 +9,9 @@ package com.salesforce.apollo.ghost.communications;
 import java.util.List;
 
 import com.salesfoce.apollo.proto.ADagEntry;
-import com.salesfoce.apollo.proto.Bytes;
 import com.salesfoce.apollo.proto.DagEntries;
 import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.Get;
 import com.salesfoce.apollo.proto.GhostGrpc;
 import com.salesfoce.apollo.proto.GhostGrpc.GhostBlockingStub;
 import com.salesfoce.apollo.proto.Interval;
@@ -60,7 +60,7 @@ public class GhostClientCommunications implements SpaceGhost {
 
     @Override
     public DagEntry get(HashKey entry) {
-        return client.get(Bytes.newBuilder().setBites(entry.toByteString()).build());
+        return client.get(Get.newBuilder().setId(entry.toID()).build());
     }
 
     @Override
