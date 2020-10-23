@@ -15,9 +15,9 @@ import java.util.stream.Collectors;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.AvalancheGrpc.AvalancheImplBase;
 import com.salesfoce.apollo.proto.DagNodes;
-import com.salesfoce.apollo.proto.DagNodes.Builder;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.QueryResult;
+import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.Avalanche.Service;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
 import com.salesforce.apollo.comm.grpc.BaseServerCommunications;
@@ -39,7 +39,7 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
     public AvalancheServerCommunications(Service avalanche, ClientIdentity identity, AvalancheMetrics metrics) {
         this.system = avalanche;
         this.identity = identity;
-        this.metrics = metrics; 
+        this.metrics = metrics;
     }
 
     @Override
@@ -75,15 +75,15 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
     }
 
     @Override
-    public void requestDag(DagNodes request, StreamObserver<DagNodes> responseObserver) {
+    public void requestDag(DagNodes request, StreamObserver<SuppliedDagNodes> responseObserver) {
         evaluate(responseObserver, request.getContext(), s -> {
             List<ByteBuffer> result = s.requestDAG(request.getEntriesList()
                                                           .stream()
                                                           .map(e -> new HashKey(e))
                                                           .collect(Collectors.toList()));
-            Builder builder = DagNodes.newBuilder();
+            com.salesfoce.apollo.proto.SuppliedDagNodes.Builder builder = SuppliedDagNodes.newBuilder();
             result.forEach(e -> builder.addEntries(ByteString.copyFrom(e)));
-            DagNodes dags = builder.build();
+            SuppliedDagNodes dags = builder.build();
             responseObserver.onNext(dags);
             responseObserver.onCompleted();
             if (metrics != null) {

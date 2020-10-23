@@ -372,7 +372,7 @@ public class WorkingSet {
 
         @Override
         public void snip() {
-            finalized.put(key.bytes(), getEntry());
+            finalized.put(key, getEntry());
             unfinalized.remove(key);
             List<Node> deps;
             synchronized (this) {
@@ -758,18 +758,18 @@ public class WorkingSet {
         return finalized.allFinalized();
     }
 
-    public Collection<byte[]> finalized() {
-        List<byte[]> l = new ArrayList<>();
+    public Collection<HashKey> finalized() {
+        List<HashKey> l = new ArrayList<>();
         unfinalized.values()
                    .stream()
                    .filter(node -> node.isFinalized())
                    .filter(e -> l.size() < 100)
                    .map(node -> node.getKey())
-                   .forEach(e -> l.add(e.bytes()));
+                   .forEach(e -> l.add(e));
         if (!l.isEmpty()) {
             return l;
         }
-        for (byte[] key : finalized.keySet()) {
+        for (HashKey key : finalized.keySet()) {
             l.add(key);
             if (l.size() > 100) {
                 return l;
@@ -824,7 +824,7 @@ public class WorkingSet {
         if (node != null) {
             return manifestDag(node.getEntry());
         }
-        byte[] entry = finalized.get(key.bytes());
+        byte[] entry = finalized.get(key);
         return entry == null ? null : manifestDag(entry);
     }
 
@@ -832,7 +832,7 @@ public class WorkingSet {
         return collect.stream().map(key -> {
             Node n = unfinalized.get(key);
             if (n == null) {
-                byte[] entry = finalized.get(key.bytes());
+                byte[] entry = finalized.get(key);
                 return entry == null ? null : entry;
             }
             return n.getEntry();
@@ -918,7 +918,7 @@ public class WorkingSet {
     }
 
     public boolean isFinalized(HashKey key) {
-        return finalized.containsKey(key.bytes());
+        return finalized.containsKey(key);
     }
 
     public Boolean isStronglyPreferred(HashKey key) {
@@ -929,7 +929,7 @@ public class WorkingSet {
         return keys.stream().map((Function<? super HashKey, ? extends Boolean>) key -> {
             Node node = unfinalized.get(key);
             if (node == null) {
-                final Boolean isFinalized = finalized.cacheContainsKey(key.bytes()) ? true : null;
+                final Boolean isFinalized = finalized.cacheContainsKey(key) ? true : null;
                 if (isFinalized == null) {
                     unknown.add(key);
                 }
@@ -1021,7 +1021,7 @@ public class WorkingSet {
             sample = preferred(entropy);
         }
         if (sample.isEmpty()) {
-            sample = new ArrayList<>(finalized().stream().map(e -> new HashKey(e)).collect(Collectors.toList()));
+            sample = new ArrayList<>(finalized());
         }
         collector.addAll(sample);
         return sample.size();
@@ -1058,7 +1058,7 @@ public class WorkingSet {
                    .stream()
                    .filter(e -> !e.getValue().isFinalized())
                    .forEach(e -> p.accept(e.getKey(), manifestDag(e.getValue().getEntry())));
-        finalized.keySet().stream().map(e -> new HashKey(e)).forEach(e -> p.accept(e, getDagEntry(e)));
+        finalized.keySet().forEach(e -> p.accept(e, getDagEntry(e)));
     }
 
     public FinalizationData tryFinalize(Collection<HashKey> keys) {
@@ -1121,7 +1121,7 @@ public class WorkingSet {
         try {
             final Node found = unfinalized.get(key);
             if (found == null) {
-                if (!finalized.containsKey(key.bytes())) {
+                if (!finalized.containsKey(key)) {
                     Node node = nodeFor(key, serialized, entry, noOp, discovered, cs);
                     unfinalized.put(key, node);
                     unqueried.add(key);
@@ -1169,7 +1169,7 @@ public class WorkingSet {
     Node resolve(HashKey key, long discovered) {
         Node exist = unfinalized.get(key);
         if (exist == null) {
-            if (finalized.containsKey(key.bytes())) {
+            if (finalized.containsKey(key)) {
                 return null;
             }
             exist = new UnknownNode(key, discovered);
@@ -1193,7 +1193,7 @@ public class WorkingSet {
                 return node.getEntry();
             }
         }
-        byte[] bs = finalized.get(key.bytes());
+        byte[] bs = finalized.get(key);
         assert bs.length > 0 : "invalid stored for: " + key;
         return bs;
     }

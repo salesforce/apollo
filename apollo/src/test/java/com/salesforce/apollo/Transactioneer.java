@@ -14,7 +14,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
@@ -72,14 +71,18 @@ public class Transactioneer {
         futureSailor = scheduler.scheduleWithFixedDelay(() -> {
             for (int i = 0; i < outstanding.size(); i++) {
                 try {
-                    HashKey result = outstanding.get(i).get(1, TimeUnit.MILLISECONDS);
-                    outstanding.remove(i);
-                    if (result != null) {
-                        success.incrementAndGet();
-                    } else {
-                        failed.incrementAndGet();
+                    CompletableFuture<HashKey> future = outstanding.get(i);
+
+                    if (future.isDone()) {
+                        HashKey result = future.get();
+                        outstanding.remove(i);
+                        if (result != null) {
+                            success.incrementAndGet();
+                        } else {
+                            failed.incrementAndGet();
+                        }
                     }
-                } catch (TimeoutException | InterruptedException e) {
+                } catch (InterruptedException e) {
                 } catch (ExecutionException e) {
                     e.getCause().printStackTrace();
                 }
