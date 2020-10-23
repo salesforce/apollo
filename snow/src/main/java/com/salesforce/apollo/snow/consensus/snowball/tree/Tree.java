@@ -8,6 +8,7 @@ package com.salesforce.apollo.snow.consensus.snowball.tree;
 
 import com.salesforce.apollo.snow.consensus.snowball.Consensus;
 import com.salesforce.apollo.snow.consensus.snowball.Parameters;
+import com.salesforce.apollo.snow.consensus.snowball.UnarySnowball;
 import com.salesforce.apollo.snow.ids.Bag;
 import com.salesforce.apollo.snow.ids.ID;
 
@@ -64,7 +65,7 @@ public class Tree implements Consensus {
 
     @Override
     public ID preference() { 
-        return node.snowball();
+        return node.getSnowball().preference();
     }
 
     @Override

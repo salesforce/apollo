@@ -14,12 +14,25 @@ package com.salesforce.apollo.snow.consensus.snowball;
 //BinarySlush is a slush instance deciding between two values. After performing
 //a network sample of k nodes, if you have alpha votes for one of the choices,
 //you should vote for that choice.
-public interface BinarySlush {
+public class BinarySlush {
 
-    void initialize(int initialPreference);
+    int preference;
+ 
+    public BinarySlush(int initialPreference) {
+       preference = initialPreference;
+    } 
 
-    int preference();
+    public int preference() {
+        return preference;
+    }
 
-    void recordSuccssfulPoll(int choice);
+    public  void recordSuccessfulPoll(int choice) {
+        preference = choice;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("BinarySlush [preference=%s]", preference);
+    }
 
 }

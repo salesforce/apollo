@@ -13,6 +13,34 @@ package com.salesforce.apollo.snow.consensus.snowball;
 
 //BinarySnowball augments BinarySnowflake with a counter that tracks the total
 //number of positive responses from a network sample.
-public interface BinarySnowball extends BinarySnowflake {
+public class BinarySnowball extends BinarySnowflake {
+    private int   preference;
+    private int[] numSucessfulPolls = new int[2];
+
+    public BinarySnowball(int beta, int initialPreference) {
+        super(beta, initialPreference);
+        preference = initialPreference;
+    }
+
+    @Override
+    public int preference() {
+        // It is possible, with low probability, that the snowflake preference is
+        // not equal to the snowball preference when snowflake finalizes. However,
+        // this case is handled for completion. Therefore, if snowflake is
+        // finalized, then our finalized snowflake choice should be preferred.
+        if (finalized()) {
+            return super.preference();
+        }
+        return preference;
+    }
+
+    @Override
+    public void recordSuccessfulPoll(int choice) {
+        numSucessfulPolls[choice]++;
+        if (numSucessfulPolls[choice] > numSucessfulPolls[1 - choice]) {
+            preference = choice;
+        }
+        super.recordSuccessfulPoll(choice);
+    }
 
 }

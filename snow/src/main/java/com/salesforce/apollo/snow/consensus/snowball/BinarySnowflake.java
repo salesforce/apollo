@@ -15,13 +15,43 @@ package com.salesforce.apollo.snow.consensus.snowball;
 //After performing a network sample of k nodes, if you have alpha votes for
 //one of the choices, you should vote for that choice. Otherwise, you should
 //reset.
-public interface BinarySnowflake {
+public class BinarySnowflake extends BinarySlush {
+    private int     confidence;
+    private int     beta;
+    private boolean finalized;
 
-    void initialize(int beta, int initialPreference);
+    public BinarySnowflake(int beta, int initialPreference) {
+        super(initialPreference);
+        this.beta = beta;
+    }
 
-    int preference();
+    @Override
+    public void recordSuccessfulPoll(int choice) {
+        if (finalized) {
+            return;
+        }
+        int preference = super.preference();
+        if (preference == choice) {
+            confidence++;
+        } else {
+            confidence = 1;
+        }
+        finalized = confidence >= beta;
+        super.recordSuccessfulPoll(choice);
+    }
 
-    void recordSuccessfulPoll(int choice);
+    public void recordUnsuccessfulPoll() {
+        confidence = 0;
+    }
 
-    boolean finalized();
+    public boolean finalized() {
+        return finalized;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("BinarySnowflake [confidence=%s, finalized=%s, preference=%s]", confidence, finalized,
+                             preference);
+    }
+
 }
