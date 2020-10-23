@@ -20,8 +20,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.ID;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
 import com.salesforce.apollo.protocols.HashKey;
@@ -56,7 +56,7 @@ public class DagViz {
 
         while (!stack.isEmpty()) {
             final DagEntry node = stack.remove(stack.size() - 1);
-            final List<ByteString> links = node.getLinksList() == null ? Collections.emptyList() : node.getLinksList();
+            final List<ID> links = node.getLinksList() == null ? Collections.emptyList() : node.getLinksList();
             for (HashKey e : links.stream().map(e -> new HashKey(e)).collect(Collectors.toList())) {
                 if (visited.add(e)) {
                     DagEntry child = dag.getDagEntry(e);

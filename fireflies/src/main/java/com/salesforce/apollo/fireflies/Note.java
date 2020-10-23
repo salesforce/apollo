@@ -56,7 +56,7 @@ public class Note implements Verifiable {
         byte[] maskBytes = mask.toByteArray();
         ByteBuffer buffer = ByteBuffer.wrap(new byte[BASE_SIZE + maskBytes.length]);
         buffer.putLong(epoch);
-        buffer.put(id.bytes());
+        id.write(buffer);
         buffer.put(maskBytes);
         content = buffer.array();
         try {

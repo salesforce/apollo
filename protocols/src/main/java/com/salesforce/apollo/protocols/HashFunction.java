@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.protocols;
 
-import java.nio.ByteBuffer;
 import java.util.BitSet;
 
 /**
@@ -91,9 +90,8 @@ public class HashFunction {
         }
 
         private void process(HashKey key) {
-            ByteBuffer buf = ByteBuffer.wrap(key.itself);
-            bmix64(buf.getLong(), buf.getLong());
-            bmix64(buf.getLong(), buf.getLong());
+            bmix64(key.itself[0], key.itself[1]);
+            bmix64(key.itself[2], key.itself[3]);
             makeHash();
         }
 

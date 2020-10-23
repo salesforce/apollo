@@ -38,7 +38,7 @@ public class GenesisBlockApi {
         }
 
         public Result(HashKey hash, boolean error, String errorMessage) {
-            this.hash = hash == null ? null : new String(Base64.getUrlEncoder().withoutPadding().encode(hash.bytes()));
+            this.hash = hash == null ? null : hash.b64Encoded();
             this.error = error;
             this.errorMessage = errorMessage;
         }

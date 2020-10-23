@@ -105,7 +105,7 @@ public class DagTest {
         }).collect(Collectors.toList());
     }
 
-    //@Test
+    // @Test
     public void smoke() {
         long then = System.currentTimeMillis();
 
@@ -151,7 +151,7 @@ public class DagTest {
                 Builder b = DagEntry.newBuilder().setData(ByteString.copyFrom("root node".getBytes()));
                 b.setData(ByteString.copyFrom(String.format("Member: %s round: %s", ghost.getNode().getId(), i)
                                                     .getBytes()));
-                randomLinksTo(stored).forEach(e -> b.addLinks(e.toByteString()));
+                randomLinksTo(stored).forEach(e -> b.addLinks(e.toID()));
 
                 DagEntry entry = builder.build();
                 stored.put(ghost.putDagEntry(entry), entry);

@@ -10,7 +10,7 @@ import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ID;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -24,9 +24,8 @@ import io.grpc.stub.StreamObserver;
  */
 public abstract interface BaseServerCommunications<T> {
 
-    default void evaluate(StreamObserver<?> responseObserver, ByteString context, Consumer<T> c, T s,
-                          Map<HashKey, T> services) {
-        T service = getService(context, s, services);
+    default void evaluate(StreamObserver<?> responseObserver, ID id, Consumer<T> c, T s, Map<HashKey, T> services) {
+        T service = getService(id, s, services);
         if (service == null) {
             responseObserver.onError(new StatusRuntimeException(Status.UNKNOWN));
         } else {
@@ -44,8 +43,9 @@ public abstract interface BaseServerCommunications<T> {
         return getClientIdentity().getFrom();
     }
 
-    default T getService(ByteString context, T system, Map<HashKey, T> services) {
-        return ((context == null || context.isEmpty()) && system != null) ? system : services.get(new HashKey(context));
+    default T getService(ID context, T system, Map<HashKey, T> services) {
+        return ((context == null || context.getItselfCount() == 0) && system != null) ? system
+                : services.get(new HashKey(context));
     }
 
     void register(HashKey id, T service);

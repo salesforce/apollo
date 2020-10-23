@@ -19,6 +19,7 @@ import com.salesfoce.apollo.proto.AvalancheGrpc.AvalancheImplBase;
 import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.QueryResult;
+import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
 import com.salesforce.apollo.protocols.CaValidator;
 import com.salesforce.apollo.protocols.Utils;
@@ -64,8 +65,8 @@ public class TestMtls {
             }
 
             @Override
-            public void requestDag(DagNodes request, StreamObserver<DagNodes> responseObserver) {
-                responseObserver.onNext(DagNodes.newBuilder().build());
+            public void requestDag(DagNodes request, StreamObserver<SuppliedDagNodes> responseObserver) {
+                responseObserver.onNext(SuppliedDagNodes.newBuilder().build());
                 responseObserver.onCompleted();
             }
         };

@@ -184,7 +184,7 @@ public class Participant extends Member {
         Note current = note;
         return current == null ? null
                 : EncodedCertificate.newBuilder()
-                                    .setId(getId().toByteString())
+                                    .setId(getId().toID())
                                     .setEpoch(current.getEpoch())
                                     .setHash(ByteString.copyFrom(certificateHash))
                                     .setContent(ByteString.copyFrom(derEncodedCertificate))

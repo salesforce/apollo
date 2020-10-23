@@ -44,8 +44,8 @@ public class Accusation implements Verifiable {
     public Accusation(long epoch, HashKey accuser, int ringNumber, HashKey accused, Signature s) {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[SIZE]);
         buffer.putLong(epoch);
-        buffer.put(accuser.bytes());
-        buffer.put(accused.bytes());
+        accuser.write(buffer);
+        accused.write(buffer);
         buffer.putInt(ringNumber);
         content = buffer.array();
         hash = hashOf(content);

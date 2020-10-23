@@ -50,6 +50,9 @@ import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import guru.nidi.graphviz.engine.Format;
+import guru.nidi.graphviz.engine.Graphviz;
+import guru.nidi.graphviz.model.FileSerializer;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -265,12 +268,12 @@ abstract public class AvalancheFunctionalTest {
         // .convertDurationsTo(TimeUnit.MILLISECONDS)
         // .build()
         // .report();
-        // FileSerializer.serialize(DagViz.visualize("smoke", nodes.get(0).getDag(),
-        // true), new File("smoke.dot"));
-
-        // Graphviz.fromGraph(DagViz.visualize("smoke", nodes.get(0).getDag(),
-        // true)).render(Format.PNG).toFile(new
-        // File("smoke.png"));
+//        FileSerializer.serialize(DagViz.visualize("smoke", processors.get(0).getAvalanche().getDag(), true),
+//                                 new File("smoke.dot"));
+//
+//        Graphviz.fromGraph(DagViz.visualize("smoke", processors.get(0).getAvalanche().getDag(), true))
+//                .render(Format.PNG)
+//                .toFile(new File("smoke.png"));
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
     }
 

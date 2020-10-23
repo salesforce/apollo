@@ -63,7 +63,7 @@ public class ByteTransactionApi {
         }
 
         public TransactionResult(HashKey result) {
-            this(new String(Base64.getUrlEncoder().withoutPadding().encode(result.bytes())));
+            this(result.b64Encoded());
         }
 
         public TransactionResult(String result) {
@@ -148,7 +148,7 @@ public class ByteTransactionApi {
             final HashKey key = processor.getAvalanche()
                                          .submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), data);
             if (key != null) {
-                result.add(Base64.getUrlEncoder().withoutPadding().encodeToString(key.bytes()));
+                result.add(key.b64Encoded());
             } else {
                 result.add(null);
             }
@@ -180,7 +180,7 @@ public class ByteTransactionApi {
             throw new WebApplicationException(
                     Response.status(Status.BAD_REQUEST).entity("No parents available for the transaction").build());
         }
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(key.bytes());
+        return key.b64Encoded();
     }
 
 }
