@@ -51,24 +51,6 @@ public class ID implements Comparable<ID> {
         return new String(hexChars);
     }
 
-    public static int compare(byte[] o1, byte[] o2) {
-        if (o1 == null) {
-            return o2 == null ? 0 : -1;
-        } else if (o2 == null) {
-            return 1;
-        }
-        if (o1.length != o2.length) {
-            return o1.length - o2.length;
-        }
-        for (int i = 0; i < o1.length; i++) {
-            final int diff = (o1[i] & 0xFF) - (o2[i] & 0xFF);
-            if (diff != 0) {
-                return diff;
-            }
-        }
-        return 0;
-    }
-
     protected final long[] itself;
 
     public ID(BigInteger i) {
