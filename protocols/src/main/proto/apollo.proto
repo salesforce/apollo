@@ -29,7 +29,7 @@ service Avalanche {
     /**
      * parent gossip
      */
-    rpc requestDag ( DagNodes ) returns (DagNodes) {}
+    rpc requestDag ( DagNodes ) returns (SuppliedDagNodes) {}
 }
 
 service Ghost {
@@ -47,57 +47,62 @@ service Ghost {
 }
 
 message DagNodes {
-    bytes context = 1;
+    ID context = 1;
+    repeated ID entries = 2;
+}
+
+message SuppliedDagNodes {
+    ID context = 1;
     repeated bytes entries = 2;
 }
 
 message DagEntries {
-    bytes context = 1;
+    ID context = 1;
     repeated DagEntry entries = 2;
 }
 
 message Bytes {
-    bytes context = 1;
+    ID context = 1;
     bytes bites = 2;
 }
 
 message ADagEntry {
-    bytes context = 1;
+    ID context = 1;
     DagEntry entry = 2;
 }
 
 message Intervals {
-    bytes context = 1;
+    ID context = 1;
     repeated Interval intervals = 2;
     repeated bytes have = 3;
 }
 
 message Query {
-    bytes context = 1;
+    ID context = 1;
     repeated bytes transactions = 2;
-    repeated bytes wanted = 3;
+    repeated ID wanted = 3;
 }
 
 message Null {
-    bytes context = 1;
+    ID context = 1;
 }
 
 message SayWhat {
-    bytes context = 1;
+    ID context = 1;
     Signed note = 2;
     int32 ring = 3;
     Digests gossip = 4;
 }
 
 message State {
-    bytes context = 1;
+    ID context = 1;
     int32 ring = 2;
     Update update = 3;
 }
 
 message Message {
-    bytes source = 1;
-    bytes id = 2;
+    ID source = 1;
+    ID id = 2;
     int32 age = 3;
     int64 time = 4;
     int32 channel = 5;
@@ -122,7 +127,7 @@ message AccusationGossip {
     } 
 
 message EncodedCertificate {
-        bytes id = 1;
+        ID id = 1;
         int64 epoch = 2;
         bytes hash = 3;
         bytes content = 4; 
@@ -169,19 +174,19 @@ message Update {
     }
 
 message DagEntry {
-        bytes description = 1;
-        repeated bytes links = 2;
+        ID description = 1;
+        repeated ID links = 2;
         bytes data = 3;
     }
 
 message Interval {
-        bytes start = 1;
-        bytes end = 2;
+        ID start = 1;
+        ID end = 2;
     }
 
 message JoinResponse {
         Signed forward = 1;
-        repeated bytes interval = 2;
+        repeated ID interval = 2;
     }
 
 message QueryResult {
@@ -192,4 +197,8 @@ message QueryResult {
     } 
     repeated Vote result = 1;
     repeated bytes wanted = 2;
+}
+
+message ID {
+    repeated int64 itself = 1;
 }

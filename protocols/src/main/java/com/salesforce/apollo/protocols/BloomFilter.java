@@ -11,7 +11,6 @@ import java.util.BitSet;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.Biff;
 import com.salesfoce.apollo.proto.Biff.Builder;
-import com.salesforce.apollo.protocols.HashFunction.Hasher;
 
 /**
  * @author hal.hildebrand
@@ -42,7 +41,6 @@ public class BloomFilter {
     }
 
     public void add(HashKey element) {
-        assert element.itself.length == Hasher.HASH_KEY_SIZE;
         h.put(element, bits);
     }
 
@@ -51,7 +49,6 @@ public class BloomFilter {
     }
 
     public boolean contains(HashKey element) {
-        assert element.itself.length == Hasher.HASH_KEY_SIZE;
         return h.mightContain(element, bits);
     }
 

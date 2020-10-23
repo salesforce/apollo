@@ -18,6 +18,7 @@ import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.Query.Builder;
 import com.salesfoce.apollo.proto.QueryResult;
+import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -61,7 +62,7 @@ public class AvalancheClientCommunications implements Avalanche {
         transactions.stream()
                     .filter(e -> e.hasRemaining())
                     .forEach(e -> builder.addTransactions(ByteString.copyFrom(e.array())));
-        wanted.forEach(e -> builder.addWanted(e.toByteString()));
+        wanted.forEach(e -> builder.addWanted(e.toID()));
         try {
             Query query = builder.build();
             QueryResult result = client.query(query);
@@ -84,10 +85,10 @@ public class AvalancheClientCommunications implements Avalanche {
     @Override
     public List<byte[]> requestDAG(Collection<HashKey> want) {
         com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder();
-        want.forEach(e -> builder.addEntries(e.toByteString()));
+        want.forEach(e -> builder.addEntries(e.toID()));
         try {
             DagNodes request = builder.build();
-            DagNodes requested = client.requestDag(request);
+            SuppliedDagNodes requested = client.requestDag(request);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(request.getSerializedSize());
                 metrics.inboundBandwidth().mark(requested.getSerializedSize());

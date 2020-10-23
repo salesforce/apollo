@@ -92,7 +92,7 @@ public class DagApi {
     public String[] allFinalized() {
         final List<String> result = dag.allFinalized()
                                        .stream()
-                                       .map(key -> ENCODER.encodeToString(key.bytes()))
+                                       .map(key -> key.b64Encoded())
                                        .collect(Collectors.toList());
         return result.toArray(new String[result.size()]);
     }

@@ -201,11 +201,11 @@ public class TransactionsTest {
 
         HashKey last = rootKey;
         HashKey firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(rootKey));
-        ordered.add(new HashKey(firstCommit.bytes()));
+        ordered.add(firstCommit);
         last = firstCommit;
 
         HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(rootKey));
-        ordered.add(new HashKey(secondCommit.bytes()));
+        ordered.add(secondCommit);
         last = secondCommit;
 
         TreeSet<HashKey> frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
@@ -215,7 +215,7 @@ public class TransactionsTest {
         assertTrue(frontier.contains(secondCommit));
 
         HashKey userTxn = newDagEntry("Ye test transaction", ordered, stored, dag.sampleParents(entropy));
-        ordered.add(new HashKey(userTxn.bytes()));
+        ordered.add(userTxn);
 
         frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
 

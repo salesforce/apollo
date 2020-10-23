@@ -64,9 +64,9 @@ public class DagTest {
     public static DagEntry dag(HashKey description, byte[] data, List<HashKey> links) {
         Builder builder = DagEntry.newBuilder();
         if (description != null)
-            builder.setDescription(description.toByteString());
+            builder.setDescription(description.toID());
         builder.setData(ByteString.copyFrom(data));
-        links.forEach(e -> builder.addLinks(e.toByteString()));
+        links.forEach(e -> builder.addLinks(e.toID()));
         return builder.build();
     }
 

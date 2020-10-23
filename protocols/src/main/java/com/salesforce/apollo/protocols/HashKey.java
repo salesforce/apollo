@@ -13,25 +13,27 @@ import java.util.Base64;
 import java.util.UUID;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ID;
+import com.salesfoce.apollo.proto.ID.Builder;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class HashKey implements Comparable<HashKey> {
- 
-    private static final int    KEY_BYTE_SIZE = 32;
     public static final HashKey LAST;
     public static final HashKey ORIGIN;
-
-    private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
+    private static final int    BYTE_SIZE;
+    private final static char[] hexArray  = "0123456789ABCDEF".toCharArray();
+    private static final int    LONG_SIZE = 4;
 
     static {
-        byte[] o = new byte[32];
-        Arrays.fill(o, (byte) 0);
+        BYTE_SIZE = LONG_SIZE * 8;
+        long[] o = new long[LONG_SIZE];
+        Arrays.fill(o, 0);
         ORIGIN = new HashKey(o);
-        byte[] l = new byte[32];
-        Arrays.fill(l, (byte) 255);
+        long[] l = new long[LONG_SIZE];
+        Arrays.fill(l, 0xffffffffffffffffL);
         LAST = new HashKey(l);
     }
 
@@ -71,28 +73,53 @@ public class HashKey implements Comparable<HashKey> {
         return 0;
     }
 
-    protected final byte[] itself;
-    private final int      hashCode;
+    protected final long[] itself;
+
+    public HashKey(BigInteger i) {
+        this(i.toByteArray());
+    }
 
     public HashKey(byte[] key) {
         if (key == null) {
             throw new IllegalArgumentException("Cannot be null");
-        } else if (key.length < 32) {
-            itself = new byte[32];
-            int start = itself.length - key.length;
+        } else if (key.length < BYTE_SIZE) {
+            byte[] normalized = new byte[BYTE_SIZE];
+            int start = BYTE_SIZE - key.length;
             for (int i = 0; i < key.length; i++) {
-                itself[i + start] = key[i];
+                normalized[i + start] = key[i];
             }
-        } else if (key.length > KEY_BYTE_SIZE) {
-            throw new IllegalArgumentException("Cannot be larger than " + KEY_BYTE_SIZE + " bytes: " + key.length);
-        } else {
-            itself = key;
+            key = normalized;
+        } else if (key.length > BYTE_SIZE) {
+            throw new IllegalArgumentException("Cannot be larger than " + BYTE_SIZE + " bytes: " + key.length);
         }
-        hashCode = ByteBuffer.wrap(itself).getInt();
+
+        itself = new long[4];
+        ByteBuffer buff = ByteBuffer.wrap(key);
+        for (int i = 0; i < 4; i++) {
+            itself[i] = buff.getLong();
+        }
     }
 
     public HashKey(ByteString key) {
         this(key.toByteArray());
+    }
+
+    /**
+     * @param description
+     */
+    public HashKey(ID description) {
+        itself = new long[4];
+        for (int i = 0; i < 4; i++) {
+            itself[i] = description.getItself(i);
+        }
+    }
+
+    /**
+     * @param itself2
+     */
+    public HashKey(long[] itself) {
+        assert itself.length == LONG_SIZE;
+        this.itself = itself;
     }
 
     public HashKey(String b64Encoded) {
@@ -103,21 +130,28 @@ public class HashKey implements Comparable<HashKey> {
         this(bytes(uuid));
     }
 
-    public HashKey(BigInteger i) {
-        this(i.toByteArray());
-    }
-
     public String b64Encoded() {
-        return Base64.getEncoder().withoutPadding().encodeToString(itself);
+        return Base64.getEncoder().withoutPadding().encodeToString(bytes());
     }
 
     public byte[] bytes() {
-        return itself;
+        byte[] bytes = new byte[32];
+        ByteBuffer buff = ByteBuffer.wrap(bytes);
+        for (int i = 0; i < itself.length; i++) {
+            buff.putLong(itself[i]);
+        }
+        return bytes;
     }
 
     @Override
     public int compareTo(HashKey o) {
-        return compare(itself, o.itself);
+        for (int i = 0; i < 4; i++) {
+            int compare = Long.compare(itself[i], o.itself[i]);
+            if (compare != 0) {
+                return compare;
+            }
+        }
+        return 0;
     }
 
     @Override
@@ -128,16 +162,30 @@ public class HashKey implements Comparable<HashKey> {
             return false;
         if (getClass() != obj.getClass())
             return false;
-        return Arrays.equals(itself, ((HashKey) obj).itself);
+        long[] other = ((HashKey) obj).itself;
+        for (int i = 0; i < 4; i++) {
+            if (itself[i] != other[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return hashCode;
+        return (int) (itself[0] & 0xFFFFFFFF);
     }
 
-    public ByteString toByteString() {
-        return ByteString.copyFrom(itself);
+    public long[] longs() {
+        return itself;
+    }
+
+    public ID toID() {
+        Builder builder = ID.newBuilder();
+        for (long i : itself) {
+            builder.addItself(i);
+        }
+        return builder.build();
     }
 
     @Override
@@ -146,6 +194,8 @@ public class HashKey implements Comparable<HashKey> {
     }
 
     public void write(ByteBuffer dest) {
-        dest.put(itself);
+        for (long l : itself) {
+            dest.putLong(l);
+        }
     }
 }

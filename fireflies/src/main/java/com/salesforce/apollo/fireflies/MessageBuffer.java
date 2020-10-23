@@ -129,8 +129,8 @@ public class MessageBuffer {
             throw new IllegalStateException("Unable to sign message content", e);
         }
         return Message.newBuilder()
-                      .setSource(from.toByteString())
-                      .setId(id.toByteString())
+                      .setSource(from.toID())
+                      .setId(id.toID())
                       .setAge(0)
                       .setTime(System.currentTimeMillis())
                       .setChannel(channel)

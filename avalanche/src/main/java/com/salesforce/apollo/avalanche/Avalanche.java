@@ -269,7 +269,7 @@ public class Avalanche {
             byte[] dummy = new byte[4];
             getEntropy().nextBytes(dummy);
             Builder builder = DagEntry.newBuilder().setData(ByteString.copyFrom(dummy));
-            parents.stream().map(e -> e.toByteString()).forEach(e -> builder.addLinks(e));
+            parents.stream().map(e -> e.toID()).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
             assert dagEntry.getLinksCount() > 0 : "Whoopsie";
             dag.insert(dagEntry, System.currentTimeMillis());
@@ -564,9 +564,9 @@ public class Avalanche {
         try {
 
             Builder builder = DagEntry.newBuilder()
-                                      .setDescription(description.toByteString())
+                                      .setDescription(description.toID())
                                       .setData(ByteString.copyFrom(data));
-            parents.stream().map(e -> e.toByteString()).forEach(e -> builder.addLinks(e));
+            parents.stream().map(e -> e.toID()).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
 
             HashKey key = dag.insert(dagEntry, System.currentTimeMillis());

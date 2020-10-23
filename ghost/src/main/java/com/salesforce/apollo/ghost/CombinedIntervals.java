@@ -65,10 +65,7 @@ public class CombinedIntervals implements Predicate<HashKey> {
 
     public List<Interval> toIntervals() {
         return intervals.stream()
-                        .map(e -> Interval.newBuilder()
-                                          .setStart(e.getBegin().toByteString())
-                                          .setEnd(e.getEnd().toByteString())
-                                          .build())
+                        .map(e -> Interval.newBuilder().setStart(e.getBegin().toID()).setEnd(e.getEnd().toID()).build())
                         .collect(Collectors.toList());
     }
 

@@ -15,6 +15,8 @@ import java.util.Set;
 
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
+import org.mapdb.DataInput2;
+import org.mapdb.DataOutput2;
 import org.mapdb.HTreeMap;
 import org.mapdb.Serializer;
 
@@ -26,6 +28,43 @@ import com.salesforce.apollo.protocols.HashKey;
  *         Manages the multi storage tier DAG db for Apollo
  */
 public class DagWood {
+
+    private static final HashKeySerializer SERIALIZER = new HashKeySerializer();
+
+    public static class HashKeySerializer implements Serializer<HashKey> {
+
+        @Override
+        public void serialize(DataOutput2 out, HashKey value) throws IOException {
+            for (Long l : value.longs()) {
+                out.writeLong(l);
+            }
+        }
+
+        @Override
+        public HashKey deserialize(DataInput2 input, int available) throws IOException {
+            long[] itself = new long[4];
+            for (int i = 0; i < 4; i++) {
+                itself[i] = input.readLong();
+            }
+            return new HashKey(itself);
+        }
+
+        @Override
+        public int fixedSize() {
+            return 8 * 4;
+        }
+
+        @Override
+        public boolean isTrusted() {
+            return true;
+        }
+
+        @Override
+        public int compare(HashKey first, HashKey second) {
+            return first.compareTo(second);
+        }
+
+    }
 
     public static class DagWoodParameters {
         public long maxCache = 150_000;
@@ -43,8 +82,8 @@ public class DagWood {
 
     private static final String CACHE = "dagwood.cache";
 
-    private final HTreeMap<byte[], byte[]> cache;
-    private final DB                       db;
+    private final HTreeMap<HashKey, byte[]> cache;
+    private final DB                        db;
 
     public DagWood(DagWoodParameters parameters) {
         try {
@@ -56,7 +95,6 @@ public class DagWood {
                     .fileMmapEnable() // Always enable mmap
                     .fileMmapEnableIfSupported() // Only enable mmap on supported platforms
                     .fileMmapPreclearDisable() // Make mmap file faster
-
                     // Unmap (release resources) file when its closed.
                     // That can cause JVM crash if file is accessed after it was unmapped
                     // (there is possible race condition).
@@ -69,7 +107,7 @@ public class DagWood {
 //        db.getStore().fileLoad();
 
         cache = db.hashMap(CACHE)
-                  .keySerializer(Serializer.BYTE_ARRAY)
+                  .keySerializer(SERIALIZER)
                   .valueSerializer(Serializer.BYTE_ARRAY)
                   .expireAfterCreate()
                   .counterEnable()
@@ -78,11 +116,11 @@ public class DagWood {
 
     public List<HashKey> allFinalized() {
         List<HashKey> all = new ArrayList<>();
-        cache.keySet().forEach(e -> all.add(new HashKey(e)));
+        cache.keySet().forEach(e -> all.add(e));
         return all;
     }
 
-    public boolean cacheContainsKey(byte[] key) {
+    public boolean cacheContainsKey(HashKey key) {
         return cache.containsKey(key);
     }
 
@@ -90,21 +128,21 @@ public class DagWood {
         db.close();
     }
 
-    public boolean containsKey(byte[] key) {
+    public boolean containsKey(HashKey key) {
         return cache.containsKey(key);
     }
 
-    public byte[] get(byte[] key) {
+    public byte[] get(HashKey key) {
         return cache.get(key);
 
     }
 
-    public Set<byte[]> keySet() {
+    public Set<HashKey> keySet() {
         return cache.keySet();
     }
 
-    public void put(byte[] key, byte[] entry) {
-        assert key.length > 0 : "Must have > 0 byte[] key";
+    public void put(HashKey key, byte[] entry) {
+        assert key != null : "Must have non null key";
         assert entry.length > 0 : "Must have >0 byte[] entry";
         cache.putIfAbsent(key, entry);
     }
