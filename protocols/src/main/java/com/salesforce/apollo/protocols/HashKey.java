@@ -131,7 +131,7 @@ public class HashKey implements Comparable<HashKey> {
     }
 
     public String b64Encoded() {
-        return Base64.getEncoder().withoutPadding().encodeToString(bytes());
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes());
     }
 
     public byte[] bytes() {
@@ -146,7 +146,7 @@ public class HashKey implements Comparable<HashKey> {
     @Override
     public int compareTo(HashKey o) {
         for (int i = 0; i < 4; i++) {
-            int compare = Long.compare(itself[i], o.itself[i]);
+            int compare = Long.compareUnsigned(itself[i], o.itself[i]);
             if (compare != 0) {
                 return compare;
             }

@@ -37,7 +37,7 @@ service Ghost {
     /*
      * Ghost API
      */
-    rpc get ( Bytes ) returns (DagEntry) {}
+    rpc get ( Get ) returns (DagEntry) {}
     rpc put ( ADagEntry ) returns (Null) {}
 
     /**
@@ -59,12 +59,7 @@ message SuppliedDagNodes {
 message DagEntries {
     ID context = 1;
     repeated DagEntry entries = 2;
-}
-
-message Bytes {
-    ID context = 1;
-    bytes bites = 2;
-}
+} 
 
 message ADagEntry {
     ID context = 1;
@@ -81,6 +76,11 @@ message Query {
     ID context = 1;
     repeated bytes transactions = 2;
     repeated ID wanted = 3;
+}
+
+message Get {
+    ID context = 1;
+    ID id = 2;
 }
 
 message Null {

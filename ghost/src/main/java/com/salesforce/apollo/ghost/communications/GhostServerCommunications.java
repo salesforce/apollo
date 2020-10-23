@@ -11,10 +11,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.salesfoce.apollo.proto.ADagEntry;
-import com.salesfoce.apollo.proto.Bytes;
 import com.salesfoce.apollo.proto.DagEntries;
 import com.salesfoce.apollo.proto.DagEntries.Builder;
 import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.Get;
 import com.salesfoce.apollo.proto.GhostGrpc.GhostImplBase;
 import com.salesfoce.apollo.proto.Intervals;
 import com.salesfoce.apollo.proto.Null;
@@ -40,9 +40,9 @@ public class GhostServerCommunications extends GhostImplBase implements BaseServ
     }
 
     @Override
-    public void get(Bytes request, StreamObserver<DagEntry> responseObserver) {
+    public void get(Get request, StreamObserver<DagEntry> responseObserver) {
         evaluate(responseObserver, request.getContext(), s -> {
-            responseObserver.onNext(s.get(new HashKey(request.getBites())));
+            responseObserver.onNext(s.get(new HashKey(request.getId())));
             responseObserver.onCompleted();
         }, system, services);
     }
