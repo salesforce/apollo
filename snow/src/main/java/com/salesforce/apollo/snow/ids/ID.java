@@ -17,15 +17,17 @@ import java.util.UUID;
  * @since 220
  */
 public class ID implements Comparable<ID> {
+
     public static final ID LAST;
+
     // NumBits is the number of bits this patricia tree manages
-    public static final int NumBits = 256;
+    public static final short NumBits = 256;
+    public static final ID  ORIGIN;
 
-    public static final ID   ORIGIN;
     private static final int ADDRESS_BITS_PER_WORD = 6;
+    private static final int BitsPerByte           = 8;
     private static final int BYTE_SIZE;
-
-    private static final int LONG_SIZE = 4;
+    private static final int LONG_SIZE             = 4;
 
     static {
         BYTE_SIZE = LONG_SIZE * 8;
@@ -50,8 +52,130 @@ public class ID implements Comparable<ID> {
     // [7 6 5 4 3 2 1 0] [15 14 13 12 11 10 9 8] ... [255 254 253 252 251 250 249
     // 248]
     // Where index 7 is the MSB of byte 0.
-    static boolean equalSubset(int start, int stop, ID id1, ID id2) {
-        return true; // TODO
+    public static boolean equalSubset(int start, int stop, ID id1, ID id2) {
+        stop--;
+        if (start > stop || stop < 0) {
+            return true;
+        }
+        if (stop >= NumBits) {
+            return false;
+        }
+
+        byte[] id1Bytes = id1.bytes();
+        byte[] id2Bytes = id2.bytes();
+
+        int startIndex = start / BitsPerByte;
+        int stopIndex = stop / BitsPerByte;
+
+        // If there is a series of bytes between the first byte and the last byte, they
+        // must be equal
+        if (startIndex + 1 < stopIndex && !equals(id1Bytes, id2Bytes, startIndex + 1, stopIndex)) {
+            return false;
+        }
+
+        int startBit = start % BitsPerByte; // Index in the byte that the first bit is at
+        int stopBit = stop % BitsPerByte; // Index in the byte that the last bit is at
+
+        int startMask = -1 << startBit; // 111...0... The number of 0s is equal to startBit
+        int stopMask = (1 << (stopBit + 1)) - 1; // 000...1... The number of 1s is equal to stopBit+1
+
+        if (startIndex == stopIndex) {
+            // If we are looking at the same byte, both masks need to be applied
+            int mask = startMask & stopMask;
+
+            // The index here could be startIndex or stopIndex, as they are equal
+            int b1 = mask & id1Bytes[startIndex];
+            int b2 = mask & id2Bytes[startIndex];
+
+            return b1 == b2;
+        }
+
+        int start1 = startMask & id1Bytes[startIndex];
+        int start2 = startMask & id2Bytes[startIndex];
+
+        int stop1 = stopMask & id1Bytes[stopIndex];
+        int stop2 = stopMask & id2Bytes[stopIndex];
+
+        return start1 == start2 && stop1 == stop2;
+    }
+
+    // firstDifferenceSubset takes in two indices and two ids and returns the index
+    // of the first difference between the ids inside bit start to bit end
+    // (non-inclusive). Bit indices are defined above
+    // @returns null, if not found
+    public static Integer firstDifferenceSubset(int start, int stop, ID id1, ID id2) {
+        stop--;
+        if (start > stop || stop < 0 || stop >= NumBits) {
+            return null;
+        }
+
+        byte[] id1Bytes = id1.bytes();
+        byte[] id2Bytes = id2.bytes();
+
+        int startIndex = start / BitsPerByte;
+        int stopIndex = stop / BitsPerByte;
+
+        int startBit = start % BitsPerByte; // Index in the byte that the first bit is at
+        int stopBit = stop % BitsPerByte; // Index in the byte that the last bit is at
+
+        int startMask = -1 << startBit; // 111...0... The number of 0s is equal to startBit
+        int stopMask = (1 << (stopBit + 1)) - 1; // 000...1... The number of 1s is equal to stopBit+1
+
+        if (startIndex == stopIndex) {
+            // If we are looking at the same byte, both masks need to be applied
+            int mask = startMask & stopMask;
+
+            // The index here could be startIndex or stopIndex, as they are equal
+            int b1 = mask & id1Bytes[startIndex];
+            int b2 = mask & id2Bytes[startIndex];
+
+            if (b1 == b2) {
+                return null;
+            }
+
+            byte bd = (byte) (b1 ^ b2);
+            return Integer.numberOfTrailingZeros(bd + startIndex * BitsPerByte);
+        }
+
+        // Check the first byte, may have some bits masked
+        int start1 = startMask & id1Bytes[startIndex];
+        int start2 = startMask & id2Bytes[startIndex];
+
+        if (start1 != start2) {
+            int bd = start1 ^ start2;
+            return Integer.numberOfTrailingZeros(bd + startIndex * BitsPerByte);
+        }
+
+        // Check all the interior bits
+        for (int i = startIndex + 1; i < stopIndex; i++) {
+            byte b1 = id1Bytes[i];
+            byte b2 = id2Bytes[i];
+            if (b1 != b2) {
+                byte bd = (byte) (b1 ^ b2);
+                return Integer.numberOfTrailingZeros(bd + i * BitsPerByte);
+            }
+        }
+
+        // Check the last byte, may have some bits masked
+        int stop1 = stopMask & id1Bytes[stopIndex];
+        int stop2 = stopMask & id2Bytes[stopIndex];
+
+        if (stop1 != stop2) {
+            int bd = stop1 ^ stop2;
+            return Integer.numberOfTrailingZeros(bd + stopIndex * BitsPerByte);
+        }
+
+        // No difference was found
+        return null;
+    }
+
+    private static boolean equals(byte[] a, byte[] b, int start, int stop) {
+        for (int i = start; i < stop; i++) {
+            if (a[i] != b[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

@@ -19,14 +19,23 @@ import com.salesforce.apollo.snow.ids.ID;
 public class Tree implements Consensus {
 
     public static class TreeFactory implements Consensus.Factory {
+
+        private final ID         id;
+        private final Parameters params;
+
+        public TreeFactory(ID id, Parameters params) {
+            this.id = id;
+            this.params = params;
+        }
+
         @Override
         public Consensus construct() {
-            return new Tree();
+            return new Tree(params, id);
         }
 
     }
 
-    private Node       node;
+    private Node<?>    node;
     private Parameters params;
 
     // shouldReset is used as an optimization to prevent needless tree
@@ -40,10 +49,18 @@ public class Tree implements Consensus {
     // RecordUnsuccessfulPoll before performing any other action.
     private boolean shouldReset;
 
-    @Override
-    public void add(ID newChoice) {
-        // TODO Auto-generated method stub
+    public Tree(Parameters parameters, ID choice) {
+        this.params = parameters;
+        node = new UnaryNode(this, choice, (short) ID.NumBits, new UnarySnowball(parameters.betaVirtuous));
+    }
 
+    @Override
+    public void add(ID choice) {
+        int prefix = node.decidedPrefix();
+        // Make sure that we haven't already decided against this new id
+        if (ID.equalSubset(0, prefix, preference(), choice)) {
+            node = node.add(choice);
+        }
     }
 
     @Override
@@ -53,29 +70,35 @@ public class Tree implements Consensus {
     }
 
     @Override
-    public void initialize(Parameters parameters, ID choice) {
-        this.params = parameters;
-        node = new UnaryNode(this, choice, ID.NumBits, new UnarySnowball());
-    }
-
-    @Override
     public Parameters parameters() {
         return params;
     }
 
     @Override
-    public ID preference() { 
-        return node.getSnowball().preference();
+    public ID preference() {
+        return null; // TODO
     }
 
     @Override
-    public void recordPoll(Bag votes) { 
+    public void recordPoll(Bag votes) {
+        // Get the assumed decided prefix of the root node.
+        int decidedPrefix = node.decidedPrefix();
+
+        // If any of the bits differ from the preference in this prefix, the vote is
+        // for a rejected operation. So, we filter out these invalid votes.
+        Bag filteredVotes = votes.filter(0, decidedPrefix, preference());
+
+        // Now that the votes have been restricted to valid votes, pass them into
+        // the first snowball instance
+        node = node.recordPoll(filteredVotes, shouldReset);
+
+        // Because we just passed the reset into the snowball instance, we should no
+        // longer reset.
+        shouldReset = false;
     }
 
     @Override
     public void recordUnsuccessfulPoll() {
-        // TODO Auto-generated method stub
-
+        shouldReset = true;
     }
-
 }

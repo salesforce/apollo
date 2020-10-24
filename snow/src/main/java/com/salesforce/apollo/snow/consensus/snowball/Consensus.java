@@ -22,8 +22,6 @@ public interface Consensus {
 
     boolean finalized();
 
-    void initialize(Parameters parameters, ID initialPreference);
-
     Parameters parameters();
 
     ID preference();
