@@ -51,7 +51,7 @@ public class BinarySnowflake extends BinarySlush {
     @Override
     public String toString() {
         return String.format("BinarySnowflake [confidence=%s, finalized=%s, preference=%s]", confidence, finalized,
-                             preference);
+                             preference());
     }
 
 }

@@ -16,11 +16,19 @@ import com.salesforce.apollo.snow.ids.ID;
 //NnarySlush is a slush instance deciding between an unbounded number of
 //values. After performing a network sample of k nodes, if you have alpha
 //votes for one of the choices, you should vote for that choice.
-public interface NarySlush {
+public class NnarySlush {
 
-    void initialize(ID initialPreference);
+    private ID preference;
 
-    ID preference();
+    public NnarySlush(ID initialPreference) {
+        preference = initialPreference;
+    }
 
-    void recordSuccessfulPoll(ID choice);
+    public ID preference() {
+        return preference;
+    }
+
+    public void recordSuccessfulPoll(ID choice) {
+        preference = choice;
+    }
 }

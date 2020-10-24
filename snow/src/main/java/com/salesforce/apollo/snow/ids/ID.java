@@ -18,23 +18,14 @@ import java.util.UUID;
  */
 public class ID implements Comparable<ID> {
     public static final ID LAST;
-    public static final ID ORIGIN;
-
-    private static final int ADDRESS_BITS_PER_WORD = 6;
-    private static final int BYTE_SIZE;
-    private static final int LONG_SIZE             = 4;
-
     // NumBits is the number of bits this patricia tree manages
     public static final int NumBits = 256;
 
-    // EqualSubset takes in two indices and two ids and returns if the ids are
-    // equal from bit start to bit end (non-inclusive). Bit indices are defined as:
-    // [7 6 5 4 3 2 1 0] [15 14 13 12 11 10 9 8] ... [255 254 253 252 251 250 249
-    // 248]
-    // Where index 7 is the MSB of byte 0.
-    static boolean equalSubset(int start, int stop, ID id1, ID id2) {
-        return true; // TODO
-    }
+    public static final ID   ORIGIN;
+    private static final int ADDRESS_BITS_PER_WORD = 6;
+    private static final int BYTE_SIZE;
+
+    private static final int LONG_SIZE = 4;
 
     static {
         BYTE_SIZE = LONG_SIZE * 8;
@@ -52,6 +43,15 @@ public class ID implements Comparable<ID> {
         buf.putLong(uuid.getLeastSignificantBits());
         buf.putLong(uuid.getMostSignificantBits());
         return bytes;
+    }
+
+    // EqualSubset takes in two indices and two ids and returns if the ids are
+    // equal from bit start to bit end (non-inclusive). Bit indices are defined as:
+    // [7 6 5 4 3 2 1 0] [15 14 13 12 11 10 9 8] ... [255 254 253 252 251 250 249
+    // 248]
+    // Where index 7 is the MSB of byte 0.
+    static boolean equalSubset(int start, int stop, ID id1, ID id2) {
+        return true; // TODO
     }
 
     /**
@@ -86,6 +86,10 @@ public class ID implements Comparable<ID> {
         for (int i = 0; i < 4; i++) {
             itself[i] = buff.getLong();
         }
+    }
+
+    public ID(int i) {
+        this(new long[] { 0, 0, 0, i });
     }
 
     /**

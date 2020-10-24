@@ -126,7 +126,7 @@ public class ShortID implements Comparable<ShortID> {
 
     @Override
     public int hashCode() {
-        return (int) (itself[0] & 0xFFFFFFFF);
+        return itself[0] & 0xFFFFFFFF;
     }
 
     public int[] ints() {

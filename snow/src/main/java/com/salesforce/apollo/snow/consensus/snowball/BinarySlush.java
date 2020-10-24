@@ -16,7 +16,7 @@ package com.salesforce.apollo.snow.consensus.snowball;
 //you should vote for that choice.
 public class BinarySlush {
 
-    int preference;
+    private int preference;
  
     public BinarySlush(int initialPreference) {
        preference = initialPreference;
