@@ -16,13 +16,23 @@ package com.salesforce.apollo.snow.consensus.snowball;
 //one of the choices, you should vote for that choice. Otherwise, you should
 //reset.
 public class BinarySnowflake extends BinarySlush {
-    private int     confidence;
     private int     beta;
+    private int     confidence;
     private boolean finalized;
 
     public BinarySnowflake(int beta, int initialPreference) {
         super(initialPreference);
         this.beta = beta;
+    }
+
+    public BinarySnowflake(int beta, int choice, int confidence, boolean finalized) {
+        this(beta, choice);
+        this.confidence = confidence;
+        this.finalized = finalized;
+    }
+
+    public boolean finalized() {
+        return finalized;
     }
 
     @Override
@@ -42,10 +52,6 @@ public class BinarySnowflake extends BinarySlush {
 
     public void recordUnsuccessfulPoll() {
         confidence = 0;
-    }
-
-    public boolean finalized() {
-        return finalized;
     }
 
     @Override
