@@ -49,4 +49,6 @@ public interface Block extends Decidable {
      * parsed into the same block on another node.
      */
     byte[] bytes();
+
+    void addChild(Block blk);
 }

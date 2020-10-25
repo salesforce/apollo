@@ -19,19 +19,22 @@ import com.salesforce.apollo.snow.ids.ShortID;
  *
  */
 public class Context {
-    public final int            networkID;
-    public final int            subnetID;
-    public final int            chainID;
-    public final ShortID        nodeID;
-    public final ID             xchainID;
-    public final ID             avaxAssetID;
-    public final Logger         log;
-    private final AtomicBoolean bootstrapped = new AtomicBoolean();
-    public final String         namespace;
-    public final MetricRegistry metrics;
+    public final int             networkID;
+    public final int             subnetID;
+    public final int             chainID;
+    public final ShortID         nodeID;
+    public final ID              xchainID;
+    public final ID              avaxAssetID;
+    public final Logger          log;
+    private final AtomicBoolean  bootstrapped = new AtomicBoolean();
+    public final String          namespace;
+    public final MetricRegistry  metrics;
+    public final EventDispatcher decisionDispatcher;
+    public final EventDispatcher consensusDispatcher;
 
     public Context(int networkID, int subnetID, int chainID, ShortID nodeID, ID xchainID, ID avaxAssetID, Logger log,
-            String namespace, MetricRegistry metrics) {
+            String namespace, MetricRegistry metrics, EventDispatcher decisionDispatcher,
+            EventDispatcher consensusDispatcher) {
         this.networkID = networkID;
         this.subnetID = subnetID;
         this.chainID = chainID;
@@ -41,6 +44,8 @@ public class Context {
         this.log = log;
         this.namespace = namespace;
         this.metrics = metrics;
+        this.consensusDispatcher = consensusDispatcher;
+        this.decisionDispatcher = decisionDispatcher;
     }
 
     public boolean isBootstrapped() {

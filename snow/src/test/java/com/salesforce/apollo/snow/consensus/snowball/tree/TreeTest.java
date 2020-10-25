@@ -179,5 +179,5 @@ public class TreeTest {
 
         assertEquals(yellow, tree.preference());
         assertFalse(tree.finalized());
-    }
+    }  
 }

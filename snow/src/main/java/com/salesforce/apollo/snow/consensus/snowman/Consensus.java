@@ -18,14 +18,12 @@ import com.salesforce.apollo.snow.ids.ID;
 public interface Consensus {
 
     interface Factory {
-        Consensus construct();
+        Consensus construct(Context context, Parameters params, ID rootId, Metrics metrics);
     }
 
     void add(Block b);
 
     boolean finalized();
-
-    void initialize(Context context, Parameters params, ID id);
 
     boolean issued(Block b);
 

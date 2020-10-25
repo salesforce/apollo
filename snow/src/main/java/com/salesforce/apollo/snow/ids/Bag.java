@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.snow.ids;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -80,6 +81,10 @@ public class Bag {
             }
         });
         return filtered;
+    }
+
+    public Collection<ID> list() {
+        return counts.keySet();
     }
 
     public Mode mode() {

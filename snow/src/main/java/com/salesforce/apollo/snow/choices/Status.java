@@ -13,28 +13,28 @@ package com.salesforce.apollo.snow.choices;
 public enum Status {
     UNKNOWN, PROCESSING {
         @Override
-        boolean fetched() {
+        public boolean fetched() {
             return true;
         }
     },
     REJECTED {
         @Override
-        boolean decided() {
+        public boolean decided() {
             return true;
         }
     },
     ACCEPTED {
         @Override
-        boolean decided() {
+        public boolean decided() {
             return true;
         }
     };
 
-    boolean fetched() {
+    public boolean fetched() {
         return decided();
     }
 
-    boolean decided() {
+    public boolean decided() {
         return false;
     }
 }
