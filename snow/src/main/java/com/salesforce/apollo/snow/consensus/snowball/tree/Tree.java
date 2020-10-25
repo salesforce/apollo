@@ -51,7 +51,7 @@ public class Tree implements Consensus {
 
     public Tree(Parameters parameters, ID choice) {
         this.params = parameters;
-        node = new UnaryNode(this, choice, (short) ID.NumBits, new UnarySnowball(parameters.betaVirtuous));
+        node = new UnaryNode(this, choice, ID.NumBits, new UnarySnowball(parameters.betaVirtuous));
     }
 
     @Override
@@ -65,8 +65,7 @@ public class Tree implements Consensus {
 
     @Override
     public boolean finalized() {
-        // TODO Auto-generated method stub
-        return false;
+        return node.finalized();
     }
 
     @Override
@@ -76,7 +75,7 @@ public class Tree implements Consensus {
 
     @Override
     public ID preference() {
-        return null; // TODO
+        return node.preference();
     }
 
     @Override

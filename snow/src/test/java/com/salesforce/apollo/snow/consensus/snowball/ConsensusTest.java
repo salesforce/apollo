@@ -14,8 +14,8 @@ import com.salesforce.apollo.snow.ids.ID;
  */
 public class ConsensusTest {
 
-    public final static ID Red   = new ID(0);
-    public final static ID Blue  = new ID(1);
-    public final static ID Green = new ID(2);
+    public final static ID Red   = ID.ORIGIN.prefix(0);
+    public final static ID Blue  = ID.ORIGIN.prefix(1);
+    public final static ID Green = ID.ORIGIN.prefix(2);
 
 }

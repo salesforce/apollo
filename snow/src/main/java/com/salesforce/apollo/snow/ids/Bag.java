@@ -44,7 +44,7 @@ public class Bag {
         if (count <= 0) {
             return;
         }
-        int totalCount = counts.get(id) + count;
+        int totalCount = counts.getOrDefault(id, 0) + count;
         counts.put(id, totalCount);
         size += count;
         if (totalCount > modeFreq) {
@@ -105,13 +105,9 @@ public class Bag {
     }
 
     public Bag[] split(int index) {
-        Bag[] splitVotes = new Bag[2];
+        Bag[] splitVotes = new Bag[] { new Bag(), new Bag() };
         counts.forEach((vote, count) -> {
-            if (vote.bit(index)) {
-                splitVotes[1].addCount(vote, count);
-            } else {
-                splitVotes[0].addCount(vote, count);
-            }
+            splitVotes[vote.bit(index)].addCount(vote, count);
         });
         return splitVotes;
     }

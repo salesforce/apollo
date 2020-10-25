@@ -8,6 +8,8 @@ package com.salesforce.apollo.snow.ids;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.UUID;
@@ -17,17 +19,42 @@ import java.util.UUID;
  * @since 220
  */
 public class ID implements Comparable<ID> {
-
-    public static final ID LAST;
-
+    public static final ID                         LAST;
+    public static final ThreadLocal<MessageDigest> MESSAGE_DIGEST;
     // NumBits is the number of bits this patricia tree manages
-    public static final short NumBits = 256;
-    public static final ID  ORIGIN;
+    public static final short  NumBits = 256;
+    public static final ID     ORIGIN;
+    public static final String SHA_256 = "sha-256";
 
-    private static final int ADDRESS_BITS_PER_WORD = 6;
-    private static final int BitsPerByte           = 8;
-    private static final int BYTE_SIZE;
-    private static final int LONG_SIZE             = 4;
+    private static final int    BitsPerByte = 8;
+    private static final int    BYTE_SIZE;
+    private static final int    LONG_SIZE   = 4;
+    private static final byte[] ntz8tab     = new byte[] { 0x08, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x03, 0x00,
+                                                           0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x04, 0x00, 0x01, 0x00,
+                                                           0x02, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x00, 0x02, 0x00,
+                                                           0x01, 0x00, 0x05, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00,
+                                                           0x03, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x04, 0x00,
+                                                           0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x00,
+                                                           0x02, 0x00, 0x01, 0x00, 0x06, 0x00, 0x01, 0x00, 0x02, 0x00,
+                                                           0x01, 0x00, 0x03, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00,
+                                                           0x04, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x03, 0x00,
+                                                           0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x05, 0x00, 0x01, 0x00,
+                                                           0x02, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x00, 0x02, 0x00,
+                                                           0x01, 0x00, 0x04, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00,
+                                                           0x03, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x07, 0x00,
+                                                           0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x00,
+                                                           0x02, 0x00, 0x01, 0x00, 0x04, 0x00, 0x01, 0x00, 0x02, 0x00,
+                                                           0x01, 0x00, 0x03, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00,
+                                                           0x05, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x03, 0x00,
+                                                           0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x04, 0x00, 0x01, 0x00,
+                                                           0x02, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x00, 0x02, 0x00,
+                                                           0x01, 0x00, 0x06, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00,
+                                                           0x03, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x04, 0x00,
+                                                           0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x00,
+                                                           0x02, 0x00, 0x01, 0x00, 0x05, 0x00, 0x01, 0x00, 0x02, 0x00,
+                                                           0x01, 0x00, 0x03, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00,
+                                                           0x04, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x00, 0x03, 0x00,
+                                                           0x01, 0x00, 0x02, 0x00, 0x01, 0x00 };
 
     static {
         BYTE_SIZE = LONG_SIZE * 8;
@@ -37,6 +64,13 @@ public class ID implements Comparable<ID> {
         long[] l = new long[LONG_SIZE];
         Arrays.fill(l, 0xffffffffffffffffL);
         LAST = new ID(l);
+        MESSAGE_DIGEST = ThreadLocal.withInitial(() -> {
+            try {
+                return MessageDigest.getInstance(SHA_256);
+            } catch (NoSuchAlgorithmException e) {
+                throw new IllegalStateException("Unable to retrieve " + SHA_256 + " Message Digest instance", e);
+            }
+        });
     }
 
     public static byte[] bytes(UUID uuid) {
@@ -134,7 +168,7 @@ public class ID implements Comparable<ID> {
             }
 
             byte bd = (byte) (b1 ^ b2);
-            return Integer.numberOfTrailingZeros(bd + startIndex * BitsPerByte);
+            return trailingZeros(bd) + (startIndex * BitsPerByte);
         }
 
         // Check the first byte, may have some bits masked
@@ -143,7 +177,7 @@ public class ID implements Comparable<ID> {
 
         if (start1 != start2) {
             int bd = start1 ^ start2;
-            return Integer.numberOfTrailingZeros(bd + startIndex * BitsPerByte);
+            return trailingZeros(bd) + (startIndex * BitsPerByte);
         }
 
         // Check all the interior bits
@@ -152,7 +186,7 @@ public class ID implements Comparable<ID> {
             byte b2 = id2Bytes[i];
             if (b1 != b2) {
                 byte bd = (byte) (b1 ^ b2);
-                return Integer.numberOfTrailingZeros(bd + i * BitsPerByte);
+                return trailingZeros(bd) + (i * BitsPerByte);
             }
         }
 
@@ -162,11 +196,20 @@ public class ID implements Comparable<ID> {
 
         if (stop1 != stop2) {
             int bd = stop1 ^ stop2;
-            return Integer.numberOfTrailingZeros(bd + stopIndex * BitsPerByte);
+            return trailingZeros(bd) + (stopIndex * BitsPerByte);
         }
 
         // No difference was found
         return null;
+    }
+
+    public static byte[] hashOf(byte[]... bytes) {
+        MessageDigest md = MESSAGE_DIGEST.get();
+        md.reset();
+        for (byte[] entry : bytes) {
+            md.update(entry);
+        }
+        return md.digest();
     }
 
     private static boolean equals(byte[] a, byte[] b, int start, int stop) {
@@ -178,11 +221,8 @@ public class ID implements Comparable<ID> {
         return true;
     }
 
-    /**
-     * Given a bit index, return word index containing it.
-     */
-    private static int wordIndex(int bitIndex) {
-        return bitIndex >> ADDRESS_BITS_PER_WORD;
+    private static int trailingZeros(int x) {
+        return (int) ntz8tab[x & 0xFF];
     }
 
     protected final long[] itself;
@@ -191,14 +231,17 @@ public class ID implements Comparable<ID> {
         this(i.toByteArray());
     }
 
+    public ID(byte i) {
+        this(new long[] { 0, 0, 0, i });
+    }
+
     public ID(byte[] key) {
         if (key == null) {
             throw new IllegalArgumentException("Cannot be null");
         } else if (key.length < BYTE_SIZE) {
             byte[] normalized = new byte[BYTE_SIZE];
-            int start = BYTE_SIZE - key.length;
             for (int i = 0; i < key.length; i++) {
-                normalized[i + start] = key[i];
+                normalized[i] = key[i];
             }
             key = normalized;
         } else if (key.length > BYTE_SIZE) {
@@ -213,7 +256,7 @@ public class ID implements Comparable<ID> {
     }
 
     public ID(int i) {
-        this(new long[] { 0, 0, 0, i });
+        this(new long[] { i, 0, 0, 0 });
     }
 
     /**
@@ -236,11 +279,25 @@ public class ID implements Comparable<ID> {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes());
     }
 
-    public boolean bit(int bitIndex) {
-        if (bitIndex < 0)
-            throw new IndexOutOfBoundsException("bitIndex < 0: " + bitIndex);
-        int wordIndex = wordIndex(bitIndex);
-        return (wordIndex < LONG_SIZE) && ((itself[wordIndex] & (1L << bitIndex)) != 0);
+    public int bit(int i) {
+        int byteIndex = i / BitsPerByte;
+        int bitIndex = i % BitsPerByte;
+
+        byte[] bytes = bytes();
+        byte b = bytes[byteIndex];
+
+        // b = [7, 6, 5, 4, 3, 2, 1, 0]
+
+        b = (byte) (b >> bitIndex);
+
+        // b = [0, ..., bitIndex + 1, bitIndex]
+        // 1 = [0, 0, 0, 0, 0, 0, 0, 1]
+
+        b = (byte) (b & 1);
+
+        // b = [0, 0, 0, 0, 0, 0, 0, bitIndex]
+
+        return (int) b;
     }
 
     public byte[] bytes() {
@@ -282,11 +339,26 @@ public class ID implements Comparable<ID> {
 
     @Override
     public int hashCode() {
-        return (int) (itself[0] & 0xFFFFFFFF);
+        long result = 0;
+        for (long l : itself) {
+            result ^= l;
+        }
+        return (int) (result & Integer.MAX_VALUE);
     }
 
     public long[] longs() {
         return itself;
+    }
+
+    public ID prefix(long... prefixes) {
+        ByteBuffer buffer = ByteBuffer.allocate((itself.length + prefixes.length) * 8);
+        for (long prefix : prefixes) {
+            buffer.putLong(prefix);
+        }
+        for (long i : itself) {
+            buffer.putLong(i);
+        }
+        return new ID(hashOf(buffer.array()));
     }
 
     @Override

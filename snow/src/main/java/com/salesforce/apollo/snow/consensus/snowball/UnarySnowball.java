@@ -35,10 +35,6 @@ public class UnarySnowball extends UnarySnowflake {
         super.recordSuccessfulPoll();
     }
 
-    public void recordUnsucessfulPoll() {
-
-    }
-
     public BinarySnowball extend(int beta, int originalPreference) {
         BinarySnowball bs = new BinarySnowball(beta, originalPreference, confidence(), finalized());
         bs.numSuccessfulPoll(originalPreference, numSuccessfulPolls);

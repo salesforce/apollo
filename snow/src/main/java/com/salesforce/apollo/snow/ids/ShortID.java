@@ -67,6 +67,10 @@ public class ShortID implements Comparable<ShortID> {
         }
     }
 
+    public ShortID(int i) {
+        itself = new int[] { i, 0, 0, 0, 0 };
+    }
+
     /**
      * @param itself
      */
@@ -126,7 +130,11 @@ public class ShortID implements Comparable<ShortID> {
 
     @Override
     public int hashCode() {
-        return itself[0] & 0xFFFFFFFF;
+        int result = 0;
+        for (int i : itself) {
+            result ^= i;
+        }
+        return result & Integer.MAX_VALUE;
     }
 
     public int[] ints() {

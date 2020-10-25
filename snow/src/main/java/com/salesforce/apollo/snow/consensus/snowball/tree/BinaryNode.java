@@ -29,14 +29,14 @@ public class BinaryNode extends Node<BinarySnowball> {
         this(tree, snowball);
         this.shouldReset[0] = shouldReset;
         this.shouldReset[1] = shouldReset;
-        int bit = preference.bit(index) ? 1 : 0;
+        int bit = preference.bit(index);
         preferences[bit] = preference;
         preferences[1 - bit] = newChoice;
     }
 
     @Override
     public Node<?> add(ID id) {
-        int b = id.bit(bit) ? 1 : 0;
+        int b = id.bit(bit);
         Node<?> child = children[b];
         // If child is nil, then we are running an instance on the last bit. Finding
         // two hashes that are equal up to the last bit would be really cool though.
@@ -73,42 +73,42 @@ public class BinaryNode extends Node<BinarySnowball> {
         // for bit 1
         Bag[] splitVotes = votes.split(bit);
 
-        bit = 0; // Because alpha > k/2, only the larger count could be increased
+        int bitIndex = 0; // Because alpha > k/2, only the larger count could be increased
         if (splitVotes[0].size() < splitVotes[1].size()) {
-            bit = 1;
+            bitIndex = 1;
         }
 
         if (reset) {
             snowball.recordUnsuccessfulPoll();
-            shouldReset[bit] = true;
+            shouldReset[bitIndex] = true;
             // 1-bit isn't set here because it is set below anyway
         }
-        shouldReset[1 - bit] = true; // They didn't get the threshold of votes
+        shouldReset[1 - bitIndex] = true; // They didn't get the threshold of votes
 
-        Bag prunedVotes = splitVotes[bit];
+        Bag prunedVotes = splitVotes[bitIndex];
         // If this bit got alpha votes, it was a successful poll
         if (prunedVotes.size() >= tree.parameters().alpha) {
-            snowball.recordSuccessfulPoll(bit);
-            Node<?> child = children[bit];
+            snowball.recordSuccessfulPoll(bitIndex);
+            Node<?> child = children[bitIndex];
             if (child != null) {
                 // The votes are filtered to ensure that they are votes that should
                 // count for the child
-                Bag filteredVotes = prunedVotes.filter(bit + 1, child.decidedPrefix(), preferences[bit]);
+                Bag filteredVotes = prunedVotes.filter(this.bit + 1, child.decidedPrefix(), preferences[bitIndex]);
 
                 if (snowball.finalized()) {
                     // If we are decided here, that means we must have decided due
                     // to this poll. Therefore, we must have decided on bit.
-                    return child.recordPoll(filteredVotes, shouldReset[bit]);
+                    return child.recordPoll(filteredVotes, shouldReset[bitIndex]);
                 }
-                Node<?> newChild = child.recordPoll(filteredVotes, shouldReset[bit]);
-                children[bit] = newChild;
-                preferences[bit] = newChild.preference();
+                Node<?> newChild = child.recordPoll(filteredVotes, shouldReset[bitIndex]);
+                children[bitIndex] = newChild;
+                preferences[bitIndex] = newChild.preference();
             }
-            shouldReset[bit] = false; // We passed the reset down
+            shouldReset[bitIndex] = false; // We passed the reset down
         } else {
             snowball.recordUnsuccessfulPoll();
             // The winning child didn't get enough votes either
-            shouldReset[bit] = true;
+            shouldReset[bitIndex] = true;
         }
         return this;
     }

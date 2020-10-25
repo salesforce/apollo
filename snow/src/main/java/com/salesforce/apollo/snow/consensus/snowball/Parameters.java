@@ -14,13 +14,94 @@ import com.codahale.metrics.MetricRegistry;
  */
 public class Parameters {
 
-    public final String         namespace;
-    public final MetricRegistry metrics;
-    public final int            k;
+    public static class Builder {
+        private int            alpha;
+        private int            betaRogue;
+        private int            betaVirtuous;
+        private int            concurrentRepolls;
+        private int            k;
+        private MetricRegistry metrics;
+        private String         namespace;
+
+        public Parameters build() {
+            return new Parameters(namespace, metrics, k, alpha, betaVirtuous, betaRogue, concurrentRepolls);
+        }
+
+        public int getAlpha() {
+            return alpha;
+        }
+
+        public int getBetaRogue() {
+            return betaRogue;
+        }
+
+        public int getBetaVirtuous() {
+            return betaVirtuous;
+        }
+
+        public int getConcurrentRepolls() {
+            return concurrentRepolls;
+        }
+
+        public int getK() {
+            return k;
+        }
+
+        public MetricRegistry getMetrics() {
+            return metrics;
+        }
+
+        public String getNamespace() {
+            return namespace;
+        }
+
+        public Builder setAlpha(int alpha) {
+            this.alpha = alpha;
+            return this;
+        }
+
+        public Builder setBetaRogue(int betaRogue) {
+            this.betaRogue = betaRogue;
+            return this;
+        }
+
+        public Builder setBetaVirtuous(int betaVirtuous) {
+            this.betaVirtuous = betaVirtuous;
+            return this;
+        }
+
+        public Builder setConcurrentRepolls(int concurrentRepolls) {
+            this.concurrentRepolls = concurrentRepolls;
+            return this;
+        }
+
+        public Builder setK(int k) {
+            this.k = k;
+            return this;
+        }
+
+        public Builder setMetrics(MetricRegistry metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
+        public Builder setNamespace(String namespace) {
+            this.namespace = namespace;
+            return this;
+        }
+    }
+
+    public static Builder newBuilder() {
+        return new Builder();
+    }
+
     public final int            alpha;
-    public final int            betaVirtuous;
     public final int            betaRogue;
+    public final int            betaVirtuous;
     public final int            concurrentRepolls;
+    public final int            k;
+    public final MetricRegistry metrics;
+    public final String         namespace;
 
     public Parameters(String namespace, MetricRegistry metrics, int k, int alpha, int betaVirtuous, int betaRogue,
             int concurrentRepolls) {

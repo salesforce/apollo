@@ -219,7 +219,7 @@ public class UnaryNode extends Node<UnarySnowball> {
         } else {
             // The difference was found, so this node must be split
 
-            int bit = this.preference.bit(index) ? 1 : 0; // The currently preferred bit
+            int bit = this.preference.bit(index); // The currently preferred bit
 
             BinaryNode b = new BinaryNode(tree, index, snowball.extend(tree.parameters().betaRogue, bit), newChoice,
                     shouldReset, preference);
