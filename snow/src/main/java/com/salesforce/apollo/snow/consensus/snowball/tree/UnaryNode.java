@@ -222,7 +222,7 @@ public class UnaryNode extends Node<UnarySnowball> {
             int bit = this.preference.bit(index); // The currently preferred bit
 
             BinaryNode b = new BinaryNode(tree, index, snowball.extend(tree.parameters().betaRogue, bit), newChoice,
-                    shouldReset, preference);
+                    shouldReset, preference, bit);
 
             UnaryNode newChild = new UnaryNode(tree, newChoice, ID.NumBits,
                     new UnarySnowball(this.tree.parameters().betaVirtuous), index + 1);

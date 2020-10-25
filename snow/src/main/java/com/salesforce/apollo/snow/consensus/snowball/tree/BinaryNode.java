@@ -15,21 +15,17 @@ import com.salesforce.apollo.snow.ids.ID;
  *
  */
 public class BinaryNode extends Node<BinarySnowball> {
-    private short           bit;
+    private final int       bit;
     private final Node<?>[] children    = new Node[2];
     private final ID[]      preferences = new ID[2];
     private final boolean[] shouldReset = new boolean[2];
 
-    public BinaryNode(Tree tree, BinarySnowball snowball) {
+    public BinaryNode(Tree tree, int index, BinarySnowball snowball, ID newChoice, boolean shouldReset, ID preference,
+            int bit) {
         super(tree, snowball);
-    }
-
-    public BinaryNode(Tree tree, Integer index, BinarySnowball snowball, ID newChoice, boolean shouldReset,
-            ID preference) {
-        this(tree, snowball);
         this.shouldReset[0] = shouldReset;
         this.shouldReset[1] = shouldReset;
-        int bit = preference.bit(index);
+        this.bit = index;
         preferences[bit] = preference;
         preferences[1 - bit] = newChoice;
     }
@@ -73,9 +69,11 @@ public class BinaryNode extends Node<BinarySnowball> {
         // for bit 1
         Bag[] splitVotes = votes.split(bit);
 
-        int bitIndex = 0; // Because alpha > k/2, only the larger count could be increased
+        final int bitIndex; // Because alpha > k/2, only the larger count could be increased
         if (splitVotes[0].size() < splitVotes[1].size()) {
             bitIndex = 1;
+        } else {
+            bitIndex = 0;
         }
 
         if (reset) {

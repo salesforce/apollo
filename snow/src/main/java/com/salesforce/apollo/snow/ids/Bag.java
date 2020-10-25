@@ -75,7 +75,7 @@ public class Bag {
     public Bag filter(int start, int end, ID id) {
         Bag filtered = new Bag();
         counts.forEach((vote, count) -> {
-            if (ID.equalSubset(0, 0, null, null)) {
+            if (ID.equalSubset(start, end, vote, id)) {
                 filtered.addCount(vote, count);
             }
         });

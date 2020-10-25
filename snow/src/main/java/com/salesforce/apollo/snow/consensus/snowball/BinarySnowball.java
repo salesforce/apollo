@@ -15,15 +15,16 @@ package com.salesforce.apollo.snow.consensus.snowball;
 //number of positive responses from a network sample.
 public class BinarySnowball extends BinarySnowflake {
     private int[] numSucessfulPolls = new int[2];
-    private int   preference;
+    private int   _preference;
 
     public BinarySnowball(int beta, int initialPreference) {
         super(beta, initialPreference);
-        preference = initialPreference;
+        _preference = initialPreference;
     }
 
     public BinarySnowball(int beta, int originalPreference, int confidence, boolean finalized) {
         super(beta, originalPreference, confidence, finalized);
+        _preference = originalPreference;
     }
 
     @Override
@@ -35,14 +36,14 @@ public class BinarySnowball extends BinarySnowflake {
         if (finalized()) {
             return super.preference();
         }
-        return preference;
+        return _preference;
     }
 
     @Override
     public void recordSuccessfulPoll(int choice) {
         numSucessfulPolls[choice]++;
         if (numSucessfulPolls[choice] > numSucessfulPolls[1 - choice]) {
-            preference = choice;
+            _preference = choice;
         }
         super.recordSuccessfulPoll(choice);
     }

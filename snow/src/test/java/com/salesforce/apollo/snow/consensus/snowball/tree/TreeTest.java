@@ -139,4 +139,45 @@ public class TreeTest {
         assertEquals(Blue, tree.preference());
         assertTrue(tree.finalized());
     }
+
+    @Test
+    public void closeTrinary() {
+        ID yellow = new ID(new byte[] { 0x01 });
+        ID cyan = new ID(new byte[] { 0x02 });
+        ID magenta = new ID(new byte[] { 0x03 });
+
+        Parameters params = Parameters.newBuilder().setK(1).setAlpha(1).setBetaVirtuous(1).setBetaRogue(2).build();
+        Tree tree = new Tree(params, yellow);
+        tree.add(cyan);
+        tree.add(magenta);
+
+        assertEquals(yellow, tree.preference());
+        assertFalse(tree.finalized());
+
+        Bag yellowBag = new Bag();
+        yellowBag.add(yellow);
+        tree.recordPoll(yellowBag);
+
+        assertEquals(yellow, tree.preference());
+        assertFalse(tree.finalized());
+
+        Bag magentaBag = new Bag();
+        magentaBag.add(magenta);
+        tree.recordPoll(magentaBag);
+
+        assertEquals(yellow, tree.preference());
+        assertFalse(tree.finalized());
+
+        Bag cyanBag = new Bag();
+        cyanBag.add(cyan);
+        tree.recordPoll(cyanBag);
+
+        assertEquals(yellow, tree.preference());
+        assertFalse(tree.finalized());
+
+        tree.recordPoll(cyanBag);
+
+        assertEquals(yellow, tree.preference());
+        assertFalse(tree.finalized());
+    }
 }
