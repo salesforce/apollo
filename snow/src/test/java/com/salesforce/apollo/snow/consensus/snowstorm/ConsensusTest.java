@@ -6,8 +6,12 @@
  */
 package com.salesforce.apollo.snow.consensus.snowstorm;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.HashSet;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -118,5 +122,47 @@ abstract public class ConsensusTest {
         assertFalse(graph.quiesce());
         graph.add(Green);
         assertTrue(graph.quiesce());
+    }
+
+    @Test
+    public void conflicts() {
+        Parameters params = Parameters.newBuilder()
+                                      .setMetrics(new MetricRegistry())
+                                      .setK(1)
+                                      .setAlpha(1)
+                                      .setBetaVirtuous(1)
+                                      .setBetaRogue(2)
+                                      .setConcurrentRepolls(1)
+                                      .build();
+
+        Consensus graph = createConsensus(defaultTestContext(), params);
+
+        ID conflictInputID = ID.ORIGIN.prefix(0);
+
+        Set<ID> insPurple = new HashSet<>();
+        insPurple.add(conflictInputID);
+        TestTransaction purple = new TestTransaction();
+        purple.idV = ID.ORIGIN.prefix(6);
+        purple.statusV = Status.PROCESSING;
+        purple.inputIDsV = insPurple;
+
+        Set<ID> insOrange = new HashSet<>();
+        insOrange.add(conflictInputID);
+        TestTransaction orange = new TestTransaction();
+        orange.idV = ID.ORIGIN.prefix(7);
+        orange.statusV = Status.PROCESSING;
+        orange.inputIDsV = insOrange;
+        
+        graph.add(purple);
+        
+        assertEquals(1, graph.conflicts(orange).size());
+        assertTrue(graph.conflicts(orange).contains(purple.id()));
+        
+        graph.add(orange);
+        
+        assertEquals(1, graph.conflicts(orange).size());
+        assertTrue(graph.conflicts(orange).contains(purple.id()));
+        
+        
     }
 }

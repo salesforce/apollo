@@ -19,10 +19,10 @@ import com.salesforce.apollo.snow.ids.ID;
  *
  */
 public class TestTransaction extends TestDecidable implements Tx {
-    public byte[]        bytesV;
-    public Set<Tx>       dependenciesV = new HashSet<>();
-    public final Set<ID> inputIDsV     = new HashSet<>();
-    public Throwable     verifyV;
+    public byte[]    bytesV;
+    public Set<Tx>   dependenciesV = new HashSet<>();
+    public Set<ID>   inputIDsV     = new HashSet<>();
+    public Throwable verifyV;
 
     public byte[] bytes() {
         return bytesV;
