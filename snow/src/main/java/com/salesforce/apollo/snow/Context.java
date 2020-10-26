@@ -19,25 +19,144 @@ import com.salesforce.apollo.snow.ids.ShortID;
  *
  */
 public class Context {
-    public final int             networkID;
-    public final int             subnetID;
-    public final int             chainID;
-    public final ShortID         nodeID;
-    public final ID              xchainID;
-    public final ID              avaxAssetID;
-    public final Logger          log;
-    private final AtomicBoolean  bootstrapped = new AtomicBoolean();
-    public final String          namespace;
-    public final MetricRegistry  metrics;
-    public final EventDispatcher decisionDispatcher;
-    public final EventDispatcher consensusDispatcher;
 
-    public Context(int networkID, int subnetID, int chainID, ShortID nodeID, ID xchainID, ID avaxAssetID, Logger log,
+    public static class Builder {
+        private ID              avaxAssetID;
+        private ID              chainID;
+        private EventDispatcher consensusDispatcher;
+        private EventDispatcher decisionDispatcher;
+        private Logger          log;
+        private MetricRegistry  metrics;
+        private String          namespace;
+        private int             networkID;
+        private ShortID         nodeID;
+        private ID              subnetID;
+        private ID              xchainID;
+
+        public Context build() {
+            return new Context(networkID, subnetID, chainID, nodeID, xchainID, avaxAssetID, log, namespace, metrics,
+                    decisionDispatcher, consensusDispatcher);
+        }
+
+        public ID getAvaxAssetID() {
+            return avaxAssetID;
+        }
+
+        public ID getChainID() {
+            return chainID;
+        }
+
+        public EventDispatcher getConsensusDispatcher() {
+            return consensusDispatcher;
+        }
+
+        public EventDispatcher getDecisionDispatcher() {
+            return decisionDispatcher;
+        }
+
+        public Logger getLog() {
+            return log;
+        }
+
+        public MetricRegistry getMetrics() {
+            return metrics;
+        }
+
+        public String getNamespace() {
+            return namespace;
+        }
+
+        public int getNetworkID() {
+            return networkID;
+        }
+
+        public ShortID getNodeID() {
+            return nodeID;
+        }
+
+        public ID getSubnetID() {
+            return subnetID;
+        }
+
+        public ID getXchainID() {
+            return xchainID;
+        }
+
+        public Builder setAvaxAssetID(ID avaxAssetID) {
+            this.avaxAssetID = avaxAssetID;
+            return this;
+        }
+
+        public Builder setChainID(ID origin) {
+            this.chainID = origin;
+            return this;
+        }
+
+        public Builder setConsensusDispatcher(EventDispatcher consensusDispatcher) {
+            this.consensusDispatcher = consensusDispatcher;
+            return this;
+        }
+
+        public Builder setDecisionDispatcher(EventDispatcher decisionDispatcher) {
+            this.decisionDispatcher = decisionDispatcher;
+            return this;
+        }
+
+        public Builder setLog(Logger log) {
+            this.log = log;
+            return this;
+        }
+
+        public Builder setMetrics(MetricRegistry metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
+        public Builder setNamespace(String namespace) {
+            this.namespace = namespace;
+            return this;
+        }
+
+        public Builder setNetworkID(int networkID) {
+            this.networkID = networkID;
+            return this;
+        }
+
+        public Builder setNodeID(ShortID nodeID) {
+            this.nodeID = nodeID;
+            return this;
+        }
+
+        public Builder setSubnetID(ID subnetID) {
+            this.subnetID = subnetID;
+            return this;
+        }
+
+        public Builder setXchainID(ID xchainID) {
+            this.xchainID = xchainID;
+            return this;
+        }
+    }
+
+    public final ID              avaxAssetID;
+    public final ID              chainID;
+    public final EventDispatcher consensusDispatcher;
+    public final EventDispatcher decisionDispatcher;
+    public final Logger          log;
+    public final MetricRegistry  metrics;
+    public final String          namespace;
+    public final int             networkID;
+    public final ShortID         nodeID;
+    public final ID              subnetID;
+    public final ID              xchainID;
+    private final AtomicBoolean  bootstrapped = new AtomicBoolean();
+
+    public Context(int networkID, ID subnetID2, ID chainID2, ShortID nodeID, ID xchainID, ID avaxAssetID, Logger log,
             String namespace, MetricRegistry metrics, EventDispatcher decisionDispatcher,
             EventDispatcher consensusDispatcher) {
         this.networkID = networkID;
-        this.subnetID = subnetID;
-        this.chainID = chainID;
+        this.subnetID = subnetID2;
+        this.chainID = chainID2;
         this.nodeID = nodeID;
         this.xchainID = xchainID;
         this.avaxAssetID = avaxAssetID;
@@ -48,11 +167,15 @@ public class Context {
         this.decisionDispatcher = decisionDispatcher;
     }
 
+    public void bootstrap() {
+        bootstrapped.set(true);
+    }
+
     public boolean isBootstrapped() {
         return bootstrapped.get();
     }
 
-    public void bootstrap() {
-        bootstrapped.set(true);
+    public static Builder newBuilder() {
+        return new Builder();
     }
 }

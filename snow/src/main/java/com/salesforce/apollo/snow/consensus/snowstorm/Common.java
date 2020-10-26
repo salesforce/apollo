@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.snow.consensus.snowstorm;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.Set;
 import com.salesforce.apollo.snow.Context;
 import com.salesforce.apollo.snow.choices.Status;
 import com.salesforce.apollo.snow.consensus.snowball.Parameters;
+import com.salesforce.apollo.snow.events.Blockable;
 import com.salesforce.apollo.snow.events.Blocker;
 import com.salesforce.apollo.snow.ids.ID;
 
@@ -22,7 +24,7 @@ import com.salesforce.apollo.snow.ids.ID;
  *
  */
 public class Common {
-    public static class acceptor {
+    public static class acceptor implements Blockable {
         private Set<ID>               deps = new HashSet<>();
         private final List<Throwable> errs;
         private final Consensus       g;
@@ -56,7 +58,7 @@ public class Common {
         }
     }
 
-    public static class rejector {
+    public static class rejector implements Blockable {
         boolean                       rejected;
         private final Set<ID>         deps = new HashSet<>();
         private final List<Throwable> errs;
@@ -99,19 +101,20 @@ public class Common {
         ID  txID;
     }
 
-    protected Context         ctx;
-    protected int             currentVote;
-    protected List<Throwable> errs;
-    protected metrics         metrics;
-    protected Parameters      parameters;
-    protected Blocker         pendingAccept;
-    protected Blocker         pendingReject;
-    protected Set<ID>         preferences;
-    protected Set<ID>         virtuous;
-    protected Set<ID>         virtuousVoting;
+    protected final Context         ctx;
+    protected int                   currentVote;
+    protected final List<Throwable> errs           = new ArrayList<>();
+    protected final metrics         metrics;
+    protected final Parameters      parameters;
+    protected final Blocker         pendingAccept  = new Blocker();
+    protected final Blocker         pendingReject  = new Blocker();
+    protected final Set<ID>         preferences    = new HashSet<>();
+    protected final Set<ID>         virtuous       = new HashSet<>();
+    protected final Set<ID>         virtuousVoting = new HashSet<>();
 
     public Common(Context ctx, Parameters params) {
         this.ctx = ctx;
+        this.metrics = new metrics();
         this.parameters = params;
         params.valid();
     }

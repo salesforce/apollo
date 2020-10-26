@@ -6,8 +6,11 @@
  */
 package com.salesforce.apollo.snow.events;
 
-import com.salesforce.apollo.snow.consensus.snowstorm.Common.acceptor;
-import com.salesforce.apollo.snow.consensus.snowstorm.Common.rejector;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
 import com.salesforce.apollo.snow.ids.ID;
 
 /**
@@ -16,24 +19,25 @@ import com.salesforce.apollo.snow.ids.ID;
  */
 public class Blocker {
 
-    public void fulfill(ID txID) {
-        // TODO Auto-generated method stub
-        
+    private final Map<ID, Collection<Blockable>> blockers = new HashMap<>();
+
+    public void fulfill(ID id) {
+        Collection<Blockable> blocking = blockers.remove(id);
+        if (blocking != null) {
+            blocking.forEach(e -> e.fulfill(id));
+        }
     }
 
-    public void abandon(ID txID) {
-        // TODO Auto-generated method stub
-        
+    public void abandon(ID id) {
+        Collection<Blockable> blocking = blockers.remove(id);
+        if (blocking != null) {
+            blocking.forEach(e -> e.fulfill(id));
+        }
     }
 
-    public void register(acceptor toAccept) {
-        // TODO Auto-generated method stub
-        
-    }
-
-    public void register(rejector toReject) {
-        // TODO Auto-generated method stub
-        
+    public void register(Blockable pending) {
+        pending.dependencies().forEach(id -> blockers.computeIfAbsent(id, i -> new ArrayList<>()).add(pending));
+        pending.update();
     }
 
 }

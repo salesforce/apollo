@@ -91,7 +91,7 @@ public class Directed extends Common implements Consensus {
         for (ID inputID : tx.inputIDs()) {
             // Get the set of txs that are currently processing that also consume
             // this UTXO
-            Set<ID> spenders = utxos.get(inputID);
+            Set<ID> spenders = utxos.getOrDefault(inputID, new HashSet<>());
 
             // Add all the txs that spend this UTXO to this txs conflicts. These
             // conflicting txs must be preferred over this tx. We know this because

@@ -170,33 +170,21 @@ public class Input extends Common implements Consensus {
     }
 
     @Override
-    public boolean finalized() {
-        // TODO Auto-generated method stub
-        return false;
-    }
-
-    @Override
     public boolean issued(Tx tx) {
-        // TODO Auto-generated method stub
-        return false;
-    }
+        // If the tx is either Accepted or Rejected, then it must have been issued
+        // previously.
+        if (tx.status().decided()) {
+            return true;
+        }
 
-    @Override
-    public Parameters parameters() {
-        // TODO Auto-generated method stub
-        return null;
+        // If the tx is currently processing, then it must have been issued.
+        return txs.containsKey(tx.id());
     }
 
     @Override
     public Set<ID> preferences() {
         // TODO Auto-generated method stub
         return null;
-    }
-
-    @Override
-    public boolean quiesce() {
-        // TODO Auto-generated method stub
-        return false;
     }
 
     public boolean recordPoll(Bag votes) {
