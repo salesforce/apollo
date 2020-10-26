@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.snow.consensus.snowstorm;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -81,7 +82,7 @@ public class Common {
             }
             rejected = true;
             try {
-                g.reject(txID);
+                g.reject(Collections.singletonList(txID));
             } catch (Throwable e) {
                 errs.add(e);
             }

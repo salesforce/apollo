@@ -34,6 +34,6 @@ public interface Consensus {
 
     boolean quiesce();
     
-    void reject(ID... rejected); 
+    void reject(Collection<ID> rejected); 
 
 }

@@ -7,6 +7,7 @@
 package com.salesforce.apollo.snow.consensus.snowstorm;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -24,14 +25,13 @@ import com.salesforce.apollo.snow.ids.ID;
  */
 public class Input extends Common implements Consensus {
     private static class inputUTXO {
-
-        public boolean        rogue;
-        public Collection<ID> spenders;
-        public ID             preference;
-        public ID             color;
-        public int            confidence;
-        public int            lastVote;
-        public int            numSuccessfulPolls;
+        boolean        rogue;
+        Collection<ID> spenders;
+        ID             preference;
+        ID             color;
+        int            confidence;
+        int            lastVote;
+        int            numSuccessfulPolls;
 
     }
 
@@ -55,11 +55,11 @@ public class Input extends Common implements Consensus {
         int lastVote;
 
         // tx is the actual transaction this node represents
-        Tx tx;
+        final Tx tx;
     }
 
-    private Map<ID, inputTx>   txs   = new HashMap<>();
-    private Map<ID, inputUTXO> utxos = new HashMap<>();
+    private final Map<ID, inputTx>   txs   = new HashMap<>();
+    private final Map<ID, inputUTXO> utxos = new HashMap<>();
 
     public Input(Context ctx, Parameters params) {
         super(ctx, params);
@@ -85,7 +85,7 @@ public class Input extends Common implements Consensus {
         preferences.remove(txID);
 
         // Reject all the txs that conflicted with this tx.
-        conflicts.forEach(e -> reject(e));
+        conflicts.forEach(e -> reject(Collections.singletonList(e)));
         acceptTx(txNode.tx);
     }
 
@@ -316,7 +316,7 @@ public class Input extends Common implements Consensus {
     }
 
     @Override
-    public void reject(ID... rejected) {
+    public void reject(Collection<ID> rejected) {
         for (ID conflictID : rejected) {
             // We are rejecting the tx, so we should remove it from the graph
             inputTx conflict = txs.remove(conflictID);
