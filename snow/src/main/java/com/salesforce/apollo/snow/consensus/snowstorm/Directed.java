@@ -125,7 +125,7 @@ public class Directed extends Common implements Consensus {
         }
 
         // Mark this transaction as rogue if had any conflicts registered above
-        txNode.rogue = txNode.outs.isEmpty();
+        txNode.rogue = !txNode.outs.isEmpty();
 
         if (!txNode.rogue) {
             // If this tx is currently virtuous, add it to the virtuous sets

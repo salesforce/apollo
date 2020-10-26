@@ -13,8 +13,8 @@ package com.salesforce.apollo.snow.consensus.snowstorm;
 public class snowball {
 
     int     numSuccessfulPolls;
-    private int     confidence;
-    private int     lastVote;
+    int     confidence;
+    int     lastVote;
     boolean rogue;
 
     public int confidence(int currentVote) {

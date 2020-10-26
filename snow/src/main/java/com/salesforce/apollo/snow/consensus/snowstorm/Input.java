@@ -24,14 +24,10 @@ import com.salesforce.apollo.snow.ids.ID;
  *
  */
 public class Input extends Common implements Consensus {
-    private static class inputUTXO {
-        boolean        rogue;
+    private static class inputUTXO extends snowball {
         Collection<ID> spenders;
         ID             preference;
         ID             color;
-        int            confidence;
-        int            lastVote;
-        int            numSuccessfulPolls;
 
     }
 

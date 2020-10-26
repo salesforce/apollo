@@ -117,6 +117,6 @@ abstract public class ConsensusTest {
         graph.add(Red);
         assertFalse(graph.quiesce());
         graph.add(Green);
-        assertFalse(graph.quiesce());
+        assertTrue(graph.quiesce());
     }
 }
