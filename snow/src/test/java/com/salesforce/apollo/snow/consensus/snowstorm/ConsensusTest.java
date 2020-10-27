@@ -23,6 +23,7 @@ import com.salesforce.apollo.snow.Context;
 import com.salesforce.apollo.snow.EventDispatcher;
 import com.salesforce.apollo.snow.choices.Status;
 import com.salesforce.apollo.snow.consensus.snowball.Parameters;
+import com.salesforce.apollo.snow.ids.Bag;
 import com.salesforce.apollo.snow.ids.ID;
 import com.salesforce.apollo.snow.ids.ShortID;
 
@@ -152,17 +153,77 @@ abstract public class ConsensusTest {
         orange.idV = ID.ORIGIN.prefix(7);
         orange.statusV = Status.PROCESSING;
         orange.inputIDsV = insOrange;
+
+        graph.add(purple);
+
+        assertEquals(1, graph.conflicts(orange).size());
+        assertTrue(graph.conflicts(orange).contains(purple.id()));
+
+        graph.add(orange);
+
+        assertEquals(1, graph.conflicts(orange).size());
+        assertTrue(graph.conflicts(orange).contains(purple.id()));
+
+    }
+
+    @Test
+    public void acceptingDependency() {
+        Parameters params = Parameters.newBuilder()
+                                      .setMetrics(new MetricRegistry())
+                                      .setK(1)
+                                      .setAlpha(1)
+                                      .setBetaVirtuous(1)
+                                      .setBetaRogue(2)
+                                      .setConcurrentRepolls(1)
+                                      .build();
+
+        Consensus graph = createConsensus(defaultTestContext(), params);
         
+        TestTransaction purple = new TestTransaction();
+        purple.idV = ID.ORIGIN.prefix(7);
+        purple.statusV = Status.PROCESSING;
+        purple.dependenciesV.add(Red);
+        purple.inputIDsV.add(ID.ORIGIN.prefix(8));
+        
+        graph.add(Red);
+        graph.add(Green);
         graph.add(purple);
         
-        assertEquals(1, graph.conflicts(orange).size());
-        assertTrue(graph.conflicts(orange).contains(purple.id()));
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Red.id()));
+        assertTrue(graph.preferences().contains(purple.id()));
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
         
-        graph.add(orange);
+        Bag g = new Bag();
+        g.add(Green.id());
         
-        assertEquals(1, graph.conflicts(orange).size());
-        assertTrue(graph.conflicts(orange).contains(purple.id()));
+        assertTrue(graph.recordPoll(g));
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Green.id()));
+        assertTrue(graph.preferences().contains(purple.id()));
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
         
+        Bag rp = new Bag();
+        rp.add(Red.id(), purple.id()); 
         
+        assertFalse(graph.recordPoll(rp));
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Green.id()));
+        assertTrue(graph.preferences().contains(purple.id())); 
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
+        
+        Bag r = new Bag();
+        r.add(Red.id());
+        assertTrue(graph.recordPoll(r));
+        assertEquals(0, graph.preferences().size());
+        assertEquals(Status.ACCEPTED, Red.status());
+        assertEquals(Status.REJECTED, Green.status());
+        assertEquals(Status.ACCEPTED, purple.status());
     }
 }

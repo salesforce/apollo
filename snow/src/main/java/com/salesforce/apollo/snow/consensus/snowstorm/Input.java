@@ -177,12 +177,6 @@ public class Input extends Common implements Consensus {
         return txs.containsKey(tx.id());
     }
 
-    @Override
-    public Set<ID> preferences() {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
     public boolean recordPoll(Bag votes) {
         // Increase the vote ID. This is only updated here and is used to reset the
         // confidence values of transactions lazily.

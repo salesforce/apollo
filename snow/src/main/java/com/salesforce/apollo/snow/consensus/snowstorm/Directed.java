@@ -13,7 +13,9 @@ import java.util.Map;
 import java.util.Set;
 
 import com.salesforce.apollo.snow.Context;
+import com.salesforce.apollo.snow.choices.Status;
 import com.salesforce.apollo.snow.consensus.snowball.Parameters;
+import com.salesforce.apollo.snow.ids.Bag;
 import com.salesforce.apollo.snow.ids.ID;
 
 /**
@@ -54,6 +56,7 @@ public class Directed extends Common implements Consensus {
     public void accept(ID txID) {
         // We are accepting the tx, so we should remove the node from the graph.
         directedTx txNode = txs.remove(txID);
+        assert txNode != null;
 
         // This tx is consuming all the UTXOs from its inputs, so we can prune them
         // all from memory
@@ -168,25 +171,109 @@ public class Directed extends Common implements Consensus {
 
     @Override
     public boolean issued(Tx tx) {
-        // TODO Auto-generated method stub
-        return false;
+        // If the tx is either Accepted or Rejected, then it must have been issued
+        // previously.
+        if (tx.status().decided()) {
+            return true;
+        }
+
+        // If the tx is currently processing, then it must have been issued.
+        return txs.containsKey(tx.id());
     }
 
     @Override
-    public Set<ID> preferences() {
-        // TODO Auto-generated method stub
-        return null;
+    public boolean recordPoll(Bag votes) {
+        // Increase the vote ID. This is only updated here and is used to reset the
+        // confidence values of transactions lazily.
+        currentVote++;
+
+        // This flag tracks if the Avalanche instance needs to recompute its
+        // frontiers. Frontiers only need to be recalculated if preferences change
+        // or if a tx was accepted.
+        boolean changed = false;
+
+        // We only want to iterate over txs that received alpha votes
+        votes.setThreshold(parameters.alpha);
+        // Get the set of IDs that meet this alpha threshold
+        Set<ID> metThreshold = votes.threshold();
+        for (ID txID : metThreshold) {
+            // Get the node this tx represents
+            directedTx txNode = txs.get(txID);
+            if (txNode == null) {
+                // This tx may have already been accepted because of tx
+                // dependencies. If this is the case, we can just drop the vote.
+                continue;
+            }
+
+            txNode.recordSuccessfulPoll(currentVote);
+
+            ctx.log.trace("Updated TxID={} to have consensus state={}", txID, txNode);
+
+            // If the tx should be accepted, then we should defer its acceptance
+            // until its dependencies are decided. If this tx was already marked to
+            // be accepted, we shouldn't register it again.
+            if (!txNode.pendingAccept && txNode.finalized(parameters.betaVirtuous, parameters.betaRogue)) {
+                // Mark that this tx is pending acceptance so acceptance is only
+                // registered once.
+                txNode.pendingAccept = true;
+
+                registerAcceptor(this, txNode.tx);
+                if (!errs.isEmpty()) {
+                    return changed;
+                }
+            }
+
+            if (txNode.tx.status() != Status.ACCEPTED) {
+                // If this tx wasn't accepted, then this instance is only changed if
+                // preferences changed.
+                changed = redirectEdges(txNode) || changed;
+            } else {
+                // By accepting a tx, the state of this instance has changed.
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    // Change the direction of this edge if needed. Returns true if the direction
+    // was switched.
+    public boolean redirectEdge(directedTx txNode, ID conflictID) {
+        directedTx conflict = txs.get(conflictID);
+        if (txNode.numSuccessfulPolls <= conflict.numSuccessfulPolls) {
+            return false;
+        }
+
+        // Because this tx has a higher preference than the conflicting tx, we must
+        // ensure that the edge is directed towards this tx.
+        ID nodeID = txNode.tx.id();
+
+        // Change the edge direction according to the conflict tx
+        conflict.ins.remove(nodeID);
+        conflict.outs.add(nodeID);
+        preferences.remove(conflictID); // This conflict has an outbound edge
+
+        // Change the edge direction according to this tx
+        txNode.ins.add(conflictID);
+        txNode.outs.remove(conflictID);
+        if (txNode.outs.isEmpty()) {
+            // If this tx doesn't have any outbound edges, it's preferred
+            preferences.add(nodeID);
+        }
+        return true;
     }
 
     @Override
     public void reject(Collection<ID> rejected) {
         for (ID conflictID : rejected) {
             directedTx conflict = txs.get(conflictID);
-
+            if (conflict == null) {
+                ctx.log.info("Rejected conflicting txn {} not found", conflictID);
+                return;
+            }
             // This tx is no longer an option for consuming the UTXOs from its
             // inputs, so we should remove their reference to this tx.
             for (ID inputID : conflict.tx.inputIDs()) {
-                Set<ID> txIDs = utxos.get(inputID);
+                Set<ID> txIDs = utxos.getOrDefault(inputID, new HashSet<>());
                 if (txIDs == null) {
                     // This UTXO may no longer exist because it was removed due to
                     // the acceptance of a tx. If that is the case, there is nothing
@@ -239,5 +326,15 @@ public class Directed extends Common implements Consensus {
                 preferences.add(neighborID);
             }
         }
+    }
+
+    // redirectEdges attempts to turn outbound edges into inbound edges if the
+    // preferences have changed
+    private boolean redirectEdges(directedTx tx) {
+        boolean changed = false;
+        for (ID conflictID : tx.outs) {
+            changed = redirectEdge(tx, conflictID) || changed;
+        }
+        return changed;
     }
 }

@@ -138,6 +138,10 @@ public class Common {
     public Set<ID> virtuous() {
         return virtuous;
     }
+    
+    public Set<ID> preferences() {
+        return preferences;
+    }
 
     protected void acceptTx(Tx tx) {
         // Accept is called before notifying the IPC so that acceptances that cause

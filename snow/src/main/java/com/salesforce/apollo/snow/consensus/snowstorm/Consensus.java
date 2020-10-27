@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.Set;
 
 import com.salesforce.apollo.snow.consensus.snowball.Parameters;
+import com.salesforce.apollo.snow.ids.Bag;
 import com.salesforce.apollo.snow.ids.ID;
 
 /**
@@ -33,7 +34,9 @@ public interface Consensus {
     Set<ID> preferences();
 
     boolean quiesce();
-    
-    void reject(Collection<ID> rejected); 
+
+    boolean recordPoll(Bag poll);
+
+    void reject(Collection<ID> rejected);
 
 }
