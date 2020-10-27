@@ -25,7 +25,7 @@ import com.salesforce.apollo.snow.ids.ID;
  */
 public class Input extends Common implements Consensus {
     private static class inputUTXO extends snowball {
-        Collection<ID> spenders;
+        Collection<ID> spenders = new HashSet<>();
         ID             preference;
         ID             color;
 
@@ -120,6 +120,7 @@ public class Input extends Common implements Consensus {
             } else {
                 // If there isn't a conflict for this UTXO, I'm the preferred
                 // spender.
+                utxo = new inputUTXO();
                 utxo.preference = txID;
             }
 
@@ -298,6 +299,9 @@ public class Input extends Common implements Consensus {
         for (ID conflictID : rejected) {
             // We are rejecting the tx, so we should remove it from the graph
             inputTx conflict = txs.remove(conflictID);
+            if (conflict == null) {
+                ctx.log.info("conflicting txn {} not found in rejection", conflictID);
+            }
 
             // While it's statistically unlikely that something being rejected is
             // preferred, it is handled for completion.

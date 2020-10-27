@@ -9,7 +9,9 @@ package com.salesforce.apollo.snow.consensus.snowstorm;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -32,6 +34,49 @@ import com.salesforce.apollo.snow.ids.ShortID;
  *
  */
 abstract public class ConsensusTest {
+
+    private static class singleAcceptTx implements Tx {
+        private boolean accepted = false;
+        private Tx      tx;
+
+        public singleAcceptTx(Tx tx) {
+            this.tx = tx;
+        }
+
+        @Override
+        public void accept() {
+            if (accepted) {
+                fail("already accepted");
+            }
+            accepted = true;
+            tx.accept();
+        }
+
+        public byte[] bytes() {
+            return tx.bytes();
+        }
+
+        public Collection<Tx> dependencies() {
+            return tx.dependencies();
+        }
+
+        public ID id() {
+            return tx.id();
+        }
+
+        public Collection<ID> inputIDs() {
+            return tx.inputIDs();
+        }
+
+        public void reject() {
+            tx.reject();
+        }
+
+        public Status status() {
+            return tx.status();
+        }
+
+    }
 
     private static final Logger log = LoggerFactory.getLogger(ConsensusTest.class);
 
@@ -103,26 +148,136 @@ abstract public class ConsensusTest {
         Alpha.inputIDsV.add(Z);
     }
 
-    abstract public Consensus createConsensus(Context ctx, Parameters params);
-
     @Test
-    public void quiesce() {
+    public void acceptingDependency() {
         Parameters params = Parameters.newBuilder()
                                       .setMetrics(new MetricRegistry())
-                                      .setK(2)
-                                      .setAlpha(2)
+                                      .setK(1)
+                                      .setAlpha(1)
                                       .setBetaVirtuous(1)
-                                      .setBetaRogue(1)
+                                      .setBetaRogue(2)
                                       .setConcurrentRepolls(1)
                                       .build();
 
         Consensus graph = createConsensus(defaultTestContext(), params);
 
-        assertTrue(graph.quiesce());
+        TestTransaction purple = new TestTransaction();
+        purple.idV = ID.ORIGIN.prefix(7);
+        purple.statusV = Status.PROCESSING;
+        purple.dependenciesV.add(Red);
+        purple.inputIDsV.add(ID.ORIGIN.prefix(8));
+
         graph.add(Red);
-        assertFalse(graph.quiesce());
         graph.add(Green);
-        assertTrue(graph.quiesce());
+        graph.add(purple);
+
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Red.id()));
+        assertTrue(graph.preferences().contains(purple.id()));
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
+
+        Bag g = new Bag();
+        g.add(Green.id());
+
+        assertTrue(graph.recordPoll(g));
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Green.id()));
+        assertTrue(graph.preferences().contains(purple.id()));
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
+
+        Bag rp = new Bag();
+        rp.add(Red.id(), purple.id());
+
+        assertFalse(graph.recordPoll(rp));
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Green.id()));
+        assertTrue(graph.preferences().contains(purple.id()));
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
+
+        Bag r = new Bag();
+        r.add(Red.id());
+        assertTrue(graph.recordPoll(r));
+        assertEquals(0, graph.preferences().size());
+        assertEquals(Status.ACCEPTED, Red.status());
+        assertEquals(Status.REJECTED, Green.status());
+        assertEquals(Status.ACCEPTED, purple.status());
+    }
+
+    @Test
+    public void acceptingSlowDependency() {
+        Parameters params = Parameters.newBuilder()
+                                      .setMetrics(new MetricRegistry())
+                                      .setK(1)
+                                      .setAlpha(1)
+                                      .setBetaVirtuous(1)
+                                      .setBetaRogue(2)
+                                      .setConcurrentRepolls(1)
+                                      .build();
+
+        Consensus graph = createConsensus(defaultTestContext(), params);
+
+        TestTransaction rawPurple = new TestTransaction();
+        rawPurple.idV = ID.ORIGIN.prefix(7);
+        rawPurple.statusV = Status.PROCESSING;
+        rawPurple.dependenciesV.add(Red);
+        rawPurple.inputIDsV.add(ID.ORIGIN.prefix(8));
+
+        singleAcceptTx purple = new singleAcceptTx(rawPurple);
+
+        graph.add(Red);
+        graph.add(Green);
+        graph.add(purple);
+
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Red.id()));
+        assertTrue(graph.preferences().contains(purple.id()));
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
+
+        Bag g = new Bag();
+        g.add(Green.id());
+        
+        assertTrue(graph.recordPoll(g));
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Green.id()));
+        assertTrue(graph.preferences().contains(purple.id()));
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
+        
+        Bag p = new Bag();
+        p.add(purple.id());
+        assertFalse(graph.recordPoll(p));
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Green.id()));
+        assertTrue(graph.preferences().contains(purple.id()));
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
+        
+        Bag rp = new Bag();
+        assertFalse(graph.recordPoll(rp));
+        assertEquals(2, graph.preferences().size());
+        assertTrue(graph.preferences().contains(Green.id()));
+        assertTrue(graph.preferences().contains(purple.id()));
+        assertEquals(Status.PROCESSING, Red.status());
+        assertEquals(Status.PROCESSING, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
+ 
+        Bag r = new Bag();
+        r.add(Red.id());
+        assertTrue(graph.recordPoll(r));
+        assertEquals(0, graph.preferences().size()); 
+        assertEquals(Status.ACCEPTED, Red.status());
+        assertEquals(Status.REJECTED, Green.status());
+        assertEquals(Status.PROCESSING, purple.status());
     }
 
     @Test
@@ -166,64 +321,25 @@ abstract public class ConsensusTest {
 
     }
 
+    abstract public Consensus createConsensus(Context ctx, Parameters params);
+
     @Test
-    public void acceptingDependency() {
+    public void quiesce() {
         Parameters params = Parameters.newBuilder()
                                       .setMetrics(new MetricRegistry())
-                                      .setK(1)
-                                      .setAlpha(1)
+                                      .setK(2)
+                                      .setAlpha(2)
                                       .setBetaVirtuous(1)
-                                      .setBetaRogue(2)
+                                      .setBetaRogue(1)
                                       .setConcurrentRepolls(1)
                                       .build();
 
         Consensus graph = createConsensus(defaultTestContext(), params);
-        
-        TestTransaction purple = new TestTransaction();
-        purple.idV = ID.ORIGIN.prefix(7);
-        purple.statusV = Status.PROCESSING;
-        purple.dependenciesV.add(Red);
-        purple.inputIDsV.add(ID.ORIGIN.prefix(8));
-        
+
+        assertTrue(graph.quiesce());
         graph.add(Red);
+        assertFalse(graph.quiesce());
         graph.add(Green);
-        graph.add(purple);
-        
-        assertEquals(2, graph.preferences().size());
-        assertTrue(graph.preferences().contains(Red.id()));
-        assertTrue(graph.preferences().contains(purple.id()));
-        assertEquals(Status.PROCESSING, Red.status());
-        assertEquals(Status.PROCESSING, Green.status());
-        assertEquals(Status.PROCESSING, purple.status());
-        
-        Bag g = new Bag();
-        g.add(Green.id());
-        
-        assertTrue(graph.recordPoll(g));
-        assertEquals(2, graph.preferences().size());
-        assertTrue(graph.preferences().contains(Green.id()));
-        assertTrue(graph.preferences().contains(purple.id()));
-        assertEquals(Status.PROCESSING, Red.status());
-        assertEquals(Status.PROCESSING, Green.status());
-        assertEquals(Status.PROCESSING, purple.status());
-        
-        Bag rp = new Bag();
-        rp.add(Red.id(), purple.id()); 
-        
-        assertFalse(graph.recordPoll(rp));
-        assertEquals(2, graph.preferences().size());
-        assertTrue(graph.preferences().contains(Green.id()));
-        assertTrue(graph.preferences().contains(purple.id())); 
-        assertEquals(Status.PROCESSING, Red.status());
-        assertEquals(Status.PROCESSING, Green.status());
-        assertEquals(Status.PROCESSING, purple.status());
-        
-        Bag r = new Bag();
-        r.add(Red.id());
-        assertTrue(graph.recordPoll(r));
-        assertEquals(0, graph.preferences().size());
-        assertEquals(Status.ACCEPTED, Red.status());
-        assertEquals(Status.REJECTED, Green.status());
-        assertEquals(Status.ACCEPTED, purple.status());
+        assertTrue(graph.quiesce());
     }
 }
