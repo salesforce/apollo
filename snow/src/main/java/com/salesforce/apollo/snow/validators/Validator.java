@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.snow.validators;
 
-import com.salesforce.apollo.snow.ids.ID;
+import com.salesforce.apollo.snow.ids.ShortID;
 
 /**
  * @author hal.hildebrand
@@ -15,16 +15,16 @@ import com.salesforce.apollo.snow.ids.ID;
 public interface Validator {
     class AbstractValidator implements Validator {
 
-        private final ID      id;
+        private final ShortID id;
         private volatile long weight;
 
-        public AbstractValidator(ID id, long weight) {
+        public AbstractValidator(ShortID id, long weight) {
             this.id = id;
             this.weight = weight;
         }
 
         @Override
-        public ID id() {
+        public ShortID id() {
             return id;
         }
 
@@ -52,7 +52,7 @@ public interface Validator {
 
     }
 
-    ID id();
+    ShortID id();
 
     long weight();
 }

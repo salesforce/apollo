@@ -6,10 +6,20 @@
  */
 package com.salesforce.apollo.snow.engine.common;
 
+import java.util.Set;
+
+import com.salesforce.apollo.snow.ids.ID;
+
 /**
  * @author hal.hildebrand
  *
  */
 public interface Bootstrapable {
+
+    void forceAccepted(Set<ID> accepted);
+
+    Set<ID> filterAccepted(Set<ID> containerIDs);
+
+    Set<ID> currentAcceptedFrontier();
 
 }

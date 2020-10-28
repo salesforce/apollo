@@ -9,7 +9,6 @@ package com.salesforce.apollo.snow.consensus.snowman;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 
 import com.salesforce.apollo.snow.choices.Status;
 import com.salesforce.apollo.snow.consensus.snowball.tree.Tree;
