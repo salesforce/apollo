@@ -15,7 +15,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,7 +80,7 @@ abstract public class ConsensusTest {
 
     private static final Logger log = LoggerFactory.getLogger(ConsensusTest.class);
 
-    private static TestTransaction Red, Green, Blue, Alpha;
+    private TestTransaction Red, Green, Blue, Alpha;
 
     public static Context defaultTestContext() {
         return Context.newBuilder()
@@ -113,8 +113,8 @@ abstract public class ConsensusTest {
         };
     }
 
-    @BeforeAll
-    public static void setup() {
+    @BeforeEach
+    public void setup() {
         Red = new TestTransaction();
         Green = new TestTransaction();
         Blue = new TestTransaction();
@@ -243,7 +243,7 @@ abstract public class ConsensusTest {
 
         Bag g = new Bag();
         g.add(Green.id());
-        
+
         assertTrue(graph.recordPoll(g));
         assertEquals(2, graph.preferences().size());
         assertTrue(graph.preferences().contains(Green.id()));
@@ -251,7 +251,7 @@ abstract public class ConsensusTest {
         assertEquals(Status.PROCESSING, Red.status());
         assertEquals(Status.PROCESSING, Green.status());
         assertEquals(Status.PROCESSING, purple.status());
-        
+
         Bag p = new Bag();
         p.add(purple.id());
         assertFalse(graph.recordPoll(p));
@@ -261,8 +261,9 @@ abstract public class ConsensusTest {
         assertEquals(Status.PROCESSING, Red.status());
         assertEquals(Status.PROCESSING, Green.status());
         assertEquals(Status.PROCESSING, purple.status());
-        
+
         Bag rp = new Bag();
+        rp.add(Red.id(), purple.id());
         assertFalse(graph.recordPoll(rp));
         assertEquals(2, graph.preferences().size());
         assertTrue(graph.preferences().contains(Green.id()));
@@ -270,14 +271,14 @@ abstract public class ConsensusTest {
         assertEquals(Status.PROCESSING, Red.status());
         assertEquals(Status.PROCESSING, Green.status());
         assertEquals(Status.PROCESSING, purple.status());
- 
+
         Bag r = new Bag();
         r.add(Red.id());
         assertTrue(graph.recordPoll(r));
-        assertEquals(0, graph.preferences().size()); 
+        assertEquals(0, graph.preferences().size());
         assertEquals(Status.ACCEPTED, Red.status());
         assertEquals(Status.REJECTED, Green.status());
-        assertEquals(Status.PROCESSING, purple.status());
+        assertEquals(Status.ACCEPTED, purple.status());
     }
 
     @Test
