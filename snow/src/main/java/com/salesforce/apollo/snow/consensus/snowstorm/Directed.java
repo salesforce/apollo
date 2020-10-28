@@ -265,11 +265,18 @@ public class Directed extends Common implements Consensus {
     @Override
     public void reject(Collection<ID> rejected) {
         for (ID conflictID : rejected) {
-            directedTx conflict = txs.get(conflictID);
+            // While it's statistically unlikely that something being rejected is
+            // preferred, it is handled for completion.
+            preferences.remove(conflictID);
+
+            // We are rejecting the tx, so we should remove it from the graph
+            directedTx conflict = txs.remove(conflictID);
+
             if (conflict == null) {
-                ctx.log.info("Rejected conflicting txn {} not found", conflictID);
+                ctx.log.trace("Rejected conflicting txn {} not found", conflictID);
                 return;
             }
+
             // This tx is no longer an option for consuming the UTXOs from its
             // inputs, so we should remove their reference to this tx.
             for (ID inputID : conflict.tx.inputIDs()) {
@@ -291,13 +298,6 @@ public class Directed extends Common implements Consensus {
                     utxos.put(inputID, txIDs);
                 }
             }
-
-            // We are rejecting the tx, so we should remove it from the graph
-            txs.remove(conflictID);
-
-            // While it's statistically unlikely that something being rejected is
-            // preferred, it is handled for completion.
-            preferences.remove(conflictID);
 
             // remove the edge between this node and all its neighbors
             removeConflict(conflictID, conflict.ins);

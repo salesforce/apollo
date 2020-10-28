@@ -296,12 +296,10 @@ abstract public class ConsensusTest {
 
         ID conflictInputID = ID.ORIGIN.prefix(0);
 
-        Set<ID> insPurple = new HashSet<>();
-        insPurple.add(conflictInputID);
         TestTransaction purple = new TestTransaction();
         purple.idV = ID.ORIGIN.prefix(6);
         purple.statusV = Status.PROCESSING;
-        purple.inputIDsV = insPurple;
+        purple.inputIDsV.add(conflictInputID);
 
         Set<ID> insOrange = new HashSet<>();
         insOrange.add(conflictInputID);
@@ -342,5 +340,63 @@ abstract public class ConsensusTest {
         assertFalse(graph.quiesce());
         graph.add(Green);
         assertTrue(graph.quiesce());
+    }
+
+    @Test
+    public void errorOnAccepted() {
+        Parameters params = Parameters.newBuilder()
+                                      .setMetrics(new MetricRegistry())
+                                      .setK(2)
+                                      .setAlpha(2)
+                                      .setBetaVirtuous(1)
+                                      .setBetaRogue(1)
+                                      .setConcurrentRepolls(1)
+                                      .build();
+
+        Consensus graph = createConsensus(defaultTestContext(), params);
+
+        TestTransaction purple = new TestTransaction();
+        purple.idV = ID.ORIGIN.prefix(7);
+        purple.statusV = Status.PROCESSING;
+        purple.acceptV = new Throwable("foo");
+        purple.inputIDsV.add(ID.ORIGIN.prefix(4));
+
+        graph.add(purple);
+
+        Bag votes = new Bag();
+        votes.add(purple.id());
+        graph.recordPoll(votes);
+    }
+
+    @Test
+    public void utxoCleanup() {
+        Parameters params = Parameters.newBuilder()
+                                      .setMetrics(new MetricRegistry())
+                                      .setK(1)
+                                      .setAlpha(1)
+                                      .setBetaVirtuous(1)
+                                      .setBetaRogue(2)
+                                      .setConcurrentRepolls(1)
+                                      .build();
+
+        Consensus graph = createConsensus(defaultTestContext(), params);
+        graph.add(Red);
+        graph.add(Green);
+        
+        Bag redVotes = new Bag();
+        redVotes.add(Red.id());
+        assertFalse(graph.recordPoll(redVotes));
+        
+
+        assertTrue(graph.recordPoll(redVotes));
+        assertEquals(Status.ACCEPTED, Red.status());
+        assertEquals(Status.REJECTED, Green.status());
+        
+        graph.add(Blue);
+        
+        Bag blueVotes = new Bag();
+        blueVotes.add(Blue.id());
+        assertTrue(graph.recordPoll(blueVotes));
+        assertEquals(Status.ACCEPTED, Blue.status());
     }
 }
