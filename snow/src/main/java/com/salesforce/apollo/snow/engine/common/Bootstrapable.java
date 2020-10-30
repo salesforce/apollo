@@ -15,11 +15,15 @@ import com.salesforce.apollo.snow.ids.ID;
  *
  */
 public interface Bootstrapable {
+    // Returns the set of containerIDs that are accepted, but have no accepted
+    // children.
+    Set<ID> currentAcceptedFrontier();
 
-    void forceAccepted(Set<ID> accepted);
-
+    // Returns the subset of containerIDs that are accepted by this chain.
     Set<ID> filterAccepted(Set<ID> containerIDs);
 
-    Set<ID> currentAcceptedFrontier();
+    // Force the provided containers to be accepted. Only returns fatal errors
+    // if they occur.
+    void forceAccepted(Set<ID> accepted);
 
 }
