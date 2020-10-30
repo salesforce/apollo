@@ -18,8 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
@@ -131,11 +129,11 @@ public class Context<T extends Member> {
     private static final String                    CONTEXT_HASH_TEMPLATE = "%s-%s";
     private static final String                    RING_HASH_TEMPLATE    = "%s-%s-%s";
 
-    private final ConcurrentNavigableMap<HashKey, T> active  = new ConcurrentSkipListMap<>();
-    private final Map<HashKey, HashKey[]>            hashes  = new ConcurrentHashMap<>();
-    private final HashKey                            id;
-    private final ConcurrentHashMap<HashKey, T>      offline = new ConcurrentHashMap<>();
-    private final Ring<T>[]                          rings;
+    private final Map<HashKey, T>               active  = new ConcurrentHashMap<>();
+    private final Map<HashKey, HashKey[]>       hashes  = new ConcurrentHashMap<>();
+    private final HashKey                       id;
+    private final ConcurrentHashMap<HashKey, T> offline = new ConcurrentHashMap<>();
+    private final Ring<T>[]                     rings;
 
     public Context(HashKey id) {
         this(id, 0);
@@ -195,6 +193,14 @@ public class Context<T extends Member> {
 
     public HashKey getId() {
         return id;
+    }
+
+    public T getMember(HashKey memberID) {
+        T member = active.get(memberID);
+        if (member == null) {
+            member = offline.get(memberID);
+        }
+        return member;
     }
 
     public Collection<T> getOffline() {

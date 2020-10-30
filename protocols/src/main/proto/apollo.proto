@@ -5,7 +5,42 @@ option java_package = "com.salesfoce.apollo.proto";
 option java_outer_classname = "ApolloProto";
 option objc_class_prefix = "Ap";
 
-package apollo; 
+package apollo;
+
+service Messaging {
+    /*
+     * Messaging 3 phase gossip
+     */
+    rpc gossip (MessageBff) returns (Messages) {}
+    rpc update (Push) returns (Null) {}
+}
+
+message MessageBff {
+    ID context = 1; 
+    int32 ring = 3;
+    Biff digests = 4;
+}
+
+message Push {
+    ID context = 1;
+    int32 ring = 2;
+    repeated  Message updates = 3;
+}
+
+message Message {
+    ID source = 1;
+    ID id = 2;
+    int32 age = 3;
+    int64 time = 4;
+    int32 channel = 5;
+    bytes content = 6;
+    bytes signature = 7;
+}
+
+message Messages {
+    Biff bff = 1;
+    repeated  Message updates = 2;
+}
 
 service Fireflies {
     /*
@@ -98,16 +133,6 @@ message State {
     ID context = 1;
     int32 ring = 2;
     Update update = 3;
-}
-
-message Message {
-    ID source = 1;
-    ID id = 2;
-    int32 age = 3;
-    int64 time = 4;
-    int32 channel = 5;
-    bytes content = 6;
-    bytes signature = 7;
 }
 
 message MessageGossip {
