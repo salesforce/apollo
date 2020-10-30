@@ -223,7 +223,7 @@ public class SwarmTest {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
                     frist.getAndSet(false) ? node0Registry : registry);
             Communications comms = new LocalCommSimm(
-                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl), node.getId());
+                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(fireflyMetricsImpl), node.getId());
             communications.add(comms);
             return new View(node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());

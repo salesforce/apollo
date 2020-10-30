@@ -52,7 +52,7 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
         evaluate(responseObserver, request.getContext(), s -> {
             QueryResult result = s.onQuery(request.getTransactionsList()
                                                   .stream()
-                                                  .map(e -> ByteBuffer.wrap(e.toByteArray()))
+                                                  .map(e -> e.toByteArray())
                                                   .collect(Collectors.toList()),
                                            request.getWantedList()
                                                   .stream()

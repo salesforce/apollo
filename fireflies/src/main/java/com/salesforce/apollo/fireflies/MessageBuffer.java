@@ -70,7 +70,7 @@ public class MessageBuffer {
      * @return the list of new messages for this buffer
      */
     public List<Message> merge(List<Message> updates, Predicate<Message> validator) {
-        return updates.stream().filter(validator).filter(message -> put(message)).collect(Collectors.toList());
+        return updates.parallelStream().filter(validator).filter(message -> put(message)).collect(Collectors.toList());
     }
 
     public MessageGossip process(BloomFilter bff, int seed, double p) {

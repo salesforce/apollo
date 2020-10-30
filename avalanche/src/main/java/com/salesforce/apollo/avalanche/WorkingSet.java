@@ -900,7 +900,7 @@ public class WorkingSet {
     }
 
     public List<HashKey> insertSerializedRaw(List<byte[]> transactions, long discovered) {
-        return transactions.stream().map(t -> {
+        return transactions.parallelStream().map(t -> {
             assert t.length > 0 : "whoopsie";
             HashKey key = new HashKey(hashOf(t));
             Node node = unfinalized.get(key);

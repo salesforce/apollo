@@ -7,6 +7,7 @@
 
 package com.salesforce.apollo.avalanche;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,23 +68,50 @@ public class DagWood {
 
     public static class DagWoodParameters {
         public long maxCache = 150_000;
+        public File file;
+
+        public DagWoodParameters() {
+            try {
+                file = File.createTempFile("dagwood", "ws");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
 
     }
 
     private static final String CACHE = "dagwood.cache";
 
     private final HTreeMap<HashKey, byte[]> cache;
-    private final DB                        dbMemory;
+    private final DB                        db;
 
     public DagWood(DagWoodParameters parameters) {
-        dbMemory = DBMaker.memoryDirectDB().cleanerHackEnable().make();
+        try {
+            parameters.file.createNewFile();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        db = DBMaker.tempFileDB()
+                    .fileMmapEnable() // Always enable mmap
+                    .fileMmapEnableIfSupported() // Only enable mmap on supported platforms
+                    .fileMmapPreclearDisable() // Make mmap file faster
+                    // Unmap (release resources) file when its closed.
+                    // That can cause JVM crash if file is accessed after it was unmapped
+                    // (there is possible race condition).
+                    .cleanerHackEnable()
+                    .allocateStartSize(10 * 1024 * 1024 * 1024) // 10GB
+                    .allocateIncrement(512 * 1024 * 1024) // 512MB
+                    .make();
 
-        cache = dbMemory.hashMap(CACHE)
-                        .keySerializer(SERIALIZER)
-                        .valueSerializer(Serializer.BYTE_ARRAY)
-                        .expireAfterCreate()
-                        .counterEnable()
-                        .createOrOpen();
+        // optionally preload file content into disk cache
+//        db.getStore().fileLoad();
+
+        cache = db.hashMap(CACHE)
+                  .keySerializer(SERIALIZER)
+                  .valueSerializer(Serializer.BYTE_ARRAY)
+                  .expireAfterCreate()
+                  .counterEnable()
+                  .createOrOpen();
     }
 
     public List<HashKey> allFinalized() {
@@ -97,7 +125,7 @@ public class DagWood {
     }
 
     public void close() {
-        dbMemory.close();
+        db.close();
     }
 
     public boolean containsKey(HashKey key) {
