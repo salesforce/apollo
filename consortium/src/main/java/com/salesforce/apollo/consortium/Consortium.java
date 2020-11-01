@@ -6,41 +6,22 @@
  */
 package com.salesforce.apollo.consortium;
 
-import static com.salesforce.apollo.consortium.grpc.ConsortiumClientCommunications.getCreate;
-
-import java.security.SecureRandom;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
+import java.security.PublicKey;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.User;
-import com.salesfoce.apollo.proto.DagEntry;
-import com.salesforce.apollo.avalanche.AvaMetrics;
-import com.salesforce.apollo.avalanche.Avalanche;
-import com.salesforce.apollo.avalanche.AvalancheParameters;
-import com.salesforce.apollo.avalanche.Processor;
-import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
-import com.salesforce.apollo.comm.CommonCommunications;
-import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.consortium.grpc.ConsortiumClientCommunications;
-import com.salesforce.apollo.consortium.grpc.ConsortiumServerCommunications;
-import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -48,32 +29,30 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  *
  */
+@SuppressWarnings("unused")
 public class Consortium {
-    public class ConsortiumProcessor implements Processor {
 
-        @Override
-        public HashKey conflictSetOf(HashKey key, DagEntry entry) {
-            Block block = manifestBlock(entry.getData().toByteArray());
-            return new HashKey(block.getHeader().getPrevious());
+    public static class Collaborator {
+        public final PublicKey consensusKey;
+        public final Member    member;
+
+        public Collaborator(Member member, byte[] consensusKey) {
+            this(member, publicKeyOf(consensusKey));
         }
 
-        @Override
-        public void finalize(FinalizationData finalization) {
-            finalizations.add(finalization);
+        public Collaborator(Member member, PublicKey consensusKey) {
+            this.member = member;
+            this.consensusKey = consensusKey;
         }
-
     }
 
     public class Service {
-
     }
 
     private class Client extends State {
-
     }
 
     private abstract class CommitteeMember extends State {
-
     }
 
     private static class CurrentBlock {
@@ -87,83 +66,23 @@ public class Consortium {
     }
 
     private class Follower extends CommitteeMember {
-
     }
 
     private class Leader extends CommitteeMember {
-
     }
 
     private abstract class State {
 
-        public void process(CurrentBlock next) {
-            switch (next.block.getBody().getType()) {
-            case CHECKPOINT: {
-                Checkpoint body;
-                try {
-                    body = Checkpoint.parseFrom(next.block.getBody().getContents());
-                } catch (InvalidProtocolBufferException e) {
-                    log.error("Protocol violation.  Cannot decode checkpoint body: {}", e);
-                    fail();
-                    return;
-                }
-                process(next, body);
-                break;
-            }
-            case GENESIS: {
-                Genesis body;
-                try {
-                    body = Genesis.parseFrom(next.block.getBody().getContents());
-                } catch (InvalidProtocolBufferException e) {
-                    log.error("Protocol violation.  Cannot decode genesis body: {}", e);
-                    fail();
-                    return;
-                }
-                process(next, body);
-                break;
-            }
-            case RECONFIGURE: {
-                Reconfigure body;
-                try {
-                    body = Reconfigure.parseFrom(next.block.getBody().getContents());
-                } catch (InvalidProtocolBufferException e) {
-                    log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
-                    fail();
-                    return;
-                }
-                process(next, body);
-                break;
-            }
-            case USER: {
-                User body;
-                try {
-                    body = User.parseFrom(next.block.getBody().getContents());
-                } catch (InvalidProtocolBufferException e) {
-                    log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
-                    fail();
-                    return;
-                }
-                process(next, body);
-                break;
-            }
-            case UNRECOGNIZED:
-            default:
-                break;
-
-            }
-
-        }
-
-        void process(CurrentBlock next, Checkpoint body) {
+        boolean process(CurrentBlock next, Checkpoint body) {
+            return false;
         };
 
-        void process(CurrentBlock next, Genesis body) {
+        boolean process(CurrentBlock next, Genesis body) {
+            return false;
         };
 
-        void process(CurrentBlock next, Reconfigure body) {
-        };
-
-        void process(CurrentBlock next, User body) {
+        boolean process(CurrentBlock next, User body) {
+            return false;
         };
 
     }
@@ -181,115 +100,145 @@ public class Consortium {
         }
     }
 
-    private final Avalanche                                            avalanche;
-    private final CommonCommunications<ConsortiumClientCommunications> comm;
-    private volatile CurrentBlock                                      current;
-    private final AtomicReference<List<Member>>                        currentView   = new AtomicReference<>();
-    private final BlockingQueue<FinalizationData>                      finalizations = new LinkedBlockingQueue<>();
-    @SuppressWarnings("unused")
-    private final AtomicReference<Member>                              leader        = new AtomicReference<>();
-    private final Service                                              service       = new Service();
-
-    private volatile State state = new Client();
-
-    public Consortium(Node node, Context<? extends Member> context, SecureRandom entropy, Communications communications,
-            AvalancheParameters p, MetricRegistry registry) {
-        avalanche = new Avalanche(node, context, entropy, communications, p,
-                registry == null ? null : new AvaMetrics(registry), new ConsortiumProcessor());
-        ConsortiumMetrics metrics = null;
-        comm = communications.create(node, getCreate(metrics), new ConsortiumServerCommunications(service,
-                communications.getClientIdentityProvider(), metrics));
-
-    }
-
-    @SuppressWarnings("unused")
-    private void becomeClient() {
-        state = new Client();
-    }
-
-    @SuppressWarnings("unused")
-    private void becomeFollower() {
-        state = new Follower();
-    }
-
-    @SuppressWarnings("unused")
-    private void becomeLeader() {
-        state = new Leader();
-    }
-
-    private void fail() {
-        // TODO Auto-generated method stub
-
-    }
-
-    @SuppressWarnings("unused")
-    private State getState() {
-        final State get = state;
-        return get;
-    }
-
-    private ConsortiumClientCommunications linkFor(Member m) {
-        try {
-            return comm.apply(m, avalanche.getNode());
-        } catch (Throwable e) {
-            log.debug("error opening connection to {}: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
-        }
+    public static PublicKey publicKeyOf(byte[] consensusKey) {
         return null;
     }
 
-    @SuppressWarnings("unused")
-    private void multicast(Consumer<ConsortiumClientCommunications> broadcast) {
-        currentView.get().forEach(e -> {
-            ConsortiumClientCommunications ch = linkFor(e);
-            try {
-                broadcast.accept(ch);
-            } finally {
-                ch.release();
-            }
-        });
+    private final Context<? extends Member> context;
+    private volatile CurrentBlock           current;
+    private volatile Ring<Member>           currentView;
+    private final HashKey                   id;
+    private volatile Member                 leader;
+    private final Member                    member;
+    private final Service                   service = new Service();
+    private volatile State                  state   = new Client();
+
+    public Consortium(HashKey id, Member member, Context<? extends Member> context) {
+        this.id = id;
+        this.member = member;
+        this.context = context;
     }
 
-    @SuppressWarnings("unused")
-    private List<Block> next() {
-        FinalizationData finalized;
-        try {
-            finalized = finalizations.poll(1, TimeUnit.NANOSECONDS);
-        } catch (InterruptedException e) {
-            log.debug("interrupted polling for next block");
-            return null;
-        }
-        if (finalized == null) {
-            return null;
-        }
-        List<Block> blocks = finalized.finalized.stream()
-                                                .map(e -> Conversion.manifestDag(e.entry))
-                                                .filter(e -> e != null)
-                                                .map(e -> manifestBlock(e.getData().toByteArray()))
-                                                .filter(e -> e != null)
-                                                .collect(Collectors.toList());
-        Collections.sort(blocks, (a, b) -> Long.compare(a.getHeader().getHeight(), b.getHeader().getHeight()));
-        return blocks;
-    }
-
-    @SuppressWarnings("unused")
-    private void process(Block block) {
+    public void process(Block block) {
         final CurrentBlock previousBlock = current;
         if (block.getHeader().getHeight() != previousBlock.block.getHeader().getHeight() + 1) {
             log.error("Protocol violation.  Block height should be {} and next block height is {}",
                       previousBlock.block.getHeader().getHeight(), block.getHeader().getHeight());
-            fail();
             return;
         }
         HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
         if (previousBlock.hash.equals(prev)) {
             log.error("Protocol violation. New block does not refer to current block hash. Should be {} and next block's prev is {}",
                       previousBlock.hash, prev);
-            fail();
             return;
         }
         CurrentBlock next = new CurrentBlock(new HashKey(Conversion.hashOf(block.toByteArray())), block);
         current = next;
-        state.process(next);
+        next();
+    }
+
+    private void becomeClient() {
+        state = new Client();
+    }
+
+    private void becomeFollower() {
+        state = new Follower();
+    }
+
+    private void becomeLeader() {
+        state = new Leader();
+    }
+
+    private State getState() {
+        final State get = state;
+        return get;
+    }
+
+    private boolean next() {
+        CurrentBlock next = current;
+        switch (next.block.getBody().getType()) {
+        case CHECKPOINT:
+            return processCheckpoint(next);
+        case GENESIS:
+            return processGenesis(next);
+        case RECONFIGURE:
+            return processReconfigure(next);
+        case USER:
+            return processUser(next);
+        case UNRECOGNIZED:
+        default:
+            log.info("Unrecognized block type: {} : {}", next.hashCode(), next.block);
+            return false;
+        }
+
+    }
+
+    private boolean processCheckpoint(CurrentBlock next) {
+        Checkpoint body;
+        try {
+            body = Checkpoint.parseFrom(next.block.getBody().getContents());
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Protocol violation.  Cannot decode checkpoint body: {}", e);
+            return false;
+        }
+        return getState().process(next, body);
+    }
+
+    private boolean processGenesis(CurrentBlock next) {
+        Genesis body;
+        try {
+            body = Genesis.parseFrom(next.block.getBody().getContents());
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Protocol violation.  Cannot decode genesis body: {}", e);
+            return false;
+        }
+        return getState().process(next, body);
+    }
+
+    private boolean processReconfigure(CurrentBlock next) {
+        Reconfigure body;
+        try {
+            body = Reconfigure.parseFrom(next.block.getBody().getContents());
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
+            return false;
+        }
+        Ring<Member> newView = new Ring<>();
+        Map<Member, PublicKey> consensusKeys = new HashMap<>();
+        body.getViewList().stream().map(v -> {
+            HashKey memberId = new HashKey(v.getId());
+            Member m = context.getMember(memberId);
+            if (m == null) {
+                return null;
+            }
+            consensusKeys.put(m, publicKeyOf(v.getConsensusKey().toByteArray()));
+            return m;
+        }).filter(m -> m != null).forEach(m -> newView.insert(m));
+
+        return viewChange(new HashKey(body.getId()), newView);
+    }
+
+    private boolean viewChange(HashKey viewId, Ring<Member> newView) {
+        currentView = newView;
+        leader = newView.successor(viewId);
+        if (member.equals(leader)) {
+            becomeLeader();
+        } else if (currentView.contains(member)) {
+            becomeFollower();
+        } else {
+            becomeClient();
+        }
+        return true;
+    }
+
+    private boolean processUser(CurrentBlock next) {
+        User body;
+        try {
+            body = User.parseFrom(next.block.getBody().getContents());
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
+            return false;
+        }
+        return getState().process(next, body);
     }
 }

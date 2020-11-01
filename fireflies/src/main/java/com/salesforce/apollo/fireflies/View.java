@@ -158,23 +158,6 @@ public class View {
         }
     }
 
-    public interface MembershipListener {
-
-        /**
-         * A member has failed
-         * 
-         * @param member
-         */
-        void fail(Participant member);
-
-        /**
-         * A new member has recovered and is now live
-         * 
-         * @param member
-         */
-        void recover(Participant member);
-    }
-
     public class Service {
 
         /**
@@ -463,11 +446,6 @@ public class View {
      */
     private final int diameter;
 
-    /**
-     * Membership listeners
-     */
-    private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
-
     @SuppressWarnings("unused")
     private final FireflyMetrics metrics;
 
@@ -605,10 +583,6 @@ public class View {
      */
     public ConcurrentMap<HashKey, Participant> getView() {
         return view;
-    }
-
-    public void register(MembershipListener listener) {
-        membershipListeners.add(listener);
     }
 
     public void registerRoundListener(Runnable callback) {
@@ -884,15 +858,6 @@ public class View {
     void gc(Participant member) {
         context.offline(member);
         member.setFailed(true);
-        membershipListeners.stream().forEach(l -> {
-            commonPool().execute(() -> {
-                try {
-                    l.fail(member);
-                } catch (Throwable e) {
-                    log.error("error sending fail to listener: " + l, e);
-                }
-            });
-        });
     }
 
     BloomFilter getAccusationsBff(int seed, double p) {
@@ -1252,15 +1217,6 @@ public class View {
             context.activate(member);
             member.setFailed(false);
             log.info("Recovering: {}", member.getId());
-            membershipListeners.stream().forEach(l -> {
-                commonPool().execute(() -> {
-                    try {
-                        l.recover(member);
-                    } catch (Throwable e) {
-                        log.error("error recoving member in listener: " + l, e);
-                    }
-                });
-            });
         } else {
             log.trace("Already active: {}", member.getId());
         }

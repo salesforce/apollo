@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.protocols;
 
+import static com.salesforce.apollo.protocols.Conversion.hashOf;
+
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -178,6 +180,17 @@ public class HashKey implements Comparable<HashKey> {
 
     public long[] longs() {
         return itself;
+    }
+
+    public HashKey prefix(long... prefixes) {
+        ByteBuffer buffer = ByteBuffer.allocate((itself.length + prefixes.length) * 8);
+        for (long prefix : prefixes) {
+            buffer.putLong(prefix);
+        }
+        for (long i : itself) {
+            buffer.putLong(i);
+        }
+        return new HashKey(hashOf(buffer.array()));
     }
 
     public ID toID() {

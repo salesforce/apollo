@@ -14,6 +14,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -31,13 +32,17 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Ring<T extends Member> implements Iterable<T> {
-    private final Context<T>                         context;
+    private final BiFunction<T, Integer, HashKey>    hasher;
     private final int                                index;
     private final ConcurrentNavigableMap<HashKey, T> ring = new ConcurrentSkipListMap<>();
 
-    public Ring(int index, Context<T> context) {
+    public Ring() {
+        this(0, (m, r) -> m.getId());
+    }
+
+    public Ring(int index, BiFunction<T, Integer, HashKey> hasher) {
         this.index = index;
-        this.context = context;
+        this.hasher = hasher;
     }
 
     /**
@@ -123,6 +128,14 @@ public class Ring<T extends Member> implements Iterable<T> {
         ring.clear();
     }
 
+    public boolean contains(T member) {
+        return ring.containsKey(member.getId());
+    }
+
+    public void delete(T m) {
+        ring.remove(hash(m));
+    }
+
     public Set<HashKey> difference(Ring<T> r) {
         return Sets.difference(ring.keySet(), r.ring.keySet());
     }
@@ -141,7 +154,12 @@ public class Ring<T extends Member> implements Iterable<T> {
     }
 
     public HashKey hash(T m) {
-        return context.hashFor(m, index);
+        return hasher.apply(m, index);
+    }
+
+    public T insert(T m) {
+        LoggerFactory.getLogger(getClass()).trace("Adding: {} to ring: {}", m, index);
+        return ring.put(hash(m), m);
     }
 
     /**
@@ -516,14 +534,5 @@ public class Ring<T extends Member> implements Iterable<T> {
                 };
             }
         };
-    }
-
-    protected void delete(T m) {
-        ring.remove(hash(m));
-    }
-
-    protected T insert(T m) {
-        LoggerFactory.getLogger(getClass()).trace("Adding: {} to ring: {}", m, index);
-        return ring.put(hash(m), m);
     }
 }

@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.membership;
 
+import static java.util.concurrent.ForkJoinPool.commonPool;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -18,13 +20,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collector;
 import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -59,6 +66,23 @@ public class Context<T extends Member> {
             current = current + 1;
             return accepted;
         }
+    }
+
+    public interface MembershipListener<T> {
+
+        /**
+         * A member has failed
+         * 
+         * @param member
+         */
+        void fail(T member);
+
+        /**
+         * A new member has recovered and is now live
+         * 
+         * @param member
+         */
+        void recover(T member);
     }
 
     private static class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
@@ -118,22 +142,27 @@ public class Context<T extends Member> {
 
     }
 
-    public static final ThreadLocal<MessageDigest> DIGEST_CACHE          = ThreadLocal.withInitial(() -> {
-                                                                             try {
-                                                                                 return MessageDigest.getInstance(Context.SHA_256);
-                                                                             } catch (NoSuchAlgorithmException e) {
-                                                                                 throw new IllegalStateException(e);
-                                                                             }
-                                                                         });
-    public static final String                     SHA_256               = "sha-256";
-    private static final String                    CONTEXT_HASH_TEMPLATE = "%s-%s";
-    private static final String                    RING_HASH_TEMPLATE    = "%s-%s-%s";
+    public static final ThreadLocal<MessageDigest> DIGEST_CACHE = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance(Context.SHA_256);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    });
 
-    private final Map<HashKey, T>               active  = new ConcurrentHashMap<>();
-    private final Map<HashKey, HashKey[]>       hashes  = new ConcurrentHashMap<>();
+    public static final String    SHA_256               = "sha-256";
+    private static final String   CONTEXT_HASH_TEMPLATE = "%s-%s";
+    private static final String   RING_HASH_TEMPLATE    = "%s-%s-%s";
+    private final Map<HashKey, T> active                = new ConcurrentHashMap<>();
+
+    private BiFunction<T, Integer, HashKey>     hasher              = (m, ring) -> hashFor(m, ring);
+    private final Map<HashKey, HashKey[]>       hashes              = new ConcurrentHashMap<>();
     private final HashKey                       id;
-    private final ConcurrentHashMap<HashKey, T> offline = new ConcurrentHashMap<>();
-    private final Ring<T>[]                     rings;
+    private Logger                              log                 = LoggerFactory.getLogger(Context.class);
+    private final List<MembershipListener<T>>   membershipListeners = new CopyOnWriteArrayList<>();
+    private final ConcurrentHashMap<HashKey, T> offline             = new ConcurrentHashMap<>();
+
+    private final Ring<T>[] rings;
 
     public Context(HashKey id) {
         this(id, 0);
@@ -144,7 +173,7 @@ public class Context<T extends Member> {
         this.id = id;
         this.rings = new Ring[r];
         for (int i = 0; i < r; i++) {
-            rings[i] = new Ring<T>(i, this);
+            rings[i] = new Ring<T>(i, hasher);
         }
     }
 
@@ -157,6 +186,15 @@ public class Context<T extends Member> {
         for (Ring<T> ring : rings) {
             ring.insert(m);
         }
+        membershipListeners.stream().forEach(l -> {
+            commonPool().execute(() -> {
+                try {
+                    l.recover(m);
+                } catch (Throwable e) {
+                    log.error("error recoving member in listener: " + l, e);
+                }
+            });
+        });
     }
 
     public void add(T m) {
@@ -189,6 +227,10 @@ public class Context<T extends Member> {
 
     public Collection<T> getActive() {
         return active.values();
+    }
+
+    public T getActiveMember(HashKey memberID) {
+        return active.get(memberID);
     }
 
     public HashKey getId() {
@@ -237,6 +279,15 @@ public class Context<T extends Member> {
         for (Ring<T> ring : rings) {
             ring.delete(m);
         }
+        membershipListeners.stream().forEach(l -> {
+            commonPool().execute(() -> {
+                try {
+                    l.fail(m);
+                } catch (Throwable e) {
+                    log.error("error sending fail to listener: " + l, e);
+                }
+            });
+        });
     }
 
     /**
@@ -256,6 +307,10 @@ public class Context<T extends Member> {
             predecessors.add(ring.predecessor(contextHash(key, ring.getIndex()), test));
         }
         return predecessors;
+    }
+
+    public void register(MembershipListener<T> listener) {
+        membershipListeners.add(listener);
     }
 
     /**
@@ -323,7 +378,7 @@ public class Context<T extends Member> {
         return successors;
     }
 
-    protected HashKey hashFor(T m, int index) {
+    HashKey hashFor(T m, int index) {
         HashKey[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
             HashKey[] s = new HashKey[rings.length];
             MessageDigest md = DIGEST_CACHE.get();

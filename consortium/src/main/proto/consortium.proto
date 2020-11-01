@@ -60,8 +60,12 @@ message User {
 message Reconfigure {
     bytes id = 1;
     int32 checkpointBlocks = 2;
-    repeated bytes view = 3;
-    repeated bytes consensusKeys = 5;
+    repeated ViewMember view = 3;
+}
+
+message ViewMember {
+    bytes id = 1;
+    bytes consensusKey = 2;
 }
 
 message Checkpoint {
