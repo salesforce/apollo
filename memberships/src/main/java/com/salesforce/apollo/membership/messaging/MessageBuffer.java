@@ -36,10 +36,45 @@ import com.salesforce.apollo.protocols.HashKey;
 public class MessageBuffer {
     private final static Logger log = LoggerFactory.getLogger(MessageBuffer.class);
 
+    public static ByteBuffer headerBuffer(long ts, int channel) {
+        ByteBuffer header = ByteBuffer.allocate(8 + 4);
+        header.putLong(ts);
+        header.putInt(channel);
+        return header;
+    }
+
+    public static byte[] sign(Member from, Signature signature, ByteBuffer header, byte[] bytes) {
+        byte[] s;
+        try {
+            signature.update(from.getId().bytes());
+            signature.update(header.array());
+            signature.update(bytes);
+            s = signature.sign();
+        } catch (SignatureException e) {
+            throw new IllegalStateException("Unable to sign message content", e);
+        }
+        return s;
+    }
+
+    public static boolean validate(Message message, Signature signature) {
+        ByteBuffer header = headerBuffer(message.getTime(), message.getChannel());
+
+        try {
+            signature.update(new HashKey(message.getSource()).bytes());
+            signature.update(header.array());
+            signature.update(message.getContent().toByteArray());
+            return signature.verify(message.getSignature().toByteArray());
+        } catch (SignatureException e) {
+            log.trace("Message validation error", e);
+            return false;
+        }
+    }
+
     private final int                   bufferSize;
     private final Map<HashKey, Long>    maxTimes = new ConcurrentHashMap<>();
     private final Map<HashKey, Message> state    = new ConcurrentHashMap<>();
-    private final int                   tooOld;
+
+    private final int tooOld;
 
     public MessageBuffer(int bufferSize, int tooOld) {
         this.bufferSize = bufferSize;
@@ -61,13 +96,6 @@ public class MessageBuffer {
         BloomFilter bff = new BloomFilter(new HashFunction(seed, bufferSize, p));
         state.keySet().forEach(h -> bff.add(h));
         return bff;
-    }
-
-    public ByteBuffer headerBuffer(long ts, int channel) {
-        ByteBuffer header = ByteBuffer.allocate(8 + 4);
-        header.putLong(ts);
-        header.putInt(channel);
-        return header;
     }
 
     /**
@@ -108,15 +136,7 @@ public class MessageBuffer {
         ByteBuffer header = headerBuffer(ts, channel);
         HashKey id = new HashKey(Conversion.hashOf(from.getId().bytes(), header.array(), bytes));
 
-        byte[] s;
-        try {
-            signature.update(from.getId().bytes());
-            signature.update(header.array());
-            signature.update(bytes);
-            s = signature.sign();
-        } catch (SignatureException e) {
-            throw new IllegalStateException("Unable to sign message content", e);
-        }
+        byte[] s = sign(from, signature, header, bytes);
         Message update = createUpdate(channel, id, ts, bytes, from.getId(), s);
         put(update);
         log.trace("broadcasting: {}", id);
@@ -131,18 +151,6 @@ public class MessageBuffer {
              .forEach(e -> builder.addUpdates(e));
     }
 
-    public boolean validate(Message message, Signature signature) {
-        ByteBuffer header = headerBuffer(message.getTime(), message.getChannel());
-        try {
-            signature.update(message.getSource().toByteArray());
-            signature.update(header.array());
-            signature.update(message.getContent().toByteArray());
-            return signature.verify(message.getSignature().toByteArray());
-        } catch (SignatureException e) {
-            return false;
-        }
-    }
-
     private void compact() {
         log.trace("Compacting buffer");
         removeOutOfDate();
@@ -154,7 +162,7 @@ public class MessageBuffer {
                       .setSource(from.toID())
                       .setId(id.toID())
                       .setAge(0)
-                      .setTime(System.currentTimeMillis())
+                      .setTime(ts)
                       .setChannel(channel)
                       .setContent(ByteString.copyFrom(content))
                       .setSignature(ByteString.copyFrom(signature))

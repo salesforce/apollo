@@ -36,6 +36,10 @@
 			<groupId>org.apache.tomcat</groupId>
 			<artifactId>annotations-api</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>io.dropwizard</groupId>
+			<artifactId>dropwizard-metrics</artifactId>
+		</dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>

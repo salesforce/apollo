@@ -34,8 +34,6 @@ import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.View.MembershipListener;
-import com.salesforce.apollo.fireflies.View.MessageChannelHandler;
 import com.salesforce.apollo.ghost.communications.GhostClientCommunications;
 import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
 import com.salesforce.apollo.membership.Member;
@@ -94,35 +92,6 @@ public class Ghost {
         public TimeUnit unit           = TimeUnit.SECONDS;
     }
 
-    public class Listener implements MessageChannelHandler, MembershipListener {
-
-        @Override
-        public void fail(Participant member) {
-            joining.remove(member);
-        }
-
-        @Override
-        public void message(List<Msg> messages) {
-            messages.forEach(msg -> {
-                joining.remove(msg.from);
-            });
-        }
-
-        @Override
-        public void recover(Participant member) {
-            joining.add(member);
-        }
-
-        public void round() {
-            log.debug("{} round", view.getNode().getId());
-            if (!joined()) {
-                service.join();
-                return;
-            }
-        }
-
-    }
-
     /**
      * The network service interface
      */
@@ -134,6 +103,7 @@ public class Ghost {
             return store.get(key);
         }
 
+        @SuppressWarnings("unused")
         private void join() {
             if (!started.get()) {
                 return;
@@ -177,7 +147,6 @@ public class Ghost {
                 }
                 if (zeros == view.getRings().size()) {
                     joined.set(true);
-                    view.publish(JOIN_MESSAGE_CHANNEL, "joined".getBytes());
                     log.info("{} joined", view.getNode().getId());
                 }
             } finally {
@@ -216,12 +185,11 @@ public class Ghost {
     private static final Logger log                  = LoggerFactory.getLogger(Ghost.class);
 
     private final CommonCommunications<GhostClientCommunications> communications;
-    private final AtomicBoolean                                   joined   = new AtomicBoolean(false);
-    private final ConcurrentSkipListSet<Member>                   joining  = new ConcurrentSkipListSet<>();
-    private final Listener                                        listener = new Listener();
+    private final AtomicBoolean                                   joined  = new AtomicBoolean(false);
+    private final ConcurrentSkipListSet<Member>                   joining = new ConcurrentSkipListSet<>();
     private final GhostParameters                                 parameters;
     private final int                                             rings;
-    private final Service                                         service  = new Service();
+    private final Service                                         service = new Service();
     private final Store                                           store;
     private final View                                            view;
 
@@ -232,9 +200,6 @@ public class Ghost {
 
         communications = c.create(getNode(), getCreate(),
                                   new GhostServerCommunications(service, c.getClientIdentityProvider()));
-        view.register(listener);
-        view.register(JOIN_MESSAGE_CHANNEL, listener);
-        view.registerRoundListener(() -> listener.round());
 
         rings = view.getNode().getParameters().toleranceLevel + 1;
     }

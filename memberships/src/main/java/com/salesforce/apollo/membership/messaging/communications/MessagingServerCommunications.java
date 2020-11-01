@@ -30,7 +30,9 @@ public class MessagingServerCommunications extends MessagingImplBase implements 
     @Override
     public void gossip(MessageBff request, StreamObserver<Messages> responseObserver) {
         evaluate(responseObserver, request.getContext(), s -> {
-            Messages response = s.gossip(request);
+            Messages response = s.gossip(request,  getFrom());
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
             if (metrics != null) {
                 metrics.inboundGossipRate().mark();
                 metrics.inboundBandwidth().mark(request.getSerializedSize());
@@ -38,15 +40,15 @@ public class MessagingServerCommunications extends MessagingImplBase implements 
                 metrics.inboundGossip().update(request.getSerializedSize());
                 metrics.gossipReply().update(response.getSerializedSize());
             }
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
         }, system, services);
     }
 
     @Override
     public void update(Push request, StreamObserver<Null> responseObserver) {
         evaluate(responseObserver, request.getContext(), s -> {
-            s.update(request);
+            s.update(request, getFrom());
+            responseObserver.onNext(Null.getDefaultInstance());
+            responseObserver.onCompleted();
             if (metrics != null) {
                 metrics.inboundUpdateRate().mark();
                 metrics.inboundBandwidth().mark(request.getSerializedSize());

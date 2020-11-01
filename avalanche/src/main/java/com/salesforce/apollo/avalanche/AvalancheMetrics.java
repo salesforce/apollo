@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.fireflies.BandwidthMetrics;
+import com.salesforce.apollo.protocols.BandwidthMetrics;
 
 /**
  * @author hal.hildebrand

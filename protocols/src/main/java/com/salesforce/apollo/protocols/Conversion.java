@@ -83,6 +83,8 @@ public final class Conversion {
         return bytes;
     }
 
+    public static final String  DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
+
     private Conversion() {
         // Hidden
     }

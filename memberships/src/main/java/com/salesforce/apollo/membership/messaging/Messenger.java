@@ -11,6 +11,7 @@ import static java.util.concurrent.ForkJoinPool.commonPool;
 
 import java.security.SecureRandom;
 import java.security.Signature;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +38,7 @@ import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandle
 import com.salesforce.apollo.membership.messaging.communications.MessagingClientCommunications;
 import com.salesforce.apollo.membership.messaging.communications.MessagingServerCommunications;
 import com.salesforce.apollo.protocols.BloomFilter;
+import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -65,49 +67,44 @@ public class Messenger {
     public static class Parameters {
         public static class Builder {
 
-            private SecureRandom        entropy;
-            private int                 falsePositiveRate;
-            private long                frequency;
-            private HashKey             id;
-            private Member              member;
-            private MessagingMetrics    metrics;
-            private Supplier<Signature> signature;
-            private TimeUnit            timeUnit;
+            private int              bufferSize        = 1000;
+            private SecureRandom     entropy;
+            private double           falsePositiveRate = 0.25;
+            private HashKey          id;
+            private MessagingMetrics metrics;
+            private int              tooOld            = 9;
 
             public Parameters build() {
-                return new Parameters(id, member, signature, frequency, timeUnit, falsePositiveRate, entropy, metrics);
+                return new Parameters(id, falsePositiveRate, entropy, bufferSize, tooOld, metrics);
+            }
+
+            public int getBufferSize() {
+                return bufferSize;
             }
 
             public SecureRandom getEntropy() {
                 return entropy;
             }
 
-            public int getFalsePositiveRate() {
+            public double getFalsePositiveRate() {
                 return falsePositiveRate;
-            }
-
-            public long getFrequency() {
-                return frequency;
             }
 
             public HashKey getId() {
                 return id;
             }
 
-            public Member getMember() {
-                return member;
-            }
-
             public MessagingMetrics getMetrics() {
                 return metrics;
             }
 
-            public Supplier<Signature> getSignature() {
-                return signature;
+            public int getTooOld() {
+                return tooOld;
             }
 
-            public TimeUnit getTimeUnit() {
-                return timeUnit;
+            public Builder setBufferSize(int bufferSize) {
+                this.bufferSize = bufferSize;
+                return this;
             }
 
             public Builder setEntropy(SecureRandom entropy) {
@@ -115,13 +112,8 @@ public class Messenger {
                 return this;
             }
 
-            public Builder setFalsePositiveRate(int falsePositiveRate) {
+            public Builder setFalsePositiveRate(double falsePositiveRate) {
                 this.falsePositiveRate = falsePositiveRate;
-                return this;
-            }
-
-            public Builder setFrequency(long frequency) {
-                this.frequency = frequency;
                 return this;
             }
 
@@ -130,65 +122,67 @@ public class Messenger {
                 return this;
             }
 
-            public Builder setMember(Member member) {
-                this.member = member;
-                return this;
-            }
-
             public Builder setMetrics(MessagingMetrics metrics) {
                 this.metrics = metrics;
                 return this;
             }
 
-            public Builder setSignature(Supplier<Signature> signature) {
-                this.signature = signature;
-                return this;
-            }
-
-            public Builder setTimeUnit(TimeUnit timeUnit) {
-                this.timeUnit = timeUnit;
+            public Builder setTooOld(int tooOld) {
+                this.tooOld = tooOld;
                 return this;
             }
 
         }
 
-        public final SecureRandom        entropy;
-        public final int                 falsePositiveRate;
-        public final long                frequency;
-        public final HashKey             id;
-        public final Member              member;
-        public final MessagingMetrics    metrics;
-        public final Supplier<Signature> signature;
-        public final TimeUnit            timeUnit;
+        public static Builder newBuilder() {
+            return new Builder();
+        }
 
-        public Parameters(HashKey id, Member member, Supplier<Signature> signature, long frequency, TimeUnit timeUnit,
-                int falsePositiveRate, SecureRandom entropy, MessagingMetrics metrics) {
+        public final SecureRandom     entropy;
+        public final double           falsePositiveRate;
+        public final HashKey          id;
+        public final MessagingMetrics metrics;
+        public final int              bufferSize;
+        public final int              tooOld;
+
+        public Parameters(HashKey id, double falsePositiveRate, SecureRandom entropy, int bufferSize, int tooOld,
+                MessagingMetrics metrics) {
             this.id = id;
-            this.member = member;
-            this.signature = signature;
-            this.frequency = frequency;
-            this.timeUnit = timeUnit;
             this.falsePositiveRate = falsePositiveRate;
             this.entropy = entropy;
             this.metrics = metrics;
+            this.bufferSize = bufferSize;
+            this.tooOld = tooOld;
         }
     }
 
     public class Service {
-        public Messages gossip(MessageBff inbound) {
+        public Messages gossip(MessageBff inbound, HashKey from) {
+            Member predecessor = context.ring(inbound.getRing()).predecessor(member);
+            if (predecessor == null || !from.equals(predecessor.getId())) {
+                log.warn("Invalid inbound messages gossip from: {} on ring: {} - not predecessor", from,
+                         inbound.getRing());
+                return Messages.getDefaultInstance();
+            }
             return buffer.process(new BloomFilter(inbound.getDigests()), parameters.entropy.nextInt(),
                                   parameters.falsePositiveRate);
         }
 
-        public void update(Push push) {
-            List<Message> updates = push.getUpdatesList();
-
-            process(updates);
+        public void update(Push push, HashKey from) {
+            Member predecessor = context.ring(push.getRing()).predecessor(member);
+            if (predecessor == null || !from.equals(predecessor.getId())) {
+                log.warn("Invalid inbound messages update from: {} on ring: {} - not predecessor", from,
+                         push.getRing());
+                return;
+            }
+            process(push.getUpdatesList());
         }
     }
 
     public static final Logger log = LoggerFactory.getLogger(Messenger.class);
 
+    public final Member                                               member;
+    public final Supplier<Signature>                                  signature;
     private final MessageBuffer                                       buffer;
     private final Map<Integer, MessageChannelHandler>                 channelHandlers = new ConcurrentHashMap<>();
     private final CommonCommunications<MessagingClientCommunications> comm;
@@ -197,60 +191,74 @@ public class Messenger {
     private final Parameters                                          parameters;
     private final AtomicBoolean                                       started         = new AtomicBoolean();
 
-    public Messenger(Context<Member> context, MessageBuffer buffer, Communications communications,
-            Parameters parameters) {
+    public Messenger(Member member, Supplier<Signature> signature, Context<Member> context,
+            Communications communications, Parameters parameters) {
+        this.member = member;
+        this.signature = signature;
         this.parameters = parameters;
         this.context = context;
-        this.buffer = buffer;
-        this.comm = communications.create(parameters.member, getCreate(parameters.metrics),
-                                          new MessagingServerCommunications(new Service(),
-                                                  communications.getClientIdentityProvider(), parameters.metrics));
+        this.buffer = new MessageBuffer(parameters.bufferSize, parameters.tooOld);
+        this.comm = communications.create(member, getCreate(parameters.metrics), new MessagingServerCommunications(
+                new Service(), communications.getClientIdentityProvider(), parameters.metrics));
     }
 
-    public void oneRound(ScheduledExecutorService scheduler) {
+    public Member getMember() {
+        return member;
+    }
+
+    public void oneRound(Duration duration, ScheduledExecutorService scheduler) {
         if (!started.get()) {
             return;
         }
+        commonPool().execute(() -> {
+            MessagingClientCommunications link = nextRing();
 
-        MessagingClientCommunications link = nextRing();
-
-        if (link == null) {
-            log.debug("No members to gossip with on ring: {}", lastRing);
-            return;
-        }
-        log.trace("gossiping with {} on {}", link.getMember(), lastRing);
-        try {
-            Messages gossip = link.gossip(MessageBff.newBuilder()
-                                                    .setContext(parameters.id.toID())
-                                                    .setDigests(buffer.getBff(parameters.entropy.nextInt(),
-                                                                              parameters.falsePositiveRate)
-                                                                      .toBff())
-                                                    .build());
-            process(gossip.getUpdatesList());
-            Builder builder = Push.newBuilder();
-            buffer.updatesFor(new BloomFilter(gossip.getBff()), builder);
-            link.update(builder.build());
-        } finally {
-            link.release();
-        }
-        if (started.get()) {
-            scheduler.schedule(() -> oneRound(scheduler), parameters.frequency, parameters.timeUnit);
-        }
+            int ring = lastRing;
+            if (link == null) {
+                log.debug("No members to message gossip with on ring: {}", ring);
+                return;
+            }
+            log.trace("message gossiping with {} on {}", link.getMember(), ring);
+            try {
+                com.salesfoce.apollo.proto.MessageBff.Builder builder = MessageBff.newBuilder();
+                if (parameters.id != null) {
+                    builder.setContext(parameters.id.toID());
+                }
+                Messages gossip = link.gossip(builder.setRing(ring)
+                                                     .setDigests(buffer.getBff(parameters.entropy.nextInt(),
+                                                                               parameters.falsePositiveRate)
+                                                                       .toBff())
+                                                     .build());
+                process(gossip.getUpdatesList());
+                Builder pushBuilder = Push.newBuilder();
+                if (parameters.id != null) {
+                    pushBuilder.setContext(parameters.id.toID());
+                }
+                pushBuilder.setRing(ring);
+                buffer.updatesFor(new BloomFilter(gossip.getBff()), pushBuilder);
+                link.update(pushBuilder.build());
+            } finally {
+                link.release();
+            }
+            if (started.get()) {
+                scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
+            }
+        });
     }
 
-    public void publish(int channel, byte[] message, Signature signature) {
-        buffer.put(System.currentTimeMillis(), message, parameters.member, signature, channel);
+    public void publish(int channel, byte[] message) {
+        buffer.put(System.currentTimeMillis(), message, member, signature.get(), channel);
     }
 
     public void register(int channel, MessageChannelHandler listener) {
         channelHandlers.put(channel, listener);
     }
 
-    public void start(ScheduledExecutorService scheduler) {
+    public void start(Duration duration, ScheduledExecutorService scheduler) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        scheduler.schedule(() -> oneRound(scheduler), parameters.frequency, parameters.timeUnit);
+        scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
@@ -258,13 +266,13 @@ public class Messenger {
     }
 
     private MessagingClientCommunications linkFor(Integer ring) {
-        Member successor = context.ring(ring).successor(parameters.member, m -> true);
+        Member successor = context.ring(ring).successor(member, m -> true);
         if (successor == null) {
             log.debug("No successor to node on ring: {} members: {}", ring, context.ring(ring).size());
             return null;
         }
         try {
-            return comm.apply(successor, parameters.member);
+            return comm.apply(successor, member);
         } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", successor.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
@@ -275,7 +283,7 @@ public class Messenger {
     private MessagingClientCommunications nextRing() {
         MessagingClientCommunications link = null;
         int last = lastRing;
-        int rings = context.getRings().length;
+        int rings = context.getRingCount();
         int current = (last + 1) % rings;
         for (int i = 0; i < rings; i++) {
             link = linkFor(current);
@@ -294,7 +302,7 @@ public class Messenger {
             HashKey id = new HashKey(m.getSource());
             Member from = context.getMember(id);
             if (from == null) {
-                log.trace("{} message from unknown member: {}", parameters.member, id);
+                log.trace("{} message from unknown member: {}", member, id);
                 return null;
             } else {
                 return new Msg(from, m.getChannel(), m.getContent().toByteArray());
@@ -308,6 +316,16 @@ public class Messenger {
     }
 
     private boolean validate(Message message) {
-        return buffer.validate(message, parameters.signature.get());
+        HashKey memberID = new HashKey(message.getSource());
+        Member member = context.getMember(memberID);
+        if (member == null) {
+            log.debug("Non existent member: " + memberID);
+            return false;
+        }
+        if (!MessageBuffer.validate(message, member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM))) {
+            log.trace("Did not validate message {} from {}", new HashKey(message.getId()), memberID);
+            return false;
+        }
+        return true;
     }
 }

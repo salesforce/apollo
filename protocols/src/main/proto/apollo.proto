@@ -133,12 +133,7 @@ message State {
     ID context = 1;
     int32 ring = 2;
     Update update = 3;
-}
-
-message MessageGossip {
-        Biff bff = 1;
-        repeated  Message updates = 2;
-    }
+} 
 
 message Signed {
         bytes content = 1;
@@ -176,26 +171,22 @@ message NoteGossip {
     }
 
 message Digests { 
-        Biff messageBff = 1;
-        Biff certificateBff = 2;
-        Biff noteBff = 3;
-        Biff accusationBff = 4; 
+        Biff certificateBff = 1;
+        Biff noteBff = 2;
+        Biff accusationBff = 3; 
     }
 
 message Gossip {
-        bool redirect = 1;
-        MessageGossip messages = 2;
-        CertificateGossip certificates = 3;
-        NoteGossip notes = 4;
-        AccusationGossip accusations = 5;
+        bool redirect = 1; 
+        CertificateGossip certificates = 2;
+        NoteGossip notes = 3;
+        AccusationGossip accusations = 4;
     }
 
 message Update {
-        repeated Message messages = 1;
-        repeated EncodedCertificate certificates = 2;
-        repeated Signed notes = 3;
-        repeated Signed accusations = 4;
-        repeated Signed signedMessages = 5;
+        repeated EncodedCertificate certificates = 1;
+        repeated Signed notes = 2;
+        repeated Signed accusations = 3; 
     }
 
 message DagEntry {

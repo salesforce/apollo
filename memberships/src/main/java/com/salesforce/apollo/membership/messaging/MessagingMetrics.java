@@ -8,16 +8,13 @@ package com.salesforce.apollo.membership.messaging;
 
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
+import com.salesforce.apollo.protocols.BandwidthMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface MessagingMetrics {
-
-    Meter outboundBandwidth();
-
-    Meter inboundBandwidth();
+public interface MessagingMetrics extends BandwidthMetrics {
 
     Histogram outboundGossip();
 

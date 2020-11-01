@@ -207,8 +207,8 @@ public class Context<T extends Member> {
         return offline.values();
     }
 
-    public Ring<T>[] getRings() {
-        return Arrays.copyOf(rings, rings.length);
+    public int getRingCount() {
+        return rings.length;
     }
 
     @Override
@@ -277,6 +277,9 @@ public class Context<T extends Member> {
      * @return the indexed Ring<T>
      */
     public Ring<T> ring(int index) {
+        if (index < 0 || index >= rings.length) {
+            throw new IllegalArgumentException("Not a valid ring #: " + index);
+        }
         return rings[index];
     }
 

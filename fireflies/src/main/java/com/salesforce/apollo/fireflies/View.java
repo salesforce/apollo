@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +55,6 @@ import com.salesforce.apollo.comm.CommonCommunications;
 import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.StandardEpProvider;
-import com.salesforce.apollo.fireflies.View.MessageChannelHandler.Msg;
 import com.salesforce.apollo.fireflies.communications.FfClientCommunications;
 import com.salesforce.apollo.fireflies.communications.FfServerCommunications;
 import com.salesforce.apollo.membership.Context;
@@ -177,28 +175,6 @@ public class View {
         void recover(Participant member);
     }
 
-    @FunctionalInterface
-    public interface MessageChannelHandler {
-        class Msg {
-            public final int         channel;
-            public final byte[]      content;
-            public final Participant from;
-
-            public Msg(Participant from, int channel, byte[] content) {
-                this.channel = channel;
-                this.from = from;
-                this.content = content;
-            }
-        }
-
-        /**
-         * Broadcast messages accepted on a channel
-         * 
-         * @param messages
-         */
-        void message(List<Msg> messages);
-    }
-
     public class Service {
 
         /**
@@ -312,7 +288,7 @@ public class View {
          *         would like updated.
          */
         public Gossip rumors(int ring, Digests digests, HashKey from, X509Certificate certificate, Signed note) {
-            if (ring >= context.getRings().length || ring < 0) {
+            if (ring >= context.getRingCount() || ring < 0) {
                 log.info("invalid ring {} from {}", ring, from);
                 return emptyGossip();
             }
@@ -340,8 +316,6 @@ public class View {
             int seed = getParameters().entropy.nextInt();
             return Gossip.newBuilder()
                          .setRedirect(false)
-                         .setMessages(messageBuffer.process(new BloomFilter(digests.getMessageBff()), seed,
-                                                            getParameters().falsePositiveRate))
                          .setCertificates(processCertificateDigests(from, new BloomFilter(digests.getCertificateBff()),
                                                                     seed, getParameters().falsePositiveRate))
                          .setNotes(processNoteDigests(from, new BloomFilter(digests.getNoteBff()), seed,
@@ -396,7 +370,6 @@ public class View {
                 context.offline(m);
             });
             context.clear();
-            messageBuffer.clear();
         }
 
         /**
@@ -408,8 +381,7 @@ public class View {
          * @param from
          */
         public void update(int ring, Update update, HashKey from) {
-            processUpdates(update.getCertificatesList(), update.getNotesList(), update.getAccusationsList(),
-                           update.getMessagesList());
+            processUpdates(update.getCertificatesList(), update.getNotesList(), update.getAccusationsList());
 
         }
 
@@ -477,11 +449,6 @@ public class View {
     }
 
     /**
-     * Message channel handlers
-     */
-    private final Map<Integer, MessageChannelHandler> channelHandlers = new ConcurrentHashMap<>();
-
-    /**
      * Communications with other members
      */
     private final CommonCommunications<FfClientCommunications> comm;
@@ -500,11 +467,6 @@ public class View {
      * Membership listeners
      */
     private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
-
-    /**
-     * Buffered store of broadcast messages gossiped between members
-     */
-    private final MessageBuffer messageBuffer;
 
     @SuppressWarnings("unused")
     private final FireflyMetrics metrics;
@@ -551,8 +513,6 @@ public class View {
                 communications.getClientIdentityProvider(), metrics));
         diameter = diameter(getParameters());
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
-        this.messageBuffer = new MessageBuffer(getParameters().bufferSize,
-                getParameters().toleranceLevel * diameter + 1);
         context = new Context<>(HashKey.ORIGIN, getParameters().rings);
         add(node);
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
@@ -645,19 +605,6 @@ public class View {
      */
     public ConcurrentMap<HashKey, Participant> getView() {
         return view;
-    }
-
-    /**
-     * Publish a message to all members
-     * 
-     * @param message
-     */
-    public void publish(int channel, byte[] message) {
-        messageBuffer.put(System.currentTimeMillis(), message, node, channel);
-    }
-
-    public void register(int channel, MessageChannelHandler listener) {
-        channelHandlers.put(channel, listener);
     }
 
     public void register(MembershipListener listener) {
@@ -930,7 +877,6 @@ public class View {
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
                       .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
-                      .setMessageBff(getMessagesBff(seed, getParameters().falsePositiveRate).toBff())
                       .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff())
                       .build();
     }
@@ -970,10 +916,6 @@ public class View {
         return bff;
     }
 
-    BloomFilter getMessagesBff(int seed, double p) {
-        return messageBuffer.getBff(seed, p);
-    }
-
     BloomFilter getNotesBff(int seed, double p) {
         BloomFilter bff = new BloomFilter(new HashFunction(seed, getParameters().cardinality, p));
         view.values()
@@ -1009,10 +951,9 @@ public class View {
         Digests outbound = commonDigests();
         Gossip gossip = link.gossip(signedNote, ring, outbound);
         if (log.isTraceEnabled()) {
-            log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {}, messages: {}",
-                      gossip.getRedirect(), gossip.getCertificates().getUpdatesCount(),
-                      gossip.getNotes().getUpdatesCount(), gossip.getAccusations().getUpdatesCount(),
-                      gossip.getMessages().getUpdatesCount());
+            log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {} ", gossip.getRedirect(),
+                      gossip.getCertificates().getUpdatesCount(), gossip.getNotes().getUpdatesCount(),
+                      gossip.getAccusations().getUpdatesCount());
         }
         if (gossip.getRedirect()) {
             if (gossip.getCertificates().getUpdatesCount() != 1 && gossip.getNotes().getUpdatesCount() != 1) {
@@ -1087,8 +1028,7 @@ public class View {
     }
 
     boolean isEmpty(Update update) {
-        return update.getAccusationsCount() == 0 && update.getCertificatesCount() == 0 && update.getMessagesCount() == 0
-                && update.getNotesCount() == 0;
+        return update.getAccusationsCount() == 0 && update.getCertificatesCount() == 0 && update.getNotesCount() == 0;
     }
 
     /**
@@ -1271,7 +1211,7 @@ public class View {
      */
     void processUpdates(Gossip gossip) {
         processUpdates(gossip.getCertificates().getUpdatesList(), gossip.getNotes().getUpdatesList(),
-                       gossip.getAccusations().getUpdatesList(), gossip.getMessages().getUpdatesList());
+                       gossip.getAccusations().getUpdatesList());
     }
 
     /**
@@ -1281,10 +1221,9 @@ public class View {
      * @param certificatUpdates
      * @param noteUpdates
      * @param accusationUpdates
-     * @param messageUpdates
      */
     void processUpdates(List<EncodedCertificate> certificatUpdates, List<Signed> noteUpdates,
-                        List<Signed> accusationUpdates, List<Message> messageUpdates) {
+                        List<Signed> accusationUpdates) {
         certificatUpdates.stream()
                          .map(cert -> certificateFrom(cert))
                          .filter(cert -> cert != null)
@@ -1301,24 +1240,6 @@ public class View {
             node.nextNote();
             node.clearAccusations();
         }
-
-        Map<Integer, List<Msg>> newMessages = new HashMap<>();
-
-        messageBuffer.merge(messageUpdates, message -> validate(message)).stream().map(m -> {
-            HashKey id = new HashKey(m.getSource());
-            Participant from = view.get(id);
-            if (from == null) {
-                log.trace("{} message from unknown member: {}", node, id);
-                return null;
-            } else {
-                return new Msg(from, m.getChannel(), m.getContent().toByteArray());
-            }
-        }).filter(m -> m != null).forEach(msg -> {
-            newMessages.computeIfAbsent(msg.channel, i -> new ArrayList<>()).add(msg);
-        });
-        channelHandlers.values()
-                       .forEach(handler -> commonPool().execute(() -> newMessages.entrySet()
-                                                                                 .forEach(e -> handler.message(e.getValue()))));
     }
 
     /**
@@ -1429,9 +1350,6 @@ public class View {
      */
     Update updatesForDigests(Gossip gossip) {
         com.salesfoce.apollo.proto.Update.Builder builder = Update.newBuilder();
-
-        // messages
-        builder.addAllMessages(messageBuffer.updatesFor(new BloomFilter(gossip.getMessages().getBff())));
 
         // certificates
         BloomFilter certBff = new BloomFilter(gossip.getCertificates().getBff());

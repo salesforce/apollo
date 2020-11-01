@@ -23,16 +23,7 @@ import com.salesforce.apollo.protocols.Conversion;
 public class FirefliesParameters {
 
     public static final String  DEFAULT_HASH_ALGORITHM      = Conversion.SHA_256;
-    public static final String  DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
-    /**
-     * 
-     */
     private static final double DEFAULT_FALSE_POSITIVE_RATE = 0.25;
-
-    /**
-     * The maximum allowed size of the message buffer
-     */
-    public int bufferSize = 400000;
 
     /**
      * The CA certificate that signs all the member's certificates
@@ -86,11 +77,12 @@ public class FirefliesParameters {
     public final int    toleranceLevel;
 
     public FirefliesParameters(X509Certificate ca) {
-        this(ca, new SecureRandom(), DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, DEFAULT_FALSE_POSITIVE_RATE);
+        this(ca, new SecureRandom(), Conversion.DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM,
+                DEFAULT_FALSE_POSITIVE_RATE);
     }
 
     public FirefliesParameters(X509Certificate ca, double falsePositiveRate) {
-        this(ca, new SecureRandom(), DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, falsePositiveRate);
+        this(ca, new SecureRandom(), Conversion.DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, falsePositiveRate);
     }
 
     public FirefliesParameters(X509Certificate ca, SecureRandom entropy, String signatureAlgorithm,
@@ -121,9 +113,8 @@ public class FirefliesParameters {
 
     @Override
     public String toString() {
-        return "bufferSize=" + bufferSize + ", cardinality=" + cardinality + ", entropy=" + entropy
-                + ", faultToleranceLevel=" + faultToleranceLevel + ", hashAlgorithm=" + hashAlgorithm
-                + ", probabilityByzantine=" + probabilityByzantine + ", rings=" + rings + ", signatureAlgorithm="
-                + signatureAlgorithm + ", toleranceLevel=" + toleranceLevel;
+        return "cardinality=" + cardinality + ", entropy=" + entropy + ", faultToleranceLevel=" + faultToleranceLevel
+                + ", hashAlgorithm=" + hashAlgorithm + ", probabilityByzantine=" + probabilityByzantine + ", rings="
+                + rings + ", signatureAlgorithm=" + signatureAlgorithm + ", toleranceLevel=" + toleranceLevel;
     }
 }
