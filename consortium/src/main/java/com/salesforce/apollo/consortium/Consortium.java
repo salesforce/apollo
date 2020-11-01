@@ -7,21 +7,26 @@
 package com.salesforce.apollo.consortium;
 
 import java.security.PublicKey;
+import java.security.Signature;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Supplier;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.User;
+import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.membership.messaging.Messenger;
+import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -73,13 +78,28 @@ public class Consortium {
 
     private abstract class State {
 
-        boolean process(CurrentBlock next, Checkpoint body) {
+        public boolean becomeClient() {
+            // TODO Auto-generated method stub
             return false;
         };
 
-        boolean process(CurrentBlock next, Genesis body) {
+        public boolean becomeFollower() {
+            // TODO Auto-generated method stub
             return false;
         };
+
+        public boolean becomeLeader() {
+            // TODO Auto-generated method stub
+            return false;
+        }
+
+        boolean process(CurrentBlock next, Checkpoint body) {
+            return false;
+        }
+
+        boolean process(CurrentBlock next, Genesis body) {
+            return false;
+        }
 
         boolean process(CurrentBlock next, User body) {
             return false;
@@ -104,19 +124,29 @@ public class Consortium {
         return null;
     }
 
-    private final Context<? extends Member> context;
-    private volatile CurrentBlock           current;
-    private volatile Ring<Member>           currentView;
-    private final HashKey                   id;
-    private volatile Member                 leader;
-    private final Member                    member;
-    private final Service                   service = new Service();
-    private volatile State                  state   = new Client();
+    private final Communications         communications;
+    private final Map<Member, PublicKey> consensusKeys = new HashMap<>();
+    private final Context<Member>        context;
+    private volatile CurrentBlock        current;
+    private volatile Context<Member>     currentView;
+    private final HashKey                id;
+    private volatile Member              leader;
+    private final Parameters.Builder     mConfig;
+    private final Member                 member;
+    private volatile Messenger           messenger;
+    private final Service                service       = new Service();
+    private final Supplier<Signature>    signature;
+    private volatile State               state         = new Client();
 
-    public Consortium(HashKey id, Member member, Context<? extends Member> context) {
+    public Consortium(HashKey id, Member member, Supplier<Signature> signature, Context<Member> context,
+            Parameters.Builder mConfig, Communications communications) {
         this.id = id;
         this.member = member;
         this.context = context;
+        this.mConfig = mConfig.clone();
+        this.communications = communications;
+        this.signature = signature;
+        context.register(membershipListener());
     }
 
     public void process(Block block) {
@@ -152,6 +182,23 @@ public class Consortium {
     private State getState() {
         final State get = state;
         return get;
+    }
+
+    private MembershipListener<Member> membershipListener() {
+        return new MembershipListener<Member>() {
+
+            @Override
+            public void fail(Member member) {
+                final Context<Member> view = currentView;
+                view.offlineIfActive(member);
+            }
+
+            @Override
+            public void recover(Member member) {
+                final Context<Member> view = currentView;
+                view.activateIfOffline(member);
+            }
+        };
     }
 
     private boolean next() {
@@ -203,32 +250,26 @@ public class Consortium {
             log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
             return false;
         }
-        Ring<Member> newView = new Ring<>();
-        Map<Member, PublicKey> consensusKeys = new HashMap<>();
+        HashKey viewId = new HashKey(body.getId());
+        Context<Member> newView = new Context<Member>(viewId, context.getRingCount());
+        Map<Member, PublicKey> keys = new HashMap<>();
         body.getViewList().stream().map(v -> {
             HashKey memberId = new HashKey(v.getId());
             Member m = context.getMember(memberId);
             if (m == null) {
                 return null;
             }
-            consensusKeys.put(m, publicKeyOf(v.getConsensusKey().toByteArray()));
+            keys.put(m, publicKeyOf(v.getConsensusKey().toByteArray()));
             return m;
-        }).filter(m -> m != null).forEach(m -> newView.insert(m));
+        }).filter(m -> m != null).forEach(m -> {
+            if (context.isActive(m)) {
+                newView.activate(m);
+            } else {
+                newView.offline(m);
+            }
+        });
 
-        return viewChange(new HashKey(body.getId()), newView);
-    }
-
-    private boolean viewChange(HashKey viewId, Ring<Member> newView) {
-        currentView = newView;
-        leader = newView.successor(viewId);
-        if (member.equals(leader)) {
-            becomeLeader();
-        } else if (currentView.contains(member)) {
-            becomeFollower();
-        } else {
-            becomeClient();
-        }
-        return true;
+        return viewChange(viewId, newView, keys);
     }
 
     private boolean processUser(CurrentBlock next) {
@@ -240,5 +281,22 @@ public class Consortium {
             return false;
         }
         return getState().process(next, body);
+    }
+
+    private boolean viewChange(HashKey viewId, Context<Member> newView, Map<Member, PublicKey> keys) {
+        currentView = newView;
+        consensusKeys.clear();
+        consensusKeys.putAll(keys);
+        messenger = new Messenger(member, signature, newView, communications, mConfig.setId(viewId).build());
+
+        // Live successor of the view ID on ring zero is leader
+        leader = newView.successors(viewId).get(0);
+
+        if (member.equals(leader)) {
+            return getState().becomeLeader();
+        } else if (currentView.getActive().contains(member)) {
+            return getState().becomeFollower();
+        }
+        return getState().becomeClient();
     }
 }

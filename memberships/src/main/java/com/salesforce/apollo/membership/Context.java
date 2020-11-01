@@ -153,13 +153,28 @@ public class Context<T extends Member> {
     public static final String    SHA_256               = "sha-256";
     private static final String   CONTEXT_HASH_TEMPLATE = "%s-%s";
     private static final String   RING_HASH_TEMPLATE    = "%s-%s-%s";
-    private final Map<HashKey, T> active                = new ConcurrentHashMap<>();
+    /**
+     * @return the minimum t such that the probability of more than t out of 2t+1
+     *         monitors are correct with probability e/size given the uniform
+     *         probability pByz that a monitor is Byzantine.
+     */
+    public static int minMajority(double pByz, double faultToleranceLevel) {
+        for (int t = 1; t <= 10000; t++) {
+            double pf = 1.0 - Util.binomialc(t, 2 * t + 1, pByz);
+            if (faultToleranceLevel >= pf) {
+                return t;
+            }
+        }
+        throw new IllegalArgumentException("Cannot compute number if rings from pByz=" + pByz);
+    }
 
+    private final Map<HashKey, T> active                = new ConcurrentHashMap<>();
     private BiFunction<T, Integer, HashKey>     hasher              = (m, ring) -> hashFor(m, ring);
     private final Map<HashKey, HashKey[]>       hashes              = new ConcurrentHashMap<>();
     private final HashKey                       id;
     private Logger                              log                 = LoggerFactory.getLogger(Context.class);
     private final List<MembershipListener<T>>   membershipListeners = new CopyOnWriteArrayList<>();
+
     private final ConcurrentHashMap<HashKey, T> offline             = new ConcurrentHashMap<>();
 
     private final Ring<T>[] rings;
@@ -195,6 +210,15 @@ public class Context<T extends Member> {
                 }
             });
         });
+    }
+
+    public boolean activateIfOffline(T m) {
+        T offlined = offline.remove(m.getId());
+        if (offlined == null) {
+            return false;
+        }
+        activate(m);
+        return true;
     }
 
     public void add(T m) {
@@ -273,8 +297,11 @@ public class Context<T extends Member> {
     /**
      * Take a member offline
      */
-    public void offline(T m) {
-        active.remove(m.getId());
+    public boolean offline(T m) {
+        T activated = active.remove(m.getId());
+        if (activated == null) {
+            return false;
+        }
         offline.computeIfAbsent(m.getId(), id -> m);
         for (Ring<T> ring : rings) {
             ring.delete(m);
@@ -288,6 +315,16 @@ public class Context<T extends Member> {
                 }
             });
         });
+        return true;
+    }
+
+    public boolean offlineIfActive(T member) {
+        T activated = active.remove(member.getId());
+        if (activated == null) {
+            return false;
+        }
+        offline(member);
+        return true;
     }
 
     /**

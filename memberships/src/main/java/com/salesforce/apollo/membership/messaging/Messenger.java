@@ -65,7 +65,7 @@ public class Messenger {
     }
 
     public static class Parameters {
-        public static class Builder {
+        public static class Builder implements Cloneable {
 
             private int              bufferSize        = 1000;
             private SecureRandom     entropy;
@@ -76,6 +76,15 @@ public class Messenger {
 
             public Parameters build() {
                 return new Parameters(id, falsePositiveRate, entropy, bufferSize, tooOld, metrics);
+            }
+
+            @Override
+            public Builder clone() {
+                try {
+                    return (Builder) super.clone();
+                } catch (CloneNotSupportedException e) {
+                    throw new IllegalStateException(e);
+                }
             }
 
             public int getBufferSize() {
@@ -138,11 +147,11 @@ public class Messenger {
             return new Builder();
         }
 
+        public final int              bufferSize;
         public final SecureRandom     entropy;
         public final double           falsePositiveRate;
         public final HashKey          id;
         public final MessagingMetrics metrics;
-        public final int              bufferSize;
         public final int              tooOld;
 
         public Parameters(HashKey id, double falsePositiveRate, SecureRandom entropy, int bufferSize, int tooOld,

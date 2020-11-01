@@ -11,6 +11,7 @@ import java.security.cert.X509Certificate;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Util;
 import com.salesforce.apollo.protocols.Conversion;
 
@@ -107,7 +108,7 @@ public class FirefliesParameters {
         cardinality = Integer.parseInt(split[0]);
         faultToleranceLevel = Double.parseDouble(split[1]);
         probabilityByzantine = Double.parseDouble(split[2]);
-        toleranceLevel = Util.minMajority(probabilityByzantine, faultToleranceLevel);
+        toleranceLevel = Context.minMajority(probabilityByzantine, faultToleranceLevel);
         rings = toleranceLevel * 2 + 1;
     }
 

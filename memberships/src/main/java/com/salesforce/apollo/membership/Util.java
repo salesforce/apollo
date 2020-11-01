@@ -128,21 +128,6 @@ final public class Util {
         }
     }
 
-    /**
-     * @return the minimum t such that the probability of more than t out of 2t+1
-     *         monitors are correct with probability e/size given the uniform
-     *         probability pByz that a monitor is Byzantine.
-     */
-    public static int minMajority(double pByz, double faultToleranceLevel) {
-        for (int t = 1; t <= 10000; t++) {
-            double pf = 1.0 - binomialc(t, 2 * t + 1, pByz);
-            if (faultToleranceLevel >= pf) {
-                return t;
-            }
-        }
-        throw new IllegalArgumentException("Cannot compute number if rings from pByz=" + pByz);
-    }
-
     public static int minMajority(double pByz, int size, int e) {
         double pTarget = ((double) e) / ((double) size);
         for (int t = 1; t <= 10000; t++) {
