@@ -319,11 +319,8 @@ public class Context<T extends Member> {
     /**
      * Take a member offline
      */
-    public boolean offline(T m) {
-        T activated = active.remove(m.getId());
-        if (activated == null) {
-            return false;
-        }
+    public void offline(T m) {
+        active.remove(m.getId());
         offline.computeIfAbsent(m.getId(), id -> m);
         for (Ring<T> ring : rings) {
             ring.delete(m);
@@ -337,7 +334,6 @@ public class Context<T extends Member> {
                 }
             });
         });
-        return true;
     }
 
     public boolean offlineIfActive(HashKey memberID) {
