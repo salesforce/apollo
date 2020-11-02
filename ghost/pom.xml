@@ -51,9 +51,7 @@
 		</dependency>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>fireflies</artifactId>
-			<classifier>tests</classifier>
-			<type>test-jar</type>
+			<artifactId>test-population</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

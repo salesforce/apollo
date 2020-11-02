@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.ghost;
 
-import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
-import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -61,7 +61,9 @@ public class GhostTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                                                   cert -> new CertWithKey(cert.getX509Certificate(),
+                                                           cert.getPrivateKey())));
     }
 
     private final List<Communications> comms = new ArrayList<>();

@@ -65,13 +65,6 @@
 			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>fireflies</artifactId>
-				<classifier>tests</classifier>
-				<type>test-jar</type>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>ghost</artifactId>
 				<version>${project.version}</version>
 			</dependency>

@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
-import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,9 +50,7 @@ import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
-import guru.nidi.graphviz.engine.Format;
-import guru.nidi.graphviz.engine.Graphviz;
-import guru.nidi.graphviz.model.FileSerializer;
+import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -61,16 +59,17 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 abstract public class AvalancheFunctionalTest {
 
-    private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate                   ca         = getCa();
+    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters               parameters = new FirefliesParameters(
+            ca.getX509Certificate());
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 100)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
     protected File                       baseDir;
@@ -103,9 +102,9 @@ abstract public class AvalancheFunctionalTest {
         seeds = new ArrayList<>();
         int testCardinality = testCardinality();
         members = new ArrayList<>();
-        for (CertWithKey cert : certs.values()) {
+        for (CertificateWithPrivateKey cert : certs.values()) {
             if (members.size() < testCardinality) {
-                members.add(new Node(cert, parameters));
+                members.add(new Node(new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()), parameters));
             } else {
                 break;
             }
@@ -114,9 +113,9 @@ abstract public class AvalancheFunctionalTest {
         assertEquals(testCardinality, members.size());
 
         while (seeds.size() < Math.min(parameters.toleranceLevel + 1, certs.size())) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(testCardinality)).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
+            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(testCardinality)).getId());
+            if (!seeds.contains(cert.getX509Certificate())) {
+                seeds.add(cert.getX509Certificate());
             }
         }
 

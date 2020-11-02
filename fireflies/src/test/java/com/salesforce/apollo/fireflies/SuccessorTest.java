@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
-import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,6 +39,7 @@ import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -47,16 +48,18 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class SuccessorTest {
 
-    private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate                   ca         = getCa();
+    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters               parameters = new FirefliesParameters(
+            ca.getX509Certificate());
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 10)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     private final List<Communications> communications = new ArrayList<>();
@@ -76,15 +79,15 @@ public class SuccessorTest {
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
                                   .parallelStream()
-                                  .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
+                                  .map(cert -> new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
+            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
+            if (!seeds.contains(cert.getX509Certificate())) {
+                seeds.add(cert.getX509Certificate());
             }
         }
 
