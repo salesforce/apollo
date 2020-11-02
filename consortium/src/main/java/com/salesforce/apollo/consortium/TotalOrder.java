@@ -32,27 +32,35 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class TotalOrder {
-    public class Channel {
+    public class ActiveChannel implements Channel {
         private final HashKey                          id;
         private volatile int                           lastSequenceNumber = -1;
         private final PriorityQueue<ConsortiumMessage> queue;
 
-        public Channel(HashKey id) {
+        public ActiveChannel(HashKey id) {
             this.id = id;
             queue = new PriorityQueue<ConsortiumMessage>((a, b) -> {
                 return Integer.compare(a.getSequenceNumber(), b.getSequenceNumber());
             });
         }
 
+        @Override
         public void clear() {
             lastSequenceNumber = -1;
             queue.clear();
         }
 
+        @Override
         public void enqueue(ConsortiumMessage msg) {
             queue.add(msg);
         }
 
+        @Override
+        public HashKey getId() {
+            return id;
+        }
+
+        @Override
         public ConsortiumMessage next() {
             ConsortiumMessage message = queue.peek();
             if (message == null) {
@@ -71,15 +79,33 @@ public class TotalOrder {
         }
     }
 
+    public interface Channel {
+
+        default void clear() {
+        }
+
+        default void enqueue(ConsortiumMessage msg) {
+        }
+
+        HashKey getId();
+
+        default ConsortiumMessage next() {
+            return null;
+        }
+
+    }
+
     private static Logger                                log      = LoggerFactory.getLogger(TotalOrder.class);
     private final Map<HashKey, Channel>                  channels = new HashMap<>();
-    private final BiConsumer<ConsortiumMessage, HashKey> processor;
+    private final Context<Collaborator>                  context;
     private final ReadWriteLock                          lock     = new ReentrantReadWriteLock(true);
+    private final BiConsumer<ConsortiumMessage, HashKey> processor;
     private final AtomicBoolean                          started  = new AtomicBoolean();
 
-    public TotalOrder(BiConsumer<ConsortiumMessage, HashKey> processor, Context<Collaborator> context) {
+    public TotalOrder(BiConsumer<ConsortiumMessage, HashKey> processor, Context<Collaborator> ctx) {
         this.processor = processor;
-        context.allMembers().forEach(m -> channels.put(m.getId(), new Channel(m.getId())));
+        this.context = ctx;
+        context.allMembers().forEach(m -> channels.put(m.getId(), new ActiveChannel(m.getId())));
         context.register(new MembershipListener<Consortium.Collaborator>() {
 
             @Override
@@ -90,7 +116,12 @@ public class TotalOrder {
                 final Lock write = lock.writeLock();
                 write.lock();
                 try {
-                    Channel channel = channels.get(member.getId());
+                    Channel channel = channels.put(member.getId(), new Channel() {
+                        @Override
+                        public HashKey getId() {
+                            return member.getId();
+                        }
+                    });
                     if (channel == null) {
                         log.trace("Unknown member failed: {}", member.getId());
                     }
@@ -102,8 +133,16 @@ public class TotalOrder {
 
             @Override
             public void recover(Collaborator member) {
-                // TODO Auto-generated method stub
-
+                if (!started.get()) {
+                    return;
+                }
+                final Lock write = lock.writeLock();
+                write.lock();
+                try {
+                    channels.put(member.getId(), new ActiveChannel(member.getId()));
+                } finally {
+                    write.unlock();
+                }
             }
         });
     }
@@ -155,7 +194,7 @@ public class TotalOrder {
         channels.forEach((id, channel) -> {
             ConsortiumMessage message = channel.next();
             if (message != null) {
-                processor.accept(message, channel.id);
+                processor.accept(message, channel.getId());
             }
         });
     }

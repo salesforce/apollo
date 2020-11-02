@@ -6,14 +6,18 @@
  */
 package com.salesforce.apollo.consortium;
 
+import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +25,8 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Supplier;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.Certification;
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.ConsortiumMessage;
 import com.salesfoce.apollo.consortium.proto.Genesis;
@@ -34,7 +40,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -43,7 +48,6 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public class Consortium {
 
     public static class Collaborator extends Member {
@@ -59,13 +63,20 @@ public class Consortium {
         }
     }
 
-    public class Service {
-    }
-
     private class Client extends State {
     }
 
+    @SuppressWarnings("unused")
     private abstract class CommitteeMember extends State {
+        private final Deque<CertifiedBlock> pending             = new ArrayDeque<>();
+        private final Deque<Transaction>    transactions        = new ArrayDeque<>();
+        private volatile Block.Builder      workingBlock;
+        private final Set<Certification>    workingCertificates = new HashSet<>();
+
+        @Override
+        public void deliverTransaction(Transaction txn, HashKey from) {
+            transactions.add(txn);
+        }
     }
 
     private static class CurrentBlock {
@@ -78,60 +89,60 @@ public class Consortium {
         }
     }
 
+    @SuppressWarnings("unused")
     private class Follower extends CommitteeMember {
     }
 
+    @SuppressWarnings("unused")
     private class Leader extends CommitteeMember {
-        private final Deque<Transaction> transactions = new ArrayDeque<>();
     }
 
     private abstract class State {
 
-        public boolean becomeClient() {
+        boolean becomeClient() {
             // TODO Auto-generated method stub
             return false;
         };
 
-        public boolean becomeFollower() {
+        boolean becomeFollower() {
             // TODO Auto-generated method stub
             return false;
         };
 
-        public boolean becomeLeader() {
+        boolean becomeLeader() {
             // TODO Auto-generated method stub
             return false;
         }
 
-        public void process(Block parseFrom) {
+        void deliverBlock(Block parseFrom, HashKey from) {
             // TODO Auto-generated method stub
-
         }
 
-        public boolean process(CurrentBlock next, Checkpoint body) {
+        void deliverPersist(ID parseFrom, HashKey from) {
+            // TODO Auto-generated method stub
+        }
+
+        void deliverTransaction(Transaction parseFrom, HashKey from) {
+            // TODO Auto-generated method stub
+        }
+
+        void deliverValidate(Validate parseFrom, HashKey from) {
+            // TODO Auto-generated method stub
+        }
+
+        boolean process(Checkpoint body, CurrentBlock next) {
+            // TODO Auto-generated method stub
             return false;
         }
 
-        public boolean process(CurrentBlock next, Genesis body) {
+        boolean process(Genesis body, CurrentBlock next) {
+            // TODO Auto-generated method stub
             return false;
         }
 
-        public boolean process(CurrentBlock next, User body) {
+        boolean process(User body, CurrentBlock next) {
+            // TODO Auto-generated method stub
             return false;
-        }
-
-        public void process(ID parseFrom) {
-            // TODO Auto-generated method stub
-
-        }
-
-        public void process(Transaction parseFrom) {
-            // TODO Auto-generated method stub
-
-        }
-
-        public void process(Validate parseFrom) {
-            // TODO Auto-generated method stub
-
         };
 
     }
@@ -153,27 +164,27 @@ public class Consortium {
         return null;
     }
 
-    private final Communications           communications;
-    private final Context<Member>          context;
-    private volatile CurrentBlock          current;
-    private volatile Context<Collaborator> currentView;
-    private final Duration                 gossipDuration;
-    private final HashKey                  id;
-    private final BlockingDeque<Msg>       inbound = new LinkedBlockingDeque<>();
-    private volatile Member                leader;
-    private final Parameters.Builder       mConfig;
-    private final Member                   member;
-    private volatile Messenger             messenger;
-    private final ScheduledExecutorService scheduler;
-    private final Service                  service = new Service();
-    private final Supplier<Signature>      signature;
-    private volatile State                 state   = new Client();
-    private volatile TotalOrder            totalOrder;
+    private final Communications                                communications;
+    private final Context<Member>                               context;
+    private volatile CurrentBlock                               current;
+    private volatile Context<Collaborator>                      currentView;
+    @SuppressWarnings("unused")
+    private final Function<List<Transaction>, List<ByteBuffer>> executor;
+    private final Duration                                      gossipDuration;
+    private final AtomicInteger                                 lastSequenceNumber = new AtomicInteger(-1);
+    private volatile Member                                     leader;
+    private final Parameters.Builder                            mConfig;
+    private final Member                                        member;
+    private volatile Messenger                                  messenger;
+    private final ScheduledExecutorService                      scheduler;
+    private final Supplier<Signature>                           signature;
+    private volatile State                                      state              = new Client();
+    private volatile TotalOrder                                 totalOrder;
 
-    public Consortium(HashKey id, Member member, Supplier<Signature> signature, Context<Member> context,
-            Parameters.Builder mConfig, Communications communications, Duration gossipDuration,
-            ScheduledExecutorService scheduler) {
-        this.id = id;
+    public Consortium(Function<List<Transaction>, List<ByteBuffer>> executor, Member member,
+            Supplier<Signature> signature, Context<Member> context, Parameters.Builder mConfig,
+            Communications communications, Duration gossipDuration, ScheduledExecutorService scheduler) {
+        this.executor = executor;
         this.member = member;
         this.context = context;
         this.mConfig = mConfig.clone();
@@ -201,18 +212,6 @@ public class Consortium {
         CurrentBlock next = new CurrentBlock(new HashKey(Conversion.hashOf(block.toByteArray())), block);
         current = next;
         return next();
-    }
-
-    private void becomeClient() {
-        state = new Client();
-    }
-
-    private void becomeFollower() {
-        state = new Follower();
-    }
-
-    private void becomeLeader() {
-        state = new Leader();
     }
 
     private State getState() {
@@ -267,28 +266,28 @@ public class Consortium {
         switch (message.getType()) {
         case BLOCK:
             try {
-                getState().process(Block.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+                getState().deliverBlock(Block.parseFrom(message.getMsg().asReadOnlyByteBuffer()), from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid block delivered from {}", from, e);
             }
             break;
         case PERSIST:
             try {
-                getState().process(ID.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+                getState().deliverPersist(ID.parseFrom(message.getMsg().asReadOnlyByteBuffer()), from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid persist delivered from {}", from, e);
             }
             break;
         case TRANSACTION:
             try {
-                getState().process(Transaction.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+                getState().deliverTransaction(Transaction.parseFrom(message.getMsg().asReadOnlyByteBuffer()), from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid transaction delivered from {}", from, e);
             }
             break;
         case VALIDATE:
             try {
-                getState().process(Validate.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+                getState().deliverValidate(Validate.parseFrom(message.getMsg().asReadOnlyByteBuffer()), from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid validate delivered from {}", from, e);
             }
@@ -300,10 +299,6 @@ public class Consortium {
         }
     }
 
-    private void process(Msg message) {
-        // TODO Auto-generated method stub
-    }
-
     private boolean processCheckpoint(CurrentBlock next) {
         Checkpoint body;
         try {
@@ -312,7 +307,7 @@ public class Consortium {
             log.error("Protocol violation.  Cannot decode checkpoint body: {}", e);
             return false;
         }
-        return getState().process(next, body);
+        return getState().process(body, next);
     }
 
     private boolean processGenesis(CurrentBlock next) {
@@ -323,7 +318,7 @@ public class Consortium {
             log.error("Protocol violation.  Cannot decode genesis body: {}", e);
             return false;
         }
-        return getState().process(next, body);
+        return getState().process(body, next);
     }
 
     private boolean processReconfigure(CurrentBlock next) {
@@ -362,7 +357,7 @@ public class Consortium {
             log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
             return false;
         }
-        return getState().process(next, body);
+        return getState().process(body, next);
     }
 
     private void resume() {
@@ -372,13 +367,15 @@ public class Consortium {
         currentMsg.start(gossipDuration, scheduler);
     }
 
-    private void submit(ConsortiumMessage message) {
+    @SuppressWarnings("unused")
+    private void submit(ConsortiumMessage.Builder message) {
         final Messenger currentMsgr = messenger;
         if (currentMsgr == null) {
             log.error("skipping message publish as no messenger");
             return;
         }
-        messenger.publish(0, message.toByteArray());
+        message.setSequenceNumber(lastSequenceNumber.incrementAndGet());
+        messenger.publish(0, message.build().toByteArray());
     }
 
     private boolean viewChange(HashKey viewId, Context<Collaborator> newView) {
@@ -390,6 +387,7 @@ public class Consortium {
         messenger.register(0, messages -> {
             totalOrder.process(messages);
         });
+        lastSequenceNumber.set(-1);
 
         resume();
 

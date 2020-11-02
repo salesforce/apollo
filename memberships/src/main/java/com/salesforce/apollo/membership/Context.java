@@ -75,14 +75,16 @@ public class Context<T extends Member> {
          * 
          * @param member
          */
-        void fail(T member);
+        default void fail(T member) {
+        };
 
         /**
          * A new member has recovered and is now live
          * 
          * @param member
          */
-        void recover(T member);
+        default void recover(T member) {
+        };
     }
 
     private static class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
