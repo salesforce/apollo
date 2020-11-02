@@ -11,10 +11,10 @@
 	<name>Consortium</name>
 	<description>Committees for ordering transactions</description>
 	<dependencies>
-		<dependency>
-			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>avalanche</artifactId>
-		</dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>memberships</artifactId>
+        </dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>
@@ -25,6 +25,11 @@
 		<dependency>
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>fireflies</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

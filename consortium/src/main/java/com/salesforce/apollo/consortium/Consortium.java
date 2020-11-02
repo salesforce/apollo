@@ -8,8 +8,12 @@ package com.salesforce.apollo.consortium;
 
 import java.security.PublicKey;
 import java.security.Signature;
-import java.util.HashMap;
-import java.util.Map;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,14 +22,19 @@ import com.google.common.base.Supplier;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.salesfoce.apollo.consortium.proto.ConsortiumMessage;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
+import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.User;
+import com.salesfoce.apollo.consortium.proto.Validate;
+import com.salesfoce.apollo.proto.ID;
 import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -37,16 +46,15 @@ import com.salesforce.apollo.protocols.HashKey;
 @SuppressWarnings("unused")
 public class Consortium {
 
-    public static class Collaborator {
+    public static class Collaborator extends Member {
         public final PublicKey consensusKey;
-        public final Member    member;
 
         public Collaborator(Member member, byte[] consensusKey) {
             this(member, publicKeyOf(consensusKey));
         }
 
         public Collaborator(Member member, PublicKey consensusKey) {
-            this.member = member;
+            super(member.getId(), member.getCertificate());
             this.consensusKey = consensusKey;
         }
     }
@@ -74,6 +82,7 @@ public class Consortium {
     }
 
     private class Leader extends CommitteeMember {
+        private final Deque<Transaction> transactions = new ArrayDeque<>();
     }
 
     private abstract class State {
@@ -93,16 +102,36 @@ public class Consortium {
             return false;
         }
 
-        boolean process(CurrentBlock next, Checkpoint body) {
+        public void process(Block parseFrom) {
+            // TODO Auto-generated method stub
+
+        }
+
+        public boolean process(CurrentBlock next, Checkpoint body) {
             return false;
         }
 
-        boolean process(CurrentBlock next, Genesis body) {
+        public boolean process(CurrentBlock next, Genesis body) {
             return false;
         }
 
-        boolean process(CurrentBlock next, User body) {
+        public boolean process(CurrentBlock next, User body) {
             return false;
+        }
+
+        public void process(ID parseFrom) {
+            // TODO Auto-generated method stub
+
+        }
+
+        public void process(Transaction parseFrom) {
+            // TODO Auto-generated method stub
+
+        }
+
+        public void process(Validate parseFrom) {
+            // TODO Auto-generated method stub
+
         };
 
     }
@@ -124,47 +153,54 @@ public class Consortium {
         return null;
     }
 
-    private final Communications         communications;
-    private final Map<Member, PublicKey> consensusKeys = new HashMap<>();
-    private final Context<Member>        context;
-    private volatile CurrentBlock        current;
-    private volatile Context<Member>     currentView;
-    private final HashKey                id;
-    private volatile Member              leader;
-    private final Parameters.Builder     mConfig;
-    private final Member                 member;
-    private volatile Messenger           messenger;
-    private final Service                service       = new Service();
-    private final Supplier<Signature>    signature;
-    private volatile State               state         = new Client();
+    private final Communications           communications;
+    private final Context<Member>          context;
+    private volatile CurrentBlock          current;
+    private volatile Context<Collaborator> currentView;
+    private final Duration                 gossipDuration;
+    private final HashKey                  id;
+    private final BlockingDeque<Msg>       inbound = new LinkedBlockingDeque<>();
+    private volatile Member                leader;
+    private final Parameters.Builder       mConfig;
+    private final Member                   member;
+    private volatile Messenger             messenger;
+    private final ScheduledExecutorService scheduler;
+    private final Service                  service = new Service();
+    private final Supplier<Signature>      signature;
+    private volatile State                 state   = new Client();
+    private volatile TotalOrder            totalOrder;
 
     public Consortium(HashKey id, Member member, Supplier<Signature> signature, Context<Member> context,
-            Parameters.Builder mConfig, Communications communications) {
+            Parameters.Builder mConfig, Communications communications, Duration gossipDuration,
+            ScheduledExecutorService scheduler) {
         this.id = id;
         this.member = member;
         this.context = context;
         this.mConfig = mConfig.clone();
         this.communications = communications;
         this.signature = signature;
+        this.gossipDuration = gossipDuration;
+        this.scheduler = scheduler;
+
         context.register(membershipListener());
     }
 
-    public void process(Block block) {
+    public boolean process(Block block) {
         final CurrentBlock previousBlock = current;
         if (block.getHeader().getHeight() != previousBlock.block.getHeader().getHeight() + 1) {
             log.error("Protocol violation.  Block height should be {} and next block height is {}",
                       previousBlock.block.getHeader().getHeight(), block.getHeader().getHeight());
-            return;
+            return false;
         }
         HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
         if (previousBlock.hash.equals(prev)) {
             log.error("Protocol violation. New block does not refer to current block hash. Should be {} and next block's prev is {}",
                       previousBlock.hash, prev);
-            return;
+            return false;
         }
         CurrentBlock next = new CurrentBlock(new HashKey(Conversion.hashOf(block.toByteArray())), block);
         current = next;
-        next();
+        return next();
     }
 
     private void becomeClient() {
@@ -189,14 +225,14 @@ public class Consortium {
 
             @Override
             public void fail(Member member) {
-                final Context<Member> view = currentView;
-                view.offlineIfActive(member);
+                final Context<Collaborator> view = currentView;
+                view.offlineIfActive(member.getId());
             }
 
             @Override
             public void recover(Member member) {
-                final Context<Member> view = currentView;
-                view.activateIfOffline(member);
+                final Context<Collaborator> view = currentView;
+                view.activateIfOffline(member.getId());
             }
         };
     }
@@ -218,6 +254,54 @@ public class Consortium {
             return false;
         }
 
+    }
+
+    private void pause() {
+        TotalOrder previousTotalOrder = totalOrder;
+        previousTotalOrder.stop();
+        Messenger previousMessenger = messenger;
+        previousMessenger.stop();
+    }
+
+    private void process(ConsortiumMessage message, HashKey from) {
+        switch (message.getType()) {
+        case BLOCK:
+            try {
+                getState().process(Block.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid block delivered from {}", from, e);
+            }
+            break;
+        case PERSIST:
+            try {
+                getState().process(ID.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid persist delivered from {}", from, e);
+            }
+            break;
+        case TRANSACTION:
+            try {
+                getState().process(Transaction.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid transaction delivered from {}", from, e);
+            }
+            break;
+        case VALIDATE:
+            try {
+                getState().process(Validate.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid validate delivered from {}", from, e);
+            }
+            break;
+        case UNRECOGNIZED:
+        default:
+            log.error("Invalid consortium message type: {} from: {}", message.getType(), from);
+            break;
+        }
+    }
+
+    private void process(Msg message) {
+        // TODO Auto-generated method stub
     }
 
     private boolean processCheckpoint(CurrentBlock next) {
@@ -251,16 +335,14 @@ public class Consortium {
             return false;
         }
         HashKey viewId = new HashKey(body.getId());
-        Context<Member> newView = new Context<Member>(viewId, context.getRingCount());
-        Map<Member, PublicKey> keys = new HashMap<>();
+        Context<Collaborator> newView = new Context<Collaborator>(viewId, context.getRingCount());
         body.getViewList().stream().map(v -> {
             HashKey memberId = new HashKey(v.getId());
             Member m = context.getMember(memberId);
             if (m == null) {
                 return null;
             }
-            keys.put(m, publicKeyOf(v.getConsensusKey().toByteArray()));
-            return m;
+            return new Collaborator(m, v.getConsensusKey().toByteArray());
         }).filter(m -> m != null).forEach(m -> {
             if (context.isActive(m)) {
                 newView.activate(m);
@@ -269,7 +351,7 @@ public class Consortium {
             }
         });
 
-        return viewChange(viewId, newView, keys);
+        return viewChange(viewId, newView);
     }
 
     private boolean processUser(CurrentBlock next) {
@@ -283,14 +365,36 @@ public class Consortium {
         return getState().process(next, body);
     }
 
-    private boolean viewChange(HashKey viewId, Context<Member> newView, Map<Member, PublicKey> keys) {
+    private void resume() {
+        TotalOrder currentTO = totalOrder;
+        Messenger currentMsg = messenger;
+        currentTO.start();
+        currentMsg.start(gossipDuration, scheduler);
+    }
+
+    private void submit(ConsortiumMessage message) {
+        final Messenger currentMsgr = messenger;
+        if (currentMsgr == null) {
+            log.error("skipping message publish as no messenger");
+            return;
+        }
+        messenger.publish(0, message.toByteArray());
+    }
+
+    private boolean viewChange(HashKey viewId, Context<Collaborator> newView) {
+        pause();
+
         currentView = newView;
-        consensusKeys.clear();
-        consensusKeys.putAll(keys);
         messenger = new Messenger(member, signature, newView, communications, mConfig.setId(viewId).build());
+        totalOrder = new TotalOrder((m, mId) -> process(m, mId), newView);
+        messenger.register(0, messages -> {
+            totalOrder.process(messages);
+        });
+
+        resume();
 
         // Live successor of the view ID on ring zero is leader
-        leader = newView.successors(viewId).get(0);
+        leader = newView.ring(0).successor(viewId);
 
         if (member.equals(leader)) {
             return getState().becomeLeader();

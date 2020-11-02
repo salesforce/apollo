@@ -10,6 +10,6 @@ package com.salesforce.apollo.consortium;
  * @author hal.hildebrand
  *
  */
-public interface Validator {
-
+public interface TransactionExecutor {
+    
 }

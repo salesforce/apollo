@@ -7,9 +7,6 @@ option objc_class_prefix = "Cp";
 
 package apollo.consortium;
 
-service Consortium { 
-}
-
 message CertifiedBlock {
     Block block = 1;
     repeated Certification certifications = 2;
@@ -70,20 +67,30 @@ message ViewMember {
 
 message Checkpoint {
     repeated Transaction transactions = 1;
-    repeated Response responses = 2;
+    repeated bytes responses = 2;
 } 
 
 message Transaction {
-    Batch batch = 1;
-    bytes signature = 2;
+    bytes source = 1;
+    bytes nonce = 2;
+    repeated bytes batch = 3;
+    bytes signature = 4;
 }
 
-message Batch {  
-    bytes originator = 1;
-    repeated bytes batch = 2;
+enum MessageType {
+    BLOCK = 0;
+    TRANSACTION = 1;
+    PERSIST = 2;
+    VALIDATE = 3;
+}
+message ConsortiumMessage {
+    int32 sequenceNumber = 1;
+    MessageType type = 2;
+    bytes msg = 3;
 }
 
-message Response {
-    repeated bytes responses = 1;
+message Validate {
+    bytes id = 1;
+    bytes blockHeaderHash = 2;
+    bytes signature = 3;
 }
- 

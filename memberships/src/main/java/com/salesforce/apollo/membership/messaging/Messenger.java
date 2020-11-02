@@ -72,10 +72,9 @@ public class Messenger {
             private double           falsePositiveRate = 0.25;
             private HashKey          id;
             private MessagingMetrics metrics;
-            private int              tooOld            = 9;
 
             public Parameters build() {
-                return new Parameters(id, falsePositiveRate, entropy, bufferSize, tooOld, metrics);
+                return new Parameters(id, falsePositiveRate, entropy, bufferSize, metrics);
             }
 
             @Override
@@ -107,10 +106,6 @@ public class Messenger {
                 return metrics;
             }
 
-            public int getTooOld() {
-                return tooOld;
-            }
-
             public Builder setBufferSize(int bufferSize) {
                 this.bufferSize = bufferSize;
                 return this;
@@ -136,11 +131,6 @@ public class Messenger {
                 return this;
             }
 
-            public Builder setTooOld(int tooOld) {
-                this.tooOld = tooOld;
-                return this;
-            }
-
         }
 
         public static Builder newBuilder() {
@@ -152,16 +142,14 @@ public class Messenger {
         public final double           falsePositiveRate;
         public final HashKey          id;
         public final MessagingMetrics metrics;
-        public final int              tooOld;
 
-        public Parameters(HashKey id, double falsePositiveRate, SecureRandom entropy, int bufferSize, int tooOld,
+        public Parameters(HashKey id, double falsePositiveRate, SecureRandom entropy, int bufferSize,
                 MessagingMetrics metrics) {
             this.id = id;
             this.falsePositiveRate = falsePositiveRate;
             this.entropy = entropy;
             this.metrics = metrics;
             this.bufferSize = bufferSize;
-            this.tooOld = tooOld;
         }
     }
 
@@ -200,13 +188,14 @@ public class Messenger {
     private final Parameters                                          parameters;
     private final AtomicBoolean                                       started         = new AtomicBoolean();
 
-    public Messenger(Member member, Supplier<Signature> signature, Context<Member> context,
+    @SuppressWarnings("unchecked")
+    public Messenger(Member member, Supplier<Signature> signature, Context<? extends Member> context,
             Communications communications, Parameters parameters) {
         this.member = member;
         this.signature = signature;
         this.parameters = parameters;
-        this.context = context;
-        this.buffer = new MessageBuffer(parameters.bufferSize, parameters.tooOld);
+        this.context = (Context<Member>) context;
+        this.buffer = new MessageBuffer(parameters.bufferSize, context.timeToLive());
         this.comm = communications.create(member, getCreate(parameters.metrics), new MessagingServerCommunications(
                 new Service(), communications.getClientIdentityProvider(), parameters.metrics));
     }

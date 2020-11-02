@@ -74,8 +74,12 @@ public class MessageTest {
                 ByteBuffer buf = ByteBuffer.wrap(message.content);
                 if (buf.getInt() == current.get() + 1) {
                     if (counted.add(message.from)) {
-                        if (totalReceived.incrementAndGet() % 1_000 == 0) {
+                        int totalCount = totalReceived.incrementAndGet();
+                        if (totalCount % 1_000 == 0) {
                             System.out.print(".");
+                        }
+                        if (totalCount % 80_000 == 0) {
+                            System.out.println();
                         }
                         if (counted.size() == certs.size() - 1) {
                             round.countDown();
@@ -99,10 +103,10 @@ public class MessageTest {
 
     }
 
+    public static final String                             DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final Parameters                        parameters = Parameters.newBuilder()
-                                                                                  .setEntropy(new SecureRandom())
-                                                                                  .build();
+
+    private static final Parameters parameters = Parameters.newBuilder().setEntropy(new SecureRandom()).build();
 
     @BeforeAll
     public static void beforeClass() {
@@ -120,49 +124,6 @@ public class MessageTest {
     @AfterEach
     public void after() {
         communications.forEach(e -> e.close());
-    }
-
-    @Test
-    public void testSigning() {
-        CertificateWithPrivateKey certificateWithPrivateKey = certs.values().stream().findFirst().get();
-        Member from = new Member(Member.getMemberId(certificateWithPrivateKey.getX509Certificate()),
-                certificateWithPrivateKey.getX509Certificate());
-        Signature signature = forSigning(from);
-
-        byte[] content = new byte[] { 1, 2, 3, 4 };
-        long ts = 400;
-        int channel = 1;
-        HashKey id = HashKey.ORIGIN;
-        ByteBuffer header = MessageBuffer.headerBuffer(ts, channel);
-
-        Message message = Message.newBuilder()
-                                 .setAge(1)
-                                 .setChannel(channel)
-                                 .setContent(ByteString.copyFrom(content))
-                                 .setSource(id.toID())
-                                 .setSignature(ByteString.copyFrom(MessageBuffer.sign(from, signature, header,
-                                                                                      content)))
-                                 .build();
-
-        MessageBuffer.validate(message, from.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM));
-    }
-
-    @Test
-    public void testMessageBuffer() {
-        CertificateWithPrivateKey certificateWithPrivateKey = certs.values().stream().findFirst().get();
-        Member from = new Member(Member.getMemberId(certificateWithPrivateKey.getX509Certificate()),
-                certificateWithPrivateKey.getX509Certificate());
-
-        MessageBuffer buff1 = new MessageBuffer(10, 10);
-        byte[] bytes1 = new byte[] { 1, 2, 3, 4, 5 };
-        Message message = buff1.put(1, bytes1, from, forSigning(from), 1);
-
-        MessageBuffer buff2 = new MessageBuffer(10, 10);
-        List<Message> merged = buff2.merge(Arrays.asList(message),
-                                           m -> MessageBuffer.validate(message,
-                                                                       from.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM)));
-
-        assertEquals(1, merged.size());
     }
 
     @Test
@@ -202,7 +163,7 @@ public class MessageTest {
                 view.register(0, receiver);
                 receivers.put(view.getMember(), receiver);
             }
-            int rounds = 5;
+            int rounds = 30;
             for (int r = 0; r < rounds; r++) {
                 CountDownLatch round = new CountDownLatch(messengers.size());
                 for (Receiver receiver : receivers.values()) {
@@ -227,7 +188,48 @@ public class MessageTest {
         }
     }
 
-    public static final String DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
+    @Test
+    public void testMessageBuffer() {
+        CertificateWithPrivateKey certificateWithPrivateKey = certs.values().stream().findFirst().get();
+        Member from = new Member(Member.getMemberId(certificateWithPrivateKey.getX509Certificate()),
+                certificateWithPrivateKey.getX509Certificate());
+
+        MessageBuffer buff1 = new MessageBuffer(10, 10);
+        byte[] bytes1 = new byte[] { 1, 2, 3, 4, 5 };
+        Message message = buff1.put(1, bytes1, from, forSigning(from), 1);
+
+        MessageBuffer buff2 = new MessageBuffer(10, 10);
+        List<Message> merged = buff2.merge(Arrays.asList(message),
+                                           m -> MessageBuffer.validate(message,
+                                                                       from.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM)));
+
+        assertEquals(1, merged.size());
+    }
+
+    @Test
+    public void testSigning() {
+        CertificateWithPrivateKey certificateWithPrivateKey = certs.values().stream().findFirst().get();
+        Member from = new Member(Member.getMemberId(certificateWithPrivateKey.getX509Certificate()),
+                certificateWithPrivateKey.getX509Certificate());
+        Signature signature = forSigning(from);
+
+        byte[] content = new byte[] { 1, 2, 3, 4 };
+        long ts = 400;
+        int channel = 1;
+        HashKey id = HashKey.ORIGIN;
+        ByteBuffer header = MessageBuffer.headerBuffer(ts, channel);
+
+        Message message = Message.newBuilder()
+                                 .setAge(1)
+                                 .setChannel(channel)
+                                 .setContent(ByteString.copyFrom(content))
+                                 .setSource(id.toID())
+                                 .setSignature(ByteString.copyFrom(MessageBuffer.sign(from, signature, header,
+                                                                                      content)))
+                                 .build();
+
+        MessageBuffer.validate(message, from.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM));
+    }
 
     private Signature forSigning(Member member) {
         Signature signature;
