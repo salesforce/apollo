@@ -9,33 +9,46 @@ package com.salesforce.apollo.consortium;
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.SignatureException;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Supplier;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.ConsortiumMessage;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
+import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.Transaction;
+import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesfoce.apollo.consortium.proto.User;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.proto.ID;
+import com.salesforce.apollo.comm.CommonCommunications;
 import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
+import com.salesforce.apollo.consortium.comms.ConsortiumServerCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
@@ -60,6 +73,24 @@ public class Consortium {
         public Collaborator(Member member, PublicKey consensusKey) {
             super(member.getId(), member.getCertificate());
             this.consensusKey = consensusKey;
+        }
+    }
+
+    public class Service {
+
+        public TransactionResult clientSubmit(SubmitTransaction request) {
+            return TransactionResult.getDefaultInstance();
+        }
+
+    }
+
+    public static class SubmittedTransaction {
+        public final Consumer<HashKey> onCompletion;
+        public final Transaction       submitted;
+
+        public SubmittedTransaction(Transaction submitted, Consumer<HashKey> onCompletion) {
+            this.submitted = submitted;
+            this.onCompletion = onCompletion;
         }
     }
 
@@ -89,29 +120,27 @@ public class Consortium {
         }
     }
 
-    @SuppressWarnings("unused")
     private class Follower extends CommitteeMember {
     }
 
-    @SuppressWarnings("unused")
     private class Leader extends CommitteeMember {
     }
 
     private abstract class State {
 
         boolean becomeClient() {
-            // TODO Auto-generated method stub
-            return false;
+            state = new Client();
+            return true;
         };
 
         boolean becomeFollower() {
-            // TODO Auto-generated method stub
-            return false;
-        };
+            state = new Follower();
+            return true;
+        }
 
         boolean becomeLeader() {
-            // TODO Auto-generated method stub
-            return false;
+            state = new Leader();
+            return true;
         }
 
         void deliverBlock(Block parseFrom, HashKey from) {
@@ -129,21 +158,6 @@ public class Consortium {
         void deliverValidate(Validate parseFrom, HashKey from) {
             // TODO Auto-generated method stub
         }
-
-        boolean process(Checkpoint body, CurrentBlock next) {
-            // TODO Auto-generated method stub
-            return false;
-        }
-
-        boolean process(Genesis body, CurrentBlock next) {
-            // TODO Auto-generated method stub
-            return false;
-        }
-
-        boolean process(User body, CurrentBlock next) {
-            // TODO Auto-generated method stub
-            return false;
-        };
 
     }
 
@@ -164,59 +178,164 @@ public class Consortium {
         return null;
     }
 
-    private final Communications                                communications;
-    private final Context<Member>                               context;
-    private volatile CurrentBlock                               current;
-    private volatile Context<Collaborator>                      currentView;
-    @SuppressWarnings("unused")
-    private final Function<List<Transaction>, List<ByteBuffer>> executor;
-    private final Duration                                      gossipDuration;
-    private final AtomicInteger                                 lastSequenceNumber = new AtomicInteger(-1);
-    private volatile Member                                     leader;
-    private final Parameters.Builder                            mConfig;
-    private final Member                                        member;
-    private volatile Messenger                                  messenger;
-    private final ScheduledExecutorService                      scheduler;
-    private final Supplier<Signature>                           signature;
-    private volatile State                                      state              = new Client();
-    private volatile TotalOrder                                 totalOrder;
+    private volatile CommonCommunications<ConsortiumClientCommunications>                 comm;
+    private final Communications                                                          communications;
+    private final Context<Member>                                                         context;
+    private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications>> createClientComms;
+    private volatile CurrentBlock                                                         current;
+    private volatile Context<Collaborator>                                                currentView;
+    private final Function<List<Transaction>, List<ByteBuffer>>                           executor;
+    private final Duration                                                                gossipDuration;
+    private final AtomicInteger                                                           lastSequenceNumber = new AtomicInteger(
+            -1);
+    private volatile Member                                                               leader;
+    private final Parameters.Builder                                                      mConfig;
+    private final Member                                                                  member;
+    private volatile Messenger                                                            messenger;
+    private final ScheduledExecutorService                                                scheduler;
+    private final Supplier<Signature>                                                     signature;
+    private volatile State                                                                state              = new Client();
+    private final Map<HashKey, SubmittedTransaction>                                      submitted          = new ConcurrentHashMap<>();
+    private volatile int                                                                  toleranceLevel;
+    private volatile TotalOrder                                                           totalOrder;
 
+    @SuppressWarnings("unchecked")
     public Consortium(Function<List<Transaction>, List<ByteBuffer>> executor, Member member,
-            Supplier<Signature> signature, Context<Member> context, Parameters.Builder mConfig,
+            Supplier<Signature> signature, Context<? extends Member> ctx, Parameters.Builder mConfig,
             Communications communications, Duration gossipDuration, ScheduledExecutorService scheduler) {
         this.executor = executor;
         this.member = member;
-        this.context = context;
+        this.context = (Context<Member>) ctx;
         this.mConfig = mConfig.clone();
         this.communications = communications;
         this.signature = signature;
         this.gossipDuration = gossipDuration;
         this.scheduler = scheduler;
-
+        this.createClientComms = k -> communications.create(member, ConsortiumClientCommunications.getCreate(null),
+                                                            new ConsortiumServerCommunications(new Service(),
+                                                                    communications.getClientIdentityProvider(), null));
         context.register(membershipListener());
     }
 
-    public boolean process(Block block) {
+    public Member getMember() {
+        return member;
+    }
+
+    public boolean process(CertifiedBlock certifiedBlock) {
+        Block block = certifiedBlock.getBlock();
+        HashKey hash = new HashKey(Conversion.hashOf(block.toByteArray()));
+        log.info("Processing block {} : {}", hash, block.getBody().getType());
+        if (!validate(certifiedBlock)) {
+            log.error("Protocol violation. New block is not certified {}", certifiedBlock);
+            return false;
+        }
         final CurrentBlock previousBlock = current;
-        if (block.getHeader().getHeight() != previousBlock.block.getHeader().getHeight() + 1) {
-            log.error("Protocol violation.  Block height should be {} and next block height is {}",
-                      previousBlock.block.getHeader().getHeight(), block.getHeader().getHeight());
-            return false;
+        if (previousBlock != null) {
+            if (block.getHeader().getHeight() != previousBlock.block.getHeader().getHeight() + 1) {
+                log.error("Protocol violation.  Block height should be {} and next block height is {}",
+                          previousBlock.block.getHeader().getHeight(), block.getHeader().getHeight());
+                return false;
+            }
+            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
+            if (previousBlock.hash.equals(prev)) {
+                log.error("Protocol violation. New block does not refer to current block hash. Should be {} and next block's prev is {}",
+                          previousBlock.hash, prev);
+                return false;
+            }
+        } else {
+            if (block.getBody().getType() != BodyType.GENESIS) {
+                log.error("Invalid genesis block: {}", block.getBody().getType());
+                return false;
+            }
         }
-        HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
-        if (previousBlock.hash.equals(prev)) {
-            log.error("Protocol violation. New block does not refer to current block hash. Should be {} and next block's prev is {}",
-                      previousBlock.hash, prev);
-            return false;
-        }
-        CurrentBlock next = new CurrentBlock(new HashKey(Conversion.hashOf(block.toByteArray())), block);
-        current = next;
+        current = new CurrentBlock(hash, block);
         return next();
+    }
+
+    public void start() {
+        resume();
+    }
+
+    public void stop() {
+        pause();
+    }
+
+    public HashKey submit(List<byte[]> transactions, Consumer<HashKey> onCompletion) throws TimeoutException {
+        final Context<Collaborator> current = currentView;
+        if (current == null) {
+            throw new IllegalStateException("The current view is undefined, unable to process transactions");
+        }
+
+        byte[] nonce = new byte[32];
+        mConfig.getEntropy().nextBytes(nonce);
+        ByteBuffer signed = ByteBuffer.allocate(nonce.length + HashKey.BYTE_SIZE
+                + transactions.stream().mapToInt(e -> e.length).sum());
+
+        signed.put(member.getId().bytes());
+        signed.put(nonce);
+
+        Transaction.Builder builder = Transaction.newBuilder()
+                                                 .setSource(member.getId().toByteString())
+                                                 .setNonce(ByteString.copyFrom(nonce));
+        transactions.forEach(t -> {
+            builder.addBatch(ByteString.copyFrom(t));
+            signed.put(t);
+        });
+
+        byte[] hash = Conversion.hashOf(signed.array());
+
+        Signature s = signature.get();
+        try {
+            s.update(hash);
+        } catch (SignatureException e) {
+            throw new IllegalStateException("Unable to sign transaction batch", e);
+        }
+        try {
+            builder.setSignature(ByteString.copyFrom(s.sign()));
+        } catch (SignatureException e) {
+            throw new IllegalStateException("Unable to sign transaction batch", e);
+        }
+        HashKey hashKey = new HashKey(hash);
+        Transaction transaction = builder.build();
+        submitted.put(hashKey, new SubmittedTransaction(transaction, onCompletion));
+        List<TransactionResult> results = current.ring(0).stream().map(c -> {
+            ConsortiumClientCommunications link = linkFor(c);
+            if (link == null) {
+                log.warn("Cannot get link for {}", c.getId());
+                return null;
+            }
+            return link.clientSubmit(SubmitTransaction.newBuilder().setTransaction(transaction).build());
+        }).filter(r -> r != null).limit(toleranceLevel).collect(Collectors.toList());
+        if (results.size() < toleranceLevel) {
+            throw new TimeoutException("Cannot submit transaction " + hashKey);
+        }
+        return hashKey;
+    }
+
+    @SuppressWarnings("unused")
+    private void deliver(ConsortiumMessage.Builder message) {
+        final Messenger currentMsgr = messenger;
+        if (currentMsgr == null) {
+            log.error("skipping message publish as no messenger");
+            return;
+        }
+        message.setSequenceNumber(lastSequenceNumber.incrementAndGet());
+        messenger.publish(0, message.build().toByteArray());
     }
 
     private State getState() {
         final State get = state;
         return get;
+    }
+
+    private ConsortiumClientCommunications linkFor(Member m) {
+        try {
+            return comm.apply(m, member);
+        } catch (Throwable e) {
+            log.debug("error opening connection to {}: {}", m.getId(),
+                      (e.getCause() != null ? e.getCause() : e).getMessage());
+        }
+        return null;
     }
 
     private MembershipListener<Member> membershipListener() {
@@ -225,13 +344,17 @@ public class Consortium {
             @Override
             public void fail(Member member) {
                 final Context<Collaborator> view = currentView;
-                view.offlineIfActive(member.getId());
+                if (view != null) {
+                    view.offlineIfActive(member.getId());
+                }
             }
 
             @Override
             public void recover(Member member) {
                 final Context<Collaborator> view = currentView;
-                view.activateIfOffline(member.getId());
+                if (view != null) {
+                    view.activateIfOffline(member.getId());
+                }
             }
         };
     }
@@ -257,9 +380,13 @@ public class Consortium {
 
     private void pause() {
         TotalOrder previousTotalOrder = totalOrder;
-        previousTotalOrder.stop();
+        if (previousTotalOrder != null) {
+            previousTotalOrder.stop();
+        }
         Messenger previousMessenger = messenger;
-        previousMessenger.stop();
+        if (previousMessenger != null) {
+            previousMessenger.stop();
+        }
     }
 
     private void process(ConsortiumMessage message, HashKey from) {
@@ -307,7 +434,7 @@ public class Consortium {
             log.error("Protocol violation.  Cannot decode checkpoint body: {}", e);
             return false;
         }
-        return getState().process(body, next);
+        return body != null;
     }
 
     private boolean processGenesis(CurrentBlock next) {
@@ -318,7 +445,7 @@ public class Consortium {
             log.error("Protocol violation.  Cannot decode genesis body: {}", e);
             return false;
         }
-        return getState().process(body, next);
+        return reconfigure(body.getInitialView());
     }
 
     private boolean processReconfigure(CurrentBlock next) {
@@ -329,6 +456,21 @@ public class Consortium {
             log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
             return false;
         }
+        return reconfigure(body);
+    }
+
+    private boolean processUser(CurrentBlock next) {
+        User body;
+        try {
+            body = User.parseFrom(next.block.getBody().getContents());
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
+            return false;
+        }
+        return body != null;
+    }
+
+    private boolean reconfigure(Reconfigure body) {
         HashKey viewId = new HashKey(body.getId());
         Context<Collaborator> newView = new Context<Collaborator>(viewId, context.getRingCount());
         body.getViewList().stream().map(v -> {
@@ -346,39 +488,26 @@ public class Consortium {
             }
         });
 
-        return viewChange(viewId, newView);
-    }
-
-    private boolean processUser(CurrentBlock next) {
-        User body;
-        try {
-            body = User.parseFrom(next.block.getBody().getContents());
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
-            return false;
-        }
-        return getState().process(body, next);
+        return viewChange(viewId, newView, body.getToleranceLevel());
     }
 
     private void resume() {
         TotalOrder currentTO = totalOrder;
-        Messenger currentMsg = messenger;
-        currentTO.start();
-        currentMsg.start(gossipDuration, scheduler);
-    }
-
-    @SuppressWarnings("unused")
-    private void submit(ConsortiumMessage.Builder message) {
-        final Messenger currentMsgr = messenger;
-        if (currentMsgr == null) {
-            log.error("skipping message publish as no messenger");
-            return;
+        if (currentTO != null) {
+            currentTO.start();
         }
-        message.setSequenceNumber(lastSequenceNumber.incrementAndGet());
-        messenger.publish(0, message.build().toByteArray());
+        Messenger currentMsg = messenger;
+        if (currentMsg != null) {
+            currentMsg.start(gossipDuration, scheduler);
+        }
     }
 
-    private boolean viewChange(HashKey viewId, Context<Collaborator> newView) {
+    private boolean validate(CertifiedBlock block) {
+        // TODO Auto-generated method stub
+        return true;
+    }
+
+    private boolean viewChange(HashKey viewId, Context<Collaborator> newView, int t) {
         pause();
 
         currentView = newView;
@@ -388,6 +517,8 @@ public class Consortium {
             totalOrder.process(messages);
         });
         lastSequenceNumber.set(-1);
+        toleranceLevel = t;
+//        comm = createClientComms.apply(viewId);
 
         resume();
 
@@ -395,10 +526,13 @@ public class Consortium {
         leader = newView.ring(0).successor(viewId);
 
         if (member.equals(leader)) {
+            log.info("reconfiguring, becoming leader: {}", member);
             return getState().becomeLeader();
-        } else if (currentView.getActive().contains(member)) {
+        } else if (currentView.getMember(member.getId()) != null) {
+            log.info("reconfiguring, becoming follower: {}", member);
             return getState().becomeFollower();
         }
+        log.info("reconfiguring, becoming client: {}", member);
         return getState().becomeClient();
     }
 }

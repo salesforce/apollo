@@ -183,8 +183,8 @@ abstract public class AvalancheFunctionalTest {
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
-        }), "Could not stabilize view membership)");
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(processors.size());
+        }), "Could not stabilize view membership)"); 
+        
         processors.forEach(p -> p.getAvalanche().start(scheduler));
 
         // generate the genesis transaction

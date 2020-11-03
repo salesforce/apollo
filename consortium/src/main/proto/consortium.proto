@@ -7,6 +7,18 @@ option objc_class_prefix = "Cp";
 
 package apollo.consortium;
 
+service OrderingService { 
+    rpc submit (SubmitTransaction) returns (TransactionResult) {}
+}
+
+message SubmitTransaction {
+    bytes context = 1;
+    Transaction transaction = 2;
+}
+
+message TransactionResult {
+}
+
 message CertifiedBlock {
     Block block = 1;
     repeated Certification certifications = 2;
@@ -57,7 +69,8 @@ message User {
 message Reconfigure {
     bytes id = 1;
     int32 checkpointBlocks = 2;
-    repeated ViewMember view = 3;
+    int32 toleranceLevel = 3;
+    repeated ViewMember view = 4;
 }
 
 message ViewMember {

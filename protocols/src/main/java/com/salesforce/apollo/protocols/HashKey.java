@@ -23,11 +23,11 @@ import com.salesfoce.apollo.proto.ID.Builder;
  * @since 220
  */
 public class HashKey implements Comparable<HashKey> {
+    public static final int     BYTE_SIZE;
     public static final HashKey LAST;
+    public static final int     LONG_SIZE = 4;
     public static final HashKey ORIGIN;
-    private static final int    BYTE_SIZE;
     private final static char[] hexArray  = "0123456789ABCDEF".toCharArray();
-    private static final int    LONG_SIZE = 4;
 
     static {
         BYTE_SIZE = LONG_SIZE * 8;
@@ -191,6 +191,10 @@ public class HashKey implements Comparable<HashKey> {
             buffer.putLong(i);
         }
         return new HashKey(hashOf(buffer.array()));
+    }
+
+    public ByteString toByteString() {
+        return ByteString.copyFrom(bytes());
     }
 
     public ID toID() {
