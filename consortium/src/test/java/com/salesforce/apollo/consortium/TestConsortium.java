@@ -178,7 +178,11 @@ public class TestConsortium {
 
         consortium.forEach(e -> e.start());
 
+        System.out.println("processing genesis block");
+
         consortium.parallelStream().forEach(c -> c.process(genesis));
+
+        System.out.println("genesis block processed");
 
         Consortium client = consortium.get(blueRibbon.size() + 1);
         try {
@@ -188,13 +192,14 @@ public class TestConsortium {
         } catch (TimeoutException e) {
             // expected
         }
-
     }
 
     private CertifiedBlock createGenesis(List<Consortium> blueRibbon) {
+        byte[] viewID = new byte[32];
+        entropy.nextBytes(viewID);
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
                                                      .setCheckpointBlocks(256)
-                                                     .setId(HashKey.ORIGIN.toByteString())
+                                                     .setId(ByteString.copyFrom(viewID))
                                                      .setToleranceLevel(parameters.toleranceLevel);
         blueRibbon.forEach(e -> {
             genesisView.addView(ViewMember.newBuilder()

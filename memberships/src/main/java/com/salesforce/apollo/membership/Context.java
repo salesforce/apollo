@@ -68,6 +68,11 @@ public class Context<T extends Member> {
         }
     }
 
+    @Override
+    public String toString() {
+        return "Context [id=" + id + " " + ring(0) + "]";
+    }
+
     public interface MembershipListener<T> {
 
         /**

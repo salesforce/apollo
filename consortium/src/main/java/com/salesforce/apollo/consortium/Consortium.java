@@ -184,6 +184,7 @@ public class Consortium {
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private volatile CurrentBlock                                                                  current;
     private volatile Context<Collaborator>                                                         currentView;
+    @SuppressWarnings("unused")
     private final Function<List<Transaction>, List<ByteBuffer>>                                    executor;
     private final Duration                                                                         gossipDuration;
     private final AtomicInteger                                                                    lastSequenceNumber = new AtomicInteger(
@@ -384,13 +385,20 @@ public class Consortium {
     }
 
     private void pause() {
-        TotalOrder previousTotalOrder = totalOrder;
-        if (previousTotalOrder != null) {
-            previousTotalOrder.stop();
+        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = comm;
+        if (currentComm != null) {
+            Context<Collaborator> current = currentView;
+            assert current != null : "No current view, but comm exists!";
+            currentComm.deregister(current.getId());
         }
-        Messenger previousMessenger = messenger;
-        if (previousMessenger != null) {
-            previousMessenger.stop();
+
+        TotalOrder currentTotalOrder = totalOrder;
+        if (currentTotalOrder != null) {
+            currentTotalOrder.stop();
+        }
+        Messenger currentMessenger = messenger;
+        if (currentMessenger != null) {
+            currentMessenger.stop();
         }
     }
 
@@ -487,8 +495,10 @@ public class Consortium {
             return new Collaborator(m, v.getConsensusKey().toByteArray());
         }).filter(m -> m != null).forEach(m -> {
             if (context.isActive(m)) {
+                log.trace("Collaborator {} is active", m);
                 newView.activate(m);
             } else {
+                log.trace("Collaborator {} is offline", m);
                 newView.offline(m);
             }
         });
@@ -497,6 +507,12 @@ public class Consortium {
     }
 
     private void resume() {
+        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = comm;
+        if (currentComm != null) {
+            Context<Collaborator> current = currentView;
+            assert current != null : "No current view, but comm exists!";
+            currentComm.register(current.getId(), new Service());
+        }
         TotalOrder currentTO = totalOrder;
         if (currentTO != null) {
             currentTO.start();
@@ -516,28 +532,34 @@ public class Consortium {
         pause();
 
         currentView = newView;
-        messenger = new Messenger(member, signature, newView, communications, msgParameters);
-        totalOrder = new TotalOrder((m, mId) -> process(m, mId), newView);
-        messenger.register(0, messages -> {
-            totalOrder.process(messages);
-        });
+        log.trace("New view: {}", newView);
         lastSequenceNumber.set(-1);
         toleranceLevel = t;
         comm = createClientComms.apply(newView.getId());
 
-        resume();
-
         // Live successor of the view ID on ring zero is leader
-        leader = newView.ring(0).successor(newView.getId());
+        Collaborator newLeader = newView.ring(0).successor(newView.getId());
+        leader = newLeader;
 
-        if (member.equals(leader)) {
-            log.info("reconfiguring, becoming leader: {}", member);
-            return getState().becomeLeader();
-        } else if (currentView.getMember(member.getId()) != null) {
+        if (newView.getMember(member.getId()) != null) {
+            log.info("Joining group {}", newView);
+            messenger = new Messenger(member, signature, newView, communications, msgParameters);
+            totalOrder = new TotalOrder((m, mId) -> process(m, mId), newView);
+            messenger.register(0, messages -> {
+                totalOrder.process(messages);
+            });
+            if (member.equals(newLeader)) {
+                log.info("reconfiguring, becoming leader: {}", member);
+                return getState().becomeLeader();
+            }
             log.info("reconfiguring, becoming follower: {}", member);
             return getState().becomeFollower();
         }
+        messenger = null;
+        totalOrder = null;
         log.info("reconfiguring, becoming client: {}", member);
-        return getState().becomeClient();
+        getState().becomeClient();
+        resume();
+        return true;
     }
 }

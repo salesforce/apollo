@@ -45,6 +45,10 @@ abstract public class Router {
         public void deregister(HashKey context) {
             routing.unbind(context);
         }
+
+        public void register(HashKey context, Service service) {
+            routing.bind(context, service);
+        }
     }
 
     private final static Logger log = LoggerFactory.getLogger(Router.class);

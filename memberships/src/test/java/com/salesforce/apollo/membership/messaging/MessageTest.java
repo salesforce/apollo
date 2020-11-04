@@ -120,9 +120,13 @@ public class MessageTest {
     private final List<Router> communications = new ArrayList<>();
 
     private final AtomicInteger totalReceived = new AtomicInteger(0);
+    private List<Messenger>     messengers;
 
     @AfterEach
     public void after() {
+        if (messengers != null) {
+            messengers.forEach(e -> e.stop());
+        }
         communications.forEach(e -> e.close());
     }
 
@@ -147,7 +151,7 @@ public class MessageTest {
         }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        List<Messenger> messengers = members.stream().map(node -> {
+        messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder().setTarget(30));
             communications.add(comms);
             comms.start();
@@ -156,36 +160,31 @@ public class MessageTest {
 
         messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
 
-        try {
-            Map<Member, Receiver> receivers = new HashMap<>();
-            AtomicInteger current = new AtomicInteger(-1);
-            for (Messenger view : messengers) {
-                Receiver receiver = new Receiver(messengers.size(), current);
-                view.register(0, receiver);
-                receivers.put(view.getMember(), receiver);
+        Map<Member, Receiver> receivers = new HashMap<>();
+        AtomicInteger current = new AtomicInteger(-1);
+        for (Messenger view : messengers) {
+            Receiver receiver = new Receiver(messengers.size(), current);
+            view.register(0, receiver);
+            receivers.put(view.getMember(), receiver);
+        }
+        int rounds = 30;
+        for (int r = 0; r < rounds; r++) {
+            CountDownLatch round = new CountDownLatch(messengers.size());
+            for (Receiver receiver : receivers.values()) {
+                receiver.setRound(round);
             }
-            int rounds = 30;
-            for (int r = 0; r < rounds; r++) {
-                CountDownLatch round = new CountDownLatch(messengers.size());
-                for (Receiver receiver : receivers.values()) {
-                    receiver.setRound(round);
-                }
-                ByteBuffer buf = ByteBuffer.wrap(new byte[4]);
-                buf.putInt(r);
-                messengers.parallelStream().forEach(view -> view.publish(0, buf.array()));
-                boolean success = round.await(10, TimeUnit.SECONDS);
-                assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
+            ByteBuffer buf = ByteBuffer.wrap(new byte[4]);
+            buf.putInt(r);
+            messengers.parallelStream().forEach(view -> view.publish(0, buf.array()));
+            boolean success = round.await(10, TimeUnit.SECONDS);
+            assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
 
-                round = new CountDownLatch(messengers.size());
-                current.incrementAndGet();
-                for (Receiver receiver : receivers.values()) {
-                    assertEquals(0, receiver.dups.get());
-                    receiver.reset();
-                }
+            round = new CountDownLatch(messengers.size());
+            current.incrementAndGet();
+            for (Receiver receiver : receivers.values()) {
+                assertEquals(0, receiver.dups.get());
+                receiver.reset();
             }
-            System.out.println();
-        } finally {
-            messengers.forEach(e -> e.stop());
         }
     }
 

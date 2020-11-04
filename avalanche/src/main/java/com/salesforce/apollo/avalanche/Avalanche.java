@@ -148,8 +148,8 @@ public class Avalanche {
         this.context = context;
         this.entropy = entropy;
         this.comm = communications.create(node, context.getId(), service,
-                                          r -> new AvalancheServerCommunications(communications.getClientIdentityProvider(),
-                                                  metrics, r),
+                                          r -> new AvalancheServerCommunications(
+                                                  communications.getClientIdentityProvider(), metrics, r),
                                           AvalancheClientCommunications.getCreate(metrics));
         this.dag = new WorkingSet(processor, parameters, new DagWood(parameters.dagWood), metrics);
 
@@ -187,6 +187,7 @@ public class Avalanche {
         if (!running.compareAndSet(false, true)) {
             return;
         }
+        comm.register(context.getId(), service);
         queryRounds.set(0);
 
         queryFuture = timer.schedule(() -> {
@@ -203,6 +204,7 @@ public class Avalanche {
         if (!running.compareAndSet(true, false)) {
             return;
         }
+        comm.deregister(context.getId());
         ScheduledFuture<?> currentQuery = queryFuture;
         queryFuture = null;
         if (currentQuery != null) {
@@ -442,7 +444,7 @@ public class Avalanche {
                 for (int i = 0; i < batch.size(); i++) {
                     invalid[i].incrementAndGet();
                 }
-                log.warn("Error querying {} for {}", m, batch, e);
+                log.debug("Error querying {} for {}", m, batch, e);
                 return false;
             } finally {
                 connection.release();

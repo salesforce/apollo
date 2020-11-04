@@ -144,8 +144,8 @@ public class Messenger {
         public Messages gossip(MessageBff inbound, HashKey from) {
             Member predecessor = context.ring(inbound.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.warn("Invalid inbound messages gossip from: {} on ring: {} - not predecessor", from,
-                         inbound.getRing());
+                log.trace("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
+                          context.getId(), member, from, inbound.getRing(), predecessor);
                 return Messages.getDefaultInstance();
             }
             return buffer.process(new BloomFilter(inbound.getDigests()), parameters.entropy.nextInt(),
@@ -155,8 +155,8 @@ public class Messenger {
         public void update(Push push, HashKey from) {
             Member predecessor = context.ring(push.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.warn("Invalid inbound messages update from: {} on ring: {} - not predecessor", from,
-                         push.getRing());
+                log.trace("Invalid inbound messages update on: {}:{} from: {} on ring: {} - not predecessor: {}",
+                          context.getId(), member, from, push.getRing(), predecessor);
                 return;
             }
             process(push.getUpdatesList());
@@ -205,19 +205,33 @@ public class Messenger {
                 log.debug("No members to message gossip with on ring: {}", ring);
                 return;
             }
-            log.trace("message gossiping with {} on {}", link.getMember(), ring);
+            assert member.equals(context.ring(ring)
+                                        .predecessor(link.getMember())) : "member is not the predecessor of the link!";
+            log.debug("message gossiping from {} with {} on {}", member, link.getMember(), ring);
             try {
-                Messages gossip = link.gossip(MessageBff.newBuilder()
-                                                        .setContext(context.getId().toID())
-                                                        .setRing(ring)
-                                                        .setDigests(buffer.getBff(parameters.entropy.nextInt(),
-                                                                                  parameters.falsePositiveRate)
-                                                                          .toBff())
-                                                        .build());
-                process(gossip.getUpdatesList());
-                Builder pushBuilder = Push.newBuilder().setContext(context.getId().toID()).setRing(ring);
-                buffer.updatesFor(new BloomFilter(gossip.getBff()), pushBuilder);
-                link.update(pushBuilder.build());
+                Messages gossip = null;
+
+                try {
+                    gossip = link.gossip(MessageBff.newBuilder()
+                                                   .setContext(context.getId().toID())
+                                                   .setRing(ring)
+                                                   .setDigests(buffer.getBff(parameters.entropy.nextInt(),
+                                                                             parameters.falsePositiveRate)
+                                                                     .toBff())
+                                                   .build());
+                } catch (Throwable e) {
+                    log.debug("error gossipling with {}", link.getMember(), e);
+                }
+                if (gossip != null) {
+                    process(gossip.getUpdatesList());
+                    Builder pushBuilder = Push.newBuilder().setContext(context.getId().toID()).setRing(ring);
+                    buffer.updatesFor(new BloomFilter(gossip.getBff()), pushBuilder);
+                    try {
+                        link.update(pushBuilder.build());
+                    } catch (Throwable e) {
+                        log.debug("error updating {}", link.getMember(), e);
+                    }
+                }
             } finally {
                 link.release();
             }
@@ -239,15 +253,19 @@ public class Messenger {
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        comm.register(context.getId(), new Service());
         scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
-        started.set(false);
+        if (!started.compareAndSet(true, false)) {
+            return;
+        }
+        comm.deregister(context.getId());
     }
 
     private MessagingClientCommunications linkFor(Integer ring) {
-        Member successor = context.ring(ring).successor(member, m -> true);
+        Member successor = context.ring(ring).successor(member);
         if (successor == null) {
             log.debug("No successor to node on ring: {} members: {}", ring, context.ring(ring).size());
             return null;

@@ -312,7 +312,7 @@ public class View {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
-
+            comm.register(context.getId(), service);
             node.setFailed(false);
             node.nextNote();
             recover(node);
@@ -341,6 +341,7 @@ public class View {
             if (!started.compareAndSet(true, false)) {
                 return;
             }
+            comm.deregister(context.getId());
             ScheduledFuture<?> currentGossip = futureGossip;
             futureGossip = null;
             if (currentGossip != null) {
@@ -916,7 +917,13 @@ public class View {
             return true;
         }
         Digests outbound = commonDigests();
-        Gossip gossip = link.gossip(context.getId(), signedNote, ring, outbound);
+        Gossip gossip;
+        try {
+            gossip = link.gossip(context.getId(), signedNote, ring, outbound);
+        } catch (Throwable e) {
+            log.debug("Exception gossiping with {}", link.getMember(), e);
+            return false;
+        }
         if (log.isTraceEnabled()) {
             log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {} ", gossip.getRedirect(),
                       gossip.getCertificates().getUpdatesCount(), gossip.getNotes().getUpdatesCount(),
@@ -959,7 +966,12 @@ public class View {
         }
         Update update = response(gossip);
         if (!isEmpty(update)) {
-            link.update(context.getId(), ring, update);
+            try {
+                link.update(context.getId(), ring, update);
+            } catch (Throwable e) {
+                log.debug("Exception updating {}", link.getMember(), e);
+                return false;
+            }
         }
         return true;
     }
@@ -1050,7 +1062,7 @@ public class View {
             link.ping(context.getId(), 200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
         } catch (Exception e) {
-            log.error("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(),
+            log.debug("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(),
                       e.getCause().getMessage());
             accuseOn(link.getMember(), lastRing);
         } finally {

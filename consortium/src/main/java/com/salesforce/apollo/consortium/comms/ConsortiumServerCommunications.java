@@ -22,6 +22,7 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class ConsortiumServerCommunications extends OrderingServiceImplBase {
+    @SuppressWarnings("unused")
     private ClientIdentity                 identity;
     @SuppressWarnings("unused")
     private final ConsortiumMetrics        metrics;

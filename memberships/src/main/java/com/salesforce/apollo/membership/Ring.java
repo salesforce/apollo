@@ -505,7 +505,7 @@ public class Ring<T extends Member> implements Iterable<T> {
 
     @Override
     public String toString() {
-        return "Ring[" + index + "] : " + ring;
+        return "Ring[" + index + "] : " + ring.keySet();
     }
 
     /**

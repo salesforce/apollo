@@ -172,12 +172,14 @@ public class Ghost {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
+            communications.register(view.getContext().getId(), service);
         }
 
         public void stop() {
             if (!started.compareAndSet(true, false)) {
                 return;
             }
+            communications.deregister(view.getContext().getId());
         }
     }
 

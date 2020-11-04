@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
+import org.slf4j.LoggerFactory;
+
 import com.salesfoce.apollo.proto.ID;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -36,12 +38,20 @@ public class RoutableService<Service> {
     public void evaluate(StreamObserver<?> responseObserver, HashKey context, Consumer<Service> c) {
         if (context == null) {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
-            responseObserver.onCompleted();
+            try {
+                responseObserver.onCompleted();
+            } catch (Throwable e) {
+                LoggerFactory.getLogger(getClass()).trace("Error returning error", e);
+            }
         }
         Service service = services.get(context);
         if (service == null) {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
-            responseObserver.onCompleted();
+            try {
+                responseObserver.onCompleted();
+            } catch (Throwable e) {
+                LoggerFactory.getLogger(getClass()).trace("Error returning error", e);
+            }
         } else {
             c.accept(service);
         }
