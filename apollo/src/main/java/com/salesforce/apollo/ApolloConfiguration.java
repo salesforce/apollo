@@ -18,10 +18,10 @@ import com.fasterxml.jackson.annotation.JsonSubTypes.Type;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.salesforce.apollo.IdentitySource.DefaultIdentitySource;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
-import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.EndpointProvider;
-import com.salesforce.apollo.comm.LocalCommSimm;
-import com.salesforce.apollo.comm.MtlsCommunications;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.MtlsRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
@@ -34,7 +34,7 @@ import com.salesforce.apollo.protocols.HashKey;
 public class ApolloConfiguration {
     public interface CommunicationsFactory {
 
-        Communications getComms(MetricRegistry metrics, HashKey id);
+        Router getComms(MetricRegistry metrics, HashKey id);
 
     }
 
@@ -79,9 +79,9 @@ public class ApolloConfiguration {
         public int target = 30;
 
         @Override
-        public Communications getComms(MetricRegistry metrics, HashKey id) {
+        public Router getComms(MetricRegistry metrics, HashKey id) {
             EndpointProvider ep = null;
-            return new MtlsCommunications(
+            return new MtlsRouter(
                     ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
                     ep);
         }
@@ -93,10 +93,9 @@ public class ApolloConfiguration {
         public int target = 30;
 
         @Override
-        public Communications getComms(MetricRegistry metrics, HashKey id) {
-            return new LocalCommSimm(
-                    ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
-                    id);
+        public Router getComms(MetricRegistry metrics, HashKey id) {
+            return new LocalRouter(id,
+                    ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)));
         }
 
     }
@@ -111,7 +110,7 @@ public class ApolloConfiguration {
     public long                  bufferSize     = 100 * 1024;
     public String                ca             = DEFAULT_CA_ALIAS;
     @JsonSubTypes({ @Type(value = SimCommunicationsFactory.class, name = "sim"),
-                    @Type(value = MtlsCommunications.class, name = "mtls") })
+                    @Type(value = MtlsCommunicationsFactory.class, name = "mtls") })
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
     public CommunicationsFactory communications = new MtlsCommunicationsFactory();
     public GhostParameters       ghost          = new GhostParameters();
@@ -124,4 +123,5 @@ public class ApolloConfiguration {
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
     public IdentityStoreSource   source;
     public int                   threadPool     = 1;
+    public String                contextBase    = HashKey.ORIGIN.b64Encoded();
 }

@@ -13,15 +13,12 @@ import java.security.cert.X509Certificate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
-import io.grpc.BindableService;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -37,8 +34,7 @@ import io.grpc.util.MutableHandlerRegistry;
  * @author hal.hildebrand
  *
  */
-public class LocalCommSimm implements Communications {
-    private static final Logger logger = LoggerFactory.getLogger(LocalCommSimm.class);
+public class LocalRouter extends Router {
 
     public static class LocalServerConnectionFactory implements ServerConnectionFactory {
 
@@ -82,40 +78,39 @@ public class LocalCommSimm implements Communications {
     public static ThreadLocal<X509Certificate> callCertificate = new ThreadLocal<>();
     public static final ThreadIdentity         LOCAL_IDENTITY  = new ThreadIdentity();
 
-    private final ServerConnectionFactory factory  = new LocalServerConnectionFactory();
-    private final MutableHandlerRegistry  registry = new MutableHandlerRegistry();
-    private final Server                  server;
-    private final ServerConnectionCache   cache;
-    private final HashKey                 id;
+    private static final Logger log = LoggerFactory.getLogger(LocalRouter.class);
 
-    public LocalCommSimm(ServerConnectionCacheBuilder builder, HashKey id) {
+    private final HashKey id;
+    private Server        server;
+
+    public LocalRouter(HashKey id, ServerConnectionCache.Builder builder) {
+        this(id, builder, new MutableHandlerRegistry());
+    }
+
+    public LocalRouter(HashKey id, ServerConnectionCache.Builder builder, MutableHandlerRegistry registry) {
+        super(builder.setFactory(new LocalServerConnectionFactory()).build(), registry);
         this.id = id;
-        cache = builder.setFactory(factory).build();
+
         server = InProcessServerBuilder.forName(id.b64Encoded())
-                                       .directExecutor() // directExecutor is fine for unit tests
+                                       .directExecutor() // directExecutor is fine for local tests
                                        .fallbackHandlerRegistry(registry)
                                        .build();
-        try {
-            server.start();
-        } catch (IOException e) {
-            logger.error("Cannot start in process server for: " + id, e);
-        }
-        logger.info("Starting server for: " + id);
     }
 
     @Override
     public void close() {
         server.shutdownNow();
-        cache.close();
+        super.close();
     }
 
     @Override
-    public <T> CommonCommunications<T> create(Member member, CreateClientCommunications<T> createFunction,
-                                              BindableService service) {
-
-        registry.addService(service);
-        logger.info("Communications created for: " + member.getId());
-        return new CommonCommunications<T>(cache, createFunction);
+    public void start() {
+        try {
+            server.start();
+        } catch (IOException e) {
+            log.error("Cannot start in process server for: " + id, e);
+        }
+        log.info("Starting server for: " + id);
     }
 
     @Override
@@ -123,14 +118,4 @@ public class LocalCommSimm implements Communications {
         return LOCAL_IDENTITY;
     }
 
-    @Override
-    public void start() {
-        try {
-            if (server.isShutdown() || server.isTerminated()) {
-                server.start();
-            }
-        } catch (IOException ex) {
-            logger.info("Server start failed for: " + id);
-        }
-    }
 }

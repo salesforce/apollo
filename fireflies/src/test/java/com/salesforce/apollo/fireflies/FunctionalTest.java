@@ -28,8 +28,8 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
@@ -58,8 +58,8 @@ public class FunctionalTest {
                                                    cert -> cert));
     }
 
-    private final List<Communications> communications = new ArrayList<>();
-    private List<View>                 views;
+    private final List<Router> communications = new ArrayList<>();
+    private List<View>         views;
 
     @AfterEach
     public void after() {
@@ -95,10 +95,11 @@ public class FunctionalTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         views = members.parallelStream().map(node -> {
-            Communications comms = new LocalCommSimm(
-                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics), node.getId());
+            Router comms = new LocalRouter(node.getId(),
+                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics));
+            comms.start();
             communications.add(comms);
-            return new View(node, comms, metrics);
+            return new View(HashKey.ORIGIN, node, comms, metrics);
         })
                        .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds, scheduler))
                        .collect(Collectors.toList());

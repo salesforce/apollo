@@ -28,6 +28,7 @@ import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.test.pregen.PregenPopulation;
 
 /**
  * @author hal.hildebrand

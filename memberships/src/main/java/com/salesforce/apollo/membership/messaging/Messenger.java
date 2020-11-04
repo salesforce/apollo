@@ -30,8 +30,8 @@ import com.salesfoce.apollo.proto.MessageBff;
 import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.Push;
 import com.salesfoce.apollo.proto.Push.Builder;
-import com.salesforce.apollo.comm.CommonCommunications;
-import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
@@ -70,11 +70,10 @@ public class Messenger {
             private int              bufferSize        = 1000;
             private SecureRandom     entropy;
             private double           falsePositiveRate = 0.25;
-            private HashKey          id;
             private MessagingMetrics metrics;
 
             public Parameters build() {
-                return new Parameters(id, falsePositiveRate, entropy, bufferSize, metrics);
+                return new Parameters(falsePositiveRate, entropy, bufferSize, metrics);
             }
 
             @Override
@@ -98,10 +97,6 @@ public class Messenger {
                 return falsePositiveRate;
             }
 
-            public HashKey getId() {
-                return id;
-            }
-
             public MessagingMetrics getMetrics() {
                 return metrics;
             }
@@ -121,11 +116,6 @@ public class Messenger {
                 return this;
             }
 
-            public Builder setId(HashKey id) {
-                this.id = id;
-                return this;
-            }
-
             public Builder setMetrics(MessagingMetrics metrics) {
                 this.metrics = metrics;
                 return this;
@@ -140,12 +130,9 @@ public class Messenger {
         public final int              bufferSize;
         public final SecureRandom     entropy;
         public final double           falsePositiveRate;
-        public final HashKey          id;
         public final MessagingMetrics metrics;
 
-        public Parameters(HashKey id, double falsePositiveRate, SecureRandom entropy, int bufferSize,
-                MessagingMetrics metrics) {
-            this.id = id;
+        public Parameters(double falsePositiveRate, SecureRandom entropy, int bufferSize, MessagingMetrics metrics) {
             this.falsePositiveRate = falsePositiveRate;
             this.entropy = entropy;
             this.metrics = metrics;
@@ -178,26 +165,28 @@ public class Messenger {
 
     public static final Logger log = LoggerFactory.getLogger(Messenger.class);
 
-    public final Member                                               member;
-    public final Supplier<Signature>                                  signature;
-    private final MessageBuffer                                       buffer;
-    private final Map<Integer, MessageChannelHandler>                 channelHandlers = new ConcurrentHashMap<>();
-    private final CommonCommunications<MessagingClientCommunications> comm;
-    private final Context<Member>                                     context;
-    private volatile int                                              lastRing        = -1;
-    private final Parameters                                          parameters;
-    private final AtomicBoolean                                       started         = new AtomicBoolean();
+    public final Member                                                        member;
+    public final Supplier<Signature>                                           signature;
+    private final MessageBuffer                                                buffer;
+    private final Map<Integer, MessageChannelHandler>                          channelHandlers = new ConcurrentHashMap<>();
+    private final CommonCommunications<MessagingClientCommunications, Service> comm;
+    private final Context<Member>                                              context;
+    private volatile int                                                       lastRing        = -1;
+    private final Parameters                                                   parameters;
+    private final AtomicBoolean                                                started         = new AtomicBoolean();
 
     @SuppressWarnings("unchecked")
     public Messenger(Member member, Supplier<Signature> signature, Context<? extends Member> context,
-            Communications communications, Parameters parameters) {
+            Router communications, Parameters parameters) {
         this.member = member;
         this.signature = signature;
         this.parameters = parameters;
         this.context = (Context<Member>) context;
         this.buffer = new MessageBuffer(parameters.bufferSize, context.timeToLive());
-        this.comm = communications.create(member, getCreate(parameters.metrics), new MessagingServerCommunications(
-                new Service(), communications.getClientIdentityProvider(), parameters.metrics));
+        this.comm = communications.create(member, context.getId(), new Service(),
+                                          r -> new MessagingServerCommunications(
+                                                  communications.getClientIdentityProvider(), parameters.metrics, r),
+                                          getCreate(parameters.metrics));
     }
 
     public Member getMember() {
@@ -218,21 +207,15 @@ public class Messenger {
             }
             log.trace("message gossiping with {} on {}", link.getMember(), ring);
             try {
-                com.salesfoce.apollo.proto.MessageBff.Builder builder = MessageBff.newBuilder();
-                if (parameters.id != null) {
-                    builder.setContext(parameters.id.toID());
-                }
-                Messages gossip = link.gossip(builder.setRing(ring)
-                                                     .setDigests(buffer.getBff(parameters.entropy.nextInt(),
-                                                                               parameters.falsePositiveRate)
-                                                                       .toBff())
-                                                     .build());
+                Messages gossip = link.gossip(MessageBff.newBuilder()
+                                                        .setContext(context.getId().toID())
+                                                        .setRing(ring)
+                                                        .setDigests(buffer.getBff(parameters.entropy.nextInt(),
+                                                                                  parameters.falsePositiveRate)
+                                                                          .toBff())
+                                                        .build());
                 process(gossip.getUpdatesList());
-                Builder pushBuilder = Push.newBuilder();
-                if (parameters.id != null) {
-                    pushBuilder.setContext(parameters.id.toID());
-                }
-                pushBuilder.setRing(ring);
+                Builder pushBuilder = Push.newBuilder().setContext(context.getId().toID()).setRing(ring);
                 buffer.updatesFor(new BloomFilter(gossip.getBff()), pushBuilder);
                 link.update(pushBuilder.build());
             } finally {

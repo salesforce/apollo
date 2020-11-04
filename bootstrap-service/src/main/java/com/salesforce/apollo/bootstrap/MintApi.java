@@ -277,6 +277,7 @@ public class MintApi {
 
         return context.transactionResult(config -> {
             DSLContext create = DSL.using(config);
+            System.out.println(create.selectFrom(ASSIGNED_IDS).fetch());
             byte[] id = create.select(ASSIGNED_IDS.ID)
                               .from(ASSIGNED_IDS)
                               .where(ASSIGNED_IDS.VERSION.isNull())

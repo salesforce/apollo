@@ -30,6 +30,7 @@ import io.github.olivierlemasle.ca.CsrWithPrivateKey;
 import io.github.olivierlemasle.ca.RootCertificate;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.stub.StreamObserver;
+import io.grpc.util.MutableHandlerRegistry;
 
 /**
  * @author hal.hildebrand
@@ -108,7 +109,7 @@ public class TestMtls {
         CertificateWithPrivateKey serverCert = serverIdentity(ca);
 
         MtlsServer server = new MtlsServer(serverAddress, ClientAuth.REQUIRE, "foo", serverCert.getX509Certificate(),
-                serverCert.getPrivateKey(), validator());
+                serverCert.getPrivateKey(), validator(), new MutableHandlerRegistry());
         return server;
     }
 

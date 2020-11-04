@@ -39,8 +39,8 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.Message;
-import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -117,7 +117,7 @@ public class MessageTest {
                                                    cert -> cert));
     }
 
-    private final List<Communications> communications = new ArrayList<>();
+    private final List<Router> communications = new ArrayList<>();
 
     private final AtomicInteger totalReceived = new AtomicInteger(0);
 
@@ -148,8 +148,9 @@ public class MessageTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         List<Messenger> messengers = members.stream().map(node -> {
-            Communications comms = new LocalCommSimm(ServerConnectionCache.newBuilder().setTarget(30), node.getId());
+            LocalRouter comms = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder().setTarget(30));
             communications.add(comms);
+            comms.start();
             return new Messenger(node, () -> forSigning(node), context, comms, parameters);
         }).collect(Collectors.toList());
 

@@ -42,9 +42,17 @@ public class PregenPopulation {
                                       keystorePassword, alias);
     }
 
+    public static int getCardinality() {
+        return cardinality;
+    }
+
     public static CertificateWithPrivateKey getMember(int index) {
         return Util.loadFrom(PregenPopulation.class.getResourceAsStream("/members/" + memberKeystoreFile(index)),
                              keystorePassword, alias);
+    }
+
+    public static File getMemberDir() {
+        return memberDir;
     }
 
     public static void main(String[] argv) {
@@ -85,5 +93,9 @@ public class PregenPopulation {
 
     public static String memberKeystoreFile(int index) {
         return String.format(MEMBER_P12_TEMPLATE, index);
+    }
+
+    public static String memberKeystoreResource(int index) {
+        return "/members/" + String.format(MEMBER_P12_TEMPLATE, index);
     }
 }

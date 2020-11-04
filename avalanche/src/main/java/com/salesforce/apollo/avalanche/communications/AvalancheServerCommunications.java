@@ -8,8 +8,6 @@ package com.salesforce.apollo.avalanche.communications;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
@@ -20,7 +18,7 @@ import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.Avalanche.Service;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
-import com.salesforce.apollo.comm.grpc.BaseServerCommunications;
+import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -30,26 +28,22 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  * @since 220
  */
-public class AvalancheServerCommunications extends AvalancheImplBase implements BaseServerCommunications<Service> {
-    private final ClientIdentity        identity;
-    private final Map<HashKey, Service> services = new ConcurrentHashMap<>();
-    private final Service               system;
-    private final AvalancheMetrics      metrics;
+public class AvalancheServerCommunications extends AvalancheImplBase {
+    @SuppressWarnings("unused")
+    private final ClientIdentity           identity;
+    private final AvalancheMetrics         metrics;
+    private final RoutableService<Service> router;
 
-    public AvalancheServerCommunications(Service avalanche, ClientIdentity identity, AvalancheMetrics metrics) {
-        this.system = avalanche;
+    public AvalancheServerCommunications(ClientIdentity identity, AvalancheMetrics metrics,
+            RoutableService<Service> router) {
         this.identity = identity;
         this.metrics = metrics;
-    }
-
-    @Override
-    public ClientIdentity getClientIdentity() {
-        return identity;
+        this.router = router;
     }
 
     @Override
     public void query(Query request, StreamObserver<QueryResult> responseObserver) {
-        evaluate(responseObserver, request.getContext(), s -> {
+        router.evaluate(responseObserver, request.getContext(), s -> {
             QueryResult result = s.onQuery(request.getTransactionsList()
                                                   .stream()
                                                   .map(e -> ByteBuffer.wrap(e.toByteArray()))
@@ -66,17 +60,12 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
                 metrics.inboundQuery().update(request.getSerializedSize());
                 metrics.queryReply().update(result.getSerializedSize());
             }
-        }, system, services);
-    }
-
-    @Override
-    public void register(HashKey id, Service service) {
-        services.computeIfAbsent(id, m -> service);
+        });
     }
 
     @Override
     public void requestDag(DagNodes request, StreamObserver<SuppliedDagNodes> responseObserver) {
-        evaluate(responseObserver, request.getContext(), s -> {
+        router.evaluate(responseObserver, request.getContext(), s -> {
             List<ByteBuffer> result = s.requestDAG(request.getEntriesList()
                                                           .stream()
                                                           .map(e -> new HashKey(e))
@@ -92,6 +81,6 @@ public class AvalancheServerCommunications extends AvalancheImplBase implements 
                 metrics.inboundRequestDag().update(request.getSerializedSize());
                 metrics.requestDagReply().update(dags.getSerializedSize());
             }
-        }, system, services);
+        });
     }
 }

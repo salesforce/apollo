@@ -120,7 +120,7 @@ public class ServerConnectionCache {
         }
     }
 
-    public static class ServerConnectionCacheBuilder {
+    public static class Builder {
         private Clock                        clock   = Clock.systemUTC();
         private ServerConnectionFactory      factory = null;
         private ServerConnectionCacheMetrics metrics;
@@ -151,27 +151,27 @@ public class ServerConnectionCache {
             return target;
         }
 
-        public ServerConnectionCacheBuilder setClock(Clock clock) {
+        public Builder setClock(Clock clock) {
             this.clock = clock;
             return this;
         }
 
-        public ServerConnectionCacheBuilder setFactory(ServerConnectionFactory factory) {
+        public Builder setFactory(ServerConnectionFactory factory) {
             this.factory = factory;
             return this;
         }
 
-        public ServerConnectionCacheBuilder setMetrics(ServerConnectionCacheMetrics metrics) {
+        public Builder setMetrics(ServerConnectionCacheMetrics metrics) {
             this.metrics = metrics;
             return this;
         }
 
-        public ServerConnectionCacheBuilder setMinIdle(Duration minIdle) {
+        public Builder setMinIdle(Duration minIdle) {
             this.minIdle = minIdle;
             return this;
         }
 
-        public ServerConnectionCacheBuilder setTarget(int target) {
+        public Builder setTarget(int target) {
             this.target = target;
             return this;
         }
@@ -205,8 +205,8 @@ public class ServerConnectionCache {
 
     private final static Logger log = LoggerFactory.getLogger(ServerConnectionCache.class);
 
-    public static ServerConnectionCacheBuilder newBuilder() {
-        return new ServerConnectionCacheBuilder();
+    public static Builder newBuilder() {
+        return new Builder();
     }
 
     private final Map<HashKey, ManagedServerConnection>  cache = new HashMap<>();

@@ -28,10 +28,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
+import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
@@ -62,7 +62,7 @@ public class SuccessorTest {
                                                    cert -> cert));
     }
 
-    private final List<Communications> communications = new ArrayList<>();
+    private final List<Router> communications = new ArrayList<>();
 
     @AfterEach
     public void after() {
@@ -93,11 +93,13 @@ public class SuccessorTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics);
-        Map<Participant, View> views = members.stream()
-                                              .map(node -> new View(node, new LocalCommSimm(builder, node.getId()),
-                                                      metrics))
-                                              .collect(Collectors.toMap(v -> v.getNode(), v -> v));
+        Builder builder = ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics);
+        Map<Participant, View> views = members.stream().map(node -> {
+            LocalRouter comms = new LocalRouter(node.getId(), builder);
+            communications.add(comms);
+            comms.start();
+            return new View(HashKey.ORIGIN, node, comms, metrics);
+        }).collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
         views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds, scheduler));
 

@@ -1,0 +1,87 @@
+/*
+ * Copyright (c) 2020, salesforce.com, inc.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+package com.salesforce.apollo.comm;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.protocols.HashKey;
+
+import io.grpc.BindableService;
+import io.grpc.util.MutableHandlerRegistry;
+
+/**
+ * @author hal.hildebrand
+ *
+ */
+abstract public class Router {
+    public class CommonCommunications<Client, Service> implements BiFunction<Member, Member, Client> {
+        private final CreateClientCommunications<Client> createFunction;
+        private final RoutableService<Service>           routing;
+
+        public CommonCommunications(RoutableService<Service> routing,
+                CreateClientCommunications<Client> createFunction) {
+            this.routing = routing;
+            this.createFunction = createFunction;
+        }
+
+        @Override
+        public Client apply(Member to, Member from) {
+            return cache.borrow(to, from, createFunction);
+        }
+
+        public void deregister(HashKey context) {
+            routing.unbind(context);
+        }
+    }
+
+    private final static Logger log = LoggerFactory.getLogger(Router.class);
+
+    private final ServerConnectionCache             cache;
+    private final MutableHandlerRegistry            registry;
+    private final Map<Class<?>, RoutableService<?>> services = new ConcurrentHashMap<>();
+
+    public Router(ServerConnectionCache cache, MutableHandlerRegistry registry) {
+        this.cache = cache;
+        this.registry = registry;
+    }
+
+    public void close() {
+        cache.close();
+    }
+
+    public <Client, Service> CommonCommunications<Client, Service> create(Member member, HashKey context,
+                                                                          Service service,
+                                                                          Function<RoutableService<Service>, BindableService> factory,
+                                                                          CreateClientCommunications<Client> createFunction) {
+        @SuppressWarnings("unchecked")
+        RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(service.getClass(),
+                                                                                               c -> {
+                                                                                                   RoutableService<Service> route = new RoutableService<Service>();
+                                                                                                   BindableService bindableService = factory.apply(route);
+                                                                                                   registry.addService(bindableService);
+                                                                                                   return route;
+                                                                                               });
+        routing.bind(context, service);
+        log.info("Communications created for: " + member.getId());
+        return new CommonCommunications<Client, Service>(routing, createFunction);
+    }
+
+    abstract public ClientIdentity getClientIdentityProvider();
+
+    public void start() {
+
+    }
+}

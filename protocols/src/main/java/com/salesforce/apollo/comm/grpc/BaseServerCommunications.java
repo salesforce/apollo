@@ -22,7 +22,7 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  *
  */
-public abstract interface BaseServerCommunications<T> {
+public interface BaseServerCommunications<T> {
     default void evaluate(StreamObserver<?> responseObserver, HashKey id, Consumer<T> c, T s,
                           Map<HashKey, T> services) {
         T service = getService(id, s, services);

@@ -51,9 +51,9 @@ import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.NoteGossip;
 import com.salesfoce.apollo.proto.Signed;
 import com.salesfoce.apollo.proto.Update;
-import com.salesforce.apollo.comm.CommonCommunications;
-import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.EndpointProvider;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.fireflies.communications.FfClientCommunications;
 import com.salesforce.apollo.fireflies.communications.FfServerCommunications;
@@ -434,7 +434,7 @@ public class View {
     /**
      * Communications with other members
      */
-    private final CommonCommunications<FfClientCommunications> comm;
+    private final CommonCommunications<FfClientCommunications, Service> comm;
 
     /**
      * View context
@@ -484,14 +484,16 @@ public class View {
      */
     private final ConcurrentMap<HashKey, Participant> view = new ConcurrentHashMap<>();
 
-    public View(Node node, Communications communications, FireflyMetrics metrics) {
+    public View(HashKey id, Node node, Router communications, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.node = node;
-        this.comm = communications.create(node, getCreate(metrics), new FfServerCommunications(service,
-                communications.getClientIdentityProvider(), metrics));
+        this.comm = communications.create(node, id, service,
+                                          r -> new FfServerCommunications(service,
+                                                  communications.getClientIdentityProvider(), metrics, r),
+                                          getCreate(metrics));
         diameter = diameter(getParameters());
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
-        context = new Context<>(HashKey.ORIGIN, getParameters().rings);
+        context = new Context<>(id, getParameters().rings);
         add(node);
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }
@@ -914,7 +916,7 @@ public class View {
             return true;
         }
         Digests outbound = commonDigests();
-        Gossip gossip = link.gossip(signedNote, ring, outbound);
+        Gossip gossip = link.gossip(context.getId(), signedNote, ring, outbound);
         if (log.isTraceEnabled()) {
             log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {} ", gossip.getRedirect(),
                       gossip.getCertificates().getUpdatesCount(), gossip.getNotes().getUpdatesCount(),
@@ -957,7 +959,7 @@ public class View {
         }
         Update update = response(gossip);
         if (!isEmpty(update)) {
-            link.update(ring, update);
+            link.update(context.getId(), ring, update);
         }
         return true;
     }
@@ -1045,7 +1047,7 @@ public class View {
      */
     void monitor(FfClientCommunications link, int lastRing) {
         try {
-            link.ping(200);
+            link.ping(context.getId(), 200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
         } catch (Exception e) {
             log.error("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(),

@@ -6,19 +6,15 @@
  */
 package com.salesforce.apollo.membership.messaging.communications;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 import com.salesfoce.apollo.proto.MessageBff;
 import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.MessagingGrpc.MessagingImplBase;
 import com.salesfoce.apollo.proto.Null;
 import com.salesfoce.apollo.proto.Push;
-import com.salesforce.apollo.comm.grpc.BaseServerCommunications;
+import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 import com.salesforce.apollo.membership.messaging.Messenger.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.stub.StreamObserver;
 
@@ -26,11 +22,11 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  *
  */
-public class MessagingServerCommunications extends MessagingImplBase implements BaseServerCommunications<Service> {
+public class MessagingServerCommunications extends MessagingImplBase {
     @Override
     public void gossip(MessageBff request, StreamObserver<Messages> responseObserver) {
-        evaluate(responseObserver, request.getContext(), s -> {
-            Messages response = s.gossip(request,  getFrom());
+        routing.evaluate(responseObserver, request.getContext(), s -> {
+            Messages response = s.gossip(request, identity.getFrom());
             responseObserver.onNext(response);
             responseObserver.onCompleted();
             if (metrics != null) {
@@ -40,13 +36,13 @@ public class MessagingServerCommunications extends MessagingImplBase implements 
                 metrics.inboundGossip().update(request.getSerializedSize());
                 metrics.gossipReply().update(response.getSerializedSize());
             }
-        }, system, services);
+        });
     }
 
     @Override
     public void update(Push request, StreamObserver<Null> responseObserver) {
-        evaluate(responseObserver, request.getContext(), s -> {
-            s.update(request, getFrom());
+        routing.evaluate(responseObserver, request.getContext(), s -> {
+            s.update(request, identity.getFrom());
             responseObserver.onNext(Null.getDefaultInstance());
             responseObserver.onCompleted();
             if (metrics != null) {
@@ -54,26 +50,20 @@ public class MessagingServerCommunications extends MessagingImplBase implements 
                 metrics.inboundBandwidth().mark(request.getSerializedSize());
                 metrics.inboundUpdate().update(request.getSerializedSize());
             }
-        }, system, services);
+        });
     }
 
-    private Service                system;
-    private ClientIdentity         identity;
-    private Map<HashKey, Service>  services = new ConcurrentHashMap<>();
-    private final MessagingMetrics metrics;
+    private ClientIdentity                 identity;
+    private final MessagingMetrics         metrics;
+    private final RoutableService<Service> routing;
 
-    public MessagingServerCommunications(Service system, ClientIdentity identity, MessagingMetrics metrics) {
+    public MessagingServerCommunications(ClientIdentity identity, MessagingMetrics metrics,
+            RoutableService<Service> routing) {
         this.metrics = metrics;
-        this.system = system;
         this.identity = identity;
+        this.routing = routing;
     }
 
-    @Override
-    public void register(HashKey id, Service service) {
-        services.computeIfAbsent(id, m -> service);
-    }
-
-    @Override
     public ClientIdentity getClientIdentity() {
         return identity;
     }

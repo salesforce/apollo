@@ -45,8 +45,8 @@ import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesfoce.apollo.consortium.proto.User;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.proto.ID;
-import com.salesforce.apollo.comm.CommonCommunications;
-import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
 import com.salesforce.apollo.consortium.comms.ConsortiumServerCommunications;
 import com.salesforce.apollo.membership.Context;
@@ -178,42 +178,44 @@ public class Consortium {
         return null;
     }
 
-    private volatile CommonCommunications<ConsortiumClientCommunications>                 comm;
-    private final Communications                                                          communications;
-    private final Context<Member>                                                         context;
-    private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications>> createClientComms;
-    private volatile CurrentBlock                                                         current;
-    private volatile Context<Collaborator>                                                currentView;
-    private final Function<List<Transaction>, List<ByteBuffer>>                           executor;
-    private final Duration                                                                gossipDuration;
-    private final AtomicInteger                                                           lastSequenceNumber = new AtomicInteger(
+    private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
+    private final Router                                                                           communications;
+    private final Context<Member>                                                                  context;
+    private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
+    private volatile CurrentBlock                                                                  current;
+    private volatile Context<Collaborator>                                                         currentView;
+    private final Function<List<Transaction>, List<ByteBuffer>>                                    executor;
+    private final Duration                                                                         gossipDuration;
+    private final AtomicInteger                                                                    lastSequenceNumber = new AtomicInteger(
             -1);
-    private volatile Member                                                               leader;
-    private final Parameters.Builder                                                      mConfig;
-    private final Member                                                                  member;
-    private volatile Messenger                                                            messenger;
-    private final ScheduledExecutorService                                                scheduler;
-    private final Supplier<Signature>                                                     signature;
-    private volatile State                                                                state              = new Client();
-    private final Map<HashKey, SubmittedTransaction>                                      submitted          = new ConcurrentHashMap<>();
-    private volatile int                                                                  toleranceLevel;
-    private volatile TotalOrder                                                           totalOrder;
+    private volatile Member                                                                        leader;
+    private final Parameters                                                                       msgParameters;
+    private final Member                                                                           member;
+    private volatile Messenger                                                                     messenger;
+    private final ScheduledExecutorService                                                         scheduler;
+    private final Supplier<Signature>                                                              signature;
+    private volatile State                                                                         state              = new Client();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted          = new ConcurrentHashMap<>();
+    private volatile int                                                                           toleranceLevel;
+    private volatile TotalOrder                                                                    totalOrder;
 
     @SuppressWarnings("unchecked")
     public Consortium(Function<List<Transaction>, List<ByteBuffer>> executor, Member member,
-            Supplier<Signature> signature, Context<? extends Member> ctx, Parameters.Builder mConfig,
-            Communications communications, Duration gossipDuration, ScheduledExecutorService scheduler) {
+            Supplier<Signature> signature, Context<? extends Member> ctx, Parameters msgParameters,
+            Router communications, Duration gossipDuration, ScheduledExecutorService scheduler) {
         this.executor = executor;
         this.member = member;
         this.context = (Context<Member>) ctx;
-        this.mConfig = mConfig.clone();
+        this.msgParameters = msgParameters;
         this.communications = communications;
         this.signature = signature;
         this.gossipDuration = gossipDuration;
         this.scheduler = scheduler;
-        this.createClientComms = k -> communications.create(member, ConsortiumClientCommunications.getCreate(null),
-                                                            new ConsortiumServerCommunications(new Service(),
-                                                                    communications.getClientIdentityProvider(), null));
+        this.createClientComms = k -> communications.create(member, k, new Service(),
+                                                            r -> new ConsortiumServerCommunications(
+                                                                    communications.getClientIdentityProvider(), null,
+                                                                    r),
+                                                            ConsortiumClientCommunications.getCreate(null));
         context.register(membershipListener());
     }
 
@@ -267,7 +269,7 @@ public class Consortium {
         }
 
         byte[] nonce = new byte[32];
-        mConfig.getEntropy().nextBytes(nonce);
+        msgParameters.entropy.nextBytes(nonce);
         ByteBuffer signed = ByteBuffer.allocate(nonce.length + HashKey.BYTE_SIZE
                 + transactions.stream().mapToInt(e -> e.length).sum());
 
@@ -304,7 +306,10 @@ public class Consortium {
                 log.warn("Cannot get link for {}", c.getId());
                 return null;
             }
-            return link.clientSubmit(SubmitTransaction.newBuilder().setTransaction(transaction).build());
+            return link.clientSubmit(SubmitTransaction.newBuilder()
+                                                      .setContext(current.getId().toByteString())
+                                                      .setTransaction(transaction)
+                                                      .build());
         }).filter(r -> r != null).limit(toleranceLevel).collect(Collectors.toList());
         if (results.size() < toleranceLevel) {
             throw new TimeoutException("Cannot submit transaction " + hashKey);
@@ -488,7 +493,7 @@ public class Consortium {
             }
         });
 
-        return viewChange(viewId, newView, body.getToleranceLevel());
+        return viewChange(newView, body.getToleranceLevel());
     }
 
     private void resume() {
@@ -507,23 +512,23 @@ public class Consortium {
         return true;
     }
 
-    private boolean viewChange(HashKey viewId, Context<Collaborator> newView, int t) {
+    private boolean viewChange(Context<Collaborator> newView, int t) {
         pause();
 
         currentView = newView;
-        messenger = new Messenger(member, signature, newView, communications, mConfig.setId(viewId).build());
+        messenger = new Messenger(member, signature, newView, communications, msgParameters);
         totalOrder = new TotalOrder((m, mId) -> process(m, mId), newView);
         messenger.register(0, messages -> {
             totalOrder.process(messages);
         });
         lastSequenceNumber.set(-1);
         toleranceLevel = t;
-//        comm = createClientComms.apply(viewId);
+        comm = createClientComms.apply(newView.getId());
 
         resume();
 
         // Live successor of the view ID on ring zero is leader
-        leader = newView.ring(0).successor(viewId);
+        leader = newView.ring(0).successor(newView.getId());
 
         if (member.equals(leader)) {
             log.info("reconfiguring, becoming leader: {}", member);

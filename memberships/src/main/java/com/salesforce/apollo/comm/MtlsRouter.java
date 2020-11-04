@@ -8,24 +8,27 @@ package com.salesforce.apollo.comm;
 
 import java.io.IOException;
 
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.comm.grpc.MtlsClient;
 import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
-import io.grpc.BindableService;
 import io.grpc.ManagedChannel;
+import io.grpc.util.MutableHandlerRegistry;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class MtlsCommunications implements Communications {
+public class MtlsRouter extends Router {
 
-    public class MtlsServerConnectionFactory implements ServerConnectionFactory {
+    public static class MtlsServerConnectionFactory implements ServerConnectionFactory {
+        private final EndpointProvider epProvider;
+
+        public MtlsServerConnectionFactory(EndpointProvider epProvider) {
+            this.epProvider = epProvider;
+        }
 
         @Override
         public ManagedChannel connectTo(Member to, Member from) {
@@ -34,27 +37,18 @@ public class MtlsCommunications implements Communications {
         }
     }
 
-    private final EndpointProvider      epProvider;
-    private final ServerConnectionCache cache;
-    private final MtlsServer            server;
+    private final EndpointProvider epProvider;
+    private final MtlsServer       server;
 
-    public MtlsCommunications(ServerConnectionCacheBuilder builder, EndpointProvider ep) {
+    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep) {
+        this(builder, ep, new MutableHandlerRegistry());
+    }
+
+    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, MutableHandlerRegistry registry) {
+        super(builder.setFactory(new MtlsServerConnectionFactory(ep)).build(), registry);
         epProvider = ep;
         this.server = new MtlsServer(epProvider.getBindAddress(), epProvider.getClientAuth(), epProvider.getAlias(),
-                epProvider.getCertificate(), epProvider.getPrivateKey(), epProvider.getValiator());
-        this.cache = builder.setFactory(new MtlsServerConnectionFactory()).build();
-    }
-
-    @Override
-    public void close() {
-        server.stop();
-    }
-
-    @Override
-    public <T> CommonCommunications<T> create(Member member, CreateClientCommunications<T> createFunction,
-                                              BindableService service) {
-        server.bind(service);
-        return new CommonCommunications<T>(cache, createFunction);
+                epProvider.getCertificate(), epProvider.getPrivateKey(), epProvider.getValiator(), registry);
     }
 
     @Override
@@ -71,4 +65,9 @@ public class MtlsCommunications implements Communications {
         }
     }
 
+    @Override
+    public void close() {
+        server.stop();
+        super.close();
+    }
 }

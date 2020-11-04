@@ -33,11 +33,11 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.EndpointProvider;
-import com.salesforce.apollo.comm.MtlsCommunications;
+import com.salesforce.apollo.comm.MtlsRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
+import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
@@ -56,7 +56,7 @@ public class MtlsTest {
     private static Map<HashKey, CertificateWithPrivateKey> certs;
     private static final FirefliesParameters               parameters     = new FirefliesParameters(
             ca.getX509Certificate());
-    private List<Communications>                           communications = new ArrayList<>();
+    private List<Router>                                   communications = new ArrayList<>();
     private List<View>                                     views;
 
     @BeforeAll
@@ -103,15 +103,15 @@ public class MtlsTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(2);
+        Builder builder = ServerConnectionCache.newBuilder().setTarget(2);
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry : registry);
             EndpointProvider ep = getStandardEpProvider(node);
             builder.setMetrics(metrics);
-            MtlsCommunications comms = new MtlsCommunications(builder, ep);
+            MtlsRouter comms = new MtlsRouter(builder, ep);
             communications.add(comms);
-            return new View(node, comms, metrics);
+            return new View(HashKey.ORIGIN, node, comms, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();

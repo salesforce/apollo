@@ -25,12 +25,13 @@ import java.util.Enumeration;
 import java.util.List;
 
 import com.salesforce.apollo.bootstrap.client.Bootstrap;
-import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 /**
@@ -188,9 +189,9 @@ public interface IdentitySource {
         }
 
         @Override
-        public View createView(Communications communications, FireflyMetrics metrics) {
+        public View createView(HashKey context, Router communications, FireflyMetrics metrics) {
             FirefliesParameters parameters = new FirefliesParameters(getCA());
-            return new View(new Node(identity(), parameters), communications, metrics);
+            return new View(context, new Node(identity(), parameters), communications, metrics);
         }
     }
 
@@ -198,10 +199,10 @@ public interface IdentitySource {
     public static final String DEFAULT_IDENTITY_ALIAS = "identity";
     public static final String SEED_PREFIX            = "seed.";
 
-    default <T extends Node> View createView(Communications communications, FireflyMetrics metrics) {
+    default <T extends Node> View createView(HashKey context, Router communications, FireflyMetrics metrics) {
         FirefliesParameters parameters = new FirefliesParameters(getCA());
 
-        return new View(new Node(identity(), parameters), communications, metrics);
+        return new View(context, new Node(identity(), parameters), communications, metrics);
     }
 
     X509Certificate getCA();

@@ -36,8 +36,8 @@ import org.junit.jupiter.api.BeforeEach;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
-import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
@@ -66,12 +66,12 @@ public class DagTest {
                                                            cert.getPrivateKey())));
     }
 
-    private List<Node>                 members;
-    private ScheduledExecutorService   scheduler;
-    private List<X509Certificate>      seeds;
-    private List<View>                 views;
-    private Random                     entropy;
-    private final List<Communications> comms = new ArrayList<>();
+    private List<Node>               members;
+    private ScheduledExecutorService scheduler;
+    private List<X509Certificate>    seeds;
+    private List<View>               views;
+    private Random                   entropy;
+    private final List<Router>       comms = new ArrayList<>();
 
     @AfterEach
     public void after() {
@@ -100,9 +100,9 @@ public class DagTest {
         scheduler = Executors.newScheduledThreadPool(100);
 
         views = members.stream().map(node -> {
-            Communications comm = new LocalCommSimm(ServerConnectionCache.newBuilder(), node.getId());
+            Router comm = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder());
             comms.add(comm);
-            View view = new View(node, comm, null);
+            View view = new View(HashKey.ORIGIN, node, comm, null);
             return view;
         }).collect(Collectors.toList());
     }
@@ -126,7 +126,7 @@ public class DagTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + testViews.size() + " members");
 
-        Iterator<Communications> communicatons = comms.iterator();
+        Iterator<Router> communicatons = comms.iterator();
 
         List<Ghost> ghosties = testViews.stream()
                                         .map(view -> new Ghost(new GhostParameters(), communicatons.next(), view,

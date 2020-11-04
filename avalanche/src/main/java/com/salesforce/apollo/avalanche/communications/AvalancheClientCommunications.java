@@ -57,8 +57,8 @@ public class AvalancheClientCommunications implements Avalanche {
     }
 
     @Override
-    public QueryResult query(List<ByteBuffer> transactions, Collection<HashKey> wanted) {
-        Builder builder = Query.newBuilder();
+    public QueryResult query(HashKey context, List<ByteBuffer> transactions, Collection<HashKey> wanted) {
+        Builder builder = Query.newBuilder().setContext(context.toID());
         transactions.stream()
                     .filter(e -> e.hasRemaining())
                     .forEach(e -> builder.addTransactions(ByteString.copyFrom(e.array())));
@@ -83,8 +83,8 @@ public class AvalancheClientCommunications implements Avalanche {
     }
 
     @Override
-    public List<byte[]> requestDAG(Collection<HashKey> want) {
-        com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder();
+    public List<byte[]> requestDAG(HashKey context, Collection<HashKey> want) {
+        com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder().setContext(context.toID());
         want.forEach(e -> builder.addEntries(e.toID()));
         try {
             DagNodes request = builder.build();

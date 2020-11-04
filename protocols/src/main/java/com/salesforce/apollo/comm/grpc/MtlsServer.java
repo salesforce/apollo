@@ -317,8 +317,8 @@ public class MtlsServer implements ClientIdentity {
     private final Context.Key<SSLSession> sslSessionContext = Context.key("SSLSession");
 
     public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
-            PrivateKey privateKey, Validator validator) {
-        registry = new MutableHandlerRegistry();
+            PrivateKey privateKey, Validator validator, MutableHandlerRegistry registry) {
+        this.registry = registry;
 
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
                                                        .sslContext(forServer(clientAuth, alias, certificate, privateKey,

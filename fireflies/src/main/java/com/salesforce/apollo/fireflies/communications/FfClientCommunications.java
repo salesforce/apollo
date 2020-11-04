@@ -22,6 +22,7 @@ import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.protocols.Fireflies;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -52,13 +53,18 @@ public class FfClientCommunications implements Fireflies {
     }
 
     @Override
-    public Gossip gossip(Signed note, int ring, Digests digests) {
+    public Gossip gossip(HashKey context, Signed note, int ring, Digests digests) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundGossipTimer().time();
         }
         try {
-            SayWhat sw = SayWhat.newBuilder().setNote(note).setRing(ring).setGossip(digests).build();
+            SayWhat sw = SayWhat.newBuilder()
+                                .setContext(context.toID())
+                                .setNote(note)
+                                .setRing(ring)
+                                .setGossip(digests)
+                                .build();
             Gossip result = client.gossip(sw);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(sw.getSerializedSize());
@@ -78,13 +84,13 @@ public class FfClientCommunications implements Fireflies {
     }
 
     @Override
-    public int ping(int ping) {
+    public int ping(HashKey context, int ping) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundPingTimer().time();
         }
         try {
-            client.ping(Null.getDefaultInstance());
+            client.ping(Null.newBuilder().setContext(context.toID()).build());
             if (metrics != null) {
                 metrics.outboundPingRate().mark();
             }
@@ -112,13 +118,13 @@ public class FfClientCommunications implements Fireflies {
     }
 
     @Override
-    public void update(int ring, Update update) {
+    public void update(HashKey context, int ring, Update update) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundUpdateTimer().time();
         }
         try {
-            State state = State.newBuilder().setRing(ring).setUpdate(update).build();
+            State state = State.newBuilder().setContext(context.toID()).setRing(ring).setUpdate(update).build();
             client.update(state);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(state.getSerializedSize());

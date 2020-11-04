@@ -29,7 +29,7 @@ import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.bootstrap.BootstrapCA;
 import com.salesforce.apollo.bootstrap.BootstrapConfiguration;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.protocols.Utils; 
 
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit5.DropwizardAppExtension;
@@ -52,7 +52,7 @@ public class BoostrapTest {
         List<Apollo> oracles = new ArrayList<>();
         URL endpoint = new URL(String.format("http://localhost:%d/api/cnc/mint", EXT.getLocalPort()));
 
-        for (int i = 0; i <= PregenPopulation.getCardinality(); i++) {
+        for (int i = 0; i <= 10; i++) {
             ApolloConfiguration config = new ApolloConfiguration();
             config.avalanche.core.alpha = 0.6;
             config.avalanche.core.k = 6;

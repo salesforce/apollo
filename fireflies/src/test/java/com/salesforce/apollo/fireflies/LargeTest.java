@@ -31,8 +31,8 @@ import org.junit.jupiter.api.BeforeAll;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
@@ -65,7 +65,7 @@ public class LargeTest {
 
     private List<Node>            members;
     private List<View>            views;
-    private List<Communications>  communications = new ArrayList<>();
+    private List<Router>          communications = new ArrayList<>();
     private List<X509Certificate> seeds;
     private MetricRegistry        registry;
     private MetricRegistry        node0Registry;
@@ -160,10 +160,10 @@ public class LargeTest {
         views = members.stream().map(node -> {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
                     frist.getAndSet(false) ? node0Registry : registry);
-            Communications comms = new LocalCommSimm(
-                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl), node.getId());
+            LocalRouter comms = new LocalRouter(node.getId(),
+                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl));
             communications.add(comms);
-            return new View(node, comms, fireflyMetricsImpl);
+            return new View(HashKey.ORIGIN, node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

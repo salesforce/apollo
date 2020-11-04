@@ -29,8 +29,8 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.Interval;
-import com.salesforce.apollo.comm.CommonCommunications;
-import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
@@ -184,22 +184,21 @@ public class Ghost {
     public static final int     JOIN_MESSAGE_CHANNEL = 3;
     private static final Logger log                  = LoggerFactory.getLogger(Ghost.class);
 
-    private final CommonCommunications<GhostClientCommunications> communications;
-    private final AtomicBoolean                                   joined  = new AtomicBoolean(false);
-    private final ConcurrentSkipListSet<Member>                   joining = new ConcurrentSkipListSet<>();
-    private final GhostParameters                                 parameters;
-    private final int                                             rings;
-    private final Service                                         service = new Service();
-    private final Store                                           store;
-    private final View                                            view;
+    private final CommonCommunications<GhostClientCommunications, Service> communications;
+    private final AtomicBoolean                                            joined  = new AtomicBoolean(false);
+    private final ConcurrentSkipListSet<Member>                            joining = new ConcurrentSkipListSet<>();
+    private final GhostParameters                                          parameters;
+    private final int                                                      rings;
+    private final Service                                                  service = new Service();
+    private final Store                                                    store;
+    private final View                                                     view;
 
-    public Ghost(GhostParameters p, Communications c, View v, Store s) {
+    public Ghost(GhostParameters p, Router c, View v, Store s) {
         parameters = p;
         view = v;
         store = s;
-
-        communications = c.create(getNode(), getCreate(),
-                                  new GhostServerCommunications(service, c.getClientIdentityProvider()));
+        communications = c.create(v.getNode(), v.getContext().getId(), service,
+                                  r -> new GhostServerCommunications(c.getClientIdentityProvider(), r), getCreate());
 
         rings = view.getNode().getParameters().toleranceLevel + 1;
     }

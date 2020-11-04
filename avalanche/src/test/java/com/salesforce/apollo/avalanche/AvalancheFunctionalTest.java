@@ -41,7 +41,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
-import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.Node;
@@ -72,15 +72,15 @@ abstract public class AvalancheFunctionalTest {
                          .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
-    protected File                       baseDir;
-    protected MetricRegistry             registry;
-    protected Random                     entropy;
-    protected List<Node>                 members;
-    protected ScheduledExecutorService   scheduler;
-    protected List<X509Certificate>      seeds;
-    protected List<View>                 views;
-    private Map<HashKey, Communications> communications = new HashMap<>();
-    protected MetricRegistry             node0registry;
+    protected File                     baseDir;
+    protected MetricRegistry           registry;
+    protected Random                   entropy;
+    protected List<Node>               members;
+    protected ScheduledExecutorService scheduler;
+    protected List<X509Certificate>    seeds;
+    protected List<View>               views;
+    private Map<HashKey, Router>       communications = new HashMap<>();
+    protected MetricRegistry           node0registry;
 
     @AfterEach
     public void after() {
@@ -125,11 +125,11 @@ abstract public class AvalancheFunctionalTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
-            Communications comms = getCommunications(node, frist.get());
+            Router comms = getCommunications(node, frist.get());
             communications.put(node.getId(), comms);
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.get() ? node0registry : registry);
             frist.set(false);
-            return new View(node, comms, metrics);
+            return new View(HashKey.ORIGIN, node, comms, metrics);
         }).collect(Collectors.toList());
     }
 
@@ -183,8 +183,8 @@ abstract public class AvalancheFunctionalTest {
                         .map(view -> view.getLive().size() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
-        }), "Could not stabilize view membership)"); 
-        
+        }), "Could not stabilize view membership)");
+
         processors.forEach(p -> p.getAvalanche().start(scheduler));
 
         // generate the genesis transaction
@@ -276,7 +276,7 @@ abstract public class AvalancheFunctionalTest {
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
     }
 
-    abstract protected Communications getCommunications(Node node, boolean first);
+    abstract protected Router getCommunications(Node node, boolean first);
 
     private void seed(List<TimedProcessor> nodes) {
         long then = System.currentTimeMillis();
