@@ -85,6 +85,13 @@
 			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>apollo</artifactId>
+				<version>${project.version}</version>
+				<classifier>tests</classifier>
+				<type>test-jar</type>
+			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>simple-ca</artifactId>
 				<version>${project.version}</version>
 			</dependency>

@@ -38,7 +38,14 @@
 		</dependency>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>test-population</artifactId>
+			<artifactId>apollo</artifactId>
+			<scope>test</scope>
+			<classifier>tests</classifier>
+			<type>test-jar</type>
+		</dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>simple-ca</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

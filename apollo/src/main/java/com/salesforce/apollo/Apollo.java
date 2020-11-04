@@ -108,6 +108,7 @@ public class Apollo {
         if (!running.compareAndSet(false, true)) {
             return;
         }
+        communications.start();
         view.getService().start(configuration.gossipInterval, seeds, scheduler);
         avalanche.start(scheduler);
     }
