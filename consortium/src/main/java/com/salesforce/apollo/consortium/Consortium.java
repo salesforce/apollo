@@ -501,10 +501,8 @@ public class Consortium {
             return new Collaborator(m, v.getConsensusKey().toByteArray());
         }).filter(m -> m != null).forEach(m -> {
             if (context.isActive(m)) {
-                log.trace("Collaborator {} is active", m);
                 newView.activate(m);
             } else {
-                log.trace("Collaborator {} is offline", m);
                 newView.offline(m);
             }
         });
@@ -541,7 +539,6 @@ public class Consortium {
         pause();
 
         currentView = newView;
-        log.trace("New view: {}", newView);
         toleranceLevel = t;
         comm = createClientComms.apply(newView.getId());
 
@@ -550,7 +547,6 @@ public class Consortium {
         leader = newLeader;
 
         if (newView.getMember(member.getId()) != null) { // cohort member
-            log.info("Joining group {}", newView);
             messenger = new Messenger(member, signature, newView, communications, msgParameters);
             to = new TotalOrder((m, k) -> process(m, k), newView);
             messenger.register(0, messages -> {

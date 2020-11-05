@@ -211,7 +211,9 @@ public class View {
                     log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing);
                     return;
                 } finally {
-                    link.release();
+                    if (link != null) {
+                        link.release();
+                    }
                 }
                 if (!success) {
                     log.trace("Partial redirect round of gossip with {}, ring {} not redirecting further",

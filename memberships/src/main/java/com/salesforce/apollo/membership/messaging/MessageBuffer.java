@@ -161,7 +161,7 @@ public class MessageBuffer {
     }
 
     private void compact() {
-        log.error("Compacting buffer");
+        log.trace("Compacting buffer");
         removeOutOfDate();
         purgeTheAged();
     }
@@ -205,7 +205,7 @@ public class MessageBuffer {
                 // first time, update
                 Long current = maxTimes.compute(k, (mid, max) -> Math.max(max == null ? 0 : max, update.getTime()));
                 if (current - update.getTime() > tooOld) {
-                    // too old, discard
+                    log.trace("discarded: {}:{}", hash, update.getSequenceNumber());
                     return null;
                 }
                 updated.set(true);
