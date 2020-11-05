@@ -11,7 +11,6 @@ import java.security.Signature;
 import java.security.SignatureException;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,20 +37,13 @@ import com.salesforce.apollo.protocols.HashKey;
 public class MessageBuffer {
     private final static Logger log = LoggerFactory.getLogger(MessageBuffer.class);
 
-    private final AtomicInteger lastSequenceNumber = new AtomicInteger();
-
-    public static ByteBuffer headerBuffer(long ts, int sequenceNumber) {
-        ByteBuffer header = ByteBuffer.allocate(8 + 4);
-        header.putLong(ts);
-        header.putInt(sequenceNumber);
-        return header;
-    }
-
-    public static byte[] sign(Member from, Signature signature, ByteBuffer header, byte[] bytes) {
+    public static byte[] sign(Member from, Signature signature, int sequenceNumber, byte[] bytes) {
+        ByteBuffer seqNum = ByteBuffer.allocate(4);
+        seqNum.putInt(sequenceNumber);
         byte[] s;
         try {
             signature.update(from.getId().bytes());
-            signature.update(header.array());
+            signature.update(seqNum.array());
             signature.update(bytes);
             s = signature.sign();
         } catch (SignatureException e) {
@@ -61,11 +53,11 @@ public class MessageBuffer {
     }
 
     public static boolean validate(Message message, Signature signature) {
-        ByteBuffer header = headerBuffer(message.getTime(), message.getSequenceNumber());
-
+        ByteBuffer seqNum = ByteBuffer.allocate(4);
+        seqNum.putInt(message.getSequenceNumber());
         try {
             signature.update(new HashKey(message.getSource()).bytes());
-            signature.update(header.array());
+            signature.update(seqNum.array());
             signature.update(message.getContent().toByteArray());
             return signature.verify(message.getSignature().toByteArray());
         } catch (SignatureException e) {
@@ -74,11 +66,20 @@ public class MessageBuffer {
         }
     }
 
-    private final int                   bufferSize;
-    private final Map<HashKey, Long>    maxTimes = new ConcurrentHashMap<>();
-    private final Map<HashKey, Message> state    = new ConcurrentHashMap<>();
+    private static HashKey idOf(byte[] source, int sequenceNumber, byte[] content) {
+        ByteBuffer seqNum = ByteBuffer.allocate(4);
+        seqNum.putInt(sequenceNumber);
+        return new HashKey(Conversion.hashOf(source, seqNum.array(), content));
+    }
 
-    private final int tooOld;
+    private static HashKey idOf(Message message) {
+        return idOf(message.getSource().toByteArray(), message.getSequenceNumber(), message.getContent().toByteArray());
+    }
+
+    private final int                   bufferSize;
+    private final AtomicInteger         lastSequenceNumber = new AtomicInteger();
+    private final Map<HashKey, Message> state              = new ConcurrentHashMap<>();
+    private int                         tooOld;
 
     public MessageBuffer(int bufferSize, int tooOld) {
         this.bufferSize = bufferSize;
@@ -86,14 +87,14 @@ public class MessageBuffer {
     }
 
     public void clear() {
-        maxTimes.clear();
         state.clear();
     }
 
     public void gc() {
-        if (state.size() > bufferSize) {
-            compact();
-        }
+        log.trace("Compacting buffer");
+        purgeTheAged();
+        removeOutOfDate();
+        log.trace("Buffer free after compact: " + (bufferSize - state.size()));
     }
 
     public BloomFilter getBff(int seed, double p) {
@@ -111,9 +112,7 @@ public class MessageBuffer {
      */
     public List<Message> merge(List<Message> updates, Predicate<Message> validator) {
         return updates.stream().filter(validator).filter(message -> {
-            ByteBuffer header = headerBuffer(message.getTime(), message.getSequenceNumber());
-            HashKey hash = new HashKey(Conversion.hashOf(message.getSource().toByteArray(), header.array(),
-                                                         message.getContent().toByteArray()));
+            HashKey hash = idOf(message);
             return merge(hash, message);
         }).collect(Collectors.toList());
     }
@@ -134,80 +133,47 @@ public class MessageBuffer {
     /**
      * Insert a new message into the buffer from the node
      * 
-     * @param ts
      * @param bytes
      * @param from
      * @param signature
+     * 
      * @return the inserted Message
      */
-    public Message publish(long ts, byte[] bytes, Member from, Signature signature) {
+    public Message publish(byte[] bytes, Member from, Signature signature) {
         int sequenceNumber = lastSequenceNumber.getAndIncrement();
-        ByteBuffer header = headerBuffer(ts, sequenceNumber);
-        HashKey id = new HashKey(Conversion.hashOf(from.getId().bytes(), header.array(), bytes));
-
-        byte[] s = sign(from, signature, header, bytes);
-        log.trace("broadcasting: {}:{}", id, sequenceNumber);
-        Message update = state.computeIfAbsent(id, k -> createUpdate(ts, bytes, sequenceNumber, from.getId(), s));
+        HashKey id = idOf(from.getId().bytes(), sequenceNumber, bytes);
+        Message update = state.computeIfAbsent(id, k -> createUpdate(bytes, sequenceNumber, from.getId(),
+                                                                     sign(from, signature, sequenceNumber, bytes)));
         gc();
+        log.trace("broadcasting: {}:{}", id, sequenceNumber);
         return update;
     }
 
     public void updatesFor(BloomFilter bff, com.salesfoce.apollo.proto.Push.Builder builder) {
         state.entrySet()
              .stream()
+             .peek(entry -> entry.setValue(Message.newBuilder(entry.getValue())
+                                                  .setAge(entry.getValue().getAge() + 1)
+                                                  .build()))
              .filter(entry -> !bff.contains(entry.getKey()))
              .map(entry -> entry.getValue())
              .forEach(e -> builder.addUpdates(e));
     }
 
-    private void compact() {
-        log.trace("Compacting buffer");
-        removeOutOfDate();
-        purgeTheAged();
-    }
-
-    private Message createUpdate(long ts, byte[] content, int sequenceNumber, HashKey from, byte[] signature) {
+    private Message createUpdate(byte[] content, int sequenceNumber, HashKey from, byte[] signature) {
         return Message.newBuilder()
                       .setSource(from.toID())
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
-                      .setTime(ts)
                       .setContent(ByteString.copyFrom(content))
                       .setSignature(ByteString.copyFrom(signature))
                       .build();
-    }
-
-    private void purgeTheAged() {
-        Entry<HashKey, Message> max;
-        while (state.size() > bufferSize) {
-            max = null;
-            for (Entry<HashKey, Message> entry : state.entrySet()) {
-                Message u = entry.getValue();
-                if (max == null) {
-                    max = entry;
-                } else if (u.getAge() > max.getValue().getAge() && u.getTime() >= max.getValue().getTime()) {
-                    max = entry;
-                }
-            }
-            if (max == null) {
-                break;
-            }
-            HashKey removed = max.getKey();
-            state.remove(removed);
-            log.trace("removing: {}", removed);
-        }
     }
 
     private boolean merge(HashKey hash, Message update) {
         AtomicBoolean updated = new AtomicBoolean(false);
         state.compute(hash, (k, v) -> {
             if (v == null) {
-                // first time, update
-                Long current = maxTimes.compute(k, (mid, max) -> Math.max(max == null ? 0 : max, update.getTime()));
-                if (current - update.getTime() > tooOld) {
-                    log.trace("discarded: {}:{}", hash, update.getSequenceNumber());
-                    return null;
-                }
                 updated.set(true);
                 log.trace("added: {}:{}", hash, update.getSequenceNumber());
                 return update;
@@ -223,13 +189,25 @@ public class MessageBuffer {
         return updated.get();
     }
 
+    private void purgeTheAged() {
+        state.entrySet()
+             .stream()
+             .filter(e -> e.getValue().getAge() > tooOld)
+             .peek(e -> log.trace("removing aged: {}:{}", e.getKey(), e.getValue().getAge()))
+             .forEach(e -> state.remove(e.getKey()));
+    }
+
     private void removeOutOfDate() {
-        state.entrySet().forEach(entry -> {
-            Long max = maxTimes.get(new HashKey(entry.getValue().getSource()));
-            if (max != null && (max - entry.getValue().getTime()) > tooOld) {
-                state.remove(entry.getKey());
-                log.trace("removing: {}", entry.getKey());
-            }
-        });
+        if (state.size() <= bufferSize) {
+            return;
+        }
+        int count = state.size() - bufferSize;
+        log.trace("removing overflow count: {}", count);
+        state.entrySet()
+             .stream()
+             .sorted((a, b) -> Integer.compare(b.getValue().getAge(), a.getValue().getAge()))
+             .limit(count)
+             .peek(e -> log.trace("removing overflow: {}:{}", e.getKey(), e.getValue().getAge()))
+             .forEach(e -> state.remove(e.getKey()));
     }
 }

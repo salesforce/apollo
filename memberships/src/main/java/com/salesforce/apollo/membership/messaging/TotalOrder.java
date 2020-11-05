@@ -50,7 +50,12 @@ public class TotalOrder {
 
         @Override
         public void enqueue(Msg msg) {
-            queue.add(msg);
+            final int current = lastSequenceNumber;
+            if (msg.sequenceNumber > current) {
+                queue.add(msg);
+            } else {
+                log.trace("discarding previously seen: {}", msg.sequenceNumber);
+            }
         }
 
         @Override
@@ -61,20 +66,21 @@ public class TotalOrder {
         @Override
         public Msg next() {
             Msg message = queue.peek();
-            if (message == null) {
-                return null;
-            }
             final int current = lastSequenceNumber;
-            if (message.sequenceNumber == current + 1) {
-                message = queue.poll();
-                assert message.sequenceNumber == current + 1 : "Kimpossible!";
-                lastSequenceNumber = message.sequenceNumber;
-                return message;
-            }
-            if (message.sequenceNumber <= current) {
-                log.error("Protocol error!  Head of channel of {} is <= than the current sequence # {}", id, current);
-            } else {
-                log.trace("Next: {} head: {}", current, message.sequenceNumber);
+            while (message != null) {
+                if (message.sequenceNumber == current + 1) {
+                    message = queue.poll();
+                    assert message.sequenceNumber == current + 1 : "Kimpossible!";
+                    lastSequenceNumber = message.sequenceNumber;
+                    return message;
+                } else if (message.sequenceNumber <= current) {
+                    log.trace("discarding previously seen: {} <= {}", message.sequenceNumber, current);
+                    queue.poll();
+                    message = queue.peek();
+                } else {
+                    log.trace("Next: {} head: {}", current, message.sequenceNumber);
+                    return null;
+                }
             }
             return null;
         }

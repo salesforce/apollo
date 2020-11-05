@@ -31,10 +31,9 @@ message Message {
     ID source = 1;
     int32 sequenceNumber = 2;
     int32 age = 3;
-    int64 time = 4;
-    int32 channel = 5;
-    bytes content = 6;
-    bytes signature = 7;
+    int32 channel = 4;
+    bytes content = 5;
+    bytes signature = 6;
 }
 
 message Messages {

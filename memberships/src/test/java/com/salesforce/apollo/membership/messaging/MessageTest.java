@@ -60,7 +60,6 @@ public class MessageTest {
     class Receiver implements MessageChannelHandler {
         final Set<Member>       counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger     current;
-        final AtomicInteger     dups    = new AtomicInteger(0);
         volatile CountDownLatch round;
 
         Receiver(int cardinality, AtomicInteger current) {
@@ -84,9 +83,6 @@ public class MessageTest {
                         if (counted.size() == certs.size() - 1) {
                             round.countDown();
                         }
-                    } else {
-                        dups.incrementAndGet();
-                        System.out.print("!");
                     }
                 }
             });
@@ -97,7 +93,6 @@ public class MessageTest {
         }
 
         void reset() {
-            dups.set(0);
             counted.clear();
         }
 
@@ -106,7 +101,10 @@ public class MessageTest {
     public static final String                             DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
     private static Map<HashKey, CertificateWithPrivateKey> certs;
 
-    private static final Parameters parameters = Parameters.newBuilder().setEntropy(new SecureRandom()).build();
+    private static final Parameters parameters = Parameters.newBuilder()
+                                                           .setBufferSize(100)
+                                                           .setEntropy(new SecureRandom())
+                                                           .build();
 
     @BeforeAll
     public static void beforeClass() {
@@ -184,9 +182,6 @@ public class MessageTest {
             round = new CountDownLatch(messengers.size());
             current.incrementAndGet();
             for (Receiver receiver : receivers.values()) {
-                if (receiver.dups.get() > 0) {
-                    System.out.println("Dup recieved: " + receiver.dups.get());
-                }
                 receiver.reset();
             }
         }
@@ -200,7 +195,7 @@ public class MessageTest {
 
         MessageBuffer buff1 = new MessageBuffer(10, 10);
         byte[] bytes1 = new byte[] { 1, 2, 3, 4, 5 };
-        Message message = buff1.publish(1, bytes1, from, forSigning(from));
+        Message message = buff1.publish(bytes1, from, forSigning(from));
 
         MessageBuffer buff2 = new MessageBuffer(10, 10);
         List<Message> merged = buff2.merge(Arrays.asList(message),
@@ -218,11 +213,9 @@ public class MessageTest {
         Signature signature = forSigning(from);
 
         byte[] content = new byte[] { 1, 2, 3, 4 };
-        long ts = 400;
         int channel = 1;
         int sequenceNumber = 0;
         HashKey id = HashKey.ORIGIN;
-        ByteBuffer header = MessageBuffer.headerBuffer(ts, sequenceNumber);
 
         Message message = Message.newBuilder()
                                  .setAge(1)
@@ -230,7 +223,7 @@ public class MessageTest {
                                  .setChannel(channel)
                                  .setContent(ByteString.copyFrom(content))
                                  .setSource(id.toID())
-                                 .setSignature(ByteString.copyFrom(MessageBuffer.sign(from, signature, header,
+                                 .setSignature(ByteString.copyFrom(MessageBuffer.sign(from, signature, sequenceNumber,
                                                                                       content)))
                                  .build();
 

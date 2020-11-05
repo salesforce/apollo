@@ -246,7 +246,7 @@ public class Messenger {
     }
 
     public void publish(byte[] message) {
-        buffer.publish(System.currentTimeMillis(), message, member, signature.get());
+        buffer.publish(message, member, signature.get());
     }
 
     public void register(int channel, MessageChannelHandler listener) {

@@ -78,7 +78,8 @@ public class TotalOrderTest {
 
     private static Map<HashKey, CertificateWithPrivateKey> certs;
     private static final Parameters                        parameters = Parameters.newBuilder()
-                                                                                  .setBufferSize(100000)
+                                                                                  .setFalsePositiveRate(0.1)
+                                                                                  .setBufferSize(500)
                                                                                   .setEntropy(new SecureRandom())
                                                                                   .build();
 
@@ -130,7 +131,7 @@ public class TotalOrderTest {
             return new Messenger(node, () -> forSigning(node), context, comms, parameters);
         }).collect(Collectors.toList());
 
-        messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
+        messengers.forEach(view -> view.start(Duration.ofMillis(50), scheduler));
         List<ToReceiver> receivers = messengers.stream().map(m -> {
             ToReceiver receiver = new ToReceiver(m.getMember().getId(), context);
             m.register(0, messages -> receiver.totalOrder.process(messages));
@@ -140,25 +141,20 @@ public class TotalOrderTest {
 
         int messageCount = 100;
 
-        messengers.parallelStream().forEach(m -> {
-            for (int i = 0; i < messageCount; i++) {
+        for (int i = 0; i < messageCount; i++) {
+            messengers.forEach(m -> {
                 m.publish("Give me food, or give me slack, or kill me".getBytes());
-                try {
-                    Thread.sleep(2);
-                } catch (InterruptedException e) {
-                }
-            }
-        });
+            });
+        }
 
-        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
+        boolean complete = Utils.waitForCondition(30_000, 1_000, () -> {
             return receivers.stream()
                             .map(r -> r.validate(messengers.size(), messageCount))
                             .filter(result -> !result)
                             .count() == 0;
-        }), "did not get all messages : " + receivers.stream()
-                                                     .filter(r -> r.validate(messengers.size(), messageCount))
-                                                     .map(r -> r.id)
-                                                     .collect(Collectors.toList()));
+        });
+        assertTrue(complete, "did not get all messages : "
+                + receivers.stream().filter(r -> !r.validate(messengers.size(), messageCount)).map(r -> r.id).count());
     }
 
     private Signature forSigning(Member member) {
