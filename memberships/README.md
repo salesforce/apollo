@@ -17,3 +17,11 @@ A ring is a circular ordering of members that are mapped to the ring.  Each ring
 ring in increasing BYTE order of the ring HASH of a given member.
 
 Rings provide convienent operations to navigate and route and search around the ring, providing prefix tree functionality.
+
+## Messaging
+
+This module also provides a messaging gossip based on the context, and its ring structure.  This provides a reusable mechanism that can be used with any Context view and provides:
+* Reliable broadcast
+    * Garbage collected reliable broadcast with bounded message buffer based on the most excellent paper [Reducing noise in gossip-based reliable broadcast](https://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.575.3297)
+* Total Order broadcast
+    * Messages broadcast from a member are delivered in order, without drops, to every member.  Messages by members are not ordered with respect to each other.

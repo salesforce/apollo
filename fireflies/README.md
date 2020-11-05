@@ -16,8 +16,6 @@ __Current Functionality__
 * Gossip communications overlay
     * Reliable message flooding
     * Fireflies rings for consistent hashing
-* Reliable broadcast
-    * Garbage collected reliable broadcast with bounded message buffer based on the most excellent paper [Reducing noise in gossip-based reliable broadcast](https://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.575.3297)
 
 __To Do__
 * Handling certificate rotation in nodes
