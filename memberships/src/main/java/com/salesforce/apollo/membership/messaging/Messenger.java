@@ -13,7 +13,6 @@ import java.security.SecureRandom;
 import java.security.Signature;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -246,8 +245,8 @@ public class Messenger {
         });
     }
 
-    public void publish(int channel, byte[] message) {
-        buffer.publish(System.currentTimeMillis(), message, member, signature.get(), channel);
+    public void publish(byte[] message) {
+        buffer.publish(System.currentTimeMillis(), message, member, signature.get());
     }
 
     public void register(int channel, MessageChannelHandler listener) {
@@ -301,6 +300,9 @@ public class Messenger {
     }
 
     private void process(List<Message> updates) {
+        if (updates.size() == 0) {
+            return;
+        }
         List<Msg> newMessages = new ArrayList<>();
         buffer.merge(updates, message -> validate(message)).stream().map(m -> {
             HashKey id = new HashKey(m.getSource());

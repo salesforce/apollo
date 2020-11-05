@@ -20,7 +20,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -53,7 +52,9 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
+import com.salesforce.apollo.membership.messaging.TotalOrder;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -187,18 +188,17 @@ public class Consortium {
     @SuppressWarnings("unused")
     private final Function<List<Transaction>, List<ByteBuffer>>                                    executor;
     private final Duration                                                                         gossipDuration;
-    private final AtomicInteger                                                                    lastSequenceNumber = new AtomicInteger(
-            -1);
+    @SuppressWarnings("unused")
     private volatile Member                                                                        leader;
-    private final Parameters                                                                       msgParameters;
     private final Member                                                                           member;
     private volatile Messenger                                                                     messenger;
+    private final Parameters                                                                       msgParameters;
     private final ScheduledExecutorService                                                         scheduler;
     private final Supplier<Signature>                                                              signature;
-    private volatile State                                                                         state              = new Client();
-    private final Map<HashKey, SubmittedTransaction>                                               submitted          = new ConcurrentHashMap<>();
+    private volatile State                                                                         state     = new Client();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted = new ConcurrentHashMap<>();
+    private volatile TotalOrder                                                                    to;
     private volatile int                                                                           toleranceLevel;
-    private volatile TotalOrder                                                                    totalOrder;
 
     @SuppressWarnings("unchecked")
     public Consortium(Function<List<Transaction>, List<ByteBuffer>> executor, Member member,
@@ -325,8 +325,7 @@ public class Consortium {
             log.error("skipping message publish as no messenger");
             return;
         }
-        message.setSequenceNumber(lastSequenceNumber.incrementAndGet());
-        messenger.publish(0, message.build().toByteArray());
+        messenger.publish(message.build().toByteArray());
     }
 
     private State getState() {
@@ -392,7 +391,7 @@ public class Consortium {
             currentComm.deregister(current.getId());
         }
 
-        TotalOrder currentTotalOrder = totalOrder;
+        TotalOrder currentTotalOrder = to;
         if (currentTotalOrder != null) {
             currentTotalOrder.stop();
         }
@@ -402,7 +401,14 @@ public class Consortium {
         }
     }
 
-    private void process(ConsortiumMessage message, HashKey from) {
+    private void process(Msg msg, HashKey from) {
+        ConsortiumMessage message;
+        try {
+            message = ConsortiumMessage.parseFrom(msg.content);
+        } catch (InvalidProtocolBufferException e) {
+            log.error("error parsing message from {}", from, e);
+            return;
+        }
         switch (message.getType()) {
         case BLOCK:
             try {
@@ -513,7 +519,7 @@ public class Consortium {
             assert current != null : "No current view, but comm exists!";
             currentComm.register(current.getId(), new Service());
         }
-        TotalOrder currentTO = totalOrder;
+        TotalOrder currentTO = to;
         if (currentTO != null) {
             currentTO.start();
         }
@@ -528,12 +534,14 @@ public class Consortium {
         return true;
     }
 
+    /**
+     * Ye Jesus Nut
+     */
     private boolean viewChange(Context<Collaborator> newView, int t) {
         pause();
 
         currentView = newView;
         log.trace("New view: {}", newView);
-        lastSequenceNumber.set(-1);
         toleranceLevel = t;
         comm = createClientComms.apply(newView.getId());
 
@@ -541,24 +549,33 @@ public class Consortium {
         Collaborator newLeader = newView.ring(0).successor(newView.getId());
         leader = newLeader;
 
-        if (newView.getMember(member.getId()) != null) {
+        if (newView.getMember(member.getId()) != null) { // cohort member
             log.info("Joining group {}", newView);
             messenger = new Messenger(member, signature, newView, communications, msgParameters);
-            totalOrder = new TotalOrder((m, mId) -> process(m, mId), newView);
+            to = new TotalOrder((m, k) -> process(m, k), newView);
             messenger.register(0, messages -> {
-                totalOrder.process(messages);
+                to.process(messages);
             });
-            if (member.equals(newLeader)) {
+            if (member.equals(newLeader)) { // I yam what I yam
                 log.info("reconfiguring, becoming leader: {}", member);
-                return getState().becomeLeader();
+                if (!getState().becomeLeader()) {
+                    return false;
+                }
             }
             log.info("reconfiguring, becoming follower: {}", member);
-            return getState().becomeFollower();
+            if (!getState().becomeFollower()) { // I'm here for you, bruh
+                return false;
+            }
+        } else { // you are all my puppets
+            messenger = null;
+            to = null;
+
+            log.info("reconfiguring, becoming client: {}", member);
+            if (!getState().becomeClient()) {
+                return false;
+            }
         }
-        messenger = null;
-        totalOrder = null;
-        log.info("reconfiguring, becoming client: {}", member);
-        getState().becomeClient();
+
         resume();
         return true;
     }

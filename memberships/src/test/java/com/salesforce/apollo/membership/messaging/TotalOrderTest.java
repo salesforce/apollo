@@ -142,7 +142,7 @@ public class TotalOrderTest {
 
         messengers.parallelStream().forEach(m -> {
             for (int i = 0; i < messageCount; i++) {
-                m.publish(0, "Give me food, or give me slack, or kill me".getBytes());
+                m.publish("Give me food, or give me slack, or kill me".getBytes());
                 try {
                     Thread.sleep(2);
                 } catch (InterruptedException e) {

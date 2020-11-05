@@ -40,10 +40,9 @@ public class MessageBuffer {
 
     private final AtomicInteger lastSequenceNumber = new AtomicInteger();
 
-    public static ByteBuffer headerBuffer(long ts, int channel, int sequenceNumber) {
-        ByteBuffer header = ByteBuffer.allocate(8 + 4 + 4);
+    public static ByteBuffer headerBuffer(long ts, int sequenceNumber) {
+        ByteBuffer header = ByteBuffer.allocate(8 + 4);
         header.putLong(ts);
-        header.putInt(channel);
         header.putInt(sequenceNumber);
         return header;
     }
@@ -62,7 +61,7 @@ public class MessageBuffer {
     }
 
     public static boolean validate(Message message, Signature signature) {
-        ByteBuffer header = headerBuffer(message.getTime(), message.getChannel(), message.getSequenceNumber());
+        ByteBuffer header = headerBuffer(message.getTime(), message.getSequenceNumber());
 
         try {
             signature.update(new HashKey(message.getSource()).bytes());
@@ -112,7 +111,7 @@ public class MessageBuffer {
      */
     public List<Message> merge(List<Message> updates, Predicate<Message> validator) {
         return updates.stream().filter(validator).filter(message -> {
-            ByteBuffer header = headerBuffer(message.getTime(), message.getChannel(), message.getSequenceNumber());
+            ByteBuffer header = headerBuffer(message.getTime(), message.getSequenceNumber());
             HashKey hash = new HashKey(Conversion.hashOf(message.getSource().toByteArray(), header.array(),
                                                          message.getContent().toByteArray()));
             return merge(hash, message);
@@ -138,19 +137,17 @@ public class MessageBuffer {
      * @param ts
      * @param bytes
      * @param from
-     * @param channel
      * @param signature
      * @return the inserted Message
      */
-    public Message publish(long ts, byte[] bytes, Member from, Signature signature, int channel) {
+    public Message publish(long ts, byte[] bytes, Member from, Signature signature) {
         int sequenceNumber = lastSequenceNumber.getAndIncrement();
-        ByteBuffer header = headerBuffer(ts, channel, sequenceNumber);
+        ByteBuffer header = headerBuffer(ts, sequenceNumber);
         HashKey id = new HashKey(Conversion.hashOf(from.getId().bytes(), header.array(), bytes));
 
         byte[] s = sign(from, signature, header, bytes);
         log.trace("broadcasting: {}:{}", id, sequenceNumber);
-        Message update = state.computeIfAbsent(id,
-                                               k -> createUpdate(channel, ts, bytes, sequenceNumber, from.getId(), s));
+        Message update = state.computeIfAbsent(id, k -> createUpdate(ts, bytes, sequenceNumber, from.getId(), s));
         gc();
         return update;
     }
@@ -169,14 +166,12 @@ public class MessageBuffer {
         purgeTheAged();
     }
 
-    private Message createUpdate(int channel, long ts, byte[] content, int sequenceNumber, HashKey from,
-                                 byte[] signature) {
+    private Message createUpdate(long ts, byte[] content, int sequenceNumber, HashKey from, byte[] signature) {
         return Message.newBuilder()
                       .setSource(from.toID())
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
                       .setTime(ts)
-                      .setChannel(channel)
                       .setContent(ByteString.copyFrom(content))
                       .setSignature(ByteString.copyFrom(signature))
                       .build();
@@ -220,7 +215,7 @@ public class MessageBuffer {
             if (v.getAge() == update.getAge()) {
                 return update;
             }
-            int age = Math.max(v.getAge(), update.getAge()); 
+            int age = Math.max(v.getAge(), update.getAge());
             log.trace("merged: {} age: {} prev: {}", hash, age, v.getAge());
             return Message.newBuilder(v).setAge(age).build();
         });

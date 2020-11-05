@@ -97,9 +97,8 @@ enum MessageType {
     VALIDATE = 3;
 }
 message ConsortiumMessage {
-    int32 sequenceNumber = 1;
-    MessageType type = 2;
-    bytes msg = 3;
+    MessageType type = 1;
+    bytes msg = 2;
 }
 
 message Validate {

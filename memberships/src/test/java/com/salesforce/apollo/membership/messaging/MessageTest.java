@@ -174,7 +174,7 @@ public class MessageTest {
             }
             ByteBuffer buf = ByteBuffer.wrap(new byte[4]);
             buf.putInt(r);
-            messengers.parallelStream().forEach(view -> view.publish(0, buf.array()));
+            messengers.parallelStream().forEach(view -> view.publish(buf.array()));
             boolean success = round.await(10, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
 
@@ -195,7 +195,7 @@ public class MessageTest {
 
         MessageBuffer buff1 = new MessageBuffer(10, 10);
         byte[] bytes1 = new byte[] { 1, 2, 3, 4, 5 };
-        Message message = buff1.publish(1, bytes1, from, forSigning(from), 1);
+        Message message = buff1.publish(1, bytes1, from, forSigning(from));
 
         MessageBuffer buff2 = new MessageBuffer(10, 10);
         List<Message> merged = buff2.merge(Arrays.asList(message),
@@ -217,7 +217,7 @@ public class MessageTest {
         int channel = 1;
         int sequenceNumber = 0;
         HashKey id = HashKey.ORIGIN;
-        ByteBuffer header = MessageBuffer.headerBuffer(ts, channel, sequenceNumber);
+        ByteBuffer header = MessageBuffer.headerBuffer(ts, sequenceNumber);
 
         Message message = Message.newBuilder()
                                  .setAge(1)

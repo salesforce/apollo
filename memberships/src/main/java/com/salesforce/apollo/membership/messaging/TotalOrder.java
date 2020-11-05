@@ -62,7 +62,6 @@ public class TotalOrder {
         public Msg next() {
             Msg message = queue.peek();
             if (message == null) {
-                log.trace("No msgs in queue");
                 return null;
             }
             final int current = lastSequenceNumber;
