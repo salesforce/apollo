@@ -189,13 +189,13 @@ public class MessageBuffer {
     }
 
     private boolean merge(HashKey hash, Message update) {
+        if (update.getAge() > tooOld + 1) {
+            log.trace("dropped as too old: {}:{}", hash, update.getSequenceNumber());
+            return false;
+        }
         AtomicBoolean updated = new AtomicBoolean(false);
         state.compute(hash, (k, v) -> {
             if (v == null) {
-                if (update.getAge() > tooOld + 1) {
-                    log.trace("dropped as too old: {}:{}", hash, update.getSequenceNumber());
-                    return null;
-                }
                 updated.set(true);
                 log.trace("added: {}:{}", hash, update.getSequenceNumber());
                 return update;
