@@ -188,9 +188,8 @@ public class TestConsortium {
         try {
             client.submit(Arrays.asList("Hello world".getBytes()), h -> {
             });
-            fail();
         } catch (TimeoutException e) {
-            // expected
+            fail();
         }
     }
 
