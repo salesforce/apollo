@@ -117,9 +117,8 @@ public class MessageTest {
                                                    cert -> cert));
     }
 
-    private final List<Router> communications = new ArrayList<>();
-
-    private final AtomicInteger totalReceived = new AtomicInteger(0);
+    private final List<Router>  communications = new ArrayList<>();
+    private final AtomicInteger totalReceived  = new AtomicInteger(0);
     private List<Messenger>     messengers;
 
     @AfterEach
@@ -196,7 +195,7 @@ public class MessageTest {
 
         MessageBuffer buff1 = new MessageBuffer(10, 10);
         byte[] bytes1 = new byte[] { 1, 2, 3, 4, 5 };
-        Message message = buff1.put(1, bytes1, from, forSigning(from), 1);
+        Message message = buff1.publish(1, bytes1, from, forSigning(from), 1);
 
         MessageBuffer buff2 = new MessageBuffer(10, 10);
         List<Message> merged = buff2.merge(Arrays.asList(message),
@@ -216,11 +215,13 @@ public class MessageTest {
         byte[] content = new byte[] { 1, 2, 3, 4 };
         long ts = 400;
         int channel = 1;
+        int sequenceNumber = 0;
         HashKey id = HashKey.ORIGIN;
-        ByteBuffer header = MessageBuffer.headerBuffer(ts, channel);
+        ByteBuffer header = MessageBuffer.headerBuffer(ts, channel, sequenceNumber);
 
         Message message = Message.newBuilder()
                                  .setAge(1)
+                                 .setSequenceNumber(sequenceNumber)
                                  .setChannel(channel)
                                  .setContent(ByteString.copyFrom(content))
                                  .setSource(id.toID())

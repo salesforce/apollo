@@ -29,7 +29,7 @@ message Push {
 
 message Message {
     ID source = 1;
-    ID id = 2;
+    int32 sequenceNumber = 2;
     int32 age = 3;
     int64 time = 4;
     int32 channel = 5;

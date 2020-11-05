@@ -11,8 +11,10 @@ import java.security.Signature;
 import java.security.SignatureException;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -36,10 +38,13 @@ import com.salesforce.apollo.protocols.HashKey;
 public class MessageBuffer {
     private final static Logger log = LoggerFactory.getLogger(MessageBuffer.class);
 
-    public static ByteBuffer headerBuffer(long ts, int channel) {
-        ByteBuffer header = ByteBuffer.allocate(8 + 4);
+    private final AtomicInteger lastSequenceNumber = new AtomicInteger();
+
+    public static ByteBuffer headerBuffer(long ts, int channel, int sequenceNumber) {
+        ByteBuffer header = ByteBuffer.allocate(8 + 4 + 4);
         header.putLong(ts);
         header.putInt(channel);
+        header.putInt(sequenceNumber);
         return header;
     }
 
@@ -57,7 +62,7 @@ public class MessageBuffer {
     }
 
     public static boolean validate(Message message, Signature signature) {
-        ByteBuffer header = headerBuffer(message.getTime(), message.getChannel());
+        ByteBuffer header = headerBuffer(message.getTime(), message.getChannel(), message.getSequenceNumber());
 
         try {
             signature.update(new HashKey(message.getSource()).bytes());
@@ -106,7 +111,12 @@ public class MessageBuffer {
      * @return the list of new messages for this buffer
      */
     public List<Message> merge(List<Message> updates, Predicate<Message> validator) {
-        return updates.stream().filter(validator).filter(message -> put(message)).collect(Collectors.toList());
+        return updates.stream().filter(validator).filter(message -> {
+            ByteBuffer header = headerBuffer(message.getTime(), message.getChannel(), message.getSequenceNumber());
+            HashKey hash = new HashKey(Conversion.hashOf(message.getSource().toByteArray(), header.array(),
+                                                         message.getContent().toByteArray()));
+            return merge(hash, message);
+        }).collect(Collectors.toList());
     }
 
     public Messages process(BloomFilter bff, int seed, double p) {
@@ -132,14 +142,16 @@ public class MessageBuffer {
      * @param signature
      * @return the inserted Message
      */
-    public Message put(long ts, byte[] bytes, Member from, Signature signature, int channel) {
-        ByteBuffer header = headerBuffer(ts, channel);
+    public Message publish(long ts, byte[] bytes, Member from, Signature signature, int channel) {
+        int sequenceNumber = lastSequenceNumber.getAndIncrement();
+        ByteBuffer header = headerBuffer(ts, channel, sequenceNumber);
         HashKey id = new HashKey(Conversion.hashOf(from.getId().bytes(), header.array(), bytes));
 
         byte[] s = sign(from, signature, header, bytes);
-        Message update = createUpdate(channel, id, ts, bytes, from.getId(), s);
-        put(update);
-        log.trace("broadcasting: {}", id);
+        log.trace("broadcasting: {}:{}", id, sequenceNumber);
+        Message update = state.computeIfAbsent(id,
+                                               k -> createUpdate(channel, ts, bytes, sequenceNumber, from.getId(), s));
+        gc();
         return update;
     }
 
@@ -152,15 +164,16 @@ public class MessageBuffer {
     }
 
     private void compact() {
-        log.trace("Compacting buffer");
+        log.error("Compacting buffer");
         removeOutOfDate();
         purgeTheAged();
     }
 
-    private Message createUpdate(int channel, HashKey id, long ts, byte[] content, HashKey from, byte[] signature) {
+    private Message createUpdate(int channel, long ts, byte[] content, int sequenceNumber, HashKey from,
+                                 byte[] signature) {
         return Message.newBuilder()
                       .setSource(from.toID())
-                      .setId(id.toID())
+                      .setSequenceNumber(sequenceNumber)
                       .setAge(0)
                       .setTime(ts)
                       .setChannel(channel)
@@ -170,29 +183,29 @@ public class MessageBuffer {
     }
 
     private void purgeTheAged() {
-        Message max;
+        Entry<HashKey, Message> max;
         while (state.size() > bufferSize) {
             max = null;
-            for (Message u : state.values()) {
+            for (Entry<HashKey, Message> entry : state.entrySet()) {
+                Message u = entry.getValue();
                 if (max == null) {
-                    max = u;
-                } else if (u.getAge() > max.getAge() && u.getTime() >= max.getTime()) {
-                    max = u;
+                    max = entry;
+                } else if (u.getAge() > max.getValue().getAge() && u.getTime() >= max.getValue().getTime()) {
+                    max = entry;
                 }
             }
             if (max == null) {
                 break;
             }
-            HashKey removed = new HashKey(max.getId());
+            HashKey removed = max.getKey();
             state.remove(removed);
             log.trace("removing: {}", removed);
         }
     }
 
-    private boolean put(Message update) {
+    private boolean merge(HashKey hash, Message update) {
         AtomicBoolean updated = new AtomicBoolean(false);
-        HashKey id = new HashKey(update.getId());
-        state.compute(id, (k, v) -> {
+        state.compute(hash, (k, v) -> {
             if (v == null) {
                 // first time, update
                 Long current = maxTimes.compute(k, (mid, max) -> Math.max(max == null ? 0 : max, update.getTime()));
@@ -201,10 +214,17 @@ public class MessageBuffer {
                     return null;
                 }
                 updated.set(true);
+                log.trace("added: {}:{}", hash, update.getSequenceNumber());
                 return update;
             }
-            return Message.newBuilder(v).setAge(Math.max(v.getAge(), update.getAge())).build();
+            if (v.getAge() == update.getAge()) {
+                return update;
+            }
+            int age = Math.max(v.getAge(), update.getAge()); 
+            log.trace("merged: {} age: {} prev: {}", hash, age, v.getAge());
+            return Message.newBuilder(v).setAge(age).build();
         });
+        gc();
         return updated.get();
     }
 

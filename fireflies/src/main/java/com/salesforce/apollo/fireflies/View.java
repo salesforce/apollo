@@ -1367,7 +1367,7 @@ public class View {
             signature.update(message.getContent().toByteArray());
             return signature.verify(message.getSignature().toByteArray());
         } catch (SignatureException e) {
-            log.debug("invalid signature for message {}", new HashKey(message.getId()), from);
+            log.debug("invalid signature from: {} message {}", from, message);
             return false;
         }
     }

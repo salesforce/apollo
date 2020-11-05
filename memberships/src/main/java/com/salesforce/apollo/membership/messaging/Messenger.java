@@ -50,14 +50,19 @@ public class Messenger {
     @FunctionalInterface
     public interface MessageChannelHandler {
         class Msg {
-            public final int    channel;
             public final byte[] content;
             public final Member from;
+            public final int    sequenceNumber;
 
-            public Msg(Member from, int channel, byte[] content) {
-                this.channel = channel;
+            public Msg(Member from, int sequenceNumber, byte[] content) {
                 this.from = from;
+                this.sequenceNumber = sequenceNumber;
                 this.content = content;
+            }
+
+            @Override
+            public String toString() {
+                return "Msg [from=" + from + ", sequence# =" + sequenceNumber + "]";
             }
         }
 
@@ -242,7 +247,7 @@ public class Messenger {
     }
 
     public void publish(int channel, byte[] message) {
-        buffer.put(System.currentTimeMillis(), message, member, signature.get(), channel);
+        buffer.publish(System.currentTimeMillis(), message, member, signature.get(), channel);
     }
 
     public void register(int channel, MessageChannelHandler listener) {
@@ -296,7 +301,7 @@ public class Messenger {
     }
 
     private void process(List<Message> updates) {
-        Map<Integer, List<Msg>> newMessages = new HashMap<>();
+        List<Msg> newMessages = new ArrayList<>();
         buffer.merge(updates, message -> validate(message)).stream().map(m -> {
             HashKey id = new HashKey(m.getSource());
             Member from = context.getMember(id);
@@ -304,14 +309,13 @@ public class Messenger {
                 log.trace("{} message from unknown member: {}", member, id);
                 return null;
             } else {
-                return new Msg(from, m.getChannel(), m.getContent().toByteArray());
+                return new Msg(from, m.getSequenceNumber(), m.getContent().toByteArray());
             }
         }).filter(m -> m != null).forEach(msg -> {
-            newMessages.computeIfAbsent(msg.channel, i -> new ArrayList<>()).add(msg);
+            newMessages.add(msg);
         });
-        channelHandlers.values()
-                       .forEach(handler -> commonPool().execute(() -> newMessages.entrySet()
-                                                                                 .forEach(e -> handler.message(e.getValue()))));
+        log.trace("processed {} updates", updates.size());
+        channelHandlers.values().forEach(handler -> commonPool().execute(() -> handler.message(newMessages)));
     }
 
     private boolean validate(Message message) {
@@ -322,7 +326,7 @@ public class Messenger {
             return false;
         }
         if (!MessageBuffer.validate(message, member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM))) {
-            log.trace("Did not validate message {} from {}", new HashKey(message.getId()), memberID);
+            log.trace("Did not validate message {} from {}", message, memberID);
             return false;
         }
         return true;
