@@ -209,9 +209,7 @@ public class Messenger {
                 log.debug("No members to message gossip with on ring: {}", ring);
                 return;
             }
-            assert member.equals(context.ring(ring)
-                                        .predecessor(link.getMember())) : "member is not the predecessor of the link!";
-            log.debug("message gossiping from {} with {} on {}", member, link.getMember(), ring);
+            log.trace("message gossiping from {} with {} on {}", member, link.getMember(), ring);
             try {
                 Messages gossip = null;
 

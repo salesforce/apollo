@@ -144,7 +144,7 @@ public class TestConsortium {
         }).collect(Collectors.toList());
     }
 
-//    @Test
+    @Test
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(20);
         Duration ffRound = Duration.ofMillis(1_00);

@@ -9,8 +9,12 @@ package com.salesforce.apollo.membership.messaging;
 import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -66,6 +70,19 @@ public class MessageBuffer {
         }
     }
 
+    private static Queue<Entry<HashKey, Message>> findNHighest(Collection<Entry<HashKey, Message>> msgs, int n) {
+        Queue<Entry<HashKey, Message>> nthHighest = new PriorityQueue<Entry<HashKey, Message>>(
+                (a, b) -> Integer.compare(a.getValue().getAge(), b.getValue().getAge()));
+
+        for (Entry<HashKey, Message> each : msgs) {
+            nthHighest.add(each);
+            if (nthHighest.size() > n) {
+                nthHighest.poll();
+            }
+        }
+        return nthHighest;
+    }
+
     private static HashKey idOf(byte[] source, int sequenceNumber, byte[] content) {
         ByteBuffer seqNum = ByteBuffer.allocate(4);
         seqNum.putInt(sequenceNumber);
@@ -79,7 +96,8 @@ public class MessageBuffer {
     private final int                   bufferSize;
     private final AtomicInteger         lastSequenceNumber = new AtomicInteger();
     private final Map<HashKey, Message> state              = new ConcurrentHashMap<>();
-    private int                         tooOld;
+
+    private int tooOld;
 
     public MessageBuffer(int bufferSize, int tooOld) {
         this.bufferSize = bufferSize;
@@ -174,6 +192,10 @@ public class MessageBuffer {
         AtomicBoolean updated = new AtomicBoolean(false);
         state.compute(hash, (k, v) -> {
             if (v == null) {
+                if (update.getAge() > tooOld + 1) {
+                    log.trace("dropped as too old: {}:{}", hash, update.getSequenceNumber());
+                    return null;
+                }
                 updated.set(true);
                 log.trace("added: {}:{}", hash, update.getSequenceNumber());
                 return update;
@@ -201,13 +223,12 @@ public class MessageBuffer {
         if (state.size() <= bufferSize) {
             return;
         }
+
         int count = state.size() - bufferSize;
         log.trace("removing overflow count: {}", count);
-        state.entrySet()
-             .stream()
-             .sorted((a, b) -> Integer.compare(b.getValue().getAge(), a.getValue().getAge()))
-             .limit(count)
-             .peek(e -> log.trace("removing overflow: {}:{}", e.getKey(), e.getValue().getAge()))
-             .forEach(e -> state.remove(e.getKey()));
+        findNHighest(state.entrySet(), count).forEach(e -> {
+            log.trace("removing overflow: {}:{}", e.getKey(), e.getValue().getAge());
+            state.remove(e.getKey());
+        });
     }
 }
