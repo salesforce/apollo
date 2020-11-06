@@ -81,19 +81,15 @@ public class Consortium {
             private Router                                        communications;
             private Context<Member>                               context;
             private Function<List<Transaction>, List<ByteBuffer>> executor;
+            private Duration                                      gossipDuration;
             private Member                                        member;
             private Messenger.Parameters                          msgParameters;
             private ScheduledExecutorService                      scheduler;
             private Supplier<Signature>                           signature;
-            private Duration                                      gossipDuration;
 
-            public Duration getGossipDuration() {
-                return gossipDuration;
-            }
-
-            public Builder setGossipDuration(Duration gossipDuration) {
-                this.gossipDuration = gossipDuration;
-                return this;
+            public Parameters build() {
+                return new Parameters(context, communications, executor, member, msgParameters, scheduler, signature,
+                        gossipDuration);
             }
 
             public Router getCommunications() {
@@ -106,6 +102,10 @@ public class Consortium {
 
             public Function<List<Transaction>, List<ByteBuffer>> getExecutor() {
                 return executor;
+            }
+
+            public Duration getGossipDuration() {
+                return gossipDuration;
             }
 
             public Member getMember() {
@@ -140,6 +140,11 @@ public class Consortium {
                 return this;
             }
 
+            public Builder setGossipDuration(Duration gossipDuration) {
+                this.gossipDuration = gossipDuration;
+                return this;
+            }
+
             public Builder setMember(Member member) {
                 this.member = member;
                 return this;
@@ -159,17 +164,13 @@ public class Consortium {
                 this.signature = signature;
                 return this;
             }
-
-            public Parameters build() {
-                return new Parameters(context, communications, executor, member, msgParameters, scheduler, signature,
-                        gossipDuration);
-            }
         }
 
         public static Builder newBuilder() {
             return new Builder();
         }
 
+        public final Duration                                       gossipDuration;
         private final Router                                        communications;
         private final Context<Member>                               context;
         @SuppressWarnings("unused")
@@ -178,7 +179,6 @@ public class Consortium {
         private final Messenger.Parameters                          msgParameters;
         private final ScheduledExecutorService                      scheduler;
         private final Supplier<Signature>                           signature;
-        public final Duration                                       gossipDuration;
 
         public Parameters(Context<Member> context, Router communications,
                 Function<List<Transaction>, List<ByteBuffer>> executor, Member member,
@@ -248,17 +248,17 @@ public class Consortium {
     private abstract class State {
 
         boolean becomeClient() {
-            state = new Client();
+            vState.state = new Client();
             return true;
         };
 
         boolean becomeFollower() {
-            state = new Follower();
+            vState.state = new Follower();
             return true;
         }
 
         boolean becomeLeader() {
-            state = new Leader();
+            vState.state = new Leader();
             return true;
         }
 
@@ -280,6 +280,52 @@ public class Consortium {
 
     }
 
+    private class VolatileState {
+        private volatile CommonCommunications<ConsortiumClientCommunications, Service> comm;
+        private volatile CurrentBlock                                                  current;
+        private volatile Context<Collaborator>                                         currentView;
+        @SuppressWarnings("unused")
+        private volatile Member                                                        leader;
+        private volatile Messenger                                                     messenger;
+        private volatile State                                                         state = new Client();
+        private volatile TotalOrder                                                    to;
+
+        private void pause() {
+            CommonCommunications<ConsortiumClientCommunications, Service> currentComm = comm;
+            if (currentComm != null) {
+                Context<Collaborator> current = currentView;
+                assert current != null : "No current view, but comm exists!";
+                currentComm.deregister(current.getId());
+            }
+
+            TotalOrder currentTotalOrder = to;
+            if (currentTotalOrder != null) {
+                currentTotalOrder.stop();
+            }
+            Messenger currentMessenger = messenger;
+            if (currentMessenger != null) {
+                currentMessenger.stop();
+            }
+        }
+
+        private void resume() {
+            CommonCommunications<ConsortiumClientCommunications, Service> currentComm = comm;
+            if (currentComm != null) {
+                Context<Collaborator> current = currentView;
+                assert current != null : "No current view, but comm exists!";
+                currentComm.register(current.getId(), new Service());
+            }
+            TotalOrder currentTO = to;
+            if (currentTO != null) {
+                currentTO.start();
+            }
+            Messenger currentMsg = messenger;
+            if (currentMsg != null) {
+                currentMsg.start(parameters.gossipDuration, parameters.scheduler);
+            }
+        }
+    }
+
     private final static Logger log = LoggerFactory.getLogger(Consortium.class);
 
     public static Block manifestBlock(byte[] data) {
@@ -297,18 +343,11 @@ public class Consortium {
         return null;
     }
 
-    private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
-    private volatile CurrentBlock                                                                  current;
-    private volatile Context<Collaborator>                                                         currentView;
-    @SuppressWarnings("unused")
-    private volatile Member                                                                        leader;
-    private volatile Messenger                                                                     messenger;
     private final Parameters                                                                       parameters;
-    private volatile State                                                                         state     = new Client();
     private final Map<HashKey, SubmittedTransaction>                                               submitted = new ConcurrentHashMap<>();
-    private volatile TotalOrder                                                                    to;
     private volatile int                                                                           toleranceLevel;
+    private final VolatileState                                                                    vState    = new VolatileState();
 
     public Consortium(Parameters parameters) {
         this.parameters = parameters;
@@ -332,7 +371,7 @@ public class Consortium {
             log.error("Protocol violation. New block is not certified {}", certifiedBlock);
             return false;
         }
-        final CurrentBlock previousBlock = current;
+        final CurrentBlock previousBlock = vState.current;
         if (previousBlock != null) {
             if (block.getHeader().getHeight() != previousBlock.block.getHeader().getHeight() + 1) {
                 log.error("Protocol violation.  Block height should be {} and next block height is {}",
@@ -351,20 +390,20 @@ public class Consortium {
                 return false;
             }
         }
-        current = new CurrentBlock(hash, block);
+        vState.current = new CurrentBlock(hash, block);
         return next();
     }
 
     public void start() {
-        resume();
+        vState.resume();
     }
 
     public void stop() {
-        pause();
+        vState.pause();
     }
 
     public HashKey submit(List<byte[]> transactions, Consumer<HashKey> onCompletion) throws TimeoutException {
-        final Context<Collaborator> current = currentView;
+        final Context<Collaborator> current = vState.currentView;
         if (current == null) {
             throw new IllegalStateException("The current view is undefined, unable to process transactions");
         }
@@ -420,22 +459,22 @@ public class Consortium {
 
     @SuppressWarnings("unused")
     private void deliver(ConsortiumMessage.Builder message) {
-        final Messenger currentMsgr = messenger;
+        final Messenger currentMsgr = vState.messenger;
         if (currentMsgr == null) {
             log.error("skipping message publish as no messenger");
             return;
         }
-        messenger.publish(message.build().toByteArray());
+        vState.messenger.publish(message.build().toByteArray());
     }
 
     private State getState() {
-        final State get = state;
+        final State get = vState.state;
         return get;
     }
 
     private ConsortiumClientCommunications linkFor(Member m) {
         try {
-            return comm.apply(m, parameters.member);
+            return vState.comm.apply(m, parameters.member);
         } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", m.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
@@ -448,7 +487,7 @@ public class Consortium {
 
             @Override
             public void fail(Member member) {
-                final Context<Collaborator> view = currentView;
+                final Context<Collaborator> view = vState.currentView;
                 if (view != null) {
                     view.offlineIfActive(member.getId());
                 }
@@ -456,7 +495,7 @@ public class Consortium {
 
             @Override
             public void recover(Member member) {
-                final Context<Collaborator> view = currentView;
+                final Context<Collaborator> view = vState.currentView;
                 if (view != null) {
                     view.activateIfOffline(member.getId());
                 }
@@ -465,7 +504,7 @@ public class Consortium {
     }
 
     private boolean next() {
-        CurrentBlock next = current;
+        CurrentBlock next = vState.current;
         switch (next.block.getBody().getType()) {
         case CHECKPOINT:
             return processCheckpoint(next);
@@ -481,24 +520,6 @@ public class Consortium {
             return false;
         }
 
-    }
-
-    private void pause() {
-        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = comm;
-        if (currentComm != null) {
-            Context<Collaborator> current = currentView;
-            assert current != null : "No current view, but comm exists!";
-            currentComm.deregister(current.getId());
-        }
-
-        TotalOrder currentTotalOrder = to;
-        if (currentTotalOrder != null) {
-            currentTotalOrder.stop();
-        }
-        Messenger currentMessenger = messenger;
-        if (currentMessenger != null) {
-            currentMessenger.stop();
-        }
     }
 
     private void process(Msg msg, HashKey from) {
@@ -610,23 +631,6 @@ public class Consortium {
         return viewChange(newView, body.getToleranceLevel());
     }
 
-    private void resume() {
-        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = comm;
-        if (currentComm != null) {
-            Context<Collaborator> current = currentView;
-            assert current != null : "No current view, but comm exists!";
-            currentComm.register(current.getId(), new Service());
-        }
-        TotalOrder currentTO = to;
-        if (currentTO != null) {
-            currentTO.start();
-        }
-        Messenger currentMsg = messenger;
-        if (currentMsg != null) {
-            currentMsg.start(parameters.gossipDuration, parameters.scheduler);
-        }
-    }
-
     private boolean validate(CertifiedBlock block) {
         // TODO Auto-generated method stub
         return true;
@@ -636,22 +640,22 @@ public class Consortium {
      * Ye Jesus Nut
      */
     private boolean viewChange(Context<Collaborator> newView, int t) {
-        pause();
+        vState.pause();
 
-        currentView = newView;
+        vState.currentView = newView;
         toleranceLevel = t;
-        comm = createClientComms.apply(newView.getId());
+        vState.comm = createClientComms.apply(newView.getId());
 
         // Live successor of the view ID on ring zero is leader
         Collaborator newLeader = newView.ring(0).successor(newView.getId());
-        leader = newLeader;
+        vState.leader = newLeader;
 
         if (newView.getMember(parameters.member.getId()) != null) { // cohort member
-            messenger = new Messenger(parameters.member, parameters.signature, newView, parameters.communications,
-                    parameters.msgParameters);
-            to = new TotalOrder((m, k) -> process(m, k), newView);
-            messenger.register(0, messages -> {
-                to.process(messages);
+            vState.messenger = new Messenger(parameters.member, parameters.signature, newView,
+                    parameters.communications, parameters.msgParameters);
+            vState.to = new TotalOrder((m, k) -> process(m, k), newView);
+            vState.messenger.register(0, messages -> {
+                vState.to.process(messages);
             });
             if (parameters.member.equals(newLeader)) { // I yam what I yam
                 log.info("reconfiguring, becoming leader: {}", parameters.member);
@@ -664,8 +668,8 @@ public class Consortium {
                 return false;
             }
         } else { // you are all my puppets
-            messenger = null;
-            to = null;
+            vState.messenger = null;
+            vState.to = null;
 
             log.info("reconfiguring, becoming client: {}", parameters.member);
             if (!getState().becomeClient()) {
@@ -673,7 +677,7 @@ public class Consortium {
             }
         }
 
-        resume();
+        vState.resume();
         return true;
     }
 }
