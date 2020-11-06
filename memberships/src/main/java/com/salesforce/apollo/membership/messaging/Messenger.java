@@ -315,7 +315,7 @@ public class Messenger {
             newMessages.add(msg);
         });
         if (newMessages.isEmpty()) {
-            log.trace("No updates processed {}", updates.size());
+            log.trace("No updates processed out of: {}", updates.size());
             return;
         }
         log.trace("processed {} updates", updates.size());

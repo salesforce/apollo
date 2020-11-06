@@ -68,11 +68,6 @@ public class Context<T extends Member> {
         }
     }
 
-    @Override
-    public String toString() {
-        return "Context [id=" + id + " " + ring(0) + "]";
-    }
-
     public interface MembershipListener<T> {
 
         /**
@@ -157,7 +152,8 @@ public class Context<T extends Member> {
         }
     });
 
-    public static final String  SHA_256               = "sha-256";
+    public static final String SHA_256 = "sha-256";
+
     private static final String CONTEXT_HASH_TEMPLATE = "%s-%s";
     private static final String RING_HASH_TEMPLATE    = "%s-%s-%s";
 
@@ -176,14 +172,14 @@ public class Context<T extends Member> {
         throw new IllegalArgumentException("Cannot compute number if rings from pByz=" + pByz);
     }
 
-    private final Map<HashKey, T>             active              = new ConcurrentHashMap<>();
-    private BiFunction<T, Integer, HashKey>   hasher              = (m, ring) -> hashFor(m, ring);
-    private final Map<HashKey, HashKey[]>     hashes              = new ConcurrentHashMap<>();
-    private final HashKey                     id;
-    private Logger                            log                 = LoggerFactory.getLogger(Context.class);
-    private final List<MembershipListener<T>> membershipListeners = new CopyOnWriteArrayList<>();
+    private final Map<HashKey, T> active = new ConcurrentHashMap<>();
 
-    private final ConcurrentHashMap<HashKey, T> offline = new ConcurrentHashMap<>();
+    private BiFunction<T, Integer, HashKey>     hasher              = (m, ring) -> hashFor(m, ring);
+    private final Map<HashKey, HashKey[]>       hashes              = new ConcurrentHashMap<>();
+    private final HashKey                       id;
+    private Logger                              log                 = LoggerFactory.getLogger(Context.class);
+    private final List<MembershipListener<T>>   membershipListeners = new CopyOnWriteArrayList<>();
+    private final ConcurrentHashMap<HashKey, T> offline             = new ConcurrentHashMap<>();
 
     private final Ring<T>[] rings;
 
@@ -253,10 +249,18 @@ public class Context<T extends Member> {
      * with FF parameters, with the rings forming random graph connections segments.
      */
     public int diameter() {
-        double cardinality = (double) cardinality();
-        double pN = ((double) (2 * toleranceLevel())) / cardinality;
-        double logN = Math.log(cardinality);
-        return (int) (logN / Math.log(cardinality * pN));
+        return (cardinality());
+    }
+
+    /**
+     * Answer the aproximate diameter of the receiver, assuming the rings were built
+     * with FF parameters, with the rings forming random graph connections segments
+     * with the supplied cardinality
+     */
+    public int diameter(int c) {
+        double pN = ((double) (2 * toleranceLevel())) / ((double) c);
+        double logN = Math.log(c);
+        return (int) (logN / Math.log(c * pN));
     }
 
     @Override
@@ -446,6 +450,19 @@ public class Context<T extends Member> {
         return toleranceLevel() * diameter() + 1;
     }
 
+    /**
+     * Answer the tolerance level of the context to byzantine members, assuming this
+     * context has been constructed from FF parameters
+     */
+    public int toleranceLevel() {
+        return (rings.length - 1) / 2;
+    }
+
+    @Override
+    public String toString() {
+        return "Context [id=" + id + " " + ring(0) + "]";
+    }
+
     HashKey hashFor(T m, int index) {
         HashKey[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
             HashKey[] s = new HashKey[rings.length];
@@ -468,13 +485,5 @@ public class Context<T extends Member> {
         md.reset();
         md.update(String.format(CONTEXT_HASH_TEMPLATE, ring).getBytes());
         return new HashKey(md.digest());
-    }
-
-    /**
-     * Answer the tolerance level of the context to byzantine members, assuming this
-     * context has been constructed from FF parameters
-     */
-    public int toleranceLevel() {
-        return (rings.length - 1) / 2;
     }
 }

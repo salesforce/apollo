@@ -261,7 +261,7 @@ public class Consortium {
         @Override
         void submit(PendingTransactions.EnqueuedTransaction enqueuedTransaction) {
             if (pending.add(enqueuedTransaction)) {
-                log.info("Submitted txn: {}", enqueuedTransaction.hash);
+                log.debug("Submitted txn: {}", enqueuedTransaction.hash);
                 deliver(ConsortiumMessage.newBuilder()
                                          .setMsg(enqueuedTransaction.transaction.toByteString())
                                          .setType(MessageType.TRANSACTION)
@@ -554,14 +554,14 @@ public class Consortium {
             return processUser(next);
         case UNRECOGNIZED:
         default:
-            log.info("Unrecognized block type: {} : {}", next.hashCode(), next.block);
+            log.error("Unrecognized block type: {} : {}", next.hashCode(), next.block);
             return false;
         }
 
     }
 
     private void process(Msg msg) {
-        log.info("Processing {} from {}", msg.sequenceNumber, msg.from);
+        log.trace("Processing {} from {}", msg.sequenceNumber, msg.from);
         ConsortiumMessage message;
         try {
             message = ConsortiumMessage.parseFrom(msg.content);

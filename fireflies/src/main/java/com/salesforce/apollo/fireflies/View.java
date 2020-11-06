@@ -401,12 +401,6 @@ public class View {
         }
     }
 
-    public static int diameter(FirefliesParameters parameters) {
-        double pN = ((double) (2 * parameters.toleranceLevel)) / ((double) parameters.cardinality);
-        double logN = Math.log(parameters.cardinality);
-        return (int) (logN / Math.log(parameters.cardinality * pN));
-    }
-
     public static Gossip emptyGossip() {
         return Gossip.getDefaultInstance();
     }
@@ -494,9 +488,9 @@ public class View {
                                           r -> new FfServerCommunications(service,
                                                   communications.getClientIdentityProvider(), metrics, r),
                                           getCreate(metrics));
-        diameter = diameter(getParameters());
-        assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
         context = new Context<>(id, getParameters().rings);
+        diameter = context.diameter(getParameters().cardinality);
+        assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
         add(node);
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }

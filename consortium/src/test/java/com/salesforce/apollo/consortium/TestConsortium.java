@@ -161,7 +161,11 @@ public class TestConsortium {
         System.out.println("Stabilized view across " + views.size() + " members");
 
         Duration gossipDuration = Duration.ofMillis(100);
-        Parameters msgParameters = Parameters.newBuilder().setEntropy(new SecureRandom()).build();
+        Parameters msgParameters = Parameters.newBuilder()
+                                             .setFalsePositiveRate(0.001)
+                                             .setBufferSize(100)
+                                             .setEntropy(new SecureRandom())
+                                             .build();
         views.stream()
              .map(v -> new Consortium(Consortium.Parameters.newBuilder()
                                                            .setExecutor(t -> Collections.emptyList())
