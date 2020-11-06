@@ -53,7 +53,6 @@ import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
-import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.membership.messaging.TotalOrder;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -74,6 +73,125 @@ public class Consortium {
         public Collaborator(Member member, PublicKey consensusKey) {
             super(member.getId(), member.getCertificate());
             this.consensusKey = consensusKey;
+        }
+    }
+
+    public static class Parameters {
+        public static class Builder {
+            private Router                                        communications;
+            private Context<Member>                               context;
+            private Function<List<Transaction>, List<ByteBuffer>> executor;
+            private Member                                        member;
+            private Messenger.Parameters                          msgParameters;
+            private ScheduledExecutorService                      scheduler;
+            private Supplier<Signature>                           signature;
+            private Duration                                      gossipDuration;
+
+            public Duration getGossipDuration() {
+                return gossipDuration;
+            }
+
+            public Builder setGossipDuration(Duration gossipDuration) {
+                this.gossipDuration = gossipDuration;
+                return this;
+            }
+
+            public Router getCommunications() {
+                return communications;
+            }
+
+            public Context<Member> getContext() {
+                return context;
+            }
+
+            public Function<List<Transaction>, List<ByteBuffer>> getExecutor() {
+                return executor;
+            }
+
+            public Member getMember() {
+                return member;
+            }
+
+            public Messenger.Parameters getMsgParameters() {
+                return msgParameters;
+            }
+
+            public ScheduledExecutorService getScheduler() {
+                return scheduler;
+            }
+
+            public Supplier<Signature> getSignature() {
+                return signature;
+            }
+
+            public Builder setCommunications(Router communications) {
+                this.communications = communications;
+                return this;
+            }
+
+            @SuppressWarnings("unchecked")
+            public Builder setContext(Context<? extends Member> context) {
+                this.context = (Context<Member>) context;
+                return this;
+            }
+
+            public Builder setExecutor(Function<List<Transaction>, List<ByteBuffer>> executor) {
+                this.executor = executor;
+                return this;
+            }
+
+            public Builder setMember(Member member) {
+                this.member = member;
+                return this;
+            }
+
+            public Builder setMsgParameters(Messenger.Parameters msgParameters) {
+                this.msgParameters = msgParameters;
+                return this;
+            }
+
+            public Builder setScheduler(ScheduledExecutorService scheduler) {
+                this.scheduler = scheduler;
+                return this;
+            }
+
+            public Builder setSignature(Supplier<Signature> signature) {
+                this.signature = signature;
+                return this;
+            }
+
+            public Parameters build() {
+                return new Parameters(context, communications, executor, member, msgParameters, scheduler, signature,
+                        gossipDuration);
+            }
+        }
+
+        public static Builder newBuilder() {
+            return new Builder();
+        }
+
+        private final Router                                        communications;
+        private final Context<Member>                               context;
+        @SuppressWarnings("unused")
+        private final Function<List<Transaction>, List<ByteBuffer>> executor;
+        private final Member                                        member;
+        private final Messenger.Parameters                          msgParameters;
+        private final ScheduledExecutorService                      scheduler;
+        private final Supplier<Signature>                           signature;
+        public final Duration                                       gossipDuration;
+
+        public Parameters(Context<Member> context, Router communications,
+                Function<List<Transaction>, List<ByteBuffer>> executor, Member member,
+                Messenger.Parameters msgParameters, ScheduledExecutorService scheduler, Supplier<Signature> signature,
+                Duration gossipDuration) {
+            this.context = context;
+            this.communications = communications;
+            this.executor = executor;
+            this.member = member;
+            this.msgParameters = msgParameters;
+            this.scheduler = scheduler;
+            this.signature = signature;
+            this.gossipDuration = gossipDuration;
         }
     }
 
@@ -180,48 +298,30 @@ public class Consortium {
     }
 
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
-    private final Router                                                                           communications;
-    private final Context<Member>                                                                  context;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private volatile CurrentBlock                                                                  current;
     private volatile Context<Collaborator>                                                         currentView;
     @SuppressWarnings("unused")
-    private final Function<List<Transaction>, List<ByteBuffer>>                                    executor;
-    private final Duration                                                                         gossipDuration;
-    @SuppressWarnings("unused")
     private volatile Member                                                                        leader;
-    private final Member                                                                           member;
     private volatile Messenger                                                                     messenger;
-    private final Parameters                                                                       msgParameters;
-    private final ScheduledExecutorService                                                         scheduler;
-    private final Supplier<Signature>                                                              signature;
+    private final Parameters                                                                       parameters;
     private volatile State                                                                         state     = new Client();
     private final Map<HashKey, SubmittedTransaction>                                               submitted = new ConcurrentHashMap<>();
     private volatile TotalOrder                                                                    to;
     private volatile int                                                                           toleranceLevel;
 
-    @SuppressWarnings("unchecked")
-    public Consortium(Function<List<Transaction>, List<ByteBuffer>> executor, Member member,
-            Supplier<Signature> signature, Context<? extends Member> ctx, Parameters msgParameters,
-            Router communications, Duration gossipDuration, ScheduledExecutorService scheduler) {
-        this.executor = executor;
-        this.member = member;
-        this.context = (Context<Member>) ctx;
-        this.msgParameters = msgParameters;
-        this.communications = communications;
-        this.signature = signature;
-        this.gossipDuration = gossipDuration;
-        this.scheduler = scheduler;
-        this.createClientComms = k -> communications.create(member, k, new Service(),
-                                                            r -> new ConsortiumServerCommunications(
-                                                                    communications.getClientIdentityProvider(), null,
-                                                                    r),
-                                                            ConsortiumClientCommunications.getCreate(null));
-        context.register(membershipListener());
+    public Consortium(Parameters parameters) {
+        this.parameters = parameters;
+        this.createClientComms = k -> parameters.communications.create(parameters.member, k, new Service(),
+                                                                       r -> new ConsortiumServerCommunications(
+                                                                               parameters.communications.getClientIdentityProvider(),
+                                                                               null, r),
+                                                                       ConsortiumClientCommunications.getCreate(null));
+        parameters.context.register(membershipListener());
     }
 
     public Member getMember() {
-        return member;
+        return parameters.member;
     }
 
     public boolean process(CertifiedBlock certifiedBlock) {
@@ -270,15 +370,15 @@ public class Consortium {
         }
 
         byte[] nonce = new byte[32];
-        msgParameters.entropy.nextBytes(nonce);
+        parameters.msgParameters.entropy.nextBytes(nonce);
         ByteBuffer signed = ByteBuffer.allocate(nonce.length + HashKey.BYTE_SIZE
                 + transactions.stream().mapToInt(e -> e.length).sum());
 
-        signed.put(member.getId().bytes());
+        signed.put(parameters.member.getId().bytes());
         signed.put(nonce);
 
         Transaction.Builder builder = Transaction.newBuilder()
-                                                 .setSource(member.getId().toByteString())
+                                                 .setSource(parameters.member.getId().toByteString())
                                                  .setNonce(ByteString.copyFrom(nonce));
         transactions.forEach(t -> {
             builder.addBatch(ByteString.copyFrom(t));
@@ -287,7 +387,7 @@ public class Consortium {
 
         byte[] hash = Conversion.hashOf(signed.array());
 
-        Signature s = signature.get();
+        Signature s = parameters.signature.get();
         try {
             s.update(hash);
         } catch (SignatureException e) {
@@ -335,7 +435,7 @@ public class Consortium {
 
     private ConsortiumClientCommunications linkFor(Member m) {
         try {
-            return comm.apply(m, member);
+            return comm.apply(m, parameters.member);
         } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", m.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
@@ -491,16 +591,16 @@ public class Consortium {
 
     private boolean reconfigure(Reconfigure body) {
         HashKey viewId = new HashKey(body.getId());
-        Context<Collaborator> newView = new Context<Collaborator>(viewId, context.getRingCount());
+        Context<Collaborator> newView = new Context<Collaborator>(viewId, parameters.context.getRingCount());
         body.getViewList().stream().map(v -> {
             HashKey memberId = new HashKey(v.getId());
-            Member m = context.getMember(memberId);
+            Member m = parameters.context.getMember(memberId);
             if (m == null) {
                 return null;
             }
             return new Collaborator(m, v.getConsensusKey().toByteArray());
         }).filter(m -> m != null).forEach(m -> {
-            if (context.isActive(m)) {
+            if (parameters.context.isActive(m)) {
                 newView.activate(m);
             } else {
                 newView.offline(m);
@@ -523,7 +623,7 @@ public class Consortium {
         }
         Messenger currentMsg = messenger;
         if (currentMsg != null) {
-            currentMsg.start(gossipDuration, scheduler);
+            currentMsg.start(parameters.gossipDuration, parameters.scheduler);
         }
     }
 
@@ -546,19 +646,20 @@ public class Consortium {
         Collaborator newLeader = newView.ring(0).successor(newView.getId());
         leader = newLeader;
 
-        if (newView.getMember(member.getId()) != null) { // cohort member
-            messenger = new Messenger(member, signature, newView, communications, msgParameters);
+        if (newView.getMember(parameters.member.getId()) != null) { // cohort member
+            messenger = new Messenger(parameters.member, parameters.signature, newView, parameters.communications,
+                    parameters.msgParameters);
             to = new TotalOrder((m, k) -> process(m, k), newView);
             messenger.register(0, messages -> {
                 to.process(messages);
             });
-            if (member.equals(newLeader)) { // I yam what I yam
-                log.info("reconfiguring, becoming leader: {}", member);
+            if (parameters.member.equals(newLeader)) { // I yam what I yam
+                log.info("reconfiguring, becoming leader: {}", parameters.member);
                 if (!getState().becomeLeader()) {
                     return false;
                 }
             }
-            log.info("reconfiguring, becoming follower: {}", member);
+            log.info("reconfiguring, becoming follower: {}", parameters.member);
             if (!getState().becomeFollower()) { // I'm here for you, bruh
                 return false;
             }
@@ -566,7 +667,7 @@ public class Consortium {
             messenger = null;
             to = null;
 
-            log.info("reconfiguring, becoming client: {}", member);
+            log.info("reconfiguring, becoming client: {}", parameters.member);
             if (!getState().becomeClient()) {
                 return false;
             }

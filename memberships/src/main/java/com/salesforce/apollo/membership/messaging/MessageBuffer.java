@@ -129,7 +129,7 @@ public class MessageBuffer {
      * @return the list of new messages for this buffer
      */
     public List<Message> merge(List<Message> updates, Predicate<Message> validator) {
-        return updates.stream().filter(validator).filter(message -> {
+        return updates.parallelStream().filter(validator).filter(message -> {
             HashKey hash = idOf(message);
             return merge(hash, message);
         }).collect(Collectors.toList());

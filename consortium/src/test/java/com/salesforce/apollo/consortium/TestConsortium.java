@@ -55,7 +55,6 @@ import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.CertWithKey;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -163,9 +162,16 @@ public class TestConsortium {
         Duration gossipDuration = Duration.ofMillis(100);
         Parameters msgParameters = Parameters.newBuilder().setEntropy(new SecureRandom()).build();
         views.stream()
-             .map(v -> new Consortium(t -> Collections.emptyList(), (Member) v.getNode(),
-                     () -> v.getNode().forSigning(), v.getContext(), msgParameters,
-                     communications.get(v.getNode().getId()), gossipDuration, scheduler))
+             .map(v -> new Consortium(Consortium.Parameters.newBuilder()
+                                                           .setExecutor(t -> Collections.emptyList())
+                                                           .setMember(v.getNode())
+                                                           .setSignature(() -> v.getNode().forSigning())
+                                                           .setContext(v.getContext())
+                                                           .setMsgParameters(msgParameters)
+                                                           .setCommunications(communications.get(v.getNode().getId()))
+                                                           .setGossipDuration(gossipDuration)
+                                                           .setScheduler(scheduler)
+                                                           .build()))
              .forEach(e -> consortium.add(e));
 
         List<Consortium> blueRibbon = new ArrayList<>();
