@@ -72,6 +72,7 @@ public class TotalOrder {
                     message = queue.poll();
                     assert message.sequenceNumber == current + 1 : "Kimpossible!";
                     lastSequenceNumber = message.sequenceNumber;
+                    log.trace("next: {}:{}", message.from, message.sequenceNumber);
                     return message;
                 } else if (message.sequenceNumber <= current) {
                     log.trace("discarding previously seen: {} <= {}", message.sequenceNumber, current);

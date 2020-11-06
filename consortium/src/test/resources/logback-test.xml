@@ -15,12 +15,12 @@
 		</encoder>
 	</appender> 
     
-    <logger name="com.salesforce.apollo.consortium" level="TRACE"
+    <logger name="com.salesforce.apollo.consortium" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
     
-    <logger name="com.salesforce.apollo.membership" level="INFO"
+    <logger name="com.salesforce.apollo.membership.messaging" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

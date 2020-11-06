@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
-import static com.salesforce.apollo.membership.messaging.communications.MessagingClientCommunications.getCreate;
+import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 import static java.util.concurrent.ForkJoinPool.commonPool;
 
 import java.security.SecureRandom;
@@ -34,8 +34,8 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
-import com.salesforce.apollo.membership.messaging.communications.MessagingClientCommunications;
-import com.salesforce.apollo.membership.messaging.communications.MessagingServerCommunications;
+import com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications;
+import com.salesforce.apollo.membership.messaging.comms.MessagingServerCommunications;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -314,6 +314,10 @@ public class Messenger {
         }).filter(m -> m != null).forEach(msg -> {
             newMessages.add(msg);
         });
+        if (newMessages.isEmpty()) {
+            log.trace("No updates processed {}", updates.size());
+            return;
+        }
         log.trace("processed {} updates", updates.size());
         channelHandlers.values().forEach(handler -> commonPool().execute(() -> handler.message(newMessages)));
     }

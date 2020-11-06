@@ -51,6 +51,7 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
+import com.salesforce.apollo.consortium.Consortium.CommitteeMember;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
@@ -197,6 +198,18 @@ public class TestConsortium {
         } catch (TimeoutException e) {
             fail();
         }
+
+        boolean submitted = Utils.waitForCondition(10_000, 1_000, () -> blueRibbon.stream().map(collaborator -> {
+            CommitteeMember member = (CommitteeMember) collaborator.getState();
+            return member.pending.isEmpty();
+        }).filter(b -> b).count() == 0);
+
+        assertTrue(submitted,
+                   "Transaction not submitted to consortium, missing: " + blueRibbon.stream().map(collaborator -> {
+                       CommitteeMember member = (CommitteeMember) collaborator.getState();
+                       return member.pending.isEmpty();
+                   }).filter(b -> b).count());
+
     }
 
     private CertifiedBlock createGenesis(List<Consortium> blueRibbon) {

@@ -11,8 +11,6 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +35,7 @@ import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.ConsortiumMessage;
 import com.salesfoce.apollo.consortium.proto.Genesis;
+import com.salesfoce.apollo.consortium.proto.MessageType;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.Transaction;
@@ -198,38 +197,80 @@ public class Consortium {
     public class Service {
 
         public TransactionResult clientSubmit(SubmitTransaction request) {
+            HashKey hash = new HashKey(Conversion.hashOf(request.getTransaction().toByteArray()));
+            getState().submit(new PendingTransactions.EnqueuedTransaction(hash, request.getTransaction()));
             return TransactionResult.getDefaultInstance();
         }
 
     }
 
-    public static class SubmittedTransaction {
-        public final Consumer<HashKey> onCompletion;
-        public final Transaction       submitted;
-
-        public SubmittedTransaction(Transaction submitted, Consumer<HashKey> onCompletion) {
-            this.submitted = submitted;
-            this.onCompletion = onCompletion;
-        }
-    }
-
-    private class Client extends State {
-    }
-
-    @SuppressWarnings("unused")
-    private abstract class CommitteeMember extends State {
-        private final Deque<CertifiedBlock> pending             = new ArrayDeque<>();
-        private final Deque<Transaction>    transactions        = new ArrayDeque<>();
-        private volatile Block.Builder      workingBlock;
-        private final Set<Certification>    workingCertificates = new HashSet<>();
+    class Client extends State {
 
         @Override
-        public void deliverTransaction(Transaction txn, HashKey from) {
-            transactions.add(txn);
+        void deliverBlock(Block parseFrom) {
+            throw new IllegalStateException("client does not participate in the consortium");
+        }
+
+        @Override
+        void deliverPersist(ID hash) {
+            throw new IllegalStateException("client does not participate in the consortium");
+        }
+
+        @Override
+        void deliverTransaction(Transaction txn) {
+            throw new IllegalStateException("client does not participate in the consortium");
+        }
+
+        @Override
+        void deliverValidate(Validate validation) {
+            throw new IllegalStateException("client does not participate in the consortium");
+        }
+
+        @Override
+        void submit(PendingTransactions.EnqueuedTransaction enqueuedTransaction) {
+            throw new IllegalStateException("client does not participate in the consortium");
         }
     }
 
-    private static class CurrentBlock {
+    abstract class CommitteeMember extends State {
+        final PendingTransactions pending             = new PendingTransactions();
+        volatile Block.Builder    workingBlock;
+        final Set<Certification>  workingCertificates = new HashSet<>();
+
+        @Override
+        public void deliverTransaction(Transaction txn) {
+            HashKey hash = new HashKey(Conversion.hashOf(txn.toByteArray()));
+            pending.add(new PendingTransactions.EnqueuedTransaction(hash, txn));
+        }
+
+        @Override
+        void deliverBlock(Block parseFrom) {
+            // TODO Auto-generated method stub
+        }
+
+        @Override
+        void deliverPersist(ID hash) {
+            // TODO Auto-generated method stub
+        }
+
+        @Override
+        void deliverValidate(Validate validation) {
+            // TODO Auto-generated method stub
+        }
+
+        @Override
+        void submit(PendingTransactions.EnqueuedTransaction enqueuedTransaction) {
+            if (pending.add(enqueuedTransaction)) {
+                log.info("Submitted txn: {}", enqueuedTransaction.hash);
+                deliver(ConsortiumMessage.newBuilder()
+                                         .setMsg(enqueuedTransaction.transaction.toByteString())
+                                         .setType(MessageType.TRANSACTION)
+                                         .build());
+            }
+        }
+    }
+
+    static class CurrentBlock {
         final Block   block;
         final HashKey hash;
 
@@ -239,13 +280,13 @@ public class Consortium {
         }
     }
 
-    private class Follower extends CommitteeMember {
+    class Follower extends CommitteeMember {
     }
 
-    private class Leader extends CommitteeMember {
+    class Leader extends CommitteeMember {
     }
 
-    private abstract class State {
+    abstract class State {
 
         boolean becomeClient() {
             vState.state = new Client();
@@ -262,25 +303,19 @@ public class Consortium {
             return true;
         }
 
-        void deliverBlock(Block parseFrom, HashKey from) {
-            // TODO Auto-generated method stub
-        }
+        abstract void deliverBlock(Block parseFrom);
 
-        void deliverPersist(ID parseFrom, HashKey from) {
-            // TODO Auto-generated method stub
-        }
+        abstract void deliverPersist(ID hash);
 
-        void deliverTransaction(Transaction parseFrom, HashKey from) {
-            // TODO Auto-generated method stub
-        }
+        abstract void deliverTransaction(Transaction txn);
 
-        void deliverValidate(Validate parseFrom, HashKey from) {
-            // TODO Auto-generated method stub
-        }
+        abstract void deliverValidate(Validate validation);
+
+        abstract void submit(PendingTransactions.EnqueuedTransaction enqueuedTransaction);
 
     }
 
-    private class VolatileState {
+    private class VolatileState implements MembershipListener<Member> {
         private volatile CommonCommunications<ConsortiumClientCommunications, Service> comm;
         private volatile CurrentBlock                                                  current;
         private volatile Context<Collaborator>                                         currentView;
@@ -289,6 +324,22 @@ public class Consortium {
         private volatile Messenger                                                     messenger;
         private volatile State                                                         state = new Client();
         private volatile TotalOrder                                                    to;
+
+        @Override
+        public void fail(Member member) {
+            final Context<Collaborator> view = currentView;
+            if (view != null) {
+                view.offlineIfActive(member.getId());
+            }
+        }
+
+        @Override
+        public void recover(Member member) {
+            final Context<Collaborator> view = currentView;
+            if (view != null) {
+                view.activateIfOffline(member.getId());
+            }
+        }
 
         private void pause() {
             CommonCommunications<ConsortiumClientCommunications, Service> currentComm = comm;
@@ -324,6 +375,7 @@ public class Consortium {
                 currentMsg.start(parameters.gossipDuration, parameters.scheduler);
             }
         }
+
     }
 
     private final static Logger log = LoggerFactory.getLogger(Consortium.class);
@@ -344,10 +396,11 @@ public class Consortium {
     }
 
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
-    private final Parameters                                                                       parameters;
-    private final Map<HashKey, SubmittedTransaction>                                               submitted = new ConcurrentHashMap<>();
-    private volatile int                                                                           toleranceLevel;
-    private final VolatileState                                                                    vState    = new VolatileState();
+
+    private final Parameters                         parameters;
+    private final Map<HashKey, SubmittedTransaction> submitted = new ConcurrentHashMap<>();
+    private volatile int                             toleranceLevel;
+    private final VolatileState                      vState    = new VolatileState();
 
     public Consortium(Parameters parameters) {
         this.parameters = parameters;
@@ -356,7 +409,7 @@ public class Consortium {
                                                                                parameters.communications.getClientIdentityProvider(),
                                                                                null, r),
                                                                        ConsortiumClientCommunications.getCreate(null));
-        parameters.context.register(membershipListener());
+        parameters.context.register(vState);
     }
 
     public Member getMember() {
@@ -440,36 +493,42 @@ public class Consortium {
         HashKey hashKey = new HashKey(hash);
         Transaction transaction = builder.build();
         submitted.put(hashKey, new SubmittedTransaction(transaction, onCompletion));
-        List<TransactionResult> results = current.ring(0).stream().map(c -> {
-            ConsortiumClientCommunications link = linkFor(c);
-            if (link == null) {
-                log.warn("Cannot get link for {}", c.getId());
-                return null;
-            }
-            return link.clientSubmit(SubmitTransaction.newBuilder()
-                                                      .setContext(current.getId().toByteString())
-                                                      .setTransaction(transaction)
-                                                      .build());
-        }).filter(r -> r != null).limit(toleranceLevel).collect(Collectors.toList());
+        List<TransactionResult> results = current.sample(toleranceLevel + 1, parameters.msgParameters.entropy,
+                                                         parameters.member.getId())
+                                                 .stream()
+                                                 .map(c -> {
+                                                     ConsortiumClientCommunications link = linkFor(c);
+                                                     if (link == null) {
+                                                         log.warn("Cannot get link for {}", c.getId());
+                                                         return null;
+                                                     }
+                                                     return link.clientSubmit(SubmitTransaction.newBuilder()
+                                                                                               .setContext(current.getId()
+                                                                                                                  .toByteString())
+                                                                                               .setTransaction(transaction)
+                                                                                               .build());
+                                                 })
+                                                 .filter(r -> r != null)
+                                                 .limit(toleranceLevel)
+                                                 .collect(Collectors.toList());
         if (results.size() < toleranceLevel) {
             throw new TimeoutException("Cannot submit transaction " + hashKey);
         }
         return hashKey;
     }
 
-    @SuppressWarnings("unused")
-    private void deliver(ConsortiumMessage.Builder message) {
+    State getState() {
+        final State get = vState.state;
+        return get;
+    }
+
+    private void deliver(ConsortiumMessage message) {
         final Messenger currentMsgr = vState.messenger;
         if (currentMsgr == null) {
             log.error("skipping message publish as no messenger");
             return;
         }
-        vState.messenger.publish(message.build().toByteArray());
-    }
-
-    private State getState() {
-        final State get = vState.state;
-        return get;
+        currentMsgr.publish(message.toByteArray());
     }
 
     private ConsortiumClientCommunications linkFor(Member m) {
@@ -480,27 +539,6 @@ public class Consortium {
                       (e.getCause() != null ? e.getCause() : e).getMessage());
         }
         return null;
-    }
-
-    private MembershipListener<Member> membershipListener() {
-        return new MembershipListener<Member>() {
-
-            @Override
-            public void fail(Member member) {
-                final Context<Collaborator> view = vState.currentView;
-                if (view != null) {
-                    view.offlineIfActive(member.getId());
-                }
-            }
-
-            @Override
-            public void recover(Member member) {
-                final Context<Collaborator> view = vState.currentView;
-                if (view != null) {
-                    view.activateIfOffline(member.getId());
-                }
-            }
-        };
     }
 
     private boolean next() {
@@ -522,46 +560,47 @@ public class Consortium {
 
     }
 
-    private void process(Msg msg, HashKey from) {
+    private void process(Msg msg) {
+        log.info("Processing {} from {}", msg.sequenceNumber, msg.from);
         ConsortiumMessage message;
         try {
             message = ConsortiumMessage.parseFrom(msg.content);
         } catch (InvalidProtocolBufferException e) {
-            log.error("error parsing message from {}", from, e);
+            log.error("error parsing message from {}", msg.from, e);
             return;
         }
         switch (message.getType()) {
         case BLOCK:
             try {
-                getState().deliverBlock(Block.parseFrom(message.getMsg().asReadOnlyByteBuffer()), from);
+                getState().deliverBlock(Block.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
             } catch (InvalidProtocolBufferException e) {
-                log.error("invalid block delivered from {}", from, e);
+                log.error("invalid block delivered from {}", msg.from, e);
             }
             break;
         case PERSIST:
             try {
-                getState().deliverPersist(ID.parseFrom(message.getMsg().asReadOnlyByteBuffer()), from);
+                getState().deliverPersist(ID.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
             } catch (InvalidProtocolBufferException e) {
-                log.error("invalid persist delivered from {}", from, e);
+                log.error("invalid persist delivered from {}", msg.from, e);
             }
             break;
         case TRANSACTION:
             try {
-                getState().deliverTransaction(Transaction.parseFrom(message.getMsg().asReadOnlyByteBuffer()), from);
+                getState().deliverTransaction(Transaction.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
             } catch (InvalidProtocolBufferException e) {
-                log.error("invalid transaction delivered from {}", from, e);
+                log.error("invalid transaction delivered from {}", msg.from, e);
             }
             break;
         case VALIDATE:
             try {
-                getState().deliverValidate(Validate.parseFrom(message.getMsg().asReadOnlyByteBuffer()), from);
+                getState().deliverValidate(Validate.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
             } catch (InvalidProtocolBufferException e) {
-                log.error("invalid validate delivered from {}", from, e);
+                log.error("invalid validate delivered from {}", msg.from, e);
             }
             break;
         case UNRECOGNIZED:
         default:
-            log.error("Invalid consortium message type: {} from: {}", message.getType(), from);
+            log.error("Invalid consortium message type: {} from: {}", message.getType(), msg.from);
             break;
         }
     }
@@ -653,7 +692,7 @@ public class Consortium {
         if (newView.getMember(parameters.member.getId()) != null) { // cohort member
             vState.messenger = new Messenger(parameters.member, parameters.signature, newView,
                     parameters.communications, parameters.msgParameters);
-            vState.to = new TotalOrder((m, k) -> process(m, k), newView);
+            vState.to = new TotalOrder((m, k) -> process(m), newView);
             vState.messenger.register(0, messages -> {
                 vState.to.process(messages);
             });
