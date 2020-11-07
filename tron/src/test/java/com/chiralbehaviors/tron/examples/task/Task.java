@@ -17,7 +17,6 @@
 package com.chiralbehaviors.tron.examples.task;
 
 import com.chiralbehaviors.tron.Exit;
-import com.chiralbehaviors.tron.Fsm;
 
 /**
  * 
@@ -180,11 +179,6 @@ public enum Task implements TaskFsm {
         }
 
     };
-
-    private static TaskModel context() {
-        TaskModel context = Fsm.thisContext();
-        return context;
-    }
 
     /**
      * Block is ignored by four of six states. Force the other two states to

@@ -10,10 +10,12 @@ package com.chiralbehaviors.tron;
  * @author hal.hildebrand
  *
  */
-public interface FsmExecutor<Context, Transitions> {
+public interface FsmExecutor<Context, T> {
     default Context context() {
-        throw new IllegalStateException();
+        return Fsm.thisContext();
     }
 
-    Fsm<Context, Transitions> fsm();
+    default Fsm<Context, T> fsm() {
+        return Fsm.thisFsm();
+    }
 }

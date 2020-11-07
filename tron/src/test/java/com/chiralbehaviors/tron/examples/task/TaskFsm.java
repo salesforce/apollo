@@ -15,12 +15,14 @@
  */
 package com.chiralbehaviors.tron.examples.task;
 
+import com.chiralbehaviors.tron.FsmExecutor;
+
 /**
  * 
  * @author hhildebrand
  * 
  */
-public interface TaskFsm {
+public interface TaskFsm extends FsmExecutor<TaskModel, TaskFsm> {
     TaskFsm block();
 
     TaskFsm delete();

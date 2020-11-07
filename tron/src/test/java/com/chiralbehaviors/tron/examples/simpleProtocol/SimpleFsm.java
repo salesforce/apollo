@@ -15,12 +15,14 @@
  */
 package com.chiralbehaviors.tron.examples.simpleProtocol;
 
+import com.chiralbehaviors.tron.FsmExecutor;
+
 /**
  * 
  * @author hhildebrand
  * 
  */
-public interface SimpleFsm {
+public interface SimpleFsm extends FsmExecutor<SimpleProtocol, SimpleFsm> {
     SimpleFsm accepted(BufferHandler buffer);
 
     SimpleFsm closing();
