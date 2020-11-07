@@ -25,8 +25,8 @@ import com.chiralbehaviors.tron.Exit;
  */
 public enum Task implements TaskFsm {
     /**
-     * the uncompleted task is externally prevented from running again. It will
-     * stay in this state until either stopped or unblocked.
+     * the uncompleted task is externally prevented from running again. It will stay
+     * in this state until either stopped or unblocked.
      */
     Blocked() {
         /**
@@ -45,57 +45,18 @@ public enum Task implements TaskFsm {
     Deleted() {
 
         @Override
-        public TaskFsm block() {
-            // internal loopback transition
-            return null;
-        }
-
-        @Override
         public TaskFsm delete() {
-            // internal loopback transition
-            return null;
-        }
-
-        @Override
-        public TaskFsm done() {
-            // internal loopback transition
-            return null;
-        }
-
-        @Override
-        public TaskFsm start(long timeslice) {
-            // internal loopback transition
             return null;
         }
 
         @Override
         public TaskFsm stop() {
-            // internal loopback transition
             return null;
         }
-
-        @Override
-        public TaskFsm stopped() {
-            // internal loopback transition
-            return null;
-        }
-
-        @Override
-        public TaskFsm suspended() {
-            // internal loopback transition
-            return null;
-        }
-
-        @Override
-        public TaskFsm unblock() {
-            // internal loopback transition
-            return null;
-        }
-
     },
     /**
-     * the task is actively doing work. The task is allowed to run for a
-     * specified time limit.
+     * the task is actively doing work. The task is allowed to run for a specified
+     * time limit.
      */
     Running() {
         @Override
@@ -139,8 +100,7 @@ public enum Task implements TaskFsm {
 
     },
     /**
-     * the task is cleaning up allocated resources before entering the stop
-     * state.
+     * the task is cleaning up allocated resources before entering the stop state.
      */
     Stopping {
 
@@ -167,8 +127,8 @@ public enum Task implements TaskFsm {
         }
 
         /**
-         * Time to do more work. The timeslice duration is passed in as a
-         * transition argument.
+         * Time to do more work. The timeslice duration is passed in as a transition
+         * argument.
          */
         @Override
         public TaskFsm start(long timeslice) {
@@ -181,32 +141,11 @@ public enum Task implements TaskFsm {
     };
 
     /**
-     * Block is ignored by four of six states. Force the other two states to
-     * define this. Note the "nil" end state. This is a loopback transition
-     */
-    @Override
-    public TaskFsm block() {
-        return null;
-    }
-
-    /**
      * All but the Delete state follow this transition. Define it here.
      */
     @Override
     public TaskFsm delete() {
         return Deleted;
-    }
-
-    @Override
-    public TaskFsm done() {
-        // ignored by default - internal loopback transition
-        return null;
-    }
-
-    @Override
-    public TaskFsm start(long timeslice) {
-        // ignored by default - internal loopback transition
-        return null;
     }
 
     /**
@@ -217,23 +156,5 @@ public enum Task implements TaskFsm {
     public TaskFsm stop() {
         context().stopTask();
         return Stopping;
-    }
-
-    @Override
-    public TaskFsm stopped() {
-        // ignored by default - internal loopback transition
-        return null;
-    }
-
-    @Override
-    public TaskFsm suspended() {
-        // ignored by default - internal loopback transition
-        return null;
-    }
-
-    @Override
-    public TaskFsm unblock() {
-        // ignored by default - internal loopback transition
-        return null;
     }
 }

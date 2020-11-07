@@ -16,6 +16,7 @@
 package com.chiralbehaviors.tron.examples.simpleProtocol;
 
 import com.chiralbehaviors.tron.FsmExecutor;
+import com.chiralbehaviors.tron.InvalidTransition;
 
 /**
  * 
@@ -23,23 +24,43 @@ import com.chiralbehaviors.tron.FsmExecutor;
  * 
  */
 public interface SimpleFsm extends FsmExecutor<SimpleProtocol, SimpleFsm> {
-    SimpleFsm accepted(BufferHandler buffer);
+    default SimpleFsm accepted(BufferHandler buffer) {
+        return protocolError();
+    }
 
-    SimpleFsm closing();
+    default SimpleFsm closing() {
+        return protocolError();
+    }
 
-    SimpleFsm connected(BufferHandler buffer);
+    default SimpleFsm connected(BufferHandler buffer) {
+        return protocolError();
+    }
 
-    SimpleFsm protocolError();
+    default SimpleFsm protocolError() {
+        throw new InvalidTransition();
+    }
 
-    SimpleFsm readError();
+    default SimpleFsm readError() {
+        return protocolError();
+    }
 
-    SimpleFsm readReady();
+    default SimpleFsm readReady() {
+        return protocolError();
+    }
 
-    SimpleFsm sendGoodbye();
+    default SimpleFsm sendGoodbye() {
+        return protocolError();
+    }
 
-    SimpleFsm transmitMessage(String message);
+    default SimpleFsm transmitMessage(String message) {
+        return protocolError();
+    }
 
-    SimpleFsm writeError();
+    default SimpleFsm writeError() {
+        return protocolError();
+    }
 
-    SimpleFsm writeReady();
+    default SimpleFsm writeReady() {
+        return protocolError();
+    }
 }

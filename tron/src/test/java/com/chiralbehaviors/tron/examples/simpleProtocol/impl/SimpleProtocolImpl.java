@@ -7,27 +7,19 @@ public class SimpleProtocolImpl implements SimpleProtocol {
     private BufferHandler handler;
 
     @Override
-    public void ackReceived() {
-        // TODO Auto-generated method stub
-
+    public void ackReceived() { 
     }
 
     @Override
-    public void awaitAck() {
-        // TODO Auto-generated method stub
-
+    public void awaitAck() { 
     }
 
     @Override
-    public void enableSend() {
-        // TODO Auto-generated method stub
-
+    public void enableSend() { 
     }
 
     @Override
-    public void establishClientSession() {
-        // TODO Auto-generated method stub
-
+    public void establishClientSession() { 
     }
 
     public BufferHandler getHandler() {
@@ -35,20 +27,16 @@ public class SimpleProtocolImpl implements SimpleProtocol {
     }
 
     @Override
-    public void sendGoodbye() {
-        // TODO Auto-generated method stub
-
+    public void sendGoodbye() { 
     }
 
     @Override
-    public void setHandler(BufferHandler handler) {
+    public void setHandler(BufferHandler handler) { 
         this.handler = handler;
     }
 
     @Override
-    public void transmitMessage(String message) {
-        // TODO Auto-generated method stub
-
+    public void transmitMessage(String message) { 
     }
 
 }

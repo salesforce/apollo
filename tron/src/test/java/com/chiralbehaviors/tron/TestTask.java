@@ -62,5 +62,9 @@ public class TestTask {
         assertEquals(Task.Stopped, fsm.getCurrentState());
         transitions.delete();
         assertEquals(Task.Deleted, fsm.getCurrentState());
+        transitions.delete();
+        assertEquals(Task.Deleted, fsm.getCurrentState());
+        transitions.stop();
+        assertEquals(Task.Deleted, fsm.getCurrentState());
     }
 }

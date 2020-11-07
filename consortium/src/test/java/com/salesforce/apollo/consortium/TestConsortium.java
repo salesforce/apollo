@@ -161,7 +161,6 @@ public class TestConsortium {
 
         Duration gossipDuration = Duration.ofMillis(100);
         Parameters msgParameters = Parameters.newBuilder()
-                                             .setFalsePositiveRate(0.001)
                                              .setBufferSize(100)
                                              .setEntropy(new SecureRandom())
                                              .build();

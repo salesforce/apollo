@@ -110,29 +110,14 @@ public enum SimpleClient implements SimpleFsm {
         SimpleFsm popTransition = fsm().pop();
         popTransition.closing();
         return null;
-    }
-
-    @Override
-    public SimpleFsm connected(BufferHandler buffer) {
-        return protocolError();
-    }
+    } 
 
     @Override
     public SimpleFsm protocolError() {
         SimpleFsm popTransition = fsm().pop();
         popTransition.protocolError();
         return null;
-    }
-
-    @Override
-    public SimpleFsm readError() {
-        return protocolError();
-    }
-
-    @Override
-    public SimpleFsm readReady() {
-        return protocolError();
-    }
+    } 
 
     @Override
     public SimpleFsm sendGoodbye() {
@@ -142,15 +127,5 @@ public enum SimpleClient implements SimpleFsm {
     @Override
     public SimpleFsm transmitMessage(String message) {
         throw new InvalidTransition();
-    }
-
-    @Override
-    public SimpleFsm writeError() {
-        return protocolError();
-    }
-
-    @Override
-    public SimpleFsm writeReady() {
-        return protocolError();
-    }
+    } 
 }
