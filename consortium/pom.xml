@@ -11,10 +11,14 @@
 	<name>Consortium</name>
 	<description>Committees for ordering transactions</description>
 	<dependencies>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>memberships</artifactId>
-        </dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>memberships</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>tron</artifactId>
+		</dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>
@@ -32,11 +36,11 @@
 			<artifactId>fireflies</artifactId>
 			<scope>test</scope>
 		</dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>test-population</artifactId>
-            <scope>test</scope>
-        </dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>test-population</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

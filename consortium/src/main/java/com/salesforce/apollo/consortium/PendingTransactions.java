@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.consortium;
 
-import java.util.Collections;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,12 +61,13 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
 
     private final static Logger log = LoggerFactory.getLogger(PendingTransactions.class);
 
-    private volatile PendingTransactions.EnqueuedTransaction   head         = null;
-    private volatile PendingTransactions.EnqueuedTransaction   tail         = null;
-    private final Set<PendingTransactions.EnqueuedTransaction> transactions = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private volatile PendingTransactions.EnqueuedTransaction            head         = null;
+    private volatile PendingTransactions.EnqueuedTransaction            tail         = null;
+    private final Map<HashKey, PendingTransactions.EnqueuedTransaction> transactions = new ConcurrentHashMap<>();
 
     public boolean add(PendingTransactions.EnqueuedTransaction e) {
-        if (transactions.add(e)) {
+        AtomicBoolean updated = new AtomicBoolean();
+        transactions.computeIfAbsent(e.hash, k -> {
             log.trace("Adding pending txn: {}", e.hash);
             PendingTransactions.EnqueuedTransaction prevHead = head;
             PendingTransactions.EnqueuedTransaction prevTail = tail;
@@ -76,10 +77,10 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
             } else {
                 prevTail.next = e;
             }
-            return true;
-        }
-        log.trace("Already have seen txn: {}:{}", e.hash, size());
-        return false;
+            updated.set(true);
+            return e;
+        });
+        return updated.get();
     }
 
     public boolean isEmpty() {
@@ -96,8 +97,18 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
         transactions.clear();
     }
 
-    public boolean contains(Object o) {
-        return transactions.contains(o);
+    public EnqueuedTransaction removeFirst() {
+        EnqueuedTransaction currentHead = head;
+        if (currentHead == null) {
+            return null;
+        }
+        head = currentHead.next;
+        currentHead.next = null;
+        return currentHead;
+    }
+
+    public boolean contains(EnqueuedTransaction o) {
+        return transactions.containsKey(o.hash);
     }
 
     @Override
