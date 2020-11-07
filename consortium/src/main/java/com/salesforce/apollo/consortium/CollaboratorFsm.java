@@ -47,6 +47,9 @@ public interface CollaboratorFsm extends FsmExecutor<CollaboratorContext, Collab
         throw new InvalidTransition();
     }
 
+    default CollaboratorFsm genesisAccepted() {
+        throw new InvalidTransition();
+    }
     default CollaboratorFsm submit(PendingTransactions.EnqueuedTransaction enqueuedTransaction) {
         throw new InvalidTransition();
     }

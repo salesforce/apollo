@@ -29,7 +29,7 @@ public enum CollaboratorFsmImpl implements CollaboratorFsm {
         }
 
     },
-    INITIAL {
+    GENESIS_PROCESSED {
 
         @Override
         public CollaboratorFsm becomeClient() {
@@ -44,6 +44,12 @@ public enum CollaboratorFsmImpl implements CollaboratorFsm {
         @Override
         public CollaboratorFsm becomeLeader() {
             return LEADER;
+        }
+    },
+    INITIAL {
+
+        public CollaboratorFsm genesisAccepted() {
+            return GENESIS_PROCESSED;
         }
     },
     LEADER {

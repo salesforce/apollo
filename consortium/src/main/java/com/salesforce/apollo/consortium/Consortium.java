@@ -547,6 +547,7 @@ public class Consortium {
             log.error("Protocol violation.  Cannot decode genesis body: {}", e);
             return false;
         }
+        transitions.genesisAccepted();
         return reconfigure(body.getInitialView());
     }
 
@@ -574,7 +575,7 @@ public class Consortium {
 
     private boolean reconfigure(Reconfigure body) {
         HashKey viewId = new HashKey(body.getId());
-        Context<Collaborator> newView = new Context<Collaborator>(viewId, parameters.context.getRingCount());
+        Context<Collaborator> newView = new Context<Collaborator>(viewId, parameters.context.toleranceLevel() + 1);
         body.getViewList().stream().map(v -> {
             HashKey memberId = new HashKey(v.getId());
             Member m = parameters.context.getMember(memberId);
@@ -603,6 +604,8 @@ public class Consortium {
      */
     private boolean viewChange(Context<Collaborator> newView, int t) {
         vState.pause();
+
+        log.info("View rings: {} ttl: {}", newView.getRingCount(), newView.timeToLive());
 
         vState.currentView = newView;
         toleranceLevel = t;
