@@ -21,6 +21,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,11 +124,13 @@ public final class Fsm<Context, Transitions> {
     private Enum<?>                  previous;
     private final Transitions        proxy;
     private final Deque<Enum<?>>     stack      = new ArrayDeque<>();
+    private final Lock               sync;
     private String                   transition;
     private final Class<Transitions> transitionsType;
 
     Fsm(Context context, boolean sync, Class<Transitions> transitionsType, ClassLoader transitionsCL) {
         this.context = context;
+        this.sync = sync ? new ReentrantLock() : null;
         this.transitionsType = transitionsType;
         this.log = DEFAULT_LOG;
         @SuppressWarnings("unchecked")
@@ -335,6 +339,14 @@ public final class Fsm<Context, Transitions> {
      * @param arguments - the transition arguments
      */
     private void fire(Method t, Object[] arguments) {
+        if (sync != null) {
+            try {
+                sync.lockInterruptibly();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(
+                        String.format("Unable to fire transition [%s] due to thread interruption", t.getName()), e);
+            }
+        }
         Fsm<?, ?> previousFsm = thisFsm.get();
         thisFsm.set(this);
         previous = current;
@@ -349,6 +361,9 @@ public final class Fsm<Context, Transitions> {
             transitionTo(nextState);
         } finally {
             thisFsm.set(previousFsm);
+            if (sync != null) {
+                sync.unlock();
+            }
         }
     }
 
