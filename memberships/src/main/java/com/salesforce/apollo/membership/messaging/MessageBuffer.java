@@ -94,7 +94,6 @@ public class MessageBuffer {
     }
 
     private final int                   bufferSize;
-    private final AtomicInteger         cycles             = new AtomicInteger();
     private final AtomicInteger         lastSequenceNumber = new AtomicInteger();
     private final Map<HashKey, Message> state              = new ConcurrentHashMap<>();
     private int                         tooOld;
