@@ -234,7 +234,7 @@ public class Consortium {
 
     abstract class CommitteeMember extends State {
         final PendingTransactions pending             = new PendingTransactions();
-        volatile Block.Builder    workingBlock;
+        volatile Block.Builder    workingBlock        = Block.newBuilder();
         final Set<Certification>  workingCertificates = new HashSet<>();
 
         @Override

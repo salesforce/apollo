@@ -78,7 +78,7 @@ public class TotalOrderTest {
 
     private static Map<HashKey, CertificateWithPrivateKey> certs;
     private static final Parameters                        parameters = Parameters.newBuilder()
-                                                                                  .setFalsePositiveRate(0.1)
+                                                                                  .setFalsePositiveRate(0.01)
                                                                                   .setBufferSize(500)
                                                                                   .setEntropy(new SecureRandom())
                                                                                   .build();
@@ -131,7 +131,7 @@ public class TotalOrderTest {
             return new Messenger(node, () -> forSigning(node), context, comms, parameters);
         }).collect(Collectors.toList());
 
-        messengers.forEach(view -> view.start(Duration.ofMillis(50), scheduler));
+        messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
         List<ToReceiver> receivers = messengers.stream().map(m -> {
             ToReceiver receiver = new ToReceiver(m.getMember().getId(), context);
             m.register(0, messages -> receiver.totalOrder.process(messages));
