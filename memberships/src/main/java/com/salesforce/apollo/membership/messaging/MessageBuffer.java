@@ -28,6 +28,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.Messages.Builder;
+import com.salesfoce.apollo.proto.Push;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
@@ -128,10 +129,12 @@ public class MessageBuffer {
      * @return the list of new messages for this buffer
      */
     public List<Message> merge(List<Message> updates, Predicate<Message> validator) {
-        return updates.parallelStream().filter(validator).filter(message -> {
+        List<Message> merged = updates.parallelStream().filter(validator).filter(message -> {
             HashKey hash = idOf(message);
             return merge(hash, message);
         }).collect(Collectors.toList());
+        gc();
+        return merged;
     }
 
     public Messages process(BloomFilter bff, int seed, double p) {
@@ -166,7 +169,7 @@ public class MessageBuffer {
         return update;
     }
 
-    public void updatesFor(BloomFilter bff, com.salesfoce.apollo.proto.Push.Builder builder) {
+    public void updatesFor(BloomFilter bff, Push.Builder builder) {
         state.entrySet()
              .stream()
              .peek(entry -> entry.setValue(Message.newBuilder(entry.getValue())
@@ -175,6 +178,7 @@ public class MessageBuffer {
              .filter(entry -> !bff.contains(entry.getKey()))
              .map(entry -> entry.getValue())
              .forEach(e -> builder.addUpdates(e));
+        purgeTheAged();
     }
 
     private Message createUpdate(byte[] content, int sequenceNumber, HashKey from, byte[] signature) {
@@ -206,7 +210,6 @@ public class MessageBuffer {
             log.trace("merged: {} age: {} prev: {}", hash, age, v.getAge());
             return Message.newBuilder(v).setAge(age).build();
         });
-        gc();
         return updated.get();
     }
 
