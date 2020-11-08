@@ -8,11 +8,15 @@ package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
+import java.security.KeyPair;
+import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
@@ -24,7 +28,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
@@ -55,6 +58,7 @@ import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -86,7 +90,7 @@ public class TestConsortium {
     private Builder                builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private Map<HashKey, Router>   communications = new HashMap<>();
     private final List<Consortium> consortium     = new ArrayList<>();
-    private Random                 entropy;
+    private SecureRandom           entropy;
     private List<Node>             members;
     private List<X509Certificate>  seeds;
     private List<View>             views;
@@ -107,7 +111,7 @@ public class TestConsortium {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        entropy = new Random(0x666);
+        entropy = new SecureRandom();
 
         seeds = new ArrayList<>();
         int testCardinality = 99;
@@ -160,10 +164,7 @@ public class TestConsortium {
         System.out.println("Stabilized view across " + views.size() + " members");
 
         Duration gossipDuration = Duration.ofMillis(100);
-        Parameters msgParameters = Parameters.newBuilder()
-                                             .setBufferSize(100)
-                                             .setEntropy(new SecureRandom())
-                                             .build();
+        Parameters msgParameters = Parameters.newBuilder().setBufferSize(100).setEntropy(new SecureRandom()).build();
         views.stream()
              .map(v -> new Consortium(Consortium.Parameters.newBuilder()
                                                            .setExecutor(t -> Collections.emptyList())
@@ -225,13 +226,26 @@ public class TestConsortium {
                                                      .setCheckpointBlocks(256)
                                                      .setId(ByteString.copyFrom(viewID))
                                                      .setToleranceLevel(parameters.toleranceLevel);
+        Map<Member, KeyPair> consensusKeys = new HashMap<>();
         blueRibbon.forEach(e -> {
+            KeyPair consensusKey = Validator.generateKeyPair(2048, "RSA");
+            consensusKeys.put(e.getMember(), consensusKey);
+
+            byte[] encoded = consensusKey.getPublic().getEncoded();
+            
+            PublicKey test = Validator.publicKeyOf(encoded);
+            assertEquals(consensusKey.getPublic(), test);
+            byte[] testEncoded = test.getEncoded();
+            assertArrayEquals(encoded, testEncoded);
+            
+            byte[] signed = Validator.sign(consensusKey.getPrivate(), entropy, encoded);
+            assertNotNull(signed);
+            assertNotNull(Validator.verify(consensusKey.getPublic(), signed, encoded));
+
             genesisView.addView(ViewMember.newBuilder()
                                           .setId(e.getMember().getId().toByteString())
-                                          .setConsensusKey(ByteString.copyFrom(e.getMember()
-                                                                                .getCertificate()
-                                                                                .getPublicKey()
-                                                                                .getEncoded())));
+                                          .setConsensusKey(ByteString.copyFrom(encoded))
+                                          .setSignature(ByteString.copyFrom(signed)));
         });
         Body genesisBody = Body.newBuilder()
                                .setConsensusId(0)
@@ -251,7 +265,7 @@ public class TestConsortium {
                                                                                .setBody(genesisBody));
         byte[] headerBytes = header.toByteArray();
         blueRibbon.stream().map(c -> c.getMember()).map(c -> (Node) c).forEach(n -> {
-            Signature signature = n.forSigning();
+            Signature signature = Validator.forSigning(consensusKeys.get(n).getPrivate(), entropy);
             try {
                 signature.update(headerBytes);
                 certifiedGenesis.addCertifications(Certification.newBuilder()

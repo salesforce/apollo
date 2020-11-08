@@ -13,7 +13,6 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.proto.ID;
 import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.Consortium.CurrentBlock;
 import com.salesforce.apollo.membership.Member;
 
 /**
