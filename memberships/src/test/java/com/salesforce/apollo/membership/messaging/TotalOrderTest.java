@@ -134,7 +134,7 @@ public class TotalOrderTest {
         messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
         List<ToReceiver> receivers = messengers.stream().map(m -> {
             ToReceiver receiver = new ToReceiver(m.getMember().getId(), context);
-            m.register(0, messages -> receiver.totalOrder.process(messages));
+            m.register(messages -> receiver.totalOrder.process(messages));
             receiver.totalOrder.start();
             return receiver;
         }).collect(Collectors.toList());

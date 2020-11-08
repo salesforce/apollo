@@ -14,8 +14,7 @@ import java.security.Signature;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -172,11 +171,12 @@ public class Messenger {
     public final Member                                                        member;
     public final Supplier<Signature>                                           signature;
     private final MessageBuffer                                                buffer;
-    private final Map<Integer, MessageChannelHandler>                          channelHandlers = new ConcurrentHashMap<>();
+    private final List<MessageChannelHandler>                                  channelHandlers = new CopyOnWriteArrayList<>();
     private final CommonCommunications<MessagingClientCommunications, Service> comm;
     private final Context<Member>                                              context;
     private volatile int                                                       lastRing        = -1;
     private final Parameters                                                   parameters;
+    private final List<Runnable>                                               roundListeners  = new CopyOnWriteArrayList<>();
     private final AtomicBoolean                                                started         = new AtomicBoolean();
 
     @SuppressWarnings("unchecked")
@@ -238,6 +238,15 @@ public class Messenger {
                 link.release();
             }
             if (started.get()) {
+                roundListeners.forEach(l -> {
+                    commonPool().execute(() -> {
+                        try {
+                            l.run();
+                        } catch (Throwable e) {
+                            log.error("error sending round() to listener: " + l, e);
+                        }
+                    });
+                });
                 scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
             }
         });
@@ -247,8 +256,12 @@ public class Messenger {
         buffer.publish(message, member, signature.get());
     }
 
-    public void register(int channel, MessageChannelHandler listener) {
-        channelHandlers.put(channel, listener);
+    public void register(MessageChannelHandler listener) {
+        channelHandlers.add(listener);
+    }
+
+    public void register(Runnable roundListener) {
+        roundListeners.add(roundListener);
     }
 
     public void start(Duration duration, ScheduledExecutorService scheduler) {
@@ -319,7 +332,7 @@ public class Messenger {
             return;
         }
         log.trace("processed {} updates", updates.size());
-        channelHandlers.values().forEach(handler -> commonPool().execute(() -> handler.message(newMessages)));
+        channelHandlers.forEach(handler -> commonPool().execute(() -> handler.message(newMessages)));
     }
 
     private boolean validate(Message message) {

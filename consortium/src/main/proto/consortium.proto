@@ -25,8 +25,9 @@ message CertifiedBlock {
 }
 
 message Block {
-    Header header = 1;
-    Body body = 2;
+    bytes headerHash = 1;
+    Header header = 2;
+    Body body = 3;
 }
 
 message Header {
@@ -103,6 +104,6 @@ message ConsortiumMessage {
 
 message Validate {
     bytes id = 1;
-    bytes blockHeaderHash = 2;
+    bytes hash = 2;
     bytes signature = 3;
 }

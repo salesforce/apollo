@@ -20,12 +20,12 @@
         <appender-ref ref="STDOUT" />
     </logger> 
     
-    <logger name="com.salesforce.apollo.membership.messaging.TotalOrder" level="info"
+    <logger name="com.chiralbehaviors.tron" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
     
-    <logger name="com.salesforce.apollo.comm" level="WARN"
+    <logger name="com.salesforce.apollo.membership.messaging" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
@@ -35,7 +35,7 @@
 		<appender-ref ref="STDOUT" />
 	</logger> 
 
-	<root level="INFO">
+	<root level="WARN">
 		<appender-ref ref="STDOUT" />
 	</root>
 

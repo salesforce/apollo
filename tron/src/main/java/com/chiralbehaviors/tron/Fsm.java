@@ -154,9 +154,8 @@ public final class Fsm<Context, Transitions> {
      * 
      * @return the action context object of this Fsm
      */
-    @SuppressWarnings("unchecked")
-    public <C> C getContext() {
-        return (C) context;
+    public Context getContext() {
+        return context;
     }
 
     /**

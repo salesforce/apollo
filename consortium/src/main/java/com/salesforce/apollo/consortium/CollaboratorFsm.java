@@ -6,51 +6,165 @@
  */
 package com.salesforce.apollo.consortium;
 
-import com.chiralbehaviors.tron.FsmExecutor;
-import com.chiralbehaviors.tron.InvalidTransition;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
-import com.salesfoce.apollo.proto.ID;
-import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
+import com.salesforce.apollo.consortium.Consortium.CurrentBlock;
+import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
+import com.salesforce.apollo.membership.Member;
 
 /**
+ * Finite state machine for the Collaborator in a Consortium
+ * 
  * @author hal.hildebrand
  *
  */
-public interface CollaboratorFsm extends FsmExecutor<CollaboratorContext, CollaboratorFsm> {
-    default CollaboratorFsm becomeClient() {
-        throw new InvalidTransition();
-    }
+public enum CollaboratorFsm implements Transitions {
+    CLIENT {
 
-    default CollaboratorFsm becomeFollower() {
-        throw new InvalidTransition();
-    }
+        @Override
+        public Transitions processCheckpoint(CurrentBlock next) {
+            if (!context().processCheckpoint(next)) {
+                return PROTOCOL_FAILURE;
+            }
+            return null;
+        }
 
-    default CollaboratorFsm becomeLeader() {
-        throw new InvalidTransition();
-    }
+        @Override
+        public Transitions processUser(CurrentBlock next) {
+            if (!context().processUser(next)) {
+                return PROTOCOL_FAILURE;
+            }
+            return null;
+        }
+    },
+    FOLLOWER
 
-    default CollaboratorFsm deliverBlock(Block parseFrom) {
-        throw new InvalidTransition();
-    }
+    {
 
-    default CollaboratorFsm deliverPersist(ID hash) {
-        throw new InvalidTransition();
-    }
+        @Override
+        public Transitions deliverBlock(Block block, Member from) {
+            context().deliverBlock(block, from);
+            return null;
+        }
 
-    default CollaboratorFsm deliverTransaction(Transaction txn) {
-        throw new InvalidTransition();
-    }
+        @Override
+        public Transitions deliverTransaction(Transaction txn) {
+            context().add(txn);
+            return null;
+        }
 
-    default CollaboratorFsm deliverValidate(Validate validation) {
-        throw new InvalidTransition();
-    }
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            context().validate(validation);
+            return null;
+        }
 
-    default CollaboratorFsm genesisAccepted() {
-        throw new InvalidTransition();
-    }
-    default CollaboratorFsm submit(PendingTransactions.EnqueuedTransaction enqueuedTransaction) {
-        throw new InvalidTransition();
-    }
+        @Override
+        public Transitions processCheckpoint(CurrentBlock next) {
+            if (!context().processCheckpoint(next)) {
+                return PROTOCOL_FAILURE;
+            }
+            return null;
+        }
+
+        @Override
+        public Transitions processUser(CurrentBlock next) {
+            if (!context().processUser(next)) {
+                return PROTOCOL_FAILURE;
+            }
+            return null;
+        }
+
+        @Override
+        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
+            context().submit(enqueuedTransaction);
+            return null;
+        }
+
+    },
+    GENESIS_PROCESSED {
+
+        @Override
+        public Transitions becomeClient() {
+            return CLIENT;
+        }
+
+        @Override
+        public Transitions becomeFollower() {
+            return FOLLOWER;
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            return LEADER;
+        }
+
+    },
+    INITIAL {
+
+        @Override
+        public Transitions genesisAccepted() {
+            return GENESIS_PROCESSED;
+        }
+
+        @Override
+        public Transitions processGenesis(CurrentBlock next) {
+            if (!context().processGenesis(next)) {
+                return PROTOCOL_FAILURE;
+            }
+            return null;
+        }
+
+    },
+    LEADER {
+        @Override
+        public Transitions deliverBlock(Block block, Member from) {
+            if (!context().member().equals(from)) {
+                log.trace("Rejecting block proposal from {}", from);
+            }
+            return null;
+        }
+
+        @Override
+        public Transitions deliverTransaction(Transaction txn) {
+            context().add(txn);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            context().validate(validation);
+            return null;
+        }
+
+        @Override
+        public Transitions processCheckpoint(CurrentBlock next) {
+            if (!context().processCheckpoint(next)) {
+                return PROTOCOL_FAILURE;
+            }
+            return null;
+        }
+
+        @Override
+        public Transitions processUser(CurrentBlock next) {
+            if (!context().processUser(next)) {
+                return PROTOCOL_FAILURE;
+            }
+            return null;
+        }
+
+        @Override
+        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
+            context().submit(enqueuedTransaction);
+            return null;
+        }
+    },
+    PROTOCOL_FAILURE;
+
+    private static final Logger log = LoggerFactory.getLogger(CollaboratorFsm.class);
+
 }

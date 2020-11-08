@@ -7,13 +7,20 @@
 package com.salesforce.apollo.consortium;
 
 import java.nio.ByteBuffer;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
@@ -29,6 +36,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.BodyType;
+import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.ConsortiumMessage;
@@ -72,24 +80,121 @@ public class Consortium {
             super(member.getId(), member.getCertificate());
             this.consensusKey = consensusKey;
         }
+
+        /**
+         * Answer the Signature, initialized with the member's public consensus key,
+         * using the supplied signature algorithm.
+         * 
+         * @param signatureAlgorithm
+         * @return the signature, initialized for verification
+         */
+        public Signature forValidation(String signatureAlgorithm) {
+            PublicKey key = consensusKey;
+            return signatureForVerification(signatureAlgorithm, key);
+        }
     }
 
     public class CollaboratorContext {
-        private final PendingTransactions pending = new PendingTransactions();
+        private final PendingTransactions                  pending       = new PendingTransactions();
+        private final TickScheduler                        scheduler     = new TickScheduler();
+        private final Map<HashKey, CertifiedBlock.Builder> workingBlocks = new HashMap<>();
 
         public void add(Transaction txn) {
             HashKey hash = new HashKey(Conversion.hashOf(txn.toByteArray()));
             pending.add(new EnqueuedTransaction(hash, txn));
         }
 
+        public void deliverBlock(Block block, Member from) {
+            Member leader = vState.leader;
+            if (!from.equals(leader)) {
+                log.debug("Rejecting block proposal from {}", from);
+                return;
+            }
+            HashKey hash = new HashKey(Conversion.hashOf(block.toByteArray()));
+            workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder().setBlock(block));
+        }
+
+        public Member member() {
+            return parameters.member;
+        }
+
+        public boolean processCheckpoint(CurrentBlock next) {
+            Checkpoint body;
+            try {
+                body = Checkpoint.parseFrom(next.block.getBody().getContents());
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Protocol violation.  Cannot decode checkpoint body: {}", e);
+                return false;
+            }
+            return body != null;
+        }
+
+        public boolean processGenesis(CurrentBlock next) {
+            Genesis body;
+            try {
+                body = Genesis.parseFrom(next.block.getBody().getContents());
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Protocol violation.  Cannot decode genesis body: {}", e);
+                return false;
+            }
+            transitions.genesisAccepted();
+            return reconfigure(body.getInitialView());
+        }
+
+        public boolean processReconfigure(CurrentBlock next) {
+            Reconfigure body;
+            try {
+                body = Reconfigure.parseFrom(next.block.getBody().getContents());
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
+                return false;
+            }
+            return reconfigure(body);
+        }
+
+        public boolean processUser(CurrentBlock next) {
+            User body;
+            try {
+                body = User.parseFrom(next.block.getBody().getContents());
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
+                return false;
+            }
+            return body != null;
+        }
+
+        public void schedudule(Runnable action, int delta) {
+            scheduler.schedule(action, delta);
+        }
+
         public void submit(EnqueuedTransaction enqueuedTransaction) {
             if (pending.add(enqueuedTransaction)) {
-                log.debug("Submitted txn: {}", enqueuedTransaction.hash);
+                log.debug("Submitted txn: {}", enqueuedTransaction.getHash());
                 deliver(ConsortiumMessage.newBuilder()
-                                         .setMsg(enqueuedTransaction.transaction.toByteString())
+                                         .setMsg(enqueuedTransaction.getTransaction().toByteString())
                                          .setType(MessageType.TRANSACTION)
                                          .build());
             }
+        }
+
+        public void tick() {
+            scheduler.tick();
+        }
+
+        public void validate(Validate v) {
+            HashKey hash = new HashKey(v.getHash());
+            CertifiedBlock.Builder certifiedBlock = workingBlocks.get(hash);
+            if (certifiedBlock == null) {
+                log.trace("No working block to validate: {}", hash);
+                return;
+            }
+            ForkJoinPool.commonPool().execute(() -> {
+                if (Consortium.this.validate(certifiedBlock.getBlock(), v)) {
+                    certifiedBlock.addCertifications(Certification.newBuilder()
+                                                                  .setId(v.getId())
+                                                                  .setSignature(v.getSignature()));
+                }
+            });
         }
 
         PendingTransactions getPending() {
@@ -240,7 +345,6 @@ public class Consortium {
         private volatile CommonCommunications<ConsortiumClientCommunications, Service> comm;
         private volatile CurrentBlock                                                  current;
         private volatile Context<Collaborator>                                         currentView;
-        @SuppressWarnings("unused")
         private volatile Member                                                        leader;
         private volatile Messenger                                                     messenger;
         private volatile TotalOrder                                                    to;
@@ -298,7 +402,16 @@ public class Consortium {
 
     }
 
-    private final static Logger log = LoggerFactory.getLogger(Consortium.class);
+    private final static Logger     DEFAULT_LOGGER = LoggerFactory.getLogger(Consortium.class);
+    private final static KeyFactory KEY_FACTORY;
+
+    static {
+        try {
+            KEY_FACTORY = KeyFactory.getInstance("RSA");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Unable to get key factory", e);
+        }
+    }
 
     public static Block manifestBlock(byte[] data) {
         if (data.length == 0) {
@@ -312,17 +425,37 @@ public class Consortium {
     }
 
     public static PublicKey publicKeyOf(byte[] consensusKey) {
-        return null;
+        try {
+            return KEY_FACTORY.generatePublic(new X509EncodedKeySpec(consensusKey));
+        } catch (InvalidKeySpecException e) {
+            throw new IllegalStateException("Cannot decode public key", e);
+        }
+    }
+
+    private static Signature signatureForVerification(String signatureAlgorithm, PublicKey key) {
+        Signature signature;
+        try {
+            signature = Signature.getInstance(signatureAlgorithm);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("no such algorithm: " + signatureAlgorithm, e);
+        }
+        try {
+            signature.initVerify(key);
+        } catch (InvalidKeyException e) {
+            throw new IllegalStateException("invalid public key", e);
+        }
+        return signature;
     }
 
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
+    private final Fsm<CollaboratorContext, Transitions>                                            fsm;
+    private Logger                                                                                 log       = DEFAULT_LOGGER;
+    private final Parameters                                                                       parameters;
+    private final Map<HashKey, SubmittedTransaction>                                               submitted = new ConcurrentHashMap<>();
+    private volatile int                                                                           toleranceLevel;
+    private final Transitions                                                                      transitions;
 
-    private final Fsm<CollaboratorContext, CollaboratorFsm> fsm;
-    private final Parameters                                parameters;
-    private final Map<HashKey, SubmittedTransaction>        submitted = new ConcurrentHashMap<>();
-    private volatile int                                    toleranceLevel;
-    private final CollaboratorFsm                           transitions;
-    private final VolatileState                             vState    = new VolatileState();
+    private final VolatileState vState = new VolatileState();
 
     public Consortium(Parameters parameters) {
         this.parameters = parameters;
@@ -332,8 +465,12 @@ public class Consortium {
                                                                                null, r),
                                                                        ConsortiumClientCommunications.getCreate(null));
         parameters.context.register(vState);
-        fsm = Fsm.construct(new CollaboratorContext(), CollaboratorFsm.class, CollaboratorFsmImpl.INITIAL, true);
+        fsm = Fsm.construct(new CollaboratorContext(), Transitions.class, CollaboratorFsm.INITIAL, true);
         transitions = fsm.getTransitions();
+    }
+
+    public Logger getLog() {
+        return log;
     }
 
     public Member getMember() {
@@ -344,35 +481,43 @@ public class Consortium {
         return fsm.getContext();
     }
 
-    public boolean process(CertifiedBlock certifiedBlock) {
+    public void process(CertifiedBlock certifiedBlock) {
         Block block = certifiedBlock.getBlock();
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteArray()));
         log.info("Processing block {} : {}", hash, block.getBody().getType());
-        if (!validate(certifiedBlock)) {
-            log.error("Protocol violation. New block is not certified {}", certifiedBlock);
-            return false;
-        }
         final CurrentBlock previousBlock = vState.current;
         if (previousBlock != null) {
             if (block.getHeader().getHeight() != previousBlock.block.getHeader().getHeight() + 1) {
                 log.error("Protocol violation.  Block height should be {} and next block height is {}",
                           previousBlock.block.getHeader().getHeight(), block.getHeader().getHeight());
-                return false;
+                return;
             }
             HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
             if (previousBlock.hash.equals(prev)) {
                 log.error("Protocol violation. New block does not refer to current block hash. Should be {} and next block's prev is {}",
                           previousBlock.hash, prev);
-                return false;
+                return;
+            }
+            if (!validate(certifiedBlock)) {
+                log.error("Protocol violation. New block is not validated {}", certifiedBlock);
+                return;
             }
         } else {
             if (block.getBody().getType() != BodyType.GENESIS) {
                 log.error("Invalid genesis block: {}", block.getBody().getType());
-                return false;
+                return;
+            }
+            if (!validateGenesis(certifiedBlock)) {
+                log.error("Protocol violation. Genesis block is not validated {}", hash);
+                return;
             }
         }
         vState.current = new CurrentBlock(hash, block);
-        return next();
+        next();
+    }
+
+    public void setLog(Logger log) {
+        this.log = log;
     }
 
     public void start() {
@@ -464,21 +609,24 @@ public class Consortium {
         return null;
     }
 
-    private boolean next() {
+    private void next() {
         CurrentBlock next = vState.current;
         switch (next.block.getBody().getType()) {
         case CHECKPOINT:
-            return processCheckpoint(next);
+            transitions.processCheckpoint(next);
+            break;
         case GENESIS:
-            return processGenesis(next);
+            transitions.processGenesis(next);
+            break;
         case RECONFIGURE:
-            return processReconfigure(next);
+            transitions.processReconfigure(next);
+            break;
         case USER:
-            return processUser(next);
+            transitions.processUser(next);
+            break;
         case UNRECOGNIZED:
         default:
             log.error("Unrecognized block type: {} : {}", next.hashCode(), next.block);
-            return false;
         }
 
     }
@@ -495,7 +643,7 @@ public class Consortium {
         switch (message.getType()) {
         case BLOCK:
             try {
-                transitions.deliverBlock(Block.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+                transitions.deliverBlock(Block.parseFrom(message.getMsg().asReadOnlyByteBuffer()), msg.from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid block delivered from {}", msg.from, e);
             }
@@ -528,51 +676,6 @@ public class Consortium {
         }
     }
 
-    private boolean processCheckpoint(CurrentBlock next) {
-        Checkpoint body;
-        try {
-            body = Checkpoint.parseFrom(next.block.getBody().getContents());
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Protocol violation.  Cannot decode checkpoint body: {}", e);
-            return false;
-        }
-        return body != null;
-    }
-
-    private boolean processGenesis(CurrentBlock next) {
-        Genesis body;
-        try {
-            body = Genesis.parseFrom(next.block.getBody().getContents());
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Protocol violation.  Cannot decode genesis body: {}", e);
-            return false;
-        }
-        transitions.genesisAccepted();
-        return reconfigure(body.getInitialView());
-    }
-
-    private boolean processReconfigure(CurrentBlock next) {
-        Reconfigure body;
-        try {
-            body = Reconfigure.parseFrom(next.block.getBody().getContents());
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
-            return false;
-        }
-        return reconfigure(body);
-    }
-
-    private boolean processUser(CurrentBlock next) {
-        User body;
-        try {
-            body = User.parseFrom(next.block.getBody().getContents());
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Protocol violation.  Cannot decode reconfiguration body: {}", e);
-            return false;
-        }
-        return body != null;
-    }
-
     private boolean reconfigure(Reconfigure body) {
         HashKey viewId = new HashKey(body.getId());
         Context<Collaborator> newView = new Context<Collaborator>(viewId, parameters.context.toleranceLevel() + 1);
@@ -594,9 +697,89 @@ public class Consortium {
         return viewChange(newView, body.getToleranceLevel());
     }
 
+    private boolean validate(Block block, Validate v) {
+        Context<Collaborator> current = vState.currentView;
+
+        HashKey memberID = new HashKey(v.getId());
+        Collaborator member = current.getMember(memberID);
+        if (member == null) {
+            log.trace("No member found for {}", memberID);
+        }
+
+        Signature signature = member.forValidation(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
+        try {
+            signature.update(block.getHeader().toByteArray());
+        } catch (SignatureException e) {
+            log.debug("Error updating validation signature of {}", memberID, e);
+            return false;
+        }
+        try {
+            return signature.verify(v.getSignature().toByteArray());
+        } catch (SignatureException e) {
+            log.debug("Error validating validation signature of {}", memberID, e);
+            return false;
+        }
+    }
+
     private boolean validate(CertifiedBlock block) {
-        // TODO Auto-generated method stub
-        return true;
+        Context<Collaborator> current = vState.currentView;
+        Function<HashKey, Signature> validators = h -> {
+            Collaborator member = current.getMember(h);
+            if (member == null) {
+                return null;
+            }
+            return member.forValidation(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
+        };
+        return block.getCertificationsList()
+                    .parallelStream()
+                    .filter(c -> validate(validators, block.getBlock(), c))
+                    .limit(toleranceLevel + 1)
+                    .count() >= toleranceLevel + 1;
+    }
+
+    private boolean validate(Function<HashKey, Signature> validators, Block block, Certification c) {
+        HashKey memberID = new HashKey(c.getId());
+        Signature signature = validators.apply(memberID);
+        if (signature == null) {
+            return false;
+        }
+        try {
+            signature.update(block.getHeader().toByteArray());
+        } catch (SignatureException e) {
+            log.debug("Error updating validation signature of {}", memberID, e);
+            return false;
+        }
+        try {
+            return signature.verify(c.getSignature().toByteArray());
+        } catch (SignatureException e) {
+            log.debug("Error validating validation signature of {}", memberID, e);
+            return false;
+        }
+    }
+
+    private boolean validateGenesis(CertifiedBlock block) {
+        Map<HashKey, Supplier<Signature>> signatures = new HashMap<>();
+        Reconfigure initialView;
+        try {
+            initialView = Genesis.parseFrom(block.getBlock().getBody().getContents()).getInitialView();
+        } catch (InvalidProtocolBufferException e) {
+            log.debug("Error deserializing genesis body", e);
+            return false;
+        }
+        initialView.getViewList().forEach(vm -> {
+            PublicKey cKey = publicKeyOf(vm.getConsensusKey().toByteArray());
+            signatures.put(new HashKey(vm.getId()),
+                           () -> signatureForVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM, cKey));
+        });
+        Function<HashKey, Signature> validators = h -> {
+            Supplier<Signature> signature = signatures.get(h);
+            return signature == null ? null : signature.get();
+        };
+        return block.getCertificationsList()
+                    .parallelStream()
+                    .filter(c -> validate(validators, block.getBlock(), c))
+                    .limit(toleranceLevel + 1)
+                    .count() >= toleranceLevel + 1;
     }
 
     /**
@@ -605,7 +788,7 @@ public class Consortium {
     private boolean viewChange(Context<Collaborator> newView, int t) {
         vState.pause();
 
-        log.info("View rings: {} ttl: {}", newView.getRingCount(), newView.timeToLive());
+        log.trace("View rings: {} ttl: {}", newView.getRingCount(), newView.timeToLive());
 
         vState.currentView = newView;
         toleranceLevel = t;
@@ -616,12 +799,12 @@ public class Consortium {
         vState.leader = newLeader;
 
         if (newView.getMember(parameters.member.getId()) != null) { // cohort member
-            vState.messenger = new Messenger(parameters.member, parameters.signature, newView,
+            Messenger nextMsgr = new Messenger(parameters.member, parameters.signature, newView,
                     parameters.communications, parameters.msgParameters);
+            vState.messenger = nextMsgr;
             vState.to = new TotalOrder((m, k) -> process(m), newView);
-            vState.messenger.register(0, messages -> {
-                vState.to.process(messages);
-            });
+            nextMsgr.register(() -> fsm.getContext().tick());
+            nextMsgr.register(messages -> vState.to.process(messages));
             if (parameters.member.equals(newLeader)) { // I yam what I yam
                 log.info("reconfiguring, becoming leader: {}", parameters.member);
                 transitions.becomeLeader();
