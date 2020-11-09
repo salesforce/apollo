@@ -35,6 +35,7 @@ import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -188,13 +189,26 @@ public class Validator {
         return true;
     }
 
-    private final int toleranceLevel;
-
+    private final Member                leader;
+    private final int                   toleranceLevel;
     private final Context<Collaborator> view;
 
-    public Validator(Context<Collaborator> view, int toleranceLevel) {
+    public Validator(Member leader, Context<Collaborator> view, int toleranceLevel) {
+        this.leader = leader;
         this.view = view;
         this.toleranceLevel = toleranceLevel;
+    }
+
+    public Member getLeader() {
+        return leader;
+    }
+
+    public int getToleranceLevel() {
+        return toleranceLevel;
+    }
+
+    public Context<Collaborator> getView() {
+        return view;
     }
 
     public boolean validate(Block block, Validate v) {

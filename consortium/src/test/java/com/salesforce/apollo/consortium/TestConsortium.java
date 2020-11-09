@@ -59,7 +59,7 @@ import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
+import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -164,9 +164,9 @@ public class TestConsortium {
         System.out.println("Stabilized view across " + views.size() + " members");
 
         Duration gossipDuration = Duration.ofMillis(100);
-        Parameters msgParameters = Parameters.newBuilder().setBufferSize(100).setEntropy(new SecureRandom()).build();
+        Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder().setBufferSize(100).setEntropy(new SecureRandom()).build();
         views.stream()
-             .map(v -> new Consortium(Consortium.Parameters.newBuilder()
+             .map(v -> new Consortium(Parameters.newBuilder()
                                                            .setExecutor(t -> Collections.emptyList())
                                                            .setMember(v.getNode())
                                                            .setSignature(() -> v.getNode().forSigning())
