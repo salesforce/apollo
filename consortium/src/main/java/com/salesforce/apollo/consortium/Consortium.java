@@ -33,12 +33,14 @@ import com.chiralbehaviors.tron.Fsm;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.Body;
 import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.ConsortiumMessage;
 import com.salesfoce.apollo.consortium.proto.Genesis;
+import com.salesfoce.apollo.consortium.proto.Header;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.JoinTransaction;
@@ -73,6 +75,8 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class Consortium {
+    public final byte[] genesisData = "Give me food or give me slack or kill me".getBytes();
+
     /**
      * Context for the state machine. These are the leaf actions driven by the FSM.
      *
@@ -136,8 +140,12 @@ public class Consortium {
                 return;
             }
             HashKey hash = new HashKey(Conversion.hashOf(block.toByteArray()));
-            workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder().setBlock(block));
-            generateValidation(hash, block);
+            CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
+                                                                                                    .setBlock(block));
+            Validate validation = generateValidation(hash, block);
+            builder.addCertifications(Certification.newBuilder()
+                                                   .setId(validation.getId())
+                                                   .setSignature(validation.getSignature()));
         }
 
         public void deliverProclamation(Proclamation p, Member from) {
@@ -147,7 +155,7 @@ public class Consortium {
 
         public void generateGenesis() {
             if (pending.size() == vState.getCurrentView().cardinality()) {
-                Consortium.this.generateGenesis();
+                Consortium.this.generateGenesis(pending, genesisData);
             } else {
                 log.info("Genesis group has not formed, rescheduling: {} want: {}", pending.size(),
                          vState.getCurrentView().cardinality());
@@ -314,6 +322,7 @@ public class Consortium {
 
             ForkJoinPool.commonPool().execute(() -> {
                 if (validator.validate(certifiedBlock.getBlock(), v, signature)) {
+                    log.info("Adding block validation: {} from: {}", hash, memberID);
                     certifiedBlock.addCertifications(Certification.newBuilder()
                                                                   .setId(v.getId())
                                                                   .setSignature(v.getSignature()));
@@ -329,10 +338,10 @@ public class Consortium {
         private void rescheduleGenesis() {
             schedule(Timers.AWAIT_GROUP, () -> {
                 if (pending.size() > vState.getToleranceLevel()) {
-                    Consortium.this.generateGenesis();
+                    Consortium.this.generateGenesis(pending, genesisData);
                 } else {
-                    log.info("Genesis group has not formed, rescheduling: {} want: {}", pending.size(),
-                             vState.getToleranceLevel());
+                    log.trace("Genesis group has not formed, rescheduling: {} want: {}", pending.size(),
+                              vState.getToleranceLevel());
                     rescheduleGenesis();
                 }
             }, vState.getCurrentView().timeToLive());
@@ -362,7 +371,7 @@ public class Consortium {
                 log.info("No pending txns to rebroadcast: {}", getMember());
             }
             pending.forEach(enqueuedTransaction -> {
-                log.info("rebroadcasting txn: {}", enqueuedTransaction.getHash());
+                log.trace("rebroadcasting txn: {}", enqueuedTransaction.getHash());
                 deliver(ConsortiumMessage.newBuilder()
                                          .setMsg(enqueuedTransaction.getTransaction().toByteString())
                                          .setType(MessageType.TRANSACTION)
@@ -457,8 +466,44 @@ public class Consortium {
         nextView();
     }
 
-    public void generateGenesis() {
-        log.info("Generating genesis on: {}", getMember());
+    private void generateGenesis(PendingTransactions joining, byte[] genesisData) {
+        log.info("Generating genesis on {}", getMember());
+        Reconfigure.Builder genesisView = Reconfigure.newBuilder()
+                                                     .setCheckpointBlocks(256)
+                                                     .setId(GENESIS_VIEW.toByteString())
+                                                     .setToleranceLevel(vState.getToleranceLevel());
+        joining.forEach(join -> {
+            genesisView.addTransactions(join.getTransaction());
+            JoinTransaction txn;
+            try {
+                txn = JoinTransaction.parseFrom(join.getTransaction().getBatch(0));
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Cannot generate genesis, unable to parse Join txn {}", join.getHash());
+                transitions.fail();
+                return;
+            }
+            genesisView.addView(txn.getMember());
+        });
+        Body genesisBody = Body.newBuilder()
+                               .setConsensusId(0)
+                               .setType(BodyType.GENESIS)
+                               .setContents(Genesis.newBuilder()
+                                                   .setGenesisData(ByteString.copyFrom(genesisData))
+                                                   .setInitialView(genesisView)
+                                                   .build()
+                                                   .toByteString())
+                               .build();
+        byte[] bodyHash = Conversion.hashOf(genesisBody.toByteArray());
+
+        Header header = Header.newBuilder().setHeight(0).setBodyHash(ByteString.copyFrom(bodyHash)).build();
+        deliver(ConsortiumMessage.newBuilder()
+                                 .setType(MessageType.BLOCK)
+                                 .setMsg(Block.newBuilder()
+                                              .setHeader(header)
+                                              .setBody(genesisBody)
+                                              .build()
+                                              .toByteString())
+                                 .build());
     }
 
     public Logger getLog() {
@@ -607,24 +652,25 @@ public class Consortium {
         return params.msgParameters.entropy;
     }
 
-    private void generateValidation(HashKey hash, Block block) {
+    private Validate generateValidation(HashKey hash, Block block) {
         byte[] signature = sign(vState.getConsensusKeyPair().getPrivate(), entropy(),
                                 Conversion.hashOf(block.getHeader().toByteArray()));
         if (signature == null) {
             log.error("Unable to sign block {}", hash);
-            return;
+            return null;
         }
+        Validate validation = Validate.newBuilder()
+                                      .setId(params.member.getId().toByteString())
+                                      .setHash(hash.toByteString())
+                                      .setSignature(ByteString.copyFrom(signature))
+                                      .build();
         vState.getMessenger()
               .publish(ConsortiumMessage.newBuilder()
                                         .setType(MessageType.VALIDATE)
-                                        .setMsg(Validate.newBuilder()
-                                                        .setId(params.member.getId().toByteString())
-                                                        .setHash(hash.toByteString())
-                                                        .setSignature(ByteString.copyFrom(signature))
-                                                        .build()
-                                                        .toByteString())
+                                        .setMsg(validation.toByteString())
                                         .build()
                                         .toByteArray());
+        return validation;
     }
 
     private Member leaderOf(Context<Member> newView) {

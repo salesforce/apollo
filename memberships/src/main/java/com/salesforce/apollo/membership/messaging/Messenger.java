@@ -330,6 +330,10 @@ public class Messenger {
         List<Msg> newMessages = new ArrayList<>();
         buffer.merge(updates, message -> validate(message)).stream().map(m -> {
             HashKey id = new HashKey(m.getSource());
+            if (member.getId().equals(id)) {
+                log.trace("Ignoriing message from self");
+                return null;
+            }
             Member from = context.getMember(id);
             if (from == null) {
                 log.trace("{} message from unknown member: {}", member, id);
@@ -362,7 +366,7 @@ public class Messenger {
         return true;
     }
 
-    public int getRound() { 
+    public int getRound() {
         return round.get();
     }
 }

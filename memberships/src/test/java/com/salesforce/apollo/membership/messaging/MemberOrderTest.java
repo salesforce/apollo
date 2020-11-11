@@ -80,9 +80,11 @@ public class MemberOrderTest {
 
         public boolean validate(List<ToReceiver> liveRcvrs, int count) {
             for (ToReceiver receiver : liveRcvrs) {
-                List<Msg> msgs = messages.get(receiver.id);
-                if (msgs == null || msgs.size() != count) {
-                    return false;
+                if (!receiver.id.equals(id)) {
+                    List<Msg> msgs = messages.get(receiver.id);
+                    if (msgs == null || msgs.size() != count) {
+                        return false;
+                    }
                 }
             }
             return true;
@@ -151,7 +153,7 @@ public class MemberOrderTest {
             return receiver;
         }).collect(Collectors.toList());
 
-        int messageCount = 10;
+        int messageCount = 100;
 
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
@@ -161,7 +163,7 @@ public class MemberOrderTest {
 
         boolean complete = Utils.waitForCondition(30_000, 1_000, () -> {
             return receivers.stream()
-                            .map(r -> r.validate(messengers.size(), messageCount))
+                            .map(r -> r.validate(messengers.size() - 1, messageCount))
                             .filter(result -> !result)
                             .count() == 0;
         });
@@ -215,12 +217,16 @@ public class MemberOrderTest {
 
         boolean complete = Utils.waitForCondition(30_000, 1_000, () -> {
             return receivers.stream()
-                            .map(r -> r.validate(messengers.size(), messageCount))
+                            .map(r -> r.validate(messengers.size() - 1, messageCount))
                             .filter(result -> !result)
                             .count() == 0;
         });
-        assertTrue(complete, "did not get all messages : "
-                + receivers.stream().filter(r -> !r.validate(messengers.size(), messageCount)).map(r -> r.id).count());
+        assertTrue(complete,
+                   "did not get all messages : "
+                           + receivers.stream()
+                                      .filter(r -> !r.validate(messengers.size() - 1, messageCount))
+                                      .map(r -> r.id)
+                                      .count());
 
         System.out.println("Stoppig half");
         int half = members.size() / 2;
@@ -269,7 +275,7 @@ public class MemberOrderTest {
         });
         assertTrue(complete, "did not get all messages : "
                 + liveRcvrs.stream().filter(r -> !r.validate(liveRcvrs, messageCount * 3)).map(r -> r.id).count()
-                + " : "                + deadRcvrs.stream().filter(r -> !r.validate(deadRcvrs, messageCount)).map(r -> r.id).count());
+                + " : " + deadRcvrs.stream().filter(r -> !r.validate(deadRcvrs, messageCount)).map(r -> r.id).count());
 
     }
 

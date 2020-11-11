@@ -73,8 +73,24 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
+        public Transitions deliverProclamation(Proclamation p, Member from) {
+            context().deliverProclamation(p, from);
+            return null;
+        }
+
+        @Override
         public Transitions deliverTransaction(Transaction txn) {
             context().add(txn);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverBlock(Block block, Member from) {
             return null;
         }
 
@@ -94,18 +110,29 @@ public enum CollaboratorFsm implements Transitions {
         public void vote() {
             context().awaitFormation();
         }
+    },
+    GENERATE_GENESIS_FOLLOWER {
+        @Override
+        public Transitions deliverBlock(Block block, Member from) {
+            context().deliverBlock(block, from);
+            return null;
+        }
 
         @Override
         public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().deliverProclamation(p, from);
+            context().resendPending(p, from);
             return null;
         }
-    },
-    GENERATE_GENESIS_FOLLOWER {
 
         @Override
         public Transitions deliverTransaction(Transaction txn) {
             context().add(txn);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            context().validate(validation);
             return null;
         }
 
@@ -127,18 +154,23 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions success() {
             return FOLLOWER;
         }
-
-        @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().resendPending(p, from);
-            return null;
-        }
     },
     GENERATE_GENESIS_LEADER {
+        @Override
+        public Transitions deliverBlock(Block block, Member from) {
+            context().deliverBlock(block, from);
+            return null;
+        }
 
         @Override
         public Transitions deliverTransaction(Transaction txn) {
             context().add(txn);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            context().validate(validation);
             return null;
         }
 
@@ -159,12 +191,6 @@ public enum CollaboratorFsm implements Transitions {
 
         public Transitions success() {
             return LEADER;
-        }
-
-        @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().deliverProclamation(p, from);
-            return null;
         }
 
     },

@@ -47,7 +47,6 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
 
     @Override
     public void vote(Join request, StreamObserver<JoinResult> responseObserver) {
-        System.out.println("Vote from " + identity.getFrom());
         try {
             router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                             s -> {
