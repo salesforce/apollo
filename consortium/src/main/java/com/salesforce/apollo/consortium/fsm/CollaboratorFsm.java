@@ -13,6 +13,7 @@ import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.Timers;
@@ -93,6 +94,12 @@ public enum CollaboratorFsm implements Transitions {
         public void vote() {
             context().awaitFormation();
         }
+
+        @Override
+        public Transitions deliverProclamation(Proclamation p, Member from) {
+            context().deliverProclamation(p, from);
+            return null;
+        }
     },
     GENERATE_GENESIS_FOLLOWER {
 
@@ -120,6 +127,12 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions success() {
             return FOLLOWER;
         }
+
+        @Override
+        public Transitions deliverProclamation(Proclamation p, Member from) {
+            context().resendPending(p, from);
+            return null;
+        }
     },
     GENERATE_GENESIS_LEADER {
 
@@ -146,6 +159,12 @@ public enum CollaboratorFsm implements Transitions {
 
         public Transitions success() {
             return LEADER;
+        }
+
+        @Override
+        public Transitions deliverProclamation(Proclamation p, Member from) {
+            context().deliverProclamation(p, from);
+            return null;
         }
 
     },

@@ -115,6 +115,7 @@ enum MessageType {
     TRANSACTION = 1;
     PERSIST = 2;
     VALIDATE = 3;
+    PROCLAMATION = 4;
 }
 message ConsortiumMessage {
     MessageType type = 1;
@@ -126,3 +127,9 @@ message Validate {
     bytes hash = 2;
     bytes signature = 3;
 }
+
+message Proclamation {
+    int32 regenecy = 1;
+    bytes id = 2;
+}
+    

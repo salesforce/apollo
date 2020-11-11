@@ -44,6 +44,7 @@ import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.JoinTransaction;
 import com.salesfoce.apollo.consortium.proto.JoinTransaction.Builder;
 import com.salesfoce.apollo.consortium.proto.MessageType;
+import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.Transaction;
@@ -139,6 +140,11 @@ public class Consortium {
             generateValidation(hash, block);
         }
 
+        public void deliverProclamation(Proclamation p, Member from) {
+            // TODO Auto-generated method stub
+
+        }
+
         public void generateGenesis() {
             if (pending.size() == vState.getCurrentView().cardinality()) {
                 Consortium.this.generateGenesis();
@@ -147,18 +153,6 @@ public class Consortium {
                          vState.getCurrentView().cardinality());
                 rescheduleGenesis();
             }
-        }
-
-        private void rescheduleGenesis() {
-            schedule(Timers.AWAIT_GROUP, () -> {
-                if (pending.size() > vState.getToleranceLevel()) {
-                    Consortium.this.generateGenesis();
-                } else {
-                    log.info("Genesis group has not formed, rescheduling: {} want: {}", pending.size(),
-                             vState.getToleranceLevel());
-                    rescheduleGenesis();
-                }
-            }, vState.getCurrentView().timeToLive());
         }
 
         public void join() {
@@ -182,7 +176,7 @@ public class Consortium {
                     return null;
                 }
 
-                log.info("One vote to join: {} : {} from: {}", params.member, vState.getCurrentView().getId(), c);
+                log.trace("One vote to join: {} : {} from: {}", params.member, vState.getCurrentView().getId(), c);
                 return new Result(c, vote);
             })
                                         .filter(r -> r != null)
@@ -191,7 +185,7 @@ public class Consortium {
                                         .collect(Collectors.toList());
 
             if (votes.size() <= vState.getToleranceLevel()) {
-                log.error("Did not gather votes necessary to join consortium needed: {} got: {}",
+                log.debug("Did not gather votes necessary to join consortium needed: {} got: {}",
                           vState.getToleranceLevel() + 1, votes.size());
                 transitions.fail();
                 return;
@@ -203,13 +197,13 @@ public class Consortium {
                                                   .setSignature(vote.vote.getSignature()));
             }
             try {
-                Consortium.this.submit(h -> {
+                Consortium.this.submit(true, h -> {
                 }, txn.build().toByteArray());
             } catch (TimeoutException e) {
                 transitions.fail();
                 return;
             }
-            log.info("successfully joined: {} : {}", params.member, vState.getCurrentView().getId());
+            log.debug("successfully joined: {} : {}", params.member, vState.getCurrentView().getId());
             if (vState.getLeader().equals(params.member)) {
                 transitions.becomeLeader();
             } else {
@@ -276,21 +270,25 @@ public class Consortium {
 
         public void submit(EnqueuedTransaction enqueuedTransaction) {
             if (pending.add(enqueuedTransaction)) {
-                log.debug("Submitted txn: {}", enqueuedTransaction.getHash());
+                log.trace("Enqueueing txn: {}", enqueuedTransaction.getHash());
                 deliver(ConsortiumMessage.newBuilder()
                                          .setMsg(enqueuedTransaction.getTransaction().toByteString())
                                          .setType(MessageType.TRANSACTION)
                                          .build());
+            } else {
+                log.trace("Transaction already seen: {}", enqueuedTransaction.getHash());
             }
         }
 
         public void submitJoin(EnqueuedTransaction enqueuedTransaction) {
-            if (enqueuedTransaction.getTransaction().getJoin()) {
+            if (!enqueuedTransaction.getTransaction().getJoin()) {
                 if (pending.add(enqueuedTransaction)) {
                     log.trace("Enqueuing a join transaction: {}", enqueuedTransaction.getHash());
+                } else {
+                    log.trace("Join transaction already pending: {}", enqueuedTransaction.getHash());
                 }
             } else {
-                log.trace("Not a join transaction: {}", enqueuedTransaction.getHash());
+                log.debug("Not a join transaction: {}", enqueuedTransaction.getHash());
             }
         }
 
@@ -328,12 +326,27 @@ public class Consortium {
             return pending;
         }
 
+        private void rescheduleGenesis() {
+            schedule(Timers.AWAIT_GROUP, () -> {
+                if (pending.size() > vState.getToleranceLevel()) {
+                    Consortium.this.generateGenesis();
+                } else {
+                    log.info("Genesis group has not formed, rescheduling: {} want: {}", pending.size(),
+                             vState.getToleranceLevel());
+                    rescheduleGenesis();
+                }
+            }, vState.getCurrentView().timeToLive());
+            deliver(ConsortiumMessage.newBuilder()
+                                     .setType(MessageType.PROCLAMATION)
+                                     .setMsg(Proclamation.newBuilder().setRegenecy(0).build().toByteString())
+                                     .build());
+        }
+
         private void schedule(Timers label, Runnable a, int delta) {
             Runnable action = () -> {
                 timers.remove(label);
                 a.run();
             };
-            log.trace("Cancelling previous timer for: {}", label);
             Messenger messenger = vState.getMessenger();
             int current = messenger == null ? 0 : messenger.getRound();
             Timer previous = timers.put(Timers.AWAIT_VIEW_MEMBERS, scheduler.schedule(label, action, current + delta));
@@ -341,6 +354,20 @@ public class Consortium {
                 log.trace("Cancelling previous timer for: {}", label);
                 previous.cancel();
             }
+            log.trace("Setting timer for: {}", label);
+        }
+
+        public void resendPending(Proclamation p, Member from) {
+            if (pending.size() == 0) {
+                log.info("No pending txns to rebroadcast: {}", getMember());
+            }
+            pending.forEach(enqueuedTransaction -> {
+                log.info("rebroadcasting txn: {}", enqueuedTransaction.getHash());
+                deliver(ConsortiumMessage.newBuilder()
+                                         .setMsg(enqueuedTransaction.getTransaction().toByteString())
+                                         .setType(MessageType.TRANSACTION)
+                                         .build());
+            });
         }
     }
 
@@ -514,7 +541,6 @@ public class Consortium {
             builder.addBatch(ByteString.copyFrom(t));
             signed.put(t);
         }
-        ;
 
         byte[] hash = Conversion.hashOf(signed.array());
 
@@ -525,31 +551,33 @@ public class Consortium {
         builder.setSignature(ByteString.copyFrom(signature));
         HashKey hashKey = new HashKey(hash);
         Transaction transaction = builder.build();
+
         submitted.put(hashKey, new SubmittedTransaction(transaction, onCompletion));
         int toleranceLevel = vState.getToleranceLevel();
-        List<TransactionResult> results = current.sample(toleranceLevel + 1, entropy(), params.member.getId())
-                                                 .stream()
-                                                 .map(c -> {
-                                                     ConsortiumClientCommunications link = linkFor(c);
-                                                     if (link == null) {
-                                                         log.warn("Cannot get link for {}", c.getId());
-                                                         return null;
-                                                     }
-                                                     try {
-                                                         return link.clientSubmit(SubmitTransaction.newBuilder()
-                                                                                                   .setContext(current.getId()
-                                                                                                                      .toByteString())
-                                                                                                   .setTransaction(transaction)
-                                                                                                   .build());
-                                                     } catch (Throwable t) {
-                                                         log.warn("Cannot submit txn {} to {}: ", hashKey, c,
-                                                                  t.getMessage());
-                                                         return null;
-                                                     }
-                                                 })
-                                                 .filter(r -> r != null)
-                                                 .limit(toleranceLevel + 1)
-                                                 .collect(Collectors.toList());
+        SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
+                                                          .setContext(current.getId().toByteString())
+                                                          .setTransaction(transaction)
+                                                          .build();
+        log.info("Submitting txn: {} from {}", hashKey, getMember());
+        transitions.submit(new EnqueuedTransaction(new HashKey(hash), transaction));
+        List<TransactionResult> results = current.ring(entropy().nextInt(current.getRingCount())).stream().map(c -> {
+            if (!getMember().equals(c)) {
+                ConsortiumClientCommunications link = linkFor(c);
+                if (link == null) {
+                    log.warn("Cannot get link for {}", c.getId());
+                    return null;
+                }
+                try {
+                    return link.clientSubmit(submittedTxn);
+                } catch (Throwable t) {
+                    log.warn("Cannot submit txn {} to {}: {}", hashKey, c, t.getMessage());
+                    return null;
+                }
+            } else {
+                return null;
+            }
+        }).filter(r -> r != null).limit(toleranceLevel + 1).collect(Collectors.toList());
+
         if (results.size() < toleranceLevel) {
             throw new TimeoutException("Cannot submit transaction " + hashKey);
         }
@@ -692,6 +720,14 @@ public class Consortium {
                 log.error("invalid validate delivered from {}", msg.from, e);
             }
             break;
+        case PROCLAMATION:
+            try {
+                transitions.deliverProclamation(Proclamation.parseFrom(message.getMsg().asReadOnlyByteBuffer()),
+                                                msg.from);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid validate delivered from {}", msg.from, e);
+            }
+            break;
         case UNRECOGNIZED:
         default:
             log.error("Invalid consortium message type: {} from: {}", message.getType(), msg.from);
@@ -725,7 +761,7 @@ public class Consortium {
     private void viewChange(Context<Member> newView, int toleranceLevel) {
         vState.pause();
 
-        log.info("Installing new view rings: {} ttl: {}", newView.getRingCount(), newView.timeToLive());
+        log.debug("Installing new view rings: {} ttl: {}", newView.getRingCount(), newView.timeToLive());
 
         // Live successor of the view ID on ring zero is presumed leader
         Member newLeader = leaderOf(newView);

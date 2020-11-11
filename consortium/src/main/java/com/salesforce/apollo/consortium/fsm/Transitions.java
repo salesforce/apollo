@@ -9,6 +9,7 @@ package com.salesforce.apollo.consortium.fsm;
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
@@ -42,6 +43,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions deliverPersist(ID hash) {
+        throw new InvalidTransition();
+    }
+
+    default Transitions deliverProclamation(Proclamation p, Member from) {
         throw new InvalidTransition();
     }
 
