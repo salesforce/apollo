@@ -18,12 +18,12 @@ import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
+import com.salesforce.apollo.membership.messaging.Messenger;
 
 /**
  * Volatile state consolidation for Conosortium
- * 
+ *
  * @author hal.hildebrand
  *
  */

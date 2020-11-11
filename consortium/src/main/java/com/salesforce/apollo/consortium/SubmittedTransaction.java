@@ -13,7 +13,7 @@ import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * A pending transaction submitted by a client
- * 
+ *
  * @author hal.hildebrand
  *
  */

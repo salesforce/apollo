@@ -23,7 +23,7 @@ import com.salesforce.apollo.membership.Member;
 
 /**
  * Finite state machine for the Collaborator in a Consortium
- * 
+ *
  * @author hal.hildebrand
  *
  */
@@ -59,11 +59,6 @@ public enum CollaboratorFsm implements Transitions {
 
     },
     GENERATE_GENESIS {
-
-        @Override
-        public Transitions genesisAccepted() {
-            return GENESIS_ORDERED;
-        }
 
         @Override
         public Transitions becomeFollower() {
@@ -106,6 +101,11 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions fail() {
             context().awaitFormation();
             return null;
+        }
+
+        @Override
+        public Transitions genesisAccepted() {
+            return GENESIS_ORDERED;
         }
 
         @Override

@@ -17,5 +17,6 @@ import com.salesfoce.apollo.consortium.proto.TransactionResult;
  */
 public interface OrderingService {
     TransactionResult clientSubmit(SubmitTransaction request);
+
     JoinResult vote(Join join);
 }

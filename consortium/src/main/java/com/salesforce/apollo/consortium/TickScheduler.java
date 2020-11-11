@@ -29,14 +29,6 @@ public class TickScheduler {
         private final int      deadline;
         private final Timers   label;
 
-        public int getDeadline() {
-            return deadline;
-        }
-
-        public Timers getLabel() {
-            return label;
-        }
-
         public Timer(Timers label, int deadline, Runnable action) {
             this.label = label;
             this.deadline = deadline;
@@ -58,6 +50,14 @@ public class TickScheduler {
             } catch (Throwable t) {
                 log.error("Error executing action {}", t);
             }
+        }
+
+        public int getDeadline() {
+            return deadline;
+        }
+
+        public Timers getLabel() {
+            return label;
         }
     }
 

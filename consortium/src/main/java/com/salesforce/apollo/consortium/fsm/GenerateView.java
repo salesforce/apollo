@@ -10,12 +10,14 @@ import com.chiralbehaviors.tron.Entry;
 
 /**
  * State machine submap for generating a view
- * 
+ *
  * @author hal.hildebrand
  *
  */
 public enum GenerateView implements Transitions {
 
+    ELECT_LEADER {
+    },
     FAILURE, INITIAL {
 
         @Override
@@ -23,6 +25,7 @@ public enum GenerateView implements Transitions {
             return FAILURE;
         }
 
+        @Override
         public Transitions success() {
             return KEY_GENERATED;
         }
@@ -43,8 +46,6 @@ public enum GenerateView implements Transitions {
         public Transitions success() {
             return ELECT_LEADER;
         }
-    },
-    ELECT_LEADER { 
     };
 
 }

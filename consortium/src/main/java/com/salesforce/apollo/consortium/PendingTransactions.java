@@ -23,8 +23,8 @@ import com.salesforce.apollo.protocols.HashKey;
  * A linked list of unique transactions. This preserves ordering via linked
  * lists of txns, so one should note that the enqueued transaction is literally
  * part of the data structure, meaning that transactions can't be enqueued in
- * the different collections.  Not thread safe
- * 
+ * the different collections. Not thread safe
+ *
  * @author hal.hildebrand
  *
  */

@@ -21,7 +21,7 @@ import com.salesforce.apollo.membership.Member;
 
 /**
  * Transition interface for the Collaborator FSM model
- * 
+ *
  * @author hal.hildebrand
  *
  */
