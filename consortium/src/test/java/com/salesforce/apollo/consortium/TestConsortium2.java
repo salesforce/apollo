@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -149,7 +150,12 @@ public class TestConsortium2 {
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
                                                                  .build();
-        Function<CertifiedBlock, HashKey> consensus = c -> HashKey.ORIGIN;
+        AtomicBoolean published = new AtomicBoolean();
+        Function<CertifiedBlock, HashKey> consensus = c -> {
+            published.set(true);
+            consortium.forEach(m -> ForkJoinPool.commonPool().execute(() -> m.process(c)));
+            return HashKey.ORIGIN;
+        };
         views.stream()
              .map(v -> new Consortium(Parameters.newBuilder()
                                                 .setConsensus(consensus)
@@ -175,7 +181,7 @@ public class TestConsortium2 {
 
         System.out.println("genesis block processed");
 
-        Thread.sleep(10_000);
+        assertTrue(Utils.waitForCondition(10_000, () -> published.get()), "Did not publish Genesis block");
 
 //        Consortium client = consortium.get(blueRibbon.size() + 1);
 //        try {

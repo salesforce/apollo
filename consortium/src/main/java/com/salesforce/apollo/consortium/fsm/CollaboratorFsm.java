@@ -59,10 +59,18 @@ public enum CollaboratorFsm implements Transitions {
 
     },
     GENERATE_GENESIS {
+
+        @Override
+        public Transitions genesisAccepted() {
+            return GENESIS_ORDERED;
+        }
+
+        @Override
         public Transitions becomeFollower() {
             return GENERATE_GENESIS_FOLLOWER;
         }
 
+        @Override
         public Transitions becomeLeader() {
             return GENERATE_GENESIS_LEADER;
         }
@@ -70,6 +78,11 @@ public enum CollaboratorFsm implements Transitions {
         @Exit
         public void cancel() {
             context().cancel(Timers.AWAIT_FORMATION);
+        }
+
+        @Override
+        public Transitions deliverBlock(Block block, Member from) {
+            return null;
         }
 
         @Override
@@ -86,11 +99,6 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions deliverValidate(Validate validation) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverBlock(Block block, Member from) {
             return null;
         }
 
@@ -136,8 +144,14 @@ public enum CollaboratorFsm implements Transitions {
             return null;
         }
 
+        @Override
         public Transitions fail() {
             return PROTOCOL_FAILURE;
+        }
+
+        @Override
+        public Transitions genesisAccepted() {
+            return GENESIS_ORDERED;
         }
 
         @Override
@@ -151,12 +165,12 @@ public enum CollaboratorFsm implements Transitions {
             return null;
         }
 
+        @Override
         public Transitions success() {
             return FOLLOWER;
         }
     },
     GENERATE_GENESIS_LEADER {
-
         @Override
         public Transitions deliverTransaction(Transaction txn) {
             context().add(txn);
@@ -170,6 +184,7 @@ public enum CollaboratorFsm implements Transitions {
             return null;
         }
 
+        @Override
         public Transitions fail() {
             return PROTOCOL_FAILURE;
         }
@@ -180,13 +195,32 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
+        public Transitions genesisAccepted() {
+            return GENESIS_ORDERED;
+        }
+
+        @Override
         public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
             context().submitJoin(enqueuedTransaction);
             return null;
         }
 
+        @Override
         public Transitions success() {
             return LEADER;
+        }
+
+    },
+    GENESIS_ORDERED {
+
+        @Override
+        public Transitions becomeClient() {
+            return CLIENT;
+        }
+
+        @Override
+        public Transitions join() {
+            return null; // TODO for now
         }
 
     },
@@ -311,6 +345,7 @@ public enum CollaboratorFsm implements Transitions {
             context().awaitGenesis();
         }
 
+        @Override
         public Transitions becomeClient() {
             return null;
         }
@@ -320,6 +355,12 @@ public enum CollaboratorFsm implements Transitions {
             context().cancel(Timers.AWAIT_GENESIS);
         }
 
+        @Override
+        public Transitions genesisAccepted() {
+            return GENESIS_ORDERED;
+        }
+
+        @Override
         public Transitions join() {
             return GENERATE_GENESIS;
         }

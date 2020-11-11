@@ -130,7 +130,7 @@ public class Validator {
         return signature;
     }
 
-    public static boolean validateGenesis(CertifiedBlock block) {
+    public static boolean validateGenesis(CertifiedBlock block, Context<Member> context, int toleranceLevel) {
         Map<HashKey, Supplier<Signature>> signatures = new HashMap<>();
         Reconfigure initialView;
         try {
@@ -141,23 +141,28 @@ public class Validator {
         }
         initialView.getViewList().forEach(vm -> {
             HashKey memberID = new HashKey(vm.getId());
-            PublicKey cKey = verify(vm.getSignature().toByteArray(), vm.getConsensusKey().toByteArray());
+            Member member = context.getMember(memberID);
+            byte[] encoded = vm.getConsensusKey().toByteArray();
+            if (!verify(member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM), vm.getSignature().toByteArray(),
+                        encoded)) {
+                log.warn("Could not validate consensus key for {}", memberID);
+            }
+            PublicKey cKey = publicKeyOf(encoded);
             if (cKey != null) {
                 signatures.put(memberID, () -> signatureForVerification(cKey));
             } else {
-                log.warn("Could not validate consensus key for {}", memberID);
+                log.warn("Could not deserialize consensus key for {}", memberID);
             }
         });
         Function<HashKey, Signature> validators = h -> {
             Supplier<Signature> signature = signatures.get(h);
             return signature == null ? null : signature.get();
         };
-        int toleranceLevel = initialView.getToleranceLevel();
         return block.getCertificationsList()
                     .parallelStream()
                     .filter(c -> verify(validators, block.getBlock(), c))
-                    .limit(toleranceLevel + 1)
-                    .count() >= toleranceLevel + 1;
+                    .limit(toleranceLevel)
+                    .count() >= toleranceLevel;
     }
 
     public static PublicKey verify(byte[] signed, byte[] encodedPublicKey) {
@@ -172,7 +177,11 @@ public class Validator {
         HashKey memberID = new HashKey(c.getId());
 
         Signature signature = validators.apply(memberID);
-        return verify(signature, c.getSignature().toByteArray(), block.getHeader().toByteArray());
+        if (signature == null) {
+            log.info("Cannot get signature for verification for: {}", memberID);
+            return false;
+        }
+        return verify(signature, c.getSignature().toByteArray(), Conversion.hashOf(block.getHeader().toByteArray()));
     }
 
     public static boolean verify(PublicKey key, byte[] signed, byte[]... content) {
@@ -180,7 +189,7 @@ public class Validator {
 
     }
 
-    private static boolean verify(Signature signature, byte[] signed, byte[]... content) {
+    public static boolean verify(Signature signature, byte[] signed, byte[]... content) {
         try {
             for (byte[] c : content) {
                 signature.update(c);
@@ -190,6 +199,7 @@ public class Validator {
             }
         } catch (Throwable e) {
             log.error("Cannot verify signature", e);
+            return false;
         }
         return true;
     }

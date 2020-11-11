@@ -161,7 +161,18 @@ public class Consortium {
             }
             genesis.getInitialView().getViewList().forEach(vm -> {
                 HashKey memberID = new HashKey(vm.getId());
-                PublicKey consensusKey = Validator.publicKeyOf(vm.getConsensusKey().toByteArray());
+                Member member = vState.getCurrentView().getMember(memberID);
+                if (member == null) {
+                    log.info("invalid genesis, view member does not exist: {}", memberID);
+                    return;
+                }
+                byte[] encoded = vm.getConsensusKey().toByteArray();
+                if (!Validator.verify(member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM),
+                                      vm.getSignature().toByteArray(), encoded)) {
+                    log.info("invalid genesis view member consensus key: {}", memberID);
+                    return;
+                }
+                PublicKey consensusKey = Validator.publicKeyOf(encoded);
                 if (consensusKey == null) {
                     log.info("invalid genesis view member, cannot generate consensus key: {}", memberID);
                     return;
@@ -578,7 +589,7 @@ public class Consortium {
                 log.error("Invalid genesis block: {}", block.getBody().getType());
                 return;
             }
-            if (!validateGenesis(certifiedBlock)) {
+            if (!validateGenesis(certifiedBlock, params.context, params.context.toleranceLevel())) {
                 log.error("Protocol violation. Genesis block is not validated {}", hash);
                 return;
             }
@@ -813,7 +824,6 @@ public class Consortium {
         KeyPair keyPair = generateKeyPair(2048, "RSA");
         byte[] encoded = keyPair.getPublic().getEncoded();
         byte[] signed = sign(params.signature.get(), params.msgParameters.entropy, encoded);
-        assert encoded.length > 0 && signed.length > 0;
         if (signed == null) {
             log.error("Unable to generate and sign consensus key");
             transitions.fail();
