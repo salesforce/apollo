@@ -14,15 +14,18 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Function;
 
 import com.google.common.base.Supplier;
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
+import com.salesforce.apollo.protocols.HashKey;
 
 public class Parameters {
     public static class Builder {
         private Router                                        communications;
+        private Function<CertifiedBlock, HashKey>             consensus;
         private Context<Member>                               context;
         private Function<List<Transaction>, List<ByteBuffer>> executor;
         private Duration                                      gossipDuration;
@@ -33,11 +36,15 @@ public class Parameters {
 
         public Parameters build() {
             return new Parameters(context, communications, executor, member, msgParameters, scheduler, signature,
-                    gossipDuration);
+                    gossipDuration, consensus);
         }
 
         public Router getCommunications() {
             return communications;
+        }
+
+        public Function<CertifiedBlock, HashKey> getConsensus() {
+            return consensus;
         }
 
         public Context<Member> getContext() {
@@ -70,6 +77,11 @@ public class Parameters {
 
         public Parameters.Builder setCommunications(Router communications) {
             this.communications = communications;
+            return this;
+        }
+
+        public Builder setConsensus(Function<CertifiedBlock, HashKey> consensus) {
+            this.consensus = consensus;
             return this;
         }
 
@@ -114,20 +126,21 @@ public class Parameters {
         return new Builder();
     }
 
-    public final Duration                                       gossipDuration;
-    final Router                                        communications;
-    final Context<Member>                               context;
+    final Router                                                communications;
+    final Function<CertifiedBlock, HashKey>                     consensus;
+    final Context<Member>                                       context;
+    final Duration                                              gossipDuration;
+    final Member                                                member;
+    final Messenger.Parameters                                  msgParameters;
+    final ScheduledExecutorService                              scheduler;
+    final Supplier<Signature>                                   signature;
     @SuppressWarnings("unused")
     private final Function<List<Transaction>, List<ByteBuffer>> executor;
-    final Member                                        member;
-    final Messenger.Parameters                          msgParameters;
-    final ScheduledExecutorService                      scheduler;
-    final Supplier<Signature>                           signature;
 
     public Parameters(Context<Member> context, Router communications,
-            Function<List<Transaction>, List<ByteBuffer>> executor, Member member,
-            Messenger.Parameters msgParameters, ScheduledExecutorService scheduler, Supplier<Signature> signature,
-            Duration gossipDuration) {
+            Function<List<Transaction>, List<ByteBuffer>> executor, Member member, Messenger.Parameters msgParameters,
+            ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
+            Function<CertifiedBlock, HashKey> consensus) {
         this.context = context;
         this.communications = communications;
         this.executor = executor;
@@ -136,5 +149,6 @@ public class Parameters {
         this.scheduler = scheduler;
         this.signature = signature;
         this.gossipDuration = gossipDuration;
+        this.consensus = consensus;
     }
 }

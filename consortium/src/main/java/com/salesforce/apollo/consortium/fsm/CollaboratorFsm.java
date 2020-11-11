@@ -114,7 +114,7 @@ public enum CollaboratorFsm implements Transitions {
     GENERATE_GENESIS_FOLLOWER {
         @Override
         public Transitions deliverBlock(Block block, Member from) {
-            context().deliverBlock(block, from);
+            context().deliverGenesisBlock(block, from);
             return null;
         }
 
@@ -156,11 +156,6 @@ public enum CollaboratorFsm implements Transitions {
         }
     },
     GENERATE_GENESIS_LEADER {
-        @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            context().deliverBlock(block, from);
-            return null;
-        }
 
         @Override
         public Transitions deliverTransaction(Transaction txn) {
@@ -171,6 +166,7 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions deliverValidate(Validate validation) {
             context().validate(validation);
+            context().totalOrderDeliver();
             return null;
         }
 

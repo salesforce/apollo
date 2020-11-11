@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -147,8 +149,10 @@ public class TestConsortium2 {
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
                                                                  .build();
+        Function<CertifiedBlock, HashKey> consensus = c -> HashKey.ORIGIN;
         views.stream()
              .map(v -> new Consortium(Parameters.newBuilder()
+                                                .setConsensus(consensus)
                                                 .setExecutor(t -> Collections.emptyList())
                                                 .setMember(v.getNode())
                                                 .setSignature(() -> v.getNode().forSigning())
