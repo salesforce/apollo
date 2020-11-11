@@ -35,7 +35,7 @@ class VolatileState implements MembershipListener<Member> {
     private volatile Messenger                                                     messenger;
     private volatile ViewMember                                                    nextView;
     private volatile KeyPair                                                       nextViewConsensusKeyPair;
-    private volatile MemberOrder                                                    to;
+    private volatile MemberOrder                                                   to;
     private volatile Validator                                                     validator;
 
     @Override
@@ -105,11 +105,6 @@ class VolatileState implements MembershipListener<Member> {
     MemberOrder getTO() {
         final MemberOrder cTo = to;
         return cTo;
-    }
-
-    int getToleranceLevel() {
-        final Validator current = getValidator();
-        return current.getToleranceLevel();
     }
 
     Validator getValidator() {

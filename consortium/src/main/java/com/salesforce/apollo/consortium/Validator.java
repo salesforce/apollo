@@ -81,10 +81,15 @@ public class Validator {
     }
 
     public static PublicKey publicKeyOf(byte[] consensusKey) {
+        if (consensusKey.length == 0) {
+            log.error("Cannot decode public key, zero length encoding");
+            return null;
+        }
         try {
             return KEY_FACTORY.generatePublic(new X509EncodedKeySpec(consensusKey));
         } catch (InvalidKeySpecException e) {
-            throw new IllegalStateException("Cannot decode public key", e);
+            log.error("Cannot decode public key: " + HashKey.bytesToHex(consensusKey), e);
+            return null;
         }
     }
 
@@ -216,18 +221,19 @@ public class Validator {
         Member member = view.getMember(memberID);
         if (member == null) {
             log.trace("No member found for {}", memberID);
+            return false;
         }
- 
+
         try {
-            signature.update(block.getHeader().toByteArray());
+            signature.update(Conversion.hashOf(block.getHeader().toByteArray()));
         } catch (SignatureException e) {
-            log.debug("Error updating validation signature of {}", memberID, e);
+            log.error("Error updating validation signature of {}", memberID, e);
             return false;
         }
         try {
             return signature.verify(v.getSignature().toByteArray());
         } catch (SignatureException e) {
-            log.debug("Error validating validation signature of {}", memberID, e);
+            log.error("Error validating validation signature of {}", memberID, e);
             return false;
         }
     }

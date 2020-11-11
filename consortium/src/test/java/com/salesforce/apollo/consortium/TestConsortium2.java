@@ -175,7 +175,7 @@ public class TestConsortium2 {
 
         System.out.println("genesis block processed");
 
-        Thread.sleep(30_000);
+        Thread.sleep(10_000);
 
 //        Consortium client = consortium.get(blueRibbon.size() + 1);
 //        try {
