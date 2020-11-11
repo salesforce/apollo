@@ -16,7 +16,15 @@
     <root level="INFO">
         <appender-ref ref="STDOUT" />
     </root>
-    <logger name="com.salesforce.apollo.membership.messaging" level="info"
+    <logger name="com.salesforce.apollo.membership.messaging.Messenger" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.membership.messaging.MemberOrder" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.comm" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

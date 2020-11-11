@@ -13,7 +13,7 @@ import java.security.cert.X509Certificate;
  * @author hal.hildebrand
  *
  */
-public interface Validator {
+public interface CertificateValidator {
     void validateClient(X509Certificate[] chain) throws CertificateException;
 
     void validateServer(X509Certificate[] chain) throws CertificateException;

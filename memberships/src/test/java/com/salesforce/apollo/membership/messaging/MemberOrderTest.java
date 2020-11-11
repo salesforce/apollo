@@ -48,19 +48,22 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
  * @author hal.hildebrand
  *
  */
-public class TotalOrderTest {
+public class MemberOrderTest {
 
     private static class ToReceiver {
         private final HashKey                 id;
         private final Map<HashKey, List<Msg>> messages = new ConcurrentHashMap<>();
-        private final TotalOrder              totalOrder;
+        private final MemberOrder             totalOrder;
+        private final Messenger               messenger;
 
-        public ToReceiver(HashKey id, Context<? extends Member> ctx) {
+        public ToReceiver(HashKey id, Messenger messenger) {
+            this.messenger = messenger;
             this.id = id;
-            BiConsumer<Msg, HashKey> processor = (m, key) -> {
-                messages.computeIfAbsent(m.from.getId(), k -> new CopyOnWriteArrayList<>()).add(m);
-            };
-            totalOrder = new TotalOrder(processor, ctx);
+            BiConsumer<Msg, HashKey> processor = (m, key) -> messages
+                                                                     .computeIfAbsent(m.from.getId(),
+                                                                                      k -> new CopyOnWriteArrayList<>())
+                                                                     .add(m);
+            totalOrder = new MemberOrder(processor, messenger);
         }
 
         public boolean validate(int entries, int count) {
@@ -69,6 +72,16 @@ public class TotalOrderTest {
             }
             for (Entry<HashKey, List<Msg>> entry : messages.entrySet()) {
                 if (entry.getValue().size() != count) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public boolean validate(List<ToReceiver> liveRcvrs, int count) {
+            for (ToReceiver receiver : liveRcvrs) {
+                List<Msg> msgs = messages.get(receiver.id);
+                if (msgs == null || msgs.size() != count) {
                     return false;
                 }
             }
@@ -133,13 +146,12 @@ public class TotalOrderTest {
 
         messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
         List<ToReceiver> receivers = messengers.stream().map(m -> {
-            ToReceiver receiver = new ToReceiver(m.getMember().getId(), context);
-            m.register(messages -> receiver.totalOrder.process(messages));
+            ToReceiver receiver = new ToReceiver(m.getMember().getId(), m);
             receiver.totalOrder.start();
             return receiver;
         }).collect(Collectors.toList());
 
-        int messageCount = 100;
+        int messageCount = 10;
 
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
@@ -155,6 +167,110 @@ public class TotalOrderTest {
         });
         assertTrue(complete, "did not get all messages : "
                 + receivers.stream().filter(r -> !r.validate(messengers.size(), messageCount)).map(r -> r.id).count());
+    }
+
+    @Test
+    public void testGaps() throws Exception {
+        List<X509Certificate> seeds = new ArrayList<>();
+        List<Member> members = certs.values()
+                                    .parallelStream()
+                                    .map(cert -> cert.getX509Certificate())
+                                    .map(cert -> new Member(Member.getMemberId(cert), cert))
+                                    .collect(Collectors.toList());
+        assertEquals(certs.size(), members.size());
+
+        Context<Member> context = new Context<Member>(HashKey.ORIGIN, 9);
+        members.forEach(m -> context.activate(m));
+
+        while (seeds.size() < 7) {
+            CertificateWithPrivateKey cert = certs.get(members.get(parameters.entropy.nextInt(members.size())).getId());
+            if (!seeds.contains(cert.getX509Certificate())) {
+                seeds.add(cert.getX509Certificate());
+            }
+        }
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
+
+        messengers = members.stream().map(node -> {
+            LocalRouter comms = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder().setTarget(30));
+            communications.add(comms);
+            comms.start();
+            return new Messenger(node, () -> forSigning(node), context, comms, parameters);
+        }).collect(Collectors.toList());
+
+        Duration gossipDuration = Duration.ofMillis(100);
+        messengers.forEach(view -> view.start(gossipDuration, scheduler));
+        List<ToReceiver> receivers = messengers.stream().map(m -> {
+            ToReceiver receiver = new ToReceiver(m.getMember().getId(), m);
+            receiver.totalOrder.start();
+            return receiver;
+        }).collect(Collectors.toList());
+
+        int messageCount = 10;
+
+        for (int i = 0; i < messageCount; i++) {
+            messengers.forEach(m -> {
+                m.publish("Give me food, or give me slack, or kill me".getBytes());
+            });
+        }
+
+        boolean complete = Utils.waitForCondition(30_000, 1_000, () -> {
+            return receivers.stream()
+                            .map(r -> r.validate(messengers.size(), messageCount))
+                            .filter(result -> !result)
+                            .count() == 0;
+        });
+        assertTrue(complete, "did not get all messages : "
+                + receivers.stream().filter(r -> !r.validate(messengers.size(), messageCount)).map(r -> r.id).count());
+
+        System.out.println("Stoppig half");
+        int half = members.size() / 2;
+        List<ToReceiver> deadRcvrs = receivers.subList(0, half);
+        List<ToReceiver> liveRcvrs = receivers.subList(half, members.size());
+
+        deadRcvrs.stream().peek(r -> context.offline(r.messenger.getMember())).forEach(m -> m.messenger.stop());
+
+        for (int i = 0; i < messageCount; i++) {
+            liveRcvrs.forEach(r -> {
+                r.messenger.publish("Give me food, or give me slack, or kill me".getBytes());
+            });
+        }
+
+        complete = Utils.waitForCondition(30_000, 1_000, () -> {
+            return liveRcvrs.stream()
+                            .map(r -> r.validate(liveRcvrs, messageCount * 2))
+                            .filter(result -> !result)
+                            .count() == 0;
+        });
+        assertTrue(complete, "did not get all messages : "
+                + liveRcvrs.stream().filter(r -> !r.validate(liveRcvrs, messageCount * 2)).map(r -> r.id).count());
+
+        System.out.println("Restarting half");
+        deadRcvrs.stream()
+                 .peek(r -> context.activate(r.messenger.getMember()))
+                 .forEach(m -> m.messenger.start(gossipDuration, scheduler));
+
+        Thread.sleep(2000);
+
+        for (int i = 0; i < messageCount; i++) {
+            receivers.forEach(r -> {
+                r.messenger.publish("Give me food, or give me slack, or kill me".getBytes());
+            });
+        }
+
+        complete = Utils.waitForCondition(30_000, 1_000, () -> {
+            return liveRcvrs.stream()
+                            .map(r -> r.validate(liveRcvrs, messageCount * 3))
+                            .filter(result -> !result)
+                            .count() == 0
+                    && deadRcvrs.stream()
+                                .map(r -> r.validate(deadRcvrs, messageCount))
+                                .filter(result -> !result)
+                                .count() == 0;
+        });
+        assertTrue(complete, "did not get all messages : "
+                + liveRcvrs.stream().filter(r -> !r.validate(liveRcvrs, messageCount * 3)).map(r -> r.id).count()
+                + " : "                + deadRcvrs.stream().filter(r -> !r.validate(deadRcvrs, messageCount)).map(r -> r.id).count());
+
     }
 
     private Signature forSigning(Member member) {

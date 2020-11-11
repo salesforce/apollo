@@ -23,7 +23,7 @@ import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
 import com.salesforce.apollo.protocols.CaValidator;
 import com.salesforce.apollo.protocols.Utils;
-import com.salesforce.apollo.protocols.Validator;
+import com.salesforce.apollo.protocols.CertificateValidator;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.CsrWithPrivateKey;
@@ -126,7 +126,7 @@ public class TestMtls {
         return serverCert;
     }
 
-    private Validator validator() {
+    private CertificateValidator validator() {
         return new CaValidator(ca.getRoot());
     }
 }

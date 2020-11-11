@@ -6,10 +6,21 @@
  */
 package com.salesforce.apollo.consortium;
 
+import static com.salesforce.apollo.consortium.Validator.generateKeyPair;
+import static com.salesforce.apollo.consortium.Validator.sign;
+import static com.salesforce.apollo.consortium.Validator.validateGenesis;
+import static com.salesforce.apollo.consortium.Validator.verify;
+
 import java.nio.ByteBuffer;
+import java.security.KeyPair;
+import java.security.PublicKey;
+import java.security.SecureRandom;
+import java.security.Signature;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -23,24 +34,36 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.BodyType;
+import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.ConsortiumMessage;
+import com.salesfoce.apollo.consortium.proto.Genesis;
+import com.salesfoce.apollo.consortium.proto.Join;
+import com.salesfoce.apollo.consortium.proto.JoinResult;
+import com.salesfoce.apollo.consortium.proto.JoinTransaction;
+import com.salesfoce.apollo.consortium.proto.JoinTransaction.Builder;
 import com.salesfoce.apollo.consortium.proto.MessageType;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
+import com.salesfoce.apollo.consortium.proto.User;
 import com.salesfoce.apollo.consortium.proto.Validate;
+import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesfoce.apollo.proto.ID;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
+import com.salesforce.apollo.consortium.TickScheduler.Timer;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
 import com.salesforce.apollo.consortium.comms.ConsortiumServerCommunications;
+import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
+import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
-import com.salesforce.apollo.membership.messaging.TotalOrder;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -49,6 +72,277 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class Consortium {
+    /**
+     * Context for the state machine. These are the leaf actions driven by the FSM.
+     *
+     */
+    public class CollaboratorContext {
+        private final Map<HashKey, ViewMember>             members       = new HashMap<>();
+        private final PendingTransactions                  pending       = new PendingTransactions();
+        private final TickScheduler                        scheduler     = new TickScheduler();
+        private final Map<Timers, Timer>                   timers        = new ConcurrentHashMap<>();
+        private final Map<HashKey, CertifiedBlock.Builder> workingBlocks = new HashMap<>();
+
+        public void add(Transaction txn) {
+            HashKey hash = new HashKey(Conversion.hashOf(txn.toByteArray()));
+            pending.add(new EnqueuedTransaction(hash, txn));
+        }
+
+        public void awaitFormation() {
+            schedule(Timers.AWAIT_FORMATION, () -> join(), vState.getCurrentView().timeToLive());
+        }
+
+        public void awaitGenesis() {
+            Transitions current = transitions.fsm().getCurrentState();
+            schedule(Timers.AWAIT_GENESIS, () -> {
+                log.info("Missing firing, scheduled from: {} on: {}", current, getMember());
+                transitions.missingGenesis();
+            }, params.context.timeToLive());
+
+            viewChange(viewFor(GENESIS_VIEW), params.context.toleranceLevel());
+        }
+
+        public void awaitViewMembers() {
+            schedule(Timers.AWAIT_VIEW_MEMBERS, () -> {
+                if (members.size() > vState.getToleranceLevel() + 1) {
+                    transitions.success();
+                } else {
+                    transitions.fail();
+                }
+            }, vState.getValidator().getView().timeToLive() * 2);
+        }
+
+        public void cancel(Timers t) {
+            Timer timer = timers.remove(t);
+            if (timer != null) {
+                log.trace("Cancelling timer: {} on: {}", t, getMember());
+                timer.cancel();
+            } else {
+                log.trace("No timer to cancel: {} on: {}", t, getMember());
+            }
+        }
+
+        public void clear() {
+            members.clear();
+            timers.values().forEach(e -> e.cancel());
+            timers.clear();
+        }
+
+        public void deliverBlock(Block block, Member from) {
+            Member leader = vState.getLeader();
+            if (!from.equals(leader)) {
+                log.debug("Rejecting block proposal from {}", from);
+                return;
+            }
+            HashKey hash = new HashKey(Conversion.hashOf(block.toByteArray()));
+            workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder().setBlock(block));
+            generateValidation(hash, block);
+        }
+
+        public void generateGenesis() {
+            if (pending.size() == vState.getCurrentView().cardinality()) {
+                Consortium.this.generateGenesis();
+            } else {
+                log.info("Genesis group has not formed, rescheduling: {} want: {}", pending.size(),
+                         vState.getCurrentView().cardinality());
+                rescheduleGenesis();
+            }
+        }
+
+        private void rescheduleGenesis() {
+            schedule(Timers.AWAIT_GROUP, () -> {
+                if (pending.size() > vState.getToleranceLevel()) {
+                    Consortium.this.generateGenesis();
+                } else {
+                    log.info("Genesis group has not formed, rescheduling: {} want: {}", pending.size(),
+                             vState.getToleranceLevel());
+                    rescheduleGenesis();
+                }
+            }, vState.getCurrentView().timeToLive());
+        }
+
+        public void join() {
+            log.info("Attempting to join: {} : {}", params.member, vState.getCurrentView().getId());
+            final Join voteForMe = Join.newBuilder()
+                                       .setMember(vState.getNextView())
+                                       .setContext(vState.getCurrentView().getId().toByteString())
+                                       .build();
+            Context<Member> current = vState.getCurrentView();
+            List<Result> votes = current.ring(entropy().nextInt(current.getRingCount())).stream().map(c -> {
+                ConsortiumClientCommunications link = linkFor(c);
+                if (link == null) {
+                    log.warn("Cannot get link for {}", c.getId());
+                    return null;
+                }
+                JoinResult vote;
+                try {
+                    vote = link.vote(voteForMe);
+                } catch (Throwable e) {
+                    log.trace("Unable to get vote from: {}:{}", c, e.getMessage());
+                    return null;
+                }
+
+                log.info("One vote to join: {} : {} from: {}", params.member, vState.getCurrentView().getId(), c);
+                return new Result(c, vote);
+            })
+                                        .filter(r -> r != null)
+                                        .filter(r -> r.vote.isInitialized())
+                                        .limit(vState.getToleranceLevel() + 1)
+                                        .collect(Collectors.toList());
+
+            if (votes.size() <= vState.getToleranceLevel()) {
+                log.error("Did not gather votes necessary to join consortium needed: {} got: {}",
+                          vState.getToleranceLevel() + 1, votes.size());
+                transitions.fail();
+                return;
+            }
+            Builder txn = JoinTransaction.newBuilder().setMember(vState.getNextView());
+            for (Result vote : votes) {
+                txn.addCertification(Certification.newBuilder()
+                                                  .setId(vote.member.getId().toByteString())
+                                                  .setSignature(vote.vote.getSignature()));
+            }
+            try {
+                Consortium.this.submit(h -> {
+                }, txn.build().toByteArray());
+            } catch (TimeoutException e) {
+                transitions.fail();
+                return;
+            }
+            log.info("successfully joined: {} : {}", params.member, vState.getCurrentView().getId());
+            if (vState.getLeader().equals(params.member)) {
+                transitions.becomeLeader();
+            } else {
+                transitions.becomeFollower();
+            }
+        }
+
+        public Member member() {
+            return Consortium.this.getMember();
+        }
+
+        public void nextView() {
+            Consortium.this.nextView();
+        }
+
+        public void processCheckpoint(CurrentBlock next) {
+            @SuppressWarnings("unused")
+            Checkpoint body;
+            try {
+                body = Checkpoint.parseFrom(next.getBlock().getBody().getContents());
+            } catch (InvalidProtocolBufferException e) {
+                log.trace("Protocol violation.  Cannot decode checkpoint body: {}", e);
+                return;
+            }
+            vState.setCurrent(next);
+        }
+
+        public void processGenesis(CurrentBlock next) {
+            Genesis body;
+            try {
+                body = Genesis.parseFrom(next.getBlock().getBody().getContents());
+            } catch (InvalidProtocolBufferException e) {
+                log.trace("Protocol violation.  Cannot decode genesis body: {}", e);
+                return;
+            }
+            vState.setCurrent(next);
+            transitions.genesisAccepted();
+            reconfigure(body.getInitialView());
+        }
+
+        public void processReconfigure(CurrentBlock next) {
+            Reconfigure body;
+            try {
+                body = Reconfigure.parseFrom(next.getBlock().getBody().getContents());
+            } catch (InvalidProtocolBufferException e) {
+                log.trace("Protocol violation.  Cannot decode reconfiguration body: {}", e);
+                return;
+            }
+            vState.setCurrent(next);
+            reconfigure(body);
+        }
+
+        public void processUser(CurrentBlock next) {
+            @SuppressWarnings("unused")
+            User body;
+            try {
+                body = User.parseFrom(next.getBlock().getBody().getContents());
+            } catch (InvalidProtocolBufferException e) {
+                log.trace("Protocol violation.  Cannot decode reconfiguration body: {}", e);
+                return;
+            }
+            vState.setCurrent(next);
+        }
+
+        public void submit(EnqueuedTransaction enqueuedTransaction) {
+            if (pending.add(enqueuedTransaction)) {
+                log.debug("Submitted txn: {}", enqueuedTransaction.getHash());
+                deliver(ConsortiumMessage.newBuilder()
+                                         .setMsg(enqueuedTransaction.getTransaction().toByteString())
+                                         .setType(MessageType.TRANSACTION)
+                                         .build());
+            }
+        }
+
+        public void submitJoin(EnqueuedTransaction enqueuedTransaction) {
+            if (enqueuedTransaction.getTransaction().getJoin()) {
+                if (pending.add(enqueuedTransaction)) {
+                    log.trace("Enqueuing a join transaction: {}", enqueuedTransaction.getHash());
+                }
+            } else {
+                log.trace("Not a join transaction: {}", enqueuedTransaction.getHash());
+            }
+        }
+
+        public void tick(int round) {
+            scheduler.tick(round);
+        }
+
+        public void validate(Validate v) {
+            HashKey hash = new HashKey(v.getHash());
+            CertifiedBlock.Builder certifiedBlock = workingBlocks.get(hash);
+            if (certifiedBlock == null) {
+                log.trace("No working block to validate: {}", hash);
+                return;
+            }
+            final Validator validator = vState.getValidator();
+            final HashKey memberID = new HashKey(v.getId());
+            final PublicKey key = validators.get(memberID);
+            if (key == null) {
+                log.trace("No valdator key to validate: {}:{}", hash, memberID);
+                return;
+            }
+            Signature signature = Validator.signatureForVerification(key);
+
+            ForkJoinPool.commonPool().execute(() -> {
+                if (validator.validate(certifiedBlock.getBlock(), v, signature)) {
+                    certifiedBlock.addCertifications(Certification.newBuilder()
+                                                                  .setId(v.getId())
+                                                                  .setSignature(v.getSignature()));
+                }
+            });
+        }
+
+        // Test access
+        PendingTransactions getPending() {
+            return pending;
+        }
+
+        private void schedule(Timers label, Runnable a, int delta) {
+            Runnable action = () -> {
+                timers.remove(label);
+                a.run();
+            };
+            log.trace("Cancelling previous timer for: {}", label);
+            Messenger messenger = vState.getMessenger();
+            int current = messenger == null ? 0 : messenger.getRound();
+            Timer previous = timers.put(Timers.AWAIT_VIEW_MEMBERS, scheduler.schedule(label, action, current + delta));
+            if (previous != null) {
+                log.trace("Cancelling previous timer for: {}", label);
+                previous.cancel();
+            }
+        }
+    }
 
     public class Service {
 
@@ -58,9 +352,49 @@ public class Consortium {
             return TransactionResult.getDefaultInstance();
         }
 
+        public JoinResult vote(Join request, HashKey fromID) {
+            Member from = vState.getCurrentView().getActiveMember(fromID);
+            if (from == null) {
+                log.debug("Member not part of current view: {}", fromID);
+                return JoinResult.getDefaultInstance();
+            }
+            ViewMember member = request.getMember();
+            byte[] encoded = member.getConsensusKey().toByteArray();
+            PublicKey consensusKey = verify(member.getSignature().toByteArray(), encoded);
+            if (consensusKey == null) {
+                log.debug("Could not verify consensus key from {}", fromID);
+                return JoinResult.getDefaultInstance();
+            }
+            byte[] signed = sign(vState.getConsensusKeyPair().getPrivate(), entropy(), encoded);
+            if (signed == null) {
+                log.debug("Could not sign consensus key from {}", fromID);
+                return JoinResult.getDefaultInstance();
+            }
+            return JoinResult.newBuilder()
+                             .setSignature(ByteString.copyFrom(signed))
+                             .setNextView(vState.getNextView())
+                             .build();
+        }
+
+    }
+
+    public enum Timers {
+        AWAIT_FORMATION, AWAIT_GENESIS, AWAIT_GROUP, AWAIT_VIEW_MEMBERS,
+    }
+
+    private static class Result {
+        public final Member     member;
+        public final JoinResult vote;
+
+        public Result(Member member, JoinResult vote) {
+            this.member = member;
+            this.vote = vote;
+        }
     }
 
     private final static Logger DEFAULT_LOGGER = LoggerFactory.getLogger(Consortium.class);
+
+    private static final HashKey GENESIS_VIEW = HashKey.ORIGIN;
 
     public static Block manifestBlock(byte[] data) {
         if (data.length == 0) {
@@ -73,24 +407,31 @@ public class Consortium {
         }
     }
 
-    Logger                                                                                         log       = DEFAULT_LOGGER;
-    final Parameters                                                                               parameters;
-    final Transitions                                                                              transitions;
-    final VolatileState                                                                            vState    = new VolatileState();
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
-    private final Fsm<CollaboratorContext, Transitions>                                            fsm;
-    private final Map<HashKey, SubmittedTransaction>                                               submitted = new ConcurrentHashMap<>();
+
+    private Logger                                   log        = DEFAULT_LOGGER;
+    private final Parameters                         params;
+    private final Map<HashKey, SubmittedTransaction> submitted  = new HashMap<>();
+    private final Transitions                        transitions;
+    private final Map<HashKey, PublicKey>            validators = new HashMap<>();
+    private final VolatileState                      vState     = new VolatileState();
 
     public Consortium(Parameters parameters) {
-        this.parameters = parameters;
+        this.params = parameters;
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, new Service(),
                                                                        r -> new ConsortiumServerCommunications(
                                                                                parameters.communications.getClientIdentityProvider(),
                                                                                null, r),
                                                                        ConsortiumClientCommunications.getCreate(null));
         parameters.context.register(vState);
-        fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
+        Fsm<CollaboratorContext, Transitions> fsm = Fsm.construct(new CollaboratorContext(), Transitions.class,
+                                                                  CollaboratorFsm.INITIAL, true);
         transitions = fsm.getTransitions();
+        nextView();
+    }
+
+    public void generateGenesis() {
+        log.info("Generating genesis on: {}", getMember());
     }
 
     public Logger getLog() {
@@ -98,11 +439,7 @@ public class Consortium {
     }
 
     public Member getMember() {
-        return parameters.member;
-    }
-
-    public CollaboratorContext getState() {
-        return fsm.getContext();
+        return params.member;
     }
 
     public void process(CertifiedBlock certifiedBlock) {
@@ -110,7 +447,6 @@ public class Consortium {
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteArray()));
         log.info("Processing block {} : {}", hash, block.getBody().getType());
         final CurrentBlock previousBlock = vState.getCurrent();
-        final Validator v = vState.getValidator();
         if (previousBlock != null) {
             if (block.getHeader().getHeight() != previousBlock.getBlock().getHeader().getHeight() + 1) {
                 log.error("Protocol violation.  Block height should be {} and next block height is {}",
@@ -123,7 +459,7 @@ public class Consortium {
                           previousBlock.getHash(), prev);
                 return;
             }
-            if (!v.validate(certifiedBlock)) {
+            if (!vState.getValidator().validate(certifiedBlock)) {
                 log.error("Protocol violation. New block is not validated {}", certifiedBlock);
                 return;
             }
@@ -132,13 +468,12 @@ public class Consortium {
                 log.error("Invalid genesis block: {}", block.getBody().getType());
                 return;
             }
-            if (!Validator.validateGenesis(certifiedBlock)) {
+            if (!validateGenesis(certifiedBlock)) {
                 log.error("Protocol violation. Genesis block is not validated {}", hash);
                 return;
             }
         }
-        vState.setCurrent(new CurrentBlock(hash, block));
-        next();
+        next(new CurrentBlock(hash, block));
     }
 
     public void setLog(Logger log) {
@@ -146,38 +481,44 @@ public class Consortium {
     }
 
     public void start() {
-        vState.resume(new Service(), parameters.gossipDuration, parameters.scheduler);
+        vState.resume(new Service(), params.gossipDuration, params.scheduler);
+        transitions.start();
     }
 
     public void stop() {
         vState.pause();
     }
 
-    public HashKey submit(List<byte[]> transactions, Consumer<HashKey> onCompletion) throws TimeoutException {
-        final Context<Collaborator> current = vState.getCurrentView();
+    public HashKey submit(boolean join, Consumer<HashKey> onCompletion,
+                          byte[]... transactions) throws TimeoutException {
+        final Context<Member> current = vState.getCurrentView();
         if (current == null) {
             throw new IllegalStateException("The current view is undefined, unable to process transactions");
         }
 
         byte[] nonce = new byte[32];
-        parameters.msgParameters.entropy.nextBytes(nonce);
-        ByteBuffer signed = ByteBuffer.allocate(nonce.length + HashKey.BYTE_SIZE
-                + transactions.stream().mapToInt(e -> e.length).sum());
-
-        signed.put(parameters.member.getId().bytes());
+        entropy().nextBytes(nonce);
+        int tsize = 0;
+        for (byte[] t : transactions) {
+            tsize += t.length;
+        }
+        ByteBuffer signed = ByteBuffer.allocate(1 + nonce.length + HashKey.BYTE_SIZE + tsize);
+        signed.put(join ? (byte) 1 : (byte) 0);
+        signed.put(params.member.getId().bytes());
         signed.put(nonce);
 
         Transaction.Builder builder = Transaction.newBuilder()
-                                                 .setSource(parameters.member.getId().toByteString())
+                                                 .setSource(params.member.getId().toByteString())
                                                  .setNonce(ByteString.copyFrom(nonce));
-        transactions.forEach(t -> {
+        for (byte[] t : transactions) {
             builder.addBatch(ByteString.copyFrom(t));
             signed.put(t);
-        });
+        }
+        ;
 
         byte[] hash = Conversion.hashOf(signed.array());
 
-        byte[] signature = Validator.sign(parameters.signature.get(), parameters.msgParameters.entropy, hash);
+        byte[] signature = sign(params.signature.get(), entropy(), hash);
         if (signature == null) {
             throw new IllegalStateException("Unable to sign transaction batch");
         }
@@ -186,8 +527,7 @@ public class Consortium {
         Transaction transaction = builder.build();
         submitted.put(hashKey, new SubmittedTransaction(transaction, onCompletion));
         int toleranceLevel = vState.getToleranceLevel();
-        List<TransactionResult> results = current.sample(toleranceLevel + 1, parameters.msgParameters.entropy,
-                                                         parameters.member.getId())
+        List<TransactionResult> results = current.sample(toleranceLevel + 1, entropy(), params.member.getId())
                                                  .stream()
                                                  .map(c -> {
                                                      ConsortiumClientCommunications link = linkFor(c);
@@ -195,14 +535,20 @@ public class Consortium {
                                                          log.warn("Cannot get link for {}", c.getId());
                                                          return null;
                                                      }
-                                                     return link.clientSubmit(SubmitTransaction.newBuilder()
-                                                                                               .setContext(current.getId()
-                                                                                                                  .toByteString())
-                                                                                               .setTransaction(transaction)
-                                                                                               .build());
+                                                     try {
+                                                         return link.clientSubmit(SubmitTransaction.newBuilder()
+                                                                                                   .setContext(current.getId()
+                                                                                                                      .toByteString())
+                                                                                                   .setTransaction(transaction)
+                                                                                                   .build());
+                                                     } catch (Throwable t) {
+                                                         log.warn("Cannot submit txn {} to {}: ", hashKey, c,
+                                                                  t.getMessage());
+                                                         return null;
+                                                     }
                                                  })
                                                  .filter(r -> r != null)
-                                                 .limit(toleranceLevel)
+                                                 .limit(toleranceLevel + 1)
                                                  .collect(Collectors.toList());
         if (results.size() < toleranceLevel) {
             throw new TimeoutException("Cannot submit transaction " + hashKey);
@@ -210,7 +556,17 @@ public class Consortium {
         return hashKey;
     }
 
-    void deliver(ConsortiumMessage message) {
+    public HashKey submit(Consumer<HashKey> onCompletion, byte[]... transactions) throws TimeoutException {
+        return submit(false, onCompletion, transactions);
+
+    }
+
+    // Access for testing
+    CollaboratorContext getState() {
+        return transitions.context();
+    }
+
+    private void deliver(ConsortiumMessage message) {
         final Messenger currentMsgr = vState.getMessenger();
         if (currentMsgr == null) {
             log.error("skipping message publish as no messenger");
@@ -219,50 +575,37 @@ public class Consortium {
         currentMsgr.publish(message.toByteArray());
     }
 
-    void generateValidation(HashKey hash, Block block) {
-        byte[] signature = Validator.sign(vState.getConsensusKeyPair().getPrivate(), parameters.msgParameters.entropy,
-                                          Conversion.hashOf(block.getHeader().toByteArray()));
+    private SecureRandom entropy() {
+        return params.msgParameters.entropy;
+    }
+
+    private void generateValidation(HashKey hash, Block block) {
+        byte[] signature = sign(vState.getConsensusKeyPair().getPrivate(), entropy(),
+                                Conversion.hashOf(block.getHeader().toByteArray()));
         if (signature == null) {
             log.error("Unable to sign block {}", hash);
             return;
         }
-        Validate validation;
-        validation = Validate.newBuilder()
-                             .setId(parameters.member.getId().toByteString())
-                             .setHash(hash.toByteString())
-                             .setSignature(ByteString.copyFrom(signature))
-                             .build();
-        vState.getMessenger().publish(ConsortiumMessage.newBuilder()
-                                                  .setType(MessageType.VALIDATE)
-                                                  .setMsg(validation.toByteString())
-                                                  .build()
-                                                  .toByteArray());
+        vState.getMessenger()
+              .publish(ConsortiumMessage.newBuilder()
+                                        .setType(MessageType.VALIDATE)
+                                        .setMsg(Validate.newBuilder()
+                                                        .setId(params.member.getId().toByteString())
+                                                        .setHash(hash.toByteString())
+                                                        .setSignature(ByteString.copyFrom(signature))
+                                                        .build()
+                                                        .toByteString())
+                                        .build()
+                                        .toByteArray());
     }
 
-    boolean reconfigure(Reconfigure body) {
-        HashKey viewId = new HashKey(body.getId());
-        Context<Collaborator> newView = new Context<Collaborator>(viewId, parameters.context.toleranceLevel() + 1);
-        body.getViewList().stream().map(vm -> {
-            HashKey memberId = new HashKey(vm.getId());
-            Member m = parameters.context.getMember(memberId);
-            if (m == null) {
-                return null;
-            }
-            return new Collaborator(m, vm.getConsensusKey().toByteArray());
-        }).filter(m -> m != null).forEach(m -> {
-            if (parameters.context.isActive(m)) {
-                newView.activate(m);
-            } else {
-                newView.offline(m);
-            }
-        });
-
-        return viewChange(newView, body.getToleranceLevel());
+    private Member leaderOf(Context<Member> newView) {
+        return newView.ring(0).successor(newView.getId());
     }
 
     private ConsortiumClientCommunications linkFor(Member m) {
         try {
-            return vState.getComm().apply(m, parameters.member);
+            return vState.getComm().apply(m, params.member);
         } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", m.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
@@ -270,8 +613,7 @@ public class Consortium {
         return null;
     }
 
-    private void next() {
-        CurrentBlock next = vState.getCurrent();
+    private void next(CurrentBlock next) {
         switch (next.getBlock().getBody().getType()) {
         case CHECKPOINT:
             transitions.processCheckpoint(next);
@@ -290,6 +632,26 @@ public class Consortium {
             log.error("Unrecognized block type: {} : {}", next.hashCode(), next.getBlock());
         }
 
+    }
+
+    private KeyPair nextView() {
+        KeyPair currentKP = vState.getNextViewConsensusKeyPair();
+        vState.setConsensusKeyPair(currentKP);
+
+        KeyPair keyPair = generateKeyPair(2048, "RSA");
+        byte[] encoded = keyPair.getPublic().getEncoded();
+        byte[] signed = sign(keyPair.getPrivate(), params.msgParameters.entropy, encoded);
+        if (signed == null) {
+            log.error("Unable to generate and sign consensus key");
+            transitions.fail();
+        }
+        vState.setNextViewConsensusKeyPair(keyPair);
+        vState.setNextView(ViewMember.newBuilder()
+                                     .setId(getMember().getId().toByteString())
+                                     .setConsensusKey(ByteString.copyFrom(encoded))
+                                     .setSignature(ByteString.copyFrom(signed))
+                                     .build());
+        return currentKP;
     }
 
     private void process(Msg msg) {
@@ -333,46 +695,73 @@ public class Consortium {
         case UNRECOGNIZED:
         default:
             log.error("Invalid consortium message type: {} from: {}", message.getType(), msg.from);
-            break;
         }
+    }
+
+    private void reconfigure(Reconfigure body) {
+        HashKey viewId = new HashKey(body.getId());
+        Context<Member> newView = new Context<Member>(viewId, params.context.toleranceLevel() + 1);
+        body.getViewList().stream().map(vm -> {
+            HashKey memberId = new HashKey(vm.getId());
+            Member m = params.context.getMember(memberId);
+            if (m == null) {
+                return null;
+            }
+            return m;
+        }).filter(m -> m != null).forEach(m -> {
+            if (params.context.isActive(m)) {
+                newView.activate(m);
+            } else {
+                newView.offline(m);
+            }
+        });
+
+        viewChange(newView, body.getToleranceLevel());
     }
 
     /**
      * Ye Jesus Nut
      */
-    private boolean viewChange(Context<Collaborator> newView, int t) {
+    private void viewChange(Context<Member> newView, int toleranceLevel) {
         vState.pause();
 
-        log.trace("View rings: {} ttl: {}", newView.getRingCount(), newView.timeToLive());
+        log.info("Installing new view rings: {} ttl: {}", newView.getRingCount(), newView.timeToLive());
 
         // Live successor of the view ID on ring zero is presumed leader
-        Collaborator newLeader = newView.ring(0).successor(newView.getId());
+        Member newLeader = leaderOf(newView);
 
         vState.setComm(createClientComms.apply(newView.getId()));
-        vState.setValidator(new Validator(newLeader, newView, t));
+        vState.setValidator(new Validator(newLeader, newView, toleranceLevel));
         vState.setMessenger(null);
         vState.setTO(null);
 
-        if (newView.getMember(parameters.member.getId()) != null) { // cohort member
-            Messenger nextMsgr = new Messenger(parameters.member, parameters.signature, newView,
-                    parameters.communications, parameters.msgParameters);
+        nextView();
+
+        if (newView.getMember(params.member.getId()) != null) { // cohort member
+            Messenger nextMsgr = new Messenger(params.member, params.signature, newView, params.communications,
+                    params.msgParameters);
             vState.setMessenger(nextMsgr);
-            vState.setTO(new TotalOrder((m, k) -> process(m), newView));
-            nextMsgr.register(() -> fsm.getContext().tick());
-            nextMsgr.register(messages -> vState.getTO().process(messages));
-            if (parameters.member.equals(newLeader)) { // I yam what I yam
-                log.info("reconfiguring, becoming leader: {}", parameters.member);
-                transitions.becomeLeader();
-            } else {
-                log.info("reconfiguring, becoming follower: {}", parameters.member);
-                transitions.becomeFollower();
-            }
+            nextMsgr.register(round -> transitions.context().tick(round));
+            vState.setTO(new MemberOrder((m, k) -> process(m), nextMsgr));
+            log.info("reconfiguring, becoming joining member: {}", params.member);
+            transitions.join();
         } else { // you are all my puppets
-            log.info("reconfiguring, becoming client: {}", parameters.member);
+            log.info("reconfiguring, becoming client: {}", params.member);
             transitions.becomeClient();
         }
 
-        vState.resume(new Service(), parameters.gossipDuration, parameters.scheduler);
-        return true;
+        vState.resume(new Service(), params.gossipDuration, params.scheduler);
+    }
+
+    private Context<Member> viewFor(HashKey hash) {
+        Context<Member> newView = new Context<Member>(hash, params.context.toleranceLevel() + 1);
+        params.context.successors(hash).forEach(e -> {
+            if (params.context.isActive(e)) {
+                newView.activate(e);
+            } else {
+                newView.offline(e);
+            }
+        });
+        return newView;
     }
 }

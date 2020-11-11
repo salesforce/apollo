@@ -43,7 +43,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
-import com.salesforce.apollo.protocols.Validator;
+import com.salesforce.apollo.protocols.CertificateValidator;
 
 import io.grpc.BindableService;
 import io.grpc.Context;
@@ -122,7 +122,7 @@ public class MtlsServer implements ClientIdentity {
 
     public static class NodeTrustManagerFactory extends TrustManagerFactory {
 
-        public NodeTrustManagerFactory(Validator validator) {
+        public NodeTrustManagerFactory(CertificateValidator validator) {
             super(new NodeTrustManagerFactorySpi(validator), PROVIDER, "Trust");
         }
 
@@ -130,9 +130,9 @@ public class MtlsServer implements ClientIdentity {
 
     public static class NodeTrustManagerFactorySpi extends TrustManagerFactorySpi {
 
-        private final Validator validator;
+        private final CertificateValidator validator;
 
-        public NodeTrustManagerFactorySpi(Validator validator) {
+        public NodeTrustManagerFactorySpi(CertificateValidator validator) {
             this.validator = validator;
         }
 
@@ -220,9 +220,9 @@ public class MtlsServer implements ClientIdentity {
     }
 
     private static class Trust extends X509ExtendedTrustManager {
-        private final Validator validator;
+        private final CertificateValidator validator;
 
-        public Trust(Validator validator) {
+        public Trust(CertificateValidator validator) {
             this.validator = validator;
         }
 
@@ -277,7 +277,7 @@ public class MtlsServer implements ClientIdentity {
     }
 
     public static SslContext forClient(ClientAuth clientAuth, String alias, X509Certificate certificate,
-                                       PrivateKey privateKey, Validator validator) {
+                                       PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forClient()
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
                                                              privateKey));
@@ -295,7 +295,7 @@ public class MtlsServer implements ClientIdentity {
     }
 
     public static SslContext forServer(ClientAuth clientAuth, String alias, X509Certificate certificate,
-                                       PrivateKey privateKey, Validator validator) {
+                                       PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forServer(new NodeKeyManagerFactory(alias, certificate,
                 privateKey));
         GrpcSslContexts.configure(builder);
@@ -317,7 +317,7 @@ public class MtlsServer implements ClientIdentity {
     private final Context.Key<SSLSession> sslSessionContext = Context.key("SSLSession");
 
     public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
-            PrivateKey privateKey, Validator validator, MutableHandlerRegistry registry) {
+            PrivateKey privateKey, CertificateValidator validator, MutableHandlerRegistry registry) {
         this.registry = registry;
 
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)

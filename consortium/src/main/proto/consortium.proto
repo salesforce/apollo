@@ -9,6 +9,17 @@ package apollo.consortium;
 
 service OrderingService { 
     rpc submit (SubmitTransaction) returns (TransactionResult) {}
+    rpc vote (Join) returns (JoinResult) {}
+}
+
+message Join {
+    bytes context = 1;
+    ViewMember member = 2;
+}
+
+message JoinResult {
+    bytes signature = 2;
+    ViewMember nextView = 3;
 }
 
 message SubmitTransaction {
@@ -72,6 +83,12 @@ message Reconfigure {
     int32 checkpointBlocks = 2;
     int32 toleranceLevel = 3;
     repeated ViewMember view = 4;
+    repeated Transaction transactions = 5;
+}
+
+message JoinTransaction {
+    ViewMember member = 1;
+    repeated Certification certification = 2;
 }
 
 message ViewMember {
@@ -86,10 +103,11 @@ message Checkpoint {
 } 
 
 message Transaction {
-    bytes source = 1;
-    bytes nonce = 2;
-    repeated bytes batch = 3;
-    bytes signature = 4;
+    bool join = 1;
+    bytes source = 2;
+    bytes nonce = 3;
+    repeated bytes batch = 4;
+    bytes signature = 5;
 }
 
 enum MessageType {

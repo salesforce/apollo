@@ -11,7 +11,7 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.Validator;
+import com.salesforce.apollo.protocols.CertificateValidator;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
@@ -33,6 +33,6 @@ public interface EndpointProvider {
 
     PrivateKey getPrivateKey();
 
-    Validator getValiator();
+    CertificateValidator getValiator();
 
 }

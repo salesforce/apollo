@@ -10,6 +10,8 @@ import java.security.KeyPair;
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 
+import com.salesfoce.apollo.consortium.proto.Genesis;
+import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
@@ -17,7 +19,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.membership.messaging.TotalOrder;
+import com.salesforce.apollo.membership.messaging.MemberOrder;
 
 /**
  * Volatile state consolidation for Conosortium
@@ -29,24 +31,36 @@ class VolatileState implements MembershipListener<Member> {
     private volatile CommonCommunications<ConsortiumClientCommunications, Service> comm;
     private volatile KeyPair                                                       consensusKeyPair;
     private volatile CurrentBlock                                                  current;
+    private volatile Genesis                                                       genesis;
     private volatile Messenger                                                     messenger;
-    private volatile TotalOrder                                                    to;
+    private volatile ViewMember                                                    nextView;
+    private volatile KeyPair                                                       nextViewConsensusKeyPair;
+    private volatile MemberOrder                                                    to;
     private volatile Validator                                                     validator;
 
     @Override
     public void fail(Member member) {
-        final Context<Collaborator> view = getCurrentView();
+        final Context<Member> view = getCurrentView();
         if (view != null) {
             view.offlineIfActive(member.getId());
         }
     }
 
+    public Genesis getGenesis() {
+        final Genesis c = genesis;
+        return c;
+    }
+
     @Override
     public void recover(Member member) {
-        final Context<Collaborator> view = getCurrentView();
+        final Context<Member> view = getCurrentView();
         if (view != null) {
             view.activateIfOffline(member.getId());
         }
+    }
+
+    public void setGenesis(Genesis genesis) {
+        this.genesis = genesis;
     }
 
     CommonCommunications<ConsortiumClientCommunications, Service> getComm() {
@@ -64,8 +78,9 @@ class VolatileState implements MembershipListener<Member> {
         return cb;
     }
 
-    Context<Collaborator> getCurrentView() {
-        return getValidator().getView();
+    Context<Member> getCurrentView() {
+        Validator v = getValidator();
+        return v != null ? v.getView() : null;
     }
 
     Member getLeader() {
@@ -77,8 +92,18 @@ class VolatileState implements MembershipListener<Member> {
         return currentMsgr;
     }
 
-    TotalOrder getTO() {
-        final TotalOrder cTo = to;
+    ViewMember getNextView() {
+        final ViewMember c = nextView;
+        return c;
+    }
+
+    KeyPair getNextViewConsensusKeyPair() {
+        final KeyPair c = nextViewConsensusKeyPair;
+        return c;
+    }
+
+    MemberOrder getTO() {
+        final MemberOrder cTo = to;
         return cTo;
     }
 
@@ -95,12 +120,12 @@ class VolatileState implements MembershipListener<Member> {
     void pause() {
         CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
         if (currentComm != null) {
-            Context<Collaborator> current = getCurrentView();
+            Context<Member> current = getCurrentView();
             assert current != null : "No current view, but comm exists!";
             currentComm.deregister(current.getId());
         }
 
-        TotalOrder currentTotalOrder = getTO();
+        MemberOrder currentTotalOrder = getTO();
         if (currentTotalOrder != null) {
             currentTotalOrder.stop();
         }
@@ -113,11 +138,11 @@ class VolatileState implements MembershipListener<Member> {
     void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
         CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
         if (currentComm != null) {
-            Context<Collaborator> current = getCurrentView();
+            Context<Member> current = getCurrentView();
             assert current != null : "No current view, but comm exists!";
             currentComm.register(current.getId(), service);
         }
-        TotalOrder currentTO = getTO();
+        MemberOrder currentTO = getTO();
         if (currentTO != null) {
             currentTO.start();
         }
@@ -143,7 +168,15 @@ class VolatileState implements MembershipListener<Member> {
         this.messenger = messenger;
     }
 
-    void setTO(TotalOrder to) {
+    void setNextView(ViewMember nextView) {
+        this.nextView = nextView;
+    }
+
+    void setNextViewConsensusKeyPair(KeyPair nextViewConsensusKeyPair) {
+        this.nextViewConsensusKeyPair = nextViewConsensusKeyPair;
+    }
+
+    void setTO(MemberOrder to) {
         this.to = to;
     }
 

@@ -161,7 +161,7 @@ public class MessageTest {
         AtomicInteger current = new AtomicInteger(-1);
         for (Messenger view : messengers) {
             Receiver receiver = new Receiver(messengers.size(), current);
-            view.register(receiver);
+            view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
         int rounds = 30;

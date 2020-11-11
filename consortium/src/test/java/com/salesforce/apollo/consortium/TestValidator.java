@@ -24,7 +24,6 @@ public class TestValidator {
 
     @Test
     public void signing() {
-
         SecureRandom entropy = new SecureRandom();
 
         KeyPair consensusKey = Validator.generateKeyPair(2048, "RSA");

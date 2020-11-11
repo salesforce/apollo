@@ -483,7 +483,7 @@ public class Context<T extends Member> {
     private HashKey contextHash(HashKey key, int ring) {
         MessageDigest md = DIGEST_CACHE.get();
         md.reset();
-        md.update(String.format(CONTEXT_HASH_TEMPLATE, ring).getBytes());
+        md.update(String.format(CONTEXT_HASH_TEMPLATE, id, ring).getBytes());
         return new HashKey(md.digest());
     }
 }

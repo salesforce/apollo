@@ -18,6 +18,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -168,15 +170,16 @@ public class Messenger {
 
     public static final Logger log = LoggerFactory.getLogger(Messenger.class);
 
-    public final Member                                                        member;
-    public final Supplier<Signature>                                           signature;
     private final MessageBuffer                                                buffer;
     private final List<MessageChannelHandler>                                  channelHandlers = new CopyOnWriteArrayList<>();
     private final CommonCommunications<MessagingClientCommunications, Service> comm;
     private final Context<Member>                                              context;
     private volatile int                                                       lastRing        = -1;
+    private final Member                                                       member;
     private final Parameters                                                   parameters;
-    private final List<Runnable>                                               roundListeners  = new CopyOnWriteArrayList<>();
+    private final AtomicInteger                                                round           = new AtomicInteger();
+    private final List<Consumer<Integer>>                                      roundListeners  = new CopyOnWriteArrayList<>();
+    private final Supplier<Signature>                                          signature;
     private final AtomicBoolean                                                started         = new AtomicBoolean();
 
     @SuppressWarnings("unchecked")
@@ -193,6 +196,10 @@ public class Messenger {
                                           getCreate(parameters.metrics));
     }
 
+    public Context<? extends Member> getContext() {
+        return context;
+    }
+
     public Member getMember() {
         return member;
     }
@@ -201,15 +208,16 @@ public class Messenger {
         if (!started.get()) {
             return;
         }
-        commonPool().execute(() -> {
-            MessagingClientCommunications link = nextRing();
+        MessagingClientCommunications link = nextRing();
+        int ring = lastRing;
+        if (link == null) {
+            log.debug("No members to message gossip with on ring: {}", ring);
+            return;
+        }
 
-            int ring = lastRing;
-            if (link == null) {
-                log.debug("No members to message gossip with on ring: {}", ring);
-                return;
-            }
-            log.trace("message gossiping from {} with {} on {}", member, link.getMember(), ring);
+        commonPool().execute(() -> {
+            int gossipRound = round.incrementAndGet();
+            log.trace("message gossiping[{}] from {} with {} on {}", gossipRound, member, link.getMember(), ring);
             try {
                 Messages gossip = null;
 
@@ -241,7 +249,7 @@ public class Messenger {
                 roundListeners.forEach(l -> {
                     commonPool().execute(() -> {
                         try {
-                            l.run();
+                            l.accept(gossipRound);
                         } catch (Throwable e) {
                             log.error("error sending round() to listener: " + l, e);
                         }
@@ -256,18 +264,19 @@ public class Messenger {
         buffer.publish(message, member, signature.get());
     }
 
-    public void register(MessageChannelHandler listener) {
-        channelHandlers.add(listener);
+    public void register(Consumer<Integer> roundListener) {
+        roundListeners.add(roundListener);
     }
 
-    public void register(Runnable roundListener) {
-        roundListeners.add(roundListener);
+    public void registerHandler(MessageChannelHandler listener) {
+        channelHandlers.add(listener);
     }
 
     public void start(Duration duration, ScheduledExecutorService scheduler) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        log.info("Starting Messenger[{}] for {}", context.getId(), member);
         comm.register(context.getId(), new Service());
         scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
     }
@@ -276,6 +285,10 @@ public class Messenger {
         if (!started.compareAndSet(true, false)) {
             return;
         }
+        log.info("Stopping Messenger[{}] for {}", context.getId(), member);
+        buffer.clear();
+        lastRing = -1;
+        round.set(0);
         comm.deregister(context.getId());
     }
 
@@ -347,5 +360,9 @@ public class Messenger {
             return false;
         }
         return true;
+    }
+
+    public int getRound() { 
+        return round.get();
     }
 }

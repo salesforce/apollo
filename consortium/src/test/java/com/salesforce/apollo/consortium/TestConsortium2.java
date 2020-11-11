@@ -8,18 +8,11 @@ package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
-import java.security.KeyPair;
-import java.security.PublicKey;
 import java.security.SecureRandom;
-import java.security.Signature;
-import java.security.SignatureException;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -29,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -39,16 +31,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.Body;
-import com.salesfoce.apollo.consortium.proto.BodyType;
-import com.salesfoce.apollo.consortium.proto.Certification;
-import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.consortium.proto.Genesis;
-import com.salesfoce.apollo.consortium.proto.Header;
-import com.salesfoce.apollo.consortium.proto.Reconfigure;
-import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -57,9 +39,7 @@ import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.CertWithKey;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -70,7 +50,7 @@ import io.github.olivierlemasle.ca.RootCertificate;
  * @author hal.hildebrand
  *
  */
-public class TestConsortium {
+public class TestConsortium2 {
 
     private static final RootCertificate                   ca         = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
@@ -142,7 +122,7 @@ public class TestConsortium {
             Router comms = new LocalRouter(node.getId(), builder);
             communications.put(node.getId(), comms);
             frist.set(false);
-            return new View(HashKey.ORIGIN, node, comms, null);
+            return new View(HashKey.ORIGIN.prefix(1), node, comms, null);
         }).collect(Collectors.toList());
     }
 
@@ -184,102 +164,38 @@ public class TestConsortium {
         for (int i = 0; i < parameters.rings; i++) {
             blueRibbon.add(consortium.get(i));
         }
-        CertifiedBlock genesis = createGenesis(blueRibbon);
 
         System.out.println("starting consortium");
 
         consortium.forEach(e -> e.start());
 
-        System.out.println("processing genesis block");
-
-        consortium.parallelStream().forEach(c -> c.process(genesis));
-
         System.out.println("genesis block processed");
 
-        Consortium client = consortium.get(blueRibbon.size() + 1);
-        try {
-            client.submit(h -> {
-            }, "Hello world".getBytes());
-        } catch (TimeoutException e) {
-            fail();
-        }
+        Thread.sleep(30_000);
 
-        boolean submitted = Utils.waitForCondition(10_000, 1_000,
-                                                   () -> blueRibbon.stream()
-                                                                   .map(collaborator -> collaborator.getState()
-                                                                                                    .getPending()
-                                                                                                    .isEmpty())
-                                                                   .filter(b -> b)
-                                                                   .count() == 0);
+//        Consortium client = consortium.get(blueRibbon.size() + 1);
+//        try {
+//            client.submit(h -> {
+//            }, "Hello world".getBytes());
+//        } catch (TimeoutException e) {
+//            fail();
+//        }
+//
+//        boolean submitted = Utils.waitForCondition(10_000, 1_000,
+//                                                   () -> blueRibbon.stream()
+//                                                                   .map(collaborator -> collaborator.getState()
+//                                                                                                    .getPending()
+//                                                                                                    .isEmpty())
+//                                                                   .filter(b -> b)
+//                                                                   .count() == 0);
+//
+//        assertTrue(submitted,
+//                   "Transaction not submitted to consortium, missing: "
+//                           + blueRibbon.stream()
+//                                       .map(collaborator -> collaborator.getState().getPending().isEmpty())
+//                                       .filter(b -> b)
+//                                       .count());
 
-        assertTrue(submitted,
-                   "Transaction not submitted to consortium, missing: "
-                           + blueRibbon.stream()
-                                       .map(collaborator -> collaborator.getState().getPending().isEmpty())
-                                       .filter(b -> b)
-                                       .count());
-
-    }
-
-    private CertifiedBlock createGenesis(List<Consortium> blueRibbon) {
-        byte[] viewID = new byte[32];
-        entropy.nextBytes(viewID);
-        Reconfigure.Builder genesisView = Reconfigure.newBuilder()
-                                                     .setCheckpointBlocks(256)
-                                                     .setId(ByteString.copyFrom(viewID))
-                                                     .setToleranceLevel(parameters.toleranceLevel);
-        Map<Member, KeyPair> consensusKeys = new HashMap<>();
-        blueRibbon.forEach(e -> {
-            KeyPair consensusKey = Validator.generateKeyPair(2048, "RSA");
-            consensusKeys.put(e.getMember(), consensusKey);
-
-            byte[] encoded = consensusKey.getPublic().getEncoded();
-
-            PublicKey test = Validator.publicKeyOf(encoded);
-            assertEquals(consensusKey.getPublic(), test);
-            byte[] testEncoded = test.getEncoded();
-            assertArrayEquals(encoded, testEncoded);
-
-            byte[] signed = Validator.sign(consensusKey.getPrivate(), entropy, encoded);
-            assertNotNull(signed);
-            assertNotNull(Validator.verify(consensusKey.getPublic(), signed, encoded));
-
-            genesisView.addView(ViewMember.newBuilder()
-                                          .setId(e.getMember().getId().toByteString())
-                                          .setConsensusKey(ByteString.copyFrom(encoded))
-                                          .setSignature(ByteString.copyFrom(signed)));
-        });
-        Body genesisBody = Body.newBuilder()
-                               .setConsensusId(0)
-                               .setType(BodyType.GENESIS)
-                               .setContents(Genesis.newBuilder()
-                                                   .setGenesisData(ByteString.copyFromUtf8("hello world"))
-                                                   .setInitialView(genesisView)
-                                                   .build()
-                                                   .toByteString())
-                               .build();
-        byte[] bodyHash = Conversion.hashOf(genesisBody.toByteArray());
-
-        Header header = Header.newBuilder().setHeight(0).setBodyHash(ByteString.copyFrom(bodyHash)).build();
-        CertifiedBlock.Builder certifiedGenesis = CertifiedBlock.newBuilder()
-                                                                .setBlock(Block.newBuilder()
-                                                                               .setHeader(header)
-                                                                               .setBody(genesisBody));
-        byte[] headerBytes = header.toByteArray();
-        blueRibbon.stream().map(c -> c.getMember()).map(c -> (Node) c).forEach(n -> {
-            Signature signature = Validator.forSigning(consensusKeys.get(n).getPrivate(), entropy);
-            try {
-                signature.update(headerBytes);
-                certifiedGenesis.addCertifications(Certification.newBuilder()
-                                                                .setId(n.getId().toByteString())
-                                                                .setSignature(ByteString.copyFrom(signature.sign())));
-            } catch (SignatureException e1) {
-                throw new IllegalStateException(e1);
-            }
-        });
-
-        CertifiedBlock genesis = certifiedGenesis.build();
-        return genesis;
     }
 
 }

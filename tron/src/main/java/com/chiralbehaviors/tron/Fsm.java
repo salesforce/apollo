@@ -52,18 +52,8 @@ public final class Fsm<Context, Transitions> {
         }
     }
 
-    private static Logger                       DEFAULT_LOG = LoggerFactory.getLogger(Fsm.class);
+    private static final Logger                 DEFAULT_LOG = LoggerFactory.getLogger(Fsm.class);
     private static final ThreadLocal<Fsm<?, ?>> thisFsm     = new ThreadLocal<>();
-
-    /**
-     * Construct a new instance of a finite state machine with a default
-     * ClassLoader.
-     */
-    public static <Context, Transitions> Fsm<Context, Transitions> construct(Context fsmContext,
-                                                                             Class<Transitions> transitions,
-                                                                             Enum<?> initialState, boolean sync) {
-        return construct(fsmContext, transitions, fsmContext.getClass().getClassLoader(), initialState, sync);
-    }
 
     /**
      * Construct a new instance of a finite state machine.
@@ -95,6 +85,16 @@ public final class Fsm<Context, Transitions> {
     }
 
     /**
+     * Construct a new instance of a finite state machine with a default
+     * ClassLoader.
+     */
+    public static <Context, Transitions> Fsm<Context, Transitions> construct(Context fsmContext,
+                                                                             Class<Transitions> transitions,
+                                                                             Enum<?> initialState, boolean sync) {
+        return construct(fsmContext, transitions, fsmContext.getClass().getClassLoader(), initialState, sync);
+    }
+
+    /**
      * 
      * @return the Context of the currently executing Fsm
      */
@@ -114,18 +114,21 @@ public final class Fsm<Context, Transitions> {
         return fsm;
     }
 
-    private final Context            context;
-    private Enum<?>                  current;
-    private Logger                   log;
-    private String                   name;
-    private boolean                  pendingPop = false;
-    private Enum<?>                  pendingPush;
-    private PopTransition            popTransition;
-    private Enum<?>                  previous;
-    private final Transitions        proxy;
-    private final Deque<Enum<?>>     stack      = new ArrayDeque<>();
-    private final Lock               sync;
-    private String                   transition;
+    private final Context        context;
+    private Enum<?>              current;
+    private Logger               log;
+    private String               name;
+    private boolean              pendingPop = false;
+    private Enum<?>              pendingPush;
+    private PopTransition        popTransition;
+    private Enum<?>              previous;
+    private final Transitions    proxy;
+    private final Deque<Enum<?>> stack      = new ArrayDeque<>();
+
+    private final Lock sync;
+
+    private String transition;
+
     private final Class<Transitions> transitionsType;
 
     Fsm(Context context, boolean sync, Class<Transitions> transitionsType, ClassLoader transitionsCL) {
@@ -253,16 +256,6 @@ public final class Fsm<Context, Transitions> {
     }
 
     /**
-     * Set the current state of the Fsm. The entry action for this state will not be
-     * called.
-     * 
-     * @param state - the new current state of the Fsm
-     */
-    private void setCurrentState(Transitions state) {
-        current = (Enum<?>) state;
-    }
-
-    /**
      * Set the Logger for this Fsm.
      * 
      * @param log - the Logger of this Fsm
@@ -336,8 +329,9 @@ public final class Fsm<Context, Transitions> {
      * 
      * @param t         - the transition to fire
      * @param arguments - the transition arguments
+     * @return
      */
-    private void fire(Method t, Object[] arguments) {
+    private Object fire(Method t, Object[] arguments) {
         if (sync != null) {
             try {
                 sync.lockInterruptibly();
@@ -349,8 +343,17 @@ public final class Fsm<Context, Transitions> {
         Fsm<?, ?> previousFsm = thisFsm.get();
         thisFsm.set(this);
         previous = current;
-        transition = prettyPrint(t);
+
         try {
+            if (!transitionsType.isAssignableFrom(t.getReturnType())) {
+                try {
+                    return t.invoke(current, arguments);
+                } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+
+            transition = prettyPrint(t);
             Enum<?> nextState;
             try {
                 nextState = fireTransition(lookupTransition(t), arguments);
@@ -364,6 +367,7 @@ public final class Fsm<Context, Transitions> {
                 sync.unlock();
             }
         }
+        return null;
     }
 
     /**
@@ -393,6 +397,8 @@ public final class Fsm<Context, Transitions> {
         }
         try {
             return (Enum<?>) stateTransition.invoke(current, arguments);
+        } catch (InvalidTransition e) {
+            throw new InvalidTransition(current + ":" + stateTransition.toGenericString(), e);
         } catch (IllegalAccessException | IllegalArgumentException e) {
             throw new IllegalStateException(String.format("Unable to invoke transition %s on state %s",
                                                           prettyPrint(stateTransition), prettyPrint(current)),
@@ -539,12 +545,21 @@ public final class Fsm<Context, Transitions> {
         executeEntryAction();
     }
 
+    /**
+     * Set the current state of the Fsm. The entry action for this state will not be
+     * called.
+     * 
+     * @param state - the new current state of the Fsm
+     */
+    private void setCurrentState(Transitions state) {
+        current = (Enum<?>) state;
+    }
+
     private InvocationHandler transitionsHandler() {
         return new InvocationHandler() {
             @Override
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                Fsm.this.fire(method, args);
-                return null;
+                return fire(method, args);
             }
         };
     }

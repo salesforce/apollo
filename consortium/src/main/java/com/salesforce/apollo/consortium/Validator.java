@@ -189,11 +189,11 @@ public class Validator {
         return true;
     }
 
-    private final Member                leader;
-    private final int                   toleranceLevel;
-    private final Context<Collaborator> view;
+    private final Member          leader;
+    private final int             toleranceLevel;
+    private final Context<Member> view;
 
-    public Validator(Member leader, Context<Collaborator> view, int toleranceLevel) {
+    public Validator(Member leader, Context<Member> view, int toleranceLevel) {
         this.leader = leader;
         this.view = view;
         this.toleranceLevel = toleranceLevel;
@@ -207,18 +207,17 @@ public class Validator {
         return toleranceLevel;
     }
 
-    public Context<Collaborator> getView() {
+    public Context<Member> getView() {
         return view;
     }
 
-    public boolean validate(Block block, Validate v) {
+    public boolean validate(Block block, Validate v, Signature signature) {
         HashKey memberID = new HashKey(v.getId());
-        Collaborator member = view.getMember(memberID);
+        Member member = view.getMember(memberID);
         if (member == null) {
             log.trace("No member found for {}", memberID);
         }
-
-        Signature signature = member.forValidation(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
+ 
         try {
             signature.update(block.getHeader().toByteArray());
         } catch (SignatureException e) {
@@ -234,17 +233,18 @@ public class Validator {
     }
 
     public boolean validate(CertifiedBlock block) {
-        Function<HashKey, Signature> validators = h -> {
-            Collaborator member = view.getMember(h);
-            if (member == null) {
-                return null;
-            }
-            return member.forValidation(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
-        };
-        return block.getCertificationsList()
-                    .parallelStream()
-                    .filter(c -> verify(validators, block.getBlock(), c))
-                    .limit(toleranceLevel + 1)
-                    .count() >= toleranceLevel + 1;
+//        Function<HashKey, Signature> validators = h -> {
+//            Member member = view.getMember(h);
+//            if (member == null) {
+//                return null;
+//            }
+//            return member.forValidation(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
+//        };
+//        return block.getCertificationsList()
+//                    .parallelStream()
+//                    .filter(c -> verify(validators, block.getBlock(), c))
+//                    .limit(toleranceLevel + 1)
+//                    .count() >= toleranceLevel + 1;
+        return false;
     }
 }

@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.consortium.comms;
 
+import com.salesfoce.apollo.consortium.proto.Join;
+import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc.OrderingServiceImplBase;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
@@ -22,7 +24,6 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class ConsortiumServerCommunications extends OrderingServiceImplBase {
-    @SuppressWarnings("unused")
     private ClientIdentity                 identity;
     @SuppressWarnings("unused")
     private final ConsortiumMetrics        metrics;
@@ -44,4 +45,18 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
                         });
     }
 
+    @Override
+    public void vote(Join request, StreamObserver<JoinResult> responseObserver) {
+        System.out.println("Vote from " + identity.getFrom());
+        try {
+            router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                            s -> {
+                                responseObserver.onNext(s.vote(request, identity.getFrom()));
+                                responseObserver.onCompleted();
+                            });
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            throw e;
+        }
+    }
 }
