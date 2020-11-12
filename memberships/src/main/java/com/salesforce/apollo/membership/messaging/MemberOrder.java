@@ -87,7 +87,8 @@ public class MemberOrder {
                     queue.poll();
                     message = queue.peek();
                 } else {
-                    log.trace("No Msg, next: {} head: {} flushTarget: {}", current, message.sequenceNumber, currentFlushTarget);
+                    log.trace("No Msg, next: {} head: {} flushTarget: {}", current, message.sequenceNumber,
+                              currentFlushTarget);
                     return null;
                 }
             }
@@ -178,7 +179,12 @@ public class MemberOrder {
         write.lock();
         log.trace("processing {}", msgs);
         try {
-            msgs.forEach(m -> process(m, round));
+            msgs.forEach(m -> {
+                if (!started.get()) {
+                    return;
+                }
+                process(m, round);
+            });
             processHead(round);
         } finally {
             write.unlock();
@@ -210,16 +216,27 @@ public class MemberOrder {
         }
     }
 
+    private void deliver(Msg msg, HashKey from) {
+        try {
+            processor.accept(msg, from);
+        } catch (Throwable e) {
+            log.error("Error processing message from {}", from, e);
+        }
+    }
+
     private void flush(int round) {
         log.trace("flushing");
         int flushed = 0;
         int lastFlushed = -1;
         while (flushed - lastFlushed > 0) {
+            if (!started.get()) {
+                return;
+            }
             lastFlushed = flushed;
             for (Entry<HashKey, Channel> e : channels.entrySet()) {
                 Msg message = e.getValue().next(round);
                 if (message != null) {
-                    processor.accept(message, e.getKey());
+                    deliver(message, e.getKey());
                     flushed++;
                 }
             }
@@ -239,9 +256,12 @@ public class MemberOrder {
     private void processHead(int round) {
         AtomicInteger delivered = new AtomicInteger();
         channels.forEach((id, channel) -> {
+            if (!started.get()) {
+                return;
+            }
             Msg message = channel.next(round);
             if (message != null) {
-                processor.accept(message, channel.getId());
+                deliver(message, channel.getId());
                 delivered.incrementAndGet();
             }
         });

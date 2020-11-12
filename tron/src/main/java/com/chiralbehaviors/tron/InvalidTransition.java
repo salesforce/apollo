@@ -33,7 +33,7 @@ public class InvalidTransition extends RuntimeException {
         super(msg);
     }
 
-    public InvalidTransition(String string, InvalidTransition e) {
+    public InvalidTransition(String string, Throwable e) {
         super(string, e);
     }
 }

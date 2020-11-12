@@ -397,15 +397,16 @@ public final class Fsm<Context, Transitions> {
         }
         try {
             return (Enum<?>) stateTransition.invoke(current, arguments);
-        } catch (InvalidTransition e) {
-            throw new InvalidTransition(current + ":" + stateTransition.toGenericString(), e);
         } catch (IllegalAccessException | IllegalArgumentException e) {
             throw new IllegalStateException(String.format("Unable to invoke transition %s on state %s",
                                                           prettyPrint(stateTransition), prettyPrint(current)),
                     e);
         } catch (InvocationTargetException e) {
             if (e.getTargetException() instanceof InvalidTransition) {
-                throw (InvalidTransition) e.getTargetException();
+                if (log.isTraceEnabled()) {
+                    log.trace(String.format("Invalid transition %s on state %s", transition, prettyPrint(current)));
+                }
+                throw new InvalidTransition(prettyPrint(stateTransition) + " -> " + prettyPrint(current), e);
             }
             throw new IllegalStateException(String.format("Unable to invoke transition %s on state %s",
                                                           prettyPrint(stateTransition), prettyPrint(current)),
@@ -464,7 +465,7 @@ public final class Fsm<Context, Transitions> {
     private void normalTransition(Enum<?> nextState) {
         if (nextState == null) { // internal loopback transition
             if (log.isTraceEnabled()) {
-                log.trace(String.format("Internal loopback transition to state %s", prettyPrint(nextState)));
+                log.trace(String.format("Internal loopback transition to state %s", prettyPrint(current)));
             }
             return;
         }

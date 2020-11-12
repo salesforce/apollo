@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -326,13 +327,13 @@ public class View {
 
             long interval = d.toMillis();
             int initialDelay = getParameters().entropy.nextInt((int) interval * 2);
-            futureGossip = scheduler.scheduleWithFixedDelay(() -> {
+            futureGossip = scheduler.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
                 try {
-                    oneRound();
+                    oneRound(d, scheduler);
                 } catch (Throwable e) {
                     log.error("unexpected error during gossip round", e);
                 }
-            }, initialDelay, interval, TimeUnit.MILLISECONDS);
+            }), initialDelay, TimeUnit.MILLISECONDS);
             log.info("{} started, initial delay: {} ms", node.getId(), initialDelay);
         }
 
@@ -1069,8 +1070,11 @@ public class View {
     /**
      * Drive one round of the View. This involves a round of gossip() and a round of
      * monitor().
+     * 
+     * @param scheduler
+     * @param d
      */
-    void oneRound() {
+    void oneRound(Duration d, ScheduledExecutorService scheduler) {
         com.codahale.metrics.Timer.Context timer = null;
         if (metrics != null) {
             timer = metrics.gossipRoundDuration().time();
@@ -1103,6 +1107,13 @@ public class View {
                 }
             });
         });
+        scheduler.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
+            try {
+                oneRound(d, scheduler);
+            } catch (Throwable e) {
+                log.error("unexpected error during gossip round", e);
+            }
+        }), d.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     /**

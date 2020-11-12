@@ -182,6 +182,17 @@ public class HashKey implements Comparable<HashKey> {
         return itself;
     }
 
+    public HashKey prefix(byte[]... prefixes) {
+        ByteBuffer buffer = ByteBuffer.allocate((itself.length + prefixes.length) * 8);
+        for (byte[] prefix : prefixes) {
+            buffer.put(prefix);
+        }
+        for (long i : itself) {
+            buffer.putLong(i);
+        }
+        return new HashKey(hashOf(buffer.array()));
+    }
+
     public HashKey prefix(long... prefixes) {
         ByteBuffer buffer = ByteBuffer.allocate((itself.length + prefixes.length) * 8);
         for (long prefix : prefixes) {

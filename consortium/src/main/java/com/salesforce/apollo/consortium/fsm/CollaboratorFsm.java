@@ -212,10 +212,34 @@ public enum CollaboratorFsm implements Transitions {
 
     },
     GENESIS_ORDERED {
-
         @Override
         public Transitions becomeClient() {
             return CLIENT;
+        }
+
+        @Entry
+        public void cancelAll() {
+            context().cancelAll();
+        }
+
+        @Override
+        public Transitions deliverBlock(Block block, Member from) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverProclamation(Proclamation p, Member from) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverTransaction(Transaction txn) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            return null;
         }
 
         @Override

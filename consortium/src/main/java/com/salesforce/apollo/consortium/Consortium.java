@@ -102,7 +102,7 @@ public class Consortium {
                 transitions.missingGenesis();
             }, params.context.timeToLive());
 
-            viewChange(viewFor(GENESIS_VIEW));
+            viewChange(viewFor(GENESIS_VIEW_ID, params.context));
         }
 
         public void awaitViewMembers() {
@@ -123,6 +123,11 @@ public class Consortium {
             } else {
                 log.trace("No timer to cancel: {} on: {}", t, getMember());
             }
+        }
+
+        public void cancelAll() {
+            timers.values().forEach(t -> t.cancel());
+            timers.clear();
         }
 
         public void clear() {
@@ -289,7 +294,7 @@ public class Consortium {
             }
             vState.setCurrent(next);
             transitions.genesisAccepted();
-            reconfigure(body.getInitialView());
+            viewChange(viewFor(new HashKey(body.getInitialView().getId()), params.context));
         }
 
         public void processReconfigure(CurrentBlock next) {
@@ -301,7 +306,7 @@ public class Consortium {
                 return;
             }
             vState.setCurrent(next);
-            reconfigure(body);
+            viewChange(viewFor(new HashKey(body.getId()), params.context));
         }
 
         public void processUser(CurrentBlock next) {
@@ -397,11 +402,6 @@ public class Consortium {
             } else {
                 log.debug("Failed block validation: {} from: {} on: {}", hash, memberID, getMember());
             }
-        }
-
-        // Test access
-        PendingTransactions getPending() {
-            return pending;
         }
 
         @SuppressWarnings("unused")
@@ -516,9 +516,8 @@ public class Consortium {
         }
     }
 
-    private final static Logger DEFAULT_LOGGER = LoggerFactory.getLogger(Consortium.class);
-
-    private static final HashKey GENESIS_VIEW = HashKey.ORIGIN;
+    public static final HashKey GENESIS_VIEW_ID = HashKey.ORIGIN.prefix("Genesis".getBytes());
+    private final static Logger DEFAULT_LOGGER  = LoggerFactory.getLogger(Consortium.class);
 
     public static Block manifestBlock(byte[] data) {
         if (data.length == 0) {
@@ -531,15 +530,41 @@ public class Consortium {
         }
     }
 
-    public final byte[] genesisData = "Give me food or give me slack or kill me".getBytes();
+    /**
+     * Answer the live successors of the hash on the base context view
+     */
+    public static Context<Member> viewFor(HashKey hash, Context<? super Member> baseContext) {
+        Context<Member> newView = new Context<Member>(hash, baseContext.getRingCount());
+        Set<Member> successors = new HashSet<Member>();
+        baseContext.successors(hash, m -> {
+            if (successors.size() == baseContext.getRingCount()) {
+                return false;
+            }
+            boolean contained = successors.contains(m);
+            successors.add(m);
+            return !contained;
+        });
+        assert successors.size() == baseContext.getRingCount();
+        successors.forEach(e -> {
+            if (baseContext.isActive(e)) {
+                newView.activate(e);
+            } else {
+                newView.offline(e);
+            }
+        });
+        assert newView.getActive().size() + newView.getOffline().size() == baseContext.getRingCount();
+        return newView;
+    }
 
+    public final byte[]                                                                            genesisData = "Give me food or give me slack or kill me".getBytes();
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
-    private Logger                                                                                 log        = DEFAULT_LOGGER;
+    private Logger                                                                                 log         = DEFAULT_LOGGER;
     private final Parameters                                                                       params;
-    private final Map<HashKey, SubmittedTransaction>                                               submitted  = new HashMap<>();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted   = new HashMap<>();
     private final Transitions                                                                      transitions;
-    private final Map<HashKey, PublicKey>                                                          validators = new HashMap<>();
-    private final VolatileState                                                                    vState     = new VolatileState();
+    private final Map<HashKey, PublicKey>                                                          validators  = new HashMap<>();
+
+    private final VolatileState vState = new VolatileState();
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
@@ -589,7 +614,7 @@ public class Consortium {
                 log.error("Invalid genesis block: {}", block.getBody().getType());
                 return;
             }
-            if (!validateGenesis(certifiedBlock, params.context, params.context.toleranceLevel())) {
+            if (!validateGenesis(certifiedBlock, params.context, toleranceLevel())) {
                 log.error("Protocol violation. Genesis block is not validated {}", hash);
                 return;
             }
@@ -647,7 +672,7 @@ public class Consortium {
         Transaction transaction = builder.build();
 
         submitted.put(hashKey, new SubmittedTransaction(transaction, onCompletion));
-        int toleranceLevel = params.context.toleranceLevel();
+        int toleranceLevel = toleranceLevel();
         SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
                                                           .setContext(current.getId().toByteString())
                                                           .setTransaction(transaction)
@@ -683,9 +708,9 @@ public class Consortium {
 
     }
 
-    // Access for testing
-    CollaboratorContext getState() {
-        return transitions.context();
+    // test accessible
+    Transitions getTransitions() {
+        return transitions;
     }
 
     private void deliver(ConsortiumMessage message) {
@@ -705,8 +730,8 @@ public class Consortium {
         log.info("Generating genesis on {}", getMember());
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
                                                      .setCheckpointBlocks(256)
-                                                     .setId(GENESIS_VIEW.toByteString())
-                                                     .setToleranceLevel(params.context.toleranceLevel());
+                                                     .setId(GENESIS_VIEW_ID.toByteString())
+                                                     .setToleranceLevel(toleranceLevel());
         joining.forEach(join -> {
             genesisView.addTransactions(join.getTransaction());
             JoinTransaction txn;
@@ -889,25 +914,8 @@ public class Consortium {
         }
     }
 
-    private void reconfigure(Reconfigure body) {
-        HashKey viewId = new HashKey(body.getId());
-        Context<Member> newView = new Context<Member>(viewId, params.context.getRingCount());
-        body.getViewList().stream().map(vm -> {
-            HashKey memberId = new HashKey(vm.getId());
-            Member m = params.context.getMember(memberId);
-            if (m == null) {
-                return null;
-            }
-            return m;
-        }).filter(m -> m != null).forEach(m -> {
-            if (params.context.isActive(m)) {
-                newView.activate(m);
-            } else {
-                newView.offline(m);
-            }
-        });
-
-        viewChange(newView);
+    private int toleranceLevel() {
+        return params.context.toleranceLevel();
     }
 
     /**
@@ -922,7 +930,7 @@ public class Consortium {
         Member newLeader = leaderOf(newView);
 
         vState.setComm(createClientComms.apply(newView.getId()));
-        vState.setValidator(new Validator(newLeader, newView, params.context.toleranceLevel()));
+        vState.setValidator(new Validator(newLeader, newView, toleranceLevel()));
         vState.setMessenger(null);
         vState.setTO(null);
 
@@ -942,17 +950,5 @@ public class Consortium {
         }
 
         vState.resume(new Service(), params.gossipDuration, params.scheduler);
-    }
-
-    private Context<Member> viewFor(HashKey hash) {
-        Context<Member> newView = new Context<Member>(hash, params.context.getRingCount());
-        params.context.successors(hash).forEach(e -> {
-            if (params.context.isActive(e)) {
-                newView.activate(e);
-            } else {
-                newView.offline(e);
-            }
-        });
-        return newView;
     }
 }
