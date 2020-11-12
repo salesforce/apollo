@@ -63,7 +63,7 @@ public class TestConsortium {
     private static Map<HashKey, CertificateWithPrivateKey> certs;
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
-    private static int                                     testCardinality = 25;
+    private static int                                     testCardinality = 100;
 
     @BeforeAll
     public static void beforeClass() {

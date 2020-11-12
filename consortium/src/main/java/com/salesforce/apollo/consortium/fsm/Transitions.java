@@ -115,7 +115,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions stop() {
-        throw new InvalidTransition();
+        return CollaboratorFsm.INITIAL;
     }
 
     default Transitions submit(PendingTransactions.EnqueuedTransaction enqueuedTransaction) {

@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -563,8 +564,8 @@ public class Consortium {
     private final Map<HashKey, SubmittedTransaction>                                               submitted   = new HashMap<>();
     private final Transitions                                                                      transitions;
     private final Map<HashKey, PublicKey>                                                          validators  = new HashMap<>();
-
-    private final VolatileState vState = new VolatileState();
+    private final VolatileState                                                                    vState      = new VolatileState();
+    private final AtomicBoolean                                                                    started     = new AtomicBoolean();
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
@@ -589,6 +590,9 @@ public class Consortium {
     }
 
     public void process(CertifiedBlock certifiedBlock) {
+        if (!started.get()) {
+            return;
+        }
         Block block = certifiedBlock.getBlock();
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteArray()));
         log.trace("Processing block {} : {}", hash, block.getBody().getType());
@@ -627,12 +631,19 @@ public class Consortium {
     }
 
     public void start() {
-        vState.resume(new Service(), params.gossipDuration, params.scheduler);
+        if (!started.compareAndSet(false, true)) {
+            transitions.start();
+        }
         transitions.start();
+        vState.resume(new Service(), params.gossipDuration, params.scheduler);
     }
 
     public void stop() {
+        if (!started.compareAndSet(true, false)) {
+            transitions.start();
+        }
         vState.pause();
+        transitions.stop();
     }
 
     public HashKey submit(boolean join, Consumer<HashKey> onCompletion,
@@ -863,6 +874,9 @@ public class Consortium {
     }
 
     private void process(Msg msg) {
+        if (!started.get()) {
+            return;
+        }
         log.trace("Processing {} from {}", msg.sequenceNumber, msg.from);
         ConsortiumMessage message;
         try {

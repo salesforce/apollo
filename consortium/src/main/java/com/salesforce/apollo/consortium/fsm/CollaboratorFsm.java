@@ -247,6 +247,11 @@ public enum CollaboratorFsm implements Transitions {
             return null; // TODO for now
         }
 
+        @Override
+        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
+            return null;
+        }
+
     },
     GENESIS_PROCESSED {
 
@@ -268,6 +273,11 @@ public enum CollaboratorFsm implements Transitions {
     },
 
     INITIAL {
+        @Override
+        public Transitions genesisAccepted() {
+            return GENESIS_ORDERED;
+        }
+
         @Entry
         public void initialize() {
             context().nextView();
