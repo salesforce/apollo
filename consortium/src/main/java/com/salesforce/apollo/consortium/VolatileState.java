@@ -10,7 +10,6 @@ import java.security.KeyPair;
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 
-import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
@@ -31,7 +30,6 @@ class VolatileState implements MembershipListener<Member> {
     private volatile CommonCommunications<ConsortiumClientCommunications, Service> comm;
     private volatile KeyPair                                                       consensusKeyPair;
     private volatile CurrentBlock                                                  current;
-    private volatile Genesis                                                       genesis;
     private volatile Messenger                                                     messenger;
     private volatile ViewMember                                                    nextView;
     private volatile KeyPair                                                       nextViewConsensusKeyPair;
@@ -46,11 +44,6 @@ class VolatileState implements MembershipListener<Member> {
         }
     }
 
-    public Genesis getGenesis() {
-        final Genesis c = genesis;
-        return c;
-    }
-
     @Override
     public void recover(Member member) {
         final Context<Member> view = getCurrentView();
@@ -59,8 +52,16 @@ class VolatileState implements MembershipListener<Member> {
         }
     }
 
-    public void setGenesis(Genesis genesis) {
-        this.genesis = genesis;
+    void clear() {
+        pause();
+        comm = null;
+        to = null;
+        consensusKeyPair = null;
+        current = null;
+        messenger = null;
+        nextView = null;
+        to = null;
+        validator = validator;
     }
 
     CommonCommunications<ConsortiumClientCommunications, Service> getComm() {

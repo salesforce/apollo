@@ -13,7 +13,6 @@ import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.Timers;
@@ -58,226 +57,7 @@ public enum CollaboratorFsm implements Transitions {
         }
 
     },
-    GENERATE_GENESIS {
-
-        @Override
-        public Transitions becomeFollower() {
-            return GENERATE_GENESIS_FOLLOWER;
-        }
-
-        @Override
-        public Transitions becomeLeader() {
-            return GENERATE_GENESIS_LEADER;
-        }
-
-        @Exit
-        public void cancel() {
-            context().cancel(Timers.AWAIT_FORMATION);
-        }
-
-        @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().deliverProclamation(p, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().add(txn);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverValidate(Validate validation) {
-            return null;
-        }
-
-        @Override
-        public Transitions fail() {
-            context().awaitFormation();
-            return null;
-        }
-
-        @Override
-        public Transitions genesisAccepted() {
-            return GENESIS_ORDERED;
-        }
-
-        @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submitJoin(enqueuedTransaction);
-            return null;
-        }
-
-        @Entry
-        public void vote() {
-            context().awaitFormation();
-        }
-    },
-    GENERATE_GENESIS_FOLLOWER {
-        @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            context().deliverGenesisBlock(block, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().resendPending(p, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().add(txn);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverValidate(Validate validation) {
-            context().validate(validation);
-            return null;
-        }
-
-        @Override
-        public Transitions fail() {
-            return PROTOCOL_FAILURE;
-        }
-
-        @Override
-        public Transitions genesisAccepted() {
-            return GENESIS_ORDERED;
-        }
-
-        @Override
-        public Transitions missingGenesis() {
-            return null;
-        }
-
-        @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submitJoin(enqueuedTransaction);
-            return null;
-        }
-
-        @Override
-        public Transitions success() {
-            return FOLLOWER;
-        }
-    },
-    GENERATE_GENESIS_LEADER {
-        @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().add(txn);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverValidate(Validate validation) {
-            context().validate(validation);
-            context().totalOrderDeliver();
-            return null;
-        }
-
-        @Override
-        public Transitions fail() {
-            return PROTOCOL_FAILURE;
-        }
-
-        @Entry
-        public void generate() {
-            context().generateGenesis();
-        }
-
-        @Override
-        public Transitions genesisAccepted() {
-            return GENESIS_ORDERED;
-        }
-
-        @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submitJoin(enqueuedTransaction);
-            return null;
-        }
-
-        @Override
-        public Transitions success() {
-            return LEADER;
-        }
-
-    },
-    GENESIS_ORDERED {
-        @Override
-        public Transitions becomeClient() {
-            return CLIENT;
-        }
-
-        @Entry
-        public void cancelAll() {
-            context().cancelAll();
-        }
-
-        @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverValidate(Validate validation) {
-            return null;
-        }
-
-        @Override
-        public Transitions join() {
-            return null; // TODO for now
-        }
-
-        @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            return null;
-        }
-
-    },
-    GENESIS_PROCESSED {
-
-        @Override
-        public Transitions becomeClient() {
-            return CLIENT;
-        }
-
-        @Override
-        public Transitions becomeFollower() {
-            return FOLLOWER;
-        }
-
-        @Override
-        public Transitions becomeLeader() {
-            return LEADER;
-        }
-
-    },
-
     INITIAL {
-        @Override
-        public Transitions genesisAccepted() {
-            return GENESIS_ORDERED;
-        }
-
         @Entry
         public void initialize() {
             context().nextView();
@@ -286,41 +66,6 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions start() {
             return RECOVERING;
-        }
-    },
-    JOINING {
-
-        @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().add(txn);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverValidate(Validate validation) {
-            context().validate(validation);
-            return null;
-        }
-
-        @Override
-        public Transitions fail() {
-            return PROTOCOL_FAILURE;
-        }
-
-        @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submit(enqueuedTransaction);
-            return null;
-        }
-
-        @Override
-        public Transitions success() {
-            return AWAIT_VIEW_CHANGE;
-        }
-
-        @Entry
-        public void vote() {
-            context().join();
         }
     },
     LEADER {
@@ -381,7 +126,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions becomeClient() {
-            return null;
+            return RECOVERING_CLIENT;
         }
 
         @Exit
@@ -390,13 +135,14 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions genesisAccepted() {
-            return GENESIS_ORDERED;
+        public Transitions fail() {
+            return PROTOCOL_FAILURE;
         }
 
         @Override
         public Transitions join() {
-            return GENERATE_GENESIS;
+            fsm().push(GenesisFsm.GENERATE);
+            return null;
         }
 
         @Override
@@ -404,6 +150,24 @@ public enum CollaboratorFsm implements Transitions {
             context().awaitGenesis();
             return null;
         }
+    },
+    RECOVERING_CLIENT {
+        @Override
+        public Transitions genesisAccepted() {
+            return null;
+        }
+
+        @Override
+        public Transitions processGenesis(CurrentBlock next) {
+            context().processGenesis(next);
+            return null;
+        }
+
+        @Override
+        public Transitions becomeClient() {
+            return CLIENT;
+        }
+
     };
 
     private static final Logger log = LoggerFactory.getLogger(CollaboratorFsm.class);

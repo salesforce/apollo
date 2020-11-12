@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +42,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
+import com.salesforce.apollo.consortium.fsm.GenesisFsm;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.CertWithKey;
@@ -150,20 +152,20 @@ public class TestConsortium {
                .peek(c -> view.activate(c.getMember()))
                .forEach(e -> consortium.put(e.getMember(), e));
 
-        Context<Member> committee = Consortium.viewFor(Consortium.GENESIS_VIEW_ID, view);
-        List<Consortium> blueRibbon = new ArrayList<>();
-        committee.allMembers().forEach(e -> {
+        Set<Consortium> blueRibbon = new HashSet<>();
+        Consortium.viewFor(Consortium.GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
-        System.out.println("starting consortium");
         communications.values().forEach(r -> r.start());
 
+        System.out.println("starting consortium");
         consortium.values().forEach(e -> e.start());
 
-        System.out.println("genesis block processed");
-
+        System.out.println("generate genesis");
         assertTrue(Utils.waitForCondition(20_000, () -> published.get()), "Did not publish Genesis block");
+
+        System.out.println("genesis published, awaiting processing");
 
         assertTrue(processed.await(20_000, TimeUnit.SECONDS), "Did not converge, end state of true clients gone bad: "
                 + consortium.values()
@@ -179,6 +181,8 @@ public class TestConsortium {
                             .filter(c -> c.getTransitions().fsm().getCurrentState() != CollaboratorFsm.CLIENT)
                             .map(c -> c.getMember())
                             .collect(Collectors.toList()));
+
+        System.out.println("processing complete, validating state");
 
         long clientsInWrongState = consortium.values()
                                              .stream()
@@ -197,7 +201,7 @@ public class TestConsortium {
         assertEquals(9,
                      blueRibbon.stream()
                                .map(c -> c.getTransitions().fsm().getCurrentState())
-                               .filter(b -> b == CollaboratorFsm.GENESIS_ORDERED)
+                               .filter(b -> b == GenesisFsm.ORDERED)
                                .count(),
                      "True member gone bad");
 

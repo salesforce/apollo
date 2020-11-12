@@ -131,12 +131,6 @@ public class Consortium {
             timers.clear();
         }
 
-        public void clear() {
-            members.clear();
-            timers.values().forEach(e -> e.cancel());
-            timers.clear();
-        }
-
         public void deliverBlock(Block block, Member from) {
             Member leader = vState.getLeader();
             if (!from.equals(leader)) {
@@ -405,6 +399,15 @@ public class Consortium {
             }
         }
 
+        private void clear() {
+            members.clear();
+            timers.values().forEach(e -> e.cancel());
+            timers.clear();
+            pending.clear();
+            scheduler.cancelAll();
+            workingBlocks.clear();
+        }
+
         @SuppressWarnings("unused")
         private void generate(Block block) {
             HashKey hash = new HashKey(Conversion.hashOf(block.toByteArray()));
@@ -561,11 +564,11 @@ public class Consortium {
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private Logger                                                                                 log         = DEFAULT_LOGGER;
     private final Parameters                                                                       params;
+    private final AtomicBoolean                                                                    started     = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted   = new HashMap<>();
     private final Transitions                                                                      transitions;
     private final Map<HashKey, PublicKey>                                                          validators  = new HashMap<>();
     private final VolatileState                                                                    vState      = new VolatileState();
-    private final AtomicBoolean                                                                    started     = new AtomicBoolean();
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
@@ -634,6 +637,7 @@ public class Consortium {
         if (!started.compareAndSet(false, true)) {
             transitions.start();
         }
+        log.trace("Starting consortium on {}", getMember());
         transitions.start();
         vState.resume(new Service(), params.gossipDuration, params.scheduler);
     }
@@ -642,7 +646,9 @@ public class Consortium {
         if (!started.compareAndSet(true, false)) {
             transitions.start();
         }
-        vState.pause();
+        log.trace("Stopping consortium on {}", getMember());
+        vState.clear();
+        transitions.context().clear();
         transitions.stop();
     }
 
@@ -956,10 +962,10 @@ public class Consortium {
             vState.setMessenger(nextMsgr);
             nextMsgr.register(round -> transitions.context().tick(round));
             vState.setTO(new MemberOrder((m, k) -> process(m), nextMsgr));
-            log.info("reconfiguring, becoming joining member: {}", params.member);
+            log.debug("reconfiguring, becoming joining member: {}", params.member);
             transitions.join();
         } else { // you are all my puppets
-            log.info("reconfiguring, becoming client: {}", params.member);
+            log.debug("reconfiguring, becoming client: {}", params.member);
             transitions.becomeClient();
         }
 
