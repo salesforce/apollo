@@ -314,6 +314,7 @@ public class Context<T extends Member> {
     }
 
     public boolean isActive(T m) {
+        assert m != null;
         return active.containsKey(m.getId());
     }
 
@@ -368,7 +369,10 @@ public class Context<T extends Member> {
     public List<T> predecessors(HashKey key, Predicate<T> test) {
         List<T> predecessors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            predecessors.add(ring.predecessor(contextHash(key, ring.getIndex()), test));
+            T predecessor = ring.predecessor(contextHash(key, ring.getIndex()), test);
+            if (predecessor != null) {
+                predecessors.add(predecessor);
+            }
         }
         return predecessors;
     }
@@ -437,7 +441,10 @@ public class Context<T extends Member> {
     public List<T> successors(HashKey key, Predicate<T> test) {
         List<T> successors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            successors.add(ring.successor(contextHash(key, ring.getIndex()), test));
+            T successor = ring.successor(contextHash(key, ring.getIndex()), test);
+            if (successor != null) {
+                successors.add(successor);
+            }
         }
         return successors;
     }
