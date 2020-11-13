@@ -107,6 +107,10 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
         return transactions.containsKey(o.hash);
     }
 
+    public boolean contains(HashKey hash) {
+        return transactions.containsKey(hash);
+    }
+
     public boolean isEmpty() {
         return transactions.isEmpty();
     }

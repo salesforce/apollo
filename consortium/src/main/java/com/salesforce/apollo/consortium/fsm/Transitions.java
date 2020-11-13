@@ -12,12 +12,11 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
-import com.salesfoce.apollo.consortium.proto.ViewMember;
-import com.salesfoce.apollo.proto.ID;
 import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.CurrentBlock;
 import com.salesforce.apollo.consortium.PendingTransactions;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * Transition interface for the Collaborator FSM model
@@ -42,7 +41,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw new InvalidTransition();
     }
 
-    default Transitions deliverPersist(ID hash) {
+    default Transitions deliverPersist(HashKey hash) {
         throw new InvalidTransition();
     }
 
@@ -55,10 +54,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions deliverValidate(Validate validation) {
-        throw new InvalidTransition();
-    }
-
-    default Transitions deliverViewMember(ViewMember parseFrom) {
         throw new InvalidTransition();
     }
 

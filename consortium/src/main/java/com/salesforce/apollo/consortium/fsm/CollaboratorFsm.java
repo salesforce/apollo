@@ -6,13 +6,11 @@
  */
 package com.salesforce.apollo.consortium.fsm;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.Timers;
@@ -38,6 +36,12 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
+        public Transitions deliverProclamation(Proclamation p, Member from) {
+            context().deliverProclamation(p, from);
+            return null;
+        }
+
+        @Override
         public Transitions deliverTransaction(Transaction txn) {
             context().add(txn);
             return null;
@@ -46,6 +50,12 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions deliverValidate(Validate validation) {
             context().validate(validation);
+            return null;
+        }
+
+        @Override
+        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
+            context().submit(enqueuedTransaction);
             return null;
         }
 
@@ -62,17 +72,57 @@ public enum CollaboratorFsm implements Transitions {
         }
     },
     JOINING_MEMBER {
+        @Override
+        public Transitions becomeFollower() {
+            return LEADER;
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            return FOLLOWER;
+        }
+
+        @Override
+        public Transitions deliverBlock(Block block, Member from) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverProclamation(Proclamation p, Member from) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverTransaction(Transaction txn) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            return null;
+        }
+
         @Entry
         public void enterView() {
             context().enterView();
         }
+
     },
     LEADER {
+
+        @Override
+        public Transitions deliverProclamation(Proclamation p, Member from) {
+            context().deliverProclamation(p, from);
+            return null;
+        }
+
+        @Entry
+        public void generate() {
+            context().becomeLeader();
+        }
+
         @Override
         public Transitions deliverBlock(Block block, Member from) {
-            if (!context().member().equals(from)) {
-                log.trace("Leader, ignoring block proposal from {}", from);
-            }
             return null;
         }
 
@@ -184,7 +234,5 @@ public enum CollaboratorFsm implements Transitions {
             return null;
         }
     };
-
-    private static final Logger log = LoggerFactory.getLogger(CollaboratorFsm.class);
 
 }

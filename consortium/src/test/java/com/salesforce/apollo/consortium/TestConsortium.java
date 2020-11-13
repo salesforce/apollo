@@ -10,6 +10,7 @@ import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.security.SecureRandom;
@@ -26,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -120,7 +122,7 @@ public class TestConsortium {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
         Context<Member> view = new Context<Member>(HashKey.ORIGIN.prefix(1), parameters.rings);
-        Duration gossipDuration = Duration.ofMillis(100);
+        Duration gossipDuration = Duration.ofMillis(250);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
@@ -132,8 +134,10 @@ public class TestConsortium {
             ForkJoinPool.commonPool()
                         .execute(() -> consortium.values()
                                                  .parallelStream()
-                                                 .peek(m -> ForkJoinPool.commonPool().execute(() -> m.process(c)))
-                                                 .forEach(m -> processed.countDown()));
+                                                 .forEach(m -> ForkJoinPool.commonPool().execute(() -> {
+                                                     m.process(c);
+                                                     processed.countDown();
+                                                 })));
             return HashKey.ORIGIN;
         };
         members.stream()
@@ -197,37 +201,52 @@ public class TestConsortium {
                                                                 .getCurrentState() != CollaboratorFsm.CLIENT)
                                                   .collect(Collectors.toSet());
         assertEquals(0, clientsInWrongState, "True clients gone bad: " + failedMembers);
-        assertEquals(9,
+        assertEquals(1,
                      blueRibbon.stream()
                                .map(c -> c.getTransitions().fsm().getCurrentState())
-                               .filter(b -> b == CollaboratorFsm.JOINING_MEMBER)
+                               .filter(b -> b == CollaboratorFsm.FOLLOWER)
                                .count(),
                      "True member gone bad: " + blueRibbon.stream()
                                                           .map(c -> c.getTransitions().fsm().getCurrentState())
                                                           .collect(Collectors.toSet()));
+        assertEquals(view.getRingCount() - 1,
+                     blueRibbon.stream()
+                               .map(c -> c.getTransitions().fsm().getCurrentState())
+                               .filter(b -> b == CollaboratorFsm.LEADER)
+                               .count(),
+                     "True member gone bad: " + blueRibbon.stream()
+                                                          .map(c -> c.getTransitions().fsm().getCurrentState())
+                                                          .collect(Collectors.toSet()));
+        assertEquals(view.getRingCount(),
+                     blueRibbon.stream()
+                               .map(collaborator -> collaborator.getState().getPending())
+                               .filter(pending -> pending.isEmpty())
+                               .count());
 
-//        Consortium client = consortium.get(blueRibbon.size() + 1);
-//        try {
-//            client.submit(h -> {
-//            }, "Hello world".getBytes());
-//        } catch (TimeoutException e) {
-//            fail();
-//        }
-//
-//        boolean submitted = Utils.waitForCondition(10_000, 1_000,
-//                                                   () -> blueRibbon.stream()
-//                                                                   .map(collaborator -> collaborator.getState()
-//                                                                                                    .getPending()
-//                                                                                                    .isEmpty())
-//                                                                   .filter(b -> b)
-//                                                                   .count() == 0);
-//
-//        assertTrue(submitted,
-//                   "Transaction not submitted to consortium, missing: "
-//                           + blueRibbon.stream()
-//                                       .map(collaborator -> collaborator.getState().getPending().isEmpty())
-//                                       .filter(b -> b)
-//                                       .count());
+        Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
+        HashKey hash;
+        try {
+            hash = client.submit(h -> {
+            }, "Hello world".getBytes());
+        } catch (TimeoutException e) {
+            fail();
+            return;
+        }
+
+        boolean success = Utils.waitForCondition(10_000, 1_000,
+                                                 () -> blueRibbon.stream()
+                                                                 .map(collaborator -> collaborator.getState()
+                                                                                                  .getPending())
+                                                                 .filter(pending -> pending.size() != 1)
+                                                                 .filter(pending -> pending.contains(hash))
+                                                                 .count() == 0);
+
+        assertTrue(success,
+                   "Transaction not submitted to consortium, missing: "
+                           + blueRibbon.stream()
+                                       .map(collaborator -> collaborator.getState().getPending().isEmpty())
+                                       .filter(b -> b)
+                                       .count());
 
     }
 

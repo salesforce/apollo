@@ -33,7 +33,7 @@ class VolatileState implements MembershipListener<Member> {
     private volatile Messenger                                                     messenger;
     private volatile ViewMember                                                    nextView;
     private volatile KeyPair                                                       nextViewConsensusKeyPair;
-    private volatile MemberOrder                                                   to;
+    private volatile MemberOrder                                                   order;
     private volatile Validator                                                     validator;
 
     @Override
@@ -55,12 +55,12 @@ class VolatileState implements MembershipListener<Member> {
     void clear() {
         pause();
         comm = null;
-        to = null;
+        order = null;
         consensusKeyPair = null;
         current = null;
         messenger = null;
         nextView = null;
-        to = null;
+        order = null;
         validator = validator;
     }
 
@@ -103,8 +103,8 @@ class VolatileState implements MembershipListener<Member> {
         return c;
     }
 
-    MemberOrder getTO() {
-        final MemberOrder cTo = to;
+    MemberOrder getOrder() {
+        final MemberOrder cTo = order;
         return cTo;
     }
 
@@ -121,7 +121,7 @@ class VolatileState implements MembershipListener<Member> {
             currentComm.deregister(current.getId());
         }
 
-        MemberOrder currentTotalOrder = getTO();
+        MemberOrder currentTotalOrder = getOrder();
         if (currentTotalOrder != null) {
             currentTotalOrder.stop();
         }
@@ -138,7 +138,7 @@ class VolatileState implements MembershipListener<Member> {
             assert current != null : "No current view, but comm exists!";
             currentComm.register(current.getId(), service);
         }
-        MemberOrder currentTO = getTO();
+        MemberOrder currentTO = getOrder();
         if (currentTO != null) {
             currentTO.start();
         }
@@ -172,8 +172,8 @@ class VolatileState implements MembershipListener<Member> {
         this.nextViewConsensusKeyPair = nextViewConsensusKeyPair;
     }
 
-    void setTO(MemberOrder to) {
-        this.to = to;
+    void setOrder(MemberOrder order) {
+        this.order = order;
     }
 
     void setValidator(Validator validator) {

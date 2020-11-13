@@ -74,7 +74,7 @@ message Genesis {
 }
 
 message User {
-    repeated Transaction transactions = 1;
+    repeated ExecutedTransaction transactions = 1;
     repeated bytes responses = 2;
 }
 
@@ -83,7 +83,7 @@ message Reconfigure {
     int32 checkpointBlocks = 2;
     int32 toleranceLevel = 3;
     repeated ViewMember view = 4;
-    repeated Transaction transactions = 5;
+    repeated ExecutedTransaction transactions = 5;
 }
 
 message JoinTransaction {
@@ -98,7 +98,7 @@ message ViewMember {
 }
 
 message Checkpoint {
-    repeated Transaction transactions = 1;
+    repeated ExecutedTransaction transactions = 1;
     repeated bytes responses = 2;
 } 
 
@@ -108,6 +108,11 @@ message Transaction {
     bytes nonce = 3;
     repeated bytes batch = 4;
     bytes signature = 5;
+}
+
+message ExecutedTransaction {
+    bytes hash = 1;
+    Transaction transaction = 2;
 }
 
 enum MessageType {

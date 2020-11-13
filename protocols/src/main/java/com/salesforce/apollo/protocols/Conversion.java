@@ -6,12 +6,15 @@
  */
 package com.salesforce.apollo.protocols;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.UUID;
 
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.DagEntry;
 
@@ -20,17 +23,16 @@ import com.salesfoce.apollo.proto.DagEntry;
  * @since 220
  */
 public final class Conversion {
-    public static final String                      SHA_256        = "sha-256";
+    public static final String DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
+    public static final String SHA_256                     = "sha-256";
+
     private static final ThreadLocal<MessageDigest> MESSAGE_DIGEST = ThreadLocal.withInitial(() -> {
-                                                                       try {
-                                                                           return MessageDigest.getInstance(SHA_256);
-                                                                       } catch (NoSuchAlgorithmException e) {
-                                                                           throw new IllegalStateException(
-                                                                                   "Unable to retrieve " + SHA_256
-                                                                                           + " Message Digest instance",
-                                                                                   e);
-                                                                       }
-                                                                   });
+        try {
+            return MessageDigest.getInstance(SHA_256);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Unable to retrieve " + SHA_256 + " Message Digest instance", e);
+        }
+    });
 
     public static byte[] bytes(UUID itself) {
         ByteBuffer buff = ByteBuffer.wrap(new byte[16]);
@@ -48,6 +50,21 @@ public final class Conversion {
         md.reset();
         for (byte[] entry : bytes) {
             md.update(entry);
+        }
+        return md.digest();
+    }
+
+    public static byte[] hashOf(ByteString byteString) {
+        MessageDigest md = MESSAGE_DIGEST.get();
+        md.reset();
+        InputStream is = BbBackedInputStream.aggregate(byteString);
+        byte[] buf = new byte[md.getDigestLength()];
+        try {
+            for (int read = is.read(buf); read >= 0; read = is.read(buf)) {
+                md.update(buf, 0, read);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Error reading from buffers, cannot generate hash", e);
         }
         return md.digest();
     }
@@ -82,8 +99,6 @@ public final class Conversion {
         assert bytes.length > 0 : " Invalid serialization: " + dag.getDescription();
         return bytes;
     }
-
-    public static final String  DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
 
     private Conversion() {
         // Hidden

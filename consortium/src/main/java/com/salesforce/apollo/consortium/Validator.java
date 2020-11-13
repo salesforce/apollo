@@ -27,11 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Supplier;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.membership.Context;
@@ -130,15 +128,9 @@ public class Validator {
         return signature;
     }
 
-    public static boolean validateGenesis(CertifiedBlock block, Context<Member> context, int toleranceLevel) {
+    public static boolean validateGenesis(CertifiedBlock block, Reconfigure initialView, Context<Member> context,
+                                          int toleranceLevel) {
         Map<HashKey, Supplier<Signature>> signatures = new HashMap<>();
-        Reconfigure initialView;
-        try {
-            initialView = Genesis.parseFrom(block.getBlock().getBody().getContents()).getInitialView();
-        } catch (InvalidProtocolBufferException e) {
-            log.debug("Error deserializing genesis body", e);
-            return false;
-        }
         initialView.getViewList().forEach(vm -> {
             HashKey memberID = new HashKey(vm.getId());
             Member member = context.getMember(memberID);
@@ -181,7 +173,7 @@ public class Validator {
             log.info("Cannot get signature for verification for: {}", memberID);
             return false;
         }
-        return verify(signature, c.getSignature().toByteArray(), Conversion.hashOf(block.getHeader().toByteArray()));
+        return verify(signature, c.getSignature().toByteArray(), Conversion.hashOf(block.getHeader().toByteString()));
     }
 
     public static boolean verify(PublicKey key, byte[] signed, byte[]... content) {
@@ -235,7 +227,7 @@ public class Validator {
         }
 
         try {
-            signature.update(Conversion.hashOf(block.getHeader().toByteArray()));
+            signature.update(Conversion.hashOf(block.getHeader().toByteString()));
         } catch (SignatureException e) {
             log.error("Error updating validation signature of {}", memberID, e);
             return false;
