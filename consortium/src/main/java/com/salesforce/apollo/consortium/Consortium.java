@@ -474,6 +474,11 @@ public class Consortium {
             }
             log.trace("Setting timer for: {}", label);
         }
+
+        public void enterView() {
+            // TODO Auto-generated method stub
+            
+        }
     }
 
     public class Service {

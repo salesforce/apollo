@@ -42,7 +42,6 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
-import com.salesforce.apollo.consortium.fsm.GenesisFsm;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.CertWithKey;
@@ -65,7 +64,7 @@ public class TestConsortium {
     private static Map<HashKey, CertificateWithPrivateKey> certs;
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
-    private static int                                     testCardinality = 100;
+    private static int                                     testCardinality = 25;
 
     @BeforeAll
     public static void beforeClass() {
@@ -201,9 +200,11 @@ public class TestConsortium {
         assertEquals(9,
                      blueRibbon.stream()
                                .map(c -> c.getTransitions().fsm().getCurrentState())
-                               .filter(b -> b == GenesisFsm.ORDERED)
+                               .filter(b -> b == CollaboratorFsm.JOINING_MEMBER)
                                .count(),
-                     "True member gone bad");
+                     "True member gone bad: " + blueRibbon.stream()
+                                                          .map(c -> c.getTransitions().fsm().getCurrentState())
+                                                          .collect(Collectors.toSet()));
 
 //        Consortium client = consortium.get(blueRibbon.size() + 1);
 //        try {

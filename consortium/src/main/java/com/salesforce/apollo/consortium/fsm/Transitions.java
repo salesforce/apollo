@@ -82,6 +82,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw new InvalidTransition();
     }
 
+    default Transitions joinGenesis() {
+        throw new InvalidTransition();
+    }
+
     default Transitions missingGenesis() {
         throw new InvalidTransition();
     }

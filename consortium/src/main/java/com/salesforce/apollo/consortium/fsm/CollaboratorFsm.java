@@ -61,6 +61,12 @@ public enum CollaboratorFsm implements Transitions {
             return RECOVERING;
         }
     },
+    JOINING_MEMBER {
+        @Entry
+        public void enterView() {
+            context().enterView();
+        }
+    },
     LEADER {
         @Override
         public Transitions deliverBlock(Block block, Member from) {
@@ -89,11 +95,6 @@ public enum CollaboratorFsm implements Transitions {
         }
     },
     PROTOCOL_FAILURE {
-        
-        @Entry
-        public void shutdown() {
-            context().shutdown();
-        }
 
         @Override
         public Transitions processCheckpoint(CurrentBlock next) {
@@ -115,6 +116,29 @@ public enum CollaboratorFsm implements Transitions {
             throw new InvalidTransition();
         }
 
+        @Entry
+        public void shutdown() {
+            context().shutdown();
+        }
+
+    },
+    RECOVERED {
+        @Override
+        public Transitions becomeClient() {
+            return CLIENT;
+        }
+
+        @Override
+        public Transitions genesisAccepted() {
+            return null;
+        }
+
+        @Override
+        public Transitions processGenesis(CurrentBlock next) {
+            context().processGenesis(next);
+            return null;
+        }
+
     },
     RECOVERING {
         @Entry
@@ -124,7 +148,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions becomeClient() {
-            return RECOVERING_CLIENT;
+            return RECOVERED;
         }
 
         @Exit
@@ -139,19 +163,18 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions join() {
-            fsm().push(GenesisFsm.GENERATE);
+            fsm().push(Genesis.GENERATE);
             return null;
+        }
+
+        @Override
+        public Transitions joinGenesis() {
+            return JOINING_MEMBER;
         }
 
         @Override
         public Transitions missingGenesis() {
             context().awaitGenesis();
-            return null;
-        }
-    },
-    RECOVERING_CLIENT {
-        @Override
-        public Transitions genesisAccepted() {
             return null;
         }
 
@@ -160,12 +183,6 @@ public enum CollaboratorFsm implements Transitions {
             context().processGenesis(next);
             return null;
         }
-
-        @Override
-        public Transitions becomeClient() {
-            return CLIENT;
-        }
-
     };
 
     private static final Logger log = LoggerFactory.getLogger(CollaboratorFsm.class);

@@ -22,7 +22,7 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public enum GenesisFsm implements Transitions {
+public enum Genesis implements Transitions {
 
     FOLLOWER {
         @Override
@@ -203,7 +203,8 @@ public enum GenesisFsm implements Transitions {
 
         @Override
         public Transitions join() {
-            return null; // TODO for now
+            fsm().pop().joinGenesis();
+            return null;
         }
 
         @Override
