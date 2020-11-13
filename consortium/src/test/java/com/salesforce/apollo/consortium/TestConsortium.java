@@ -122,7 +122,7 @@ public class TestConsortium {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
         Context<Member> view = new Context<Member>(HashKey.ORIGIN.prefix(1), parameters.rings);
-        Duration gossipDuration = Duration.ofMillis(250);
+        Duration gossipDuration = Duration.ofMillis(10);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
