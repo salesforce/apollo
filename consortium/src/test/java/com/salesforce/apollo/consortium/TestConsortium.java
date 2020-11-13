@@ -140,20 +140,7 @@ public class TestConsortium {
                                                  })));
             return HashKey.ORIGIN;
         };
-        members.stream()
-               .map(m -> new Consortium(Parameters.newBuilder()
-                                                  .setConsensus(consensus)
-                                                  .setExecutor(t -> Collections.emptyList())
-                                                  .setMember(m)
-                                                  .setSignature(() -> m.forSigning())
-                                                  .setContext(view)
-                                                  .setMsgParameters(msgParameters)
-                                                  .setCommunications(communications.get(m.getId()))
-                                                  .setGossipDuration(gossipDuration)
-                                                  .setScheduler(scheduler)
-                                                  .build()))
-               .peek(c -> view.activate(c.getMember()))
-               .forEach(e -> consortium.put(e.getMember(), e));
+        gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
         Consortium.viewFor(Consortium.GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
@@ -187,6 +174,55 @@ public class TestConsortium {
 
         System.out.println("processing complete, validating state");
 
+        validateState(view, blueRibbon);
+
+        Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
+        HashKey hash;
+        try {
+            hash = client.submit(h -> {
+            }, "Hello world".getBytes());
+        } catch (TimeoutException e) {
+            fail();
+            return;
+        }
+
+        boolean success = Utils.waitForCondition(10_000, 1_000,
+                                                 () -> blueRibbon.stream()
+                                                                 .map(collaborator -> collaborator.getState()
+                                                                                                  .getPending())
+                                                                 .filter(pending -> pending.size() != 1)
+                                                                 .filter(pending -> pending.contains(hash))
+                                                                 .count() == 0);
+
+        assertTrue(success,
+                   "Transaction not submitted to consortium, missing: "
+                           + blueRibbon.stream()
+                                       .map(collaborator -> collaborator.getState().getPending().isEmpty())
+                                       .filter(b -> b)
+                                       .count());
+
+    }
+
+    private void gatherConsortium(Context<Member> view, Function<CertifiedBlock, HashKey> consensus,
+                                  Duration gossipDuration, ScheduledExecutorService scheduler,
+                                  Messenger.Parameters msgParameters) {
+        members.stream()
+               .map(m -> new Consortium(Parameters.newBuilder()
+                                                  .setConsensus(consensus)
+                                                  .setExecutor(t -> Collections.emptyList())
+                                                  .setMember(m)
+                                                  .setSignature(() -> m.forSigning())
+                                                  .setContext(view)
+                                                  .setMsgParameters(msgParameters)
+                                                  .setCommunications(communications.get(m.getId()))
+                                                  .setGossipDuration(gossipDuration)
+                                                  .setScheduler(scheduler)
+                                                  .build()))
+               .peek(c -> view.activate(c.getMember()))
+               .forEach(e -> consortium.put(e.getMember(), e));
+    }
+
+    private void validateState(Context<Member> view, Set<Consortium> blueRibbon) {
         long clientsInWrongState = consortium.values()
                                              .stream()
                                              .filter(c -> !blueRibbon.contains(c))
@@ -222,32 +258,6 @@ public class TestConsortium {
                                .map(collaborator -> collaborator.getState().getPending())
                                .filter(pending -> pending.isEmpty())
                                .count());
-
-        Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
-        HashKey hash;
-        try {
-            hash = client.submit(h -> {
-            }, "Hello world".getBytes());
-        } catch (TimeoutException e) {
-            fail();
-            return;
-        }
-
-        boolean success = Utils.waitForCondition(10_000, 1_000,
-                                                 () -> blueRibbon.stream()
-                                                                 .map(collaborator -> collaborator.getState()
-                                                                                                  .getPending())
-                                                                 .filter(pending -> pending.size() != 1)
-                                                                 .filter(pending -> pending.contains(hash))
-                                                                 .count() == 0);
-
-        assertTrue(success,
-                   "Transaction not submitted to consortium, missing: "
-                           + blueRibbon.stream()
-                                       .map(collaborator -> collaborator.getState().getPending().isEmpty())
-                                       .filter(b -> b)
-                                       .count());
-
     }
 
 }
