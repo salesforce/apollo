@@ -99,6 +99,7 @@ public class Consortium {
         }
 
         public void awaitGenesis() {
+            validators.put(getMember().getId(), vState.getNextViewConsensusKeyPair().getPublic());
             schedule(Timers.AWAIT_GENESIS, () -> {
                 transitions.missingGenesis();
             }, params.context.timeToLive());
@@ -177,7 +178,7 @@ public class Consortium {
                     log.info("invalid genesis view member, cannot generate consensus key: {}", memberID);
                     return;
                 }
-                validators.put(memberID, consensusKey);
+                validators.computeIfAbsent(memberID, k -> consensusKey);
             });
             HashKey hash = new HashKey(Conversion.hashOf(block.toByteArray()));
             CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
@@ -477,7 +478,7 @@ public class Consortium {
 
         public void enterView() {
             // TODO Auto-generated method stub
-            
+
         }
     }
 
@@ -828,8 +829,6 @@ public class Consortium {
     private Validate generateValidationFromNextView(HashKey hash, Block block) {
         byte[] signed = Conversion.hashOf(block.getHeader().toByteArray());
         byte[] signature = sign(vState.getNextViewConsensusKeyPair().getPrivate(), entropy(), signed);
-        assert signature.length > 0;
-        log.trace("generating validation: {} on: {} ", hash, getMember());
         return generateValidation(hash, signature);
     }
 
