@@ -329,6 +329,10 @@ public class Consortium {
             });
         }
 
+        public void shutdown() {
+            stop();
+        }
+
         public void submit(EnqueuedTransaction enqueuedTransaction) {
             if (pending.add(enqueuedTransaction)) {
                 log.trace("Enqueueing txn: {}", enqueuedTransaction.getHash());

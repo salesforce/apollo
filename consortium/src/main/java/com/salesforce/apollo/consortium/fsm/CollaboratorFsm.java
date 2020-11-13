@@ -27,13 +27,6 @@ import com.salesforce.apollo.membership.Member;
  *
  */
 public enum CollaboratorFsm implements Transitions {
-    AWAIT_VIEW_CHANGE {
-
-        @Override
-        public Transitions fail() {
-            return PROTOCOL_FAILURE;
-        }
-    },
     CLIENT, FOLLOWER
 
     {
@@ -96,6 +89,11 @@ public enum CollaboratorFsm implements Transitions {
         }
     },
     PROTOCOL_FAILURE {
+        
+        @Entry
+        public void shutdown() {
+            context().shutdown();
+        }
 
         @Override
         public Transitions processCheckpoint(CurrentBlock next) {
