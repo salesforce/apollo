@@ -12,7 +12,6 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
-import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
@@ -85,7 +84,7 @@ public enum Genesis implements Transitions {
 
         @Exit
         public void cancel() {
-            context().cancel(Timers.AWAIT_FORMATION);
+            context().cancelAll();
         }
 
         @Override

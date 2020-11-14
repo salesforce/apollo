@@ -70,13 +70,18 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
         public String toString() {
             return "txn " + hash;
         }
+
+        public int totalByteSize() {
+            return transaction.getSerializedSize() + 32;
+        }
     }
 
     private final static Logger log = LoggerFactory.getLogger(PendingTransactions.class);
 
-    private volatile EnqueuedTransaction            head         = null;
-    private volatile EnqueuedTransaction            tail         = null;
-    private final Map<HashKey, EnqueuedTransaction> transactions = new HashMap<>();
+    private volatile EnqueuedTransaction            head          = null;
+    private volatile EnqueuedTransaction            tail          = null;
+    private volatile int                            totalByteSize = 0;
+    private final Map<HashKey, EnqueuedTransaction> transactions  = new HashMap<>();
 
     public boolean add(EnqueuedTransaction e) {
         AtomicBoolean updated = new AtomicBoolean();
@@ -92,6 +97,8 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
                 e.prev = prevTail;
                 tail = e;
             }
+            totalByteSize += e.getTransaction().getSerializedSize();
+            totalByteSize += 32; // for hash of Executed Txn
             updated.set(true);
             return e;
         });
@@ -109,6 +116,16 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
 
     public boolean contains(HashKey hash) {
         return transactions.containsKey(hash);
+    }
+
+    public EnqueuedTransaction first() {
+        final EnqueuedTransaction c = head;
+        return c;
+    }
+
+    public int getTotalByteSize() {
+        final int c = totalByteSize;
+        return c;
     }
 
     public boolean isEmpty() {
@@ -163,7 +180,7 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
         return "PendingTransactions [head=" + head + ", tail=" + tail + ", transactions=" + transactions + "]";
     }
 
-    private void unlink(EnqueuedTransaction e) {
+    public void unlink(EnqueuedTransaction e) {
         if (e.prev != null) {
             e.prev.next = e.next;
         }
@@ -175,9 +192,10 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
         if (e.equals(currentTail)) {
             tail = currentHead.prev;
         }
-        head = tail = null;
+        e.next = e.prev = null;
         transactions.remove(e.hash);
-
+        totalByteSize -= e.transaction.getSerializedSize();
+        totalByteSize -= 32; // Hash size for Executed txn
     }
 
 }

@@ -16,7 +16,6 @@ import java.io.File;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -64,9 +63,10 @@ public class TestConsortium {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static final Duration                          gossipDuration  = Duration.ofMillis(100);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
-    private static int                                     testCardinality = 25;
+    private final static int                               testCardinality = 25;
 
     @BeforeAll
     public static void beforeClass() {
@@ -122,7 +122,6 @@ public class TestConsortium {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
         Context<Member> view = new Context<Member>(HashKey.ORIGIN.prefix(1), parameters.rings);
-        Duration gossipDuration = Duration.ofMillis(10);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
@@ -133,7 +132,7 @@ public class TestConsortium {
             published.set(true);
             ForkJoinPool.commonPool()
                         .execute(() -> consortium.values()
-                                                 .parallelStream()
+                                                 .stream()
                                                  .forEach(m -> ForkJoinPool.commonPool().execute(() -> {
                                                      m.process(c);
                                                      processed.countDown();
@@ -209,7 +208,6 @@ public class TestConsortium {
         members.stream()
                .map(m -> new Consortium(Parameters.newBuilder()
                                                   .setConsensus(consensus)
-                                                  .setExecutor(t -> Collections.emptyList())
                                                   .setMember(m)
                                                   .setSignature(() -> m.forSigning())
                                                   .setContext(view)

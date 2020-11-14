@@ -19,6 +19,7 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -66,6 +67,7 @@ import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.TickScheduler.Timer;
+import com.salesforce.apollo.consortium.TransactionSimulator.EvaluatedTransaction;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
 import com.salesforce.apollo.consortium.comms.ConsortiumServerCommunications;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
@@ -93,6 +95,8 @@ public class Consortium {
         private final PendingTransactions                  pending         = new PendingTransactions();
         private final Set<HashKey>                         publishedBlocks = new HashSet<>();
         private final TickScheduler                        scheduler       = new TickScheduler();
+        private final TransactionSimulator                 simulator       = new TransactionSimulator(
+                params.maxBatchByteSize, this, params.validator);
         private final Map<Timers, Timer>                   timers          = new ConcurrentHashMap<>();
         private final Map<HashKey, CertifiedBlock.Builder> workingBlocks   = new HashMap<>();
 
@@ -203,6 +207,22 @@ public class Consortium {
         public void deliverProclamation(Proclamation p, Member from) {
             // TODO Auto-generated method stub
 
+        }
+
+        public void drain() {
+            EnqueuedTransaction txn = pending.first();
+            while (txn != null) {
+                if (simulator.add(txn)) {
+                    pending.removeFirst();
+                    txn = pending.first();
+                } else {
+                    txn = null;
+                }
+            }
+        }
+
+        public void drainPending(Deque<EnqueuedTransaction> transactions) {
+            transitions.drainPending(transactions);
         }
 
         public void enterView() {
@@ -358,6 +378,14 @@ public class Consortium {
             });
         }
 
+        public void scheduleBlockTimeout() {
+            scheduleIfAbsent(Timers.FLUSH_BATCH, () -> {
+                if (pending.isEmpty()) {
+                    generateNextBlock();
+                }
+            }, vState.getCurrentView().timeToLive());
+        }
+
         public void shutdown() {
             stop();
         }
@@ -432,6 +460,11 @@ public class Consortium {
             }
         }
 
+        void evaluated(Deque<EvaluatedTransaction> evaluated) {
+            // TODO Auto-generated method stub
+
+        }
+
         PendingTransactions getPending() {
             return pending;
         }
@@ -485,6 +518,21 @@ public class Consortium {
                                      .build());
         }
 
+        private void generateNextBlock() {
+            User.Builder body = User.newBuilder();
+            EnqueuedTransaction txn = pending.removeFirst();
+            int processed = 0;
+            int processedBytes = 0;
+            while (txn != null && processed <= params.maxBatchByteSize && processedBytes <= params.maxBatchByteSize) {
+                processed++;
+                processedBytes += txn.getTransaction().getSerializedSize() + 32;
+                body.addTransactions(ExecutedTransaction.newBuilder()
+                                                        .setHash(txn.getHash().toByteString())
+                                                        .setTransaction(txn.getTransaction()));
+            }
+            scheduleBlockTimeout();
+        }
+
         private void rescheduleGenesis() {
             schedule(Timers.AWAIT_GROUP, () -> {
                 if (pending.size() > params.context.toleranceLevel()) {
@@ -508,12 +556,29 @@ public class Consortium {
             };
             Messenger messenger = vState.getMessenger();
             int current = messenger == null ? 0 : messenger.getRound();
-            Timer previous = timers.put(Timers.AWAIT_VIEW_MEMBERS, scheduler.schedule(label, action, current + delta));
+            Timer previous = timers.put(label, scheduler.schedule(label, action, current + delta));
             if (previous != null) {
                 log.trace("Cancelling previous timer for: {}", label);
                 previous.cancel();
             }
             log.trace("Setting timer for: {}", label);
+        }
+
+        private void scheduleIfAbsent(Timers label, Runnable a, int delta) {
+            Runnable action = () -> {
+                timers.remove(label);
+                a.run();
+            };
+            Messenger messenger = vState.getMessenger();
+            int current = messenger == null ? 0 : messenger.getRound();
+            timers.computeIfAbsent(label, k -> {
+                log.trace("Setting timer for: {}", label);
+                return scheduler.schedule(k, action, current + delta);
+            });
+        }
+
+        public void evaluate() {
+            simulator.evaluateNext();
         }
     }
 
@@ -552,7 +617,7 @@ public class Consortium {
     }
 
     public enum Timers {
-        AWAIT_FORMATION, AWAIT_GENESIS, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, PROCLAIM;
+        AWAIT_FORMATION, AWAIT_GENESIS, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, FLUSH_BATCH, PROCLAIM;
     }
 
     private static class Result {
@@ -606,17 +671,16 @@ public class Consortium {
         return newView;
     }
 
-    public final byte[] genesisData = "Give me food or give me slack or kill me".getBytes();
-
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
 
-    private Logger                                   log        = DEFAULT_LOGGER;
+    private final byte[]                             genesisData = "Give me food or give me slack or kill me".getBytes();
+    private Logger                                   log         = DEFAULT_LOGGER;
     private final Parameters                         params;
-    private final AtomicBoolean                      started    = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction> submitted  = new HashMap<>();
+    private final AtomicBoolean                      started     = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction> submitted   = new HashMap<>();
     private final Transitions                        transitions;
-    private final Map<HashKey, PublicKey>            validators = new HashMap<>();
-    private final VolatileState                      vState     = new VolatileState();
+    private final Map<HashKey, PublicKey>            validators  = new HashMap<>();
+    private final VolatileState                      vState      = new VolatileState();
 
     public Consortium(Parameters parameters) {
         this.params = parameters;

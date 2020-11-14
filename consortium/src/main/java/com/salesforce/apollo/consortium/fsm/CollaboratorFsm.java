@@ -13,6 +13,7 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
+import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.CurrentBlock;
 import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
@@ -140,7 +141,9 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submit(enqueuedTransaction);
+            CollaboratorContext context = context();
+            context.submit(enqueuedTransaction);
+            context.scheduleBlockTimeout();
             return null;
         }
     },

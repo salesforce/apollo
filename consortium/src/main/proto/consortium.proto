@@ -113,6 +113,7 @@ message Transaction {
 message ExecutedTransaction {
     bytes hash = 1;
     Transaction transaction = 2;
+    bytes result = 3;
 }
 
 enum MessageType {
