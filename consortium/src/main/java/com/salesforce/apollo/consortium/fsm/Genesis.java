@@ -181,6 +181,11 @@ public enum Genesis implements Transitions {
             context().cancelAll();
         }
 
+        @Exit
+        public void cancelTimers() {
+            context().cancelAll();
+        }
+
         @Override
         public Transitions deliverBlock(Block block, Member from) {
             return null;

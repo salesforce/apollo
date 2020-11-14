@@ -75,12 +75,12 @@ public enum CollaboratorFsm implements Transitions {
     JOINING_MEMBER {
         @Override
         public Transitions becomeFollower() {
-            return LEADER;
+            return FOLLOWER;
         }
 
         @Override
         public Transitions becomeLeader() {
-            return FOLLOWER;
+            return LEADER;
         }
 
         @Override
@@ -110,12 +110,6 @@ public enum CollaboratorFsm implements Transitions {
 
     },
     LEADER {
-
-        @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().deliverProclamation(p, from);
-            return null;
-        }
 
         @Entry
         public void generate() {

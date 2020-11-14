@@ -235,20 +235,20 @@ public class TestConsortium {
                                                                 .getCurrentState() != CollaboratorFsm.CLIENT)
                                                   .collect(Collectors.toSet());
         assertEquals(0, clientsInWrongState, "True clients gone bad: " + failedMembers);
-        assertEquals(1,
+        assertEquals(view.getRingCount() - 1,
                      blueRibbon.stream()
                                .map(c -> c.getTransitions().fsm().getCurrentState())
                                .filter(b -> b == CollaboratorFsm.FOLLOWER)
                                .count(),
-                     "True member gone bad: " + blueRibbon.stream()
-                                                          .map(c -> c.getTransitions().fsm().getCurrentState())
-                                                          .collect(Collectors.toSet()));
-        assertEquals(view.getRingCount() - 1,
+                     "True follower gone bad: " + blueRibbon.stream()
+                                                            .map(c -> c.getTransitions().fsm().getCurrentState())
+                                                            .collect(Collectors.toSet()));
+        assertEquals(1,
                      blueRibbon.stream()
                                .map(c -> c.getTransitions().fsm().getCurrentState())
                                .filter(b -> b == CollaboratorFsm.LEADER)
                                .count(),
-                     "True member gone bad: " + blueRibbon.stream()
+                     "True leader gone bad: " + blueRibbon.stream()
                                                           .map(c -> c.getTransitions().fsm().getCurrentState())
                                                           .collect(Collectors.toSet()));
         assertEquals(view.getRingCount(),
