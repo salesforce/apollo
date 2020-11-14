@@ -63,7 +63,7 @@ public class TestConsortium {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final Duration                          gossipDuration  = Duration.ofMillis(100);
+    private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
     private final static int                               testCardinality = 25;

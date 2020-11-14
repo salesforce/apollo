@@ -692,6 +692,7 @@ public class Consortium {
         parameters.context.register(vState);
         Fsm<CollaboratorContext, Transitions> fsm = Fsm.construct(new CollaboratorContext(), Transitions.class,
                                                                   CollaboratorFsm.INITIAL, true);
+        fsm.setName(getMember().getId().b64Encoded());
         transitions = fsm.getTransitions();
         nextView();
     }

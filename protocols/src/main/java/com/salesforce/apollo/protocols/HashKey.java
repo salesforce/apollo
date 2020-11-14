@@ -218,7 +218,7 @@ public class HashKey implements Comparable<HashKey> {
 
     @Override
     public String toString() {
-        return "[" + b64Encoded() + "]";
+        return b64Encoded();
     }
 
     public void write(ByteBuffer dest) {

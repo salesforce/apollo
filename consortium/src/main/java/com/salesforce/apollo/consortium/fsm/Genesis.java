@@ -128,6 +128,7 @@ public enum Genesis implements Transitions {
 
         @Entry
         public void vote() {
+            context().cancelAll();
             context().awaitFormation();
         }
     },
