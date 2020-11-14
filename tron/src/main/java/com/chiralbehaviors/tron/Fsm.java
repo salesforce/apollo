@@ -114,18 +114,18 @@ public final class Fsm<Context, Transitions> {
         return fsm;
     }
 
-    private final Context          context;
-    private volatile Enum<?>       current;
-    private volatile Logger        log;
-    private volatile String        name;
-    private volatile boolean       pendingPop = false;
-    private volatile Enum<?>       pendingPush;
-    private volatile PopTransition popTransition;
-    private volatile Enum<?>       previous;
-    private final Transitions      proxy;
-    private final Deque<Enum<?>>   stack      = new ArrayDeque<>();
-    private final Lock             sync;
-    private volatile String        transition;
+    private final Context            context;
+    private volatile Transitions     current;
+    private volatile Logger          log;
+    private volatile String          name;
+    private volatile boolean         pendingPop = false;
+    private volatile Transitions     pendingPush;
+    private volatile PopTransition   popTransition;
+    private volatile Transitions     previous;
+    private final Transitions        proxy;
+    private final Deque<Transitions> stack      = new ArrayDeque<>();
+    private final Lock               sync;
+    private volatile String          transition;
 
     private final Class<Transitions> transitionsType;
 
@@ -164,8 +164,7 @@ public final class Fsm<Context, Transitions> {
      * @return the current state of the Fsm
      */
     public Transitions getCurrentState() {
-        @SuppressWarnings("unchecked")
-        Transitions transitions = (Transitions) getCurrent();
+        Transitions transitions = getCurrent();
         return transitions;
     }
 
@@ -186,8 +185,7 @@ public final class Fsm<Context, Transitions> {
      * @return the previous state of the Fsm, or null if no previous state
      */
     public Transitions getPreviousState() {
-        @SuppressWarnings("unchecked")
-        Transitions transitions = (Transitions) getPrevious();
+        Transitions transitions = getPrevious();
         return transitions;
     }
 
@@ -251,7 +249,7 @@ public final class Fsm<Context, Transitions> {
         if (isPendingPop()) {
             throw new IllegalStateException("Cannot push after pop");
         }
-        setPendingPush((Enum<?>) state);
+        setPendingPush(state);
     }
 
     /**
@@ -356,7 +354,7 @@ public final class Fsm<Context, Transitions> {
             }
 
             setTransition(prettyPrint(t));
-            Enum<?> nextState;
+            Transitions nextState;
             try {
                 nextState = fireTransition(lookupTransition(t), arguments);
             } catch (InvalidTransition e) {
@@ -380,14 +378,15 @@ public final class Fsm<Context, Transitions> {
      * 
      * @return the next state
      */
-    private Enum<?> fireTransition(Method stateTransition, Object[] arguments) {
+    @SuppressWarnings("unchecked")
+    private Transitions fireTransition(Method stateTransition, Object[] arguments) {
         if (stateTransition.isAnnotationPresent(Default.class)) {
             if (log.isTraceEnabled()) {
                 log.trace(String.format("Executing default transition %s on state %s", getTransition(),
                                         prettyPrint(getCurrent())));
             }
             try {
-                return (Enum<?>) stateTransition.invoke(getCurrent(), (Object[]) null);
+                return (Transitions) stateTransition.invoke(getCurrent(), (Object[]) null);
             } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
                 throw new IllegalStateException(String.format("Unable to invoke transition %s on state %s",
                                                               prettyPrint(stateTransition), prettyPrint(getCurrent())),
@@ -398,7 +397,7 @@ public final class Fsm<Context, Transitions> {
             log.trace(String.format("Executing transition %s on state %s", getTransition(), prettyPrint(getCurrent())));
         }
         try {
-            return (Enum<?>) stateTransition.invoke(getCurrent(), arguments);
+            return (Transitions) stateTransition.invoke(getCurrent(), arguments);
         } catch (IllegalAccessException | IllegalArgumentException e) {
             throw new IllegalStateException(String.format("Unable to invoke transition %s on state %s",
                                                           prettyPrint(stateTransition), prettyPrint(getCurrent())),
@@ -417,13 +416,13 @@ public final class Fsm<Context, Transitions> {
         }
     }
 
-    private Enum<?> getCurrent() {
-        final Enum<?> c = current;
+    private Transitions getCurrent() {
+        final Transitions c = current;
         return c;
     }
 
-    private Enum<?> getPendingPush() {
-        final Enum<?> c = pendingPush;
+    private Transitions getPendingPush() {
+        final Transitions c = pendingPush;
         return c;
     }
 
@@ -432,8 +431,8 @@ public final class Fsm<Context, Transitions> {
         return c;
     }
 
-    private Enum<?> getPrevious() {
-        final Enum<?> c = previous;
+    private Transitions getPrevious() {
+        final Transitions c = previous;
         return c;
     }
 
@@ -490,7 +489,7 @@ public final class Fsm<Context, Transitions> {
      * 
      * @param nextState - the next state of the Fsm
      */
-    private void normalTransition(Enum<?> nextState) {
+    private void normalTransition(Transitions nextState) {
         if (nextState == null) { // internal loopback transition
             if (log.isTraceEnabled()) {
                 log.trace(String.format("Internal loopback transition to state %s", prettyPrint(getCurrent())));
@@ -513,7 +512,7 @@ public final class Fsm<Context, Transitions> {
     private void popTransition() {
         setPendingPop(false);
         setPrevious(getCurrent());
-        Enum<?> pop = stack.pop();
+        Transitions pop = stack.pop();
         PopTransition pendingTransition = getPopTransition();
         setPopTransition(null);
 
@@ -531,13 +530,13 @@ public final class Fsm<Context, Transitions> {
         }
     }
 
-    private String prettyPrint(Enum<?> state) {
+    private String prettyPrint(Transitions state) {
         if (state == null) {
             return "null";
         }
         Class<?> enclosingClass = state.getClass().getEnclosingClass();
         return String.format("%s.%s", (enclosingClass != null ? enclosingClass : state.getClass()).getSimpleName(),
-                             state.name());
+                             ((Enum<?>) state).name());
     }
 
     private String prettyPrint(Method transition) {
@@ -567,8 +566,8 @@ public final class Fsm<Context, Transitions> {
      * 
      * @param nextState
      */
-    private void pushTransition(Enum<?> nextState) {
-        Enum<?> pushed = getPendingPush();
+    private void pushTransition(Transitions nextState) {
+        Transitions pushed = getPendingPush();
         setPendingPush(null);
         normalTransition(nextState);
         stack.push(getCurrent());
@@ -579,7 +578,7 @@ public final class Fsm<Context, Transitions> {
         executeEntryAction();
     }
 
-    private void setCurrent(Enum<?> current) {
+    private void setCurrent(Transitions current) {
         this.current = current;
     }
 
@@ -590,14 +589,14 @@ public final class Fsm<Context, Transitions> {
      * @param state - the new current state of the Fsm
      */
     private void setCurrentState(Transitions state) {
-        setCurrent((Enum<?>) state);
+        setCurrent(state);
     }
 
     private void setPendingPop(boolean pendingPop) {
         this.pendingPop = pendingPop;
     }
 
-    private void setPendingPush(Enum<?> pendingPush) {
+    private void setPendingPush(Transitions pendingPush) {
         this.pendingPush = pendingPush;
     }
 
@@ -605,7 +604,7 @@ public final class Fsm<Context, Transitions> {
         this.popTransition = popTransition;
     }
 
-    private void setPrevious(Enum<?> previous) {
+    private void setPrevious(Transitions previous) {
         this.previous = previous;
     }
 
@@ -623,7 +622,7 @@ public final class Fsm<Context, Transitions> {
      * 
      * @param nextState
      */
-    private void transitionTo(Enum<?> nextState) {
+    private void transitionTo(Transitions nextState) {
         if (getPendingPush() != null) {
             pushTransition(nextState);
         } else if (isPendingPop()) {
