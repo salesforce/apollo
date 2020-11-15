@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
@@ -30,6 +32,7 @@ import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.Messages.Builder;
 import com.salesfoce.apollo.proto.Push;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.BbBackedInputStream;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashFunction;
@@ -63,9 +66,13 @@ public class MessageBuffer {
         try {
             signature.update(new HashKey(message.getSource()).bytes());
             signature.update(seqNum.array());
-            signature.update(message.getContent().toByteArray());
+            byte[] buf = new byte[256];
+            InputStream is = BbBackedInputStream.aggregate(message.getContent());
+            for (int read = is.read(buf); read > 0; read = is.read(buf)) {
+                signature.update(buf, 0, read);
+            }
             return signature.verify(message.getSignature().toByteArray());
-        } catch (SignatureException e) {
+        } catch (SignatureException | IOException e) {
             log.trace("Message validation error", e);
             return false;
         }
