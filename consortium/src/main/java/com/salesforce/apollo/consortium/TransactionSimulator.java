@@ -106,7 +106,7 @@ public class TransactionSimulator {
                     totalByteSize += result.size();
                     txn = transactions.peek();
                 } else {
-                    collaborator.drainPending(transactions);
+                    collaborator.drainPending();
                     txn = null;
                 }
             } catch (Throwable e) {

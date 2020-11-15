@@ -55,9 +55,21 @@ public final class Conversion {
     }
 
     public static byte[] hashOf(ByteString byteString) {
+        InputStream is = BbBackedInputStream.aggregate(byteString);
+        return hashOf(is);
+    }
+
+    /**
+     * @param entry
+     * @return the hash value of the entry
+     */
+    public static byte[] hashOf(DagEntry entry) {
+        return hashOf(serialize(entry));
+    }
+
+    public static byte[] hashOf(InputStream is) {
         MessageDigest md = MESSAGE_DIGEST.get();
         md.reset();
-        InputStream is = BbBackedInputStream.aggregate(byteString);
         byte[] buf = new byte[md.getDigestLength()];
         try {
             for (int read = is.read(buf); read >= 0; read = is.read(buf)) {
@@ -67,14 +79,6 @@ public final class Conversion {
             throw new IllegalStateException("Error reading from buffers, cannot generate hash", e);
         }
         return md.digest();
-    }
-
-    /**
-     * @param entry
-     * @return the hash value of the entry
-     */
-    public static byte[] hashOf(DagEntry entry) {
-        return hashOf(serialize(entry));
     }
 
     public static DagEntry manifestDag(byte[] data) {

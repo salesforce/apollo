@@ -13,13 +13,12 @@ import static com.salesforce.apollo.consortium.Validator.verify;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -62,6 +61,7 @@ import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.Transaction;
+import com.salesfoce.apollo.consortium.proto.TransactionOrBuilder;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesfoce.apollo.consortium.proto.User;
 import com.salesfoce.apollo.consortium.proto.Validate;
@@ -109,8 +109,7 @@ public class Consortium {
         }
 
         public void add(Transaction txn) {
-            EnqueuedTransaction transaction = new EnqueuedTransaction(
-                    new HashKey(Conversion.hashOf(txn.toByteString())), txn);
+            EnqueuedTransaction transaction = new EnqueuedTransaction(hashOf(txn), txn);
             if (pending.add(transaction)) {
                 unreplicated.remove(transaction);
             }
@@ -223,7 +222,7 @@ public class Consortium {
 
         }
 
-        public void drainPending(Deque<EnqueuedTransaction> transactions) {
+        public void drainPending() {
             transitions.drainPending();
         }
 
@@ -242,12 +241,16 @@ public class Consortium {
         }
 
         public void evaluate(EnqueuedTransaction transaction) {
-            log.info("Enqueuing transaction {} on: {}", transaction.getHash(), getMember());
+            log.info("Enqueueing transaction {} on: {}", transaction.getHash(), getMember());
             if (pending.add(transaction)) {
                 unreplicated.add(transaction);
                 simulator.add(transaction);
             }
             scheduleBlockTimeout();
+        }
+
+        public void evaluate(Transaction txn) {
+            evaluate(new EnqueuedTransaction(hashOf(txn), txn));
         }
 
         public void generateGenesis() {
@@ -417,7 +420,6 @@ public class Consortium {
         }
 
         public void processUser(CurrentBlock next) {
-            @SuppressWarnings("unused")
             User body;
             try {
                 body = User.parseFrom(getBody(next.getBlock()));
@@ -426,6 +428,16 @@ public class Consortium {
                           next.getHash(), e);
                 return;
             }
+            body.getTransactionsList().forEach(txn -> {
+                HashKey hash = new HashKey(txn.getHash());
+                SubmittedTransaction submittedTxn = submitted.get(hash);
+                if (submittedTxn != null && submittedTxn.onCompletion != null) {
+                    log.info("Completing txn: {} on: {}", hash, getMember());
+                    ForkJoinPool.commonPool().execute(() -> submittedTxn.onCompletion.accept(hash));
+                } else {
+                    log.info("Processing txn: {} on: {}", hash, getMember());
+                }
+            });
             accept(next);
         }
 
@@ -468,9 +480,9 @@ public class Consortium {
         }
 
         public void submitJoin(EnqueuedTransaction enqueuedTransaction) {
-            if (!enqueuedTransaction.getTransaction().getJoin()) {
+            if (enqueuedTransaction.getTransaction().getJoin()) {
                 if (pending.add(enqueuedTransaction)) {
-                    log.trace("Enqueuing a join transaction: {}", enqueuedTransaction.getHash());
+                    log.trace("Enqueueing a join transaction: {}", enqueuedTransaction.getHash());
                     unreplicated.add(enqueuedTransaction);
                 } else {
                     log.trace("Join transaction already pending: {}", enqueuedTransaction.getHash());
@@ -635,9 +647,16 @@ public class Consortium {
 
     public class Service {
 
-        public TransactionResult clientSubmit(SubmitTransaction request) {
-            HashKey hash = new HashKey(Conversion.hashOf(request.getTransaction().toByteString()));
-            transitions.submit(new EnqueuedTransaction(hash, request.getTransaction()));
+        public TransactionResult clientSubmit(SubmitTransaction request, HashKey from) {
+            if (params.context.getMember(from) == null) {
+                log.warn("Received client transaction submission from non member: {}", from);
+                return TransactionResult.getDefaultInstance();
+            }
+            EnqueuedTransaction enqueuedTransaction = new EnqueuedTransaction(hashOf(request.getTransaction()),
+                    request.getTransaction());
+            log.info("Client submission of transaction: {} on: {} from: {}", enqueuedTransaction.getHash(), getMember(),
+                     from);
+            transitions.submit(enqueuedTransaction);
             return TransactionResult.getDefaultInstance();
         }
 
@@ -756,9 +775,9 @@ public class Consortium {
         return params.member;
     }
 
-    public void process(CertifiedBlock certifiedBlock) {
+    public boolean process(CertifiedBlock certifiedBlock) {
         if (!started.get()) {
-            return;
+            return false;
         }
         Block block = certifiedBlock.getBlock();
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
@@ -769,22 +788,22 @@ public class Consortium {
                 log.error("Protocol violation on {}.  Block height should be {} and next block height is {}",
                           getMember(), previousBlock.getBlock().getHeader().getHeight() + 1,
                           block.getHeader().getHeight());
-                return;
+                return false;
             }
             HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
             if (!previousBlock.getHash().equals(prev)) {
                 log.error("Protocol violation ons {}. New block does not refer to current block hash. Should be {} and next block's prev is {}",
                           getMember(), previousBlock.getHash(), prev);
-                return;
+                return false;
             }
             if (!vState.getValidator().validate(certifiedBlock)) {
                 log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
-                return;
+                return false;
             }
         } else {
             if (block.getBody().getType() != BodyType.GENESIS) {
                 log.error("Invalid genesis block on: {} block: {}", getMember(), block.getBody().getType());
-                return;
+                return false;
             }
             Genesis body;
             try {
@@ -792,14 +811,14 @@ public class Consortium {
             } catch (IOException e) {
                 log.error("Protocol violation ont: {}. Genesis block body cannot be deserialized {}", getMember(),
                           hash);
-                return;
+                return false;
             }
             if (!validateGenesis(certifiedBlock, body.getInitialView(), params.context, toleranceLevel())) {
                 log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
-                return;
+                return false;
             }
         }
-        next(new CurrentBlock(hash, block));
+        return next(new CurrentBlock(hash, block));
     }
 
     public void setLog(Logger log) {
@@ -961,6 +980,18 @@ public class Consortium {
                 BbBackedInputStream.aggregate(block.getBody().getContents().asReadOnlyByteBufferList()));
     }
 
+    private HashKey hashOf(TransactionOrBuilder transaction) {
+        List<ByteString> buffers = new ArrayList<>();
+        buffers.add(transaction.getNonce());
+        buffers.add(ByteString.copyFrom(transaction.getJoin() ? new byte[] { 1 } : new byte[] { 0 }));
+        buffers.add(transaction.getSource());
+        for (int i = 0; i < transaction.getBatchCount(); i++) {
+            buffers.add(transaction.getBatch(i)); 
+        }
+
+        return new HashKey(Conversion.hashOf(BbBackedInputStream.aggregate(buffers)));
+    }
+
     private Member leaderOf(Context<Member> newView) {
         return newView.ring(0).successor(newView.getId());
     }
@@ -975,7 +1006,7 @@ public class Consortium {
         return null;
     }
 
-    private void next(CurrentBlock next) {
+    private boolean next(CurrentBlock next) {
         switch (next.getBlock().getBody().getType()) {
         case CHECKPOINT:
             transitions.processCheckpoint(next);
@@ -993,7 +1024,7 @@ public class Consortium {
         default:
             log.error("Unrecognized block type: {} : {}", next.hashCode(), next.getBlock());
         }
-
+        return vState.getCurrent() == next;
     }
 
     private KeyPair nextView() {
@@ -1020,7 +1051,6 @@ public class Consortium {
         if (!started.get()) {
             return;
         }
-        log.trace("Processing {} from {}", msg.sequenceNumber, msg.from);
         ConsortiumMessage message;
         try {
             message = ConsortiumMessage.parseFrom(msg.content);
@@ -1076,40 +1106,32 @@ public class Consortium {
 
         byte[] nonce = new byte[32];
         entropy().nextBytes(nonce);
-        int tsize = 0;
-        for (byte[] t : transactions) {
-            tsize += t.length;
-        }
-        ByteBuffer signed = ByteBuffer.allocate(1 + nonce.length + HashKey.BYTE_SIZE + tsize);
-        signed.put(join ? (byte) 1 : (byte) 0);
-        signed.put(params.member.getId().bytes());
-        signed.put(nonce);
 
         Transaction.Builder builder = Transaction.newBuilder()
+                                                 .setJoin(join)
                                                  .setSource(params.member.getId().toByteString())
                                                  .setNonce(ByteString.copyFrom(nonce));
         for (byte[] t : transactions) {
             builder.addBatch(ByteString.copyFrom(t));
-            signed.put(t);
         }
 
-        byte[] hash = Conversion.hashOf(signed.array());
+        HashKey hash = hashOf(builder);
 
-        byte[] signature = sign(params.signature.get(), entropy(), hash);
+        byte[] signature = sign(params.signature.get(), entropy(), hash.bytes());
         if (signature == null) {
             throw new IllegalStateException("Unable to sign transaction batch");
         }
         builder.setSignature(ByteString.copyFrom(signature));
-        HashKey hashKey = new HashKey(hash);
         Transaction transaction = builder.build();
+        assert hash.equals(hashOf(transaction)) : "Hash does not match!";
 
-        submitted.put(hashKey, new SubmittedTransaction(transaction, onCompletion));
+        submitted.put(hash, new SubmittedTransaction(transaction, onCompletion));
         int toleranceLevel = toleranceLevel();
         SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
                                                           .setContext(current.getId().toByteString())
                                                           .setTransaction(transaction)
                                                           .build();
-        log.info("Submitting txn: {} from {}", hashKey, getMember());
+        log.info("Submitting txn: {} from {}", hash, getMember());
         List<TransactionResult> results = current.ring(entropy().nextInt(current.getRingCount())).stream().map(c -> {
             if (!getMember().equals(c)) {
                 ConsortiumClientCommunications link = linkFor(c);
@@ -1120,19 +1142,19 @@ public class Consortium {
                 try {
                     return link.clientSubmit(submittedTxn);
                 } catch (Throwable t) {
-                    log.warn("Cannot submit txn {} to {}: {}", hashKey, c, t.getMessage());
+                    log.warn("Cannot submit txn {} to {}: {}", hash, c, t.getMessage());
                     return null;
                 }
             } else {
-                transitions.submit(new EnqueuedTransaction(new HashKey(hash), transaction));
+                transitions.submit(new EnqueuedTransaction(hash, transaction));
                 return TransactionResult.getDefaultInstance();
             }
         }).filter(r -> r != null).limit(toleranceLevel).collect(Collectors.toList());
 
         if (results.size() < toleranceLevel) {
-            throw new TimeoutException("Cannot submit transaction " + hashKey);
+            throw new TimeoutException("Cannot submit transaction " + hash);
         }
-        return hashKey;
+        return hash;
     }
 
     private int toleranceLevel() {

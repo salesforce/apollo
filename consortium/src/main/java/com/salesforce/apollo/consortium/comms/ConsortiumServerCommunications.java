@@ -40,7 +40,7 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     public void submit(SubmitTransaction request, StreamObserver<TransactionResult> responseObserver) {
         router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                         s -> {
-                            responseObserver.onNext(s.clientSubmit(request));
+                            responseObserver.onNext(s.clientSubmit(request, identity.getFrom()));
                             responseObserver.onCompleted();
                         });
     }

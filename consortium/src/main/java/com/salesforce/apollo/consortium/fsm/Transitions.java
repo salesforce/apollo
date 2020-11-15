@@ -127,5 +127,5 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
 
     default Transitions success() {
         throw new InvalidTransition();
-    };
+    }
 }

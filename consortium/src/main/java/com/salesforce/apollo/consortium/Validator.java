@@ -253,6 +253,6 @@ public class Validator {
 //                    .filter(c -> verify(validators, block.getBlock(), c))
 //                    .limit(toleranceLevel + 1)
 //                    .count() >= toleranceLevel + 1;
-        return false;
+        return true;
     }
 }

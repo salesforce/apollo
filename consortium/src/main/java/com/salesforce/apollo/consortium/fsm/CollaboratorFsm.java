@@ -17,8 +17,6 @@ import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.CurrentBlock;
 import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * Finite state machine for the Collaborator in a Consortium
@@ -119,8 +117,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions deliverTransaction(Transaction txn) {
-            HashKey hash = new HashKey(Conversion.hashOf(txn.toByteString()));
-            context().evaluate(new EnqueuedTransaction(hash, txn));
+            context().evaluate(txn);
             return null;
         }
 

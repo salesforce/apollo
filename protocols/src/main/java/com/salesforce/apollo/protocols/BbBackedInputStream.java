@@ -10,10 +10,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.SequenceInputStream;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
 
@@ -22,14 +24,30 @@ import com.google.protobuf.ByteString;
  *
  */
 public class BbBackedInputStream extends InputStream {
+    public static InputStream aggregate(List<ByteString> buffers) {
+        return aggregate(buffers.stream().map(e -> e.asReadOnlyByteBuffer()).collect(Collectors.toList()));
 
-    public static InputStream aggregate(ByteString byteString) {
-        return aggregate(byteString.asReadOnlyByteBufferList());
     }
 
-    public static InputStream aggregate(List<ByteBuffer> buffers) {
+    public static InputStream aggregate(ByteString... byteStrings) {
+        return aggregate(Arrays.asList(byteStrings)
+                               .stream()
+                               .map(e -> e.asReadOnlyByteBuffer())
+                               .collect(Collectors.toList()));
+
+    }
+
+    public static InputStream aggregate(ByteString byteString) {
+        return aggregate(new ByteString[] { byteString });
+    }
+
+    @SafeVarargs
+    public static InputStream aggregate(List<ByteBuffer>... buffers) {
         return new SequenceInputStream(new Enumeration<InputStream>() {
-            private List<ByteBuffer> aggregate = buffers;
+            private List<ByteBuffer> aggregate = Arrays.asList(buffers)
+                                                       .stream()
+                                                       .flatMap(bl -> bl.stream())
+                                                       .collect(Collectors.toList());
 
             @Override
             public boolean hasMoreElements() {

@@ -28,6 +28,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -127,16 +128,15 @@ public class TestConsortium {
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
                                                                  .build();
-        CountDownLatch processed = new CountDownLatch(testCardinality);
-        AtomicBoolean published = new AtomicBoolean();
+        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Function<CertifiedBlock, HashKey> consensus = c -> {
-            published.set(true);
             ForkJoinPool.commonPool()
                         .execute(() -> consortium.values()
                                                  .stream()
                                                  .forEach(m -> ForkJoinPool.commonPool().execute(() -> {
-                                                     m.process(c);
-                                                     processed.countDown();
+                                                     if (m.process(c)) {
+                                                         processed.get().countDown();
+                                                     }
                                                  })));
             return HashKey.ORIGIN;
         };
@@ -152,12 +152,9 @@ public class TestConsortium {
         System.out.println("starting consortium");
         consortium.values().forEach(e -> e.start());
 
-        System.out.println("generate genesis");
-        assertTrue(Utils.waitForCondition(20_000, () -> published.get()), "Did not publish Genesis block");
+        System.out.println("awaiting genesis processing");
 
-        System.out.println("genesis published, awaiting processing");
-
-        assertTrue(processed.await(20_000, TimeUnit.SECONDS), "Did not converge, end state of true clients gone bad: "
+        assertTrue(processed.get().await(40, TimeUnit.SECONDS), "Did not converge, end state of true clients gone bad: "
                 + consortium.values()
                             .stream()
                             .filter(c -> !blueRibbon.contains(c))
@@ -176,8 +173,11 @@ public class TestConsortium {
 
         validateState(view, blueRibbon);
 
+        processed.set(new CountDownLatch(testCardinality));
         Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
         AtomicBoolean txnProcessed = new AtomicBoolean();
+
+        System.out.println("Submitting transaction");
         HashKey hash;
         try {
             hash = client.submit(h -> txnProcessed.set(true), "Hello world".getBytes());
@@ -186,21 +186,11 @@ public class TestConsortium {
             return;
         }
 
-        boolean success = Utils.waitForCondition(10_000, 1_000,
-                                                 () -> blueRibbon.stream()
-                                                                 .map(collaborator -> collaborator.getState()
-                                                                                                  .getPending())
-                                                                 .filter(pending -> pending.size() != 1)
-                                                                 .filter(pending -> pending.contains(hash))
-                                                                 .count() == 0);
+        System.out.println("awaiting processing of User transaction block: " + hash);
+        assertTrue(processed.get().await(5, TimeUnit.SECONDS), "Did not process transaction block");
 
-        assertTrue(success,
-                   "Transaction not submitted to consortium, missing: "
-                           + blueRibbon.stream()
-                                       .map(collaborator -> collaborator.getState().getPending().isEmpty())
-                                       .filter(b -> b)
-                                       .count());
-//        assertTrue(Utils.waitForCondition(5_000, () -> txnProcessed.get()), "Transaction not processed");
+        System.out.println("block processed, waiting for transaction completion: {}" + hash);
+        assertTrue(Utils.waitForCondition(5_000, () -> txnProcessed.get()), "Transaction not completed");
 
     }
 
