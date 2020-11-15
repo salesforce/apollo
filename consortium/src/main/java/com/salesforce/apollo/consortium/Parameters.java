@@ -28,6 +28,7 @@ public class Parameters {
         private Context<Member>                           context;
         private Duration                                  gossipDuration;
         private int                                       maxBatchByteSize = 4 * 1024;
+        private int                                       maxBatchDelay = 1;
         private int                                       maxBatchSize     = 10;
         private Member                                    member;
         private Messenger.Parameters                      msgParameters;
@@ -37,7 +38,7 @@ public class Parameters {
 
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
-                    consensus, maxBatchSize, maxBatchByteSize, validator);
+                    consensus, maxBatchSize, maxBatchByteSize, validator, maxBatchDelay);
         }
 
         public Router getCommunications() {
@@ -58,6 +59,10 @@ public class Parameters {
 
         public int getMaxBatchByteSize() {
             return maxBatchByteSize;
+        }
+
+        public int getMaxBatchDelay() {
+            return maxBatchDelay;
         }
 
         public int getMaxBatchSize() {
@@ -110,6 +115,11 @@ public class Parameters {
             return this;
         }
 
+        public Builder setMaxBatchDelay(int maxBatchDelay) {
+            this.maxBatchDelay = maxBatchDelay;
+            return this;
+        }
+
         public Builder setMaxBatchSize(int maxBatchSize) {
             this.maxBatchSize = maxBatchSize;
             return this;
@@ -150,6 +160,7 @@ public class Parameters {
     public final Context<Member>                           context;
     public final Duration                                  gossipDuration;
     public final int                                       maxBatchByteSize;
+    public final int                                       maxBatchDelay;
     public final int                                       maxBatchSize;
     public final Member                                    member;
     public final Messenger.Parameters                      msgParameters;
@@ -160,7 +171,7 @@ public class Parameters {
     public Parameters(Context<Member> context, Router communications, Member member, Messenger.Parameters msgParameters,
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             Function<CertifiedBlock, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
-            Function<EnqueuedTransaction, ByteString> validator) {
+            Function<EnqueuedTransaction, ByteString> validator, int maxBatchDelay) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -172,5 +183,6 @@ public class Parameters {
         this.maxBatchSize = maxBatchSize;
         this.maxBatchByteSize = maxBatchByteSize;
         this.validator = validator;
+        this.maxBatchDelay = maxBatchDelay;
     }
 }

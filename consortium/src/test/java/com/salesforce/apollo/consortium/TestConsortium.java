@@ -37,6 +37,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -176,10 +177,10 @@ public class TestConsortium {
         validateState(view, blueRibbon);
 
         Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
+        AtomicBoolean txnProcessed = new AtomicBoolean();
         HashKey hash;
         try {
-            hash = client.submit(h -> {
-            }, "Hello world".getBytes());
+            hash = client.submit(h -> txnProcessed.set(true), "Hello world".getBytes());
         } catch (TimeoutException e) {
             fail();
             return;
@@ -199,6 +200,7 @@ public class TestConsortium {
                                        .map(collaborator -> collaborator.getState().getPending().isEmpty())
                                        .filter(b -> b)
                                        .count());
+//        assertTrue(Utils.waitForCondition(5_000, () -> txnProcessed.get()), "Transaction not processed");
 
     }
 
@@ -206,16 +208,18 @@ public class TestConsortium {
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters) {
         members.stream()
-               .map(m -> new Consortium(Parameters.newBuilder()
-                                                  .setConsensus(consensus)
-                                                  .setMember(m)
-                                                  .setSignature(() -> m.forSigning())
-                                                  .setContext(view)
-                                                  .setMsgParameters(msgParameters)
-                                                  .setCommunications(communications.get(m.getId()))
-                                                  .setGossipDuration(gossipDuration)
-                                                  .setScheduler(scheduler)
-                                                  .build()))
+               .map(m -> new Consortium(
+                       Parameters.newBuilder()
+                                 .setConsensus(consensus)
+                                 .setValidator(txn -> ByteString.copyFromUtf8("Give Me Food Or Give Me Slack Or Kill Me"))
+                                 .setMember(m)
+                                 .setSignature(() -> m.forSigning())
+                                 .setContext(view)
+                                 .setMsgParameters(msgParameters)
+                                 .setCommunications(communications.get(m.getId()))
+                                 .setGossipDuration(gossipDuration)
+                                 .setScheduler(scheduler)
+                                 .build()))
                .peek(c -> view.activate(c.getMember()))
                .forEach(e -> consortium.put(e.getMember(), e));
     }

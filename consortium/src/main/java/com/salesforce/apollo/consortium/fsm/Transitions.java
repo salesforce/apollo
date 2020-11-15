@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.consortium.fsm;
 
-import java.util.Deque;
-
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
@@ -16,7 +14,6 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.CurrentBlock;
-import com.salesforce.apollo.consortium.PendingTransactions;
 import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
@@ -60,7 +57,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw new InvalidTransition();
     }
 
-    default void drainPending(Deque<EnqueuedTransaction> transactions) {
+    default Transitions drainPending() {
         throw new InvalidTransition();
     }
 
@@ -124,7 +121,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return CollaboratorFsm.INITIAL;
     }
 
-    default Transitions submit(PendingTransactions.EnqueuedTransaction enqueuedTransaction) {
+    default Transitions submit(EnqueuedTransaction enqueuedTransaction) {
         throw new InvalidTransition();
     }
 

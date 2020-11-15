@@ -32,7 +32,7 @@ public enum Genesis implements Transitions {
 
         @Override
         public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().resendPending(p, from);
+            context().resendUnreplicated(p, from);
             return null;
         }
 
