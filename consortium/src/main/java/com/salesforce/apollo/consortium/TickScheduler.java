@@ -8,11 +8,7 @@ package com.salesforce.apollo.consortium;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.PriorityQueue;
-import java.util.concurrent.Callable;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.PriorityBlockingQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,56 +59,35 @@ public class TickScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(TickScheduler.class);
 
-    private final ReadWriteLock        rwLock    = new ReentrantReadWriteLock();
-    private final PriorityQueue<Timer> scheduled = new PriorityQueue<>();
+    private final PriorityBlockingQueue<Timer> scheduled = new PriorityBlockingQueue<>();
 
     public void cancelAll() {
-        locked(() -> {
-            scheduled.clear();
-            return null;
-        });
+        scheduled.clear();
     }
 
     public Timer schedule(Timers t, Runnable action, int target) {
-        return locked(() -> {
-            Timer timer = new Timer(t, target, action);
-            scheduled.add(timer);
-            return timer;
-        });
+        Timer timer = new Timer(t, target, action);
+        scheduled.add(timer);
+        return timer;
     }
 
     public void tick(int current) {
-        locked(() -> {
-            List<Timer> drained = new ArrayList<>();
-            Timer head = scheduled.peek();
-            while (head != null) {
-                if (current >= head.deadline) {
-                    drained.add(scheduled.remove());
-                    head = scheduled.peek();
-                } else {
-                    head = null;
-                }
+        List<Timer> drained = new ArrayList<>();
+        Timer head = scheduled.peek();
+        while (head != null) {
+            if (current >= head.deadline) {
+                drained.add(scheduled.remove());
+                head = scheduled.peek();
+            } else {
+                head = null;
             }
-            drained.forEach(e -> {
-                try {
-                    e.fire();
-                } catch (Throwable ex) {
-                    log.error("Exception in timer action", ex);
-                }
-            });
-            return null;
-        });
-    }
-
-    private <T> T locked(Callable<T> call) {
-        final Lock lock = rwLock.writeLock();
-        lock.lock();
-        try {
-            return call.call();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        } finally {
-            lock.unlock();
         }
+        drained.forEach(e -> {
+            try {
+                e.fire();
+            } catch (Throwable ex) {
+                log.error("Exception in timer action", ex);
+            }
+        });
     }
 }

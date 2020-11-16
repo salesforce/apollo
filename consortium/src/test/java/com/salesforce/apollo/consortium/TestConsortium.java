@@ -154,20 +154,21 @@ public class TestConsortium {
 
         System.out.println("awaiting genesis processing");
 
-        assertTrue(processed.get().await(40, TimeUnit.SECONDS), "Did not converge, end state of true clients gone bad: "
-                + consortium.values()
-                            .stream()
-                            .filter(c -> !blueRibbon.contains(c))
-                            .map(c -> c.getTransitions().fsm().getCurrentState())
-                            .filter(b -> b != CollaboratorFsm.CLIENT)
-                            .collect(Collectors.toSet())
-                + " : "
-                + consortium.values()
-                            .stream()
-                            .filter(c -> !blueRibbon.contains(c))
-                            .filter(c -> c.getTransitions().fsm().getCurrentState() != CollaboratorFsm.CLIENT)
-                            .map(c -> c.getMember())
-                            .collect(Collectors.toList()));
+        assertTrue(processed.get().await(10, TimeUnit.SECONDS),
+                   "Did not converge, end state of true clients gone bad: "
+                           + consortium.values()
+                                       .stream()
+                                       .filter(c -> !blueRibbon.contains(c))
+                                       .map(c -> c.fsm().getCurrentState())
+                                       .filter(b -> b != CollaboratorFsm.CLIENT)
+                                       .collect(Collectors.toSet())
+                           + " : "
+                           + consortium.values()
+                                       .stream()
+                                       .filter(c -> !blueRibbon.contains(c))
+                                       .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
+                                       .map(c -> c.getMember())
+                                       .collect(Collectors.toList()));
 
         System.out.println("processing complete, validating state");
 
@@ -189,7 +190,7 @@ public class TestConsortium {
         System.out.println("awaiting processing of User transaction block: " + hash);
         assertTrue(processed.get().await(5, TimeUnit.SECONDS), "Did not process transaction block");
 
-        System.out.println("block processed, waiting for transaction completion: {}" + hash);
+        System.out.println("block processed, waiting for transaction completion: " + hash);
         assertTrue(Utils.waitForCondition(5_000, () -> txnProcessed.get()), "Transaction not completed");
 
     }
@@ -218,38 +219,29 @@ public class TestConsortium {
         long clientsInWrongState = consortium.values()
                                              .stream()
                                              .filter(c -> !blueRibbon.contains(c))
-                                             .map(c -> c.getTransitions().fsm().getCurrentState())
+                                             .map(c -> c.fsm().getCurrentState())
                                              .filter(b -> b != CollaboratorFsm.CLIENT)
                                              .count();
         Set<Consortium> failedMembers = consortium.values()
                                                   .stream()
                                                   .filter(c -> !blueRibbon.contains(c))
-                                                  .filter(c -> c.getTransitions()
-                                                                .fsm()
-                                                                .getCurrentState() != CollaboratorFsm.CLIENT)
+                                                  .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
                                                   .collect(Collectors.toSet());
         assertEquals(0, clientsInWrongState, "True clients gone bad: " + failedMembers);
         assertEquals(view.getRingCount() - 1,
                      blueRibbon.stream()
-                               .map(c -> c.getTransitions().fsm().getCurrentState())
+                               .map(c -> c.fsm().getCurrentState())
                                .filter(b -> b == CollaboratorFsm.FOLLOWER)
                                .count(),
-                     "True follower gone bad: " + blueRibbon.stream()
-                                                            .map(c -> c.getTransitions().fsm().getCurrentState())
-                                                            .collect(Collectors.toSet()));
+                     "True follower gone bad: "
+                             + blueRibbon.stream().map(c -> c.fsm().getCurrentState()).collect(Collectors.toSet()));
         assertEquals(1,
                      blueRibbon.stream()
-                               .map(c -> c.getTransitions().fsm().getCurrentState())
+                               .map(c -> c.fsm().getCurrentState())
                                .filter(b -> b == CollaboratorFsm.LEADER)
                                .count(),
-                     "True leader gone bad: " + blueRibbon.stream()
-                                                          .map(c -> c.getTransitions().fsm().getCurrentState())
-                                                          .collect(Collectors.toSet()));
-        assertEquals(view.getRingCount(),
-                     blueRibbon.stream()
-                               .map(collaborator -> collaborator.getState().getPending())
-                               .filter(pending -> pending.isEmpty())
-                               .count());
+                     "True leader gone bad: "
+                             + blueRibbon.stream().map(c -> c.fsm().getCurrentState()).collect(Collectors.toSet()));
     }
 
 }

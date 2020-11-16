@@ -275,6 +275,17 @@ public final class Fsm<Context, Transitions> {
         this.name = name;
     }
 
+    public <R> R synchonizeOnState(Callable<R> call) throws Exception {
+        return locked(call);
+    }
+
+    public void synchonizeOnState(Runnable call) {
+        locked(() -> {
+            call.run();
+            return null;
+        });
+    }
+
     @Override
     public String toString() {
         return String.format("Fsm [name = %s, current=%s, previous=%s, transition=%s]", name, prettyPrint(getCurrent()),
@@ -342,20 +353,19 @@ public final class Fsm<Context, Transitions> {
         if (t == null) {
             return null;
         }
-        return locked(() -> {
-            Fsm<?, ?> previousFsm = thisFsm.get();
-            thisFsm.set(this);
-            setPrevious(getCurrent());
-
+        Fsm<?, ?> previousFsm = thisFsm.get();
+        thisFsm.set(this);
+        setPrevious(getCurrent());
+        if (!transitionsType.isAssignableFrom(t.getReturnType())) {
             try {
-                if (!transitionsType.isAssignableFrom(t.getReturnType())) {
-                    try {
-                        return t.invoke(getCurrent(), arguments);
-                    } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-                        throw new IllegalStateException(e);
-                    }
-                }
+                return t.invoke(getCurrent(), arguments);
+            } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+                throw new IllegalStateException(e);
+            }
+        }
 
+        try {
+            return locked(() -> {
                 setTransition(prettyPrint(t));
                 Transitions nextState;
                 try {
@@ -364,11 +374,11 @@ public final class Fsm<Context, Transitions> {
                     nextState = fireTransition(lookupDefaultTransition(e, t), arguments);
                 }
                 transitionTo(nextState);
-            } finally {
-                thisFsm.set(previousFsm);
-            }
-            return null;
-        });
+                return null;
+            });
+        } finally {
+            thisFsm.set(previousFsm);
+        }
     }
 
     /**

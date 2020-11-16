@@ -37,7 +37,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().deliverProclamation(p, from);
+            context().resendUnreplicated(p, from);
             return null;
         }
 
@@ -57,6 +57,11 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
             context().submit(enqueuedTransaction);
             return null;
+        }
+        
+        @Entry
+        public void cancelAll() {
+            context().cancelAll();
         }
 
     },
@@ -195,6 +200,7 @@ public enum CollaboratorFsm implements Transitions {
         @Entry
         public void awaitGenesis() {
             context().awaitGenesis();
+            context().establishGenesisView();
         }
 
         @Override

@@ -53,21 +53,6 @@ public class Validator {
         }
     }
 
-    public static Signature forSigning(PrivateKey privateKey, SecureRandom entropy) {
-        Signature signature;
-        try {
-            signature = Signature.getInstance(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("no such algorithm: " + Conversion.DEFAULT_SIGNATURE_ALGORITHM, e);
-        }
-        try {
-            signature.initSign(privateKey, entropy);
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException("invalid private key", e);
-        }
-        return signature;
-    }
-
     public static KeyPair generateKeyPair(final int keySize, String algorithm) {
         try {
             final KeyPairGenerator gen = KeyPairGenerator.getInstance(algorithm);
@@ -78,25 +63,25 @@ public class Validator {
         }
     }
 
-    public static PublicKey publicKeyOf(byte[] consensusKey) {
-        if (consensusKey.length == 0) {
+    public static PublicKey publicKeyOf(byte[] encoded) {
+        if (encoded.length == 0) {
             log.error("Cannot decode public key, zero length encoding");
             return null;
         }
         try {
-            return KEY_FACTORY.generatePublic(new X509EncodedKeySpec(consensusKey));
+            return KEY_FACTORY.generatePublic(new X509EncodedKeySpec(encoded));
         } catch (InvalidKeySpecException e) {
-            log.error("Cannot decode public key: " + HashKey.bytesToHex(consensusKey), e);
+            log.error("Cannot decode public key: " + HashKey.bytesToHex(encoded), e);
             return null;
         }
     }
 
     public static byte[] sign(PrivateKey privateKey, SecureRandom entropy, byte[]... contents) {
         Signature signature = forSigning(privateKey, entropy);
-        return sign(signature, entropy, contents);
+        return sign(signature, contents);
     }
 
-    public static byte[] sign(Signature signature, SecureRandom entropy, byte[]... contents) {
+    public static byte[] sign(Signature signature, byte[]... contents) {
         for (byte[] part : contents) {
             try {
                 signature.update(part);
@@ -157,14 +142,6 @@ public class Validator {
                     .count() >= toleranceLevel;
     }
 
-    public static PublicKey verify(byte[] signed, byte[] encodedPublicKey) {
-        PublicKey cKey = Validator.publicKeyOf(encodedPublicKey);
-        if (cKey == null) {
-            return null;
-        }
-        return verify(cKey, signed, encodedPublicKey) ? cKey : null;
-    }
-
     public static boolean verify(Function<HashKey, Signature> validators, Block block, Certification c) {
         HashKey memberID = new HashKey(c.getId());
 
@@ -176,9 +153,8 @@ public class Validator {
         return verify(signature, c.getSignature().toByteArray(), Conversion.hashOf(block.getHeader().toByteString()));
     }
 
-    public static boolean verify(PublicKey key, byte[] signed, byte[]... content) {
-        return verify(signatureForVerification(key), signed, content);
-
+    public static boolean verify(Member member, byte[] signed, byte[]... content) {
+        return verify(member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM), signed, content);
     }
 
     public static boolean verify(Signature signature, byte[] signed, byte[]... content) {
@@ -196,8 +172,24 @@ public class Validator {
         return true;
     }
 
-    private final Member          leader;
-    private final int             toleranceLevel;
+    private static Signature forSigning(PrivateKey privateKey, SecureRandom entropy) {
+        Signature signature;
+        try {
+            signature = Signature.getInstance(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("no such algorithm: " + Conversion.DEFAULT_SIGNATURE_ALGORITHM, e);
+        }
+        try {
+            signature.initSign(privateKey, entropy);
+        } catch (InvalidKeyException e) {
+            throw new IllegalStateException("invalid private key", e);
+        }
+        return signature;
+    }
+
+    private final Member leader;
+    private final int    toleranceLevel;
+
     private final Context<Member> view;
 
     public Validator(Member leader, Context<Member> view, int toleranceLevel) {
@@ -222,20 +214,28 @@ public class Validator {
         HashKey memberID = new HashKey(v.getId());
         Member member = view.getMember(memberID);
         if (member == null) {
-            log.trace("No member found for {}", memberID);
+            log.debug("No member found for {}", memberID);
             return false;
         }
 
+        byte[] headerHash = Conversion.hashOf(block.getHeader().toByteString());
         try {
-            signature.update(Conversion.hashOf(block.getHeader().toByteString()));
+            signature.update(headerHash);
         } catch (SignatureException e) {
             log.error("Error updating validation signature of {}", memberID, e);
             return false;
         }
         try {
-            return signature.verify(v.getSignature().toByteArray());
+            boolean verified = signature.verify(v.getSignature().toByteArray());
+            if (!verified) {
+                log.error("Error validating block signature of {} did not match", memberID);
+                System.err.println("error validating: " + new HashKey(Conversion.hashOf(block.toByteString()))
+                        + " from: " + memberID + " header hash: " + HashKey.bytesToHex(headerHash) + " sig: "
+                        + HashKey.bytesToHex(v.getSignature().toByteArray()));
+            }
+            return verified;
         } catch (SignatureException e) {
-            log.error("Error validating validation signature of {}", memberID, e);
+            log.error("Error validating signature of {}", memberID, e);
             return false;
         }
     }
