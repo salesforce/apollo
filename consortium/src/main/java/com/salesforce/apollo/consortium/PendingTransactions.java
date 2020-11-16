@@ -123,6 +123,10 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
         return c;
     }
 
+    public EnqueuedTransaction get(HashKey hash) {
+        return transactions.get(hash);
+    }
+
     public int getTotalByteSize() {
         final int c = totalByteSize;
         return c;
@@ -160,6 +164,14 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
 
     public void remove(EnqueuedTransaction txn) {
         unlink(txn);
+    }
+
+    public EnqueuedTransaction remove(HashKey hash) {
+        EnqueuedTransaction removed = transactions.remove(hash);
+        if (removed != null) {
+            unlink(removed);
+        }
+        return removed;
     }
 
     public EnqueuedTransaction removeFirst() {

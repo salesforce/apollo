@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -98,7 +99,7 @@ public class Consortium {
         private final PendingTransactions                  pending       = new PendingTransactions();
         private final TransactionSimulator                 simulator;
         private final Map<Timers, Timer>                   timers        = new ConcurrentHashMap<>();
-        private final Set<EnqueuedTransaction>             unreplicated  = new HashSet<>();
+        private final Set<HashKey>                         unreplicated  = new HashSet<>();
         private final Map<HashKey, CertifiedBlock.Builder> workingBlocks = new HashMap<>();
 
         public CollaboratorContext() {
@@ -108,7 +109,7 @@ public class Consortium {
         public void add(Transaction txn) {
             EnqueuedTransaction transaction = new EnqueuedTransaction(hashOf(txn), txn);
             if (pending.add(transaction)) {
-                unreplicated.remove(transaction);
+                unreplicated.add(transaction.getHash());
             }
         }
 
@@ -145,16 +146,24 @@ public class Consortium {
         public void deliverBlock(Block block, Member from) {
             Member leader = vState.getLeader();
             if (!from.equals(leader)) {
-                log.debug("Rejecting block proposal from {}", from);
+                log.debug("Rejecting block proposal from {} on: {} not leader: {}", from, getMember(),
+                          vState.getLeader());
                 return;
             }
             HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-            CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
-                                                                                                    .setBlock(block));
-            Validate validation = generateValidation(hash, block);
-            builder.addCertifications(Certification.newBuilder()
-                                                   .setId(validation.getId())
-                                                   .setSignature(validation.getSignature()));
+            workingBlocks.computeIfAbsent(hash, k -> {
+                Validate validation = generateValidation(hash, block);
+                if (validation == null) {
+                    log.debug("Rejecting block proposal, cannot validate: {} from {} on: {}", hash, from, getMember(),
+                              vState.getLeader());
+                    return null;
+                }
+                return CertifiedBlock.newBuilder()
+                                     .setBlock(block)
+                                     .addCertifications(Certification.newBuilder()
+                                                                     .setId(validation.getId())
+                                                                     .setSignature(validation.getSignature()));
+            });
         }
 
         public void deliverGenesisBlock(Block block, Member from) {
@@ -164,42 +173,45 @@ public class Consortium {
                 log.debug("Rejecting genesis block proposal from {}", from);
                 return;
             }
-            Genesis genesis;
-            try {
-                genesis = Genesis.parseFrom(getBody(block));
-            } catch (IOException e) {
-                log.error("Cannot deserialize genesis block from {}", from, e);
-                return;
-            }
-            genesis.getInitialView().getViewList().forEach(vm -> {
-                HashKey memberID = new HashKey(vm.getId());
-                Member member = vState.getCurrentView().getMember(memberID);
-                if (member == null) {
-                    log.warn("invalid genesis, view member does not exist: {}", memberID);
-                    return;
+
+            workingBlocks.computeIfAbsent(hash, k -> {
+                Genesis genesis;
+                try {
+                    genesis = Genesis.parseFrom(getBody(block));
+                } catch (IOException e) {
+                    log.error("Cannot deserialize genesis block from {}", from, e);
+                    return null;
                 }
-                byte[] encoded = vm.getConsensusKey().toByteArray();
-                if (!Validator.verify(member, vm.getSignature().toByteArray(), encoded)) {
-                    log.warn("invalid genesis view member consensus key: {}", memberID);
-                    return;
-                }
-                PublicKey consensusKey = Validator.publicKeyOf(encoded);
-                if (consensusKey == null) {
-                    log.warn("invalid genesis view member, cannot generate consensus key: {}", memberID);
-                    return;
-                }
-                validators.computeIfAbsent(memberID, k -> {
-                    log.debug("defining genesis view member: {} consensus key: {}", memberID,
-                              HashKey.bytesToHex(encoded));
-                    return consensusKey;
+                genesis.getInitialView().getViewList().forEach(vm -> {
+                    HashKey memberID = new HashKey(vm.getId());
+                    Member member = vState.getCurrentView().getMember(memberID);
+                    if (member == null) {
+                        log.warn("invalid genesis, view member does not exist: {}", memberID);
+                        return;
+                    }
+                    byte[] encoded = vm.getConsensusKey().toByteArray();
+                    if (!Validator.verify(member, vm.getSignature().toByteArray(), encoded)) {
+                        log.warn("invalid genesis view member consensus key: {}", memberID);
+                        return;
+                    }
+                    PublicKey consensusKey = Validator.publicKeyOf(encoded);
+                    if (consensusKey == null) {
+                        log.warn("invalid genesis view member, cannot generate consensus key: {}", memberID);
+                        return;
+                    }
+                    validators.computeIfAbsent(memberID, key -> {
+                        log.debug("defining genesis view member: {} consensus key: {}", memberID,
+                                  HashKey.bytesToHex(encoded));
+                        return consensusKey;
+                    });
                 });
+                Validate validation = generateValidationFromNextView(hash, block);
+                return CertifiedBlock.newBuilder()
+                                     .setBlock(block)
+                                     .addCertifications(Certification.newBuilder()
+                                                                     .setId(validation.getId())
+                                                                     .setSignature(validation.getSignature()));
             });
-            CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
-                                                                                                    .setBlock(block));
-            Validate validation = generateValidationFromNextView(hash, block);
-            builder.addCertifications(Certification.newBuilder()
-                                                   .setId(validation.getId())
-                                                   .setSignature(validation.getSignature()));
         }
 
         public void deliverProclamation(Proclamation p, Member from) {
@@ -233,7 +245,7 @@ public class Consortium {
         public void evaluate(EnqueuedTransaction transaction) {
             if (pending.add(transaction)) {
                 log.debug("Evaluating transaction {} on: {}", transaction.getHash(), getMember());
-                unreplicated.add(transaction);
+                unreplicated.add(transaction.getHash());
                 simulator.add(transaction);
             } else {
                 log.trace("Not evaluating duplicate transaction {} on: {}", transaction.getHash(), getMember());
@@ -274,6 +286,7 @@ public class Consortium {
 
             User.Builder user = User.newBuilder();
             int processedBytes = 0;
+            List<HashKey> processed = new ArrayList<>();
 
             do {
                 processedBytes += txn.getSerializedSize();
@@ -281,16 +294,17 @@ public class Consortium {
                                                         .setHash(txn.transaction.getHash().toByteString())
                                                         .setTransaction(txn.transaction.getTransaction()))
                     .addResponses(txn.result);
+                processed.add(txn.transaction.getHash());
                 txn = simulator.poll();
-            } while (txn != null && user.getTransactionsCount() <= params.maxBatchByteSize
+            } while (txn != null && processed.size() <= params.maxBatchByteSize
                     && processedBytes <= params.maxBatchByteSize);
 
-            if (user.getTransactionsCount() == 0) {
+            if (processed.size() == 0) {
                 log.debug("No transactions to generate block on: {}", getMember());
                 return false;
             }
             log.debug("Generating next block on: {} height: {} transactions: {}", getMember(), thisHeight,
-                      user.getTransactionsCount());
+                      processed.size());
 
             Body body = Body.newBuilder()
                             .setType(BodyType.USER)
@@ -311,6 +325,7 @@ public class Consortium {
             blockCache.put(thisHeight, new CurrentBlock(hash, block));
             deliver(ConsortiumMessage.newBuilder().setType(MessageType.BLOCK).setMsg(block.toByteString()).build());
             lastBlock = thisHeight;
+
             Validate validation = generateValidation(hash, block);
             builder.addCertifications(Certification.newBuilder()
                                                    .setId(validation.getId())
@@ -390,7 +405,6 @@ public class Consortium {
         }
 
         public void processCheckpoint(CurrentBlock next) {
-            @SuppressWarnings("unused")
             Checkpoint body;
             try {
                 body = Checkpoint.parseFrom(getBody(next.getBlock()));
@@ -398,6 +412,10 @@ public class Consortium {
                 log.debug("Protocol violation on: {}.  Cannot decode checkpoint body: {}", getMember(), e);
                 return;
             }
+            body.getTransactionsList().forEach(txn -> {
+                HashKey hash = new HashKey(txn.getHash());
+                finalized(hash);
+            });
             accept(next);
         }
 
@@ -410,11 +428,11 @@ public class Consortium {
                 return;
             }
             accept(next);
+            body.getInitialView().getTransactionsList().forEach(txn -> Consortium.this.finalize(txn));
             pending.clear();
             submitted.clear();
             unreplicated.clear();
             transitions.genesisAccepted();
-            body.getInitialView().getTransactionsList().forEach(txn -> Consortium.this.finalize(txn));
             viewChange(viewFor(new HashKey(body.getInitialView().getId()), params.context),
                        body.getInitialView().getViewList());
         }
@@ -427,6 +445,10 @@ public class Consortium {
                 log.debug("Protocol violation on: {}.  Cannot decode reconfiguration body: {}", getMember(), e);
                 return;
             }
+            body.getTransactionsList().forEach(txn -> {
+                HashKey hash = new HashKey(txn.getHash());
+                finalized(hash);
+            });
             accept(next);
             viewChange(viewFor(new HashKey(body.getId()), params.context), body.getViewList());
         }
@@ -442,6 +464,7 @@ public class Consortium {
             }
             body.getTransactionsList().forEach(txn -> {
                 HashKey hash = new HashKey(txn.getHash());
+                finalized(hash);
                 SubmittedTransaction submittedTxn = submitted.get(hash);
                 if (submittedTxn != null && submittedTxn.onCompletion != null) {
                     log.info("Completing txn: {} on: {}", hash, getMember());
@@ -453,17 +476,30 @@ public class Consortium {
             accept(next);
         }
 
+        private void finalized(HashKey hash) {
+            pending.remove(hash);
+            unreplicated.remove(hash);
+        }
+
         public void resendUnreplicated(Proclamation p, Member from) {
             if (unreplicated.size() == 0) {
                 log.trace("No pending txns to rebroadcast: {}", getMember());
             }
-            unreplicated.forEach(enqueuedTransaction -> {
-                log.trace("rebroadcasting txn: {}", enqueuedTransaction.getHash());
-                deliver(ConsortiumMessage.newBuilder()
-                                         .setMsg(enqueuedTransaction.getTransaction().toByteString())
-                                         .setType(MessageType.TRANSACTION)
-                                         .build());
-            });
+            Iterator<HashKey> hashes = unreplicated.iterator();
+            while (hashes.hasNext()) {
+                HashKey hash = hashes.next();
+                EnqueuedTransaction enqueued = pending.get(hash);
+                if (enqueued == null) {
+                    hashes.remove();
+                } else {
+                    log.trace("rebroadcasting txn: {}", hash);
+
+                    deliver(ConsortiumMessage.newBuilder()
+                                             .setMsg(enqueued.getTransaction().toByteString())
+                                             .setType(MessageType.TRANSACTION)
+                                             .build());
+                }
+            }
         }
 
         public void scheduleBlockTimeout() {
@@ -485,7 +521,7 @@ public class Consortium {
         public void submit(EnqueuedTransaction enqueuedTransaction) {
             if (pending.add(enqueuedTransaction)) {
                 log.trace("Enqueueing txn: {}", enqueuedTransaction.getHash());
-                unreplicated.add(enqueuedTransaction);
+                unreplicated.add(enqueuedTransaction.getHash());
             } else {
                 log.trace("Transaction already seen: {}", enqueuedTransaction.getHash());
             }
@@ -495,7 +531,7 @@ public class Consortium {
             if (enqueuedTransaction.getTransaction().getJoin()) {
                 if (pending.add(enqueuedTransaction)) {
                     log.trace("Enqueueing a join transaction: {}", enqueuedTransaction.getHash());
-                    unreplicated.add(enqueuedTransaction);
+                    unreplicated.add(enqueuedTransaction.getHash());
                 } else {
                     log.trace("Join transaction already pending: {}", enqueuedTransaction.getHash());
                 }
@@ -513,7 +549,8 @@ public class Consortium {
                                               e.getValue().getCertificationsCount(), getMember()))
                          .filter(e -> e.getValue().getCertificationsCount() >= params.context.toleranceLevel())
                          .forEach(e -> {
-                             log.info("Totally ordering block {} on {}", e.getKey(), getMember());
+                             log.info("Totally ordering block: {} height: {} on: {}", e.getKey(),
+                                      e.getValue().getBlock().getHeader().getHeight(), getMember());
                              params.consensus.apply(e.getValue().build());
                              published.add(e.getKey());
                          });
@@ -576,22 +613,6 @@ public class Consortium {
                                      .setMsg(Proclamation.newBuilder().setRegenecy(0).build().toByteString())
                                      .build());
             schedule(Timers.PROCLAIM, () -> emitProclamation(), vState.getCurrentView().timeToLive());
-        }
-
-        @SuppressWarnings("unused")
-        private void generate(Block block) {
-            HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-            CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
-                                                                                                    .setBlock(block));
-            deliver(ConsortiumMessage.newBuilder().setType(MessageType.BLOCK).setMsg(block.toByteString()).build());
-            Validate validation = generateValidation(hash, block);
-            builder.addCertifications(Certification.newBuilder()
-                                                   .setId(validation.getId())
-                                                   .setSignature(validation.getSignature()));
-            deliver(ConsortiumMessage.newBuilder()
-                                     .setType(MessageType.VALIDATE)
-                                     .setMsg(validation.toByteString())
-                                     .build());
         }
 
         private void generateGenesisBlock() {
