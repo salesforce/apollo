@@ -110,6 +110,8 @@ public class Consortium {
             EnqueuedTransaction transaction = new EnqueuedTransaction(hashOf(txn), txn);
             if (pending.add(transaction)) {
                 unreplicated.add(transaction.getHash());
+            }  else {
+                unreplicated.remove(transaction.getHash());
             }
         }
 
@@ -249,6 +251,7 @@ public class Consortium {
                 simulator.add(transaction);
             } else {
                 log.trace("Not evaluating duplicate transaction {} on: {}", transaction.getHash(), getMember());
+                unreplicated.remove(transaction.getHash());
             }
             scheduleBlockTimeout();
         }
