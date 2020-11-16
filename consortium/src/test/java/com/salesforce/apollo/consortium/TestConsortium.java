@@ -187,11 +187,12 @@ public class TestConsortium {
             return;
         }
 
-        System.out.println("awaiting processing of User transaction block: " + hash);
+        System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(5, TimeUnit.SECONDS), "Did not process transaction block");
 
         System.out.println("block processed, waiting for transaction completion: " + hash);
         assertTrue(Utils.waitForCondition(5_000, () -> txnProcessed.get()), "Transaction not completed");
+        System.out.println("transaction completed: " + hash);
 
     }
 

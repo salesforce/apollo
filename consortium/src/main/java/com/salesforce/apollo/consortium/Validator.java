@@ -147,7 +147,7 @@ public class Validator {
 
         Signature signature = validators.apply(memberID);
         if (signature == null) {
-            log.info("Cannot get signature for verification for: {}", memberID);
+            log.warn("Cannot get signature for verification for: {}", memberID);
             return false;
         }
         return verify(signature, c.getSignature().toByteArray(), Conversion.hashOf(block.getHeader().toByteString()));
@@ -229,9 +229,6 @@ public class Validator {
             boolean verified = signature.verify(v.getSignature().toByteArray());
             if (!verified) {
                 log.error("Error validating block signature of {} did not match", memberID);
-                System.err.println("error validating: " + new HashKey(Conversion.hashOf(block.toByteString()))
-                        + " from: " + memberID + " header hash: " + HashKey.bytesToHex(headerHash) + " sig: "
-                        + HashKey.bytesToHex(v.getSignature().toByteArray()));
             }
             return verified;
         } catch (SignatureException e) {
