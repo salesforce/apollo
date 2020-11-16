@@ -270,18 +270,25 @@ public class Consortium {
         }
 
         public boolean generateNextBlock() {
+            EvaluatedTransaction txn = simulator.poll();
+            if (txn == null) {
+                log.info("No transactions to generate block on: {}", getMember());
+                return false;
+            }
+
             User.Builder user = User.newBuilder();
             int processedBytes = 0;
 
-            EvaluatedTransaction txn = simulator.poll();
-            while (txn != null && user.getTransactionsCount() <= params.maxBatchByteSize
-                    && processedBytes <= params.maxBatchByteSize) {
+            do {
                 processedBytes += txn.getSerializedSize();
                 user.addTransactions(ExecutedTransaction.newBuilder()
                                                         .setHash(txn.transaction.getHash().toByteString())
                                                         .setTransaction(txn.transaction.getTransaction()))
                     .addResponses(txn.result);
-            }
+                txn = simulator.poll();
+            } while (txn != null && user.getTransactionsCount() <= params.maxBatchByteSize
+                    && processedBytes <= params.maxBatchByteSize);
+
             if (user.getTransactionsCount() == 0) {
                 log.info("No transactions to generate block on: {}", getMember());
                 return false;
@@ -308,7 +315,7 @@ public class Consortium {
             CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
                                                                                                     .setBlock(block));
             deliver(ConsortiumMessage.newBuilder().setType(MessageType.BLOCK).setMsg(block.toByteString()).build());
-            Validate validation = generateValidationFromNextView(hash, block);
+            Validate validation = generateValidation(hash, block);
             builder.addCertifications(Certification.newBuilder()
                                                    .setId(validation.getId())
                                                    .setSignature(validation.getSignature()));
@@ -317,7 +324,7 @@ public class Consortium {
                                      .setMsg(validation.toByteString())
                                      .build());
 
-            log.info("Generated next block: {} on: {}", hash, getMember());
+            log.info("Generated next block: {} on: {} txns: {}", hash, getMember(), user.getTransactionsCount());
             return true;
         }
 
