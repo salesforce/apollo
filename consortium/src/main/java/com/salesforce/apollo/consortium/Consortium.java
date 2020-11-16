@@ -110,7 +110,7 @@ public class Consortium {
             EnqueuedTransaction transaction = new EnqueuedTransaction(hashOf(txn), txn);
             if (pending.add(transaction)) {
                 unreplicated.add(transaction.getHash());
-            }  else {
+            } else {
                 unreplicated.remove(transaction.getHash());
             }
         }
@@ -344,7 +344,7 @@ public class Consortium {
         }
 
         public void join() {
-            log.info("Attempting to join: {} : {}", params.member, vState.getCurrentView().getId());
+            log.debug("Attempting to join view: {} on: {}", vState.getCurrentView().getId(), params.member);
             final Join voteForMe = Join.newBuilder()
                                        .setMember(vState.getNextView())
                                        .setContext(vState.getCurrentView().getId().toByteString())
@@ -395,7 +395,7 @@ public class Consortium {
                 transitions.fail();
                 return;
             }
-            log.debug("successfully joined: {} : {}", params.member, vState.getCurrentView().getId());
+            log.info("successfully joined view: {} on: {}", vState.getCurrentView().getId(), params.member);
             if (vState.getLeader().equals(params.member)) {
                 transitions.becomeLeader();
             } else {
@@ -550,7 +550,7 @@ public class Consortium {
                          .stream()
                          .peek(e -> log.trace("TO Consider: {}:{} on: {}", e.getKey(),
                                               e.getValue().getCertificationsCount(), getMember()))
-                         .filter(e -> e.getValue().getCertificationsCount() >= params.context.toleranceLevel())
+                         .filter(e -> e.getValue().getCertificationsCount() > params.context.toleranceLevel())
                          .forEach(e -> {
                              log.info("Totally ordering block: {} height: {} on: {}", e.getKey(),
                                       e.getValue().getBlock().getHeader().getHeight(), getMember());
@@ -689,8 +689,17 @@ public class Consortium {
             }
             EnqueuedTransaction enqueuedTransaction = new EnqueuedTransaction(hashOf(request.getTransaction()),
                     request.getTransaction());
-            log.info("Client submission of transaction: {} on: {} from: {}", enqueuedTransaction.getHash(), getMember(),
-                     from);
+            if (enqueuedTransaction.getTransaction().getJoin()) {
+                Member joiningMember = vState.getCurrentView().getMember(from);
+                if (joiningMember == null) {
+                    log.warn("Received join from non consortium member: {} on: {}", from, getMember());
+                    return TransactionResult.getDefaultInstance();
+                }
+                log.info("Join transaction: {} on: {} from consortium member : {}", enqueuedTransaction.getHash(),
+                         getMember(), from);
+            } else {
+                log.info("Client transaction: {} on: {} from: {}", enqueuedTransaction.getHash(), getMember(), from);
+            }
             transitions.submit(enqueuedTransaction);
             return TransactionResult.getDefaultInstance();
         }
@@ -1203,7 +1212,8 @@ public class Consortium {
                                                           .setTransaction(transaction)
                                                           .build();
         log.info("Submitting txn: {} from: {}", hash, getMember());
-        List<TransactionResult> results = current.ring(entropy().nextInt(current.getRingCount())).stream().map(c -> {
+        List<TransactionResult> results;
+        results = current.ring(entropy().nextInt(current.getRingCount())).stream().map(c -> {
             if (!getMember().equals(c)) {
                 ConsortiumClientCommunications link = linkFor(c);
                 if (link == null) {
@@ -1220,9 +1230,9 @@ public class Consortium {
                 transitions.submit(new EnqueuedTransaction(hash, transaction));
                 return TransactionResult.getDefaultInstance();
             }
-        }).filter(r -> r != null).limit(toleranceLevel).collect(Collectors.toList());
+        }).filter(r -> r != null).limit(toleranceLevel + 1).collect(Collectors.toList());
 
-        if (results.size() < toleranceLevel) {
+        if (results.size() <= toleranceLevel) {
             throw new TimeoutException("Cannot submit transaction " + hash);
         }
         return hash;

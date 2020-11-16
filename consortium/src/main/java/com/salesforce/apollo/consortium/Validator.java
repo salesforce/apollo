@@ -138,8 +138,8 @@ public class Validator {
         return block.getCertificationsList()
                     .parallelStream()
                     .filter(c -> verify(validators, block.getBlock(), c))
-                    .limit(toleranceLevel)
-                    .count() >= toleranceLevel;
+                    .limit(toleranceLevel + 1)
+                    .count() > toleranceLevel;
     }
 
     public static boolean verify(Function<HashKey, Signature> validators, Block block, Certification c) {
