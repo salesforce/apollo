@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -52,11 +52,10 @@ import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.NoteGossip;
 import com.salesfoce.apollo.proto.Signed;
 import com.salesfoce.apollo.proto.Update;
-import com.salesforce.apollo.comm.CommonCommunications;
-import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.EndpointProvider;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.StandardEpProvider;
-import com.salesforce.apollo.fireflies.View.MessageChannelHandler.Msg;
 import com.salesforce.apollo.fireflies.communications.FfClientCommunications;
 import com.salesforce.apollo.fireflies.communications.FfServerCommunications;
 import com.salesforce.apollo.membership.Context;
@@ -160,45 +159,6 @@ public class View {
         }
     }
 
-    public interface MembershipListener {
-
-        /**
-         * A member has failed
-         * 
-         * @param member
-         */
-        void fail(Participant member);
-
-        /**
-         * A new member has recovered and is now live
-         * 
-         * @param member
-         */
-        void recover(Participant member);
-    }
-
-    @FunctionalInterface
-    public interface MessageChannelHandler {
-        class Msg {
-            public final int         channel;
-            public final byte[]      content;
-            public final Participant from;
-
-            public Msg(Participant from, int channel, byte[] content) {
-                this.channel = channel;
-                this.from = from;
-                this.content = content;
-            }
-        }
-
-        /**
-         * Broadcast messages accepted on a channel
-         * 
-         * @param messages
-         */
-        void message(List<Msg> messages);
-    }
-
     public class Service {
 
         /**
@@ -252,7 +212,9 @@ public class View {
                     log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing);
                     return;
                 } finally {
-                    link.release();
+                    if (link != null) {
+                        link.release();
+                    }
                 }
                 if (!success) {
                     log.trace("Partial redirect round of gossip with {}, ring {} not redirecting further",
@@ -312,7 +274,7 @@ public class View {
          *         would like updated.
          */
         public Gossip rumors(int ring, Digests digests, HashKey from, X509Certificate certificate, Signed note) {
-            if (ring >= context.getRings().length || ring < 0) {
+            if (ring >= context.getRingCount() || ring < 0) {
                 log.info("invalid ring {} from {}", ring, from);
                 return emptyGossip();
             }
@@ -340,8 +302,6 @@ public class View {
             int seed = getParameters().entropy.nextInt();
             return Gossip.newBuilder()
                          .setRedirect(false)
-                         .setMessages(messageBuffer.process(new BloomFilter(digests.getMessageBff()), seed,
-                                                            getParameters().falsePositiveRate))
                          .setCertificates(processCertificateDigests(from, new BloomFilter(digests.getCertificateBff()),
                                                                     seed, getParameters().falsePositiveRate))
                          .setNotes(processNoteDigests(from, new BloomFilter(digests.getNoteBff()), seed,
@@ -355,7 +315,7 @@ public class View {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
-
+            comm.register(context.getId(), service);
             node.setFailed(false);
             node.nextNote();
             recover(node);
@@ -367,13 +327,13 @@ public class View {
 
             long interval = d.toMillis();
             int initialDelay = getParameters().entropy.nextInt((int) interval * 2);
-            futureGossip = scheduler.scheduleWithFixedDelay(() -> {
+            futureGossip = scheduler.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
                 try {
-                    oneRound();
+                    oneRound(d, scheduler);
                 } catch (Throwable e) {
                     log.error("unexpected error during gossip round", e);
                 }
-            }, initialDelay, interval, TimeUnit.MILLISECONDS);
+            }), initialDelay, TimeUnit.MILLISECONDS);
             log.info("{} started, initial delay: {} ms", node.getId(), initialDelay);
         }
 
@@ -384,6 +344,7 @@ public class View {
             if (!started.compareAndSet(true, false)) {
                 return;
             }
+            comm.deregister(context.getId());
             ScheduledFuture<?> currentGossip = futureGossip;
             futureGossip = null;
             if (currentGossip != null) {
@@ -396,7 +357,6 @@ public class View {
                 context.offline(m);
             });
             context.clear();
-            messageBuffer.clear();
         }
 
         /**
@@ -408,8 +368,7 @@ public class View {
          * @param from
          */
         public void update(int ring, Update update, HashKey from) {
-            processUpdates(update.getCertificatesList(), update.getNotesList(), update.getAccusationsList(),
-                           update.getMessagesList());
+            processUpdates(update.getCertificatesList(), update.getNotesList(), update.getAccusationsList());
 
         }
 
@@ -443,12 +402,6 @@ public class View {
         }
     }
 
-    public static int diameter(FirefliesParameters parameters) {
-        double pN = ((double) (2 * parameters.toleranceLevel)) / ((double) parameters.cardinality);
-        double logN = Math.log(parameters.cardinality);
-        return (int) (logN / Math.log(parameters.cardinality * pN));
-    }
-
     public static Gossip emptyGossip() {
         return Gossip.getDefaultInstance();
     }
@@ -477,14 +430,9 @@ public class View {
     }
 
     /**
-     * Message channel handlers
-     */
-    private final Map<Integer, MessageChannelHandler> channelHandlers = new ConcurrentHashMap<>();
-
-    /**
      * Communications with other members
      */
-    private final CommonCommunications<FfClientCommunications> comm;
+    private final CommonCommunications<FfClientCommunications, Service> comm;
 
     /**
      * View context
@@ -495,16 +443,6 @@ public class View {
      * The analytical diameter of the graph of members
      */
     private final int diameter;
-
-    /**
-     * Membership listeners
-     */
-    private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
-
-    /**
-     * Buffered store of broadcast messages gossiped between members
-     */
-    private final MessageBuffer messageBuffer;
 
     @SuppressWarnings("unused")
     private final FireflyMetrics metrics;
@@ -544,16 +482,16 @@ public class View {
      */
     private final ConcurrentMap<HashKey, Participant> view = new ConcurrentHashMap<>();
 
-    public View(Node node, Communications communications, FireflyMetrics metrics) {
+    public View(HashKey id, Node node, Router communications, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.node = node;
-        this.comm = communications.create(node, getCreate(metrics), new FfServerCommunications(service,
-                communications.getClientIdentityProvider(), metrics));
-        diameter = diameter(getParameters());
+        this.comm = communications.create(node, id, service,
+                                          r -> new FfServerCommunications(service,
+                                                  communications.getClientIdentityProvider(), metrics, r),
+                                          getCreate(metrics));
+        context = new Context<>(id, getParameters().rings);
+        diameter = context.diameter(getParameters().cardinality);
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
-        this.messageBuffer = new MessageBuffer(getParameters().bufferSize,
-                getParameters().toleranceLevel * diameter + 1);
-        context = new Context<>(HashKey.ORIGIN, getParameters().rings);
         add(node);
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }
@@ -645,23 +583,6 @@ public class View {
      */
     public ConcurrentMap<HashKey, Participant> getView() {
         return view;
-    }
-
-    /**
-     * Publish a message to all members
-     * 
-     * @param message
-     */
-    public void publish(int channel, byte[] message) {
-        messageBuffer.put(System.currentTimeMillis(), message, node, channel);
-    }
-
-    public void register(int channel, MessageChannelHandler listener) {
-        channelHandlers.put(channel, listener);
-    }
-
-    public void register(MembershipListener listener) {
-        membershipListeners.add(listener);
     }
 
     public void registerRoundListener(Runnable callback) {
@@ -930,7 +851,6 @@ public class View {
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
                       .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
-                      .setMessageBff(getMessagesBff(seed, getParameters().falsePositiveRate).toBff())
                       .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff())
                       .build();
     }
@@ -938,15 +858,6 @@ public class View {
     void gc(Participant member) {
         context.offline(member);
         member.setFailed(true);
-        membershipListeners.stream().forEach(l -> {
-            commonPool().execute(() -> {
-                try {
-                    l.fail(member);
-                } catch (Throwable e) {
-                    log.error("error sending fail to listener: " + l, e);
-                }
-            });
-        });
     }
 
     BloomFilter getAccusationsBff(int seed, double p) {
@@ -968,10 +879,6 @@ public class View {
             .filter(e -> e != null)
             .forEach(n -> bff.add(new HashKey(n)));
         return bff;
-    }
-
-    BloomFilter getMessagesBff(int seed, double p) {
-        return messageBuffer.getBff(seed, p);
     }
 
     BloomFilter getNotesBff(int seed, double p) {
@@ -1007,12 +914,17 @@ public class View {
             return true;
         }
         Digests outbound = commonDigests();
-        Gossip gossip = link.gossip(signedNote, ring, outbound);
+        Gossip gossip;
+        try {
+            gossip = link.gossip(context.getId(), signedNote, ring, outbound);
+        } catch (Throwable e) {
+            log.debug("Exception gossiping with {}", link.getMember(), e);
+            return false;
+        }
         if (log.isTraceEnabled()) {
-            log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {}, messages: {}",
-                      gossip.getRedirect(), gossip.getCertificates().getUpdatesCount(),
-                      gossip.getNotes().getUpdatesCount(), gossip.getAccusations().getUpdatesCount(),
-                      gossip.getMessages().getUpdatesCount());
+            log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {} ", gossip.getRedirect(),
+                      gossip.getCertificates().getUpdatesCount(), gossip.getNotes().getUpdatesCount(),
+                      gossip.getAccusations().getUpdatesCount());
         }
         if (gossip.getRedirect()) {
             if (gossip.getCertificates().getUpdatesCount() != 1 && gossip.getNotes().getUpdatesCount() != 1) {
@@ -1051,7 +963,12 @@ public class View {
         }
         Update update = response(gossip);
         if (!isEmpty(update)) {
-            link.update(ring, update);
+            try {
+                link.update(context.getId(), ring, update);
+            } catch (Throwable e) {
+                log.debug("Exception updating {}", link.getMember(), e);
+                return false;
+            }
         }
         return true;
     }
@@ -1087,8 +1004,7 @@ public class View {
     }
 
     boolean isEmpty(Update update) {
-        return update.getAccusationsCount() == 0 && update.getCertificatesCount() == 0 && update.getMessagesCount() == 0
-                && update.getNotesCount() == 0;
+        return update.getAccusationsCount() == 0 && update.getCertificatesCount() == 0 && update.getNotesCount() == 0;
     }
 
     /**
@@ -1140,10 +1056,10 @@ public class View {
      */
     void monitor(FfClientCommunications link, int lastRing) {
         try {
-            link.ping(200);
+            link.ping(context.getId(), 200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
         } catch (Exception e) {
-            log.error("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(),
+            log.debug("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(),
                       e.getCause().getMessage());
             accuseOn(link.getMember(), lastRing);
         } finally {
@@ -1154,8 +1070,11 @@ public class View {
     /**
      * Drive one round of the View. This involves a round of gossip() and a round of
      * monitor().
+     * 
+     * @param scheduler
+     * @param d
      */
-    void oneRound() {
+    void oneRound(Duration d, ScheduledExecutorService scheduler) {
         com.codahale.metrics.Timer.Context timer = null;
         if (metrics != null) {
             timer = metrics.gossipRoundDuration().time();
@@ -1188,6 +1107,13 @@ public class View {
                 }
             });
         });
+        scheduler.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
+            try {
+                oneRound(d, scheduler);
+            } catch (Throwable e) {
+                log.error("unexpected error during gossip round", e);
+            }
+        }), d.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -1271,7 +1197,7 @@ public class View {
      */
     void processUpdates(Gossip gossip) {
         processUpdates(gossip.getCertificates().getUpdatesList(), gossip.getNotes().getUpdatesList(),
-                       gossip.getAccusations().getUpdatesList(), gossip.getMessages().getUpdatesList());
+                       gossip.getAccusations().getUpdatesList());
     }
 
     /**
@@ -1281,10 +1207,9 @@ public class View {
      * @param certificatUpdates
      * @param noteUpdates
      * @param accusationUpdates
-     * @param messageUpdates
      */
     void processUpdates(List<EncodedCertificate> certificatUpdates, List<Signed> noteUpdates,
-                        List<Signed> accusationUpdates, List<Message> messageUpdates) {
+                        List<Signed> accusationUpdates) {
         certificatUpdates.stream()
                          .map(cert -> certificateFrom(cert))
                          .filter(cert -> cert != null)
@@ -1301,24 +1226,6 @@ public class View {
             node.nextNote();
             node.clearAccusations();
         }
-
-        Map<Integer, List<Msg>> newMessages = new HashMap<>();
-
-        messageBuffer.merge(messageUpdates, message -> validate(message)).stream().map(m -> {
-            HashKey id = new HashKey(m.getSource());
-            Participant from = view.get(id);
-            if (from == null) {
-                log.trace("{} message from unknown member: {}", node, id);
-                return null;
-            } else {
-                return new Msg(from, m.getChannel(), m.getContent().toByteArray());
-            }
-        }).filter(m -> m != null).forEach(msg -> {
-            newMessages.computeIfAbsent(msg.channel, i -> new ArrayList<>()).add(msg);
-        });
-        channelHandlers.values()
-                       .forEach(handler -> commonPool().execute(() -> newMessages.entrySet()
-                                                                                 .forEach(e -> handler.message(e.getValue()))));
     }
 
     /**
@@ -1331,15 +1238,6 @@ public class View {
             context.activate(member);
             member.setFailed(false);
             log.info("Recovering: {}", member.getId());
-            membershipListeners.stream().forEach(l -> {
-                commonPool().execute(() -> {
-                    try {
-                        l.recover(member);
-                    } catch (Throwable e) {
-                        log.error("error recoving member in listener: " + l, e);
-                    }
-                });
-            });
         } else {
             log.trace("Already active: {}", member.getId());
         }
@@ -1430,9 +1328,6 @@ public class View {
     Update updatesForDigests(Gossip gossip) {
         com.salesfoce.apollo.proto.Update.Builder builder = Update.newBuilder();
 
-        // messages
-        builder.addAllMessages(messageBuffer.updatesFor(new BloomFilter(gossip.getMessages().getBff())));
-
         // certificates
         BloomFilter certBff = new BloomFilter(gossip.getCertificates().getBff());
         view.values()
@@ -1479,7 +1374,7 @@ public class View {
             signature.update(message.getContent().toByteArray());
             return signature.verify(message.getSignature().toByteArray());
         } catch (SignatureException e) {
-            log.debug("invalid signature for message {}", new HashKey(message.getId()), from);
+            log.debug("invalid signature from: {} message {}", from, message);
             return false;
         }
     }

@@ -91,8 +91,8 @@ public class TestApollo {
             config.avalanche.core.beta2 = 5;
             config.gossipInterval = Duration.ofMillis(100);
             config.communications = new ApolloConfiguration.SimCommunicationsFactory();
-            ApolloConfiguration.FileIdentitySource ks = new ApolloConfiguration.FileIdentitySource();
-            ks.store = new File(PregenPopulation.getMemberDir(), PregenPopulation.memberKeystoreFile(i));
+            ApolloConfiguration.ResourceIdentitySource ks = new ApolloConfiguration.ResourceIdentitySource();
+            ks.store = PregenPopulation.memberKeystoreResource(i);
             config.source = ks;
             oracles.add(new Apollo(config));
         }

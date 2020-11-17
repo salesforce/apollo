@@ -29,6 +29,40 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class Member implements Comparable<Member> {
 
+    public static HashKey getMemberId(X509Certificate c) {
+        X509CertificateHolder holder;
+        try {
+            holder = new X509CertificateHolder(c.getEncoded());
+        } catch (CertificateEncodingException | IOException e) {
+            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
+        }
+        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
+
+        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
+        return new HashKey(id);
+    }
+
+    /**
+     * @param certificate
+     * @return host and port for the member indicated by the certificate
+     */
+    public static InetSocketAddress portsFrom(X509Certificate certificate) {
+
+        String dn = certificate.getSubjectX500Principal().getName();
+        Map<String, String> decoded = Util.decodeDN(dn);
+        String portString = decoded.get("L");
+        if (portString == null) {
+            throw new IllegalArgumentException("Invalid certificate, no port encodings in \"L\" of dn= " + dn);
+        }
+        int ffPort = Integer.parseInt(portString);
+
+        String hostName = decoded.get("CN");
+        if (hostName == null) {
+            throw new IllegalArgumentException("Invalid certificate, missing \"CN\" of dn= " + dn);
+        }
+        return new InetSocketAddress(hostName, ffPort);
+    }
+
     /**
      * Signing identity
      */
@@ -39,7 +73,7 @@ public class Member implements Comparable<Member> {
      */
     private final HashKey id;
 
-    protected Member(HashKey id, X509Certificate c) {
+    public Member(HashKey id, X509Certificate c) {
         certificate = c;
         this.id = id;
     }
@@ -105,40 +139,6 @@ public class Member implements Comparable<Member> {
     @Override
     public String toString() {
         return "Member[" + id + "]";
-    }
-
-    public static HashKey getMemberId(X509Certificate c) {
-        X509CertificateHolder holder;
-        try {
-            holder = new X509CertificateHolder(c.getEncoded());
-        } catch (CertificateEncodingException | IOException e) {
-            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
-        }
-        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
-
-        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
-        return new HashKey(id);
-    }
-
-    /**
-     * @param certificate
-     * @return host and port for the member indicated by the certificate
-     */
-    public static InetSocketAddress portsFrom(X509Certificate certificate) {
-
-        String dn = certificate.getSubjectX500Principal().getName();
-        Map<String, String> decoded = Util.decodeDN(dn);
-        String portString = decoded.get("L");
-        if (portString == null) {
-            throw new IllegalArgumentException("Invalid certificate, no port encodings in \"L\" of dn= " + dn);
-        }
-        int ffPort = Integer.parseInt(portString);
-
-        String hostName = decoded.get("CN");
-        if (hostName == null) {
-            throw new IllegalArgumentException("Invalid certificate, missing \"CN\" of dn= " + dn);
-        }
-        return new InetSocketAddress(hostName, ffPort);
     }
 
 }

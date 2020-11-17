@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.PregenLargePopulation.getCa;
-import static com.salesforce.apollo.fireflies.PregenLargePopulation.getMember;
+import static com.salesforce.apollo.test.pregen.PregenLargePopulation.getCa;
+import static com.salesforce.apollo.test.pregen.PregenLargePopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -31,14 +31,16 @@ import org.junit.jupiter.api.BeforeAll;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.test.pregen.PregenLargePopulation;
 
+import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -47,21 +49,23 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class LargeTest {
 
-    private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate                   ca         = getCa();
+    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters               parameters = new FirefliesParameters(
+            ca.getX509Certificate());
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, PregenLargePopulation.cardinality)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     private List<Node>            members;
     private List<View>            views;
-    private List<Communications>  communications = new ArrayList<>();
+    private List<Router>          communications = new ArrayList<>();
     private List<X509Certificate> seeds;
     private MetricRegistry        registry;
     private MetricRegistry        node0Registry;
@@ -140,15 +144,15 @@ public class LargeTest {
         seeds = new ArrayList<>();
         members = certs.values()
                        .parallelStream()
-                       .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
+                       .map(cert -> new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()))
                        .map(cert -> new Node(cert, parameters))
                        .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(24)).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
+            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(24)).getId());
+            if (!seeds.contains(cert.getX509Certificate())) {
+                seeds.add(cert.getX509Certificate());
             }
         }
 
@@ -156,10 +160,10 @@ public class LargeTest {
         views = members.stream().map(node -> {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
                     frist.getAndSet(false) ? node0Registry : registry);
-            Communications comms = new LocalCommSimm(
-                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl), node.getId());
+            LocalRouter comms = new LocalRouter(node.getId(),
+                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl));
             communications.add(comms);
-            return new View(node, comms, fireflyMetricsImpl);
+            return new View(HashKey.ORIGIN, node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

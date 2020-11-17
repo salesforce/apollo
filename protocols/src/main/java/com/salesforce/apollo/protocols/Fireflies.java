@@ -17,10 +17,10 @@ import com.salesfoce.apollo.proto.Update;
  */
 public interface Fireflies {
 
-    Gossip gossip(Signed note, int ring, Digests gossip);
+    Gossip gossip(HashKey id, Signed note, int ring, Digests gossip);
 
-    int ping(int ping);
+    int ping(HashKey id, int ping);
 
-    void update(int ring, Update update);
+    void update(HashKey id, int ring, Update update);
 
 }

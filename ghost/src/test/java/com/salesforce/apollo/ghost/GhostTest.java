@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.ghost;
 
-import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
-import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -32,8 +32,8 @@ import org.junit.jupiter.api.BeforeAll;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
-import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
@@ -61,11 +61,13 @@ public class GhostTest {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                                                   cert -> new CertWithKey(cert.getX509Certificate(),
+                                                           cert.getPrivateKey())));
     }
 
-    private final List<Communications> comms = new ArrayList<>();
-    private List<View>                 views;
+    private final List<Router> comms = new ArrayList<>();
+    private List<View>         views;
 
     @AfterEach
     public void after() {
@@ -96,9 +98,9 @@ public class GhostTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         views = members.stream().map(node -> {
-            Communications com = new LocalCommSimm(ServerConnectionCache.newBuilder(), node.getId());
+            Router com = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder());
             comms.add(com);
-            View view = new View(node, com, null);
+            View view = new View(HashKey.ORIGIN, node, com, null);
             return view;
         }).collect(Collectors.toList());
 
@@ -115,7 +117,7 @@ public class GhostTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + views.size() + " members");
 
-        Iterator<Communications> communications = comms.iterator();
+        Iterator<Router> communications = comms.iterator();
         List<Ghost> ghosties = views.stream()
                                     .map(view -> new Ghost(new GhostParameters(), communications.next(), view,
                                             new MemoryStore()))

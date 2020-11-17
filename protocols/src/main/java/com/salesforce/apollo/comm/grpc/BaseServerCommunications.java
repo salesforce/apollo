@@ -22,15 +22,19 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  *
  */
-public abstract interface BaseServerCommunications<T> {
-
-    default void evaluate(StreamObserver<?> responseObserver, ID id, Consumer<T> c, T s, Map<HashKey, T> services) {
+public interface BaseServerCommunications<T> {
+    default void evaluate(StreamObserver<?> responseObserver, HashKey id, Consumer<T> c, T s,
+                          Map<HashKey, T> services) {
         T service = getService(id, s, services);
         if (service == null) {
             responseObserver.onError(new StatusRuntimeException(Status.UNKNOWN));
         } else {
             c.accept(service);
         }
+    }
+
+    default void evaluate(StreamObserver<?> responseObserver, ID id, Consumer<T> c, T s, Map<HashKey, T> services) {
+        evaluate(responseObserver, id.getItselfCount() == 0 ? null : new HashKey(id), c, s, services);
     }
 
     default X509Certificate getCert() {
@@ -43,9 +47,8 @@ public abstract interface BaseServerCommunications<T> {
         return getClientIdentity().getFrom();
     }
 
-    default T getService(ID context, T system, Map<HashKey, T> services) {
-        return ((context == null || context.getItselfCount() == 0) && system != null) ? system
-                : services.get(new HashKey(context));
+    default T getService(HashKey context, T system, Map<HashKey, T> services) {
+        return (context == null && system != null) ? system : services.get(context);
     }
 
     void register(HashKey id, T service);

@@ -23,6 +23,8 @@
 		<module>sql-state</module>
 		<module>memberships</module>
 		<module>consortium</module>
+		<module>test-population</module>
+		<module>tron</module>
 	</modules>
 
 	<properties>
@@ -60,13 +62,6 @@
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>fireflies</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>fireflies</artifactId>
-				<classifier>tests</classifier>
-				<type>test-jar</type>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
@@ -122,6 +117,16 @@
 				<classifier>phat</classifier>
 				<version>${project.version}</version>
 			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>test-population</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>tron</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>

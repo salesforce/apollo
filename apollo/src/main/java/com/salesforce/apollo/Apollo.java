@@ -21,7 +21,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.salesforce.apollo.avalanche.AvaMetrics;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
-import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Member;
@@ -55,7 +55,7 @@ public class Apollo {
     }
 
     private final Avalanche             avalanche;
-    private final Communications        communications;
+    private final Router                communications;
     private final ApolloConfiguration   configuration;
     private final TimedProcessor        processor = new TimedProcessor();
     private final AtomicBoolean         running   = new AtomicBoolean();
@@ -73,7 +73,7 @@ public class Apollo {
                                                                    ApolloConfiguration.DEFAULT_IDENTITY_ALIAS);
         HashKey id = Member.getMemberId(identitySource.identity().getCertificate());
         communications = c.communications.getComms(metrics, id);
-        view = identitySource.createView(communications, new FireflyMetricsImpl(metrics));
+        view = identitySource.createView(new HashKey(c.contextBase), communications, new FireflyMetricsImpl(metrics));
         seeds = identitySource.seeds();
         avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics),
                 processor);
@@ -108,6 +108,7 @@ public class Apollo {
         if (!running.compareAndSet(false, true)) {
             return;
         }
+        communications.start();
         view.getService().start(configuration.gossipInterval, seeds, scheduler);
         avalanche.start(scheduler);
     }

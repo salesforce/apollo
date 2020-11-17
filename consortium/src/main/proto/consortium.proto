@@ -4,10 +4,30 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.consortium.proto";
 option java_outer_classname = "ConsortiumProto";
 option objc_class_prefix = "Cp";
-
+import "google/protobuf/any.proto";
 package apollo.consortium;
 
-service Consortium { 
+service OrderingService { 
+    rpc submit (SubmitTransaction) returns (TransactionResult) {}
+    rpc vote (Join) returns (JoinResult) {}
+}
+
+message Join {
+    bytes context = 1;
+    ViewMember member = 2;
+}
+
+message JoinResult {
+    bytes signature = 2;
+    ViewMember nextView = 3;
+}
+
+message SubmitTransaction {
+    bytes context = 1;
+    Transaction transaction = 2;
+}
+
+message TransactionResult {
 }
 
 message CertifiedBlock {
@@ -16,8 +36,9 @@ message CertifiedBlock {
 }
 
 message Block {
-    Header header = 1;
-    Body body = 2;
+    bytes headerHash = 1;
+    Header header = 2;
+    Body body = 3;
 }
 
 message Header {
@@ -53,33 +74,62 @@ message Genesis {
 }
 
 message User {
-    repeated Transaction transactions = 1;
+    repeated ExecutedTransaction transactions = 1;
     repeated bytes responses = 2;
 }
 
 message Reconfigure {
     bytes id = 1;
     int32 checkpointBlocks = 2;
-    repeated bytes view = 3;
-    repeated bytes consensusKeys = 5;
+    int32 toleranceLevel = 3;
+    repeated ViewMember view = 4;
+    repeated ExecutedTransaction transactions = 5;
+}
+
+message ByteTransaction {
+    bytes content = 1;
+}
+
+message JoinTransaction {
+    ViewMember member = 1;
+    repeated Certification certification = 2;
+}
+
+message ViewMember {
+    bytes id = 1;
+    bytes consensusKey = 2;
+    bytes signature = 3;
 }
 
 message Checkpoint {
-    repeated Transaction transactions = 1;
-    repeated Response responses = 2;
+    repeated ExecutedTransaction transactions = 1;
 } 
 
 message Transaction {
-    Batch batch = 1;
-    bytes signature = 2;
+    bool join = 1;
+    bytes source = 2;
+    bytes nonce = 3;
+    bytes signature = 4;
+    repeated google.protobuf.Any batch = 5;
 }
 
-message Batch {  
-    bytes originator = 1;
-    repeated bytes batch = 2;
+message ExecutedTransaction {
+    bytes hash = 1;
+    Transaction transaction = 2;
+    google.protobuf.Any result = 3;
 }
 
-message Response {
-    repeated bytes responses = 1;
+message Validate {
+    bytes id = 1;
+    bytes hash = 2;
+    bytes signature = 3;
 }
- 
+
+message Proclamation {
+    int32 regenecy = 1;
+    bytes id = 2;
+}
+
+message Persist {
+}
+    

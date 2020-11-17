@@ -11,7 +11,7 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.Validator;
+import com.salesforce.apollo.protocols.CertificateValidator;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
@@ -25,10 +25,10 @@ public class StandardEpProvider implements EndpointProvider {
     private final X509Certificate certificate;
     private final ClientAuth      clientAuth;
     private final PrivateKey      privateKey;
-    private final Validator       validator;
+    private final CertificateValidator       validator;
 
     public StandardEpProvider(SocketAddress bindAddress, X509Certificate certificate, PrivateKey privateKey,
-            ClientAuth clientAuth, Validator validator) {
+            ClientAuth clientAuth, CertificateValidator validator) {
         this.bindAddress = bindAddress;
         this.certificate = certificate;
         this.privateKey = privateKey;
@@ -67,7 +67,7 @@ public class StandardEpProvider implements EndpointProvider {
     }
 
     @Override
-    public Validator getValiator() {
+    public CertificateValidator getValiator() {
         return validator;
     }
 

@@ -76,7 +76,7 @@ public class WorkingSet {
             }
 
             dagEntry.getLinksList().forEach(link -> {
-                DagInsert n = set.get(new HashKey(link.toByteArray()));
+                DagInsert n = set.get(new HashKey(link.toByteString()));
                 if (n != null && !visited.contains(n)) {
                     n.topologicalSort(set, visited, stack);
                 }

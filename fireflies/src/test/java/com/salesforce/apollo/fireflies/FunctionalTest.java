@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
-import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.security.cert.X509Certificate;
@@ -28,14 +28,15 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.comm.Communications;
-import com.salesforce.apollo.comm.LocalCommSimm;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.HashKey;
 
+import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -43,20 +44,22 @@ import io.github.olivierlemasle.ca.RootCertificate;
  * @since 220
  */
 public class FunctionalTest {
-    private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate                   ca         = getCa();
+    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters               parameters = new FirefliesParameters(
+            ca.getX509Certificate());
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 11)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
-    private final List<Communications> communications = new ArrayList<>();
-    private  List<View> views;
+    private final List<Router> communications = new ArrayList<>();
+    private List<View>         views;
 
     @AfterEach
     public void after() {
@@ -77,28 +80,29 @@ public class FunctionalTest {
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
                                   .parallelStream()
-                                  .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
+                                  .map(cert -> new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
+            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
+            if (!seeds.contains(cert.getX509Certificate())) {
+                seeds.add(cert.getX509Certificate());
             }
         }
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         views = members.parallelStream().map(node -> {
-            Communications comms = new LocalCommSimm(
-                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics), node.getId());
+            Router comms = new LocalRouter(node.getId(),
+                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics));
+            comms.start();
             communications.add(comms);
-            return new View(node, comms, metrics);
+            return new View(HashKey.ORIGIN, node, comms, metrics);
         })
-                                  .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds, scheduler))
-                                  .collect(Collectors.toList());
+                       .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds, scheduler))
+                       .collect(Collectors.toList());
 
         for (int j = 0; j < 20; j++) {
             for (int i = 0; i < parameters.rings + 2; i++) {

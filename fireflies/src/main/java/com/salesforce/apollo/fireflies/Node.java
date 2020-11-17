@@ -71,6 +71,21 @@ public class Node extends Participant {
         this.parameters = p;
     }
 
+    public Signature forSigning() {
+        Signature signature;
+        try {
+            signature = Signature.getInstance(parameters.signatureAlgorithm);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("no such algorithm: " + parameters.signatureAlgorithm, e);
+        }
+        try {
+            signature.initSign(privateKey, parameters.entropy);
+        } catch (InvalidKeyException e) {
+            throw new IllegalStateException("invalid private key", e);
+        }
+        return signature;
+    }
+
     public X509Certificate getCA() {
         return parameters.ca;
     }
@@ -89,21 +104,6 @@ public class Node extends Participant {
 
     Accusation accuse(Participant m, int ringNumber) {
         return new Accusation(m.getEpoch(), getId(), ringNumber, m.getId(), forSigning());
-    }
-
-    Signature forSigning() {
-        Signature signature;
-        try {
-            signature = Signature.getInstance(parameters.signatureAlgorithm);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("no such algorithm: " + parameters.signatureAlgorithm, e);
-        }
-        try {
-            signature.initSign(privateKey, parameters.entropy);
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException("invalid private key", e);
-        }
-        return signature;
     }
 
     Signature forVerification() {

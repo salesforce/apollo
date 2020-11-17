@@ -17,7 +17,7 @@ import java.security.cert.X509Certificate;
  * @author hal.hildebrand
  *
  */
-public class CaValidator implements Validator {
+public class CaValidator implements CertificateValidator {
     private final X509Certificate ca;
 
     public CaValidator(X509Certificate ca) {

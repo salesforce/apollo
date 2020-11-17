@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.protocols;
 
+import static com.salesforce.apollo.protocols.Conversion.hashOf;
+
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -21,11 +23,11 @@ import com.salesfoce.apollo.proto.ID.Builder;
  * @since 220
  */
 public class HashKey implements Comparable<HashKey> {
+    public static final int     BYTE_SIZE;
     public static final HashKey LAST;
+    public static final int     LONG_SIZE = 4;
     public static final HashKey ORIGIN;
-    private static final int    BYTE_SIZE;
     private final static char[] hexArray  = "0123456789ABCDEF".toCharArray();
-    private static final int    LONG_SIZE = 4;
 
     static {
         BYTE_SIZE = LONG_SIZE * 8;
@@ -180,6 +182,32 @@ public class HashKey implements Comparable<HashKey> {
         return itself;
     }
 
+    public HashKey prefix(byte[]... prefixes) {
+        ByteBuffer buffer = ByteBuffer.allocate((itself.length + prefixes.length) * 8);
+        for (byte[] prefix : prefixes) {
+            buffer.put(prefix);
+        }
+        for (long i : itself) {
+            buffer.putLong(i);
+        }
+        return new HashKey(hashOf(buffer.array()));
+    }
+
+    public HashKey prefix(long... prefixes) {
+        ByteBuffer buffer = ByteBuffer.allocate((itself.length + prefixes.length) * 8);
+        for (long prefix : prefixes) {
+            buffer.putLong(prefix);
+        }
+        for (long i : itself) {
+            buffer.putLong(i);
+        }
+        return new HashKey(hashOf(buffer.array()));
+    }
+
+    public ByteString toByteString() {
+        return ByteString.copyFrom(bytes());
+    }
+
     public ID toID() {
         Builder builder = ID.newBuilder();
         for (long i : itself) {
@@ -190,7 +218,7 @@ public class HashKey implements Comparable<HashKey> {
 
     @Override
     public String toString() {
-        return "[" + b64Encoded() + "]";
+        return b64Encoded();
     }
 
     public void write(ByteBuffer dest) {

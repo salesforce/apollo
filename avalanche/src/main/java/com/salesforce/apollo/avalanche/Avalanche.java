@@ -42,8 +42,8 @@ import com.salesfoce.apollo.proto.QueryResult.Vote;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.communications.AvalancheClientCommunications;
 import com.salesforce.apollo.avalanche.communications.AvalancheServerCommunications;
-import com.salesforce.apollo.comm.CommonCommunications;
-import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Member;
@@ -122,34 +122,35 @@ public class Avalanche {
 
     private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
 
-    private final CommonCommunications<AvalancheClientCommunications>  comm;
-    private com.salesforce.apollo.membership.Context<? extends Member> context;
-    private final WorkingSet                                           dag;
-    private final SecureRandom                                         entropy;
-    private final int                                                  invalidThreshold;
-    private final AvalancheMetrics                                     metrics;
-    private final Node                                                 node;
-    private final AvalancheParameters                                  parameters;
-    private final Deque<HashKey>                                       parentSample = new LinkedBlockingDeque<>();
-    private final Processor                                            processor;
-    private volatile ScheduledFuture<?>                                queryFuture;
-    private final AtomicLong                                           queryRounds  = new AtomicLong();
-    private final int                                                  required;
-    private final AtomicBoolean                                        running      = new AtomicBoolean();
-    private volatile ScheduledFuture<?>                                scheduledNoOpsCull;
-    private final Service                                              service      = new Service();
+    private final CommonCommunications<AvalancheClientCommunications, Service> comm;
+    private com.salesforce.apollo.membership.Context<? extends Member>         context;
+    private final WorkingSet                                                   dag;
+    private final SecureRandom                                                 entropy;
+    private final int                                                          invalidThreshold;
+    private final AvalancheMetrics                                             metrics;
+    private final Node                                                         node;
+    private final AvalancheParameters                                          parameters;
+    private final Deque<HashKey>                                               parentSample = new LinkedBlockingDeque<>();
+    private final Processor                                                    processor;
+    private volatile ScheduledFuture<?>                                        queryFuture;
+    private final AtomicLong                                                   queryRounds  = new AtomicLong();
+    private final int                                                          required;
+    private final AtomicBoolean                                                running      = new AtomicBoolean();
+    private volatile ScheduledFuture<?>                                        scheduledNoOpsCull;
+    private final Service                                                      service      = new Service();
 
     public Avalanche(Node node, com.salesforce.apollo.membership.Context<? extends Member> context,
-            SecureRandom entropy, Communications communications, AvalancheParameters p, AvalancheMetrics metrics,
+            SecureRandom entropy, Router communications, AvalancheParameters p, AvalancheMetrics metrics,
             Processor processor) {
         this.metrics = metrics;
         parameters = p;
         this.node = node;
         this.context = context;
         this.entropy = entropy;
-        this.comm = communications.create(getNode(), AvalancheClientCommunications.getCreate(metrics),
-                                          new AvalancheServerCommunications(service,
-                                                  communications.getClientIdentityProvider(), metrics));
+        this.comm = communications.create(node, context.getId(), service,
+                                          r -> new AvalancheServerCommunications(
+                                                  communications.getClientIdentityProvider(), metrics, r),
+                                          AvalancheClientCommunications.getCreate(metrics));
         this.dag = new WorkingSet(processor, parameters, new DagWood(parameters.dagWood), metrics);
 
         required = (int) (parameters.core.k * parameters.core.alpha);
@@ -157,12 +158,12 @@ public class Avalanche {
         this.processor = processor;
     }
 
-    public Avalanche(View view, Communications communications, AvalancheParameters p, AvalancheMetrics metrics,
+    public Avalanche(View view, Router communications, AvalancheParameters p, AvalancheMetrics metrics,
             Processor processor) {
         this(view.getNode(), view.getContext(), view.getParameters().entropy, communications, p, metrics, processor);
     }
 
-    public Avalanche(View view, Communications communications, AvalancheParameters p, Processor processor) {
+    public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor) {
         this(view, communications, p, null, processor);
     }
 
@@ -186,6 +187,7 @@ public class Avalanche {
         if (!running.compareAndSet(false, true)) {
             return;
         }
+        comm.register(context.getId(), service);
         queryRounds.set(0);
 
         queryFuture = timer.schedule(() -> {
@@ -202,6 +204,7 @@ public class Avalanche {
         if (!running.compareAndSet(true, false)) {
             return;
         }
+        comm.deregister(context.getId());
         ScheduledFuture<?> currentQuery = queryFuture;
         queryFuture = null;
         if (currentQuery != null) {
@@ -335,7 +338,7 @@ public class Avalanche {
                 log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
             }
             try {
-                List<byte[]> entries = connection.requestDAG(wanted);
+                List<byte[]> entries = connection.requestDAG(context.getId(), wanted);
                 dag.insertSerializedRaw(entries, System.currentTimeMillis());
                 if (metrics != null) {
                     metrics.getWantedRate().mark(wanted.size());
@@ -436,12 +439,12 @@ public class Avalanche {
                 return false;
             }
             try {
-                result = connection.query(batch, m == wanted ? want : Collections.emptyList());
+                result = connection.query(context.getId(), batch, m == wanted ? want : Collections.emptyList());
             } catch (Exception e) {
                 for (int i = 0; i < batch.size(); i++) {
                     invalid[i].incrementAndGet();
                 }
-                log.warn("Error querying {} for {}", m, batch, e);
+                log.debug("Error querying {} for {}", m, batch, e);
                 return false;
             } finally {
                 connection.release();

@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
-import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
 import static com.salesforce.apollo.fireflies.View.getStandardEpProvider;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,16 +33,17 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.comm.Communications;
 import com.salesforce.apollo.comm.EndpointProvider;
-import com.salesforce.apollo.comm.MtlsCommunications;
+import com.salesforce.apollo.comm.MtlsRouter;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionCacheBuilder;
+import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
+import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -51,18 +52,20 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class MtlsTest {
 
-    private static final RootCertificate     ca             = getCa();
-    private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters     = new FirefliesParameters(ca.getX509Certificate());
-    private List<Communications>             communications = new ArrayList<>();
-    private List<View>                       views;
+    private static final RootCertificate                   ca             = getCa();
+    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters               parameters     = new FirefliesParameters(
+            ca.getX509Certificate());
+    private List<Router>                                   communications = new ArrayList<>();
+    private List<View>                                     views;
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     @AfterEach
@@ -86,29 +89,29 @@ public class MtlsTest {
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
                                   .parallelStream()
-                                  .map(cert -> new CertWithKey(cert.getCertificate(), cert.getPrivateKey()))
+                                  .map(cert -> new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()))
                                   .map(cert -> new Node(cert, parameters))
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
+            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
+            if (!seeds.contains(cert.getX509Certificate())) {
+                seeds.add(cert.getX509Certificate());
             }
         }
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        ServerConnectionCacheBuilder builder = ServerConnectionCache.newBuilder().setTarget(2);
+        Builder builder = ServerConnectionCache.newBuilder().setTarget(2);
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry : registry);
             EndpointProvider ep = getStandardEpProvider(node);
             builder.setMetrics(metrics);
-            MtlsCommunications comms = new MtlsCommunications(builder, ep);
+            MtlsRouter comms = new MtlsRouter(builder, ep);
             communications.add(comms);
-            return new View(node, comms, metrics);
+            return new View(HashKey.ORIGIN, node, comms, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();

@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.fireflies.PregenPopulation.getCa;
-import static com.salesforce.apollo.fireflies.PregenPopulation.getMember;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,7 +41,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
-import com.salesforce.apollo.comm.Communications;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.Node;
@@ -50,9 +50,7 @@ import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
-import guru.nidi.graphviz.engine.Format;
-import guru.nidi.graphviz.engine.Graphviz;
-import guru.nidi.graphviz.model.FileSerializer;
+import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
@@ -61,27 +59,28 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 abstract public class AvalancheFunctionalTest {
 
-    private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static final RootCertificate                   ca         = getCa();
+    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters               parameters = new FirefliesParameters(
+            ca.getX509Certificate());
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 100)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getCertificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
-    protected File                       baseDir;
-    protected MetricRegistry             registry;
-    protected Random                     entropy;
-    protected List<Node>                 members;
-    protected ScheduledExecutorService   scheduler;
-    protected List<X509Certificate>      seeds;
-    protected List<View>                 views;
-    private Map<HashKey, Communications> communications = new HashMap<>();
-    protected MetricRegistry             node0registry;
+    protected File                     baseDir;
+    protected MetricRegistry           registry;
+    protected Random                   entropy;
+    protected List<Node>               members;
+    protected ScheduledExecutorService scheduler;
+    protected List<X509Certificate>    seeds;
+    protected List<View>               views;
+    private Map<HashKey, Router>       communications = new HashMap<>();
+    protected MetricRegistry           node0registry;
 
     @AfterEach
     public void after() {
@@ -103,9 +102,9 @@ abstract public class AvalancheFunctionalTest {
         seeds = new ArrayList<>();
         int testCardinality = testCardinality();
         members = new ArrayList<>();
-        for (CertWithKey cert : certs.values()) {
+        for (CertificateWithPrivateKey cert : certs.values()) {
             if (members.size() < testCardinality) {
-                members.add(new Node(cert, parameters));
+                members.add(new Node(new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()), parameters));
             } else {
                 break;
             }
@@ -114,9 +113,9 @@ abstract public class AvalancheFunctionalTest {
         assertEquals(testCardinality, members.size());
 
         while (seeds.size() < Math.min(parameters.toleranceLevel + 1, certs.size())) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(testCardinality)).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
+            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(testCardinality)).getId());
+            if (!seeds.contains(cert.getX509Certificate())) {
+                seeds.add(cert.getX509Certificate());
             }
         }
 
@@ -126,11 +125,11 @@ abstract public class AvalancheFunctionalTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
-            Communications comms = getCommunications(node, frist.get());
+            Router comms = getCommunications(node, frist.get());
             communications.put(node.getId(), comms);
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.get() ? node0registry : registry);
             frist.set(false);
-            return new View(node, comms, metrics);
+            return new View(HashKey.ORIGIN, node, comms, metrics);
         }).collect(Collectors.toList());
     }
 
@@ -185,7 +184,7 @@ abstract public class AvalancheFunctionalTest {
                         .filter(view -> view != null)
                         .count() == 0;
         }), "Could not stabilize view membership)");
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(processors.size());
+
         processors.forEach(p -> p.getAvalanche().start(scheduler));
 
         // generate the genesis transaction
@@ -277,7 +276,7 @@ abstract public class AvalancheFunctionalTest {
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
     }
 
-    abstract protected Communications getCommunications(Node node, boolean first);
+    abstract protected Router getCommunications(Node node, boolean first);
 
     private void seed(List<TimedProcessor> nodes) {
         long then = System.currentTimeMillis();

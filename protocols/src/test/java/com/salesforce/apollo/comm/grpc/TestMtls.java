@@ -23,13 +23,14 @@ import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
 import com.salesforce.apollo.protocols.CaValidator;
 import com.salesforce.apollo.protocols.Utils;
-import com.salesforce.apollo.protocols.Validator;
+import com.salesforce.apollo.protocols.CertificateValidator;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 import io.github.olivierlemasle.ca.CsrWithPrivateKey;
 import io.github.olivierlemasle.ca.RootCertificate;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.stub.StreamObserver;
+import io.grpc.util.MutableHandlerRegistry;
 
 /**
  * @author hal.hildebrand
@@ -108,7 +109,7 @@ public class TestMtls {
         CertificateWithPrivateKey serverCert = serverIdentity(ca);
 
         MtlsServer server = new MtlsServer(serverAddress, ClientAuth.REQUIRE, "foo", serverCert.getX509Certificate(),
-                serverCert.getPrivateKey(), validator());
+                serverCert.getPrivateKey(), validator(), new MutableHandlerRegistry());
         return server;
     }
 
@@ -125,7 +126,7 @@ public class TestMtls {
         return serverCert;
     }
 
-    private Validator validator() {
+    private CertificateValidator validator() {
         return new CaValidator(ca.getRoot());
     }
 }

@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.membership;
 
+import static java.util.concurrent.ForkJoinPool.commonPool;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -18,15 +20,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collector;
 import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -61,6 +66,25 @@ public class Context<T extends Member> {
             current = current + 1;
             return accepted;
         }
+    }
+
+    public interface MembershipListener<T> {
+
+        /**
+         * A member has failed
+         * 
+         * @param member
+         */
+        default void fail(T member) {
+        };
+
+        /**
+         * A new member has recovered and is now live
+         * 
+         * @param member
+         */
+        default void recover(T member) {
+        };
     }
 
     private static class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
@@ -120,22 +144,44 @@ public class Context<T extends Member> {
 
     }
 
-    public static final ThreadLocal<MessageDigest> DIGEST_CACHE          = ThreadLocal.withInitial(() -> {
-                                                                             try {
-                                                                                 return MessageDigest.getInstance(Context.SHA_256);
-                                                                             } catch (NoSuchAlgorithmException e) {
-                                                                                 throw new IllegalStateException(e);
-                                                                             }
-                                                                         });
-    public static final String                     SHA_256               = "sha-256";
-    private static final String                    CONTEXT_HASH_TEMPLATE = "%s-%s";
-    private static final String                    RING_HASH_TEMPLATE    = "%s-%s-%s";
+    public static final ThreadLocal<MessageDigest> DIGEST_CACHE = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance(Context.SHA_256);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    });
 
-    private final ConcurrentNavigableMap<HashKey, T> active  = new ConcurrentSkipListMap<>();
-    private final Map<HashKey, HashKey[]>            hashes  = new ConcurrentHashMap<>();
-    private final HashKey                            id;
-    private final ConcurrentHashMap<HashKey, T>      offline = new ConcurrentHashMap<>();
-    private final Ring<T>[]                          rings;
+    public static final String SHA_256 = "sha-256";
+
+    private static final String CONTEXT_HASH_TEMPLATE = "%s-%s";
+    private static final String RING_HASH_TEMPLATE    = "%s-%s-%s";
+
+    /**
+     * @return the minimum t such that the probability of more than t out of 2t+1
+     *         monitors are correct with probability e/size given the uniform
+     *         probability pByz that a monitor is Byzantine.
+     */
+    public static int minMajority(double pByz, double faultToleranceLevel) {
+        for (int t = 1; t <= 10000; t++) {
+            double pf = 1.0 - Util.binomialc(t, 2 * t + 1, pByz);
+            if (faultToleranceLevel >= pf) {
+                return t;
+            }
+        }
+        throw new IllegalArgumentException("Cannot compute number if rings from pByz=" + pByz);
+    }
+
+    private final Map<HashKey, T> active = new ConcurrentHashMap<>();
+
+    private BiFunction<T, Integer, HashKey>     hasher              = (m, ring) -> hashFor(m, ring);
+    private final Map<HashKey, HashKey[]>       hashes              = new ConcurrentHashMap<>();
+    private final HashKey                       id;
+    private Logger                              log                 = LoggerFactory.getLogger(Context.class);
+    private final List<MembershipListener<T>>   membershipListeners = new CopyOnWriteArrayList<>();
+    private final ConcurrentHashMap<HashKey, T> offline             = new ConcurrentHashMap<>();
+
+    private final Ring<T>[] rings;
 
     public Context(HashKey id) {
         this(id, 0);
@@ -146,7 +192,7 @@ public class Context<T extends Member> {
         this.id = id;
         this.rings = new Ring[r];
         for (int i = 0; i < r; i++) {
-            rings[i] = new Ring<T>(i, this);
+            rings[i] = new Ring<T>(i, hasher);
         }
     }
 
@@ -159,10 +205,36 @@ public class Context<T extends Member> {
         for (Ring<T> ring : rings) {
             ring.insert(m);
         }
+        membershipListeners.stream().forEach(l -> {
+            commonPool().execute(() -> {
+                try {
+                    l.recover(m);
+                } catch (Throwable e) {
+                    log.error("error recoving member in listener: " + l, e);
+                }
+            });
+        });
+    }
+
+    public boolean activateIfOffline(HashKey memberID) {
+        T offlined = offline.remove(memberID);
+        if (offlined == null) {
+            return false;
+        }
+        activate(offlined);
+        return true;
     }
 
     public void add(T m) {
         offline(m);
+    }
+
+    public Stream<T> allMembers() {
+        return Arrays.asList(active.values(), offline.values()).stream().flatMap(c -> c.stream());
+    }
+
+    public int cardinality() {
+        return active.size() + offline.size();
     }
 
     public void clear() {
@@ -170,6 +242,25 @@ public class Context<T extends Member> {
             ring.clear();
         }
         hashes.clear();
+    }
+
+    /**
+     * Answer the aproximate diameter of the receiver, assuming the rings were built
+     * with FF parameters, with the rings forming random graph connections segments.
+     */
+    public int diameter() {
+        return (cardinality());
+    }
+
+    /**
+     * Answer the aproximate diameter of the receiver, assuming the rings were built
+     * with FF parameters, with the rings forming random graph connections segments
+     * with the supplied cardinality
+     */
+    public int diameter(int c) {
+        double pN = ((double) (2 * toleranceLevel())) / ((double) c);
+        double logN = Math.log(c);
+        return (int) (logN / Math.log(c * pN));
     }
 
     @Override
@@ -193,16 +284,28 @@ public class Context<T extends Member> {
         return active.values();
     }
 
+    public T getActiveMember(HashKey memberID) {
+        return active.get(memberID);
+    }
+
     public HashKey getId() {
         return id;
+    }
+
+    public T getMember(HashKey memberID) {
+        T member = active.get(memberID);
+        if (member == null) {
+            member = offline.get(memberID);
+        }
+        return member;
     }
 
     public Collection<T> getOffline() {
         return offline.values();
     }
 
-    public Ring<T>[] getRings() {
-        return Arrays.copyOf(rings, rings.length);
+    public int getRingCount() {
+        return rings.length;
     }
 
     @Override
@@ -211,6 +314,7 @@ public class Context<T extends Member> {
     }
 
     public boolean isActive(T m) {
+        assert m != null;
         return active.containsKey(m.getId());
     }
 
@@ -231,6 +335,24 @@ public class Context<T extends Member> {
         for (Ring<T> ring : rings) {
             ring.delete(m);
         }
+        membershipListeners.stream().forEach(l -> {
+            commonPool().execute(() -> {
+                try {
+                    l.fail(m);
+                } catch (Throwable e) {
+                    log.error("error sending fail to listener: " + l, e);
+                }
+            });
+        });
+    }
+
+    public boolean offlineIfActive(HashKey memberID) {
+        T activated = active.remove(memberID);
+        if (activated == null) {
+            return false;
+        }
+        offline(activated);
+        return true;
     }
 
     /**
@@ -247,9 +369,16 @@ public class Context<T extends Member> {
     public List<T> predecessors(HashKey key, Predicate<T> test) {
         List<T> predecessors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            predecessors.add(ring.predecessor(contextHash(key, ring.getIndex()), test));
+            T predecessor = ring.predecessor(contextHash(key, ring.getIndex()), test);
+            if (predecessor != null) {
+                predecessors.add(predecessor);
+            }
         }
         return predecessors;
+    }
+
+    public void register(MembershipListener<T> listener) {
+        membershipListeners.add(listener);
     }
 
     /**
@@ -271,6 +400,9 @@ public class Context<T extends Member> {
      * @return the indexed Ring<T>
      */
     public Ring<T> ring(int index) {
+        if (index < 0 || index >= rings.length) {
+            throw new IllegalArgumentException("Not a valid ring #: " + index);
+        }
         return rings[index];
     }
 
@@ -309,12 +441,36 @@ public class Context<T extends Member> {
     public List<T> successors(HashKey key, Predicate<T> test) {
         List<T> successors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            successors.add(ring.successor(contextHash(key, ring.getIndex()), test));
+            T successor = ring.successor(contextHash(key, ring.getIndex()), test);
+            if (successor != null) {
+                successors.add(successor);
+            }
         }
         return successors;
     }
 
-    protected HashKey hashFor(T m, int index) {
+    /**
+     * The number of iterations until a given message has been distributed to all
+     * members in the context, using the rings of the receiver as a gossip graph
+     */
+    public int timeToLive() {
+        return toleranceLevel() * diameter() + 1;
+    }
+
+    /**
+     * Answer the tolerance level of the context to byzantine members, assuming this
+     * context has been constructed from FF parameters
+     */
+    public int toleranceLevel() {
+        return (rings.length - 1) / 2;
+    }
+
+    @Override
+    public String toString() {
+        return "Context [id=" + id + " " + ring(0) + "]";
+    }
+
+    HashKey hashFor(T m, int index) {
         HashKey[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
             HashKey[] s = new HashKey[rings.length];
             MessageDigest md = DIGEST_CACHE.get();
@@ -334,7 +490,7 @@ public class Context<T extends Member> {
     private HashKey contextHash(HashKey key, int ring) {
         MessageDigest md = DIGEST_CACHE.get();
         md.reset();
-        md.update(String.format(CONTEXT_HASH_TEMPLATE, ring).getBytes());
+        md.update(String.format(CONTEXT_HASH_TEMPLATE, id, ring).getBytes());
         return new HashKey(md.digest());
     }
 }
