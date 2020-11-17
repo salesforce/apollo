@@ -198,7 +198,28 @@ public class TestConsortium {
         System.out.println("block processed, waiting for transaction completion: " + hash);
         assertTrue(Utils.waitForCondition(5_000, () -> txnProcessed.get()), "Transaction not completed");
         System.out.println("transaction completed: " + hash);
+        System.out.println();
 
+        int bunchCount = 10;
+        System.out.println("Submitting bunch: " + bunchCount);
+        CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+        for (int i = 0; i < bunchCount; i++) {
+            try {
+                HashKey pending = client.submit(h -> {
+                    System.out.println("Completing: " + h);
+                    submittedBunch.countDown();
+                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build()));
+                System.out.println("Submitted transaction:  " + pending);
+            } catch (TimeoutException e) {
+                fail();
+                return;
+            }
+        }
+
+        System.out.println("Awaiting " + bunchCount + " transactions");
+        boolean completed = submittedBunch.await(5, TimeUnit.SECONDS);
+        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
+        System.out.println("Completed additional " + bunchCount + " transactions");
     }
 
     private void gatherConsortium(Context<Member> view, Function<CertifiedBlock, HashKey> consensus,

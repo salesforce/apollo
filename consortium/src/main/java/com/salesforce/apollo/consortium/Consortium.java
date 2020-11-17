@@ -141,7 +141,7 @@ public class Consortium {
         }
 
         public void cancelAll() {
-            timers.values().forEach(t -> t.cancel());
+            scheduler.cancelAll();
             timers.clear();
         }
 

@@ -93,7 +93,9 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
                 head = e;
                 tail = e;
             } else {
-                prevTail.next = e;
+                if (prevTail != null) {
+                    prevTail.next = e;
+                }
                 e.prev = prevTail;
                 tail = e;
             }
@@ -202,7 +204,11 @@ public class PendingTransactions implements Iterable<PendingTransactions.Enqueue
         }
         EnqueuedTransaction currentTail = tail;
         if (e.equals(currentTail)) {
-            tail = currentHead.prev;
+            if (currentHead != null) {
+                tail = currentHead.prev;
+            } else {
+                tail = null;
+            }
         }
         e.next = e.prev = null;
         transactions.remove(e.hash);
