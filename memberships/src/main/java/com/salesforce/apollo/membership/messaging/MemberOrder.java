@@ -120,12 +120,14 @@ public class MemberOrder {
     private final BiConsumer<Msg, HashKey> processor;
     private final AtomicBoolean            started  = new AtomicBoolean();
     private final int                      ttl;
+    private final int                      tick;
 
     @SuppressWarnings("unchecked")
     public MemberOrder(BiConsumer<Msg, HashKey> processor, Messenger messenger) {
         this.processor = processor;
         this.context = (Context<Member>) messenger.getContext();
         ttl = context.timeToLive();
+        tick = Math.max(2, context.toleranceLevel() / 2);
         context.allMembers().forEach(m -> channels.put(m.getId(), new ActiveChannel(m.getId())));
 
         messenger.registerHandler(messages -> process(messages, messenger.getRound()));
@@ -204,7 +206,7 @@ public class MemberOrder {
     }
 
     public void tick(int round) {
-        if (round % ttl != 1) { // ttl + 1
+        if (round % tick != 0) {
             return;
         }
         final Lock write = lock;

@@ -6,11 +6,10 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -20,19 +19,19 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
+import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.Messages.Builder;
 import com.salesfoce.apollo.proto.Push;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.BbBackedInputStream;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashFunction;
@@ -45,34 +44,20 @@ import com.salesforce.apollo.protocols.HashKey;
 public class MessageBuffer {
     private final static Logger log = LoggerFactory.getLogger(MessageBuffer.class);
 
-    public static byte[] sign(Member from, Signature signature, int sequenceNumber, byte[] bytes) {
-        ByteBuffer seqNum = ByteBuffer.allocate(4);
-        seqNum.putInt(sequenceNumber);
-        byte[] s;
+    public static byte[] sign(HashKey hash, Signature signature) {
         try {
-            signature.update(from.getId().bytes());
-            signature.update(seqNum.array());
-            signature.update(bytes);
-            s = signature.sign();
+            signature.update(hash.bytes());
+            return signature.sign();
         } catch (SignatureException e) {
             throw new IllegalStateException("Unable to sign message content", e);
         }
-        return s;
     }
 
-    public static boolean validate(Message message, Signature signature) {
-        ByteBuffer seqNum = ByteBuffer.allocate(4);
-        seqNum.putInt(message.getSequenceNumber());
+    public static boolean validate(HashKey hash, Message message, Signature signature) {
         try {
-            signature.update(new HashKey(message.getSource()).bytes());
-            signature.update(seqNum.array());
-            byte[] buf = new byte[256];
-            InputStream is = BbBackedInputStream.aggregate(message.getContent());
-            for (int read = is.read(buf); read > 0; read = is.read(buf)) {
-                signature.update(buf, 0, read);
-            }
+            signature.update(hash.bytes());
             return signature.verify(message.getSignature().toByteArray());
-        } catch (SignatureException | IOException e) {
+        } catch (SignatureException e) {
             log.trace("Message validation error", e);
             return false;
         }
@@ -91,14 +76,20 @@ public class MessageBuffer {
         return nthHighest;
     }
 
-    private static HashKey idOf(byte[] source, int sequenceNumber, byte[] content) {
-        ByteBuffer seqNum = ByteBuffer.allocate(4);
-        seqNum.putInt(sequenceNumber);
-        return new HashKey(Conversion.hashOf(source, seqNum.array(), content));
+    private static HashKey idOf(int sequenceNumber, HashKey from, Any content) {
+        ByteBuffer header = ByteBuffer.allocate(32 + 4);
+        from.write(header);
+        header.putInt(sequenceNumber);
+        header.flip();
+        List<ByteBuffer> buffers = new ArrayList<>();
+        buffers.add(header);
+        buffers.addAll(content.toByteString().asReadOnlyByteBufferList());
+
+        return new HashKey(Conversion.hashOf(buffers));
     }
 
     private static HashKey idOf(Message message) {
-        return idOf(message.getSource().toByteArray(), message.getSequenceNumber(), message.getContent().toByteArray());
+        return idOf(message.getSequenceNumber(), new HashKey(message.getSource()), message.getContent());
     }
 
     private final int                   bufferSize;
@@ -135,9 +126,13 @@ public class MessageBuffer {
      * @param validator
      * @return the list of new messages for this buffer
      */
-    public List<Message> merge(List<Message> updates, Predicate<Message> validator) {
-        List<Message> merged = updates.parallelStream().filter(validator).filter(message -> {
+    public List<Message> merge(List<Message> updates, BiPredicate<HashKey, Message> validator) {
+        List<Message> merged = updates.parallelStream().filter(message -> {
             HashKey hash = idOf(message);
+            if (!validator.test(hash, message)) {
+                log.error("Cannot validate message: {}", hash);
+                return false;
+            }
             return merge(hash, message);
         }).collect(Collectors.toList());
         gc();
@@ -160,19 +155,19 @@ public class MessageBuffer {
     /**
      * Insert a new message into the buffer from the node
      * 
-     * @param bytes
+     * @param msg
      * @param from
      * @param signature
      * 
      * @return the inserted Message
      */
-    public Message publish(byte[] bytes, Member from, Signature signature) {
+    public Message publish(Any msg, Member from, Signature signature) {
         int sequenceNumber = lastSequenceNumber.getAndIncrement();
-        HashKey id = idOf(from.getId().bytes(), sequenceNumber, bytes);
-        Message update = state.computeIfAbsent(id, k -> createUpdate(bytes, sequenceNumber, from.getId(),
-                                                                     sign(from, signature, sequenceNumber, bytes)));
+        HashKey id = idOf(sequenceNumber, from.getId(), msg);
+        Message update = state.computeIfAbsent(id, k -> createUpdate(msg, sequenceNumber, from.getId(),
+                                                                     sign(k, signature)));
         gc();
-        log.trace("broadcasting: {}:{}", id, sequenceNumber);
+        log.trace("broadcasting: {}:{} on: {}", id, sequenceNumber, from);
         return update;
     }
 
@@ -188,12 +183,12 @@ public class MessageBuffer {
         purgeTheAged();
     }
 
-    private Message createUpdate(byte[] content, int sequenceNumber, HashKey from, byte[] signature) {
+    private Message createUpdate(Any msg, int sequenceNumber, HashKey from, byte[] signature) {
         return Message.newBuilder()
                       .setSource(from.toID())
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
-                      .setContent(ByteString.copyFrom(content))
+                      .setContent(msg)
                       .setSignature(ByteString.copyFrom(signature))
                       .build();
     }

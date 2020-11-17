@@ -18,7 +18,6 @@ import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -37,8 +36,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.Message;
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -46,7 +47,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
-import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
@@ -70,7 +70,13 @@ public class MessageTest {
         public void message(List<Msg> messages) {
             messages.forEach(message -> {
                 assert message.from != null : "null member";
-                ByteBuffer buf = ByteBuffer.wrap(message.content);
+                ByteBuffer buf;
+                try {
+                    buf = message.content.unpack(ByteMessage.class).getContents().asReadOnlyByteBuffer();
+                } catch (InvalidProtocolBufferException e) {
+                    throw new IllegalStateException(e);
+                }
+                assert buf.remaining() > 4 : "buffer: " + buf.remaining();
                 if (buf.getInt() == current.get() + 1) {
                     if (counted.add(message.from)) {
                         int totalCount = totalReceived.incrementAndGet();
@@ -175,7 +181,13 @@ public class MessageTest {
             ByteBuffer buf = ByteBuffer.wrap(new byte[36]);
             buf.putInt(r);
             buf.put(rand);
-            messengers.parallelStream().forEach(view -> view.publish(buf.array()));
+            buf.flip();
+            assert buf.remaining() > 0;
+            messengers.parallelStream().forEach(view -> {
+                ByteString packed = ByteString.copyFrom(buf.array());
+                assertEquals(36, packed.size());
+                view.publish(Any.pack(ByteMessage.newBuilder().setContents(packed).build()));
+            });
             boolean success = round.await(20, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
 
@@ -186,49 +198,6 @@ public class MessageTest {
             }
         }
         System.out.println();
-    }
-
-    @Test
-    public void testMessageBuffer() {
-        CertificateWithPrivateKey certificateWithPrivateKey = certs.values().stream().findFirst().get();
-        Member from = new Member(Member.getMemberId(certificateWithPrivateKey.getX509Certificate()),
-                certificateWithPrivateKey.getX509Certificate());
-
-        MessageBuffer buff1 = new MessageBuffer(10, 10);
-        byte[] bytes1 = new byte[] { 1, 2, 3, 4, 5 };
-        Message message = buff1.publish(bytes1, from, forSigning(from));
-
-        MessageBuffer buff2 = new MessageBuffer(10, 10);
-        List<Message> merged = buff2.merge(Arrays.asList(message),
-                                           m -> MessageBuffer.validate(message,
-                                                                       from.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM)));
-
-        assertEquals(1, merged.size());
-    }
-
-    @Test
-    public void testSigning() {
-        CertificateWithPrivateKey certificateWithPrivateKey = certs.values().stream().findFirst().get();
-        Member from = new Member(Member.getMemberId(certificateWithPrivateKey.getX509Certificate()),
-                certificateWithPrivateKey.getX509Certificate());
-        Signature signature = forSigning(from);
-
-        byte[] content = new byte[] { 1, 2, 3, 4 };
-        int channel = 1;
-        int sequenceNumber = 0;
-        HashKey id = HashKey.ORIGIN;
-
-        Message message = Message.newBuilder()
-                                 .setAge(1)
-                                 .setSequenceNumber(sequenceNumber)
-                                 .setChannel(channel)
-                                 .setContent(ByteString.copyFrom(content))
-                                 .setSource(id.toID())
-                                 .setSignature(ByteString.copyFrom(MessageBuffer.sign(from, signature, sequenceNumber,
-                                                                                      content)))
-                                 .build();
-
-        MessageBuffer.validate(message, from.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM));
     }
 
     private Signature forSigning(Member member) {

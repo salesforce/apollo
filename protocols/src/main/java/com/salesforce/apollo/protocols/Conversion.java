@@ -12,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 import com.google.protobuf.ByteString;
@@ -54,7 +55,12 @@ public final class Conversion {
         return md.digest();
     }
 
-    public static byte[] hashOf(ByteString byteString) {
+    public static byte[] hashOf(ByteBuffer... buffers) {
+        InputStream is = BbBackedInputStream.aggregate(buffers);
+        return hashOf(is);
+    }
+
+    public static byte[] hashOf(ByteString... byteString) {
         InputStream is = BbBackedInputStream.aggregate(byteString);
         return hashOf(is);
     }
@@ -79,6 +85,11 @@ public final class Conversion {
             throw new IllegalStateException("Error reading from buffers, cannot generate hash", e);
         }
         return md.digest();
+    }
+
+    public static byte[] hashOf(List<ByteBuffer> buffers) {
+        InputStream is = BbBackedInputStream.aggregate(buffers);
+        return hashOf(is);
     }
 
     public static DagEntry manifestDag(byte[] data) {

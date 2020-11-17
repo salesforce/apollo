@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
@@ -49,7 +50,6 @@ import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
-import com.salesfoce.apollo.consortium.proto.ConsortiumMessage;
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Header;
@@ -57,7 +57,7 @@ import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.JoinTransaction;
 import com.salesfoce.apollo.consortium.proto.JoinTransaction.Builder;
-import com.salesfoce.apollo.consortium.proto.MessageType;
+import com.salesfoce.apollo.consortium.proto.Persist;
 import com.salesfoce.apollo.consortium.proto.Proclamation;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
@@ -313,6 +313,7 @@ public class Consortium {
                             .setType(BodyType.USER)
                             .setContents(compress(user.build().toByteString()))
                             .build();
+
             Block block = Block.newBuilder()
                                .setHeader(Header.newBuilder()
                                                 .setPrevious(currentBlock.getHash().toByteString())
@@ -326,17 +327,14 @@ public class Consortium {
             CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
                                                                                                     .setBlock(block));
             blockCache.put(thisHeight, new CurrentBlock(hash, block));
-            deliver(ConsortiumMessage.newBuilder().setType(MessageType.BLOCK).setMsg(block.toByteString()).build());
+            deliver(Any.pack(block));
             lastBlock = thisHeight;
 
             Validate validation = generateValidation(hash, block);
             builder.addCertifications(Certification.newBuilder()
                                                    .setId(validation.getId())
                                                    .setSignature(validation.getSignature()));
-            deliver(ConsortiumMessage.newBuilder()
-                                     .setType(MessageType.VALIDATE)
-                                     .setMsg(validation.toByteString())
-                                     .build());
+            deliver(Any.pack(validation));
 
             log.info("Generated next block: {} height: {} on: {} txns: {}", hash, thisHeight, getMember(),
                      user.getTransactionsCount());
@@ -390,7 +388,7 @@ public class Consortium {
             }
             try {
                 Consortium.this.submit(true, h -> {
-                }, txn.build().toByteArray());
+                }, Any.pack(txn.build()));
             } catch (TimeoutException e) {
                 transitions.fail();
                 return;
@@ -497,10 +495,7 @@ public class Consortium {
                 } else {
                     log.trace("rebroadcasting txn: {}", hash);
 
-                    deliver(ConsortiumMessage.newBuilder()
-                                             .setMsg(enqueued.getTransaction().toByteString())
-                                             .setType(MessageType.TRANSACTION)
-                                             .build());
+                    deliver(Any.pack(enqueued.getTransaction()));
                 }
             }
         }
@@ -611,28 +606,27 @@ public class Consortium {
         }
 
         private void emitProclamation() {
-            deliver(ConsortiumMessage.newBuilder()
-                                     .setType(MessageType.PROCLAMATION)
-                                     .setMsg(Proclamation.newBuilder().setRegenecy(0).build().toByteString())
-                                     .build());
+            deliver(Any.pack(Proclamation.newBuilder().setRegenecy(0).build()));
             schedule(Timers.PROCLAIM, () -> emitProclamation(), vState.getCurrentView().timeToLive());
         }
 
         private void generateGenesisBlock() {
             Block block = Consortium.this.generateGenesis(pending, genesisData);
             HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-            CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
-                                                                                                    .setBlock(block));
-            lastBlock = 0;
-            deliver(ConsortiumMessage.newBuilder().setType(MessageType.BLOCK).setMsg(block.toByteString()).build());
-            Validate validation = generateValidationFromNextView(hash, block);
-            builder.addCertifications(Certification.newBuilder()
-                                                   .setId(validation.getId())
-                                                   .setSignature(validation.getSignature()));
-            deliver(ConsortiumMessage.newBuilder()
-                                     .setType(MessageType.VALIDATE)
-                                     .setMsg(validation.toByteString())
-                                     .build());
+            workingBlocks.computeIfAbsent(hash, k -> {
+                lastBlock = 0;
+                deliver(Any.pack(block));
+                Validate validation = generateValidationFromNextView(hash, block);
+                if (validation == null) {
+                    log.error("Cannot validate generated genesis block: {} on: {}", hash, getMember());
+                }
+                CertifiedBlock.Builder builder = CertifiedBlock.newBuilder().setBlock(block);
+                builder.addCertifications(Certification.newBuilder()
+                                                       .setId(validation.getId())
+                                                       .setSignature(validation.getSignature()));
+                deliver(Any.pack(validation));
+                return builder;
+            });
         }
 
         private void rescheduleGenesis() {
@@ -645,10 +639,7 @@ public class Consortium {
                     rescheduleGenesis();
                 }
             }, vState.getCurrentView().timeToLive());
-            deliver(ConsortiumMessage.newBuilder()
-                                     .setType(MessageType.PROCLAMATION)
-                                     .setMsg(Proclamation.newBuilder().setRegenecy(0).build().toByteString())
-                                     .build());
+            deliver(Any.pack(Proclamation.newBuilder().setRegenecy(0).build()));
         }
 
         private void schedule(Timers label, Runnable a, int delta) {
@@ -768,7 +759,7 @@ public class Consortium {
         buffers.add(ByteString.copyFrom(transaction.getJoin() ? new byte[] { 1 } : new byte[] { 0 }));
         buffers.add(transaction.getSource());
         for (int i = 0; i < transaction.getBatchCount(); i++) {
-            buffers.add(transaction.getBatch(i));
+            buffers.add(transaction.getBatch(i).toByteString());
         }
 
         return new HashKey(Conversion.hashOf(BbBackedInputStream.aggregate(buffers)));
@@ -913,7 +904,7 @@ public class Consortium {
         transitions.stop();
     }
 
-    public HashKey submit(Consumer<HashKey> onCompletion, byte[]... transactions) throws TimeoutException {
+    public HashKey submit(Consumer<HashKey> onCompletion, Any... transactions) throws TimeoutException {
         return submit(false, onCompletion, transactions);
 
     }
@@ -944,13 +935,13 @@ public class Consortium {
         }
     }
 
-    private void deliver(ConsortiumMessage message) {
+    private void deliver(Any message) {
         final Messenger currentMsgr = vState.getMessenger();
         if (currentMsgr == null) {
             log.error("skipping message publish as no messenger");
             return;
         }
-        currentMsgr.publish(message.toByteArray());
+        currentMsgr.publish(message);
     }
 
     private SecureRandom entropy() {
@@ -981,7 +972,7 @@ public class Consortium {
                                                            .setTransaction(join.getTransaction()));
             JoinTransaction txn;
             try {
-                txn = JoinTransaction.parseFrom(join.getTransaction().getBatch(0));
+                txn = join.getTransaction().getBatch(0).unpack(JoinTransaction.class);
             } catch (InvalidProtocolBufferException e) {
                 log.error("Cannot generate genesis, unable to parse Join txnL {} on: {}", join.getHash(), getMember());
                 transitions.fail();
@@ -1053,12 +1044,7 @@ public class Consortium {
                                       .setHash(hash.toByteString())
                                       .setSignature(ByteString.copyFrom(signature))
                                       .build();
-        vState.getMessenger()
-              .publish(ConsortiumMessage.newBuilder()
-                                        .setType(MessageType.VALIDATE)
-                                        .setMsg(validation.toByteString())
-                                        .build()
-                                        .toByteArray());
+        deliver(Any.pack(validation));
         return validation;
     }
 
@@ -1130,54 +1116,54 @@ public class Consortium {
         if (!started.get()) {
             return;
         }
-        ConsortiumMessage message;
-        try {
-            message = ConsortiumMessage.parseFrom(msg.content);
-        } catch (InvalidProtocolBufferException e) {
-            log.error("error parsing message from: {} on: {}", msg.from, getMember(), e);
-            return;
-        }
-        switch (message.getType()) {
-        case BLOCK:
+        if (msg.content.is(Block.class)) {
             try {
-                transitions.deliverBlock(Block.parseFrom(message.getMsg().asReadOnlyByteBuffer()), msg.from);
+                transitions.deliverBlock(msg.content.unpack(Block.class), msg.from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid block delivered from: {} on: {}", msg.from, getMember(), e);
             }
-            break;
-        case PERSIST:
-            transitions.deliverPersist(new HashKey(message.getMsg()));
-            break;
-        case TRANSACTION:
+            return;
+        }
+        if (msg.content.is(Persist.class)) {
             try {
-                transitions.deliverTransaction(Transaction.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
+                @SuppressWarnings("unused")
+                Persist persist = msg.content.unpack(Persist.class);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid persis delivered from: {} on: {}", msg.from, getMember(), e);
+            }
+            transitions.deliverPersist(HashKey.ORIGIN);
+            return;
+        }
+        if (msg.content.is(Transaction.class)) {
+            try {
+                transitions.deliverTransaction(msg.content.unpack(Transaction.class));
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid transaction delivered from: {} on: {}", msg.from, getMember(), e);
             }
-            break;
-        case VALIDATE:
-            try {
-                transitions.deliverValidate(Validate.parseFrom(message.getMsg().asReadOnlyByteBuffer()));
-            } catch (InvalidProtocolBufferException e) {
-                log.error("invalid validate delivered from: {} on: {}", msg.from, getMember(), e);
-            }
-            break;
-        case PROCLAMATION:
-            try {
-                transitions.deliverProclamation(Proclamation.parseFrom(message.getMsg().asReadOnlyByteBuffer()),
-                                                msg.from);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("invalid validate delivered from: {} on: {}", msg.from, getMember(), e);
-            }
-            break;
-        case UNRECOGNIZED:
-        default:
-            log.error("Invalid consortium message type: {} from: {} on: {}", message.getType(), msg.from, getMember());
+            return;
         }
+        if (msg.content.is(Validate.class)) {
+            try {
+                transitions.deliverValidate(msg.content.unpack(Validate.class));
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid validate delivered from: {} on: {}", msg.from, getMember(), e);
+            }
+            return;
+        }
+        if (msg.content.is(Proclamation.class)) {
+            try {
+                transitions.deliverProclamation(msg.content.unpack(Proclamation.class), msg.from);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid validate delivered from: {} on: {}", msg.from, getMember(), e);
+            }
+            return;
+        }
+        log.error("Invalid consortium message type: {} from: {} on: {}", msg.content.getDescriptorForType(), msg.from,
+                  getMember());
+
     }
 
-    private HashKey submit(boolean join, Consumer<HashKey> onCompletion,
-                           byte[]... transactions) throws TimeoutException {
+    private HashKey submit(boolean join, Consumer<HashKey> onCompletion, Any... transactions) throws TimeoutException {
         final Context<Member> current = vState.getCurrentView();
         if (current == null) {
             throw new IllegalStateException(
@@ -1191,8 +1177,8 @@ public class Consortium {
                                                  .setJoin(join)
                                                  .setSource(params.member.getId().toByteString())
                                                  .setNonce(ByteString.copyFrom(nonce));
-        for (byte[] t : transactions) {
-            builder.addBatch(ByteString.copyFrom(t));
+        for (Any t : transactions) {
+            builder.addBatch(t);
         }
 
         HashKey hash = hashOf(builder);

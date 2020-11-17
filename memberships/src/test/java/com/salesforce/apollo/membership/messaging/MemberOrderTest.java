@@ -32,6 +32,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -157,7 +160,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
-                m.publish("Give me food, or give me slack, or kill me".getBytes());
+                m.publish(Any.pack(ByteMessage.newBuilder()
+                                              .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                              .build()));
             });
         }
 
@@ -211,7 +216,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
-                m.publish("Give me food, or give me slack, or kill me".getBytes());
+                m.publish(Any.pack(ByteMessage.newBuilder()
+                                              .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                              .build()));
             });
         }
 
@@ -237,7 +244,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             liveRcvrs.forEach(r -> {
-                r.messenger.publish("Give me food, or give me slack, or kill me".getBytes());
+                r.messenger.publish(Any.pack(ByteMessage.newBuilder()
+                                                        .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                                        .build()));
             });
         }
 
@@ -259,7 +268,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             receivers.forEach(r -> {
-                r.messenger.publish("Give me food, or give me slack, or kill me".getBytes());
+                r.messenger.publish(Any.pack(ByteMessage.newBuilder()
+                                                        .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                                        .build()));
             });
         }
 

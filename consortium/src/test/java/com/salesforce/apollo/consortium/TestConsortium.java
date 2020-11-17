@@ -38,7 +38,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -181,7 +183,10 @@ public class TestConsortium {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit(h -> txnProcessed.set(true), "Hello world".getBytes());
+            hash = client.submit(h -> txnProcessed.set(true),
+                                 Any.pack(ByteTransaction.newBuilder()
+                                                         .setContent(ByteString.copyFromUtf8("Hello world"))
+                                                         .build()));
         } catch (TimeoutException e) {
             fail();
             return;

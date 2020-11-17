@@ -24,9 +24,8 @@ import com.google.protobuf.ByteString;
  *
  */
 public class BbBackedInputStream extends InputStream {
-    public static InputStream aggregate(List<ByteString> buffers) {
-        return aggregate(buffers.stream().map(e -> e.asReadOnlyByteBuffer()).collect(Collectors.toList()));
-
+    public static InputStream aggregate(ByteBuffer... buffers) {
+        return aggregate(Arrays.asList(buffers));
     }
 
     public static InputStream aggregate(ByteString... byteStrings) {
@@ -68,6 +67,11 @@ public class BbBackedInputStream extends InputStream {
                 return is;
             }
         });
+    }
+
+    public static InputStream aggregate(List<ByteString> buffers) {
+        return aggregate(buffers.stream().map(e -> e.asReadOnlyByteBuffer()).collect(Collectors.toList()));
+
     }
 
     private final ByteBuffer buf;

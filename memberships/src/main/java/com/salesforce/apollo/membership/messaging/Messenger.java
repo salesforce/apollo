@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Supplier;
+import com.google.protobuf.Any;
 import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.MessageBff;
 import com.salesfoce.apollo.proto.Messages;
@@ -50,14 +51,14 @@ public class Messenger {
     @FunctionalInterface
     public interface MessageChannelHandler {
         class Msg {
-            public final byte[] content;
+            public final Any    content;
             public final Member from;
             public final int    sequenceNumber;
 
-            public Msg(Member from, int sequenceNumber, byte[] content) {
+            public Msg(Member from, int sequenceNumber, Any any) {
                 this.from = from;
                 this.sequenceNumber = sequenceNumber;
-                this.content = content;
+                this.content = any;
             }
 
             @Override
@@ -260,7 +261,7 @@ public class Messenger {
         });
     }
 
-    public void publish(byte[] message) {
+    public void publish(Any message) {
         buffer.publish(message, member, signature.get());
     }
 
@@ -328,7 +329,7 @@ public class Messenger {
             return;
         }
         List<Msg> newMessages = new ArrayList<>();
-        buffer.merge(updates, message -> validate(message)).stream().map(m -> {
+        buffer.merge(updates, (hash, message) -> validate(hash, message)).stream().map(m -> {
             HashKey id = new HashKey(m.getSource());
             if (member.getId().equals(id)) {
                 log.trace("Ignoriing message from self");
@@ -339,7 +340,7 @@ public class Messenger {
                 log.trace("{} message from unknown member: {}", member, id);
                 return null;
             } else {
-                return new Msg(from, m.getSequenceNumber(), m.getContent().toByteArray());
+                return new Msg(from, m.getSequenceNumber(), m.getContent());
             }
         }).filter(m -> m != null).forEach(msg -> {
             newMessages.add(msg);
@@ -352,14 +353,14 @@ public class Messenger {
         channelHandlers.forEach(handler -> commonPool().execute(() -> handler.message(newMessages)));
     }
 
-    private boolean validate(Message message) {
+    private boolean validate(HashKey hash, Message message) {
         HashKey memberID = new HashKey(message.getSource());
         Member member = context.getMember(memberID);
         if (member == null) {
             log.debug("Non existent member: " + memberID);
             return false;
         }
-        if (!MessageBuffer.validate(message, member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM))) {
+        if (!MessageBuffer.validate(hash, message, member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM))) {
             log.trace("Did not validate message {} from {}", message, memberID);
             return false;
         }

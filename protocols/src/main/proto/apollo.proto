@@ -4,6 +4,7 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.proto";
 option java_outer_classname = "ApolloProto";
 option objc_class_prefix = "Ap";
+import "google/protobuf/any.proto";
 
 package apollo;
 
@@ -32,8 +33,12 @@ message Message {
     int32 sequenceNumber = 2;
     int32 age = 3;
     int32 channel = 4;
-    bytes content = 5;
-    bytes signature = 6;
+    bytes signature = 5;
+    google.protobuf.Any content = 6;
+}
+
+message ByteMessage {
+    bytes contents = 1;
 }
 
 message Messages {
