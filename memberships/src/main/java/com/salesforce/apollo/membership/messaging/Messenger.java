@@ -13,8 +13,10 @@ import java.security.SecureRandom;
 import java.security.Signature;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -178,6 +180,7 @@ public class Messenger {
     private volatile int                                                       lastRing        = -1;
     private final Member                                                       member;
     private final Parameters                                                   parameters;
+    private final Deque<Msg>                                                   pending         = new LinkedBlockingDeque<Msg>();
     private final AtomicInteger                                                round           = new AtomicInteger();
     private final List<Consumer<Integer>>                                      roundListeners  = new CopyOnWriteArrayList<>();
     private final Supplier<Signature>                                          signature;
@@ -205,6 +208,10 @@ public class Messenger {
         return member;
     }
 
+    public int getRound() {
+        return round.get();
+    }
+
     public void oneRound(Duration duration, ScheduledExecutorService scheduler) {
         if (!started.get()) {
             return;
@@ -217,6 +224,9 @@ public class Messenger {
         }
 
         commonPool().execute(() -> {
+            if (!started.get()) {
+                return;
+            }
             int gossipRound = round.incrementAndGet();
             log.trace("message gossiping[{}] from {} with {} on {}", gossipRound, member, link.getMember(), ring);
             try {
@@ -248,20 +258,36 @@ public class Messenger {
             }
             if (started.get()) {
                 roundListeners.forEach(l -> {
-                    commonPool().execute(() -> {
+                    try {
+                        l.accept(gossipRound);
+                    } catch (Throwable e) {
+                        log.error("error sending round() to listener: " + l, e);
+                    }
+                });
+                List<Msg> msgs = new ArrayList<>();
+                Msg msg = pending.poll();
+                while (msg != null) {
+                    msgs.add(msg);
+                    msg = pending.poll();
+                }
+                if (!msgs.isEmpty()) {
+                    channelHandlers.forEach(handler -> {
                         try {
-                            l.accept(gossipRound);
+                            handler.message(msgs);
                         } catch (Throwable e) {
-                            log.error("error sending round() to listener: " + l, e);
+                            log.error("Error in message handler on: {}", member, e);
                         }
                     });
-                });
+                }
                 scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
             }
         });
     }
 
     public void publish(Any message) {
+        if (!started.get()) {
+            return;
+        }
         buffer.publish(message, member, signature.get());
     }
 
@@ -328,7 +354,7 @@ public class Messenger {
         if (updates.size() == 0) {
             return;
         }
-        List<Msg> newMessages = new ArrayList<>();
+        int newMessages = 0;
         buffer.merge(updates, (hash, message) -> validate(hash, message)).stream().map(m -> {
             HashKey id = new HashKey(m.getSource());
             if (member.getId().equals(id)) {
@@ -343,14 +369,13 @@ public class Messenger {
                 return new Msg(from, m.getSequenceNumber(), m.getContent());
             }
         }).filter(m -> m != null).forEach(msg -> {
-            newMessages.add(msg);
+            pending.add(msg);
         });
-        if (newMessages.isEmpty()) {
+        if (newMessages == 0) {
             log.trace("No updates processed out of: {}", updates.size());
             return;
         }
         log.trace("processed {} updates", updates.size());
-        channelHandlers.forEach(handler -> commonPool().execute(() -> handler.message(newMessages)));
     }
 
     private boolean validate(HashKey hash, Message message) {
@@ -365,9 +390,5 @@ public class Messenger {
             return false;
         }
         return true;
-    }
-
-    public int getRound() {
-        return round.get();
     }
 }
