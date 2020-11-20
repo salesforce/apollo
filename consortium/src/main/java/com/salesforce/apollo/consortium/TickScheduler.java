@@ -49,6 +49,9 @@ public class TickScheduler {
 
         @Override
         public int compareTo(Timer o) {
+            if (o == null) {
+                return -1;
+            }
             return Integer.compare(deadline, o.deadline);
         }
 
@@ -540,14 +543,10 @@ public class TickScheduler {
     public void tick(int current) {
         currentRound = current;
         List<Timer> drained = new ArrayList<>();
-        Timer head = scheduled.peek();
+        Timer head = scheduled.poll();
         while (head != null) {
-            if (current >= head.deadline) {
-                drained.add(scheduled.remove());
-                head = scheduled.peek();
-            } else {
-                head = null;
-            }
+            drained.add(head);
+            head = scheduled.poll();
         }
         drained.forEach(e -> {
             try {

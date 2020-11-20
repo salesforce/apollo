@@ -6,9 +6,11 @@
  */
 package com.salesforce.apollo.consortium.comms;
 
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc.OrderingServiceImplBase;
+import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesforce.apollo.comm.RoutableService;
@@ -37,25 +39,35 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     }
 
     @Override
-    public void submit(SubmitTransaction request, StreamObserver<TransactionResult> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
-                        s -> {
-                            responseObserver.onNext(s.clientSubmit(request, identity.getFrom()));
-                            responseObserver.onCompleted();
-                        });
-    }
-
-    @Override
-    public void vote(Join request, StreamObserver<JoinResult> responseObserver) {
+    public void join(Join request, StreamObserver<JoinResult> responseObserver) {
         try {
             router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                             s -> {
-                                responseObserver.onNext(s.vote(request, identity.getFrom()));
+                                responseObserver.onNext(s.join(request, identity.getFrom()));
                                 responseObserver.onCompleted();
                             });
         } catch (RuntimeException e) {
             e.printStackTrace();
             throw e;
         }
+    }
+
+    @Override
+    public void stop(StopData request, StreamObserver<Empty> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                        s -> {
+                            s.stop(request, identity.getFrom());
+                            responseObserver.onNext(Empty.getDefaultInstance());
+                            responseObserver.onCompleted();
+                        });
+    }
+
+    @Override
+    public void submit(SubmitTransaction request, StreamObserver<TransactionResult> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                        s -> {
+                            responseObserver.onNext(s.clientSubmit(request, identity.getFrom()));
+                            responseObserver.onCompleted();
+                        });
     }
 }

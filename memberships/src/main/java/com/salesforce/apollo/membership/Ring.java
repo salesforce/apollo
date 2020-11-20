@@ -140,6 +140,20 @@ public class Ring<T extends Member> implements Iterable<T> {
         return Sets.difference(ring.keySet(), r.ring.keySet());
     }
 
+    /**
+     * Answer the nth member on the ring. Wrap arounds permitted - i.e. this cycles.
+     */
+    public Member get(int m) {
+        int index = m % ring.size();
+        for (Member member : ring.values()) {
+            if (index == 0) {
+                return member;
+            }
+            index--;
+        }
+        throw new NoSuchElementException("empty ring");
+    }
+
     public int getIndex() {
         return index;
     }

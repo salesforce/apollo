@@ -6,16 +6,19 @@
  */
 package com.salesforce.apollo.consortium.fsm;
 
+import java.util.List;
+
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.Proclamation;
+import com.salesfoce.apollo.consortium.proto.StopData;
+import com.salesfoce.apollo.consortium.proto.TotalOrdering;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.CurrentBlock;
-import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
+import com.salesforce.apollo.consortium.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -25,9 +28,36 @@ import com.salesforce.apollo.membership.Member;
  *
  */
 public enum CollaboratorFsm implements Transitions {
+    AWAITING_SYNCHRONIZATION {
+
+    },
+    CHANGE_REGENCY {
+
+        @Override
+        public Transitions regentChosen() {
+            return AWAITING_SYNCHRONIZATION;
+        }
+
+        @Override
+        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverStopData(StopData stopData, Member from) {
+            context().deliverStopData(stopData, from);
+            return null;
+        }
+
+    },
     CLIENT, FOLLOWER
 
     {
+
+        @Override
+        public Transitions becomeFollower() {
+            return null;
+        }
 
         @Override
         public Transitions deliverBlock(Block block, Member from) {
@@ -36,14 +66,14 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().resendUnreplicated(p, from);
+        public Transitions deliverTotalOrdering(TotalOrdering msg, Member from) {
+            context().deliverTotalOrdering(msg, from);
             return null;
         }
 
         @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().add(txn);
+        public Transitions deliverTransaction(Transaction txn, Member from) {
+            context().receive(txn);
             return null;
         }
 
@@ -54,14 +84,15 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submit(enqueuedTransaction);
+        public Transitions receive(Transaction transacton, Member from) {
+            context().receive(transacton);
             return null;
         }
-        
-        @Entry
-        public void cancelAll() {
-            context().cancelAll();
+
+        @Override
+        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
+            context().changeRegency(transactions);
+            return CHANGE_REGENCY;
         }
 
     },
@@ -93,12 +124,7 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverTransaction(Transaction txn) {
+        public Transitions deliverTransaction(Transaction txn, Member from) {
             return null;
         }
 
@@ -121,8 +147,14 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().evaluate(txn);
+        public Transitions deliverTotalOrdering(TotalOrdering msg, Member from) {
+            context().deliverTotalOrdering(msg, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverTransaction(Transaction txn, Member from) {
+            context().receive(txn);
             return null;
         }
 
@@ -135,7 +167,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions drainPending() {
-            context().generateNextBlock();
+            context().drainBlocks();
             return null;
         }
 
@@ -145,9 +177,15 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().evaluate(enqueuedTransaction);
+        public Transitions receive(Transaction transacton, Member from) {
+            context().receive(transacton);
             return null;
+        }
+
+        @Override
+        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
+            context().changeRegency(transactions);
+            return CHANGE_REGENCY;
         }
     },
     PROTOCOL_FAILURE {

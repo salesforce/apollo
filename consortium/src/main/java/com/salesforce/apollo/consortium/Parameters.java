@@ -15,7 +15,6 @@ import com.google.common.base.Supplier;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
@@ -28,7 +27,7 @@ public class Parameters {
         private Context<Member>                           context;
         private Duration                                  gossipDuration;
         private int                                       maxBatchByteSize = 4 * 1024;
-        private int                                       maxBatchDelay = 1;
+        private Duration                                  maxBatchDelay    = Duration.ofMillis(100);
         private int                                       maxBatchSize     = 10;
         private Member                                    member;
         private Messenger.Parameters                      msgParameters;
@@ -61,7 +60,7 @@ public class Parameters {
             return maxBatchByteSize;
         }
 
-        public int getMaxBatchDelay() {
+        public Duration getMaxBatchDelay() {
             return maxBatchDelay;
         }
 
@@ -115,7 +114,7 @@ public class Parameters {
             return this;
         }
 
-        public Builder setMaxBatchDelay(int maxBatchDelay) {
+        public Builder setMaxBatchDelay(Duration maxBatchDelay) {
             this.maxBatchDelay = maxBatchDelay;
             return this;
         }
@@ -171,7 +170,7 @@ public class Parameters {
     public Parameters(Context<Member> context, Router communications, Member member, Messenger.Parameters msgParameters,
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             Function<CertifiedBlock, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
-            Function<EnqueuedTransaction, ByteString> validator, int maxBatchDelay) {
+            Function<EnqueuedTransaction, ByteString> validator, Duration maxBatchDelay) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -183,6 +182,7 @@ public class Parameters {
         this.maxBatchSize = maxBatchSize;
         this.maxBatchByteSize = maxBatchByteSize;
         this.validator = validator;
-        this.maxBatchDelay = maxBatchDelay;
+        int maxTicks = (int) maxBatchDelay.dividedBy(gossipDuration);
+        this.maxBatchDelay = Math.max(context.getRingCount(), maxTicks);
     }
 }

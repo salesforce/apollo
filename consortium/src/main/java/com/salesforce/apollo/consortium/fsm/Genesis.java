@@ -9,10 +9,11 @@ package com.salesforce.apollo.consortium.fsm;
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.Proclamation;
+import com.salesfoce.apollo.consortium.proto.TotalOrdering;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
-import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
+import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
+import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -24,6 +25,7 @@ import com.salesforce.apollo.membership.Member;
 public enum Genesis implements Transitions {
 
     FOLLOWER {
+
         @Override
         public Transitions deliverBlock(Block block, Member from) {
             context().deliverGenesisBlock(block, from);
@@ -31,14 +33,14 @@ public enum Genesis implements Transitions {
         }
 
         @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().resendUnreplicated(p, from);
+        public Transitions deliverTotalOrdering(TotalOrdering msg, Member from) {
+            context().genesisTotalOrdering(msg, from);
             return null;
         }
 
         @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().add(txn);
+        public Transitions deliverTransaction(Transaction txn, Member from) {
+            context().receive(txn);
             return null;
         }
 
@@ -65,12 +67,18 @@ public enum Genesis implements Transitions {
         }
 
         @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submitJoin(enqueuedTransaction);
+        public Transitions receive(Transaction transacton, Member from) {
+            context().receive(transacton);
             return null;
         }
     },
     GENERATE {
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            context().validate(validation);
+            return null;
+        }
 
         @Override
         public Transitions becomeFollower() {
@@ -82,30 +90,9 @@ public enum Genesis implements Transitions {
             return LEADER;
         }
 
-        @Exit
-        public void cancel() {
-            context().cancelAll();
-        }
-
         @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().deliverProclamation(p, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().add(txn);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverValidate(Validate validation) {
+        public Transitions deliverTransaction(Transaction txn, Member from) {
+            context().receive(txn);
             return null;
         }
 
@@ -115,27 +102,31 @@ public enum Genesis implements Transitions {
             return null;
         }
 
+        @Entry
+        public void generate() {
+            context().awaitFormation();
+        }
+
         @Override
         public Transitions genesisAccepted() {
             return ORDERED;
         }
 
         @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submitJoin(enqueuedTransaction);
+        public Transitions receive(Transaction transacton, Member from) {
+            context().receive(transacton);
             return null;
         }
 
-        @Entry
-        public void generate() {
-            context().cancelAll();
-            context().awaitFormation();
+        @Exit
+        public void cancelAwait() {
+            context().cancel(Timers.AWAIT_FORMATION);
         }
     },
     LEADER {
         @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().add(txn);
+        public Transitions deliverTransaction(Transaction txn, Member from) {
+            context().receive(txn);
             return null;
         }
 
@@ -163,8 +154,8 @@ public enum Genesis implements Transitions {
         }
 
         @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submitJoin(enqueuedTransaction);
+        public Transitions receive(Transaction transacton, Member from) {
+            context().receive(transacton);
             return null;
         }
 
@@ -178,12 +169,8 @@ public enum Genesis implements Transitions {
 
         @Entry
         public void cancelAll() {
-            context().cancelAll();
-        }
-
-        @Exit
-        public void cancelTimers() {
-            context().cancelAll();
+            CollaboratorContext context = context();
+            context.quiesce();
         }
 
         @Override
@@ -192,17 +179,17 @@ public enum Genesis implements Transitions {
         }
 
         @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverTransaction(Transaction txn) {
+        public Transitions deliverTransaction(Transaction txn, Member from) {
             return null;
         }
 
         @Override
         public Transitions deliverValidate(Validate validation) {
+            return null;
+        }
+
+        @Override
+        public Transitions genesisAccepted() {
             return null;
         }
 
@@ -213,7 +200,7 @@ public enum Genesis implements Transitions {
         }
 
         @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
+        public Transitions receive(Transaction transacton, Member from) {
             return null;
         }
 

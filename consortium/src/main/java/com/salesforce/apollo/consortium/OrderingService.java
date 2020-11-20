@@ -8,6 +8,7 @@ package com.salesforce.apollo.consortium;
 
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
+import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 
@@ -18,5 +19,7 @@ import com.salesfoce.apollo.consortium.proto.TransactionResult;
 public interface OrderingService {
     TransactionResult clientSubmit(SubmitTransaction request);
 
-    JoinResult vote(Join join);
+    JoinResult join(Join join);
+
+    void stop(StopData stopData);
 }

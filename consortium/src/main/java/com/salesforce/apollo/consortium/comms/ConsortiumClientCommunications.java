@@ -10,6 +10,7 @@ import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc;
 import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc.OrderingServiceBlockingStub;
+import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
@@ -56,7 +57,12 @@ public class ConsortiumClientCommunications implements OrderingService {
     }
 
     @Override
-    public JoinResult vote(Join join) {
-        return client.vote(join);
+    public JoinResult join(Join join) {
+        return client.join(join);
+    }
+
+    @Override
+    public void stop(StopData stopData) {
+        client.stop(stopData);
     }
 }

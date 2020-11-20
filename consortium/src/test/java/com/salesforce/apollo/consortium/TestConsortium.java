@@ -9,6 +9,7 @@ package com.salesforce.apollo.consortium;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -22,8 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -40,19 +41,23 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.Header;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
+import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
+import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -70,7 +75,7 @@ public class TestConsortium {
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
-    private final static int                               testCardinality = 25;
+    private final static int                               testCardinality = 12;
 
     @BeforeAll
     public static void beforeClass() {
@@ -122,6 +127,23 @@ public class TestConsortium {
     }
 
     @Test
+    public void testGaps() throws Exception {
+        List<CertifiedBlock> blocks = new ArrayList<>();
+        HashKey prev = HashKey.ORIGIN;
+        for (int i = 0; i < 10; i++) {
+            Block block = Block.newBuilder().setHeader(Header.newBuilder().setPrevious(prev.toByteString())).build();
+            blocks.add(CertifiedBlock.newBuilder().setBlock(block).build());
+            prev = new HashKey(Conversion.hashOf(block.toByteString()));
+        }
+        assertTrue(Consortium.noGaps(blocks, HashKey.ORIGIN));
+        ArrayList<CertifiedBlock> gapped = new ArrayList<>(blocks);
+        gapped.remove(5);
+        assertFalse(Consortium.noGaps(gapped, HashKey.ORIGIN));
+        assertFalse(Consortium.noGaps(blocks.subList(1, blocks.size()), HashKey.ORIGIN));
+        assertFalse(Consortium.noGaps(blocks, HashKey.LAST));
+    }
+
+    @Test
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
@@ -130,22 +152,20 @@ public class TestConsortium {
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
                                                                  .build();
+        Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Function<CertifiedBlock, HashKey> consensus = c -> {
-            ForkJoinPool.commonPool()
-                        .execute(() -> consortium.values()
-                                                 .stream()
-                                                 .forEach(m -> ForkJoinPool.commonPool().execute(() -> {
-                                                     if (m.process(c)) {
-                                                         processed.get().countDown();
-                                                     }
-                                                 })));
+            cPipeline.execute(() -> consortium.values().stream().forEach(m -> {
+                if (m.process(c)) {
+                    processed.get().countDown();
+                }
+            }));
             return HashKey.ORIGIN;
         };
         gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
-        Consortium.viewFor(Consortium.GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
+        ViewContext.viewFor(Consortium.GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
@@ -260,8 +280,10 @@ public class TestConsortium {
                                .map(c -> c.fsm().getCurrentState())
                                .filter(b -> b == CollaboratorFsm.FOLLOWER)
                                .count(),
-                     "True follower gone bad: "
-                             + blueRibbon.stream().map(c -> c.fsm().getCurrentState()).collect(Collectors.toSet()));
+                     "True follower gone bad: " + blueRibbon.stream().map(c -> {
+                         Transitions cs = c.fsm().getCurrentState();
+                         return cs.getClass().getSimpleName() + "." + cs;
+                     }).collect(Collectors.toSet()));
         assertEquals(1,
                      blueRibbon.stream()
                                .map(c -> c.fsm().getCurrentState())

@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
 
 /**
  * @author hal.hildebrand

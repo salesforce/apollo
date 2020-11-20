@@ -20,6 +20,7 @@ import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -82,6 +83,23 @@ public class Validator {
     }
 
     public static byte[] sign(Signature signature, byte[]... contents) {
+        for (byte[] part : contents) {
+            try {
+                signature.update(part);
+            } catch (SignatureException e) {
+                log.error("unable to sign contents", e);
+                return null;
+            }
+        }
+        try {
+            return signature.sign();
+        } catch (SignatureException e) {
+            log.error("unable to sign contents", e);
+            return null;
+        }
+    }
+
+    public static byte[] sign(Signature signature, SecureRandom entropy, List<byte[]> contents) {
         for (byte[] part : contents) {
             try {
                 signature.update(part);
@@ -188,7 +206,8 @@ public class Validator {
     }
 
     private final Member leader;
-    private final int    toleranceLevel;
+
+    private final int toleranceLevel;
 
     private final Context<Member> view;
 

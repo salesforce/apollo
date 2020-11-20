@@ -14,7 +14,6 @@ import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
@@ -28,40 +27,21 @@ import com.salesforce.apollo.membership.messaging.Messenger;
  */
 class VolatileState implements MembershipListener<Member> {
     private volatile CommonCommunications<ConsortiumClientCommunications, Service> comm;
-    private volatile KeyPair                                                       consensusKeyPair;
     private volatile CurrentBlock                                                  current;
     private volatile Messenger                                                     messenger;
     private volatile ViewMember                                                    nextView;
     private volatile KeyPair                                                       nextViewConsensusKeyPair;
     private volatile MemberOrder                                                   order;
-    private volatile Validator                                                     validator;
-
-    @Override
-    public void fail(Member member) {
-        final Context<Member> view = getCurrentView();
-        if (view != null) {
-            view.offlineIfActive(member.getId());
-        }
-    }
-
-    @Override
-    public void recover(Member member) {
-        final Context<Member> view = getCurrentView();
-        if (view != null) {
-            view.activateIfOffline(member.getId());
-        }
-    }
+    private volatile ViewContext                                                   viewContext;
 
     void clear() {
         pause();
         comm = null;
         order = null;
-        consensusKeyPair = null;
         current = null;
         messenger = null;
         nextView = null;
         order = null;
-        validator = validator;
     }
 
     CommonCommunications<ConsortiumClientCommunications, Service> getComm() {
@@ -69,23 +49,9 @@ class VolatileState implements MembershipListener<Member> {
         return cc;
     }
 
-    KeyPair getConsensusKeyPair() {
-        final KeyPair ckp = consensusKeyPair;
-        return ckp;
-    }
-
     CurrentBlock getCurrent() {
         final CurrentBlock cb = current;
         return cb;
-    }
-
-    Context<Member> getCurrentView() {
-        Validator v = getValidator();
-        return v != null ? v.getView() : null;
-    }
-
-    Member getLeader() {
-        return getValidator().getLeader();
     }
 
     Messenger getMessenger() {
@@ -108,15 +74,14 @@ class VolatileState implements MembershipListener<Member> {
         return cTo;
     }
 
-    Validator getValidator() {
-        final Validator v = validator;
-        return v;
+    ViewContext getViewContext() {
+        return viewContext;
     }
 
     void pause() {
         CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
         if (currentComm != null) {
-            Context<Member> current = getCurrentView();
+            ViewContext current = viewContext;
             assert current != null : "No current view, but comm exists!";
             currentComm.deregister(current.getId());
         }
@@ -134,7 +99,7 @@ class VolatileState implements MembershipListener<Member> {
     void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
         CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
         if (currentComm != null) {
-            Context<Member> current = getCurrentView();
+            ViewContext current = viewContext;
             assert current != null : "No current view, but comm exists!";
             currentComm.register(current.getId(), service);
         }
@@ -150,10 +115,6 @@ class VolatileState implements MembershipListener<Member> {
 
     void setComm(CommonCommunications<ConsortiumClientCommunications, Service> comm) {
         this.comm = comm;
-    }
-
-    void setConsensusKeyPair(KeyPair consensusKeyPair) {
-        this.consensusKeyPair = consensusKeyPair;
     }
 
     void setCurrent(CurrentBlock current) {
@@ -176,8 +137,7 @@ class VolatileState implements MembershipListener<Member> {
         this.order = order;
     }
 
-    void setValidator(Validator validator) {
-        this.validator = validator;
+    void setViewContext(ViewContext viewContext) {
+        this.viewContext = viewContext;
     }
-
 }
