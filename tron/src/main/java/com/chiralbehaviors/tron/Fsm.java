@@ -421,18 +421,22 @@ public final class Fsm<Context, Transitions> {
         } catch (IllegalAccessException | IllegalArgumentException e) {
             throw new IllegalStateException(String.format("Unable to invoke transition %s.%s",
                                                           prettyPrint(getCurrent()), prettyPrint(stateTransition)),
-                    e);
+                    e.getCause());
         } catch (InvocationTargetException e) {
             if (e.getTargetException() instanceof InvalidTransition) {
                 if (log.isTraceEnabled()) {
                     log.trace(String.format("[%s] Invalid transition %s.%s", name, prettyPrint(getCurrent()),
                                             getTransition()));
                 }
-                throw new InvalidTransition(prettyPrint(stateTransition) + " -> " + prettyPrint(getCurrent()), e);
+                throw new InvalidTransition(prettyPrint(stateTransition) + " -> " + prettyPrint(getCurrent()),
+                        e.getTargetException());
+            }
+            if (e.getTargetException() instanceof RuntimeException) {
+                throw (RuntimeException) e.getTargetException();
             }
             throw new IllegalStateException(String.format("[%s] Unable to invoke transition %s.%s", name,
                                                           prettyPrint(getCurrent()), prettyPrint(stateTransition)),
-                    e);
+                    e.getTargetException());
         }
     }
 
@@ -468,6 +472,8 @@ public final class Fsm<Context, Transitions> {
         }
         try {
             return call.call();
+        } catch (RuntimeException e) {
+            throw (RuntimeException) e;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         } finally {
