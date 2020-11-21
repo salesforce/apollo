@@ -160,9 +160,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
-                m.publish(Any.pack(ByteMessage.newBuilder()
-                                              .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                              .build()));
+                m.publish(ByteMessage.newBuilder()
+                                     .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                     .build());
             });
         }
 
@@ -216,9 +216,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
-                m.publish(Any.pack(ByteMessage.newBuilder()
+                m.publish(ByteMessage.newBuilder()
                                               .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                              .build()));
+                                              .build());
             });
         }
 
@@ -244,9 +244,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             liveRcvrs.forEach(r -> {
-                r.messenger.publish(Any.pack(ByteMessage.newBuilder()
+                r.messenger.publish(ByteMessage.newBuilder()
                                                         .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                                        .build()));
+                                                        .build());
             });
         }
 
@@ -268,9 +268,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             receivers.forEach(r -> {
-                r.messenger.publish(Any.pack(ByteMessage.newBuilder()
+                r.messenger.publish(ByteMessage.newBuilder()
                                                         .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                                        .build()));
+                                                        .build());
             });
         }
 

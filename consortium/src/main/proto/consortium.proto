@@ -168,3 +168,7 @@ message CertifiedLog {
     repeated bytes signatures = 3;
     repeated CertifiedBlock blocks = 5;
 }
+
+message ReplicateTransactions {
+    repeated Transaction transactions = 1;
+}

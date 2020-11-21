@@ -32,7 +32,6 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
-import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Conversion;
@@ -42,10 +41,9 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  *
  */
-public class Validator {
+public final class SigningUtils {
     private final static KeyFactory KEY_FACTORY;
-    private static final Logger     log = LoggerFactory.getLogger(Validator.class);
-
+    private static final Logger     log = LoggerFactory.getLogger(SigningUtils.class);
     static {
         try {
             KEY_FACTORY = KeyFactory.getInstance("RSA");
@@ -205,70 +203,7 @@ public class Validator {
         return signature;
     }
 
-    private final Member leader;
-
-    private final int toleranceLevel;
-
-    private final Context<Member> view;
-
-    public Validator(Member leader, Context<Member> view, int toleranceLevel) {
-        this.leader = leader;
-        this.view = view;
-        this.toleranceLevel = toleranceLevel;
+    private SigningUtils() {
     }
 
-    public Member getLeader() {
-        return leader;
-    }
-
-    public int getToleranceLevel() {
-        return toleranceLevel;
-    }
-
-    public Context<Member> getView() {
-        return view;
-    }
-
-    public boolean validate(Block block, Validate v, Signature signature) {
-        HashKey memberID = new HashKey(v.getId());
-        Member member = view.getMember(memberID);
-        if (member == null) {
-            log.debug("No member found for {}", memberID);
-            return false;
-        }
-
-        byte[] headerHash = Conversion.hashOf(block.getHeader().toByteString());
-        try {
-            signature.update(headerHash);
-        } catch (SignatureException e) {
-            log.error("Error updating validation signature of {}", memberID, e);
-            return false;
-        }
-        try {
-            boolean verified = signature.verify(v.getSignature().toByteArray());
-            if (!verified) {
-                log.error("Error validating block signature of {} did not match", memberID);
-            }
-            return verified;
-        } catch (SignatureException e) {
-            log.error("Error validating signature of {}", memberID, e);
-            return false;
-        }
-    }
-
-    public boolean validate(CertifiedBlock block) {
-//        Function<HashKey, Signature> validators = h -> {
-//            Member member = view.getMember(h);
-//            if (member == null) {
-//                return null;
-//            }
-//            return member.forValidation(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
-//        };
-//        return block.getCertificationsList()
-//                    .parallelStream()
-//                    .filter(c -> verify(validators, block.getBlock(), c))
-//                    .limit(toleranceLevel + 1)
-//                    .count() >= toleranceLevel + 1;
-        return true;
-    }
 }

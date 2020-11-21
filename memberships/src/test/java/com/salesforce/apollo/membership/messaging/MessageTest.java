@@ -186,7 +186,7 @@ public class MessageTest {
             messengers.parallelStream().forEach(view -> {
                 ByteString packed = ByteString.copyFrom(buf.array());
                 assertEquals(36, packed.size());
-                view.publish(Any.pack(ByteMessage.newBuilder().setContents(packed).build()));
+                view.publish(ByteMessage.newBuilder().setContents(packed).build());
             });
             boolean success = round.await(20, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());

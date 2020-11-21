@@ -284,11 +284,11 @@ public class Messenger {
         });
     }
 
-    public void publish(Any message) {
+    public void publish(com.google.protobuf.Message message) {
         if (!started.get()) {
             return;
         }
-        buffer.publish(message, member, signature.get());
+        buffer.publish(Any.pack(message), member, signature.get());
     }
 
     public void register(Consumer<Integer> roundListener) {

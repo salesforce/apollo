@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.consortium;
 
-import static com.salesforce.apollo.consortium.Validator.sign;
+import static com.salesforce.apollo.consortium.SigningUtils.sign;
 
 import java.security.KeyPair;
 import java.security.PublicKey;
@@ -72,7 +72,7 @@ public class ViewContext implements MembershipListener<Member> {
     private final KeyPair                 consensusKeyPair;
     private final Context<Member>         context;
     private final SecureRandom            entropy;
-    private final boolean                 isMember;
+    private final boolean                 isViewMember;
     private final Member                  member;
     private final Map<HashKey, PublicKey> validators = new HashMap<>();
 
@@ -85,7 +85,7 @@ public class ViewContext implements MembershipListener<Member> {
             HashKey mID = new HashKey(vm.getId());
             validators.computeIfAbsent(mID, k -> {
                 byte[] encoded = vm.getConsensusKey().toByteArray();
-                PublicKey consensusKey = Validator.publicKeyOf(encoded);
+                PublicKey consensusKey = SigningUtils.publicKeyOf(encoded);
                 if (consensusKey == null) {
                     log.debug("invalid view member, cannot deserialize consensus key for: {} on: {}", mID, member);
                     return null;
@@ -93,7 +93,7 @@ public class ViewContext implements MembershipListener<Member> {
                 return consensusKey;
             });
         });
-        isMember = validators.containsKey(member.getId());
+        isViewMember = validators.containsKey(member.getId());
         this.entropy = entropy;
     }
 
@@ -165,7 +165,11 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public boolean isMember() {
-        return isMember;
+        return context.getMember(member.getId()) != null;
+    }
+
+    public boolean isViewMember() {
+        return isViewMember;
     }
 
     @Override
@@ -194,7 +198,7 @@ public class ViewContext implements MembershipListener<Member> {
             log.debug("No valdator key to validate: {} from: {} on: {}", hash, memberID, member);
             return false;
         }
-        Signature signature = Validator.signatureForVerification(key);
+        Signature signature = SigningUtils.signatureForVerification(key);
         Member member = context.getMember(memberID);
         if (member == null) {
             log.debug("No member found for {}", memberID);

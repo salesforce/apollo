@@ -11,6 +11,7 @@ import java.util.List;
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
@@ -50,23 +51,27 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw new InvalidTransition();
     }
 
-    default void deliverStop(Stop stop, Member member) {
+    default Transitions deliverStop(Stop stop, Member from) {
         throw new InvalidTransition();
     }
 
-    default Transitions deliverStopData(StopData stopData, Member member) {
+    default Transitions deliverStopData(StopData stopData, Member from) {
         throw new InvalidTransition();
     }
 
-    default Transitions deliverSync(Sync synch, Member member) {
+    default Transitions deliverSync(Sync syncData, Member from) {
         throw new InvalidTransition();
     }
 
-    default Transitions deliverTotalOrdering(TotalOrdering unpack, Member from) {
+    default Transitions deliverTotalOrdering(TotalOrdering to, Member from) {
         throw new InvalidTransition();
     }
 
-    default Transitions deliverTransaction(Transaction txn, Member from) {
+    default Transitions deliverTransaction(Transaction transaction, Member from) {
+        throw new InvalidTransition();
+    }
+
+    default Transitions deliverTransactions(ReplicateTransactions transactions, Member from) {
         throw new InvalidTransition();
     }
 
@@ -78,7 +83,15 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw new InvalidTransition();
     }
 
+    default Transitions establishNextRegent() {
+        throw new InvalidTransition();
+    }
+
     default Transitions fail() {
+        throw new InvalidTransition();
+    }
+
+    default Transitions formView() {
         throw new InvalidTransition();
     }
 
@@ -91,6 +104,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions join() {
+        throw new InvalidTransition();
+    }
+
+    default Transitions joinAsMember() {
         throw new InvalidTransition();
     }
 
@@ -126,15 +143,11 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
-    default Transitions receive(Transaction transacton, Member from) {
+    default Transitions receive(Transaction transaction, Member from) {
         throw new InvalidTransition();
     }
 
     default Transitions recovering() {
-        throw new InvalidTransition();
-    }
-
-    default Transitions regentChosen() {
         throw new InvalidTransition();
     }
 
@@ -143,7 +156,8 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
-        throw new InvalidTransition();
+        context().changeRegency(transactions);
+        return null;
     }
 
     default Transitions stop() {
@@ -151,6 +165,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions success() {
+        throw new InvalidTransition();
+    }
+
+    default Transitions syncd() {
         throw new InvalidTransition();
     }
 }

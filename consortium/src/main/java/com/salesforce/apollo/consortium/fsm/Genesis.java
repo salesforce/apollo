@@ -7,13 +7,11 @@
 package com.salesforce.apollo.consortium.fsm;
 
 import com.chiralbehaviors.tron.Entry;
-import com.chiralbehaviors.tron.Exit;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.TotalOrdering;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -34,7 +32,6 @@ public enum Genesis implements Transitions {
 
         @Override
         public Transitions deliverTotalOrdering(TotalOrdering msg, Member from) {
-            context().genesisTotalOrdering(msg, from);
             return null;
         }
 
@@ -75,12 +72,6 @@ public enum Genesis implements Transitions {
     GENERATE {
 
         @Override
-        public Transitions deliverValidate(Validate validation) {
-            context().validate(validation);
-            return null;
-        }
-
-        @Override
         public Transitions becomeFollower() {
             return FOLLOWER;
         }
@@ -97,20 +88,20 @@ public enum Genesis implements Transitions {
         }
 
         @Override
-        public Transitions fail() {
-            context().awaitFormation();
+        public Transitions deliverValidate(Validate validation) {
+            context().validate(validation);
             return null;
         }
 
-        @Entry
-        public void generate() {
-            context().awaitFormation();
+        @Override
+        public Transitions fail() {
+            return null;
         }
 
         @Override
         public Transitions genesisAccepted() {
             return ORDERED;
-        }
+        } 
 
         @Override
         public Transitions receive(Transaction transacton, Member from) {
@@ -118,10 +109,6 @@ public enum Genesis implements Transitions {
             return null;
         }
 
-        @Exit
-        public void cancelAwait() {
-            context().cancel(Timers.AWAIT_FORMATION);
-        }
     },
     LEADER {
         @Override

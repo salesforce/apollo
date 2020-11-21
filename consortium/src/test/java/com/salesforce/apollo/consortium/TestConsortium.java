@@ -176,7 +176,7 @@ public class TestConsortium {
 
         System.out.println("awaiting genesis processing");
 
-        assertTrue(processed.get().await(10, TimeUnit.SECONDS),
+        assertTrue(processed.get().await(20, TimeUnit.SECONDS),
                    "Did not converge, end state of true clients gone bad: "
                            + consortium.values()
                                        .stream()

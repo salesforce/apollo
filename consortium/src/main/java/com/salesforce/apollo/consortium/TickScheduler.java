@@ -64,7 +64,7 @@ public class TickScheduler {
             try {
                 action.run();
             } catch (Throwable t) {
-                log.error("Error executing action {}", t);
+                log.trace("Error executing action {}", t);
             }
         }
 
@@ -540,7 +540,7 @@ public class TickScheduler {
         return timer;
     }
 
-    public void tick(int current) {
+    public void tick(int current) { 
         currentRound = current;
         List<Timer> drained = new ArrayList<>();
         Timer head = scheduled.poll();
