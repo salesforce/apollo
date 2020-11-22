@@ -20,6 +20,7 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Timers;
+import com.salesforce.apollo.consortium.CurrentBlock;
 import com.salesforce.apollo.consortium.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
@@ -49,13 +50,13 @@ public enum EstablishView implements Transitions {
 
         @Override
         public Transitions deliverTransaction(Transaction txn, Member from) {
-            context().receive(txn);
+            context().receiveJoin(txn);
             return null;
         }
 
         @Override
         public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
-            context().receive(txns, from);
+            context().receiveJoins(txns, from);
             return null;
         }
 
@@ -166,8 +167,36 @@ public enum EstablishView implements Transitions {
         }
 
         @Override
+        public Transitions deliverTransaction(Transaction transaction, Member from) {
+            context().receive(transaction);
+            return null;
+        }
+
+        @Override
         public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
             context().receive(txns, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            context().validate(validation);
+            return null;
+        }
+
+        @Override
+        public Transitions genesisAccepted() {
+            return null;
+        }
+
+        @Override
+        public Transitions join() {
+            return null;
+        }
+
+        @Override
+        public Transitions processGenesis(CurrentBlock next) {
+            context().processGenesis(next);
             return null;
         }
 
@@ -207,8 +236,42 @@ public enum EstablishView implements Transitions {
         }
 
         @Override
+        public Transitions deliverTransaction(Transaction transaction, Member from) {
+            context().receive(transaction);
+            return null;
+        }
+
+        @Override
         public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
             context().receive(txns, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            context().validate(validation);
+            context().totalOrderDeliver();
+            return null;
+        }
+
+        @Entry
+        public void generateView() {
+            context().generateView();
+        }
+
+        @Override
+        public Transitions genesisAccepted() {
+            return null;
+        }
+
+        @Override
+        public Transitions join() {
+            return null;
+        }
+
+        @Override
+        public Transitions processGenesis(CurrentBlock next) {
+            context().processGenesis(next);
             return null;
         }
 

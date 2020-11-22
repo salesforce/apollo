@@ -263,6 +263,11 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
+        public Transitions genesisAccepted() {
+            return RECOVERED;
+        }
+
+        @Override
         public Transitions join() {
             fsm().push(EstablishView.BUILD);
             return null;

@@ -129,8 +129,8 @@ public final class SigningUtils {
         return signature;
     }
 
-    public static boolean validateGenesis(CertifiedBlock block, Reconfigure initialView, Context<Member> context,
-                                          int toleranceLevel) {
+    public static boolean validateGenesis(HashKey hash, CertifiedBlock block, Reconfigure initialView,
+                                          Context<Member> context, int toleranceLevel) {
         Map<HashKey, Supplier<Signature>> signatures = new HashMap<>();
         initialView.getViewList().forEach(vm -> {
             HashKey memberID = new HashKey(vm.getId());
@@ -151,11 +151,14 @@ public final class SigningUtils {
             Supplier<Signature> signature = signatures.get(h);
             return signature == null ? null : signature.get();
         };
-        return block.getCertificationsList()
-                    .parallelStream()
-                    .filter(c -> verify(validators, block.getBlock(), c))
-                    .limit(toleranceLevel + 1)
-                    .count() > toleranceLevel;
+        long certifiedCount = block.getCertificationsList()
+                                   .parallelStream()
+                                   .filter(c -> verify(validators, block.getBlock(), c))
+                                   .count();
+
+        log.warn("Certified: {} required: {} provided: {} for genesis: {} on: {}", certifiedCount, toleranceLevel + 1,
+                 signatures.size(), hash);
+        return certifiedCount > toleranceLevel;
     }
 
     public static boolean verify(Function<HashKey, Signature> validators, Block block, Certification c) {
@@ -166,7 +169,12 @@ public final class SigningUtils {
             log.warn("Cannot get signature for verification for: {}", memberID);
             return false;
         }
-        return verify(signature, c.getSignature().toByteArray(), Conversion.hashOf(block.getHeader().toByteString()));
+        boolean verified = verify(signature, c.getSignature().toByteArray(),
+                                  Conversion.hashOf(block.getHeader().toByteString()));
+        if (!verified) {
+            log.warn("Could not verify block using sig from: {}", memberID);
+        }
+        return verified;
     }
 
     public static boolean verify(Member member, byte[] signed, byte[]... content) {

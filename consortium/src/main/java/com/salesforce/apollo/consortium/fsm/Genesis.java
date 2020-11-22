@@ -26,7 +26,7 @@ public enum Genesis implements Transitions {
 
         @Override
         public Transitions deliverBlock(Block block, Member from) {
-            context().deliverGenesisBlock(block, from);
+//            context().deliverGenesisBlock(block, from);
             return null;
         }
 

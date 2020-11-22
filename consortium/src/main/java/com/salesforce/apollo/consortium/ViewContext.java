@@ -8,6 +8,7 @@ package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.consortium.SigningUtils.sign;
 
+import java.security.Key;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
@@ -78,20 +79,34 @@ public class ViewContext implements MembershipListener<Member> {
 
     public ViewContext(Context<Member> context, Member member, KeyPair consensusKeyPair, List<ViewMember> members,
             SecureRandom entropy) {
+        assert consensusKeyPair != null;
         this.context = context;
         this.member = member;
         this.consensusKeyPair = consensusKeyPair;
         members.forEach(vm -> {
             HashKey mID = new HashKey(vm.getId());
-            validators.computeIfAbsent(mID, k -> {
+            if (member.getId().equals(mID)) {
                 byte[] encoded = vm.getConsensusKey().toByteArray();
                 PublicKey consensusKey = SigningUtils.publicKeyOf(encoded);
-                if (consensusKey == null) {
-                    log.debug("invalid view member, cannot deserialize consensus key for: {} on: {}", mID, member);
-                    return null;
+                if (!consensusKeyPair.getPublic().equals(consensusKey)) {
+                    log.warn("Consensus key for view {} does not match current consensus key on: {}", context.getId(),
+                             member);
+                } else {
+                    log.trace("Consensus key for view {} matches current consensus key on: {}", context.getId(),
+                              member);
                 }
-                return consensusKey;
-            });
+            } else {
+                validators.computeIfAbsent(mID, k -> {
+                    byte[] encoded = vm.getConsensusKey().toByteArray();
+                    PublicKey consensusKey = SigningUtils.publicKeyOf(encoded);
+                    if (consensusKey == null) {
+                        log.debug("invalid view member, cannot deserialize consensus key for: {} on: {}", mID, member);
+                        return null;
+                    }
+                    log.info("Adding consensus key for: {} on: {}", mID, member);
+                    return consensusKey;
+                });
+            }
         });
         isViewMember = validators.containsKey(member.getId());
         this.entropy = entropy;
@@ -113,7 +128,8 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public ViewContext cloneWith(List<ViewMember> members) {
-        return new ViewContext(context, member, consensusKeyPair, members, null);
+        log.info("Cloning view context: {} on: {} members: {}", context.getId(), member, members.size());
+        return new ViewContext(context, member, consensusKeyPair, members, entropy);
     }
 
     public Messenger createMessenger(Parameters params) {
@@ -156,12 +172,30 @@ public class ViewContext implements MembershipListener<Member> {
         return context.getMember(from);
     }
 
+    public Key getPublic() {
+        return consensusKeyPair.getPublic();
+    }
+
     public Member getRegent(int regent) {
         return context.ring(0).get(regent);
     }
 
     public int getRingCount() {
         return context.getRingCount();
+    }
+
+    public ViewMember getView(Signature signature) {
+        byte[] encoded = consensusKeyPair.getPublic().getEncoded();
+        byte[] signed = sign(signature, encoded);
+        if (signed == null) {
+            log.error("Unable to generate and sign consensus key on: {}", member);
+            return null;
+        }
+        return ViewMember.newBuilder()
+                         .setId(member.getId().toByteString())
+                         .setConsensusKey(ByteString.copyFrom(encoded))
+                         .setSignature(ByteString.copyFrom(signed))
+                         .build();
     }
 
     public boolean isMember() {
@@ -195,7 +229,7 @@ public class ViewContext implements MembershipListener<Member> {
         log.trace("Validation: {} from: {}", hash, memberID);
         final PublicKey key = validators.get(memberID);
         if (key == null) {
-            log.debug("No valdator key to validate: {} from: {} on: {}", hash, memberID, member);
+            log.debug("No validator key to validate: {} for: {} on: {}", hash, memberID, member);
             return false;
         }
         Signature signature = SigningUtils.signatureForVerification(key);
@@ -238,5 +272,9 @@ public class ViewContext implements MembershipListener<Member> {
 //              .limit(toleranceLevel + 1)
 //              .count() >= toleranceLevel + 1;
         return true;
+    }
+
+    public KeyPair getConsensusKey() { 
+        return consensusKeyPair;
     }
 }
