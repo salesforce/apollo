@@ -121,11 +121,13 @@ public class MemberOrder {
     private final AtomicBoolean            started  = new AtomicBoolean();
     private final int                      ttl;
     private final int                      tick;
+    private final Member                   member;
 
     @SuppressWarnings("unchecked")
     public MemberOrder(BiConsumer<Msg, HashKey> processor, Messenger messenger) {
         this.processor = processor;
         this.context = (Context<Member>) messenger.getContext();
+        this.member = messenger.getMember();
         ttl = context.timeToLive();
         tick = Math.max(2, context.toleranceLevel() / 2);
         context.allMembers().forEach(m -> channels.put(m.getId(), new ActiveChannel(m.getId())));
@@ -222,7 +224,7 @@ public class MemberOrder {
         try {
             processor.accept(msg, from);
         } catch (Throwable e) {
-            log.error("Error processing message from {}", from, e);
+            log.error("Error processing message from {} on: {}", from, member, e);
         }
     }
 
@@ -248,7 +250,7 @@ public class MemberOrder {
     private void process(Msg m, int round) {
         Channel channel = channels.get(m.from.getId());
         if (channel == null) {
-            log.trace("Message received from {} which is not a consortium member", m.from.getId());
+            log.trace("Message received on: {} from {} which is not a consortium member", member, m.from.getId());
             return;
         }
         channel.enqueue(m, round);
@@ -267,6 +269,6 @@ public class MemberOrder {
                 delivered.incrementAndGet();
             }
         });
-        log.trace("Delivered: {} messages", delivered.get());
+        log.trace("Delivered: {} messages on: {}", delivered.get(), member);
     }
 }
