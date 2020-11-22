@@ -26,6 +26,11 @@ public enum ChangeRegency implements Transitions {
     AWAIT_SYNCHRONIZATION {
 
         @Override
+        public Transitions synchronizingLeader() {
+            return SYNCHRONIZING_LEADER;
+        }
+
+        @Override
         public Transitions deliverStop(Stop stop, Member from) {
             context().deliverStop(stop, from);
             return null;

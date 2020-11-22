@@ -10,7 +10,6 @@ import java.util.List;
 
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
-import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
@@ -239,22 +238,22 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions processCheckpoint(CurrentBlock next) {
-            throw new InvalidTransition();
+            throw fsm().invalidTransitionOn();
         }
 
         @Override
         public Transitions processGenesis(CurrentBlock next) {
-            throw new InvalidTransition();
+            throw fsm().invalidTransitionOn();
         }
 
         @Override
         public Transitions processReconfigure(CurrentBlock next) {
-            throw new InvalidTransition();
+            throw fsm().invalidTransitionOn();
         }
 
         @Override
         public Transitions processUser(CurrentBlock next) {
-            throw new InvalidTransition();
+            throw fsm().invalidTransitionOn();
         }
 
         @Entry

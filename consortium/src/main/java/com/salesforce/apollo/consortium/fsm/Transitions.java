@@ -9,7 +9,6 @@ package com.salesforce.apollo.consortium.fsm;
 import java.util.List;
 
 import com.chiralbehaviors.tron.FsmExecutor;
-import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
@@ -32,95 +31,95 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public interface Transitions extends FsmExecutor<CollaboratorContext, Transitions> {
     default Transitions becomeClient() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions becomeFollower() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions becomeLeader() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions deliverBlock(Block block, Member from) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions deliverPersist(HashKey hash) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions deliverStop(Stop stop, Member from) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions deliverStopData(StopData stopData, Member from) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions deliverSync(Sync syncData, Member from) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions deliverTotalOrdering(TotalOrdering to, Member from) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions deliverTransaction(Transaction transaction, Member from) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions deliverTransactions(ReplicateTransactions transactions, Member from) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions deliverValidate(Validate validation) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions drainPending() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions establishNextRegent() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions fail() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions formView() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions generateGenesis() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions genesisAccepted() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions join() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions joinAsMember() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions joined() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions joinGenesis() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions missingGenesis() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions processCheckpoint(CurrentBlock next) {
@@ -144,15 +143,15 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions receive(Transaction transaction, Member from) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions recovering() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions start() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
@@ -165,14 +164,14 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions success() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions syncd() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions synchronizingLeader() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 }
