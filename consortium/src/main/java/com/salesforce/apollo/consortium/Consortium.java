@@ -280,6 +280,7 @@ public class Consortium {
             if (regencyData.proofs.size() >= viewContext().cardinality() - viewContext().toleranceLevel()) {
                 Sync synch = buildSync(elected, regencyData);
                 if (synch != null) {
+                    transitions.synchronizingLeader();
                     transitions.deliverSync(synch, getMember());
                     deliver(synch);
                 }
@@ -318,6 +319,7 @@ public class Consortium {
             }
             sync.put(cReg, syncData);
             transitions.syncd();
+            resolveStatus();
         }
 
         public void deliverTotalOrdering(TotalOrdering msg, Member from) {
@@ -380,6 +382,8 @@ public class Consortium {
                 } else {
                     try {
                         link.stop(stopData);
+                    } catch (Throwable e) {
+                        log.warn("Error sending stop data: {} to: {} on: {}", currentRegent, leader, getMember());
                     } finally {
                         link.release();
                     }
@@ -523,7 +527,7 @@ public class Consortium {
             body.getTransactionsList().forEach(txn -> {
                 HashKey hash = new HashKey(txn.getHash());
                 finalized(hash);
-                SubmittedTransaction submittedTxn = submitted.get(hash);
+                SubmittedTransaction submittedTxn = submitted.remove(hash);
                 if (submittedTxn != null && submittedTxn.onCompletion != null) {
                     log.info("Completing txn: {} on: {}", hash, getMember());
                     ForkJoinPool.commonPool().execute(() -> submittedTxn.onCompletion.accept(hash));
@@ -549,6 +553,15 @@ public class Consortium {
             EnqueuedTransaction transaction = new EnqueuedTransaction(hashOf(txn), txn);
             if (toOrder.put(transaction.getHash(), transaction) == null) {
                 transaction.setTimer(schedule(transaction));
+            }
+        }
+
+        public void resolveStatus() {
+            Member regent = getRegent(nextRegent);
+            if (getMember().equals(regent)) {
+                transitions.becomeLeader();
+            } else {
+                transitions.becomeFollower();
             }
         }
 
@@ -581,7 +594,7 @@ public class Consortium {
                          .forEach(e -> {
                              log.info("Totally ordering block: {} height: {} on: {}", e.getKey(),
                                       e.getValue().getBlock().getHeader().getHeight(), getMember());
-                             params.consensus.apply(((CertifiedBlock.Builder) e.getValue()).build());
+                             params.consensus.apply(e.getValue().build());
                              published.add(e.getKey());
                              deliver(TotalOrdering.newBuilder().setHash(e.getKey().toByteString()).build());
                          });
@@ -960,15 +973,6 @@ public class Consortium {
                 return true;
             }
             return false;
-        }
-
-        public void resolveStatus() {
-            Member regent = getRegent(nextRegent);
-            if (getMember().equals(regent)) {
-                transitions.becomeLeader();
-            } else {
-                transitions.becomeFollower();
-            }
         }
     }
 
@@ -1550,7 +1554,7 @@ public class Consortium {
 
     /**
      * Ye Jesus Nut
-     * 
+     *
      * @param list
      */
     private void viewChange(ViewContext newView) {

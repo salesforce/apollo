@@ -122,25 +122,8 @@ public class TestConsortium {
 
         assertEquals(testCardinality, members.size());
 
-        members.forEach(node -> communications.put(node.getId(), (Router) new LocalRouter(node.getId(), builder)));
+        members.forEach(node -> communications.put(node.getId(), new LocalRouter(node.getId(), builder)));
 
-    }
-
-    @Test
-    public void testGaps() throws Exception {
-        List<CertifiedBlock> blocks = new ArrayList<>();
-        HashKey prev = HashKey.ORIGIN;
-        for (int i = 0; i < 10; i++) {
-            Block block = Block.newBuilder().setHeader(Header.newBuilder().setPrevious(prev.toByteString())).build();
-            blocks.add(CertifiedBlock.newBuilder().setBlock(block).build());
-            prev = new HashKey(Conversion.hashOf(block.toByteString()));
-        }
-        assertTrue(Consortium.noGaps(blocks, HashKey.ORIGIN));
-        ArrayList<CertifiedBlock> gapped = new ArrayList<>(blocks);
-        gapped.remove(5);
-        assertFalse(Consortium.noGaps(gapped, HashKey.ORIGIN));
-        assertFalse(Consortium.noGaps(blocks.subList(1, blocks.size()), HashKey.ORIGIN));
-        assertFalse(Consortium.noGaps(blocks, HashKey.LAST));
     }
 
     @Test
@@ -240,6 +223,23 @@ public class TestConsortium {
         boolean completed = submittedBunch.await(5, TimeUnit.SECONDS);
         assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
         System.out.println("Completed additional " + bunchCount + " transactions");
+    }
+
+    @Test
+    public void testGaps() throws Exception {
+        List<CertifiedBlock> blocks = new ArrayList<>();
+        HashKey prev = HashKey.ORIGIN;
+        for (int i = 0; i < 10; i++) {
+            Block block = Block.newBuilder().setHeader(Header.newBuilder().setPrevious(prev.toByteString())).build();
+            blocks.add(CertifiedBlock.newBuilder().setBlock(block).build());
+            prev = new HashKey(Conversion.hashOf(block.toByteString()));
+        }
+        assertTrue(Consortium.noGaps(blocks, HashKey.ORIGIN));
+        ArrayList<CertifiedBlock> gapped = new ArrayList<>(blocks);
+        gapped.remove(5);
+        assertFalse(Consortium.noGaps(gapped, HashKey.ORIGIN));
+        assertFalse(Consortium.noGaps(blocks.subList(1, blocks.size()), HashKey.ORIGIN));
+        assertFalse(Consortium.noGaps(blocks, HashKey.LAST));
     }
 
     private void gatherConsortium(Context<Member> view, Function<CertifiedBlock, HashKey> consensus,

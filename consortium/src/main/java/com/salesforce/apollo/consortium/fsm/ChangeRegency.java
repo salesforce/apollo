@@ -23,7 +23,61 @@ import com.salesforce.apollo.membership.Member;
  *
  */
 public enum ChangeRegency implements Transitions {
+    AWAIT_SYNCHRONIZATION {
+
+        @Override
+        public Transitions deliverStop(Stop stop, Member from) {
+            context().deliverStop(stop, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverStopData(StopData stopData, Member from) {
+            context().deliverStopData(stopData, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverSync(Sync syncData, Member from) {
+            context().deliverSync(syncData, from);
+            return SYNCHRONIZED;
+        }
+
+        @Entry
+        public void regentElected() {
+            context().establishNextRegent();
+        }
+
+        @Override
+        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
+            return null;
+        }
+
+        @Override
+        public Transitions syncd() {
+            return SYNCHRONIZED;
+        }
+    },
     INITIAL {
+        @Override
+        public Transitions deliverStop(Stop stop, Member from) {
+            context().deliverStop(stop, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverStopData(StopData stopData, Member from) {
+            context().deliverStopData(stopData, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverSync(Sync syncData, Member from) {
+            context().establishNextRegent();
+            context().deliverSync(syncData, from);
+            return SYNCHRONIZED;
+        }
+
         @Override
         public Transitions establishNextRegent() {
             return AWAIT_SYNCHRONIZATION;
@@ -35,64 +89,16 @@ public enum ChangeRegency implements Transitions {
         }
 
         @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            context().establishNextRegent();
-            context().deliverSync(syncData, from);
-            return SYNCHRONIZED;
-        }
-
-        @Override
-        public Transitions deliverStop(Stop stop, Member from) {
-            context().deliverStop(stop, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverStopData(StopData stopData, Member from) {
-            context().deliverStopData(stopData, from);
-            return null;
-        }
-    },
-    AWAIT_SYNCHRONIZATION {
-
-        @Override
-        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
-            return null;
-        }
-
-        @Entry
-        public void regentElected() {
-            context().establishNextRegent();
-        }
-
-        @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            context().deliverSync(syncData, from);
-            return SYNCHRONIZED;
-        }
-        @Override
-        public Transitions deliverStop(Stop stop, Member from) {
-            context().deliverStop(stop, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverStopData(StopData stopData, Member from) {
-            context().deliverStopData(stopData, from);
-            return null;
-        }
-
-        @Override
         public Transitions syncd() {
             return SYNCHRONIZED;
         }
+
+        @Override
+        public Transitions synchronizingLeader() {
+            return SYNCHRONIZING_LEADER;
+        }
     },
     SYNCHRONIZED {
-        
-        @Entry
-        public void resolveStatus() {
-            context().resolveStatus();
-        }
 
         @Override
         public Transitions becomeFollower() {
@@ -115,11 +121,33 @@ public enum ChangeRegency implements Transitions {
         public Transitions deliverStopData(StopData stopData, Member from) {
             return null;
         }
+    },
+    SYNCHRONIZING_LEADER {
+
+        @Override
+        public Transitions deliverSync(Sync syncData, Member from) {
+            context().deliverSync(syncData, from);
+            return null;
+        }
+
+        @Override
+        public Transitions syncd() {
+            return SYNCHRONIZED;
+        }
+
     };
 
     @Override
     public Transitions deliverTransaction(Transaction txn, Member from) {
         context().receive(txn);
+        return null;
+    }
+
+    @Override
+    public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
+        for (Transaction txn : txns.getTransactionsList()) {
+            context().receive(txn);
+        }
         return null;
     }
 
@@ -132,14 +160,6 @@ public enum ChangeRegency implements Transitions {
     @Override
     public Transitions receive(Transaction transacton, Member from) {
         context().receive(transacton);
-        return null;
-    }
-
-    @Override
-    public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
-        for (Transaction txn : txns.getTransactionsList()) {
-            context().receive(txn);
-        }
         return null;
     }
 }

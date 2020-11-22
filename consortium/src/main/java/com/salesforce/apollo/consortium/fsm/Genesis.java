@@ -101,7 +101,7 @@ public enum Genesis implements Transitions {
         @Override
         public Transitions genesisAccepted() {
             return ORDERED;
-        } 
+        }
 
         @Override
         public Transitions receive(Transaction transacton, Member from) {

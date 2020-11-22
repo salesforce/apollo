@@ -52,13 +52,13 @@ public class ConsortiumClientCommunications implements OrderingService {
         return member;
     }
 
-    public void release() {
-        channel.release();
-    }
-
     @Override
     public JoinResult join(Join join) {
         return client.join(join);
+    }
+
+    public void release() {
+        channel.release();
     }
 
     @Override

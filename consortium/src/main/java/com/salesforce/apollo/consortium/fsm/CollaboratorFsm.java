@@ -340,11 +340,13 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions becomeFollower() {
+            fsm().pop().becomeFollower();
             return FOLLOWER;
         }
 
         @Override
         public Transitions becomeLeader() {
+            fsm().pop().becomeLeader();
             return LEADER;
         }
 

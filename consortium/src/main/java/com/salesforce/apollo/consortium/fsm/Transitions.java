@@ -171,4 +171,8 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     default Transitions syncd() {
         throw new InvalidTransition();
     }
+
+    default Transitions synchronizingLeader() {
+        throw new InvalidTransition();
+    }
 }

@@ -117,16 +117,19 @@ public class TickScheduler {
                 this.array = array;
             }
 
+            @Override
             public boolean hasNext() {
                 return cursor < array.length;
             }
 
+            @Override
             public Timer next() {
                 if (cursor >= array.length)
                     throw new NoSuchElementException();
                 return array[lastRet = cursor++];
             }
 
+            @Override
             public void remove() {
                 if (lastRet < 0)
                     throw new IllegalStateException();
@@ -172,10 +175,12 @@ public class TickScheduler {
             available = lock.newCondition();
         }
 
+        @Override
         public boolean add(Timer e) {
             return offer(e);
         }
 
+        @Override
         public void clear() {
             final ReentrantLock lock = this.lock;
             lock.lock();
@@ -194,6 +199,7 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public boolean contains(Object x) {
             final ReentrantLock lock = this.lock;
             lock.lock();
@@ -204,10 +210,12 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public int drainTo(Collection<? super Timer> c) {
             return drainTo(c, Integer.MAX_VALUE);
         }
 
+        @Override
         public int drainTo(Collection<? super Timer> c, int maxElements) {
             Objects.requireNonNull(c);
             if (c == this)
@@ -229,10 +237,12 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public boolean isEmpty() {
             return size() == 0;
         }
 
+        @Override
         public Iterator<Timer> iterator() {
             final ReentrantLock lock = this.lock;
             lock.lock();
@@ -243,10 +253,11 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public boolean offer(Timer x) {
             if (x == null)
                 throw new NullPointerException();
-            Timer e = (Timer) x;
+            Timer e = x;
             final ReentrantLock lock = this.lock;
             lock.lock();
             try {
@@ -270,10 +281,12 @@ public class TickScheduler {
             return true;
         }
 
+        @Override
         public boolean offer(Timer e, long timeout, TimeUnit unit) {
             return offer(e);
         }
 
+        @Override
         public Timer peek() {
             final ReentrantLock lock = this.lock;
             lock.lock();
@@ -284,6 +297,7 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public Timer poll() {
             final ReentrantLock lock = this.lock;
             lock.lock();
@@ -295,6 +309,7 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public Timer poll(long timeout, TimeUnit unit) throws InterruptedException {
             long nanos = unit.toNanos(timeout);
             final ReentrantLock lock = this.lock;
@@ -336,14 +351,17 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public void put(Timer e) {
             offer(e);
         }
 
+        @Override
         public int remainingCapacity() {
             return Integer.MAX_VALUE;
         }
 
+        @Override
         public boolean remove(Object x) {
             final ReentrantLock lock = this.lock;
             lock.lock();
@@ -367,6 +385,7 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public int size() {
             final ReentrantLock lock = this.lock;
             lock.lock();
@@ -377,6 +396,7 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public Timer take() throws InterruptedException {
             final ReentrantLock lock = this.lock;
             lock.lockInterruptibly();
@@ -411,6 +431,7 @@ public class TickScheduler {
             }
         }
 
+        @Override
         public Object[] toArray() {
             final ReentrantLock lock = this.lock;
             lock.lock();
@@ -421,6 +442,7 @@ public class TickScheduler {
             }
         }
 
+        @Override
         @SuppressWarnings("unchecked")
         public <T> T[] toArray(T[] a) {
             final ReentrantLock lock = this.lock;
@@ -440,7 +462,7 @@ public class TickScheduler {
         /**
          * Performs common bookkeeping for poll and take: Replaces first element with
          * last and sifts it down. Call only when holding lock.
-         * 
+         *
          * @param f the task to remove and return
          */
         private Timer finishPoll(Timer f) {
@@ -540,7 +562,7 @@ public class TickScheduler {
         return timer;
     }
 
-    public void tick(int current) { 
+    public void tick(int current) {
         currentRound = current;
         List<Timer> drained = new ArrayList<>();
         Timer head = scheduled.poll();
