@@ -408,7 +408,7 @@ public final class Fsm<Context, Transitions> {
                 if (pinned == current) {
                     transitionTo(nextState);
                 } else {
-                    if (log.isTraceEnabled()) {
+                    if (nextState != null && log.isTraceEnabled()) {
                         log.trace(String.format("[%s] Eliding Transition %s -> %s, pinned state: %s", name,
                                                 prettyPrint(current), prettyPrint(nextState), prettyPrint(pinned)));
                     }
