@@ -26,14 +26,15 @@ public class InvalidTransition extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    public InvalidTransition() {
-    }
-
     public InvalidTransition(String msg) {
         super(msg);
     }
 
     public InvalidTransition(String string, Throwable e) {
         super(string, e);
+    }
+
+    @SuppressWarnings("unused")
+    private InvalidTransition() {
     }
 }

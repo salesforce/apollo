@@ -199,6 +199,13 @@ public final class Fsm<Context, Transitions> {
     }
 
     /**
+     * @return the invalid transition excepiton based current transition attempt
+     */
+    public InvalidTransition invalidTransitionOn() {
+        return new InvalidTransition(String.format("[%s] %s.%s", name, prettyPrint(current), transition));
+    }
+
+    /**
      * 
      * @return the String representation of the current transition
      */
@@ -457,9 +464,7 @@ public final class Fsm<Context, Transitions> {
                     log.trace(String.format("[%s] Invalid transition %s.%s", name, prettyPrint(current),
                                             getTransition()));
                 }
-                throw new InvalidTransition(
-                        String.format("[%s] %s.%s", name, prettyPrint(current), prettyPrint(stateTransition)),
-                        e.getTargetException());
+                throw (InvalidTransition) e.getTargetException();
             }
             if (e.getTargetException() instanceof RuntimeException) {
                 throw (RuntimeException) e.getTargetException();

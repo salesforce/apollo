@@ -16,7 +16,6 @@
 package com.chiralbehaviors.tron.examples.simpleProtocol;
 
 import com.chiralbehaviors.tron.FsmExecutor;
-import com.chiralbehaviors.tron.InvalidTransition;
 
 /**
  * 
@@ -37,7 +36,7 @@ public interface SimpleFsm extends FsmExecutor<SimpleProtocol, SimpleFsm> {
     }
 
     default SimpleFsm protocolError() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     default SimpleFsm readError() {

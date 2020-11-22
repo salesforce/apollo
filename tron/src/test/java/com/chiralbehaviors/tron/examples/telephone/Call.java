@@ -19,7 +19,6 @@ import com.chiralbehaviors.tron.Default;
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.chiralbehaviors.tron.Fsm;
-import com.chiralbehaviors.tron.InvalidTransition;
 
 /**
  * 
@@ -65,8 +64,7 @@ public enum Call implements TelephoneFsm {
     Dialing() {
 
         @Override
-        public TelephoneFsm dialingDone(int callType, String areaCode,
-                                        String exchange, String local) {
+        public TelephoneFsm dialingDone(int callType, String areaCode, String exchange, String local) {
             context().routeCall(callType, areaCode, exchange, local);
             return Routing;
         }
@@ -304,12 +302,11 @@ public enum Call implements TelephoneFsm {
 
     @Override
     public TelephoneFsm depositMoney() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
-    public TelephoneFsm dialingDone(int callType, String areaCode,
-                                    String exchange, String local) {
+    public TelephoneFsm dialingDone(int callType, String areaCode, String exchange, String local) {
         throw null;
     }
 
@@ -320,7 +317,7 @@ public enum Call implements TelephoneFsm {
 
     @Override
     public TelephoneFsm emergency() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
@@ -330,37 +327,37 @@ public enum Call implements TelephoneFsm {
 
     @Override
     public TelephoneFsm invalidNumber() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm leftOfHook() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm lineBusy() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm loopTimer() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm nycTemp() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm offHook() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm offHookTimer() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     /**
@@ -376,11 +373,11 @@ public enum Call implements TelephoneFsm {
 
     @Override
     public TelephoneFsm ringTimer() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm time() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 }
