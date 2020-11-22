@@ -114,10 +114,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
-    default Transitions joinGenesis() {
-        throw fsm().invalidTransitionOn();
-    }
-
     default Transitions missingGenesis() {
         throw fsm().invalidTransitionOn();
     }

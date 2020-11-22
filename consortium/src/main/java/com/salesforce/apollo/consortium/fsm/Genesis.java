@@ -182,7 +182,7 @@ public enum Genesis implements Transitions {
 
         @Override
         public Transitions join() {
-            fsm().pop().joinGenesis();
+//            fsm().pop().joinGenesis();
             return null;
         }
 

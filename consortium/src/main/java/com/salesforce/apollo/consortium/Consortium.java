@@ -98,8 +98,7 @@ public class Consortium {
     /**
      * Context for the state machine. These are the leaf actions driven by the FSM.
      *
-     */
-    @SuppressWarnings("unused")
+     */ 
     public class CollaboratorContext {
         private final NavigableMap<Long, CurrentBlock>     blockCache        = new ConcurrentSkipListMap<>();
         private volatile int                               currentConsensus  = -1;
