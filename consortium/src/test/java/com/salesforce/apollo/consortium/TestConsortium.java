@@ -75,7 +75,7 @@ public class TestConsortium {
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
-    private final static int                               testCardinality = 12;
+    private final static int                               testCardinality = 5;
 
     @BeforeAll
     public static void beforeClass() {
@@ -130,7 +130,7 @@ public class TestConsortium {
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<Member>(HashKey.ORIGIN.prefix(1), parameters.rings);
+        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
@@ -159,7 +159,7 @@ public class TestConsortium {
 
         System.out.println("awaiting genesis processing");
 
-        assertTrue(processed.get().await(20, TimeUnit.SECONDS),
+        assertTrue(processed.get().await(30, TimeUnit.SECONDS),
                    "Did not converge, end state of true clients gone bad: "
                            + consortium.values()
                                        .stream()
@@ -187,9 +187,9 @@ public class TestConsortium {
         HashKey hash;
         try {
             hash = client.submit(h -> txnProcessed.set(true),
-                                 Any.pack(ByteTransaction.newBuilder()
-                                                         .setContent(ByteString.copyFromUtf8("Hello world"))
-                                                         .build()));
+                                 ByteTransaction.newBuilder()
+                                                .setContent(ByteString.copyFromUtf8("Hello world"))
+                                                .build());
         } catch (TimeoutException e) {
             fail();
             return;
@@ -291,6 +291,10 @@ public class TestConsortium {
                                .count(),
                      "True leader gone bad: "
                              + blueRibbon.stream().map(c -> c.fsm().getCurrentState()).collect(Collectors.toSet()));
+        System.out.println("To Order in blue ribbon: " + blueRibbon.stream()
+                                                                   .map(c -> c.getState())
+                                                                   .map(cc -> cc.getToOrder().size())
+                                                                   .collect(Collectors.toList()));
     }
 
 }

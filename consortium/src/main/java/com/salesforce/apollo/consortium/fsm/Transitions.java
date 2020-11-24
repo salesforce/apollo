@@ -94,15 +94,11 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
-    default Transitions generateGenesis() {
+    default Transitions generateView() {
         throw fsm().invalidTransitionOn();
     }
 
     default Transitions genesisAccepted() {
-        throw fsm().invalidTransitionOn();
-    }
-
-    default Transitions join() {
         throw fsm().invalidTransitionOn();
     }
 
@@ -151,8 +147,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
-        context().changeRegency(transactions);
-        return null;
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions stop() {
@@ -168,6 +163,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions synchronizingLeader() {
+        throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions){
         throw fsm().invalidTransitionOn();
     }
 }

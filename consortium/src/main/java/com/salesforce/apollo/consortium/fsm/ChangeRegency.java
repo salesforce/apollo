@@ -9,6 +9,7 @@ package com.salesforce.apollo.consortium.fsm;
 import java.util.List;
 
 import com.chiralbehaviors.tron.Entry;
+import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
@@ -24,11 +25,6 @@ import com.salesforce.apollo.membership.Member;
  */
 public enum ChangeRegency implements Transitions {
     AWAIT_SYNCHRONIZATION {
-
-        @Override
-        public Transitions synchronizingLeader() {
-            return SYNCHRONIZING_LEADER;
-        }
 
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
@@ -62,8 +58,19 @@ public enum ChangeRegency implements Transitions {
         public Transitions syncd() {
             return SYNCHRONIZED;
         }
+
+        @Override
+        public Transitions synchronizingLeader() {
+            return SYNCHRONIZING_LEADER;
+        }
     },
     INITIAL {
+        @Override
+        public Transitions continueChangeRegency(List<EnqueuedTransaction> transactions) {
+            context().changeRegency(transactions);
+            return null;
+        }
+
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
             context().deliverStop(stop, from);
@@ -130,6 +137,16 @@ public enum ChangeRegency implements Transitions {
     SYNCHRONIZING_LEADER {
 
         @Override
+        public Transitions deliverStop(Stop stop, Member from) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverStopData(StopData stopData, Member from) {
+            return null;
+        }
+
+        @Override
         public Transitions deliverSync(Sync syncData, Member from) {
             context().deliverSync(syncData, from);
             return null;
@@ -143,6 +160,12 @@ public enum ChangeRegency implements Transitions {
     };
 
     @Override
+    public Transitions deliverBlock(Block block, Member from) {
+        context().deliverBlock(block, from);
+        return null;
+    }
+
+    @Override
     public Transitions deliverTransaction(Transaction txn, Member from) {
         context().receive(txn);
         return null;
@@ -150,15 +173,19 @@ public enum ChangeRegency implements Transitions {
 
     @Override
     public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
-        for (Transaction txn : txns.getTransactionsList()) {
-            context().receive(txn);
-        }
+        context().receive(txns, from);
         return null;
     }
 
     @Override
     public Transitions deliverValidate(Validate validation) {
         context().validate(validation);
+        return null;
+    }
+
+    @Override
+    public Transitions genesisAccepted() {
+        fsm().pop().genesisAccepted();
         return null;
     }
 

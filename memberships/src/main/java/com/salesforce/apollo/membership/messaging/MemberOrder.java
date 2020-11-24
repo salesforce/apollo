@@ -80,15 +80,15 @@ public class MemberOrder {
                     flushTarget = -1;
                     message = queue.remove();
                     lastSequenceNumber = message.sequenceNumber;
-                    log.trace("next: {}:{}", message.from, message.sequenceNumber);
+                    log.trace("next msg: {} from: {} on: {}", message.sequenceNumber, message.from, member);
                     return message;
                 } else if (message.sequenceNumber <= current) {
-                    log.trace("discarding previously seen: {} <= {}", message.sequenceNumber, current);
+                    log.trace("discarding previously seen: {} <= {} on: {}", message.sequenceNumber, current, member);
                     queue.poll();
                     message = queue.peek();
                 } else {
-                    log.trace("No Msg, next: {} head: {} flushTarget: {}", current, message.sequenceNumber,
-                              currentFlushTarget);
+                    log.trace("No Msg, next: {} head: {} flushTarget: {} on: {}", current, message.sequenceNumber,
+                              currentFlushTarget, member);
                     return null;
                 }
             }
@@ -229,7 +229,6 @@ public class MemberOrder {
     }
 
     private void flush(int round) {
-        log.trace("flushing");
         int flushed = 0;
         int lastFlushed = -1;
         while (flushed - lastFlushed > 0) {
@@ -244,6 +243,9 @@ public class MemberOrder {
                     flushed++;
                 }
             }
+        }
+        if (flushed != 0) {
+            log.trace("flushed {} messages on: {}", flushed, member);
         }
     }
 

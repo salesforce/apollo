@@ -25,7 +25,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
     
-    <logger name="com.salesforce.apollo.membership.messaging" level="WARN"
+    <logger name="com.salesforce.apollo.membership.messaging.MemberOrder" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

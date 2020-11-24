@@ -84,9 +84,9 @@ message User {
 message Reconfigure {
     bytes id = 1;
     int32 checkpointBlocks = 2;
-    int32 toleranceLevel = 3;
+    int32 tolerance = 3;
     repeated ViewMember view = 4;
-    repeated ExecutedTransaction transactions = 5;
+    repeated JoinTransaction transactions = 5;
 }
 
 message ByteTransaction {
@@ -95,7 +95,8 @@ message ByteTransaction {
 
 message JoinTransaction {
     ViewMember member = 1;
-    repeated Certification certification = 2;
+    int32 regency = 2;
+    repeated Certification certification = 3;
 }
 
 message ViewMember {
@@ -163,7 +164,7 @@ message Sync {
 }
 
 message CertifiedLog {
-    int32 currentRegency = 1;
+    int32 currentRegent = 1;
     repeated Proof proofs = 2;
     repeated bytes signatures = 3;
     repeated CertifiedBlock blocks = 5;

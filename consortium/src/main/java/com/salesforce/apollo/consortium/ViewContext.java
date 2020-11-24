@@ -94,6 +94,7 @@ public class ViewContext implements MembershipListener<Member> {
                 } else {
                     log.trace("Consensus key for view {} matches current consensus key on: {}", context.getId(),
                               member);
+                    validators.put(mID, consensusKeyPair.getPublic());
                 }
             } else {
                 validators.computeIfAbsent(mID, k -> {
@@ -109,6 +110,8 @@ public class ViewContext implements MembershipListener<Member> {
             }
         });
         isViewMember = validators.containsKey(member.getId());
+        log.info("View context established for: {} is member: {} is view member: {} validators: {}", member,
+                 context.getMember(member.getId()) != null, isViewMember, validators.size());
         this.entropy = entropy;
     }
 
@@ -274,7 +277,11 @@ public class ViewContext implements MembershipListener<Member> {
         return true;
     }
 
-    public KeyPair getConsensusKey() { 
+    public KeyPair getConsensusKey() {
         return consensusKeyPair;
+    }
+
+    public int majority() {
+        return cardinality() - toleranceLevel();
     }
 }

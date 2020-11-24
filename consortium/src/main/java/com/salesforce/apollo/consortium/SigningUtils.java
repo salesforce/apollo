@@ -130,7 +130,7 @@ public final class SigningUtils {
     }
 
     public static boolean validateGenesis(HashKey hash, CertifiedBlock block, Reconfigure initialView,
-                                          Context<Member> context, int toleranceLevel) {
+                                          Context<Member> context, int majority) {
         Map<HashKey, Supplier<Signature>> signatures = new HashMap<>();
         initialView.getViewList().forEach(vm -> {
             HashKey memberID = new HashKey(vm.getId());
@@ -156,9 +156,9 @@ public final class SigningUtils {
                                    .filter(c -> verify(validators, block.getBlock(), c))
                                    .count();
 
-        log.warn("Certified: {} required: {} provided: {} for genesis: {} on: {}", certifiedCount, toleranceLevel + 1,
+        log.warn("Certified: {} required: {} provided: {} for genesis: {} on: {}", certifiedCount, majority,
                  signatures.size(), hash);
-        return certifiedCount > toleranceLevel;
+        return certifiedCount >= majority;
     }
 
     public static boolean verify(Function<HashKey, Signature> validators, Block block, Certification c) {

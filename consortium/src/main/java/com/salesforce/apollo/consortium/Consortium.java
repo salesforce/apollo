@@ -45,6 +45,7 @@ import com.chiralbehaviors.tron.Fsm;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Body;
 import com.salesfoce.apollo.consortium.proto.BodyType;
@@ -102,11 +103,11 @@ public class Consortium {
     public class CollaboratorContext {
         private final NavigableMap<Long, CurrentBlock>     blockCache        = new ConcurrentSkipListMap<>();
         private volatile int                               currentConsensus  = -1;
-        private volatile int                               currentRegent;
+        private volatile int                               currentRegent     = 0;
         private final Map<Integer, CurrentSync>            data              = new HashMap<>();
         private final Deque<CertifiedBlock>                decided           = new ArrayDeque<>();
         private volatile long                              lastBlock         = -1;
-        private volatile int                               nextRegent;
+        private volatile int                               nextRegent        = -1;
         private final TransactionSimulator                 simulator;
         private final Deque<EnqueuedTransaction>           stopMessages      = new ArrayDeque<>();
         private volatile boolean                           stopped           = false;
@@ -114,7 +115,7 @@ public class Consortium {
         private final Map<Timers, Timer>                   timers            = new ConcurrentHashMap<>();
         private final Map<HashKey, EnqueuedTransaction>    toOrder           = new HashMap<>();
         private final Map<Integer, Set<Member>>            wantRegencyChange = new HashMap<>();
-        private final Map<HashKey, CertifiedBlock.Builder> workingBlocks     = new HashMap<>();
+        private final Map<HashKey, CertifiedBlock.Builder> workingBlocks     = new ConcurrentHashMap<>();
 
         public CollaboratorContext() {
             simulator = new TransactionSimulator(params.maxBatchByteSize, this, params.validator);
@@ -124,10 +125,6 @@ public class Consortium {
             schedule(Timers.AWAIT_GENESIS, () -> {
                 transitions.missingGenesis();
             }, params.context.toleranceLevel());
-        }
-
-        public void becomeLeader() {
-            scheduleBlockTimeout();
         }
 
         public void cancel(Timers t) {
@@ -141,16 +138,18 @@ public class Consortium {
         }
 
         public void changeRegency(List<EnqueuedTransaction> transactions) {
-            if (nextRegent != currentRegent) {
+            if (nextRegent() == currentRegent()) {
+                log.trace("Not changing regent as next/cur are identical: {} on: {}", currentRegent(), getMember());
                 return;
             }
+            log.trace("Starting change of regent from: {} to: {} on: {}", currentRegent(), nextRegent(), getMember());
             stopped = true;
-            nextRegent = currentRegent + 1;
+            nextRegent(currentRegent() + 1);
             toOrder.values().forEach(t -> t.cancel());
-            Builder data = Stop.newBuilder().setNextRegent(nextRegent);
+            Builder data = Stop.newBuilder().setNextRegent(nextRegent());
             transactions.forEach(eqt -> data.addTransactions(eqt.getTransaction()));
             Stop stop = data.build();
-            deliver(stop);
+            publish(stop);
             transitions.deliverStop(stop, getMember());
         }
 
@@ -160,7 +159,7 @@ public class Consortium {
                 return;
             }
             HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-            long previous = lastBlock;
+            long previous = lastBlock();
             if (block.getHeader().getHeight() <= previous) {
                 log.debug("Rejecting block proposal: {} from {} on: {} not next block: {} last: {}", hash, from,
                           getMember(), block.getHeader().getHeight(), previous);
@@ -172,8 +171,8 @@ public class Consortium {
                     log.debug("Rejecting block proposal: {}, cannot validate from {} on: {}", hash, from, getMember());
                     return null;
                 }
-                lastBlock = block.getHeader().getHeight();
-                deliver(validation);
+                lastBlock(block.getHeader().getHeight());
+                publish(validation);
                 return CertifiedBlock.newBuilder()
                                      .setBlock(block)
                                      .addCertifications(Certification.newBuilder()
@@ -183,27 +182,34 @@ public class Consortium {
         }
 
         public void deliverStop(Stop data, Member from) {
-            if (data.getNextRegent() != currentRegent + 1) {
-                log.info("Ignoring stop: {} current: {} from {} on: {}", data.getNextRegent(), currentRegent, from,
+            if (data.getNextRegent() != currentRegent() + 1) {
+                log.info("Ignoring stop: {} current: {} from {} on: {}", data.getNextRegent(), currentRegent(), from,
                          getMember());
                 return;
             }
-            log.info("Delivering stop: {} from {} on: {}", data.getNextRegent(), from, getMember());
-            List<EnqueuedTransaction> enqueued = data.getTransactionsList()
-                                                     .stream()
-                                                     .map(tx -> new EnqueuedTransaction(hashOf(tx), tx))
-                                                     .peek(eqt -> stopMessages.add(eqt))
-                                                     .collect(Collectors.toList());
+            if (sync.containsKey(data.getNextRegent())) {
+                log.info("Ignoring stop, already sync'd: {} from {} on: {}", data.getNextRegent(), from, getMember());
+                return;
+            }
             Set<Member> votes = wantRegencyChange.computeIfAbsent(data.getNextRegent(), k -> new HashSet<>());
+
+            if (votes.size() >= viewContext().majority()) {
+                log.info("Ignoring stop, already established: {} from {} on: {} requesting: {}", data.getNextRegent(),
+                         from, getMember(), votes.stream().map(m -> m.getId()).collect(Collectors.toList()));
+                return;
+            }
+            log.info("Delivering stop: {} from {} on: {}", data.getNextRegent(), from, getMember());
             votes.add(from);
-            if (votes.size() > params.context.toleranceLevel()) {
+            if (votes.size() >= viewContext().majority()) {
                 transitions.startRegencyChange(stopMessages.stream().collect(Collectors.toList()));
-                enqueued.forEach(eqt -> {
-                    toOrder.put(eqt.getHash(), eqt);
-                });
-                if (votes.size() > 2 * params.context.toleranceLevel()) {
-                    transitions.establishNextRegent();
-                }
+                data.getTransactionsList()
+                    .stream()
+                    .map(tx -> new EnqueuedTransaction(hashOf(tx), tx))
+                    .peek(eqt -> stopMessages.add(eqt))
+                    .forEach(eqt -> {
+                        toOrder.put(eqt.getHash(), eqt);
+                    });
+                transitions.establishNextRegent();
             }
         }
 
@@ -215,7 +221,23 @@ public class Consortium {
                          regent);
                 return;
             }
+            if (nextRegent() != elected) {
+                log.info("ignoring StopData from {} on: {}, incorrect regent: {} not next regent: {})", from,
+                         getMember(), elected, nextRegent());
+                return;
+            }
+            if (sync.containsKey(elected)) {
+                log.info("ignoring StopData from {} on: {}, already synchronized for regency: {}", from, getMember(),
+                         elected);
+                return;
+            }
             CurrentSync regencyData = data.computeIfAbsent(elected, k -> new CurrentSync());
+
+            if (regencyData.proofs.size() >= viewContext().majority()) {
+                log.info("ignoring StopData from {} on: {}, already majority for regency: {}", from, getMember(),
+                         elected);
+                return;
+            }
             Map<HashKey, CertifiedBlock> hashed;
             List<HashKey> hashes = new ArrayList<>();
             hashed = stopData.getBlocksList().stream().collect(Collectors.toMap(cb -> {
@@ -241,12 +263,12 @@ public class Consortium {
                 regencyData.blocks.putAll(hashed);
             }
 
-            if (regencyData.proofs.size() >= viewContext().cardinality() - viewContext().toleranceLevel()) {
+            if (regencyData.proofs.size() >= viewContext().majority()) {
                 Sync synch = buildSync(elected, regencyData);
                 if (synch != null) {
                     transitions.synchronizingLeader();
                     transitions.deliverSync(synch, getMember());
-                    deliver(synch);
+                    publish(synch);
                 }
             }
         }
@@ -254,10 +276,10 @@ public class Consortium {
         public void deliverSync(Sync syncData, Member from) {
             CertifiedLog sLog = syncData.getLog();
 
-            int cReg = sLog.getCurrentRegency();
-            if (nextRegent != cReg) {
+            int cReg = sLog.getCurrentRegent();
+            if (nextRegent() != cReg) {
                 log.info("Rejecting Sync from: {} on: {} expected regent: {} provided: {}", from, getMember(), cReg,
-                         nextRegent);
+                         nextRegent());
                 return;
             }
             Member regent = getRegent(cReg);
@@ -283,7 +305,7 @@ public class Consortium {
             }
             sync.put(cReg, syncData);
             transitions.syncd();
-            resolveStatus();
+            resolveRegentStatus();
         }
 
         public void deliverTotalOrdering(TotalOrdering msg, Member from) {
@@ -306,34 +328,28 @@ public class Consortium {
             }
         }
 
-        public void enterView() {
-            if (viewContext().isViewMember()) {
-                transitions.joinAsMember();
-            } else {
-                transitions.join();
-            }
-        }
-
         public void establishGenesisView() {
             ViewContext newView = new ViewContext(GENESIS_VIEW_ID, params.context, getMember(), nextViewConsensusKey(),
                     Collections.emptyList(), entropy());
             viewChange(newView);
             if (viewContext().isMember()) {
+                currentRegent(0);
+                nextRegent(-1);
                 vState.pause();
                 joinMessageGroup(newView);
-                transitions.join();
+                transitions.generateView();
             }
         }
 
         public void establishNextRegent() {
-            if (currentRegent == nextRegent) {
+            if (currentRegent() == nextRegent()) {
                 log.trace("Regent already established on {}", getMember());
                 return;
             }
-            currentRegent = nextRegent;
+            currentRegent(nextRegent());
             reschedule();
-            Member leader = getRegent(currentRegent);
-            StopData stopData = buildStopData(currentRegent);
+            Member leader = getRegent(currentRegent());
+            StopData stopData = buildStopData(currentRegent());
             if (stopData == null) {
                 return;
             }
@@ -347,7 +363,7 @@ public class Consortium {
                     try {
                         link.stop(stopData);
                     } catch (Throwable e) {
-                        log.warn("Error sending stop data: {} to: {} on: {}", currentRegent, leader, getMember());
+                        log.warn("Error sending stop data: {} to: {} on: {}", currentRegent(), leader, getMember());
                     } finally {
                         link.release();
                     }
@@ -355,19 +371,9 @@ public class Consortium {
             }
         }
 
-        public void generateGenesis() {
-            if (toOrder.size() == viewContext().cardinality()) {
-                generateGenesisBlock();
-            } else {
-                log.trace("Genesis group has not formed, rescheduling: {} want: {}", toOrder.size(),
-                          viewContext().cardinality());
-                rescheduleGenesis();
-            }
-        }
-
         public void generateView() {
             if (vState.getCurrent() == null) {
-                generateGenesis();
+                generateGenesisView();
             } else {
                 generateNextView();
             }
@@ -400,40 +406,37 @@ public class Consortium {
             })
                                               .filter(r -> r != null)
                                               .filter(r -> r.vote.isInitialized())
-                                              .limit(params.context.toleranceLevel() + 1)
+                                              .limit(viewContext().majority())
                                               .collect(Collectors.toList());
 
-            if (votes.size() <= params.context.toleranceLevel()) {
+            if (votes.size() < viewContext().majority()) {
                 log.debug("Did not gather votes necessary to join consortium needed: {} got: {}",
-                          params.context.toleranceLevel() + 1, votes.size());
+                          viewContext().majority(), votes.size());
                 return;
             }
-            JoinTransaction.Builder txn = JoinTransaction.newBuilder().setMember(voteForMe.getMember());
+            JoinTransaction.Builder txn = JoinTransaction.newBuilder()
+                                                         .setRegency(currentRegent())
+                                                         .setMember(voteForMe.getMember());
             for (Result vote : votes) {
                 txn.addCertification(Certification.newBuilder()
                                                   .setId(vote.member.getId().toByteString())
                                                   .setSignature(vote.vote.getSignature()));
             }
             JoinTransaction joinTxn = txn.build();
+
+            HashKey txnHash;
             try {
-                submit(true, h -> {
-                }, Any.pack(joinTxn));
+                txnHash = submit(true, h -> {
+                }, joinTxn);
             } catch (TimeoutException e) {
-                transitions.fail();
                 return;
             }
-            log.info("Successfully petitioned to joined view: {} on: {}", viewContext().getId(), params.member);
+            log.info("Successfully petitioned: {} to join view: {} on: {}", txnHash, viewContext().getId(),
+                     params.member);
         }
 
         public void joinView() {
-            if (toOrder.size() > viewContext().toleranceLevel()) {
-                transitions.formView();
-            } else {
-                join();
-                log.trace("View has not been formed, rescheduling on: {} have: {} require: {}", getMember(),
-                          toOrder.size(), viewContext().toleranceLevel() + 1);
-                schedule(Timers.AWAIT_VIEW_MEMBERS, () -> joinView(), viewContext().timeToLive());
-            }
+            joinView(0);
         }
 
         public void nextView() {
@@ -447,6 +450,7 @@ public class Consortium {
                 log.debug("Protocol violation on: {}.  Cannot decode checkpoint body: {}", getMember(), e);
                 return;
             }
+            log.info("Processing checkpoint block: {} on: {}", next.getHash(), getMember());
             body.getTransactionsList().forEach(txn -> {
                 HashKey hash = new HashKey(txn.getHash());
                 finalized(hash);
@@ -462,9 +466,9 @@ public class Consortium {
                 log.debug("Protocol violation on {}.  Cannot decode genesis body: {}", getMember(), e);
                 return;
             }
+            log.info("Processing genesis block: {} on: {}", next.getHash(), getMember());
             accept(next);
             Reconfigure reconfigure = body.getInitialView();
-            reconfigure.getTransactionsList().forEach(txn -> Consortium.this.finalize(txn));
             cancelToTimers();
             toOrder.clear();
             submitted.clear();
@@ -480,10 +484,7 @@ public class Consortium {
                 log.debug("Protocol violation on: {}.  Cannot decode reconfiguration body: {}", getMember(), e);
                 return;
             }
-            body.getTransactionsList().forEach(txn -> {
-                HashKey hash = new HashKey(txn.getHash());
-                finalized(hash);
-            });
+            log.info("Processing reconfigure block: {} on: {}", next.getHash(), getMember());
             accept(next);
             reconfigure(body, false);
         }
@@ -497,6 +498,7 @@ public class Consortium {
                           next.getHash(), e);
                 return;
             }
+            log.info("Processing user block: {} on: {}", next.getHash(), getMember());
             body.getTransactionsList().forEach(txn -> {
                 HashKey hash = new HashKey(txn.getHash());
                 finalized(hash);
@@ -511,11 +513,6 @@ public class Consortium {
             accept(next);
         }
 
-        public void quiesce() {
-            log.debug("Quiescing group messaging on: {}", getMember());
-            vState.pause();
-        }
-
         public void receive(ReplicateTransactions transactions, Member from) {
             for (Transaction txn : transactions.getTransactionsList()) {
                 receive(txn);
@@ -524,14 +521,31 @@ public class Consortium {
 
         public void receive(Transaction txn) {
             EnqueuedTransaction transaction = new EnqueuedTransaction(hashOf(txn), txn);
-            if (toOrder.put(transaction.getHash(), transaction) == null) {
+            toOrder.computeIfAbsent(transaction.getHash(), k -> {
+                if (txn.getJoin()) {
+                    JoinTransaction join;
+                    try {
+                        join = txn.getBatch(0).unpack(JoinTransaction.class);
+                    } catch (InvalidProtocolBufferException e) {
+                        log.debug("Cannot deserialize join on: {}", getMember(), e);
+                        return null;
+                    }
+                    HashKey memberID = new HashKey(join.getMember().getId());
+                    if (join.getRegency() != currentRegent()) {
+                        log.debug("Discarding join: {} from: {} invalid regency: {} current: {} on: {}", hashOf(txn),
+                                  memberID, join.getRegency(), currentRegent(), getMember());
+                        return null;
+                    }
+                    log.trace("Join txn:{} received on: {} self join: {}", transaction.getHash(), getMember(),
+                              getMember().getId().equals(memberID));
+                }
                 transaction.setTimer(schedule(transaction));
-            }
+                return transaction;
+            });
         }
 
         public void receiveJoin(Transaction txn) {
             if (!txn.getJoin()) {
-                log.trace("not join txn on {}", getMember());
                 return;
             }
             receive(txn);
@@ -539,12 +553,13 @@ public class Consortium {
         }
 
         public void receiveJoins(ReplicateTransactions transactions, Member from) {
-            receive(transactions, from);
+            transactions.getTransactionsList().stream().filter(txn -> txn.getJoin()).forEach(txn -> receive(txn));
             reduceJoinTransactions();
         }
 
-        public void resolveStatus() {
-            Member regent = getRegent(nextRegent);
+        public void resolveRegentStatus() {
+            Member regent = getRegent(nextRegent());
+            log.info("Regent: {} on: {}", regent, getMember());
             if (getMember().equals(regent)) {
                 transitions.becomeLeader();
             } else {
@@ -575,7 +590,7 @@ public class Consortium {
                          .stream()
                          .peek(e -> log.trace("TO Consider: {}:{} on: {}", e.getKey(),
                                               e.getValue().getCertificationsCount(), getMember()))
-                         .filter(e -> e.getValue().getCertificationsCount() > params.context.toleranceLevel())
+                         .filter(e -> e.getValue().getCertificationsCount() >= viewContext().majority())
                          .sorted((a, b) -> Long.compare(a.getValue().getBlock().getHeader().getHeight(),
                                                         b.getValue().getBlock().getHeader().getHeight()))
                          .forEach(e -> {
@@ -583,7 +598,7 @@ public class Consortium {
                                       e.getValue().getBlock().getHeader().getHeight(), getMember());
                              params.consensus.apply(e.getValue().build());
                              published.add(e.getKey());
-                             deliver(TotalOrdering.newBuilder().setHash(e.getKey().toByteString()).build());
+                             publish(TotalOrdering.newBuilder().setHash(e.getKey().toByteString()).build());
                          });
             published.forEach(h -> workingBlocks.remove(h));
         }
@@ -611,6 +626,10 @@ public class Consortium {
             transitions.drainPending();
         }
 
+        Map<HashKey, EnqueuedTransaction> getToOrder() {
+            return toOrder;
+        }
+
         private void accept(CurrentBlock next) {
             workingBlocks.remove(next.getHash());
             vState.setCurrent(next);
@@ -621,7 +640,7 @@ public class Consortium {
             Map<HashKey, CertifiedBlock> decided;
             decided = workingBlocks.entrySet()
                                    .stream()
-                                   .filter(e -> e.getValue().getCertificationsCount() <= toleranceLevel())
+                                   .filter(e -> e.getValue().getCertificationsCount() >= viewContext().majority())
                                    .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().build()));
 
             CurrentBlock current = vState.getCurrent();
@@ -663,7 +682,7 @@ public class Consortium {
                 log.info("Cannot build sync on {}, gaps in log", getMember());
                 return null;
             }
-            CertifiedLog.Builder logBuilder = CertifiedLog.newBuilder().setCurrentRegency(elected);
+            CertifiedLog.Builder logBuilder = CertifiedLog.newBuilder().setCurrentRegent(elected);
             ArrayList<CertifiedBlock> blocks = new ArrayList<>(regencyData.blocks.values());
             blocks.forEach(cb -> logBuilder.addBlocks(cb));
             logBuilder.addAllProofs(regencyData.proofs);
@@ -710,18 +729,33 @@ public class Consortium {
         }
 
         private void clear() {
+            currentRegent(0);
+            nextRegent(-2);
+            currentConsensus = -1;
+            lastBlock = -1;
             timers.values().forEach(e -> e.cancel());
             timers.clear();
             cancelToTimers();
             toOrder.clear();
-            lastBlock = -1;
+            lastBlock(-1);
             scheduler.cancelAll();
             workingBlocks.clear();
         }
 
+        private int currentRegent() {
+            final int c = currentRegent;
+            return c;
+        }
+
+        private void currentRegent(int currentRegent) {
+            assert currentRegent >= 0 : "Must be >= 0 : " + currentRegent;
+            log.info("Current regency set to: {} previous: {} on: {} ", currentRegent, this.currentRegent, getMember());
+            this.currentRegent = currentRegent;
+        }
+
         private void deliverGenesisBlock(final Block block, Member from) {
             HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-            final long previous = lastBlock;
+            final long previous = lastBlock();
             if (block.getHeader().getHeight() != previous + 1) {
                 log.debug("Rejecting genesis block proposal: {} from {}, not block height {} + 1", hash, from,
                           previous);
@@ -747,9 +781,9 @@ public class Consortium {
                     log.error("Cannot validate generated genesis: {} on: {}", hash, getMember());
                     return null;
                 }
-                lastBlock = block.getHeader().getHeight();
+                lastBlock(block.getHeader().getHeight());
                 vState.setViewContext(viewContext().cloneWith(genesis.getInitialView().getViewList()));
-                deliver(validation);
+                publish(validation);
                 return CertifiedBlock.newBuilder()
                                      .setBlock(block)
                                      .addCertifications(Certification.newBuilder()
@@ -762,6 +796,7 @@ public class Consortium {
             EnqueuedTransaction removed = toOrder.remove(hash);
             if (removed != null) {
                 removed.cancel();
+                Consortium.this.finalized(removed);
             }
         }
 
@@ -773,27 +808,25 @@ public class Consortium {
                                                                          .addTransactions(transaction.getTransaction());
             toOrder.values()
                    .stream()
-                   .filter(eqt -> eqt.getDelay() < toleranceLevel())
+                   .filter(eqt -> eqt.getDelay() < viewContext().toleranceLevel())
                    .peek(eqt -> eqt.cancel())
                    .map(eqt -> eqt.getTransaction())
                    .forEach(txn -> builder.addTransactions(txn));
 
-            deliver(builder.build());
+            publish(builder.build());
             transaction.setTimer(scheduler.schedule(Timers.TRANSACTION_TIMEOUT_2, () -> secondTimeout(transaction),
                                                     viewContext().toleranceLevel()));
         }
 
         private void generateGenesisBlock() {
-            assert toOrder.size() > toleranceLevel() : "Whoops";
+            reduceJoinTransactions();
+            assert toOrder.size() >= viewContext().majority() : "Whoops";
             log.info("Generating genesis on {} join transactions: {}", getMember(), toOrder.size());
             Reconfigure.Builder genesisView = Reconfigure.newBuilder()
                                                          .setCheckpointBlocks(256)
                                                          .setId(GENESIS_VIEW_ID.toByteString())
-                                                         .setToleranceLevel(toleranceLevel());
+                                                         .setTolerance(viewContext().majority());
             toOrder.values().forEach(join -> {
-                genesisView.addTransactions(ExecutedTransaction.newBuilder()
-                                                               .setHash(join.getHash().toByteString())
-                                                               .setTransaction(join.getTransaction()));
                 JoinTransaction txn;
                 try {
                     txn = join.getTransaction().getBatch(0).unpack(JoinTransaction.class);
@@ -803,6 +836,7 @@ public class Consortium {
                     transitions.fail();
                     return;
                 }
+                genesisView.addTransactions(txn);
                 genesisView.addView(txn.getMember());
             });
             if (genesisView.getViewCount() != toOrder.size()) {
@@ -828,7 +862,7 @@ public class Consortium {
             HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
             log.info("Genesis block: {} generated on {}", hash, getMember());
             workingBlocks.computeIfAbsent(hash, k -> {
-                lastBlock = 0;
+                lastBlock(0);
                 Validate validation = viewContext().generateValidation(hash, block);
                 if (validation == null) {
                     log.error("Cannot validate generated genesis block: {} on: {}", hash, getMember());
@@ -839,14 +873,29 @@ public class Consortium {
                                                        .setSignature(validation.getSignature()));
 
                 vState.setViewContext(viewContext().cloneWith(genesisView.getViewList()));
-                deliver(block);
-                deliver(validation);
+                publish(block);
+                publish(validation);
                 return builder;
             });
         }
 
+        private void generateGenesisView() {
+            if (!selfJoinRecorded()) {
+                log.trace("Join transaction not found on: {}, rescheduling", getMember());
+                rescheduleGenesis();
+                return;
+            }
+            if (toOrder.size() == viewContext().cardinality()) {
+                generateGenesisBlock();
+            } else {
+                log.trace("Genesis group has not formed, rescheduling: {} want: {}", toOrder.size(),
+                          viewContext().cardinality());
+                rescheduleGenesis();
+            }
+        }
+
         private boolean generateNextBlock() {
-            final long currentHeight = lastBlock;
+            final long currentHeight = lastBlock();
             final CurrentBlock currentBlock = blockCache.get(currentHeight);
             final long thisHeight = currentHeight + 1;
 
@@ -902,8 +951,8 @@ public class Consortium {
             CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
                                                                                                     .setBlock(block));
             blockCache.put(thisHeight, new CurrentBlock(hash, block));
-            deliver(block);
-            lastBlock = thisHeight;
+            publish(block);
+            lastBlock(thisHeight);
 
             Validate validation = viewContext().generateValidation(hash, block);
             if (validation == null) {
@@ -913,7 +962,7 @@ public class Consortium {
             builder.addCertifications(Certification.newBuilder()
                                                    .setId(validation.getId())
                                                    .setSignature(validation.getSignature()));
-            deliver(validation);
+            publish(validation);
 
             log.info("Generated next block: {} height: {} on: {} txns: {}", hash, thisHeight, getMember(),
                      user.getTransactionsCount());
@@ -929,17 +978,49 @@ public class Consortium {
             return viewContext().getRegent(regent);
         }
 
+        private void joinView(int attempt) {
+            boolean selfJoin = selfJoinRecorded();
+            if (attempt < 3 && selfJoin && toOrder.size() == viewContext().toleranceLevel()) {
+                log.trace("View formed on: {} have: {} require: {} self join: {}", getMember(), toOrder.size(),
+                          viewContext().majority(), selfJoin);
+                transitions.formView();
+            } else if (selfJoin && toOrder.size() >= viewContext().majority()) {
+                log.trace("View formed on: {} have: {} require: {} self join: {}", getMember(), toOrder.size(),
+                          viewContext().majority(), selfJoin);
+                transitions.formView();
+            } else {
+                log.trace("View has not been formed, rescheduling on: {} have: {} require: {} self join: {}",
+                          getMember(), toOrder.size(), viewContext().majority(), selfJoin);
+                join();
+                schedule(Timers.AWAIT_VIEW_MEMBERS, () -> joinView(attempt - 1), 50);
+            }
+        }
+
+        private long lastBlock() {
+            final long c = lastBlock;
+            return c;
+        }
+
+        private void lastBlock(long lastBlock) {
+            this.lastBlock = lastBlock;
+        }
+
+        private int nextRegent() {
+            final int c = nextRegent;
+            return c;
+        }
+
+        private void nextRegent(int nextRegent) {
+            this.nextRegent = nextRegent;
+        }
+
         private void reconfigure(Reconfigure view, boolean genesis) {
             ViewContext newView = new ViewContext(view, params.context, getMember(),
                     genesis ? viewContext().getConsensusKey() : nextViewConsensusKey(), entropy());
+            currentRegent(0);
+            nextRegent(-1);
             viewChange(newView);
-            if (newView.isMember()) { // cohort member
-                log.debug("reconfiguring, becoming joining member: {}", params.member);
-                transitions.join();
-            } else { // you are all my puppets
-                log.debug("reconfiguring, becoming client: {}", params.member);
-                transitions.becomeClient();
-            }
+            resolveStatus();
         }
 
         private void reduceJoinTransactions() {
@@ -955,8 +1036,7 @@ public class Consortium {
                     log.error("Failure deserializing ToOrder txn Join on {}", getMember(), e);
                 }
             });
-            log.trace("Reduced joins on: {} current: {} prev: {} members: {}", getMember(), toOrder.size(),
-                      reduced.size(), reduced.keySet());
+//            log.trace("Reduced joins on: {} current: {} prev: {}", getMember(), reduced.size(), toOrder.size());
             toOrder.clear();
             reduced.values().forEach(eqt -> toOrder.put(eqt.getHash(), eqt));
         }
@@ -970,19 +1050,37 @@ public class Consortium {
 
         private void rescheduleGenesis() {
             schedule(Timers.AWAIT_GROUP, () -> {
-                if (toOrder.size() > params.context.toleranceLevel()) {
+                if (selfJoinRecorded() && toOrder.size() >= viewContext().majority()) {
                     generateGenesisBlock();
                 } else {
                     log.trace("Genesis group has not formed, rescheduling: {} want: {}", toOrder.size(),
-                              params.context.toleranceLevel());
+                              viewContext().majority());
                     rescheduleGenesis();
                 }
             }, viewContext().toleranceLevel());
         }
 
+        private void resolveStatus() {
+            Member regent = getRegent(currentRegent());
+            if (viewContext().isViewMember()) {
+                if (getMember().equals(regent)) {
+                    log.info("becoming leader on: {}", getMember());
+                    transitions.becomeLeader();
+                } else {
+                    log.info("becoming follower on: {} regent: {}", getMember(), regent);
+                    transitions.becomeFollower();
+                }
+            } else if (viewContext().isMember()) {
+                log.info("becoming joining member on: {} regent: {}", getMember(), regent);
+                transitions.joinAsMember();
+            } else {
+                log.info("becoming client on: {} regent: {}", getMember(), regent);
+                transitions.becomeClient();
+            }
+        }
+
         private Timer schedule(EnqueuedTransaction eqt) {
-            return scheduler.schedule(Timers.TRANSACTION_TIMEOUT_1, () -> firstTimeout(eqt),
-                                      5 * viewContext().timeToLive());
+            return scheduler.schedule(Timers.TRANSACTION_TIMEOUT_1, () -> firstTimeout(eqt), 50);
         }
 
         private void schedule(Timers label, Runnable a, int delta) {
@@ -1031,10 +1129,22 @@ public class Consortium {
             log.info("Second timeout for: {} on: {}", transaction.getHash(), getMember());
             List<EnqueuedTransaction> timedOut = toOrder.values()
                                                         .stream()
-                                                        .filter(eqt -> eqt.getDelay() < viewContext().timeToLive())
+                                                        .filter(eqt -> eqt.getDelay() < 10)
                                                         .peek(eqt -> eqt.cancel())
                                                         .collect(Collectors.toList());
             transitions.startRegencyChange(timedOut);
+        }
+
+        private boolean selfJoinRecorded() {
+            HashKey id = getMember().getId();
+            return toOrder.values().stream().map(eqt -> eqt.getTransaction()).map(t -> {
+                try {
+                    return t.getBatch(0).unpack(JoinTransaction.class);
+                } catch (InvalidProtocolBufferException e) {
+                    log.error("Cannot generate genesis, unable to parse Join txn on: {}", getMember());
+                    return null;
+                }
+            }).filter(jt -> jt != null).anyMatch(jt -> id.equals(new HashKey(jt.getMember().getId())));
         }
 
         private boolean validate(Member regent, CertifiedLog certifiedLog, int regency) {
@@ -1057,9 +1167,9 @@ public class Consortium {
                 return false;
             }
 
-            if (certifiedLog.getProofsCount() <= toleranceLevel()) {
+            if (certifiedLog.getProofsCount() < viewContext().majority()) {
                 log.info("Rejecting Sync from: {} regent: {} on: {} consensus not proved: {} required: {}", regent,
-                         regency, getMember(), certifiedLog.getProofsCount(), toleranceLevel());
+                         regency, getMember(), certifiedLog.getProofsCount(), viewContext().majority());
                 return false;
             }
             Set<HashKey> unresolved = hashes.stream().filter(h -> !hashed.containsKey(h)).collect(Collectors.toSet());
@@ -1067,6 +1177,13 @@ public class Consortium {
                 return true;
             }
             return false;
+        }
+
+        public void reschedule(List<EnqueuedTransaction> transactions) {
+            transactions.forEach(eqt -> {
+                eqt.setTimedOut(false);
+                eqt.setTimer(schedule(eqt));
+            });
         }
     }
 
@@ -1216,7 +1333,7 @@ public class Consortium {
 
     private final Fsm<CollaboratorContext, Transitions> fsm;
     private final byte[]                                genesisData = "Give me food or give me slack or kill me".getBytes();
-    private Logger                                      log         = DEFAULT_LOGGER;
+    private static final Logger                         log         = DEFAULT_LOGGER;
     private final Parameters                            params;
     private final TickScheduler                         scheduler   = new TickScheduler();
     private final AtomicBoolean                         started     = new AtomicBoolean();
@@ -1284,16 +1401,13 @@ public class Consortium {
                           hash);
                 return false;
             }
-            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), params.context, toleranceLevel())) {
+            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), params.context,
+                                 viewContext().majority())) {
                 log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
                 return false;
             }
         }
         return next(new CurrentBlock(hash, block));
-    }
-
-    public void setLog(Logger log) {
-        this.log = log;
     }
 
     public void start() {
@@ -1315,7 +1429,7 @@ public class Consortium {
         transitions.stop();
     }
 
-    public HashKey submit(Consumer<HashKey> onCompletion, Any... transactions) throws TimeoutException {
+    public HashKey submit(Consumer<HashKey> onCompletion, Message... transactions) throws TimeoutException {
         return submit(false, onCompletion, transactions);
 
     }
@@ -1335,7 +1449,7 @@ public class Consortium {
         return transitions;
     }
 
-    private EnqueuedTransaction build(boolean join, Any... transactions) {
+    private EnqueuedTransaction build(boolean join, Message... transactions) {
         byte[] nonce = new byte[32];
         entropy().nextBytes(nonce);
 
@@ -1343,8 +1457,8 @@ public class Consortium {
                                                  .setJoin(join)
                                                  .setSource(params.member.getId().toByteString())
                                                  .setNonce(ByteString.copyFrom(nonce));
-        for (Any t : transactions) {
-            builder.addBatch(t);
+        for (Message t : transactions) {
+            builder.addBatch(Any.pack(t));
         }
 
         HashKey hash = hashOf(builder);
@@ -1377,12 +1491,13 @@ public class Consortium {
         }
     }
 
-    private void deliver(com.google.protobuf.Message message) {
+    private void publish(com.google.protobuf.Message message) {
         final Messenger currentMsgr = vState.getMessenger();
         if (currentMsgr == null) {
             log.error("skipping message publish as no messenger");
             return;
         }
+//        log.info("publish message: {} on: {}", message.getClass().getSimpleName(), getMember());
         currentMsgr.publish(message);
     }
 
@@ -1390,13 +1505,12 @@ public class Consortium {
         return params.msgParameters.entropy;
     }
 
-    private void finalize(ExecutedTransaction txn) {
-        HashKey hash = new HashKey(txn.getHash());
-        SubmittedTransaction previous = submitted.remove(hash);
+    private void finalized(final EnqueuedTransaction finald) {
+        final SubmittedTransaction previous = submitted.remove(finald.getHash());
         if (previous != null) {
             ForkJoinPool.commonPool().execute(() -> {
                 if (previous.onCompletion != null) {
-                    previous.onCompletion.accept(hash);
+                    previous.onCompletion.accept(finald.getHash());
                 }
             });
         }
@@ -1470,6 +1584,9 @@ public class Consortium {
             return;
         }
         Any content = msg.content;
+
+//        log.info("processing msg: {} from: {} on: {} seq: {} ", classNameOf(content), msg.from, getMember(),
+//                 msg.sequenceNumber);
 
         if (content.is(TotalOrdering.class)) {
             try {
@@ -1550,7 +1667,8 @@ public class Consortium {
 
     }
 
-    private HashKey submit(boolean join, Consumer<HashKey> onCompletion, Any... transactions) throws TimeoutException {
+    private HashKey submit(boolean join, Consumer<HashKey> onCompletion,
+                           Message... transactions) throws TimeoutException {
         if (viewContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
@@ -1564,7 +1682,6 @@ public class Consortium {
         assert transaction.getHash().equals(hashOf(transaction.getTransaction())) : "Hash does not match!";
 
         submitted.put(transaction.getHash(), new SubmittedTransaction(transaction.getTransaction(), onCompletion));
-        int toleranceLevel = toleranceLevel();
         SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
                                                           .setContext(viewContext().getId().toByteString())
                                                           .setTransaction(transaction.getTransaction())
@@ -1572,7 +1689,11 @@ public class Consortium {
         log.info("Submitting txn: {} from: {}", transaction.getHash(), getMember());
         List<TransactionResult> results;
         results = viewContext().streamRandomRing().map(c -> {
-            if (!getMember().equals(c)) {
+            if (getMember().equals(c)) {
+                log.trace("submit: {} to self: {}", transaction.getHash(), c.getId());
+                transitions.receive(transaction.getTransaction(), getMember());
+                return TransactionResult.getDefaultInstance();
+            } else {
                 ConsortiumClientCommunications link = linkFor(c);
                 if (link == null) {
                     log.trace("Cannot get link for {}", c.getId());
@@ -1584,19 +1705,14 @@ public class Consortium {
                     log.trace("Cannot submit txn {} to {}: {}", transaction.getHash(), c, t.getMessage());
                     return null;
                 }
-            } else {
-                transitions.receive(transaction.getTransaction(), getMember());
-                return TransactionResult.getDefaultInstance();
             }
         }).filter(r -> r != null).collect(Collectors.toList());
 
-        if (results.size() <= toleranceLevel) {
+        if (results.size() < viewContext().majority()) {
+            log.trace("Cannot submit txn {} on: {} responses: {} required: {}", transaction.getHash(), getMember(),
+                      results.size(), viewContext().majority());
             throw new TimeoutException("Cannot submit transaction " + transaction.getHash());
         }
-    }
-
-    private int toleranceLevel() {
-        return params.context.toleranceLevel();
     }
 
     /**
@@ -1607,8 +1723,9 @@ public class Consortium {
     private void viewChange(ViewContext newView) {
         vState.pause();
 
-        log.debug("Installing new view rings: {} ttl: {} on: {}", newView.getRingCount(), newView.timeToLive(),
-                  getMember());
+        log.debug("Installing new view rings: {} ttl: {} on: {} regent: {}", newView.getRingCount(),
+                  newView.timeToLive(), getMember(),
+                  getState().currentRegent() >= 0 ? newView.getRegent(getState().currentRegent()) : "None");
 
         vState.setComm(createClientComms.apply(newView.getId()));
         vState.setMessenger(null);

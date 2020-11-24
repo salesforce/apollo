@@ -185,15 +185,17 @@ public class TickScheduler {
             final ReentrantLock lock = this.lock;
             lock.lock();
             try {
+                List<Timer> cancelled = new ArrayList<>();
                 for (int i = 0; i < size; i++) {
                     Timer t = queue[i];
                     if (t != null) {
-                        t.cancel();
+                        cancelled.add(t);
                         queue[i] = null;
                         setIndex(t, -1);
                     }
                 }
                 size = 0;
+                cancelled.forEach(t -> t.cancel());
             } finally {
                 lock.unlock();
             }
