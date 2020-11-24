@@ -104,14 +104,14 @@ public class ViewContext implements MembershipListener<Member> {
                         log.debug("invalid view member, cannot deserialize consensus key for: {} on: {}", mID, member);
                         return null;
                     }
-                    log.info("Adding consensus key for: {} on: {}", mID, member);
+                    log.debug("Adding consensus key for: {} on: {}", mID, member);
                     return consensusKey;
                 });
             }
         });
         isViewMember = validators.containsKey(member.getId());
-        log.info("View context established for: {} is member: {} is view member: {} validators: {}", member,
-                 context.getMember(member.getId()) != null, isViewMember, validators.size());
+        log.debug("View context established for: {} is member: {} is view member: {} validators: {}", member,
+                  context.getMember(member.getId()) != null, isViewMember, validators.size());
         this.entropy = entropy;
     }
 
@@ -131,7 +131,6 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public ViewContext cloneWith(List<ViewMember> members) {
-        log.info("Cloning view context: {} on: {} members: {}", context.getId(), member, members.size());
         return new ViewContext(context, member, consensusKeyPair, members, entropy);
     }
 

@@ -97,6 +97,11 @@ public enum EstablishView implements Transitions {
     FOLLOWER {
 
         @Override
+        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
+            return null;
+        }
+
+        @Override
         public Transitions becomeClient() {
             fsm().pop().becomeClient();
             return null;
@@ -145,6 +150,11 @@ public enum EstablishView implements Transitions {
 
     },
     LEADER {
+
+        @Override
+        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
+            return null;
+        }
 
         @Override
         public Transitions becomeClient() {

@@ -26,6 +26,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,6 +35,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -135,7 +137,7 @@ public class TestConsortium {
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
                                                                  .build();
-        Executor cPipeline = Executors.newSingleThreadExecutor();
+        Executor cPipeline = new ThreadPoolExecutor(1, 1, 10, TimeUnit.SECONDS, new BlockingArrayQueue<Runnable>(1));
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Function<CertifiedBlock, HashKey> consensus = c -> {
             cPipeline.execute(() -> consortium.values().stream().forEach(m -> {
@@ -291,10 +293,13 @@ public class TestConsortium {
                                .count(),
                      "True leader gone bad: "
                              + blueRibbon.stream().map(c -> c.fsm().getCurrentState()).collect(Collectors.toSet()));
-        System.out.println("To Order in blue ribbon: " + blueRibbon.stream()
-                                                                   .map(c -> c.getState())
-                                                                   .map(cc -> cc.getToOrder().size())
-                                                                   .collect(Collectors.toList()));
+        assertEquals(0,
+                     blueRibbon.stream()
+                               .map(c -> c.getState())
+                               .map(cc -> cc.getToOrder().size())
+                               .filter(c -> c > 0)
+                               .count(),
+                     "Blue ribbion committee did not flush toOrder");
     }
 
 }
