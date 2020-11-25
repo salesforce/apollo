@@ -283,4 +283,8 @@ public class ViewContext implements MembershipListener<Member> {
     public int majority() {
         return cardinality() - toleranceLevel();
     }
+
+    public int activeCardinality() {
+        return  context.getActive().size();
+    }
 }

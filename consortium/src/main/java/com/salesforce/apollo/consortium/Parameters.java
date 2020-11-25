@@ -175,8 +175,9 @@ public class Parameters {
             return this;
         }
 
-        public void setViewTimeout(Duration viewTimeout) {
+        public Builder setViewTimeout(Duration viewTimeout) {
             this.viewTimeout = viewTimeout;
+            return this;
         }
     }
 

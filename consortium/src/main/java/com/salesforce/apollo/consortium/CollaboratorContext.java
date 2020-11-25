@@ -72,7 +72,7 @@ public class CollaboratorContext {
     private static final Logger                        log               = LoggerFactory.getLogger(CollaboratorContext.class);
     private final NavigableMap<Long, CurrentBlock>     blockCache        = new ConcurrentSkipListMap<>();
     private final Consortium                           consortium;
-    private volatile int                               currentConsensus  = -1;
+    private volatile long                              currentConsensus  = -1;
     private volatile int                               currentRegent     = 0;
     private final Map<Integer, CurrentSync>            data              = new HashMap<>();
     private final Deque<CertifiedBlock>                decided           = new ArrayDeque<>();
@@ -369,6 +369,10 @@ public class CollaboratorContext {
         }
     }
 
+    public void initializeConsensus() {
+        currentConsensus(consortium.getvState().getCurrent().getBlock().getHeader().getHeight());
+    }
+
     public void join() {
         log.debug("Petitioning to join view: {} on: {}", consortium.viewContext().getId(),
                   consortium.getParams().member);
@@ -579,8 +583,8 @@ public class CollaboratorContext {
     }
 
     public void totalOrderDeliver() {
-        log.debug("Attempting total ordering of working blocks: {} on: {}", workingBlocks.size(),
-                  consortium.getMember());
+        log.trace("Attempting total ordering of working blocks: {} current consensus: {} on: {}", workingBlocks.size(),
+                  currentConsensus(), consortium.getMember());
         List<HashKey> published = new ArrayList<>();
         workingBlocks.entrySet()
                      .stream()
@@ -589,12 +593,16 @@ public class CollaboratorContext {
                      .filter(e -> e.getValue().getCertificationsCount() >= consortium.viewContext().majority())
                      .sorted((a, b) -> Long.compare(a.getValue().getBlock().getHeader().getHeight(),
                                                     b.getValue().getBlock().getHeader().getHeight()))
+                     .filter(e -> e.getValue().getBlock().getHeader().getHeight() >= currentConsensus() + 1)
                      .forEach(e -> {
-                         log.info("Totally ordering block: {} height: {} on: {}", e.getKey(),
-                                  e.getValue().getBlock().getHeader().getHeight(), consortium.getMember());
-                         consortium.getParams().consensus.apply(e.getValue().build());
-                         published.add(e.getKey());
-                         consortium.publish(TotalOrdering.newBuilder().setHash(e.getKey().toByteString()).build());
+                         if (e.getValue().getBlock().getHeader().getHeight() == currentConsensus() + 1) {
+                             currentConsensus(e.getValue().getBlock().getHeader().getHeight());
+                             log.info("Totally ordering block: {} height: {} on: {}", e.getKey(),
+                                      e.getValue().getBlock().getHeader().getHeight(), consortium.getMember());
+                             consortium.getParams().consensus.apply(e.getValue().build());
+                             consortium.publish(TotalOrdering.newBuilder().setHash(e.getKey().toByteString()).build());
+                             published.add(e.getKey());
+                         }
                      });
         published.forEach(h -> workingBlocks.remove(h));
     }
@@ -621,8 +629,7 @@ public class CollaboratorContext {
     void clear() {
         currentRegent(0);
         nextRegent(-2);
-        currentConsensus = -1;
-        lastBlock = -1;
+        currentConsensus(-1);
         timers.values().forEach(e -> e.cancel());
         timers.clear();
         cancelToTimers();
@@ -745,6 +752,15 @@ public class CollaboratorContext {
         return true;
     }
 
+    private long currentConsensus() {
+        final long c = currentConsensus;
+        return c;
+    }
+
+    private void currentConsensus(long l) {
+        this.currentConsensus = l;
+    }
+
     private void currentRegent(int currentRegent) {
         assert currentRegent >= 0 : "Must be >= 0 : " + currentRegent;
         log.trace("Current regency set to: {} previous: {} on: {} ", currentRegent, this.currentRegent,
@@ -754,9 +770,9 @@ public class CollaboratorContext {
 
     private void deliverGenesisBlock(final Block block, Member from) {
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-        final long previous = lastBlock();
-        if (block.getHeader().getHeight() != previous + 1) {
-            log.debug("Rejecting genesis block proposal: {} from {}, not block height {} + 1", hash, from, previous);
+        if (block.getHeader().getHeight() != 0) {
+            log.debug("Rejecting genesis block proposal: {} height: {} from {}, not block height 0", hash,
+                      block.getHeader().getHeight(), from);
         }
 
         if (block.getBody().getType() != BodyType.GENESIS) {
@@ -892,7 +908,7 @@ public class CollaboratorContext {
             rescheduleGenesis();
             return;
         }
-        if (toOrder.size() == consortium.viewContext().cardinality()) {
+        if (toOrder.size() == consortium.viewContext().activeCardinality()) {
             generateGenesisBlock();
         } else {
             log.trace("Genesis group has not formed, rescheduling: {} want: {}", toOrder.size(),
@@ -987,11 +1003,11 @@ public class CollaboratorContext {
 
     private void joinView(int attempt) {
         boolean selfJoin = selfJoinRecorded();
-        if (attempt < 10 && selfJoin && toOrder.size() == consortium.viewContext().toleranceLevel()) {
+        if (attempt < 20 && selfJoin && toOrder.size() == consortium.viewContext().toleranceLevel()) {
             log.trace("View formed on: {} have: {} require: {} self join: {}", consortium.getMember(), toOrder.size(),
                       consortium.viewContext().majority(), selfJoin);
             consortium.getTransitions().formView();
-        } else if (selfJoin && toOrder.size() >= consortium.viewContext().majority()) {
+        } else if (attempt >= 20 && selfJoin && toOrder.size() >= consortium.viewContext().majority()) {
             log.trace("View formed on: {} have: {} require: {} self join: {}", consortium.getMember(), toOrder.size(),
                       consortium.viewContext().majority(), selfJoin);
             consortium.getTransitions().formView();
@@ -1015,7 +1031,7 @@ public class CollaboratorContext {
 
     private void nextBatch() {
         if (toOrder.isEmpty()) {
-            log.debug("No transactions available to batch on: {}:{}", consortium.getMember(), toOrder.size());
+//            log.debug("No transactions available to batch on: {}:{}", consortium.getMember(), toOrder.size());
             return;
         }
         List<EnqueuedTransaction> batch = toOrder.values()

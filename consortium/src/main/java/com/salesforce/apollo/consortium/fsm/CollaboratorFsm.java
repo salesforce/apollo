@@ -18,6 +18,7 @@ import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.TotalOrdering;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
+import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.CurrentBlock;
 import com.salesforce.apollo.consortium.EnqueuedTransaction;
@@ -172,6 +173,14 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
+        public Transitions deliverValidate(Validate validation) {
+            CollaboratorContext context = context();
+            context.validate(validation);
+            context.totalOrderDeliver();
+            return null;
+        }
+
+        @Override
         public Transitions drainPending() {
             context().drainBlocks();
             return null;
@@ -179,6 +188,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Entry
         public void generate() {
+            context().initializeConsensus();
             context().generateBlocks();
         }
 
@@ -324,7 +334,6 @@ public enum CollaboratorFsm implements Transitions {
     @Override
     public Transitions deliverValidate(Validate validation) {
         context().validate(validation);
-        context().totalOrderDeliver();
         return null;
     }
 
