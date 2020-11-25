@@ -140,7 +140,7 @@ public class TestConsortium {
         Executor cPipeline = new ThreadPoolExecutor(1, 1, 10, TimeUnit.SECONDS, new BlockingArrayQueue<Runnable>(1));
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Function<CertifiedBlock, HashKey> consensus = c -> {
-            cPipeline.execute(() -> consortium.values().stream().forEach(m -> {
+            cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
                 if (m.process(c)) {
                     processed.get().countDown();
                 }
@@ -198,7 +198,7 @@ public class TestConsortium {
         }
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
-        assertTrue(processed.get().await(5, TimeUnit.SECONDS), "Did not process transaction block");
+        assertTrue(processed.get().await(25, TimeUnit.SECONDS), "Did not process transaction block");
 
         System.out.println("block processed, waiting for transaction completion: " + hash);
         assertTrue(Utils.waitForCondition(5_000, () -> txnProcessed.get()), "Transaction not completed");

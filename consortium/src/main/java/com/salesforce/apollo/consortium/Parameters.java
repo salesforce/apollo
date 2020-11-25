@@ -28,7 +28,7 @@ public class Parameters {
         private Duration                                  gossipDuration;
         private Duration                                  joinTimeout      = Duration.ofMillis(500);
         private int                                       maxBatchByteSize = 4 * 1024;
-        private Duration                                  maxBatchDelay    = Duration.ofMillis(100);
+        private Duration                                  maxBatchDelay    = Duration.ofMillis(200);
         private int                                       maxBatchSize     = 10;
         private Member                                    member;
         private Messenger.Parameters                      msgParameters;
@@ -190,7 +190,7 @@ public class Parameters {
     public final Duration                                  gossipDuration;
     public final Duration                                  joinTimeout;
     public final int                                       maxBatchByteSize;
-    public final int                                       maxBatchDelay;
+    public final Duration                                  maxBatchDelay;
     public final int                                       maxBatchSize;
     public final Member                                    member;
     public final Messenger.Parameters                      msgParameters;
@@ -216,8 +216,7 @@ public class Parameters {
         this.maxBatchSize = maxBatchSize;
         this.maxBatchByteSize = maxBatchByteSize;
         this.validator = validator;
-        int maxTicks = (int) maxBatchDelay.dividedBy(gossipDuration);
-        this.maxBatchDelay = Math.max(context.getRingCount(), maxTicks);
+        this.maxBatchDelay = maxBatchDelay;
         this.joinTimeout = joinTimeout;
         this.viewTimeout = viewTimeout;
         this.submitTimeout = submitTimeout;
@@ -225,6 +224,10 @@ public class Parameters {
 
     public int getJoinTimeoutTicks() {
         return (int) joinTimeout.dividedBy(gossipDuration);
+    }
+
+    public int getMaxBatchDelayTicks() {
+        return (int) maxBatchDelay.dividedBy(gossipDuration);
     }
 
     public int getSubmitTimeoutTicks() {

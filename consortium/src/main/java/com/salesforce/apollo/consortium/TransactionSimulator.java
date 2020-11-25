@@ -40,6 +40,7 @@ public class TransactionSimulator {
 
     private final static Logger log = LoggerFactory.getLogger(TransactionSimulator.class);
 
+    private final int                                       bufferSize;
     private final CollaboratorContext                       collaborator;
     private final Deque<EvaluatedTransaction>               evaluated;
     private final AtomicBoolean                             running = new AtomicBoolean();
@@ -49,6 +50,7 @@ public class TransactionSimulator {
 
     public TransactionSimulator(int bufferSize, CollaboratorContext collaborator,
             Function<EnqueuedTransaction, ByteString> validator) {
+        this.bufferSize = bufferSize;
         transactions = new LinkedBlockingDeque<>(bufferSize);
         evaluated = new LinkedBlockingDeque<>(bufferSize);
         this.collaborator = collaborator;
@@ -62,6 +64,10 @@ public class TransactionSimulator {
         totalByteSize += transaction.totalByteSize();
         evaluateNext();
         return true;
+    }
+
+    public int available() {
+        return bufferSize - transactions.size();
     }
 
     public int evaluated() {

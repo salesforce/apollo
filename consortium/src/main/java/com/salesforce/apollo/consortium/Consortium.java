@@ -113,7 +113,7 @@ public class Consortium {
         private volatile boolean                           stopped           = false;
         private final Map<Integer, Sync>                   sync              = new HashMap<>();
         private final Map<Timers, Timer>                   timers            = new ConcurrentHashMap<>();
-        private final Map<HashKey, EnqueuedTransaction>    toOrder           = new HashMap<>();
+        private final Map<HashKey, EnqueuedTransaction>    toOrder           = new ConcurrentHashMap<>();
         private final Map<Integer, Set<Member>>            wantRegencyChange = new HashMap<>();
         private final Map<HashKey, CertifiedBlock.Builder> workingBlocks     = new ConcurrentHashMap<>();
 
@@ -324,11 +324,8 @@ public class Consortium {
         public void drainBlocks() {
             cancel(Timers.FLUSH_BATCH);
             if (!simulator.isEmpty()) {
-                boolean generated = generateNextBlock();
-                while (generated) {
-                    generated = generateNextBlock();
-                }
-                scheduleBlockTimeout();
+                generate();
+                generateBlocks();
             }
         }
 
@@ -542,6 +539,8 @@ public class Consortium {
                     }
                     log.trace("Join txn:{} received on: {} self join: {}", transaction.getHash(), getMember(),
                               getMember().getId().equals(memberID));
+                } else {
+                    log.trace("Client txn:{} received on: {} ", transaction.getHash(), getMember());
                 }
                 transaction.setTimer(schedule(transaction));
                 return transaction;
@@ -561,6 +560,13 @@ public class Consortium {
             reduceJoinTransactions();
         }
 
+        public void reschedule(List<EnqueuedTransaction> transactions) {
+            transactions.forEach(eqt -> {
+                eqt.setTimedOut(false);
+                eqt.setTimer(schedule(eqt));
+            });
+        }
+
         public void resolveRegentStatus() {
             Member regent = getRegent(nextRegent());
             log.debug("Regent: {} on: {}", regent, getMember());
@@ -571,16 +577,11 @@ public class Consortium {
             }
         }
 
-        public void scheduleBlockTimeout() {
-            scheduleIfAbsent(Timers.FLUSH_BATCH, () -> {
-                if (!simulator.isEmpty()) {
-                    boolean generated = generateNextBlock();
-                    while (generated) {
-                        generated = generateNextBlock();
-                    }
-                    scheduleBlockTimeout();
-                }
-            }, params.maxBatchDelay);
+        public void generateBlocks() {
+            nextBatch();
+            generate();
+            log.trace("starting block timeout: {} on: {}", params.getMaxBatchDelayTicks(), getMember());
+            scheduleIfAbsent(Timers.FLUSH_BATCH, () -> generateBlocks(), params.getMaxBatchDelayTicks());
         }
 
         public void shutdown() {
@@ -823,6 +824,13 @@ public class Consortium {
                                                     viewContext().toleranceLevel()));
         }
 
+        private void generate() {
+            boolean generated = generateNextBlock();
+            while (generated) {
+                generated = generateNextBlock();
+            }
+        }
+
         private void generateGenesisBlock() {
             reduceJoinTransactions();
             assert toOrder.size() >= viewContext().majority() : "Whoops";
@@ -1010,6 +1018,24 @@ public class Consortium {
             this.lastBlock = lastBlock;
         }
 
+        private void nextBatch() {
+            if (toOrder.isEmpty()) {
+                log.debug("No transactions available to batch on: {}:{}", getMember(), toOrder.size());
+                return;
+            }
+            List<EnqueuedTransaction> batch = toOrder.values()
+                                                     .stream()
+                                                     .limit(Math.max(params.maxBatchByteSize, simulator.available()))
+                                                     .map(eqt -> simulator.add(eqt) ? eqt : null)
+                                                     .filter(eqt -> eqt != null)
+                                                     .peek(eqt -> eqt.cancel())
+                                                     .collect(Collectors.toList());
+            batch.forEach(eqt -> toOrder.remove(eqt.getHash()));
+            if (!batch.isEmpty()) {
+                log.info("submitting batch: {} for simulation on: {}", batch.size(), getMember());
+            }
+        }
+
         private int nextRegent() {
             final int c = nextRegent;
             return c;
@@ -1185,13 +1211,6 @@ public class Consortium {
             }
             return false;
         }
-
-        public void reschedule(List<EnqueuedTransaction> transactions) {
-            transactions.forEach(eqt -> {
-                eqt.setTimedOut(false);
-                eqt.setTimer(schedule(eqt));
-            });
-        }
     }
 
     public class Service {
@@ -1293,6 +1312,8 @@ public class Consortium {
 
     private final static Logger DEFAULT_LOGGER = LoggerFactory.getLogger(Consortium.class);
 
+    private static final Logger log = DEFAULT_LOGGER;
+
     public static HashKey hashOf(TransactionOrBuilder transaction) {
         List<ByteString> buffers = new ArrayList<>();
         buffers.add(transaction.getNonce());
@@ -1337,16 +1358,14 @@ public class Consortium {
     }
 
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
-
-    private final Fsm<CollaboratorContext, Transitions> fsm;
-    private final byte[]                                genesisData = "Give me food or give me slack or kill me".getBytes();
-    private static final Logger                         log         = DEFAULT_LOGGER;
-    private final Parameters                            params;
-    private final TickScheduler                         scheduler   = new TickScheduler();
-    private final AtomicBoolean                         started     = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>    submitted   = new ConcurrentHashMap<>();
-    private final Transitions                           transitions;
-    private final VolatileState                         vState      = new VolatileState();
+    private final Fsm<CollaboratorContext, Transitions>                                            fsm;
+    private final byte[]                                                                           genesisData = "Give me food or give me slack or kill me".getBytes();
+    private final Parameters                                                                       params;
+    private final TickScheduler                                                                    scheduler   = new TickScheduler();
+    private final AtomicBoolean                                                                    started     = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted   = new ConcurrentHashMap<>();
+    private final Transitions                                                                      transitions;
+    private final VolatileState                                                                    vState      = new VolatileState();
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
@@ -1496,16 +1515,6 @@ public class Consortium {
             log.error("Cannot compress input", e);
             return null;
         }
-    }
-
-    private void publish(com.google.protobuf.Message message) {
-        final Messenger currentMsgr = vState.getMessenger();
-        if (currentMsgr == null) {
-            log.error("skipping message publish as no messenger");
-            return;
-        }
-//        log.info("publish message: {} on: {}", message.getClass().getSimpleName(), getMember());
-        currentMsgr.publish(message);
     }
 
     private SecureRandom entropy() {
@@ -1672,6 +1681,16 @@ public class Consortium {
         }
         log.error("Invalid consortium message type: {} from: {} on: {}", classNameOf(content), msg.from, getMember());
 
+    }
+
+    private void publish(com.google.protobuf.Message message) {
+        final Messenger currentMsgr = vState.getMessenger();
+        if (currentMsgr == null) {
+            log.error("skipping message publish as no messenger");
+            return;
+        }
+//        log.info("publish message: {} on: {}", message.getClass().getSimpleName(), getMember());
+        currentMsgr.publish(message);
     }
 
     private HashKey submit(boolean join, Consumer<HashKey> onCompletion,

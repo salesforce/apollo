@@ -179,7 +179,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Entry
         public void generate() {
-            context().scheduleBlockTimeout();
+            context().generateBlocks();
         }
 
         @Override
