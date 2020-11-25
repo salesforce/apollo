@@ -77,7 +77,7 @@ public class TestConsortium {
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
-    private final static int                               testCardinality = 5;
+    private final static int                               testCardinality = 25;
 
     @BeforeAll
     public static void beforeClass() {
@@ -132,7 +132,7 @@ public class TestConsortium {
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
+        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 5);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())

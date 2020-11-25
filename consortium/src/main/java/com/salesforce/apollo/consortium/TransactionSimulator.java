@@ -16,7 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
 
 /**
  * @author hal.hildebrand
