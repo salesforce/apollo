@@ -220,4 +220,6 @@
 			</plugins>
 		</pluginManagement>
 	</build>
+	<name>Bootstrap Service</name>
+	<description>Temporary CA and membership generator</description>
 </project>
