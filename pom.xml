@@ -122,11 +122,11 @@
 				<artifactId>test-population</artifactId>
 				<version>${project.version}</version>
 			</dependency>
-            <dependency>
-                <groupId>com.salesforce.apollo</groupId>
-                <artifactId>tron</artifactId>
-                <version>${project.version}</version>
-            </dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>tron</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
@@ -348,8 +348,9 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<forkCount>1</forkCount>
+					<forkCount>3</forkCount>
 					<reuseForks>false</reuseForks>
+					<argLine>-Xms2048m -Xmx2048m -XX:MaxDirectMemorySize=10G</argLine>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -454,7 +455,7 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
-					<version>3.0.0-M1</version>
+					<version>3.0.0-M5</version>
 					<configuration>
 						<argLine>
 							--illegal-access=permit
