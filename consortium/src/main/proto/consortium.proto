@@ -86,7 +86,7 @@ message Reconfigure {
     int32 checkpointBlocks = 2;
     int32 tolerance = 3;
     repeated ViewMember view = 4;
-    repeated JoinTransaction transactions = 5;
+    repeated ExecutedTransaction transactions = 5;
 }
 
 message ByteTransaction {
@@ -131,11 +131,6 @@ message Validate {
 }
 
 message Persist {
-}
-
-message TotalOrdering {
-    int32 nextConsensusId = 1;
-    bytes hash = 2;
 }
 
 message Stop {

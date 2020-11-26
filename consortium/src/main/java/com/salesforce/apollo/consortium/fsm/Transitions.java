@@ -14,7 +14,6 @@ import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
-import com.salesfoce.apollo.consortium.proto.TotalOrdering;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
@@ -59,10 +58,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions deliverSync(Sync syncData, Member from) {
-        throw fsm().invalidTransitionOn();
-    }
-
-    default Transitions deliverTotalOrdering(TotalOrdering to, Member from) {
         throw fsm().invalidTransitionOn();
     }
 
@@ -166,7 +161,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
-    default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions){
+    default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions) {
         throw fsm().invalidTransitionOn();
     }
 }

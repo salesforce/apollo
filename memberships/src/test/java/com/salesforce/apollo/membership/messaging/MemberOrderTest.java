@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -61,10 +61,9 @@ public class MemberOrderTest {
         public ToReceiver(HashKey id, Messenger messenger) {
             this.messenger = messenger;
             this.id = id;
-            BiConsumer<Msg, HashKey> processor = (m, key) -> messages
-                                                                     .computeIfAbsent(m.from.getId(),
-                                                                                      k -> new CopyOnWriteArrayList<>())
-                                                                     .add(m);
+            Consumer<List<Msg>> processor = msgs -> msgs.forEach(m -> messages.computeIfAbsent(m.from.getId(),
+                                                                                               k -> new CopyOnWriteArrayList<>())
+                                                                              .add(m));
             totalOrder = new MemberOrder(processor, messenger);
         }
 
@@ -216,8 +215,8 @@ public class MemberOrderTest {
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
                 m.publish(ByteMessage.newBuilder()
-                                              .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                              .build());
+                                     .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                     .build());
             });
         }
 
@@ -244,8 +243,8 @@ public class MemberOrderTest {
         for (int i = 0; i < messageCount; i++) {
             liveRcvrs.forEach(r -> {
                 r.messenger.publish(ByteMessage.newBuilder()
-                                                        .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                                        .build());
+                                               .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                               .build());
             });
         }
 
@@ -268,8 +267,8 @@ public class MemberOrderTest {
         for (int i = 0; i < messageCount; i++) {
             receivers.forEach(r -> {
                 r.messenger.publish(ByteMessage.newBuilder()
-                                                        .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                                        .build());
+                                               .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                               .build());
             });
         }
 

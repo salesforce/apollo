@@ -7,7 +7,6 @@
 package com.salesforce.apollo.consortium;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,7 +47,6 @@ import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
-import com.salesfoce.apollo.consortium.proto.TotalOrdering;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.User;
 import com.salesfoce.apollo.consortium.proto.Validate;
@@ -81,6 +79,7 @@ public class CollaboratorContext {
     private final TransactionSimulator                 simulator;
     private final Deque<EnqueuedTransaction>           stopMessages      = new ArrayDeque<>();
     private volatile boolean                           stopped           = false;
+    private final ProcessedBuffer                      processed;
     private final Map<Integer, Sync>                   sync              = new HashMap<>();
     private final Map<Timers, Timer>                   timers            = new ConcurrentHashMap<>();
     private final Map<HashKey, EnqueuedTransaction>    toOrder           = new ConcurrentHashMap<>();
@@ -89,6 +88,7 @@ public class CollaboratorContext {
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
+        processed = new ProcessedBuffer(consortium.getParams().processedBufferSize);
         simulator = new TransactionSimulator(consortium.getParams().maxBatchByteSize, this,
                 consortium.getParams().validator);
     }
@@ -117,8 +117,8 @@ public class CollaboratorContext {
         }
         stopped = true;
         nextRegent(currentRegent() + 1);
-        log.debug("Starting change of regent from: {} to: {} on: {}", currentRegent(), nextRegent(),
-                  consortium.getMember());
+        log.info("Starting change of regent from: {} to: {} on: {}", currentRegent(), nextRegent(),
+                 consortium.getMember());
         toOrder.values().forEach(t -> t.cancel());
         Stop.Builder data = Stop.newBuilder().setNextRegent(nextRegent());
         transactions.forEach(eqt -> data.addTransactions(eqt.getTransaction()));
@@ -147,6 +147,7 @@ public class CollaboratorContext {
                 return null;
             }
             lastBlock(block.getHeader().getHeight());
+            processToOrder(block);
             consortium.publish(validation);
             return CertifiedBlock.newBuilder()
                                  .setBlock(block)
@@ -182,8 +183,9 @@ public class CollaboratorContext {
                 .stream()
                 .map(tx -> new EnqueuedTransaction(Consortium.hashOf(tx), tx))
                 .peek(eqt -> stopMessages.add(eqt))
+                .filter(eqt -> !processed.contains(eqt.getHash()))
                 .forEach(eqt -> {
-                    toOrder.put(eqt.getHash(), eqt);
+                    toOrder.putIfAbsent(eqt.getHash(), eqt);
                 });
             consortium.getTransitions().establishNextRegent();
         }
@@ -289,15 +291,6 @@ public class CollaboratorContext {
         resolveRegentStatus();
     }
 
-    public void deliverTotalOrdering(TotalOrdering msg, Member from) {
-        HashKey hash = new HashKey(msg.getHash());
-        CertifiedBlock.Builder cb = workingBlocks.remove(hash);
-        if (cb == null) {
-            log.debug("No block matching total order of: {} next cid: {} from: {} on: {}", hash,
-                      msg.getNextConsensusId(), from, consortium.getMember());
-        }
-    }
-
     public void drainBlocks() {
         cancel(Timers.FLUSH_BATCH);
         if (!simulator.isEmpty()) {
@@ -312,8 +305,8 @@ public class CollaboratorContext {
                 consortium.entropy());
         consortium.viewChange(newView);
         if (consortium.viewContext().isMember()) {
-            currentRegent(0);
-            nextRegent(-1);
+            currentRegent(-1);
+            nextRegent(-2);
             consortium.getvState().pause();
             consortium.joinMessageGroup(newView);
             consortium.getTransitions().generateView();
@@ -444,11 +437,8 @@ public class CollaboratorContext {
     }
 
     public void processCheckpoint(CurrentBlock next) {
-        Checkpoint body;
-        try {
-            body = Checkpoint.parseFrom(consortium.getBody(next.getBlock()));
-        } catch (IOException e) {
-            log.debug("Protocol violation on: {}.  Cannot decode checkpoint body: {}", consortium.getMember(), e);
+        Checkpoint body = checkpointBody(next.getBlock());
+        if (body == null) {
             return;
         }
         log.info("Processing checkpoint block: {} on: {}", next.getHash(), consortium.getMember());
@@ -460,11 +450,8 @@ public class CollaboratorContext {
     }
 
     public void processGenesis(CurrentBlock next) {
-        Genesis body;
-        try {
-            body = Genesis.parseFrom(consortium.getBody(next.getBlock()));
-        } catch (IOException e) {
-            log.debug("Protocol violation on {}.  Cannot decode genesis body: {}", consortium.getMember(), e);
+        Genesis body = genesisBody(next.getBlock());
+        if (body == null) {
             return;
         }
         log.info("Processing genesis block: {} on: {}", next.getHash(), consortium.getMember());
@@ -478,11 +465,8 @@ public class CollaboratorContext {
     }
 
     public void processReconfigure(CurrentBlock next) {
-        Reconfigure body;
-        try {
-            body = Reconfigure.parseFrom(consortium.getBody(next.getBlock()));
-        } catch (IOException e) {
-            log.debug("Protocol violation on: {}.  Cannot decode reconfiguration body: {}", consortium.getMember(), e);
+        Reconfigure body = reconfigureBody(next.getBlock());
+        if (body == null) {
             return;
         }
         log.info("Processing reconfigure block: {} on: {}", next.getHash(), consortium.getMember());
@@ -491,12 +475,8 @@ public class CollaboratorContext {
     }
 
     public void processUser(CurrentBlock next) {
-        User body;
-        try {
-            body = User.parseFrom(consortium.getBody(next.getBlock()));
-        } catch (IOException e) {
-            log.debug("Protocol violation on: {}.  Cannot decode reconfiguration body: {}", consortium.getMember(),
-                      next.getHash(), e);
+        User body = userBody(next.getBlock());
+        if (body == null) {
             return;
         }
         log.info("Processing user block: {} on: {}", next.getHash(), consortium.getMember());
@@ -522,6 +502,9 @@ public class CollaboratorContext {
 
     public void receive(Transaction txn) {
         EnqueuedTransaction transaction = new EnqueuedTransaction(Consortium.hashOf(txn), txn);
+        if (processed.contains(transaction.getHash())) {
+            return;
+        }
         toOrder.computeIfAbsent(transaction.getHash(), k -> {
             if (txn.getJoin()) {
                 JoinTransaction join;
@@ -600,7 +583,6 @@ public class CollaboratorContext {
                              log.info("Totally ordering block: {} height: {} on: {}", e.getKey(),
                                       e.getValue().getBlock().getHeader().getHeight(), consortium.getMember());
                              consortium.getParams().consensus.apply(e.getValue().build());
-                             consortium.publish(TotalOrdering.newBuilder().setHash(e.getKey().toByteString()).build());
                              published.add(e.getKey());
                          }
                      });
@@ -752,6 +734,17 @@ public class CollaboratorContext {
         return true;
     }
 
+    private Checkpoint checkpointBody(Block block) {
+        Checkpoint body;
+        try {
+            body = Checkpoint.parseFrom(consortium.getBody(block));
+        } catch (IOException e) {
+            log.debug("Protocol violation on: {}.  Cannot decode checkpoint body: {}", consortium.getMember(), e);
+            return null;
+        }
+        return body;
+    }
+
     private long currentConsensus() {
         final long c = currentConsensus;
         return c;
@@ -762,7 +755,6 @@ public class CollaboratorContext {
     }
 
     private void currentRegent(int currentRegent) {
-        assert currentRegent >= 0 : "Must be >= 0 : " + currentRegent;
         log.trace("Current regency set to: {} previous: {} on: {} ", currentRegent, this.currentRegent,
                   consortium.getMember());
         this.currentRegent = currentRegent;
@@ -783,14 +775,11 @@ public class CollaboratorContext {
             return;
         }
         workingBlocks.computeIfAbsent(hash, k -> {
-            final Genesis genesis;
-            try {
-                final InputStream body = consortium.getBody(block);
-                genesis = Genesis.parseFrom(body);
-            } catch (IOException e) {
-                log.error("Cannot deserialize genesis block: {} from {} on: {}", hash, from, consortium.getMember(), e);
+            final Genesis genesis = genesisBody(block);
+            if (genesis == null) {
                 return null;
             }
+            processToOrder(genesis.getInitialView().getTransactionsList());
             Validate validation = consortium.viewContext().generateValidation(hash, block);
             if (validation == null) {
                 log.error("Cannot validate generated genesis: {} on: {}", hash, consortium.getMember());
@@ -812,6 +801,7 @@ public class CollaboratorContext {
         EnqueuedTransaction removed = toOrder.remove(hash);
         if (removed != null) {
             removed.cancel();
+            processed.add(removed.getHash());
             consortium.finalized(removed);
         }
     }
@@ -846,9 +836,11 @@ public class CollaboratorContext {
         reduceJoinTransactions();
         assert toOrder.size() >= consortium.viewContext().majority() : "Whoops";
         log.debug("Generating genesis on {} join transactions: {}", consortium.getMember(), toOrder.size());
+        byte[] nextView = new byte[32];
+        consortium.entropy().nextBytes(nextView);
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
                                                      .setCheckpointBlocks(256)
-                                                     .setId(Consortium.GENESIS_VIEW_ID.toByteString())
+                                                     .setId(ByteString.copyFrom(nextView))
                                                      .setTolerance(consortium.viewContext().majority());
         toOrder.values().forEach(join -> {
             JoinTransaction txn;
@@ -860,13 +852,16 @@ public class CollaboratorContext {
                 consortium.getTransitions().fail();
                 return;
             }
-            genesisView.addTransactions(txn);
+            processed.add(join.getHash());
+            genesisView.addTransactions(ExecutedTransaction.newBuilder()
+                                                           .setHash(join.getHash().toByteString())
+                                                           .setTransaction(join.getTransaction())
+                                                           .build());
             genesisView.addView(txn.getMember());
         });
-        if (genesisView.getViewCount() != toOrder.size()) {
-            log.error("Did not successfully add all validations: {}:{}", toOrder.size(), genesisView.getViewCount());
-            return;
-        }
+        toOrder.values().forEach(e -> e.cancel());
+        ;
+        toOrder.clear();
         Body genesisBody = Body.newBuilder()
                                .setType(BodyType.GENESIS)
                                .setContents(consortium.compress(Genesis.newBuilder()
@@ -997,6 +992,17 @@ public class CollaboratorContext {
 
     }
 
+    private Genesis genesisBody(Block block) {
+        Genesis body;
+        try {
+            body = Genesis.parseFrom(consortium.getBody(block));
+        } catch (IOException e) {
+            log.debug("Protocol violation on {}.  Cannot decode genesis body: {}", consortium.getMember(), e);
+            return null;
+        }
+        return body;
+    }
+
     private Member getRegent(int regent) {
         return consortium.viewContext().getRegent(regent);
     }
@@ -1036,13 +1042,17 @@ public class CollaboratorContext {
         }
         List<EnqueuedTransaction> batch = toOrder.values()
                                                  .stream()
-                                                 .limit(Math.max(consortium.getParams().maxBatchByteSize,
+                                                 .limit(Math.min(consortium.getParams().maxBatchByteSize,
                                                                  simulator.available()))
                                                  .map(eqt -> simulator.add(eqt) ? eqt : null)
                                                  .filter(eqt -> eqt != null)
                                                  .peek(eqt -> eqt.cancel())
                                                  .collect(Collectors.toList());
-        batch.forEach(eqt -> toOrder.remove(eqt.getHash()));
+        batch.forEach(eqt -> {
+            eqt.cancel();
+            toOrder.remove(eqt.getHash());
+            processed.add(eqt.getHash());
+        });
         if (!batch.isEmpty()) {
             log.info("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
         }
@@ -1057,14 +1067,66 @@ public class CollaboratorContext {
         this.nextRegent = nextRegent;
     }
 
+    private void processToOrder(Block block) {
+        switch (block.getBody().getType()) {
+        case CHECKPOINT: {
+            Checkpoint body = checkpointBody(block);
+            processToOrder(body.getTransactionsList());
+            break;
+        }
+        case GENESIS: {
+            Genesis body = genesisBody(block);
+            processToOrder(body.getInitialView().getTransactionsList());
+            break;
+        }
+        case RECONFIGURE: {
+            Reconfigure body = reconfigureBody(block);
+            processToOrder(body.getTransactionsList());
+            break;
+        }
+        case USER: {
+            User body = userBody(block);
+            processToOrder(body.getTransactionsList());
+            break;
+        }
+        case UNRECOGNIZED:
+            break;
+        default:
+            break;
+
+        }
+    }
+
+    private void processToOrder(List<ExecutedTransaction> transactions) {
+        transactions.forEach(et -> {
+            HashKey hash = new HashKey(et.getHash());
+            EnqueuedTransaction p = toOrder.remove(hash);
+            if (p != null) {
+                p.cancel();
+                processed.add(hash);
+            }
+        });
+    }
+
     private void reconfigure(Reconfigure view, boolean genesis) {
         ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
                 genesis ? consortium.viewContext().getConsensusKey() : consortium.nextViewConsensusKey(),
                 consortium.entropy());
-        currentRegent(0);
+        currentRegent(genesis ? 1 : 0);
         nextRegent(-1);
         consortium.viewChange(newView);
         resolveStatus();
+    }
+
+    private Reconfigure reconfigureBody(Block block) {
+        Reconfigure body;
+        try {
+            body = Reconfigure.parseFrom(consortium.getBody(block));
+        } catch (IOException e) {
+            log.debug("Protocol violation on: {}.  Cannot decode reconfiguration body: {}", consortium.getMember(), e);
+            return null;
+        }
+        return body;
     }
 
     private void reduceJoinTransactions() {
@@ -1192,6 +1254,17 @@ public class CollaboratorContext {
                 return null;
             }
         }).filter(jt -> jt != null).anyMatch(jt -> id.equals(new HashKey(jt.getMember().getId())));
+    }
+
+    private User userBody(Block block) {
+        User body;
+        try {
+            body = User.parseFrom(consortium.getBody(block));
+        } catch (IOException e) {
+            log.debug("Protocol violation on: {}.  Cannot decode reconfiguration body", consortium.getMember(), e);
+            return null;
+        }
+        return body;
     }
 
     private boolean validate(Member regent, CertifiedLog certifiedLog, int regency) {

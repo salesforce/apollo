@@ -13,10 +13,8 @@ import java.security.SecureRandom;
 import java.security.Signature;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -180,7 +178,6 @@ public class Messenger {
     private volatile int                                                       lastRing        = -1;
     private final Member                                                       member;
     private final Parameters                                                   parameters;
-    private final Deque<Msg>                                                   pending         = new LinkedBlockingDeque<Msg>();
     private final AtomicInteger                                                round           = new AtomicInteger();
     private final List<Consumer<Integer>>                                      roundListeners  = new CopyOnWriteArrayList<>();
     private final Supplier<Signature>                                          signature;
@@ -264,21 +261,6 @@ public class Messenger {
                         log.error("error sending round() to listener: " + l, e);
                     }
                 });
-                List<Msg> msgs = new ArrayList<>();
-                Msg msg = pending.poll();
-                while (msg != null) {
-                    msgs.add(msg);
-                    msg = pending.poll();
-                }
-                if (!msgs.isEmpty()) {
-                    channelHandlers.forEach(handler -> {
-                        try {
-                            handler.message(msgs);
-                        } catch (Throwable e) {
-                            log.error("Error in message handler on: {}", member, e);
-                        }
-                    });
-                }
                 scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
             }
         });
@@ -354,7 +336,7 @@ public class Messenger {
         if (updates.size() == 0) {
             return;
         }
-        int newMessages = 0;
+        List<Msg> newMessages = new ArrayList<>();
         buffer.merge(updates, (hash, message) -> validate(hash, message)).stream().map(m -> {
             HashKey id = new HashKey(m.getSource());
             if (member.getId().equals(id)) {
@@ -368,14 +350,23 @@ public class Messenger {
             } else {
                 return new Msg(from, m.getSequenceNumber(), m.getContent());
             }
-        }).filter(m -> m != null).forEach(msg -> {
-            pending.add(msg);
+        }).filter(m -> m != null).filter(m -> !m.from.equals(member)).forEach(msg -> {
+            newMessages.add(msg);
         });
-        if (newMessages == 0) {
+        if (newMessages.isEmpty()) {
             log.trace("No updates processed out of: {}", updates.size());
             return;
         }
         log.trace("processed {} updates", updates.size());
+        if (!newMessages.isEmpty()) {
+            channelHandlers.forEach(handler -> {
+                try {
+                    handler.message(newMessages);
+                } catch (Throwable e) {
+                    log.error("Error in message handler on: {}", member, e);
+                }
+            });
+        }
     }
 
     private boolean validate(HashKey hash, Message message) {

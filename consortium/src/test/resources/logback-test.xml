@@ -15,7 +15,7 @@
 		</encoder>
 	</appender> 
     
-    <logger name="com.salesforce.apollo.consortium" level="trace"
+    <logger name="com.salesforce.apollo.consortium" level="debug"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

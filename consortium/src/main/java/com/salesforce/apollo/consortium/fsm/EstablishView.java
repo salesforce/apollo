@@ -15,7 +15,6 @@ import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
-import com.salesfoce.apollo.consortium.proto.TotalOrdering;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.Timers;
@@ -126,12 +125,6 @@ public enum EstablishView implements Transitions {
         }
 
         @Override
-        public Transitions deliverTotalOrdering(TotalOrdering msg, Member from) {
-            context().deliverTotalOrdering(msg, from);
-            return null;
-        }
-
-        @Override
         public Transitions genesisAccepted() {
             return null;
         }
@@ -177,12 +170,6 @@ public enum EstablishView implements Transitions {
         @Override
         public Transitions deliverBlock(Block block, Member from) {
             context().deliverBlock(block, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverTotalOrdering(TotalOrdering msg, Member from) {
-            context().deliverTotalOrdering(msg, from);
             return null;
         }
 

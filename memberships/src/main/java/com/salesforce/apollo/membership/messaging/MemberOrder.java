@@ -6,16 +6,17 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,18 +114,18 @@ public class MemberOrder {
 
     }
 
-    private static Logger                  log      = LoggerFactory.getLogger(MemberOrder.class);
-    private final Map<HashKey, Channel>    channels = new HashMap<>();
-    private final Context<Member>          context;
-    private final Lock                     lock     = new ReentrantLock(true);
-    private final BiConsumer<Msg, HashKey> processor;
-    private final AtomicBoolean            started  = new AtomicBoolean();
-    private final int                      ttl;
-    private final int                      tick;
-    private final Member                   member;
+    private static Logger               log      = LoggerFactory.getLogger(MemberOrder.class);
+    private final Map<HashKey, Channel> channels = new HashMap<>();
+    private final Context<Member>       context;
+    private final Lock                  lock     = new ReentrantLock(true);
+    private final Consumer<List<Msg>>   processor;
+    private final AtomicBoolean         started  = new AtomicBoolean();
+    private final int                   ttl;
+    private final int                   tick;
+    private final Member                member;
 
     @SuppressWarnings("unchecked")
-    public MemberOrder(BiConsumer<Msg, HashKey> processor, Messenger messenger) {
+    public MemberOrder(Consumer<List<Msg>> processor, Messenger messenger) {
         this.processor = processor;
         this.context = (Context<Member>) messenger.getContext();
         this.member = messenger.getMember();
@@ -220,32 +221,32 @@ public class MemberOrder {
         }
     }
 
-    private void deliver(Msg msg, HashKey from) {
+    private void deliver(List<Msg> msgs) {
         try {
-            processor.accept(msg, from);
+            processor.accept(msgs);
         } catch (Throwable e) {
-            log.error("Error processing message from {} on: {}", from, member, e);
+            log.error("Error processing messages  on: {}", member, e);
         }
     }
 
     private void flush(int round) {
-        int flushed = 0;
+        List<Msg> flushed = new ArrayList<>();
         int lastFlushed = -1;
-        while (flushed - lastFlushed > 0) {
+        while (flushed.size() - lastFlushed > 0) {
             if (!started.get()) {
                 return;
             }
-            lastFlushed = flushed;
+            lastFlushed = flushed.size();
             for (Entry<HashKey, Channel> e : channels.entrySet()) {
                 Msg message = e.getValue().next(round);
                 if (message != null) {
-                    deliver(message, e.getKey());
-                    flushed++;
+                    flushed.add(message);
                 }
             }
         }
-        if (flushed != 0) {
-            log.trace("flushed {} messages on: {}", flushed, member);
+        if (flushed.size() != 0) {
+            log.trace("Flushed: {} messages on: {}", flushed.size(), member);
+            deliver(flushed);
         }
     }
 
@@ -260,17 +261,19 @@ public class MemberOrder {
 
     // Deliever all messages in sequence that are available
     private void processHead(int round) {
-        AtomicInteger delivered = new AtomicInteger();
+        List<Msg> delivered = new ArrayList<>();
         channels.forEach((id, channel) -> {
             if (!started.get()) {
                 return;
             }
             Msg message = channel.next(round);
             if (message != null) {
-                deliver(message, channel.getId());
-                delivered.incrementAndGet();
+                delivered.add(message);
             }
         });
-        log.trace("Delivered: {} messages on: {}", delivered.get(), member);
+        if (delivered.size() > 0) {
+            log.trace("Delivering: {} messages on: {}", delivered.size(), member);
+            deliver(delivered);
+        }
     }
 }

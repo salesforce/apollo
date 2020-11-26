@@ -26,22 +26,23 @@ public class Parameters {
         private Function<CertifiedBlock, HashKey>         consensus;
         private Context<Member>                           context;
         private Duration                                  gossipDuration;
-        private Duration                                  joinTimeout      = Duration.ofMillis(500);
-        private int                                       maxBatchByteSize = 4 * 1024;
-        private Duration                                  maxBatchDelay    = Duration.ofMillis(200);
-        private int                                       maxBatchSize     = 10;
+        private Duration                                  joinTimeout         = Duration.ofMillis(500);
+        private int                                       maxBatchByteSize    = 4 * 1024;
+        private Duration                                  maxBatchDelay       = Duration.ofMillis(200);
+        private int                                       maxBatchSize        = 10;
         private Member                                    member;
         private Messenger.Parameters                      msgParameters;
+        private int                                       processedBufferSize = 1000;
         private ScheduledExecutorService                  scheduler;
         private Supplier<Signature>                       signature;
-        private Duration                                  submitTimeout    = Duration.ofSeconds(30);
+        private Duration                                  submitTimeout       = Duration.ofSeconds(30);
         private Function<EnqueuedTransaction, ByteString> validator;
-        private Duration                                  viewTimeout      = Duration.ofSeconds(60);
+        private Duration                                  viewTimeout         = Duration.ofSeconds(60);
 
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, validator, maxBatchDelay, joinTimeout, viewTimeout,
-                    submitTimeout);
+                    submitTimeout, processedBufferSize);
         }
 
         public Router getCommunications() {
@@ -84,12 +85,20 @@ public class Parameters {
             return msgParameters;
         }
 
+        public int getProcessedBufferSize() {
+            return processedBufferSize;
+        }
+
         public ScheduledExecutorService getScheduler() {
             return scheduler;
         }
 
         public Supplier<Signature> getSignature() {
             return signature;
+        }
+
+        public Duration getSubmitTimeout() {
+            return submitTimeout;
         }
 
         public Duration getTransactonTimeout() {
@@ -155,6 +164,11 @@ public class Parameters {
             return this;
         }
 
+        public Builder setProcessedBufferSize(int processedBufferSize) {
+            this.processedBufferSize = processedBufferSize;
+            return this;
+        }
+
         public Parameters.Builder setScheduler(ScheduledExecutorService scheduler) {
             this.scheduler = scheduler;
             return this;
@@ -162,6 +176,11 @@ public class Parameters {
 
         public Parameters.Builder setSignature(Supplier<Signature> signature) {
             this.signature = signature;
+            return this;
+        }
+
+        public Builder setSubmitTimeout(Duration submitTimeout) {
+            this.submitTimeout = submitTimeout;
             return this;
         }
 
@@ -195,6 +214,7 @@ public class Parameters {
     public final int                                       maxBatchSize;
     public final Member                                    member;
     public final Messenger.Parameters                      msgParameters;
+    public final int                                       processedBufferSize;
     public final ScheduledExecutorService                  scheduler;
     public final Supplier<Signature>                       signature;
     public final Duration                                  submitTimeout;
@@ -205,7 +225,7 @@ public class Parameters {
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             Function<CertifiedBlock, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Function<EnqueuedTransaction, ByteString> validator, Duration maxBatchDelay, Duration joinTimeout,
-            Duration viewTimeout, Duration submitTimeout) {
+            Duration viewTimeout, Duration submitTimeout, int processedBufferSize) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -221,6 +241,7 @@ public class Parameters {
         this.joinTimeout = joinTimeout;
         this.viewTimeout = viewTimeout;
         this.submitTimeout = submitTimeout;
+        this.processedBufferSize = processedBufferSize;
     }
 
     public int getJoinTimeoutTicks() {

@@ -222,7 +222,7 @@ public class TestConsortium {
         }
 
         System.out.println("Awaiting " + bunchCount + " transactions");
-        boolean completed = submittedBunch.await(5, TimeUnit.SECONDS);
+        boolean completed = submittedBunch.await(25, TimeUnit.SECONDS);
         assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
         System.out.println("Completed additional " + bunchCount + " transactions");
     }
@@ -257,6 +257,7 @@ public class TestConsortium {
                                  .setContext(view)
                                  .setMsgParameters(msgParameters)
                                  .setCommunications(communications.get(m.getId()))
+                                 .setMaxBatchDelay(Duration.ofMillis(100))
                                  .setGossipDuration(gossipDuration)
                                  .setViewTimeout(Duration.ofSeconds(1))
                                  .setJoinTimeout(Duration.ofSeconds(2))

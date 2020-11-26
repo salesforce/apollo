@@ -15,7 +15,6 @@ import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
-import com.salesfoce.apollo.consortium.proto.TotalOrdering;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
@@ -62,12 +61,6 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions deliverSync(Sync syncData, Member from) {
             return null; // TODO
-        }
-
-        @Override
-        public Transitions deliverTotalOrdering(TotalOrdering msg, Member from) {
-            context().deliverTotalOrdering(msg, from);
-            return null;
         }
 
         @Override
@@ -164,12 +157,6 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions deliverSync(Sync syncData, Member from) {
             return null; // TODO
-        }
-
-        @Override
-        public Transitions deliverTotalOrdering(TotalOrdering msg, Member from) {
-            context().deliverTotalOrdering(msg, from);
-            return null;
         }
 
         @Override
