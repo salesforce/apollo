@@ -175,7 +175,7 @@ public enum EstablishView implements Transitions {
 
         @Override
         public Transitions deliverValidate(Validate validation) {
-            context().validate(validation);
+            context().deliverValidate(validation);
             context().totalOrderDeliver();
             return null;
         }
@@ -235,7 +235,7 @@ public enum EstablishView implements Transitions {
 
     @Override
     public Transitions deliverValidate(Validate validation) {
-        context().validate(validation);
+        context().deliverValidate(validation);
         return null;
     }
 

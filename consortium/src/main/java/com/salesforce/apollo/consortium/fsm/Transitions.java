@@ -41,6 +41,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
+    default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions) {
+        throw fsm().invalidTransitionOn();
+    }
+
     default Transitions deliverBlock(Block block, Member from) {
         throw fsm().invalidTransitionOn();
     }
@@ -101,10 +105,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
-    default Transitions joined() {
-        throw fsm().invalidTransitionOn();
-    }
-
     default Transitions missingGenesis() {
         throw fsm().invalidTransitionOn();
     }
@@ -129,10 +129,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
-    default Transitions recovering() {
-        throw fsm().invalidTransitionOn();
-    }
-
     default Transitions start() {
         throw fsm().invalidTransitionOn();
     }
@@ -145,19 +141,11 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return CollaboratorFsm.INITIAL;
     }
 
-    default Transitions success() {
-        throw fsm().invalidTransitionOn();
-    }
-
     default Transitions syncd() {
         throw fsm().invalidTransitionOn();
     }
 
     default Transitions synchronizingLeader() {
-        throw fsm().invalidTransitionOn();
-    }
-
-    default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions) {
         throw fsm().invalidTransitionOn();
     }
 }

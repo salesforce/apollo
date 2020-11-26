@@ -77,9 +77,9 @@ public class CollaboratorContext {
     private final Deque<CertifiedBlock>                decided           = new ArrayDeque<>();
     private volatile long                              lastBlock         = -1;
     private volatile int                               nextRegent        = -1;
+    private final ProcessedBuffer                      processed;
     private final TransactionSimulator                 simulator;
     private final Deque<EnqueuedTransaction>           stopMessages      = new ArrayDeque<>();
-    private final ProcessedBuffer                      processed;
     private final Map<Integer, Sync>                   sync              = new HashMap<>();
     private final Map<Timers, Timer>                   timers            = new ConcurrentHashMap<>();
     private final Map<HashKey, EnqueuedTransaction>    toOrder           = new ConcurrentHashMap<>();
@@ -290,6 +290,25 @@ public class CollaboratorContext {
         resolveRegentStatus();
     }
 
+    public void deliverValidate(Validate v) {
+        HashKey hash = new HashKey(v.getHash());
+        CertifiedBlock.Builder certifiedBlock = workingBlocks.get(hash);
+        if (certifiedBlock == null) {
+            log.debug("No working block to validate: {} on: {}", hash, consortium.getMember());
+            return;
+        }
+        HashKey memberID = new HashKey(v.getId());
+        if (consortium.viewContext().validate(certifiedBlock.getBlock(), v)) {
+            certifiedBlock.addCertifications(Certification.newBuilder()
+                                                          .setId(v.getId())
+                                                          .setSignature(v.getSignature()));
+            log.debug("Adding block validation: {} from: {} on: {} count: {}", hash, memberID, consortium.getMember(),
+                      certifiedBlock.getCertificationsCount());
+        } else {
+            log.debug("Failed block validation: {} from: {} on: {}", hash, memberID, consortium.getMember());
+        }
+    }
+
     public void drainBlocks() {
         cancel(Timers.FLUSH_BATCH);
         if (!simulator.isEmpty()) {
@@ -432,9 +451,6 @@ public class CollaboratorContext {
         joinView(0);
     }
 
-    public void nextView() {
-    }
-
     public void processCheckpoint(CurrentBlock next) {
         Checkpoint body = checkpointBody(next.getBlock());
         if (body == null) {
@@ -536,13 +552,6 @@ public class CollaboratorContext {
         reduceJoinTransactions();
     }
 
-    public void reschedule(List<EnqueuedTransaction> transactions) {
-        transactions.forEach(eqt -> {
-            eqt.setTimedOut(false);
-            eqt.setTimer(schedule(eqt));
-        });
-    }
-
     public void resolveRegentStatus() {
         Member regent = getRegent(nextRegent());
         log.debug("Regent: {} on: {}", regent, consortium.getMember());
@@ -579,25 +588,6 @@ public class CollaboratorContext {
                          }
                      });
         published.forEach(h -> workingBlocks.remove(h));
-    }
-
-    public void validate(Validate v) {
-        HashKey hash = new HashKey(v.getHash());
-        CertifiedBlock.Builder certifiedBlock = workingBlocks.get(hash);
-        if (certifiedBlock == null) {
-            log.debug("No working block to validate: {} on: {}", hash, consortium.getMember());
-            return;
-        }
-        HashKey memberID = new HashKey(v.getId());
-        if (consortium.viewContext().validate(certifiedBlock.getBlock(), v)) {
-            certifiedBlock.addCertifications(Certification.newBuilder()
-                                                          .setId(v.getId())
-                                                          .setSignature(v.getSignature()));
-            log.debug("Adding block validation: {} from: {} on: {} count: {}", hash, memberID, consortium.getMember(),
-                      certifiedBlock.getCertificationsCount());
-        } else {
-            log.debug("Failed block validation: {} from: {} on: {}", hash, memberID, consortium.getMember());
-        }
     }
 
     void clear() {

@@ -55,10 +55,6 @@ public enum CollaboratorFsm implements Transitions {
         }
     },
     INITIAL {
-        @Entry
-        public void initialize() {
-            context().nextView();
-        }
 
         @Override
         public Transitions start() {
@@ -132,7 +128,7 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions deliverValidate(Validate validation) {
             CollaboratorContext context = context();
-            context.validate(validation);
+            context.deliverValidate(validation);
             context.totalOrderDeliver();
             return null;
         }
@@ -291,7 +287,7 @@ public enum CollaboratorFsm implements Transitions {
 
     @Override
     public Transitions deliverValidate(Validate validation) {
-        context().validate(validation);
+        context().deliverValidate(validation);
         return null;
     }
 
