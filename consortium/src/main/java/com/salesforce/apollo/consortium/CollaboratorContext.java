@@ -483,13 +483,6 @@ public class CollaboratorContext {
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
-            SubmittedTransaction submittedTxn = consortium.getSubmitted().remove(hash);
-            if (submittedTxn != null && submittedTxn.onCompletion != null) {
-                log.info("Completing txn: {} on: {}", hash, consortium.getMember());
-                ForkJoinPool.commonPool().execute(() -> submittedTxn.onCompletion.accept(hash));
-            } else {
-                log.debug("Processing txn: {} on: {}", hash, consortium.getMember());
-            }
         });
         accept(next);
     }
@@ -803,6 +796,13 @@ public class CollaboratorContext {
             removed.cancel();
             processed.add(removed.getHash());
             consortium.finalized(removed);
+        }
+        SubmittedTransaction submittedTxn = consortium.getSubmitted().remove(hash);
+        if (submittedTxn != null && submittedTxn.onCompletion != null) {
+            log.info("Completing txn: {} on: {}", hash, consortium.getMember());
+            ForkJoinPool.commonPool().execute(() -> submittedTxn.onCompletion.accept(hash));
+        } else {
+            log.debug("Processing txn: {} on: {}", hash, consortium.getMember());
         }
     }
 

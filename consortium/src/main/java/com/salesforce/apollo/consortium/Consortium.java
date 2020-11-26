@@ -341,6 +341,7 @@ public class Consortium {
         if (previous != null) {
             ForkJoinPool.commonPool().execute(() -> {
                 if (previous.onCompletion != null) {
+                    log.info("finalizing: {} on: {}", finald.getHash(), getMember());
                     previous.onCompletion.accept(finald.getHash());
                 }
             });

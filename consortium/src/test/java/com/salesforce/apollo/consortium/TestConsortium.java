@@ -223,6 +223,7 @@ public class TestConsortium {
 
         System.out.println("Awaiting " + bunchCount + " transactions");
         boolean completed = submittedBunch.await(25, TimeUnit.SECONDS);
+        submittedBunch.getCount();
         assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
         System.out.println("Completed additional " + bunchCount + " transactions");
     }
