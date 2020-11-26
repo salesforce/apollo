@@ -835,7 +835,7 @@ public class CollaboratorContext {
     private void generateGenesisBlock() {
         reduceJoinTransactions();
         assert toOrder.size() >= consortium.viewContext().majority() : "Whoops";
-        log.debug("Generating genesis on {} join transactions: {}", consortium.getMember(), toOrder.keySet());
+        log.debug("Generating genesis on {} join transactions: {}", consortium.getMember(), toOrder.size());
         byte[] nextView = new byte[32];
         consortium.entropy().nextBytes(nextView);
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
@@ -949,7 +949,7 @@ public class CollaboratorContext {
             return false;
         }
         log.info("Generating next block on: {} height: {} transactions: {}", consortium.getMember(), thisHeight,
-                 processed);
+                 processed.size());
 
         Body body = Body.newBuilder()
                         .setType(BodyType.USER)
@@ -1054,8 +1054,7 @@ public class CollaboratorContext {
             processed.add(eqt.getHash());
         });
         if (!batch.isEmpty()) {
-            log.info("submitting batch: {} for simulation on: {} txns: {}", batch.size(), consortium.getMember(),
-                     batch.stream().map(eqt -> eqt.getHash()).collect(Collectors.toList()));
+            log.info("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
         }
     }
 
