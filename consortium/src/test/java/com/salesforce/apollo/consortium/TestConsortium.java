@@ -203,7 +203,7 @@ public class TestConsortium {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        int bunchCount = 1000;
+        int bunchCount = 1_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);

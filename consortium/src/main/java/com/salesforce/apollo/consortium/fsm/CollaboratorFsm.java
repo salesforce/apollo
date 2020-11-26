@@ -49,22 +49,8 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverStop(Stop stop, Member from) {
-            return null; // TODO
-        }
-
-        @Override
-        public Transitions deliverStopData(StopData stopData, Member from) {
-            return null; // TODO
-        }
-
-        @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            return null; // TODO
-        }
-
-        @Override
         public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
+            fsm().push(ChangeRegency.INITIAL).continueChangeRegency(transactions);
             return null;
         }
     },
@@ -102,14 +88,12 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions deliverStopData(StopData stopData, Member from) {
-            // TODO Auto-generated method stub
-            return super.deliverStopData(stopData, from);
+            return null;
         }
 
         @Override
         public Transitions deliverSync(Sync syncData, Member from) {
-            // TODO Auto-generated method stub
-            return super.deliverSync(syncData, from);
+            return null;
         }
 
         @Override
@@ -134,6 +118,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
+            fsm().push(ChangeRegency.INITIAL).continueChangeRegency(transactions);
             return null;
         }
 
@@ -142,21 +127,6 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions deliverBlock(Block block, Member from) {
             return null;
-        }
-
-        @Override
-        public Transitions deliverStop(Stop stop, Member from) {
-            return null; // TODO
-        }
-
-        @Override
-        public Transitions deliverStopData(StopData stopData, Member from) {
-            return null; // TODO
-        }
-
-        @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            return null; // TODO
         }
 
         @Override
@@ -181,6 +151,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
+            fsm().push(ChangeRegency.INITIAL).continueChangeRegency(transactions);
             return null;
         }
     },
@@ -321,6 +292,30 @@ public enum CollaboratorFsm implements Transitions {
     @Override
     public Transitions deliverValidate(Validate validation) {
         context().validate(validation);
+        return null;
+    }
+
+    @Override
+    public Transitions processCheckpoint(CurrentBlock next) {
+        context().processCheckpoint(next);
+        return null;
+    }
+
+    @Override
+    public Transitions processGenesis(CurrentBlock next) {
+        context().processGenesis(next);
+        return null;
+    }
+
+    @Override
+    public Transitions processReconfigure(CurrentBlock next) {
+        context().processReconfigure(next);
+        return null;
+    }
+
+    @Override
+    public Transitions processUser(CurrentBlock next) {
+        context().processUser(next);
         return null;
     }
 

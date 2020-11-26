@@ -285,9 +285,10 @@ public class Messenger {
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        Duration initialDelay = duration.plusMillis(parameters.entropy.nextInt((int) (duration.toMillis() / 2)));
         log.info("Starting Messenger[{}] for {}", context.getId(), member);
         comm.register(context.getId(), new Service());
-        scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     public void stop() {

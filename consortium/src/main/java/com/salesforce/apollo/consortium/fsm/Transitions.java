@@ -110,23 +110,19 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions processCheckpoint(CurrentBlock next) {
-        context().processCheckpoint(next);
-        return null;
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions processGenesis(CurrentBlock next) {
-        context().processGenesis(next);
-        return null;
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions processReconfigure(CurrentBlock next) {
-        context().processReconfigure(next);
-        return null;
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions processUser(CurrentBlock next) {
-        context().processUser(next);
-        return null;
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions receive(Transaction transaction, Member from) {

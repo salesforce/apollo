@@ -73,12 +73,12 @@ public class CollaboratorContext {
     private volatile long                              currentConsensus  = -1;
     private volatile int                               currentRegent     = 0;
     private final Map<Integer, CurrentSync>            data              = new HashMap<>();
+    @SuppressWarnings("unused")
     private final Deque<CertifiedBlock>                decided           = new ArrayDeque<>();
     private volatile long                              lastBlock         = -1;
     private volatile int                               nextRegent        = -1;
     private final TransactionSimulator                 simulator;
     private final Deque<EnqueuedTransaction>           stopMessages      = new ArrayDeque<>();
-    private volatile boolean                           stopped           = false;
     private final ProcessedBuffer                      processed;
     private final Map<Integer, Sync>                   sync              = new HashMap<>();
     private final Map<Timers, Timer>                   timers            = new ConcurrentHashMap<>();
@@ -115,7 +115,6 @@ public class CollaboratorContext {
                       consortium.getMember());
             return;
         }
-        stopped = true;
         nextRegent(currentRegent() + 1);
         log.info("Starting change of regent from: {} to: {} on: {}", currentRegent(), nextRegent(),
                  consortium.getMember());

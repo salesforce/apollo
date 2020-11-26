@@ -16,6 +16,7 @@ import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
+import com.salesforce.apollo.consortium.CurrentBlock;
 import com.salesforce.apollo.consortium.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
@@ -192,6 +193,30 @@ public enum ChangeRegency implements Transitions {
     @Override
     public Transitions receive(Transaction transacton, Member from) {
         context().receive(transacton);
+        return null;
+    }
+
+    @Override
+    public Transitions processCheckpoint(CurrentBlock next) {
+        context().processCheckpoint(next);
+        return null;
+    }
+
+    @Override
+    public Transitions processGenesis(CurrentBlock next) {
+        context().processGenesis(next);
+        return null;
+    }
+
+    @Override
+    public Transitions processReconfigure(CurrentBlock next) {
+        context().processReconfigure(next);
+        return null;
+    }
+
+    @Override
+    public Transitions processUser(CurrentBlock next) {
+        context().processUser(next);
         return null;
     }
 }
