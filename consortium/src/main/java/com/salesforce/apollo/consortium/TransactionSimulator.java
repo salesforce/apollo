@@ -84,6 +84,10 @@ public class TransactionSimulator {
         return evaluated.isEmpty();
     }
 
+    public EvaluatedTransaction peek() {
+        return evaluated.peek();
+    }
+    
     public EvaluatedTransaction poll() {
         return evaluated.poll();
     }

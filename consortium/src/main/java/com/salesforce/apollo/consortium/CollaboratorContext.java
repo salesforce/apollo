@@ -835,7 +835,7 @@ public class CollaboratorContext {
     private void generateGenesisBlock() {
         reduceJoinTransactions();
         assert toOrder.size() >= consortium.viewContext().majority() : "Whoops";
-        log.debug("Generating genesis on {} join transactions: {}", consortium.getMember(), toOrder.size());
+        log.debug("Generating genesis on {} join transactions: {}", consortium.getMember(), toOrder.keySet());
         byte[] nextView = new byte[32];
         consortium.entropy().nextBytes(nextView);
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
@@ -860,7 +860,6 @@ public class CollaboratorContext {
             genesisView.addView(txn.getMember());
         });
         toOrder.values().forEach(e -> e.cancel());
-        ;
         toOrder.clear();
         Body genesisBody = Body.newBuilder()
                                .setType(BodyType.GENESIS)
@@ -923,8 +922,7 @@ public class CollaboratorContext {
             return false;
         }
 
-        EvaluatedTransaction txn = simulator.poll();
-        if (txn == null) {
+        if (simulator.peek() == null) {
             log.trace("No transactions to generate block on: {}", consortium.getMember());
             return false;
         }
@@ -933,23 +931,25 @@ public class CollaboratorContext {
         int processedBytes = 0;
         List<HashKey> processed = new ArrayList<>();
 
-        do {
-            processedBytes += txn.getSerializedSize();
-            user.addTransactions(ExecutedTransaction.newBuilder()
-                                                    .setHash(txn.transaction.getHash().toByteString())
-                                                    .setTransaction(txn.transaction.getTransaction()))
-                .addResponses(txn.result);
-            processed.add(txn.transaction.getHash());
-            txn = simulator.poll();
-        } while (txn != null && processed.size() <= consortium.getParams().maxBatchByteSize
-                && processedBytes <= consortium.getParams().maxBatchByteSize);
+        while (simulator.peek() != null && processed.size() <= consortium.getParams().maxBatchByteSize
+                && processedBytes <= consortium.getParams().maxBatchByteSize) {
+            EvaluatedTransaction txn = simulator.poll();
+            if (txn != null) {
+                processedBytes += txn.getSerializedSize();
+                user.addTransactions(ExecutedTransaction.newBuilder()
+                                                        .setHash(txn.transaction.getHash().toByteString())
+                                                        .setTransaction(txn.transaction.getTransaction()))
+                    .addResponses(txn.result);
+                processed.add(txn.transaction.getHash());
+            }
+        }
 
         if (processed.size() == 0) {
             log.debug("No transactions to generate block on: {}", consortium.getMember());
             return false;
         }
-        log.debug("Generating next block on: {} height: {} transactions: {}", consortium.getMember(), thisHeight,
-                  processed.size());
+        log.info("Generating next block on: {} height: {} transactions: {}", consortium.getMember(), thisHeight,
+                 processed);
 
         Body body = Body.newBuilder()
                         .setType(BodyType.USER)
@@ -1054,7 +1054,8 @@ public class CollaboratorContext {
             processed.add(eqt.getHash());
         });
         if (!batch.isEmpty()) {
-            log.info("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
+            log.info("submitting batch: {} for simulation on: {} txns: {}", batch.size(), consortium.getMember(),
+                     batch.stream().map(eqt -> eqt.getHash()).collect(Collectors.toList()));
         }
     }
 

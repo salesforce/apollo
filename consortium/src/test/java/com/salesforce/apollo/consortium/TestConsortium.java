@@ -26,7 +26,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,7 +34,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -137,7 +135,7 @@ public class TestConsortium {
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
                                                                  .build();
-        Executor cPipeline = new ThreadPoolExecutor(1, 1, 10, TimeUnit.SECONDS, new BlockingArrayQueue<Runnable>(1));
+        Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Function<CertifiedBlock, HashKey> consensus = c -> {
             cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
@@ -205,15 +203,17 @@ public class TestConsortium {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        int bunchCount = 10;
+        int bunchCount = 1000;
         System.out.println("Submitting bunch: " + bunchCount);
+        ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             try {
                 HashKey pending = client.submit(h -> {
-                    System.out.println("Completing: " + h);
+                    submitted.remove(h);
                     submittedBunch.countDown();
                 }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build()));
+                submitted.add(pending);
                 System.out.println("Submitted transaction:  " + pending);
             } catch (TimeoutException e) {
                 fail();
@@ -224,7 +224,7 @@ public class TestConsortium {
         System.out.println("Awaiting " + bunchCount + " transactions");
         boolean completed = submittedBunch.await(25, TimeUnit.SECONDS);
         submittedBunch.getCount();
-        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
+        assertTrue(completed, "Did not process transaction bunch: " + submitted);
         System.out.println("Completed additional " + bunchCount + " transactions");
     }
 
