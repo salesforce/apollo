@@ -236,7 +236,7 @@ public class CollaboratorContext {
                                         .filter(h -> !hashed.containsKey(h))
                                         .filter(h -> regencyData.blocks.containsKey(h))
                                         .collect(Collectors.toSet());
-        if (unresolved.isEmpty() || unresolved.contains(consortium.getvState().getCurrent().getHash())) {
+        if (unresolved.isEmpty() || unresolved.contains(consortium.getCurrent().getHash())) {
             regencyData.proofs.add(stopData.getProof());
             regencyData.signatures.add(stopData.getSignature());
             regencyData.blocks.putAll(hashed);
@@ -325,7 +325,7 @@ public class CollaboratorContext {
         if (consortium.viewContext().isMember()) {
             currentRegent(-1);
             nextRegent(-2);
-            consortium.getvState().pause();
+            consortium.pause();
             consortium.joinMessageGroup(newView);
             consortium.getTransitions().generateView();
         }
@@ -371,7 +371,7 @@ public class CollaboratorContext {
     }
 
     public void generateView() {
-        if (consortium.getvState().getCurrent() == null) {
+        if (consortium.getCurrent() == null) {
             log.trace("Generating genesis view on: {}", consortium.getMember());
             generateGenesisView();
         } else {
@@ -381,7 +381,7 @@ public class CollaboratorContext {
     }
 
     public void initializeConsensus() {
-        currentConsensus(consortium.getvState().getCurrent().getBlock().getHeader().getHeight());
+        currentConsensus(consortium.getCurrent().getBlock().getHeader().getHeight());
     }
 
     public void join() {
@@ -389,9 +389,9 @@ public class CollaboratorContext {
                   consortium.getParams().member);
 
         Join voteForMe = Join.newBuilder()
-                             .setMember(consortium.getvState().getCurrent() == null
+                             .setMember(consortium.getCurrent() == null
                                      ? consortium.viewContext().getView(consortium.getParams().signature.get())
-                                     : consortium.getvState().getNextView())
+                                     : consortium.getNextView())
                              .setContext(consortium.viewContext().getId().toByteString())
                              .build();
         List<Result> votes = consortium.viewContext()
@@ -618,7 +618,7 @@ public class CollaboratorContext {
 
     private void accept(CurrentBlock next) {
         workingBlocks.remove(next.getHash());
-        consortium.getvState().setCurrent(next);
+        consortium.setCurrent(next);
         blockCache.put(next.getBlock().getHeader().getHeight(), next);
     }
 
@@ -630,7 +630,7 @@ public class CollaboratorContext {
                                                                                                .majority())
                                .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().build()));
 
-        CurrentBlock current = consortium.getvState().getCurrent();
+        CurrentBlock current = consortium.getCurrent();
         HashKey last = HashKey.ORIGIN;
         if (current != null) {
             last = current.getHash();
@@ -664,7 +664,7 @@ public class CollaboratorContext {
     }
 
     private Sync buildSync(int elected, CurrentSync regencyData) {
-        CurrentBlock current = consortium.getvState().getCurrent();
+        CurrentBlock current = consortium.getCurrent();
         HashKey hash = current != null ? current.getHash() : HashKey.ORIGIN;
         if (!Consortium.noGaps(regencyData.blocks, hash)) {
             log.debug("Cannot build sync on {}, gaps in log", consortium.getMember());
@@ -768,8 +768,7 @@ public class CollaboratorContext {
                 return null;
             }
             lastBlock(block.getHeader().getHeight());
-            consortium.getvState()
-                      .setViewContext(consortium.viewContext().cloneWith(genesis.getInitialView().getViewList()));
+            consortium.setViewContext(consortium.viewContext().cloneWith(genesis.getInitialView().getViewList()));
             consortium.publish(validation);
             return CertifiedBlock.newBuilder()
                                  .setBlock(block)
@@ -811,7 +810,9 @@ public class CollaboratorContext {
         consortium.publish(builder.build());
         transaction.setTimer(consortium.getScheduler()
                                        .schedule(Timers.TRANSACTION_TIMEOUT_2, () -> secondTimeout(transaction),
-                                                 consortium.viewContext().toleranceLevel()));
+                                                 transaction.getTransaction().getJoin()
+                                                         ? consortium.getParams().getJoinTimeoutTicks()
+                                                         : consortium.getParams().getSubmitTimeoutTicks()));
     }
 
     private void generate() {
@@ -852,8 +853,8 @@ public class CollaboratorContext {
         toOrder.clear();
         Body genesisBody = Body.newBuilder()
                                .setType(BodyType.GENESIS)
-                               .setContents(consortium.compress(Genesis.newBuilder()
-                                                                       .setGenesisData(ByteString.copyFrom(consortium.genesisData))
+                               .setContents(Consortium.compress(Genesis.newBuilder()
+                                                                       .setGenesisData(ByteString.copyFrom(consortium.getGenesisData()))
                                                                        .setInitialView(genesisView)
                                                                        .build()
                                                                        .toByteString()))
@@ -878,7 +879,7 @@ public class CollaboratorContext {
                                                    .setId(validation.getId())
                                                    .setSignature(validation.getSignature()));
 
-            consortium.getvState().setViewContext(consortium.viewContext().cloneWith(genesisView.getViewList()));
+            consortium.setViewContext(consortium.viewContext().cloneWith(genesisView.getViewList()));
             consortium.publish(block);
             consortium.publish(validation);
             return builder;
@@ -942,7 +943,7 @@ public class CollaboratorContext {
 
         Body body = Body.newBuilder()
                         .setType(BodyType.USER)
-                        .setContents(consortium.compress(user.build().toByteString()))
+                        .setContents(Consortium.compress(user.build().toByteString()))
                         .build();
 
         Block block = Block.newBuilder()
@@ -1193,7 +1194,7 @@ public class CollaboratorContext {
                           currentState, consortium.getMember());
             }
         };
-        Messenger messenger = consortium.getvState().getMessenger();
+        Messenger messenger = consortium.getMessenger();
         int current = messenger == null ? 0 : messenger.getRound();
         Timer previous = timers.put(label, consortium.getScheduler().schedule(label, action, current + delta));
         if (previous != null) {
@@ -1215,7 +1216,7 @@ public class CollaboratorContext {
                           consortium.getMember());
             }
         };
-        Messenger messenger = consortium.getvState().getMessenger();
+        Messenger messenger = consortium.getMessenger();
         int current = messenger == null ? 0 : messenger.getRound();
         timers.computeIfAbsent(label, k -> {
             log.trace("Setting timer for: {} on: {}", label, consortium.getMember());
@@ -1265,7 +1266,7 @@ public class CollaboratorContext {
             return hash;
         }, cb -> cb));
 
-        CurrentBlock current = consortium.getvState().getCurrent();
+        CurrentBlock current = consortium.getCurrent();
         HashKey hash = current != null ? current.getHash() : HashKey.ORIGIN;
         if (!Consortium.noGaps(hashed, hash)) {
             log.debug("Rejecting Sync from: {} regent: {} on: {} gaps in Sync log", regent, regency,

@@ -46,7 +46,7 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions deliverBlock(Block block, Member from) {
             context().deliverBlock(block, from);
             return null;
-        }
+        } 
 
         @Override
         public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {

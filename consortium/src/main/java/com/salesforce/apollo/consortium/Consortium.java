@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -108,7 +110,7 @@ public class Consortium {
             }
             try {
                 return fsm.synchonizeOnState(() -> {
-                    if (getvState().getNextView() == null) {
+                    if (getNextView() == null) {
                         log.debug("Cannot vote for: {} next view undefined on: {}", fromID, getMember());
                         return JoinResult.getDefaultInstance();
                     }
@@ -129,7 +131,7 @@ public class Consortium {
                     }
                     return JoinResult.newBuilder()
                                      .setSignature(ByteString.copyFrom(signed))
-                                     .setNextView(getvState().getNextView())
+                                     .setNextView(getNextView())
                                      .build();
                 });
             } catch (Exception e) {
@@ -175,6 +177,17 @@ public class Consortium {
 
     private static final Logger log = LoggerFactory.getLogger(Consortium.class);
 
+    public static ByteString compress(ByteString input) {
+        DeflaterInputStream dis = new DeflaterInputStream(
+                BbBackedInputStream.aggregate(input.asReadOnlyByteBufferList()));
+        try {
+            return ByteString.readFrom(dis);
+        } catch (IOException e) {
+            log.error("Cannot compress input", e);
+            return null;
+        }
+    }
+
     public static HashKey hashOf(TransactionOrBuilder transaction) {
         List<ByteString> buffers = new ArrayList<>();
         buffers.add(transaction.getNonce());
@@ -218,15 +231,22 @@ public class Consortium {
         })).entrySet().stream().filter(e -> e.getValue() == emptyBlock).count() == 0;
     }
 
-    final byte[]                                                                                   genesisData = "Give me food or give me slack or kill me".getBytes();
+    private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
+    private volatile CurrentBlock                                                                  current;
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
+    private final byte[]                                                                           genesisData = "Give me food or give me slack or kill me".getBytes();
+    private volatile Messenger                                                                     messenger;
+    private volatile ViewMember                                                                    nextView;
+    private volatile KeyPair                                                                       nextViewConsensusKeyPair;
+    private volatile MemberOrder                                                                   order;
     private final Parameters                                                                       params;
     private final TickScheduler                                                                    scheduler   = new TickScheduler();
     private final AtomicBoolean                                                                    started     = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted   = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final VolatileState                                                                    vState      = new VolatileState();
+
+    private volatile ViewContext viewContext;
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
@@ -235,7 +255,6 @@ public class Consortium {
                                                                                parameters.communications.getClientIdentityProvider(),
                                                                                null, r),
                                                                        ConsortiumClientCommunications.getCreate(null));
-        parameters.context.register(getvState());
         fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
         fsm.setName(getMember().getId().b64Encoded());
         transitions = fsm.getTransitions();
@@ -257,7 +276,7 @@ public class Consortium {
         Block block = certifiedBlock.getBlock();
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
         log.debug("Processing block {} : {} on: {}", hash, block.getBody().getType(), getMember());
-        final CurrentBlock previousBlock = getvState().getCurrent();
+        final CurrentBlock previousBlock = getCurrent();
         if (previousBlock != null) {
             if (block.getHeader().getHeight() != previousBlock.getBlock().getHeader().getHeight() + 1) {
                 log.error("Protocol violation on {}.  Block: {} height should be {} and next block height is {}",
@@ -303,7 +322,7 @@ public class Consortium {
         }
         log.info("Starting consortium on {}", getMember());
         getTransitions().start();
-        getvState().resume(new Service(), getParams().gossipDuration, getParams().scheduler);
+        resume(new Service(), getParams().gossipDuration, getParams().scheduler);
     }
 
     public void stop() {
@@ -311,7 +330,7 @@ public class Consortium {
             return;
         }
         log.info("Stopping consortium on {}", getMember());
-        getvState().clear();
+        clear();
         getTransitions().context().clear();
         getTransitions().stop();
     }
@@ -319,17 +338,6 @@ public class Consortium {
     public HashKey submit(Consumer<HashKey> onCompletion, Message... transactions) throws TimeoutException {
         return submit(false, onCompletion, transactions);
 
-    }
-
-    ByteString compress(ByteString input) {
-        DeflaterInputStream dis = new DeflaterInputStream(
-                BbBackedInputStream.aggregate(input.asReadOnlyByteBufferList()));
-        try {
-            return ByteString.readFrom(dis);
-        } catch (IOException e) {
-            log.error("Cannot compress input", e);
-            return null;
-        }
     }
 
     SecureRandom entropy() {
@@ -358,6 +366,35 @@ public class Consortium {
                 BbBackedInputStream.aggregate(block.getBody().getContents().asReadOnlyByteBufferList()));
     }
 
+    CommonCommunications<ConsortiumClientCommunications, Service> getComm() {
+        final CommonCommunications<ConsortiumClientCommunications, Service> cc = comm;
+        return cc;
+    }
+
+    CurrentBlock getCurrent() {
+        final CurrentBlock cb = current;
+        return cb;
+    }
+
+    byte[] getGenesisData() {
+        return genesisData;
+    }
+
+    Messenger getMessenger() {
+        Messenger currentMsgr = messenger;
+        return currentMsgr;
+    }
+
+    ViewMember getNextView() {
+        final ViewMember c = nextView;
+        return c;
+    }
+
+    KeyPair getNextViewConsensusKeyPair() {
+        final KeyPair c = nextViewConsensusKeyPair;
+        return c;
+    }
+
     Parameters getParams() {
         return params;
     }
@@ -380,21 +417,21 @@ public class Consortium {
         return transitions;
     }
 
-    VolatileState getvState() {
-        return vState;
+    ViewContext getViewContext() {
+        return viewContext;
     }
 
     void joinMessageGroup(ViewContext newView) {
         log.debug("Joining message group: {} on: {}", newView.getId(), getMember());
         Messenger nextMsgr = newView.createMessenger(getParams());
-        getvState().setMessenger(nextMsgr);
+        setMessenger(nextMsgr);
         nextMsgr.register(round -> getScheduler().tick(round));
-        getvState().setOrder(new MemberOrder(messages -> process(messages), nextMsgr));
+        setOrder(new MemberOrder(messages -> process(messages), nextMsgr));
     }
 
     ConsortiumClientCommunications linkFor(Member m) {
         try {
-            return getvState().getComm().apply(m, getParams().member);
+            return getComm().apply(m, getParams().member);
         } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", m.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
@@ -403,32 +440,94 @@ public class Consortium {
     }
 
     KeyPair nextViewConsensusKey() {
-        KeyPair current = getvState().getNextViewConsensusKeyPair();
+        KeyPair current = getNextViewConsensusKeyPair();
 
         KeyPair keyPair = generateKeyPair(2048, "RSA");
-        getvState().setNextViewConsensusKeyPair(keyPair);
+        setNextViewConsensusKeyPair(keyPair);
         byte[] encoded = keyPair.getPublic().getEncoded();
         byte[] signed = sign(getParams().signature.get(), encoded);
         if (signed == null) {
             log.error("Unable to generate and sign consensus key on: {}", getMember());
             getTransitions().fail();
         }
-        getvState().setNextView(ViewMember.newBuilder()
-                                          .setId(getMember().getId().toByteString())
-                                          .setConsensusKey(ByteString.copyFrom(encoded))
-                                          .setSignature(ByteString.copyFrom(signed))
-                                          .build());
+        setNextView(ViewMember.newBuilder()
+                              .setId(getMember().getId().toByteString())
+                              .setConsensusKey(ByteString.copyFrom(encoded))
+                              .setSignature(ByteString.copyFrom(signed))
+                              .build());
         return current;
     }
 
+    void pause() { 
+        Messenger currentMessenger = getMessenger();
+        if (currentMessenger != null) {
+            currentMessenger.stop();
+        }
+        MemberOrder currentTotalOrder = getOrder();
+        if (currentTotalOrder != null) {
+            currentTotalOrder.stop();
+        }
+        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
+        if (currentComm != null) {
+            ViewContext current = viewContext;
+            assert current != null : "No current view, but comm exists!";
+            currentComm.deregister(current.getId());
+        }
+    }
+
     void publish(com.google.protobuf.Message message) {
-        final Messenger currentMsgr = getvState().getMessenger();
+        final Messenger currentMsgr = getMessenger();
         if (currentMsgr == null) {
             log.error("skipping message publish as no messenger");
             return;
         }
 //        log.info("publish message: {} on: {}", message.getClass().getSimpleName(), getMember());
         currentMsgr.publish(message);
+    }
+
+    void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
+        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
+        if (currentComm != null) {
+            ViewContext current = viewContext;
+            assert current != null : "No current view, but comm exists!";
+            currentComm.register(current.getId(), service);
+        }
+        MemberOrder currentTO = getOrder();
+        if (currentTO != null) {
+            currentTO.start();
+        }
+        Messenger currentMsg = getMessenger();
+        if (currentMsg != null) {
+            currentMsg.start(gossipDuration, scheduler);
+        }
+    }
+
+    void setComm(CommonCommunications<ConsortiumClientCommunications, Service> comm) {
+        this.comm = comm;
+    }
+
+    void setCurrent(CurrentBlock current) {
+        this.current = current;
+    }
+
+    void setMessenger(Messenger messenger) {
+        this.messenger = messenger;
+    }
+
+    void setNextView(ViewMember nextView) {
+        this.nextView = nextView;
+    }
+
+    void setNextViewConsensusKeyPair(KeyPair nextViewConsensusKeyPair) {
+        this.nextViewConsensusKeyPair = nextViewConsensusKeyPair;
+    }
+
+    void setOrder(MemberOrder order) {
+        this.order = order;
+    }
+
+    void setViewContext(ViewContext viewContext) {
+        this.viewContext = viewContext;
     }
 
     HashKey submit(boolean join, Consumer<HashKey> onCompletion, Message... transactions) throws TimeoutException {
@@ -447,26 +546,26 @@ public class Consortium {
      * @param list
      */
     void viewChange(ViewContext newView) {
-        getvState().pause();
+        pause();
 
         log.info("Installing new view: {} rings: {} ttl: {} on: {} regent: {} member: {} view member: {}",
                  newView.getId(), newView.getRingCount(), newView.timeToLive(), getMember(),
                  getState().currentRegent() >= 0 ? newView.getRegent(getState().currentRegent()) : "None",
                  newView.isMember(), newView.isViewMember());
 
-        getvState().setComm(createClientComms.apply(newView.getId()));
-        getvState().setMessenger(null);
-        getvState().setOrder(null);
-        getvState().setViewContext(newView);
+        setComm(createClientComms.apply(newView.getId()));
+        setMessenger(null);
+        setOrder(null);
+        setViewContext(newView);
         if (newView.isViewMember()) {
             joinMessageGroup(newView);
         }
 
-        getvState().resume(new Service(), getParams().gossipDuration, getParams().scheduler);
+        resume(new Service(), getParams().gossipDuration, getParams().scheduler);
     }
 
     ViewContext viewContext() {
-        return getvState().getViewContext();
+        return getViewContext();
     }
 
     private EnqueuedTransaction build(boolean join, Message... transactions) {
@@ -500,6 +599,21 @@ public class Consortium {
         return url.substring(index + 1);
     }
 
+    private void clear() {
+        pause();
+        comm = null;
+        order = null;
+        current = null;
+        messenger = null;
+        nextView = null;
+        order = null;
+    }
+
+    private MemberOrder getOrder() {
+        final MemberOrder cTo = order;
+        return cTo;
+    }
+
     private boolean next(CurrentBlock next) {
         switch (next.getBlock().getBody().getType()) {
         case CHECKPOINT:
@@ -518,7 +632,7 @@ public class Consortium {
         default:
             log.error("Unrecognized block type: {} : {}", next.hashCode(), next.getBlock());
         }
-        return getvState().getCurrent() == next;
+        return getCurrent() == next;
     }
 
     private void process(List<Msg> messages) {

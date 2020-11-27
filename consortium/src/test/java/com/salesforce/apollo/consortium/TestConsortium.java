@@ -262,7 +262,7 @@ public class TestConsortium {
                                  .setGossipDuration(gossipDuration)
                                  .setViewTimeout(Duration.ofSeconds(1))
                                  .setJoinTimeout(Duration.ofSeconds(2))
-                                 .setTransactonTimeout(Duration.ofSeconds(3))
+                                 .setTransactonTimeout(Duration.ofSeconds(5))
                                  .setScheduler(scheduler)
                                  .build()))
                .peek(c -> view.activate(c.getMember()))
