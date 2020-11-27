@@ -46,7 +46,13 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions deliverBlock(Block block, Member from) {
             context().deliverBlock(block, from);
             return null;
-        } 
+        }
+
+        @Override
+        public Transitions deliverStop(Stop stop, Member from) {
+            context().deliverStop(stop, from);
+            return null;
+        }
 
         @Override
         public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
@@ -122,6 +128,12 @@ public enum CollaboratorFsm implements Transitions {
     LEADER {
         @Override
         public Transitions deliverBlock(Block block, Member from) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverStop(Stop stop, Member from) {
+            context().deliverStop(stop, from);
             return null;
         }
 

@@ -456,12 +456,12 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
-        log.info("Processing checkpoint block: {} on: {}", next.getHash(), consortium.getMember());
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
         });
         accept(next);
+        log.info("Processed checkpoint block: {} on: {}", next.getHash(), consortium.getMember());
     }
 
     public void processGenesis(CurrentBlock next) {
@@ -469,14 +469,13 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
-        log.info("Processing genesis block: {} on: {}", next.getHash(), consortium.getMember());
         accept(next);
-        Reconfigure reconfigure = body.getInitialView();
+        consortium.getTransitions().genesisAccepted();
+        reconfigure(body.getInitialView(), true);
         cancelToTimers();
         toOrder.clear();
         consortium.getSubmitted().clear();
-        consortium.getTransitions().genesisAccepted();
-        reconfigure(reconfigure, true);
+        log.info("Processed genesis block: {} on: {}", next.getHash(), consortium.getMember());
     }
 
     public void processReconfigure(CurrentBlock next) {
@@ -484,9 +483,9 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
-        log.info("Processing reconfigure block: {} on: {}", next.getHash(), consortium.getMember());
         accept(next);
         reconfigure(body, false);
+        log.info("Processed reconfigure block: {} on: {}", next.getHash(), consortium.getMember());
     }
 
     public void processUser(CurrentBlock next) {
@@ -494,12 +493,12 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
-        log.info("Processing user block: {} on: {}", next.getHash(), consortium.getMember());
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
         });
         accept(next);
+        log.info("Processed user block: {} on: {}", next.getHash(), consortium.getMember());
     }
 
     public void receive(ReplicateTransactions transactions, Member from) {
@@ -1102,7 +1101,7 @@ public class CollaboratorContext {
         ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
                 genesis ? consortium.viewContext().getConsensusKey() : consortium.nextViewConsensusKey(),
                 consortium.entropy());
-        currentRegent(genesis ? 1 : 0);
+        currentRegent(genesis ? 2 : 0);
         nextRegent(-1);
         consortium.viewChange(newView);
         resolveStatus();

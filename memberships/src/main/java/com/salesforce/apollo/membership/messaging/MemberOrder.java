@@ -16,7 +16,7 @@ import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -114,18 +114,18 @@ public class MemberOrder {
 
     }
 
-    private static Logger               log      = LoggerFactory.getLogger(MemberOrder.class);
-    private final Map<HashKey, Channel> channels = new HashMap<>();
-    private final Context<Member>       context;
-    private final Lock                  lock     = new ReentrantLock(true);
-    private final Consumer<List<Msg>>   processor;
-    private final AtomicBoolean         started  = new AtomicBoolean();
-    private final int                   ttl;
-    private final int                   tick;
-    private final Member                member;
+    private static Logger                        log      = LoggerFactory.getLogger(MemberOrder.class);
+    private final Map<HashKey, Channel>          channels = new HashMap<>();
+    private final Context<Member>                context;
+    private final Lock                           lock     = new ReentrantLock(true);
+    private final BiConsumer<HashKey, List<Msg>> processor;
+    private final AtomicBoolean                  started  = new AtomicBoolean();
+    private final int                            ttl;
+    private final int                            tick;
+    private final Member                         member;
 
     @SuppressWarnings("unchecked")
-    public MemberOrder(Consumer<List<Msg>> processor, Messenger messenger) {
+    public MemberOrder(BiConsumer<HashKey, List<Msg>> processor, Messenger messenger) {
         this.processor = processor;
         this.context = (Context<Member>) messenger.getContext();
         this.member = messenger.getMember();
@@ -133,7 +133,7 @@ public class MemberOrder {
         tick = Math.max(2, context.toleranceLevel() / 2);
         context.allMembers().forEach(m -> channels.put(m.getId(), new ActiveChannel(m.getId())));
 
-        messenger.registerHandler(messages -> process(messages, messenger.getRound()));
+        messenger.registerHandler((id, messages) -> process(messages, messenger.getRound()));
         messenger.register(round -> tick(round));
         context.register(new MembershipListener<Member>() {
 
@@ -223,7 +223,7 @@ public class MemberOrder {
 
     private void deliver(List<Msg> msgs) {
         try {
-            processor.accept(msgs);
+            processor.accept(context.getId(), msgs);
         } catch (Throwable e) {
             log.error("Error processing messages  on: {}", member, e);
         }

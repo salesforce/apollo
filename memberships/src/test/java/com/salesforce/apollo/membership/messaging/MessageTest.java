@@ -44,7 +44,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -56,7 +56,7 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
  */
 public class MessageTest {
 
-    class Receiver implements MessageChannelHandler {
+    class Receiver implements MessageHandler {
         final Set<Member>       counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger     current;
         volatile CountDownLatch round;
@@ -66,7 +66,7 @@ public class MessageTest {
         }
 
         @Override
-        public void message(List<Msg> messages) {
+        public void message(HashKey context, List<Msg> messages) {
             messages.forEach(message -> {
                 assert message.from != null : "null member";
                 ByteBuffer buf;

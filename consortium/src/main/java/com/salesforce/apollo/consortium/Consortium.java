@@ -67,7 +67,7 @@ import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.protocols.BbBackedInputStream;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -426,7 +426,7 @@ public class Consortium {
         Messenger nextMsgr = newView.createMessenger(getParams());
         setMessenger(nextMsgr);
         nextMsgr.register(round -> getScheduler().tick(round));
-        setOrder(new MemberOrder(messages -> process(messages), nextMsgr));
+        setOrder(new MemberOrder((id, messages) -> process(id, messages), nextMsgr));
     }
 
     ConsortiumClientCommunications linkFor(Member m) {
@@ -458,7 +458,7 @@ public class Consortium {
         return current;
     }
 
-    void pause() { 
+    void pause() {
         Messenger currentMessenger = getMessenger();
         if (currentMessenger != null) {
             currentMessenger.stop();
@@ -635,7 +635,7 @@ public class Consortium {
         return getCurrent() == next;
     }
 
-    private void process(List<Msg> messages) {
+    private void process(HashKey contextId, List<Msg> messages) {
         if (!started.get()) {
             return;
         }
@@ -643,6 +643,12 @@ public class Consortium {
             if (!started.get()) {
                 return;
             }
+            if (!viewContext().getId().equals(contextId)) {
+                log.trace("Eliding processing of message: {} from: {} on: {} invalid view: {} current: {}",
+                         classNameOf(msg.content), msg.from, getMember(), contextId, viewContext().getId());
+                return;
+            }
+
             try {
                 process(msg);
             } catch (Throwable t) {

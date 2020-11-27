@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -39,7 +39,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -61,9 +61,10 @@ public class MemberOrderTest {
         public ToReceiver(HashKey id, Messenger messenger) {
             this.messenger = messenger;
             this.id = id;
-            Consumer<List<Msg>> processor = msgs -> msgs.forEach(m -> messages.computeIfAbsent(m.from.getId(),
-                                                                                               k -> new CopyOnWriteArrayList<>())
-                                                                              .add(m));
+            BiConsumer<HashKey, List<Msg>> processor = (cid,
+                                                        msgs) -> msgs.forEach(m -> messages.computeIfAbsent(m.from.getId(),
+                                                                                                            k -> new CopyOnWriteArrayList<>())
+                                                                                           .add(m));
             totalOrder = new MemberOrder(processor, messenger);
         }
 

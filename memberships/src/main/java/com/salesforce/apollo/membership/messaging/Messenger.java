@@ -35,7 +35,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications;
 import com.salesforce.apollo.membership.messaging.comms.MessagingServerCommunications;
 import com.salesforce.apollo.protocols.BloomFilter;
@@ -49,7 +49,7 @@ import com.salesforce.apollo.protocols.HashKey;
 public class Messenger {
 
     @FunctionalInterface
-    public interface MessageChannelHandler {
+    public interface MessageHandler {
         class Msg {
             public final Any    content;
             public final Member from;
@@ -67,7 +67,7 @@ public class Messenger {
             }
         }
 
-        void message(List<Msg> messages);
+        void message(HashKey context, List<Msg> messages);
     }
 
     public static class Parameters {
@@ -172,7 +172,7 @@ public class Messenger {
     public static final Logger log = LoggerFactory.getLogger(Messenger.class);
 
     private final MessageBuffer                                                buffer;
-    private final List<MessageChannelHandler>                                  channelHandlers = new CopyOnWriteArrayList<>();
+    private final List<MessageHandler>                                         channelHandlers = new CopyOnWriteArrayList<>();
     private final CommonCommunications<MessagingClientCommunications, Service> comm;
     private final Context<Member>                                              context;
     private volatile int                                                       lastRing        = -1;
@@ -277,7 +277,7 @@ public class Messenger {
         roundListeners.add(roundListener);
     }
 
-    public void registerHandler(MessageChannelHandler listener) {
+    public void registerHandler(MessageHandler listener) {
         channelHandlers.add(listener);
     }
 
@@ -362,7 +362,7 @@ public class Messenger {
         if (!newMessages.isEmpty()) {
             channelHandlers.forEach(handler -> {
                 try {
-                    handler.message(newMessages);
+                    handler.message(context.getId(), newMessages);
                 } catch (Throwable e) {
                     log.error("Error in message handler on: {}", member, e);
                 }
