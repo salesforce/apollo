@@ -349,7 +349,7 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<forkCount>3</forkCount>
-					<reuseForks>false</reuseForks>
+					<reuseForks>true</reuseForks>
 					<argLine>-Xms2048m -Xmx2048m -XX:MaxDirectMemorySize=10G</argLine>
 				</configuration>
 			</plugin>

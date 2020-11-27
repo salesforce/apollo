@@ -502,9 +502,7 @@ public class CollaboratorContext {
     }
 
     public void receive(ReplicateTransactions transactions, Member from) {
-        for (Transaction txn : transactions.getTransactionsList()) {
-            receive(txn);
-        }
+        transactions.getTransactionsList().forEach(txn -> receive(txn));
     }
 
     public void receive(Transaction txn) {

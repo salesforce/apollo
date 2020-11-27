@@ -55,6 +55,18 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
+        public Transitions deliverStopData(StopData stopData, Member from) {
+            context().deliverStopData(stopData, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverSync(Sync syncData, Member from) {
+            context().deliverSync(syncData, from);
+            return null;
+        }
+
+        @Override
         public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
             fsm().push(ChangeRegency.INITIAL).continueChangeRegency(transactions);
             return null;
@@ -126,6 +138,7 @@ public enum CollaboratorFsm implements Transitions {
 
     },
     LEADER {
+
         @Override
         public Transitions deliverBlock(Block block, Member from) {
             return null;
@@ -134,6 +147,18 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
             context().deliverStop(stop, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverStopData(StopData stopData, Member from) {
+            context().deliverStopData(stopData, from);
+            return null;
+        }
+
+        @Override
+        public Transitions deliverSync(Sync syncData, Member from) {
+            context().deliverSync(syncData, from);
             return null;
         }
 
