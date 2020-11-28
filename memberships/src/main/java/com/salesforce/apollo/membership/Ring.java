@@ -144,6 +144,9 @@ public class Ring<T extends Member> implements Iterable<T> {
      * Answer the nth member on the ring. Wrap arounds permitted - i.e. this cycles.
      */
     public Member get(int m) {
+        if (m < 0) {
+            throw new IllegalArgumentException("Must be greater than 0: " + m);
+        }
         int index = m % ring.size();
         for (Member member : ring.values()) {
             if (index == 0) {

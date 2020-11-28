@@ -86,7 +86,6 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverSync(Sync syncData, Member from) {
-            context().establishNextRegent();
             context().deliverSync(syncData, from);
             return SYNCHRONIZED;
         }

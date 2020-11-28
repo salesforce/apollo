@@ -183,12 +183,7 @@ public enum EstablishView implements Transitions {
         @Entry
         public void gen() {
             context().generateView();
-        }
-
-        @Override
-        public Transitions genesisAccepted() {
-            return null;
-        }
+        } 
 
         @Override
         public Transitions joinAsMember() {
@@ -248,6 +243,12 @@ public enum EstablishView implements Transitions {
     @Override
     public Transitions receive(Transaction transacton, Member from) {
         context().receiveJoin(transacton);
+        return null;
+    }
+
+    @Override
+    public Transitions deliverBlock(Block block, Member from) {
+        context().deliverBlock(block, from);
         return null;
     }
 }

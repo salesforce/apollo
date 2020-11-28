@@ -196,7 +196,7 @@ public class TestConsortium {
         }
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
-        assertTrue(processed.get().await(25, TimeUnit.SECONDS), "Did not process transaction block");
+        assertTrue(processed.get().await(60, TimeUnit.SECONDS), "Did not process transaction block");
 
         System.out.println("block processed, waiting for transaction completion: " + hash);
         assertTrue(Utils.waitForCondition(5_000, () -> txnProcessed.get()), "Transaction not completed");
@@ -257,8 +257,9 @@ public class TestConsortium {
                                  .setSignature(() -> m.forSigning())
                                  .setContext(view)
                                  .setMsgParameters(msgParameters)
+                                 .setProcessedBufferSize(10)
                                  .setCommunications(communications.get(m.getId()))
-                                 .setMaxBatchDelay(Duration.ofMillis(100))
+                                 .setMaxBatchDelay(Duration.ofSeconds(100))
                                  .setGossipDuration(gossipDuration)
                                  .setViewTimeout(Duration.ofSeconds(1))
                                  .setJoinTimeout(Duration.ofSeconds(2))

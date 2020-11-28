@@ -27,6 +27,9 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -98,7 +101,7 @@ public class Consortium {
             } else {
                 log.info("Client transaction: {} on: {} from: {}", enqueuedTransaction.getHash(), getMember(), from);
             }
-            getTransitions().receive(enqueuedTransaction.getTransaction(), member);
+            transitions.receive(enqueuedTransaction.getTransaction(), member);
             return TransactionResult.getDefaultInstance();
         }
 
@@ -140,13 +143,40 @@ public class Consortium {
             }
         }
 
-        public void stop(StopData request, HashKey from) {
+        public void stop(Stop stop, HashKey from) {
+            Member member = viewContext().getMember(from);
+            if (member == null) {
+                log.warn("Received Stop from non consortium member: {} on: {}", from, getMember());
+                return;
+            }
+            whileStable(new HashKey(stop.getContext()), () -> transitions.deliverStop(stop, member));
+        }
+
+        public void stopData(StopData stopData, HashKey from) {
             Member member = viewContext().getMember(from);
             if (member == null) {
                 log.warn("Received StopData from non consortium member: {} on: {}", from, getMember());
                 return;
             }
-            getTransitions().deliverStopData(request, member);
+            whileStable(new HashKey(stopData.getContext()), () -> transitions.deliverStopData(stopData, member));
+        }
+
+        public void sync(Sync sync, HashKey from) {
+            Member member = viewContext().getMember(from);
+            if (member == null) {
+                log.warn("Received Sync from non consortium member: {} on: {}", from, getMember());
+                return;
+            }
+            whileStable(new HashKey(sync.getContext()), () -> transitions.deliverSync(sync, member));
+        }
+
+        public void replicate(ReplicateTransactions request, HashKey from) {
+            Member member = viewContext().getMember(from);
+            if (member == null) {
+                log.warn("Received ReplicateTransactions from non consortium member: {} on: {}", from, getMember());
+                return;
+            }
+            whileStable(new HashKey(request.getContext()), () -> transitions.deliverTransactions(request, member));
         }
 
     }
@@ -245,6 +275,7 @@ public class Consortium {
     private final AtomicBoolean                                                                    started     = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted   = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
+    private final ReadWriteLock                                                                    viewChange  = new ReentrantReadWriteLock();
 
     private volatile ViewContext viewContext;
 
@@ -321,7 +352,7 @@ public class Consortium {
             return;
         }
         log.info("Starting consortium on {}", getMember());
-        getTransitions().start();
+        transitions.start();
         resume(new Service(), getParams().gossipDuration, getParams().scheduler);
     }
 
@@ -331,8 +362,8 @@ public class Consortium {
         }
         log.info("Stopping consortium on {}", getMember());
         clear();
-        getTransitions().context().clear();
-        getTransitions().stop();
+        transitions.context().clear();
+        transitions.stop();
     }
 
     public HashKey submit(Consumer<HashKey> onCompletion, Message... transactions) throws TimeoutException {
@@ -417,6 +448,10 @@ public class Consortium {
         return transitions;
     }
 
+    ReadWriteLock getViewChange() {
+        return viewChange;
+    }
+
     ViewContext getViewContext() {
         return viewContext;
     }
@@ -448,7 +483,7 @@ public class Consortium {
         byte[] signed = sign(getParams().signature.get(), encoded);
         if (signed == null) {
             log.error("Unable to generate and sign consensus key on: {}", getMember());
-            getTransitions().fail();
+            transitions.fail();
         }
         setNextView(ViewMember.newBuilder()
                               .setId(getMember().getId().toByteString())
@@ -459,19 +494,19 @@ public class Consortium {
     }
 
     void pause() {
-        Messenger currentMessenger = getMessenger();
-        if (currentMessenger != null) {
-            currentMessenger.stop();
-        }
-        MemberOrder currentTotalOrder = getOrder();
-        if (currentTotalOrder != null) {
-            currentTotalOrder.stop();
-        }
         CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
         if (currentComm != null) {
             ViewContext current = viewContext;
             assert current != null : "No current view, but comm exists!";
             currentComm.deregister(current.getId());
+        }
+        MemberOrder currentTotalOrder = getOrder();
+        if (currentTotalOrder != null) {
+            currentTotalOrder.stop();
+        }
+        Messenger currentMessenger = getMessenger();
+        if (currentMessenger != null) {
+            currentMessenger.stop();
         }
     }
 
@@ -538,6 +573,23 @@ public class Consortium {
         EnqueuedTransaction transaction = build(join, transactions);
         submit(transaction, onCompletion);
         return transaction.getHash();
+    }
+
+    void synchronousSendToAll(Consumer<ConsortiumClientCommunications> msg) {
+        viewContext().streamRandomRing().forEach(c -> {
+            if (!params.member.equals(c)) {
+                ConsortiumClientCommunications link = linkFor(c);
+                if (link == null) {
+                    log.debug("Cannot get link for: {} on: {}", c.getId(), getMember());
+                }
+                try {
+                    log.debug("Executing synchronous action to: {} on: {}", c.getId(), getMember());
+                    msg.accept(link);
+                } catch (Throwable t) {
+                    log.trace("Error sending synchronous message to: {} on: {}", c, getMember());
+                }
+            }
+        });
     }
 
     /**
@@ -617,16 +669,16 @@ public class Consortium {
     private boolean next(CurrentBlock next) {
         switch (next.getBlock().getBody().getType()) {
         case CHECKPOINT:
-            getTransitions().processCheckpoint(next);
+            transitions.processCheckpoint(next);
             break;
         case GENESIS:
-            getTransitions().processGenesis(next);
+            transitions.processGenesis(next);
             break;
         case RECONFIGURE:
-            getTransitions().processReconfigure(next);
+            transitions.processReconfigure(next);
             break;
         case USER:
-            getTransitions().processUser(next);
+            transitions.processUser(next);
             break;
         case UNRECOGNIZED:
         default:
@@ -639,23 +691,20 @@ public class Consortium {
         if (!started.get()) {
             return;
         }
-        for (Msg msg : messages) {
-            if (!started.get()) {
-                return;
-            }
-            if (!viewContext().getId().equals(contextId)) {
-                log.trace("Eliding processing of message: {} from: {} on: {} invalid view: {} current: {}",
-                         classNameOf(msg.content), msg.from, getMember(), contextId, viewContext().getId());
-                return;
-            }
+        whileStable(contextId, () -> {
+            for (Msg msg : messages) {
+                if (!started.get()) {
+                    return;
+                }
 
-            try {
-                process(msg);
-            } catch (Throwable t) {
-                log.error("Error processing msg: {} from: {} on: {}", classNameOf(msg.content), msg.from, getMember(),
-                          t);
+                try {
+                    process(msg);
+                } catch (Throwable t) {
+                    log.error("Error processing msg: {} from: {} on: {}", classNameOf(msg.content), msg.from,
+                              getMember(), t);
+                }
             }
-        }
+        });
     }
 
     private void process(Msg msg) {
@@ -670,7 +719,7 @@ public class Consortium {
         if (content.is(Block.class)) {
             try {
                 Block block = content.unpack(Block.class);
-                getTransitions().deliverBlock(block, msg.from);
+                transitions.deliverBlock(block, msg.from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid block delivered from: {} on: {}", msg.from, getMember(), e);
             }
@@ -683,12 +732,12 @@ public class Consortium {
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid persist delivered from: {} on: {}", msg.from, getMember(), e);
             }
-            getTransitions().deliverPersist(HashKey.ORIGIN);
+            transitions.deliverPersist(HashKey.ORIGIN);
             return;
         }
         if (content.is(Transaction.class)) {
             try {
-                getTransitions().deliverTransaction(content.unpack(Transaction.class), msg.from);
+                transitions.deliverTransaction(content.unpack(Transaction.class), msg.from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid transaction delivered from: {} on: {}", msg.from, getMember(), e);
             }
@@ -696,41 +745,9 @@ public class Consortium {
         }
         if (content.is(Validate.class)) {
             try {
-                getTransitions().deliverValidate(content.unpack(Validate.class));
+                transitions.deliverValidate(content.unpack(Validate.class));
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid validate delivered from: {} on: {}", msg.from, getMember(), e);
-            }
-            return;
-        }
-        if (content.is(Stop.class)) {
-            try {
-                getTransitions().deliverStop(content.unpack(Stop.class), msg.from);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("invalid stop delivered from: {} on: {}", msg.from, getMember(), e);
-            }
-            return;
-        }
-        if (content.is(Sync.class)) {
-            try {
-                getTransitions().deliverSync(content.unpack(Sync.class), msg.from);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("invalid sync delivered from: {} on: {}", msg.from, getMember(), e);
-            }
-            return;
-        }
-        if (content.is(StopData.class)) {
-            try {
-                getTransitions().deliverStopData(content.unpack(StopData.class), msg.from);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("invalid sync delivered from: {} on: {}", msg.from, getMember(), e);
-            }
-            return;
-        }
-        if (content.is(ReplicateTransactions.class)) {
-            try {
-                getTransitions().deliverTransactions(content.unpack(ReplicateTransactions.class), msg.from);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("invalid replication of transactions delivered from: {} on: {}", msg.from, getMember(), e);
             }
             return;
         }
@@ -751,7 +768,7 @@ public class Consortium {
         results = viewContext().streamRandomRing().map(c -> {
             if (getMember().equals(c)) {
                 log.trace("submit: {} to self: {}", transaction.getHash(), c.getId());
-                getTransitions().receive(transaction.getTransaction(), getMember());
+                transitions.receive(transaction.getTransaction(), getMember());
                 return TransactionResult.getDefaultInstance();
             } else {
                 ConsortiumClientCommunications link = linkFor(c);
@@ -772,6 +789,21 @@ public class Consortium {
             log.debug("Cannot submit txn {} on: {} responses: {} required: {}", transaction.getHash(), getMember(),
                       results.size(), viewContext().majority());
             throw new TimeoutException("Cannot submit transaction " + transaction.getHash());
+        }
+    }
+
+    private void whileStable(HashKey targetView, Runnable action) {
+        Lock lock = viewChange.readLock();
+        lock.lock();
+        try {
+            if (viewContext().getId().equals(targetView)) {
+                action.run();
+            } else {
+                log.info("Eliding action from stale view: {} current: {} on: {}", targetView, viewContext().getId(),
+                         getMember());
+            }
+        } finally {
+            lock.unlock();
         }
     }
 }

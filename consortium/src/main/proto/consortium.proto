@@ -12,7 +12,10 @@ package apollo.consortium;
 service OrderingService { 
     rpc submit (SubmitTransaction) returns (TransactionResult) {}
     rpc join (Join) returns (JoinResult) {}
-    rpc stop(StopData) returns (google.protobuf.Empty){}
+    rpc stop(Stop) returns (google.protobuf.Empty){}
+    rpc stopData(StopData) returns (google.protobuf.Empty){}
+    rpc sync(Sync) returns (google.protobuf.Empty){}
+    rpc replicate(ReplicateTransactions) returns (google.protobuf.Empty){}
 }
 
 message Join {
@@ -133,9 +136,10 @@ message Validate {
 message Persist {
 }
 
-message Stop {
+message Stop { 
     int32 nextRegent = 1;
-    repeated Transaction transactions = 2;
+    bytes context = 2;
+    repeated Transaction transactions = 3;
 }
 
 message StopData {
@@ -154,8 +158,9 @@ message Proof {
 }
 
 message Sync {
-    bytes signature = 1;
-    CertifiedLog log = 2;
+    bytes context = 1;
+    bytes signature = 2;
+    CertifiedLog log = 3;
 }
 
 message CertifiedLog {
@@ -166,5 +171,6 @@ message CertifiedLog {
 }
 
 message ReplicateTransactions {
-    repeated Transaction transactions = 1;
+    bytes context = 1;
+    repeated Transaction transactions = 2;
 }

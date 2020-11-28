@@ -6,12 +6,17 @@
  */
 package com.salesforce.apollo.consortium.comms;
 
+import java.util.concurrent.ForkJoinPool;
+
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc.OrderingServiceImplBase;
+import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
+import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
+import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.consortium.Consortium.Service;
@@ -53,12 +58,12 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     }
 
     @Override
-    public void stop(StopData request, StreamObserver<Empty> responseObserver) {
+    public void stopData(StopData request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                         s -> {
-                            s.stop(request, identity.getFrom());
                             responseObserver.onNext(Empty.getDefaultInstance());
                             responseObserver.onCompleted();
+                            ForkJoinPool.commonPool().submit(() -> s.stopData(request, identity.getFrom()));
                         });
     }
 
@@ -68,6 +73,39 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
                         s -> {
                             responseObserver.onNext(s.clientSubmit(request, identity.getFrom()));
                             responseObserver.onCompleted();
+                        });
+    }
+
+    @Override
+    public void replicate(ReplicateTransactions request, StreamObserver<Empty> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                        s -> {
+                            responseObserver.onNext(Empty.getDefaultInstance());
+                            responseObserver.onCompleted();
+                            HashKey from = identity.getFrom();
+                            ForkJoinPool.commonPool().submit(() -> s.replicate(request, from));
+                        });
+    }
+
+    @Override
+    public void stop(Stop request, StreamObserver<Empty> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                        s -> {
+                            responseObserver.onNext(Empty.getDefaultInstance());
+                            responseObserver.onCompleted();
+                            HashKey from = identity.getFrom();
+                            ForkJoinPool.commonPool().submit(() -> s.stop(request, from));
+                        });
+    }
+
+    @Override
+    public void sync(Sync request, StreamObserver<Empty> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                        s -> {
+                            responseObserver.onNext(Empty.getDefaultInstance());
+                            responseObserver.onCompleted();
+                            HashKey from = identity.getFrom();
+                            ForkJoinPool.commonPool().submit(() -> s.sync(request, from));
                         });
     }
 }

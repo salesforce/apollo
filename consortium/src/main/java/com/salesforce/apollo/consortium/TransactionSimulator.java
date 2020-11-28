@@ -114,6 +114,7 @@ public class TransactionSimulator {
                     totalByteSize += result.size();
                     txn = transactions.peek();
                 } else {
+                    log.info("Draining pending from: {}", txn.getHash());
                     collaborator.drainPending();
                     txn = null;
                 }

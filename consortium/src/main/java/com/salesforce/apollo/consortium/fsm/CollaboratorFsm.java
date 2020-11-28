@@ -38,8 +38,18 @@ public enum CollaboratorFsm implements Transitions {
     {
 
         @Override
+        public Transitions becomeClient() {
+            return CLIENT;
+        }
+
+        @Override
         public Transitions becomeFollower() {
-            return null;
+            return FOLLOWER;
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            return LEADER;
         }
 
         @Override
@@ -64,6 +74,11 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions deliverSync(Sync syncData, Member from) {
             context().deliverSync(syncData, from);
             return null;
+        }
+
+        @Override
+        public Transitions joinAsMember() {
+            return JOINING_MEMBER;
         }
 
         @Override
@@ -140,6 +155,21 @@ public enum CollaboratorFsm implements Transitions {
     LEADER {
 
         @Override
+        public Transitions becomeClient() {
+            return CLIENT;
+        }
+
+        @Override
+        public Transitions becomeFollower() {
+            return FOLLOWER;
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            return LEADER;
+        }
+
+        @Override
         public Transitions deliverBlock(Block block, Member from) {
             return null;
         }
@@ -180,6 +210,11 @@ public enum CollaboratorFsm implements Transitions {
         public void generate() {
             context().initializeConsensus();
             context().generateBlocks();
+        }
+
+        @Override
+        public Transitions joinAsMember() {
+            return JOINING_MEMBER;
         }
 
         @Override

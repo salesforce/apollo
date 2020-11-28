@@ -285,6 +285,10 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public int activeCardinality() {
-        return  context.getActive().size();
+        return context.getActive().size();
+    }
+
+    public void activeAll() {
+        context.getOffline().forEach(m -> context.activate(m));
     }
 }
