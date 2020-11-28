@@ -467,7 +467,7 @@ public class CollaboratorContext {
         }
         log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash, consortium.viewContext().getId(),
                   consortium.getParams().member);
-    } 
+    }
 
     public void joinView() {
         joinView(0);
@@ -812,9 +812,12 @@ public class CollaboratorContext {
             consortium.finalized(removed);
         }
         SubmittedTransaction submittedTxn = consortium.getSubmitted().remove(hash);
-        if (submittedTxn != null && submittedTxn.onCompletion != null) {
-            log.info("Completing txn: {} on: {}", hash, consortium.getMember());
-            ForkJoinPool.commonPool().execute(() -> submittedTxn.onCompletion.accept(hash));
+        if (submittedTxn != null) {
+            if (submittedTxn.onCompletion != null) {
+                log.info("Completing {} txn: {} on: {}", submittedTxn.submitted.getJoin() ? "JOIN" : "USER", hash,
+                         consortium.getMember());
+                ForkJoinPool.commonPool().execute(() -> submittedTxn.onCompletion.accept(hash));
+            }
         } else {
             log.debug("Processing txn: {} on: {}", hash, consortium.getMember());
         }
@@ -1054,7 +1057,7 @@ public class CollaboratorContext {
 
     private void nextBatch() {
         if (toOrder.isEmpty()) {
-//            log.debug("No transactions available to batch on: {}:{}", consortium.getMember(), toOrder.size());
+            log.debug("No transactions available to batch on: {}:{}", consortium.getMember(), toOrder.size());
             return;
         }
         List<EnqueuedTransaction> batch = toOrder.values()
@@ -1072,6 +1075,8 @@ public class CollaboratorContext {
         });
         if (!batch.isEmpty()) {
             log.info("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
+        } else {
+            log.info("No transaction batch for simulation on: {}", consortium.getMember());
         }
     }
 

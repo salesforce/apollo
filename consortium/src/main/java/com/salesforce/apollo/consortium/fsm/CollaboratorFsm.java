@@ -169,6 +169,11 @@ public enum CollaboratorFsm implements Transitions {
             return LEADER;
         }
 
+        @Exit
+        public void cancelBatchGeneration() {
+            context().cancel(Timers.FLUSH_BATCH);
+        }
+
         @Override
         public Transitions deliverBlock(Block block, Member from) {
             return null;
