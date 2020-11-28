@@ -132,7 +132,7 @@ public final class Fsm<Context, Transitions> {
 
     Fsm(Context context, boolean sync, Class<Transitions> transitionsType, ClassLoader transitionsCL) {
         this.context = context;
-        this.sync = sync ? new ReentrantLock(true) : null;
+        this.sync = sync ? new ReentrantLock() : null;
         this.transitionsType = transitionsType;
         this.log = DEFAULT_LOG;
         @SuppressWarnings("unchecked")
