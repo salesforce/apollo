@@ -52,7 +52,6 @@ import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.User;
 import com.salesfoce.apollo.consortium.proto.Validate;
-import com.salesforce.apollo.consortium.Consortium.CurrentSync;
 import com.salesforce.apollo.consortium.Consortium.Result;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.TickScheduler.Timer;
@@ -69,6 +68,13 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class CollaboratorContext {
+    static class CurrentSync {
+        public final Map<HashKey, CertifiedBlock> blocks     = new HashMap<>();
+        public final List<Proof>                  proofs     = new ArrayList<>();
+        public final List<ByteString>             signatures = new ArrayList<>();
+
+    }
+
     private static final Logger                        log               = LoggerFactory.getLogger(CollaboratorContext.class);
     private final NavigableMap<Long, CurrentBlock>     blockCache        = new ConcurrentSkipListMap<>();
     private final Consortium                           consortium;
@@ -223,7 +229,7 @@ public class CollaboratorContext {
                       consortium.getMember(), elected);
             return;
         }
-        CurrentSync regencyData = data.computeIfAbsent(elected, k -> new Consortium.CurrentSync());
+        CurrentSync regencyData = data.computeIfAbsent(elected, k -> new CurrentSync());
 
         if (regencyData.proofs.size() >= consortium.viewContext().majority()) {
             log.trace("ignoring StopData from {} on: {}, already majority for regency: {}", from,
@@ -304,6 +310,7 @@ public class CollaboratorContext {
                   consortium.getMember());
         currentRegent(nextRegent());
         sync.put(cReg, syncData);
+        synchronize(syncData);
         consortium.getTransitions().syncd();
         resolveRegentStatus();
     }
@@ -636,6 +643,23 @@ public class CollaboratorContext {
 
     Map<HashKey, EnqueuedTransaction> getToOrder() {
         return toOrder;
+    }
+
+    void reconfigure(Reconfigure view, boolean genesis) {
+        final Lock lock = consortium.getViewChange().writeLock();
+        lock.lock();
+        try {
+            consortium.pause();
+            ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
+                    genesis ? consortium.viewContext().getConsensusKey() : consortium.nextViewConsensusKey(),
+                    consortium.entropy());
+            currentRegent(genesis ? 2 : 0);
+            nextRegent(-1);
+            consortium.viewChange(newView);
+            resolveStatus();
+        } finally {
+            lock.unlock();
+        }
     }
 
     private void accept(CurrentBlock next) {
@@ -1028,6 +1052,14 @@ public class CollaboratorContext {
         return consortium.viewContext().getRegent(regent);
     }
 
+    private long height(Block block) {
+        return block.getHeader().getHeight();
+    }
+
+    private long height(CertifiedBlock cb) {
+        return height(cb.getBlock());
+    }
+
     private void joinView(int attempt) {
         boolean selfJoin = selfJoinRecorded();
         if (attempt < 20 && selfJoin && toOrder.size() == consortium.viewContext().toleranceLevel()) {
@@ -1127,23 +1159,6 @@ public class CollaboratorContext {
                 processed.add(hash);
             }
         });
-    }
-
-    void reconfigure(Reconfigure view, boolean genesis) {
-        final Lock lock = consortium.getViewChange().writeLock();
-        lock.lock();
-        try {
-            consortium.pause();
-            ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
-                    genesis ? consortium.viewContext().getConsensusKey() : consortium.nextViewConsensusKey(),
-                    consortium.entropy());
-            currentRegent(genesis ? 2 : 0);
-            nextRegent(-1);
-            consortium.viewChange(newView);
-            resolveStatus();
-        } finally {
-            lock.unlock();
-        }
     }
 
     private Reconfigure reconfigureBody(Block block) {
@@ -1269,6 +1284,22 @@ public class CollaboratorContext {
                 return null;
             }
         }).filter(jt -> jt != null).anyMatch(jt -> id.equals(new HashKey(jt.getMember().getId())));
+    }
+
+    private void synchronize(Sync syncData) {
+        CurrentBlock current = consortium.getCurrent();
+        final long currentHeight = current != null ? height(current.getBlock()) : -1;
+        syncData.getLog()
+                .getBlocksList()
+                .stream()
+                .sorted((a, b) -> Long.compare(height(a), height(b)))
+                .filter(cb -> height(cb) > currentHeight)
+                .forEach(cb -> {
+                    workingBlocks.put(new HashKey(Conversion.hashOf(cb.getBlock().toByteString())), cb.toBuilder());
+                    lastBlock(height(cb));
+                });
+        log.info("Synchronized from: {} to: {} working blocks: {} on: {}", currentHeight, lastBlock(),
+                 workingBlocks.size(), consortium.getMember());
     }
 
     private User userBody(Block block) {

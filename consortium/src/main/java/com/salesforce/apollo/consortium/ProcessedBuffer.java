@@ -6,10 +6,11 @@
  */
 package com.salesforce.apollo.consortium;
 
-import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -18,11 +19,11 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class ProcessedBuffer {
-    private final Deque<HashKey> buffer = new ArrayDeque<>();
+    private final Deque<HashKey> buffer = new ConcurrentLinkedDeque<>();
 
     private final int bufferSize;
 
-    private final Set<HashKey> set = new HashSet<>();
+    private final Set<HashKey> set = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public ProcessedBuffer(int bufferSize) {
         this.bufferSize = bufferSize;

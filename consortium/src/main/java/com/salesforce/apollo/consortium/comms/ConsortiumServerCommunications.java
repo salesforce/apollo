@@ -8,6 +8,8 @@ package com.salesforce.apollo.consortium.comms;
 
 import java.util.concurrent.ForkJoinPool;
 
+import org.slf4j.LoggerFactory;
+
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
@@ -83,7 +85,14 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
                             responseObserver.onNext(Empty.getDefaultInstance());
                             responseObserver.onCompleted();
                             HashKey from = identity.getFrom();
-                            ForkJoinPool.commonPool().submit(() -> s.replicate(request, from));
+                            ForkJoinPool.commonPool().submit(() -> {
+                                try {
+                                    s.replicate(request, from);
+                                } catch (Throwable t) {
+                                    LoggerFactory.getLogger(ConsortiumServerCommunications.class)
+                                                 .error("error processing replicating", t);
+                                }
+                            });
                         });
     }
 
@@ -94,7 +103,14 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
                             responseObserver.onNext(Empty.getDefaultInstance());
                             responseObserver.onCompleted();
                             HashKey from = identity.getFrom();
-                            ForkJoinPool.commonPool().submit(() -> s.stop(request, from));
+                            ForkJoinPool.commonPool().submit(() -> {
+                                try {
+                                    s.stop(request, from);
+                                } catch (Throwable t) {
+                                    LoggerFactory.getLogger(ConsortiumServerCommunications.class)
+                                                 .error("error processing stop", t);
+                                }
+                            });
                         });
     }
 
@@ -105,7 +121,14 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
                             responseObserver.onNext(Empty.getDefaultInstance());
                             responseObserver.onCompleted();
                             HashKey from = identity.getFrom();
-                            ForkJoinPool.commonPool().submit(() -> s.sync(request, from));
+                            ForkJoinPool.commonPool().submit(() -> {
+                                try {
+                                    s.sync(request, from);
+                                } catch (Throwable t) {
+                                    LoggerFactory.getLogger(ConsortiumServerCommunications.class)
+                                                 .error("error processing sync", t);
+                                }
+                            });
                         });
     }
 }

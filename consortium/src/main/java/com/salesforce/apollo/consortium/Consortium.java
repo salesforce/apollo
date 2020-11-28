@@ -19,7 +19,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,7 +50,6 @@ import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.Persist;
-import com.salesfoce.apollo.consortium.proto.Proof;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
@@ -184,13 +182,6 @@ public class Consortium {
     public enum Timers {
         AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, FLUSH_BATCH, PROCLAIM,
         TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
-    }
-
-    static class CurrentSync {
-        public final Map<HashKey, CertifiedBlock> blocks     = new HashMap<>();
-        public final List<Proof>                  proofs     = new ArrayList<>();
-        public final List<ByteString>             signatures = new ArrayList<>();
-
     }
 
     static class Result {
