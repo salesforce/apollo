@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
@@ -96,9 +97,9 @@ public class CollaboratorContext {
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
-        processed = new ProcessedBuffer(consortium.getParams().processedBufferSize);
-        simulator = new TransactionSimulator(consortium.getParams().maxBatchByteSize, this,
-                consortium.getParams().validator);
+        Parameters params = consortium.getParams();
+        processed = new ProcessedBuffer(params.processedBufferSize);
+        simulator = new TransactionSimulator(params.maxBatchByteSize, this, params.maxBatchSize, params.validator);
     }
 
     public void awaitGenesis() {
@@ -409,6 +410,7 @@ public class CollaboratorContext {
 
     public void initializeConsensus() {
         currentConsensus(consortium.getCurrent().getBlock().getHeader().getHeight());
+        simulator.start();
     }
 
     public void join() {
@@ -538,11 +540,12 @@ public class CollaboratorContext {
         receive(txn, false);
     }
 
-    public void receive(Transaction txn, boolean replicated) {
+    public boolean receive(Transaction txn, boolean replicated) {
         EnqueuedTransaction transaction = new EnqueuedTransaction(Consortium.hashOf(txn), txn);
         if (processed.contains(transaction.getHash())) {
-            return;
+            return false;
         }
+        AtomicBoolean added = new AtomicBoolean(); // this is stupid
         toOrder.computeIfAbsent(transaction.getHash(), k -> {
             if (txn.getJoin()) {
                 JoinTransaction join;
@@ -565,8 +568,10 @@ public class CollaboratorContext {
                 log.trace("Client txn:{} received on: {} ", transaction.getHash(), consortium.getMember());
             }
             transaction.setTimer(schedule(transaction, replicated));
+            added.set(true);
             return transaction;
         });
+        return added.get();
     }
 
     public void receiveJoin(Transaction txn) {
@@ -594,6 +599,10 @@ public class CollaboratorContext {
 
     public void shutdown() {
         consortium.stop();
+    }
+
+    public void stopSimulation() {
+        simulator.stop();
     }
 
     public void totalOrderDeliver() {
@@ -683,7 +692,6 @@ public class CollaboratorContext {
         }
         if (!Consortium.noGaps(decided, last)) {
             log.debug("Have no valid log on: {}", consortium.getMember());
-            return null;
         }
         Proof.Builder proofBuilder = Proof.newBuilder()
                                           .setCurrentRegent(currentRegent)
@@ -1094,8 +1102,7 @@ public class CollaboratorContext {
         }
         List<EnqueuedTransaction> batch = toOrder.values()
                                                  .stream()
-                                                 .limit(Math.min(consortium.getParams().maxBatchByteSize,
-                                                                 simulator.available()))
+                                                 .limit(simulator.available())
                                                  .map(eqt -> simulator.add(eqt) ? eqt : null)
                                                  .filter(eqt -> eqt != null)
                                                  .peek(eqt -> eqt.cancel())
@@ -1234,8 +1241,8 @@ public class CollaboratorContext {
         eqt.setTimedOut(replicated);
         int target = eqt.getTransaction().getJoin() ? consortium.getParams().getJoinTimeoutTicks()
                 : consortium.getParams().getSubmitTimeoutTicks();
-        log.info("scheduling transaction: {} for: {} first: {} on: {}", eqt.getHash(), target, !replicated,
-                 consortium.getMember());
+//        log.info("scheduling transaction: {} for: {} first: {} on: {}", eqt.getHash(), target, !replicated,
+//                 consortium.getMember());
         return consortium.getScheduler().schedule(Timers.TRANSACTION_TIMEOUT_1, () -> {
             if (replicated)
                 secondTimeout(eqt);
@@ -1259,8 +1266,9 @@ public class CollaboratorContext {
         Messenger messenger = consortium.getMessenger();
         int current = messenger == null ? 0 : messenger.getRound();
         timers.computeIfAbsent(label, k -> {
-            log.trace("Setting timer for: {} on: {}", label, consortium.getMember());
-            return consortium.getScheduler().schedule(k, action, current + delta);
+            int target = current + delta;
+            log.trace("Setting timer for: {} target: {} on: {}", label, target, consortium.getMember());
+            return consortium.getScheduler().schedule(k, action, target);
         });
     }
 

@@ -42,15 +42,19 @@ public class TransactionSimulator {
     private final int                                       bufferSize;
     private final CollaboratorContext                       collaborator;
     private final Deque<EvaluatedTransaction>               evaluated;
+    @SuppressWarnings("unused")
+    private final int                                       maxByteSize;
     private final AtomicBoolean                             running = new AtomicBoolean();
+    private final AtomicBoolean                             started = new AtomicBoolean();
     private volatile int                                    totalByteSize;
     private final Deque<EnqueuedTransaction>                transactions;
     private final Function<EnqueuedTransaction, ByteString> validator;
 
-    public TransactionSimulator(int bufferSize, CollaboratorContext collaborator,
+    public TransactionSimulator(int maxByteSize, CollaboratorContext collaborator, int maxBufferSize,
             Function<EnqueuedTransaction, ByteString> validator) {
-        this.bufferSize = bufferSize;
-        transactions = new LinkedBlockingDeque<>(bufferSize);
+        this.bufferSize = maxBufferSize;
+        this.maxByteSize = maxByteSize;
+        transactions = new LinkedBlockingDeque<>(bufferSize + 1);
         evaluated = new LinkedBlockingDeque<>(bufferSize);
         this.collaborator = collaborator;
         this.validator = validator;
@@ -60,24 +64,20 @@ public class TransactionSimulator {
         if (!transactions.add(transaction)) {
             return false;
         }
+        if (transactions.size() >= bufferSize) {
+            return false;
+        }
         totalByteSize += transaction.totalByteSize();
         evaluateNext();
         return true;
     }
 
     public int available() {
-        return bufferSize - transactions.size();
+        return bufferSize - transactions.size() - 1;
     }
 
     public int evaluated() {
         return evaluated.size();
-    }
-
-    public void evaluateNext() {
-        boolean started = running.compareAndExchange(false, true);
-        if (!started) {
-            ForkJoinPool.commonPool().execute(() -> evaluate());
-        }
     }
 
     public boolean isEmpty() {
@@ -87,13 +87,27 @@ public class TransactionSimulator {
     public EvaluatedTransaction peek() {
         return evaluated.peek();
     }
-    
+
     public EvaluatedTransaction poll() {
         return evaluated.poll();
     }
 
     public int size() {
         return transactions.size();
+    }
+
+    public void start() {
+        if (!started.compareAndExchange(false, true)) {
+            return;
+        }
+    }
+
+    public void stop() {
+        if (started.compareAndExchange(true, false)) {
+            return;
+        }
+        transactions.clear();
+        evaluated.clear();
     }
 
     public int totalByteSize() {
@@ -104,16 +118,18 @@ public class TransactionSimulator {
     private void evaluate() {
         EnqueuedTransaction txn = transactions.peek();
         ByteString result = null;
-        while (txn != null) {
+        while (started.get() && txn != null) {
             try {
                 log.info("Evaluating transaction: {}", txn.getHash());
                 result = validator.apply(txn);
-                if (evaluated.offer(new EvaluatedTransaction(txn, result))) {
+                EvaluatedTransaction eval = new EvaluatedTransaction(txn, result);
+                if (evaluated.offer(eval)) {
                     transactions.remove();
                     totalByteSize += txn.totalByteSize();
                     totalByteSize += result.size();
                     txn = transactions.peek();
                 } else {
+                    transactions.addFirst(txn);
                     log.info("Draining pending from: {}", txn.getHash());
                     collaborator.drainPending();
                     txn = null;
@@ -126,6 +142,13 @@ public class TransactionSimulator {
         }
         running.set(false);
         evaluateNext();
+    }
+
+    private void evaluateNext() {
+        boolean evaluating = running.compareAndExchange(false, true);
+        if (!evaluating) {
+            ForkJoinPool.commonPool().execute(() -> evaluate());
+        }
     }
 
 }
