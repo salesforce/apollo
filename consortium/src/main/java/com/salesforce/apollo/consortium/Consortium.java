@@ -275,7 +275,7 @@ public class Consortium {
     private final AtomicBoolean                                                                    started     = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted   = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final ReadWriteLock                                                                    viewChange  = new ReentrantReadWriteLock();
+    private final ReadWriteLock                                                                    viewChange  = new ReentrantReadWriteLock(true);
 
     private volatile ViewContext viewContext;
 
@@ -583,7 +583,7 @@ public class Consortium {
                     log.debug("Cannot get link for: {} on: {}", c.getId(), getMember());
                 }
                 try {
-                    log.debug("Executing synchronous action to: {} on: {}", c.getId(), getMember());
+//                    log.debug("Executing synchronous action to: {} on: {}", c.getId(), getMember());
                     msg.accept(link);
                 } catch (Throwable t) {
                     log.trace("Error sending synchronous message to: {} on: {}", c, getMember());
