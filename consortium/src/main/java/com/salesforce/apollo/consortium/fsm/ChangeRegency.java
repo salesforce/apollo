@@ -111,7 +111,6 @@ public enum ChangeRegency implements Transitions {
         }
     },
     SYNCHRONIZED {
-
         @Override
         public Transitions becomeFollower() {
             fsm().pop().becomeFollower();
@@ -135,16 +134,6 @@ public enum ChangeRegency implements Transitions {
         }
     },
     SYNCHRONIZING_LEADER {
-
-        @Override
-        public Transitions deliverStop(Stop stop, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverStopData(StopData stopData, Member from) {
-            return null;
-        }
 
         @Override
         public Transitions deliverSync(Sync syncData, Member from) {

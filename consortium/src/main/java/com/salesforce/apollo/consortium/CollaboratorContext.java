@@ -136,12 +136,12 @@ public class CollaboratorContext {
             return;
         }
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-        long previous = lastBlock();
-        if (block.getHeader().getHeight() <= previous) {
-            log.debug("Rejecting block proposal: {} from {} on: {} not next block: {} last: {}", hash, from,
-                      consortium.getMember(), block.getHeader().getHeight(), previous);
-            return;
-        }
+//        long previous = lastBlock();
+//        if (block.getHeader().getHeight() <= previous) {
+//            log.debug("Rejecting block proposal: {} from {} on: {} not next block: {} last: {}", hash, from,
+//                      consortium.getMember(), block.getHeader().getHeight(), previous);
+//            return;
+//        }
         workingBlocks.computeIfAbsent(hash, k -> {
             Validate validation = consortium.viewContext().generateValidation(hash, block);
             if (validation == null) {
@@ -347,6 +347,7 @@ public class CollaboratorContext {
             consortium.pause();
             consortium.joinMessageGroup(newView);
             consortium.getTransitions().generateView();
+            consortium.resume();
         }
     }
 
@@ -386,7 +387,7 @@ public class CollaboratorContext {
         generate();
         log.trace("starting block timeout: {} on: {}", consortium.getParams().getMaxBatchDelayTicks(),
                   consortium.getMember());
-        scheduleIfAbsent(Timers.FLUSH_BATCH, () -> generateBlocks(), consortium.getParams().getMaxBatchDelayTicks());
+        schedule(Timers.FLUSH_BATCH, () -> generateBlocks(), consortium.getParams().getMaxBatchDelayTicks());
     }
 
     public void generateView() {
@@ -419,20 +420,22 @@ public class CollaboratorContext {
                                        .map(c -> {
                                            ConsortiumClientCommunications link = consortium.linkFor(c);
                                            if (link == null) {
-                                               log.warn("Cannot get link for {}", c.getId());
+                                               log.warn("Cannot get link for: {} on: {}", c.getId(),
+                                                        consortium.getMember());
                                                return null;
                                            }
                                            JoinResult vote;
                                            try {
                                                vote = link.join(voteForMe);
                                            } catch (Throwable e) {
-                                               log.trace("Unable to poll vote from: {}:{}", c, e.getMessage());
+                                               log.trace("Unable to poll vote from: {}:{} on {}", c, e.getMessage(),
+                                                         consortium.getMember());
                                                return null;
                                            }
 
-                                           log.trace("One vote to join: {} : {} from: {}",
-                                                     consortium.getParams().member, consortium.viewContext().getId(),
-                                                     c);
+                                           log.trace("One vote to join: {} : {} from: {} on: {}",
+                                                     consortium.getParams().member, consortium.viewContext().getId(), c,
+                                                     consortium.getMember());
                                            return new Consortium.Result(c, vote);
                                        })
                                        .filter(r -> r != null)
@@ -441,8 +444,8 @@ public class CollaboratorContext {
                                        .collect(Collectors.toList());
 
         if (votes.size() < consortium.viewContext().majority()) {
-            log.debug("Did not gather votes necessary to join consortium needed: {} got: {}",
-                      consortium.viewContext().majority(), votes.size());
+            log.debug("Did not gather votes necessary to join consortium needed: {} got: {} on: {}",
+                      consortium.viewContext().majority(), votes.size(), consortium.getMember());
             return;
         }
         JoinTransaction.Builder txn = JoinTransaction.newBuilder()
@@ -464,7 +467,7 @@ public class CollaboratorContext {
         }
         log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash, consortium.viewContext().getId(),
                   consortium.getParams().member);
-    }
+    } 
 
     public void joinView() {
         joinView(0);
@@ -521,10 +524,14 @@ public class CollaboratorContext {
     }
 
     public void receive(ReplicateTransactions transactions, Member from) {
-        transactions.getTransactionsList().forEach(txn -> receive(txn));
+        transactions.getTransactionsList().forEach(txn -> receive(txn, true));
     }
 
     public void receive(Transaction txn) {
+        receive(txn, false);
+    }
+
+    public void receive(Transaction txn, boolean replicated) {
         EnqueuedTransaction transaction = new EnqueuedTransaction(Consortium.hashOf(txn), txn);
         if (processed.contains(transaction.getHash())) {
             return;
@@ -550,7 +557,7 @@ public class CollaboratorContext {
             } else {
                 log.trace("Client txn:{} received on: {} ", transaction.getHash(), consortium.getMember());
             }
-            transaction.setTimer(schedule(transaction));
+            transaction.setTimer(schedule(transaction, replicated));
             return transaction;
         });
     }
@@ -564,7 +571,7 @@ public class CollaboratorContext {
     }
 
     public void receiveJoins(ReplicateTransactions transactions, Member from) {
-        transactions.getTransactionsList().stream().filter(txn -> txn.getJoin()).forEach(txn -> receive(txn));
+        receive(transactions, from);
         reduceJoinTransactions();
     }
 
@@ -912,11 +919,12 @@ public class CollaboratorContext {
             rescheduleGenesis();
             return;
         }
-        if (toOrder.size() >= consortium.viewContext().activeCardinality()) {
+        int txns = toOrder.size();
+        if (txns >= consortium.viewContext().activeCardinality()) {
             generateGenesisBlock();
         } else {
-            log.trace("Genesis group has not formed, rescheduling: {} want: {}", toOrder.size(),
-                      consortium.viewContext().cardinality());
+            log.trace("Genesis group has not formed, rescheduling, have: {} want: {} on: {}", txns,
+                      consortium.viewContext().activeCardinality(), consortium.getMember());
             rescheduleGenesis();
         }
     }
@@ -1165,17 +1173,18 @@ public class CollaboratorContext {
     private void reschedule() {
         toOrder.values().forEach(eqt -> {
             eqt.setTimedOut(false);
-            eqt.setTimer(schedule(eqt));
+            eqt.setTimer(schedule(eqt, false));
         });
     }
 
     private void rescheduleGenesis() {
         schedule(Timers.AWAIT_GROUP, () -> {
-            if (selfJoinRecorded() && toOrder.size() >= consortium.viewContext().majority()) {
+            boolean selfJoin = selfJoinRecorded();
+            if (selfJoin && toOrder.size() >= consortium.viewContext().majority()) {
                 generateGenesisBlock();
             } else {
-                log.trace("Genesis group has not formed, rescheduling: {} want: {}", toOrder.size(),
-                          consortium.viewContext().majority());
+                log.trace("Genesis group has not formed, rescheduling, have: {} want: {} self join: {} on: {}",
+                          toOrder.size(), consortium.viewContext().majority(), selfJoin, consortium.getMember());
                 rescheduleGenesis();
             }
         }, consortium.getParams().getViewTimeoutTicks());
@@ -1200,11 +1209,19 @@ public class CollaboratorContext {
         }
     }
 
-    private Timer schedule(EnqueuedTransaction eqt) {
-        return consortium.getScheduler()
-                         .schedule(Timers.TRANSACTION_TIMEOUT_1, () -> firstTimeout(eqt),
-                                   eqt.getTransaction().getJoin() ? consortium.getParams().getJoinTimeoutTicks()
-                                           : consortium.getParams().getSubmitTimeoutTicks());
+    private Timer schedule(EnqueuedTransaction eqt, boolean replicated) {
+        eqt.cancel();
+        eqt.setTimedOut(replicated);
+        int target = eqt.getTransaction().getJoin() ? consortium.getParams().getJoinTimeoutTicks()
+                : consortium.getParams().getSubmitTimeoutTicks();
+        log.info("scheduling transaction: {} for: {} first: {} on: {}", eqt.getHash(), target, !replicated,
+                 consortium.getMember());
+        return consortium.getScheduler().schedule(Timers.TRANSACTION_TIMEOUT_1, () -> {
+            if (replicated)
+                secondTimeout(eqt);
+            else
+                firstTimeout(eqt);
+        }, target);
     }
 
     private void schedule(Timers label, Runnable a, int delta) {
@@ -1217,28 +1234,6 @@ public class CollaboratorContext {
             } else {
                 log.debug("discarding timer for: {} scheduled on: {} but timed out: {} on: {}", label, timerState,
                           currentState, consortium.getMember());
-            }
-        };
-        Messenger messenger = consortium.getMessenger();
-        int current = messenger == null ? 0 : messenger.getRound();
-        Timer previous = timers.put(label, consortium.getScheduler().schedule(label, action, current + delta));
-        if (previous != null) {
-            log.trace("Cancelling previous timer for: {} on: {}", label, consortium.getMember());
-            previous.cancel();
-        }
-        log.debug("Setting timer for: {} on: {}", label, consortium.getMember());
-    }
-
-    private void scheduleIfAbsent(Timers label, Runnable a, int delta) {
-        Transitions timerState = consortium.fsm().getCurrentState();
-        Runnable action = () -> {
-            timers.remove(label);
-            Transitions currentState = consortium.fsm().getCurrentState();
-            if (timerState.equals(currentState)) {
-                a.run();
-            } else {
-                log.debug("discarding timer scheduled on: {} but timed out: {} on: {}", timerState, currentState,
-                          consortium.getMember());
             }
         };
         Messenger messenger = consortium.getMessenger();

@@ -143,6 +143,15 @@ public class Consortium {
             }
         }
 
+        public void replicate(ReplicateTransactions request, HashKey from) {
+            Member member = viewContext().getMember(from);
+            if (member == null) {
+                log.warn("Received ReplicateTransactions from non consortium member: {} on: {}", from, getMember());
+                return;
+            }
+            whileStable(new HashKey(request.getContext()), () -> transitions.deliverTransactions(request, member));
+        }
+
         public void stop(Stop stop, HashKey from) {
             Member member = viewContext().getMember(from);
             if (member == null) {
@@ -168,15 +177,6 @@ public class Consortium {
                 return;
             }
             whileStable(new HashKey(sync.getContext()), () -> transitions.deliverSync(sync, member));
-        }
-
-        public void replicate(ReplicateTransactions request, HashKey from) {
-            Member member = viewContext().getMember(from);
-            if (member == null) {
-                log.warn("Received ReplicateTransactions from non consortium member: {} on: {}", from, getMember());
-                return;
-            }
-            whileStable(new HashKey(request.getContext()), () -> transitions.deliverTransactions(request, member));
         }
 
     }
@@ -275,7 +275,7 @@ public class Consortium {
     private final AtomicBoolean                                                                    started     = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted   = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final ReadWriteLock                                                                    viewChange  = new ReentrantReadWriteLock(true);
+    private final ReadWriteLock                                                                    viewChange  = new ReentrantReadWriteLock();
 
     private volatile ViewContext viewContext;
 
@@ -353,7 +353,7 @@ public class Consortium {
         }
         log.info("Starting consortium on {}", getMember());
         transitions.start();
-        resume(new Service(), getParams().gossipDuration, getParams().scheduler);
+        resume();
     }
 
     public void stop() {
@@ -520,21 +520,8 @@ public class Consortium {
         currentMsgr.publish(message);
     }
 
-    void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
-        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
-        if (currentComm != null) {
-            ViewContext current = viewContext;
-            assert current != null : "No current view, but comm exists!";
-            currentComm.register(current.getId(), service);
-        }
-        MemberOrder currentTO = getOrder();
-        if (currentTO != null) {
-            currentTO.start();
-        }
-        Messenger currentMsg = getMessenger();
-        if (currentMsg != null) {
-            currentMsg.start(gossipDuration, scheduler);
-        }
+    void resume() {
+        resume(new Service(), getParams().gossipDuration, getParams().scheduler);
     }
 
     void setComm(CommonCommunications<ConsortiumClientCommunications, Service> comm) {
@@ -613,7 +600,7 @@ public class Consortium {
             joinMessageGroup(newView);
         }
 
-        resume(new Service(), getParams().gossipDuration, getParams().scheduler);
+        resume();
     }
 
     ViewContext viewContext() {
@@ -755,6 +742,23 @@ public class Consortium {
 
     }
 
+    private void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
+        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
+        if (currentComm != null) {
+            ViewContext current = viewContext;
+            assert current != null : "No current view, but comm exists!";
+            currentComm.register(current.getId(), service);
+        }
+        MemberOrder currentTO = getOrder();
+        if (currentTO != null) {
+            currentTO.start();
+        }
+        Messenger currentMsg = getMessenger();
+        if (currentMsg != null) {
+            currentMsg.start(gossipDuration, scheduler);
+        }
+    }
+
     private void submit(EnqueuedTransaction transaction, Consumer<HashKey> onCompletion) throws TimeoutException {
         assert transaction.getHash().equals(hashOf(transaction.getTransaction())) : "Hash does not match!";
 
@@ -793,17 +797,17 @@ public class Consortium {
     }
 
     private void whileStable(HashKey targetView, Runnable action) {
-        Lock lock = viewChange.readLock();
-        lock.lock();
-        try {
-            if (viewContext().getId().equals(targetView)) {
-                action.run();
-            } else {
-                log.info("Eliding action from stale view: {} current: {} on: {}", targetView, viewContext().getId(),
-                         getMember());
-            }
-        } finally {
-            lock.unlock();
+//        Lock lock = viewChange.readLock();
+//        lock.lock();
+//        try {
+        if (viewContext().getId().equals(targetView)) {
+            action.run();
+        } else {
+            log.info("Eliding action from stale view: {} current: {} on: {}", targetView, viewContext().getId(),
+                     getMember());
         }
+//        } finally {
+//            lock.unlock();
+//        }
     }
 }
