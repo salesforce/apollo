@@ -7,8 +7,12 @@
 package com.salesforce.apollo.consortium;
 
 import java.util.Deque;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
@@ -44,11 +48,11 @@ public class TransactionSimulator {
     private final Deque<EvaluatedTransaction>               evaluated;
     @SuppressWarnings("unused")
     private final int                                       maxByteSize;
-    private final AtomicBoolean                             running = new AtomicBoolean();
     private final AtomicBoolean                             started = new AtomicBoolean();
     private volatile int                                    totalByteSize;
-    private final Deque<EnqueuedTransaction>                transactions;
+    private final LinkedBlockingDeque<Runnable>             transactions;
     private final Function<EnqueuedTransaction, ByteString> validator;
+    private final ExecutorService                           executor;
 
     public TransactionSimulator(int maxByteSize, CollaboratorContext collaborator, int maxBufferSize,
             Function<EnqueuedTransaction, ByteString> validator) {
@@ -58,18 +62,30 @@ public class TransactionSimulator {
         evaluated = new LinkedBlockingDeque<>(bufferSize);
         this.collaborator = collaborator;
         this.validator = validator;
+        new ThreadPoolExecutor(1, 1, Integer.MAX_VALUE, TimeUnit.DAYS, transactions);
+        executor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "Txn Sim: [" + collaborator.getMember() + "]");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     public boolean add(EnqueuedTransaction transaction) {
-        if (!transactions.add(transaction)) {
-            return false;
-        }
         if (transactions.size() >= bufferSize) {
             return false;
         }
-        totalByteSize += transaction.totalByteSize();
-        evaluateNext();
-        return true;
+        Runnable evaluation = () -> {
+            if (started.get()) {
+                evaluate(transaction);
+            }
+        };
+        try {
+            executor.execute(evaluation);
+            totalByteSize += transaction.totalByteSize();
+            return true;
+        } catch (RejectedExecutionException e) {
+            return false;
+        }
     }
 
     public int available() {
@@ -115,39 +131,26 @@ public class TransactionSimulator {
         return c;
     }
 
-    private void evaluate() {
-        EnqueuedTransaction txn = transactions.peek();
-        ByteString result = null;
-        while (started.get() && txn != null) {
-            try {
-                log.info("Evaluating transaction: {}", txn.getHash());
-                result = validator.apply(txn);
-                EvaluatedTransaction eval = new EvaluatedTransaction(txn, result);
-                if (evaluated.offer(eval)) {
-                    transactions.remove();
-                    totalByteSize += txn.totalByteSize();
-                    totalByteSize += result.size();
-                    txn = transactions.peek();
-                } else {
-                    transactions.addFirst(txn);
-                    log.info("Draining pending from: {}", txn.getHash());
-                    collaborator.drainPending();
-                    txn = null;
-                }
-            } catch (Throwable e) {
-                log.error("Unable to evaluate transactiion {}", txn.getHash(), e);
-                transactions.remove();
-                txn = transactions.peek();
-            }
+    private void evaluate(final EnqueuedTransaction txn) {
+        if (!started.get()) {
+            return;
         }
-        running.set(false);
-        evaluateNext();
-    }
 
-    private void evaluateNext() {
-        boolean evaluating = running.compareAndExchange(false, true);
-        if (!evaluating) {
-            ForkJoinPool.commonPool().execute(() -> evaluate());
+        ByteString result = null;
+        try {
+            log.info("Evaluating transaction: {}", txn.getHash());
+            result = validator.apply(txn);
+            EvaluatedTransaction eval = new EvaluatedTransaction(txn, result);
+            if (evaluated.offer(eval)) {
+                totalByteSize += txn.totalByteSize();
+                totalByteSize += result.size();
+            } else {
+                transactions.addFirst(() -> evaluate(txn));
+                log.info("Draining pending from: {}", txn.getHash());
+                collaborator.drainPending();
+            }
+        } catch (Throwable e) {
+            log.error("Unable to evaluate transactiion {}", txn.getHash(), e);
         }
     }
 

@@ -249,8 +249,7 @@ public class CollaboratorContext {
             return;
         }
         if (!Consortium.noGaps(hashed, new HashKey(stopData.getProof().getRoot()))) {
-            log.trace("Ignoring StopData: {} from {} on: {} gaps in log", elected, from, consortium.getMember());
-            return;
+            log.trace("StopData: {} from {} on: {} gaps in log", elected, from, consortium.getMember());
         }
 
         log.debug("Delivering StopData: {} from {} on: {}", elected, from, consortium.getMember());
@@ -337,10 +336,8 @@ public class CollaboratorContext {
 
     public void drainBlocks() {
         cancel(Timers.FLUSH_BATCH);
-        if (!simulator.isEmpty()) {
-            generate();
-            generateBlocks();
-        }
+        generate();
+        scheduleFlush();
     }
 
     public void establishGenesisView() {
@@ -393,9 +390,7 @@ public class CollaboratorContext {
     public void generateBlocks() {
         nextBatch();
         generate();
-        log.trace("starting block timeout: {} on: {}", consortium.getParams().getMaxBatchDelayTicks(),
-                  consortium.getMember());
-        schedule(Timers.FLUSH_BATCH, () -> generateBlocks(), consortium.getParams().getMaxBatchDelayTicks());
+        scheduleFlush();
     }
 
     public void generateView() {
@@ -406,6 +401,10 @@ public class CollaboratorContext {
             log.trace("Generating view on: {}", consortium.getMember());
             generateNextView();
         }
+    }
+
+    public Member getMember() {
+        return consortium.getMember();
     }
 
     public void initializeConsensus() {
@@ -720,12 +719,30 @@ public class CollaboratorContext {
     private Sync buildSync(int elected, CurrentSync regencyData) {
         CurrentBlock current = consortium.getCurrent();
         HashKey hash = current != null ? current.getHash() : HashKey.ORIGIN;
+        List<CertifiedBlock> blocks = new ArrayList<>();
         if (!Consortium.noGaps(regencyData.blocks, hash)) {
-            log.debug("Cannot build sync on {}, gaps in log", consortium.getMember());
-            return null;
+            log.debug("Gaps in sync log, trimming to valid log on: {}", consortium.getMember());
+            AtomicLong next = new AtomicLong(-1);
+            blocks = regencyData.blocks.values()
+                                       .stream()
+                                       .sorted((a, b) -> Long.compare(height(a), height(b)))
+                                       .filter(cb -> {
+                                           if (next.get() < 0) {
+                                               next.set(height(cb) + 1);
+                                               return true;
+                                           } else {
+                                               long height = height(cb);
+                                               return next.compareAndSet(height - 1, height);
+                                           }
+                                       })
+                                       .collect(Collectors.toList());
+        } else {
+            blocks = regencyData.blocks.values()
+                                       .stream()
+                                       .sorted((a, b) -> Long.compare(height(a), height(b)))
+                                       .collect(Collectors.toList());
         }
         CertifiedLog.Builder logBuilder = CertifiedLog.newBuilder().setCurrentRegent(elected);
-        ArrayList<CertifiedBlock> blocks = new ArrayList<>(regencyData.blocks.values());
         blocks.forEach(cb -> logBuilder.addBlocks(cb));
         logBuilder.addAllProofs(regencyData.proofs);
         logBuilder.addAllSignatures(regencyData.signatures);
@@ -976,7 +993,7 @@ public class CollaboratorContext {
         }
 
         if (simulator.peek() == null) {
-            log.trace("No transactions to generate block on: {}", consortium.getMember());
+//            log.trace("No transactions to generate block on: {}", consortium.getMember());
             return false;
         }
 
@@ -1097,7 +1114,7 @@ public class CollaboratorContext {
 
     private void nextBatch() {
         if (toOrder.isEmpty()) {
-            log.debug("No transactions available to batch on: {}:{}", consortium.getMember(), toOrder.size());
+//            log.debug("No transactions available to batch on: {}:{}", consortium.getMember(), toOrder.size());
             return;
         }
         List<EnqueuedTransaction> batch = toOrder.values()
@@ -1114,8 +1131,6 @@ public class CollaboratorContext {
         });
         if (!batch.isEmpty()) {
             log.info("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
-        } else {
-            log.info("No transaction batch for simulation on: {}", consortium.getMember());
         }
     }
 
@@ -1270,6 +1285,10 @@ public class CollaboratorContext {
             log.trace("Setting timer for: {} target: {} on: {}", label, target, consortium.getMember());
             return consortium.getScheduler().schedule(k, action, target);
         });
+    }
+
+    private void scheduleFlush() {
+        schedule(Timers.FLUSH_BATCH, () -> generateBlocks(), consortium.getParams().getMaxBatchDelayTicks());
     }
 
     private void secondTimeout(EnqueuedTransaction transaction) {

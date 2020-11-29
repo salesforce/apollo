@@ -42,7 +42,7 @@ public enum ChangeRegency implements Transitions {
         @Override
         public Transitions deliverSync(Sync syncData, Member from) {
             context().deliverSync(syncData, from);
-            return SYNCHRONIZED;
+            return null;
         }
 
         @Entry
@@ -87,7 +87,7 @@ public enum ChangeRegency implements Transitions {
         @Override
         public Transitions deliverSync(Sync syncData, Member from) {
             context().deliverSync(syncData, from);
-            return SYNCHRONIZED;
+            return null;
         }
 
         @Override
@@ -144,6 +144,16 @@ public enum ChangeRegency implements Transitions {
         @Override
         public Transitions syncd() {
             return SYNCHRONIZED;
+        }
+
+        @Override
+        public Transitions deliverStop(Stop stop, Member from) {
+            return null;
+        }
+
+        @Override
+        public Transitions deliverStopData(StopData stopData, Member from) {
+            return null;
         }
 
     };
