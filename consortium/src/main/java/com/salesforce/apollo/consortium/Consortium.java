@@ -18,7 +18,6 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,8 +25,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -146,7 +143,7 @@ public class Consortium {
                 log.warn("Received ReplicateTransactions from non consortium member: {} on: {}", from, getMember());
                 return;
             }
-            whileStable(new HashKey(request.getContext()), () -> transitions.deliverTransactions(request, member));
+            transitions.deliverTransactions(request, member);
         }
 
         public void stop(Stop stop, HashKey from) {
@@ -155,7 +152,7 @@ public class Consortium {
                 log.warn("Received Stop from non consortium member: {} on: {}", from, getMember());
                 return;
             }
-            whileStable(new HashKey(stop.getContext()), () -> transitions.deliverStop(stop, member));
+            transitions.deliverStop(stop, member);
         }
 
         public void stopData(StopData stopData, HashKey from) {
@@ -164,7 +161,7 @@ public class Consortium {
                 log.warn("Received StopData from non consortium member: {} on: {}", from, getMember());
                 return;
             }
-            whileStable(new HashKey(stopData.getContext()), () -> transitions.deliverStopData(stopData, member));
+            transitions.deliverStopData(stopData, member);
         }
 
         public void sync(Sync sync, HashKey from) {
@@ -173,7 +170,7 @@ public class Consortium {
                 log.warn("Received Sync from non consortium member: {} on: {}", from, getMember());
                 return;
             }
-            whileStable(new HashKey(sync.getContext()), () -> transitions.deliverSync(sync, member));
+            ((Runnable) () -> transitions.deliverSync(sync, member)).run();
         }
 
     }
@@ -190,6 +187,16 @@ public class Consortium {
         public Result(Member member, JoinResult vote) {
             this.member = member;
             this.vote = vote;
+        }
+    }
+
+    private static class DelayedMessage {
+        public final Member from;
+        public final Any    msg;
+
+        private DelayedMessage(Member from, Message message) {
+            this.from = from;
+            this.msg = Any.pack(message);
         }
     }
 
@@ -231,29 +238,10 @@ public class Consortium {
         }
     }
 
-    public static boolean noGaps(Collection<CertifiedBlock> blocks, HashKey lastBlock) {
-        Map<HashKey, CertifiedBlock> hashed = blocks.stream()
-                                                    .collect(Collectors.toMap(cb -> new HashKey(
-                                                            Conversion.hashOf(cb.getBlock().toByteString())),
-                                                                              cb -> cb));
-
-        return noGaps(hashed, lastBlock);
-    }
-
-    public static boolean noGaps(Map<HashKey, CertifiedBlock> hashed, HashKey lastBlock) {
-        CertifiedBlock emptyBlock = CertifiedBlock.getDefaultInstance();
-        return hashed.entrySet().stream().collect(Collectors.toMap(e -> e.getKey(), e -> {
-            HashKey p = new HashKey(e.getValue().getBlock().getHeader().getPrevious());
-            if (lastBlock.equals(p)) {
-                return CertifiedBlock.newBuilder().build();
-            }
-            return hashed.getOrDefault(p, emptyBlock);
-        })).entrySet().stream().filter(e -> e.getValue() == emptyBlock).count() == 0;
-    }
-
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private volatile CurrentBlock                                                                  current;
+    private final List<DelayedMessage>                                                             delayed     = new ArrayList<>();
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
     private final byte[]                                                                           genesisData = "Give me food or give me slack or kill me".getBytes();
     private volatile Messenger                                                                     messenger;
@@ -265,9 +253,7 @@ public class Consortium {
     private final AtomicBoolean                                                                    started     = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted   = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final ReadWriteLock                                                                    viewChange  = new ReentrantReadWriteLock();
-
-    private volatile ViewContext viewContext;
+    private volatile ViewContext                                                                   viewContext;
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
@@ -361,6 +347,10 @@ public class Consortium {
 
     }
 
+    void delay(Message message, Member from) {
+        delayed.add(new DelayedMessage(from, message));
+    }
+
     SecureRandom entropy() {
         return getParams().msgParameters.entropy;
     }
@@ -438,10 +428,6 @@ public class Consortium {
         return transitions;
     }
 
-    ReadWriteLock getViewChange() {
-        return viewChange;
-    }
-
     ViewContext getViewContext() {
         return viewContext;
     }
@@ -459,7 +445,7 @@ public class Consortium {
             return getComm().apply(m, getParams().member);
         } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
+                      (e.getCause() != null ? e.getCause() : e).toString());
         }
         return null;
     }
@@ -500,7 +486,7 @@ public class Consortium {
         }
     }
 
-    void publish(com.google.protobuf.Message message) {
+    void publish(Message message) {
         final Messenger currentMsgr = getMessenger();
         if (currentMsgr == null) {
             log.error("skipping message publish as no messenger");
@@ -550,23 +536,6 @@ public class Consortium {
         EnqueuedTransaction transaction = build(join, transactions);
         submit(transaction, onCompletion);
         return transaction.getHash();
-    }
-
-    void synchronousSendToAll(Consumer<ConsortiumClientCommunications> msg) {
-        viewContext().streamRandomRing().forEach(c -> {
-            if (!params.member.equals(c)) {
-                ConsortiumClientCommunications link = linkFor(c);
-                if (link == null) {
-                    log.debug("Cannot get link for: {} on: {}", c.getId(), getMember());
-                }
-                try {
-//                    log.debug("Executing synchronous action to: {} on: {}", c.getId(), getMember());
-                    msg.accept(link);
-                } catch (Throwable t) {
-                    log.trace("Error sending synchronous message to: {} on: {}", c, getMember());
-                }
-            }
-        });
     }
 
     /**
@@ -668,20 +637,18 @@ public class Consortium {
         if (!started.get()) {
             return;
         }
-        whileStable(contextId, () -> {
-            for (Msg msg : messages) {
-                if (!started.get()) {
-                    return;
-                }
-
-                try {
-                    process(msg);
-                } catch (Throwable t) {
-                    log.error("Error processing msg: {} from: {} on: {}", classNameOf(msg.content), msg.from,
-                              getMember(), t);
-                }
+        for (Msg msg : messages) {
+            if (!started.get()) {
+                return;
             }
-        });
+
+            try {
+                process(msg);
+            } catch (Throwable t) {
+                log.error("Error processing msg: {} from: {} on: {}", classNameOf(msg.content), msg.from, getMember(),
+                          t);
+            }
+        }
     }
 
     private void process(Msg msg) {
@@ -728,8 +695,60 @@ public class Consortium {
             }
             return;
         }
-        log.error("Invalid consortium message type: {} from: {} on: {}", classNameOf(content), msg.from, getMember());
+        if (processSynchronized(msg.from, content)) {
+            if (!delayed.isEmpty()) {
+                List<DelayedMessage> toConsider = new ArrayList<>(delayed);
+                delayed.clear();
+                for (DelayedMessage dm : toConsider) {
+                    log.info("Applying delayed: {} on: {}", classNameOf(dm.msg), getMember());
+                    if (!processSynchronized(dm.from, dm.msg)) {
+                        log.error("Protocol error on: {} processing delayed, not sync message: {}", getMember(),
+                                  classNameOf(dm.msg));
+                    }
+                }
+            }
+        } else {
+            log.error("Invalid consortium message type: {} from: {} on: {}", classNameOf(content), msg.from,
+                      getMember());
+        }
 
+    }
+
+    private boolean processSynchronized(Member from, Any content) {
+        log.info("processing synchronous: {} from: {} on: {}", classNameOf(content), from, getMember());
+        if (content.is(Stop.class)) {
+            try {
+                transitions.deliverStop(content.unpack(Stop.class), from);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid stop delivered from: {} on: {}", from, getMember(), e);
+            }
+            return true;
+        }
+        if (content.is(Sync.class)) {
+            try {
+                transitions.deliverSync(content.unpack(Sync.class), from);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid sync delivered from: {} on: {}", from, getMember(), e);
+            }
+            return true;
+        }
+        if (content.is(StopData.class)) {
+            try {
+                transitions.deliverStopData(content.unpack(StopData.class), from);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid sync delivered from: {} on: {}", from, getMember(), e);
+            }
+            return true;
+        }
+        if (content.is(ReplicateTransactions.class)) {
+            try {
+                transitions.deliverTransactions(content.unpack(ReplicateTransactions.class), from);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid replication of transactions delivered from: {} on: {}", from, getMember(), e);
+            }
+            return true;
+        }
+        return false;
     }
 
     private void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
@@ -784,20 +803,5 @@ public class Consortium {
                       results.size(), viewContext().majority());
             throw new TimeoutException("Cannot submit transaction " + transaction.getHash());
         }
-    }
-
-    private void whileStable(HashKey targetView, Runnable action) {
-//        Lock lock = viewChange.readLock();
-//        lock.lock();
-//        try {
-        if (viewContext().getId().equals(targetView)) {
-            action.run();
-        } else {
-            log.info("Eliding action from stale view: {} current: {} on: {}", targetView, viewContext().getId(),
-                     getMember());
-        }
-//        } finally {
-//            lock.unlock();
-//        }
     }
 }

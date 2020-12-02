@@ -7,6 +7,10 @@
 package com.salesforce.apollo.consortium.fsm;
 
 import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesfoce.apollo.consortium.proto.Block;
@@ -29,16 +33,21 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public interface Transitions extends FsmExecutor<CollaboratorContext, Transitions> {
+    static Logger log = LoggerFactory.getLogger(Transitions.class);
+
     default Transitions becomeClient() {
-        throw fsm().invalidTransitionOn();
+        fsm().pop().becomeClient();
+        return null;
     }
 
     default Transitions becomeFollower() {
-        throw fsm().invalidTransitionOn();
+        fsm().pop().becomeFollower();
+        return null;
     }
 
     default Transitions becomeLeader() {
-        throw fsm().invalidTransitionOn();
+        fsm().pop().becomeLeader();
+        return null;
     }
 
     default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions) {
@@ -46,7 +55,8 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions deliverBlock(Block block, Member from) {
-        throw fsm().invalidTransitionOn();
+        context().deliverBlock(block, from);
+        return null;
     }
 
     default Transitions deliverPersist(HashKey hash) {
@@ -54,27 +64,73 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions deliverStop(Stop stop, Member from) {
-        throw fsm().invalidTransitionOn();
+        CollaboratorContext context = context();
+        if (stop.getNextRegent() > context.currentRegent() + 1) {
+            log.info("Delaying future Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from, context.getMember(),
+                     this);
+            context.delay(stop, from);
+        } else if (stop.getNextRegent() == context.currentRegent() + 1) {
+            context.deliverStop(stop, from);
+        } else {
+            log.info("Discarding stale Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
+                     context.getMember(), this);
+        }
+        return null;
     }
 
     default Transitions deliverStopData(StopData stopData, Member from) {
-        throw fsm().invalidTransitionOn();
+        CollaboratorContext context = context();
+        if (stopData.getCurrentRegent() > context.nextRegent()) {
+            log.info("Delaying future StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
+                     context.getMember(), this);
+            context.delay(stopData, from);
+            return null;
+        } else if (stopData.getCurrentRegent() < context.nextRegent()) {
+            log.info("Discarding stale StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
+                     context.getMember(), this);
+            return null;
+        }
+        if (context.isRegent(stopData.getCurrentRegent())) {
+            log.info("Preemptively becoming synchronizing leader, StopData: {} from: {} on: {} at: {}",
+                     stopData.getCurrentRegent(), from, context.getMember(), this);
+            fsm().push(ChangeRegency.SYNCHRONIZING_LEADER).deliverStopData(stopData, from);
+        }
+        return null;
     }
 
-    default Transitions deliverSync(Sync syncData, Member from) {
-        throw fsm().invalidTransitionOn();
+    default Transitions deliverSync(Sync sync, Member from) {
+        CollaboratorContext context = context();
+        if (context().nextRegent() == sync.getCurrentRegent()) {
+            if (context.isRegent(sync.getCurrentRegent())) {
+                log.info("Invalid state: {}, discarding invalid Sync: {} from: {} on: {} at: {}", this,
+                         sync.getCurrentRegent(), from, context.getMember(), this);
+            } else {
+                fsm().push(ChangeRegency.AWAIT_SYNCHRONIZATION).deliverSync(sync, from);
+            }
+        } else if (sync.getCurrentRegent() > context().nextRegent()) {
+            log.info("Delaying future Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                     context.getMember(), this);
+            context.delay(sync, from);
+        } else {
+            log.info("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                     context.getMember(), this);
+        }
+        return null;
     }
 
-    default Transitions deliverTransaction(Transaction transaction, Member from) {
-        throw fsm().invalidTransitionOn();
+    default Transitions deliverTransaction(Transaction txn, Member from) {
+        context().receive(txn);
+        return null;
     }
 
-    default Transitions deliverTransactions(ReplicateTransactions transactions, Member from) {
-        throw fsm().invalidTransitionOn();
+    default Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
+        context().receive(txns, from);
+        return null;
     }
 
     default Transitions deliverValidate(Validate validation) {
-        throw fsm().invalidTransitionOn();
+        context().deliverValidate(validation);
+        return null;
     }
 
     default Transitions drainPending() {
@@ -102,7 +158,8 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions joinAsMember() {
-        throw fsm().invalidTransitionOn();
+        fsm().pop().joinAsMember();
+        return null;
     }
 
     default Transitions missingGenesis() {
@@ -110,19 +167,23 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions processCheckpoint(CurrentBlock next) {
-        throw fsm().invalidTransitionOn();
+        context().processCheckpoint(next);
+        return null;
     }
 
     default Transitions processGenesis(CurrentBlock next) {
-        throw fsm().invalidTransitionOn();
+        context().processGenesis(next);
+        return null;
     }
 
     default Transitions processReconfigure(CurrentBlock next) {
-        throw fsm().invalidTransitionOn();
+        context().processReconfigure(next);
+        return null;
     }
 
     default Transitions processUser(CurrentBlock next) {
-        throw fsm().invalidTransitionOn();
+        context().processUser(next);
+        return null;
     }
 
     default Transitions receive(Transaction transaction, Member from) {
@@ -134,7 +195,8 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
-        throw fsm().invalidTransitionOn();
+        fsm().push(ChangeRegency.INITIAL).continueChangeRegency(transactions);
+        return null;
     }
 
     default Transitions stop() {
@@ -142,6 +204,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions syncd() {
+        throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions synchronize(int elected, Map<Member, StopData> regencyData) {
         throw fsm().invalidTransitionOn();
     }
 

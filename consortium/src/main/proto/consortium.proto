@@ -144,31 +144,15 @@ message Stop {
 
 message StopData {
     bytes context = 1;
-    Proof proof = 2;
-    bytes signature = 3;
-    repeated CertifiedBlock blocks = 4;
-}
-
-message Proof {
-    bytes id = 1;
     int32 currentRegent = 2;
-    bytes context = 3;
-    bytes root = 4;
-    repeated bytes blocks = 5;
+    repeated CertifiedBlock blocks = 3;
 }
 
 message Sync {
     bytes context = 1;
-    bytes signature = 2;
-    CertifiedLog log = 3;
-}
-
-message CertifiedLog {
-    int32 currentRegent = 1;
-    repeated Proof proofs = 2;
-    repeated bytes signatures = 3;
-    repeated CertifiedBlock blocks = 5;
-}
+    int32 currentRegent = 2; 
+    repeated CertifiedBlock blocks = 3;
+} 
 
 message ReplicateTransactions {
     bytes context = 1;

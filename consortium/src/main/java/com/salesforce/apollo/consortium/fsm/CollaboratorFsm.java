@@ -6,21 +6,15 @@
  */
 package com.salesforce.apollo.consortium.fsm;
 
-import java.util.List;
-
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
-import com.salesfoce.apollo.consortium.proto.Stop;
-import com.salesfoce.apollo.consortium.proto.StopData;
-import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.CurrentBlock;
-import com.salesforce.apollo.consortium.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -53,38 +47,8 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            context().deliverBlock(block, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverStop(Stop stop, Member from) {
-            context().deliverStop(stop, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverStopData(StopData stopData, Member from) {
-            context().deliverStopData(stopData, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            context().deliverSync(syncData, from);
-            return null;
-        }
-
-        @Override
         public Transitions joinAsMember() {
             return JOINING_MEMBER;
-        }
-
-        @Override
-        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
-            fsm().push(ChangeRegency.INITIAL).continueChangeRegency(transactions);
-            return null;
         }
     },
     INITIAL {
@@ -111,21 +75,6 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverStop(Stop stop, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverStopData(StopData stopData, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            return null;
-        }
-
-        @Override
         public Transitions deliverTransaction(Transaction txn, Member from) {
             return null;
         }
@@ -142,12 +91,6 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions receive(Transaction transacton, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
-            fsm().push(ChangeRegency.INITIAL).continueChangeRegency(transactions);
             return null;
         }
 
@@ -178,25 +121,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions deliverBlock(Block block, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverStop(Stop stop, Member from) {
-            context().deliverStop(stop, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverStopData(StopData stopData, Member from) {
-            context().deliverStopData(stopData, from);
-            return null;
-        }
-
-        @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            context().deliverSync(syncData, from);
-            return null;
+            throw fsm().invalidTransitionOn();
         }
 
         @Override
@@ -223,14 +148,28 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions joinAsMember() {
             return JOINING_MEMBER;
         }
-
-        @Override
-        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
-            fsm().push(ChangeRegency.INITIAL).continueChangeRegency(transactions);
-            return null;
-        }
     },
     PROTOCOL_FAILURE {
+
+        @Override
+        public Transitions becomeClient() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        @Override
+        public Transitions becomeFollower() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        @Override
+        public Transitions joinAsMember() {
+            throw fsm().invalidTransitionOn();
+        }
 
         @Override
         public Transitions processCheckpoint(CurrentBlock next) {

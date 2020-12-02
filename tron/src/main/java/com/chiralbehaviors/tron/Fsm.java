@@ -554,8 +554,8 @@ public final class Fsm<Context, Transitions> {
 
         executeExitAction();
         if (log.isTraceEnabled()) {
-            log.trace(String.format("[%s] Popping(%s) from: %s to: %s", name, stack.size() + 1, prettyPrint(previous),
-                                    prettyPrint(pop)));
+            log.trace(String.format("[%s] State transition:  %s -> %s - Popping(%s)", name,  prettyPrint(previous),
+                                    prettyPrint(pop), stack.size() + 1));
         }
         current = pop;
         if (pendingTransition != null) {
@@ -600,8 +600,8 @@ public final class Fsm<Context, Transitions> {
         normalTransition(nextState);
         stack.push(current);
         if (log.isTraceEnabled()) {
-            log.trace(String.format("[%s] Pushing(%s) %s -> %s", name, stack.size(), prettyPrint(current),
-                                    prettyPrint(pushed)));
+            log.trace(String.format("[%s] State transition: %s -> %s - Pushing(%s)", name, prettyPrint(current),
+                                    prettyPrint(pushed), stack.size()));
         }
         current = pushed;
         Transitions pinned = current;

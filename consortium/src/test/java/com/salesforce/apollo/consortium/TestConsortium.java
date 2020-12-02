@@ -9,7 +9,6 @@ package com.salesforce.apollo.consortium;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -17,15 +16,18 @@ import java.io.File;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -75,7 +77,7 @@ public class TestConsortium {
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
-    private final static int                               testCardinality = 25;
+    private final static int                               testCardinality = 7;
 
     @BeforeAll
     public static void beforeClass() {
@@ -137,13 +139,17 @@ public class TestConsortium {
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
+        Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         Function<CertifiedBlock, HashKey> consensus = c -> {
-            cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
-                if (m.process(c)) {
-                    processed.get().countDown();
-                }
-            }));
-            return HashKey.ORIGIN;
+            HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
+            if (decided.add(hash)) {
+                cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
+                    if (m.process(c)) {
+                        processed.get().countDown();
+                    }
+                }));
+            }
+            return hash;
         };
         gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters);
 
@@ -203,18 +209,20 @@ public class TestConsortium {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        int bunchCount = 100;
+        Semaphore outstanding = new Semaphore(5); // 20 outstanding txns
+        int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
+            outstanding.acquire();
             try {
                 HashKey pending = client.submit(h -> {
+                    outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
                 }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build()));
                 submitted.add(pending);
-                System.out.println("Submitted transaction:  " + pending);
             } catch (TimeoutException e) {
                 fail();
                 return;
@@ -230,19 +238,27 @@ public class TestConsortium {
 
     @Test
     public void testGaps() throws Exception {
+        long nextBlock = 56L;
         List<CertifiedBlock> blocks = new ArrayList<>();
         HashKey prev = HashKey.ORIGIN;
         for (int i = 0; i < 10; i++) {
-            Block block = Block.newBuilder().setHeader(Header.newBuilder().setPrevious(prev.toByteString())).build();
+            Block block = Block.newBuilder()
+                               .setHeader(Header.newBuilder().setHeight(nextBlock).setPrevious(prev.toByteString()))
+                               .build();
+            nextBlock++;
             blocks.add(CertifiedBlock.newBuilder().setBlock(block).build());
             prev = new HashKey(Conversion.hashOf(block.toByteString()));
         }
-        assertTrue(Consortium.noGaps(blocks, HashKey.ORIGIN));
+        Map<Long, CurrentBlock> cache = new HashMap<>();
+        assertEquals(0, CollaboratorContext.noGaps(blocks, cache).size());
         ArrayList<CertifiedBlock> gapped = new ArrayList<>(blocks);
         gapped.remove(5);
-        assertFalse(Consortium.noGaps(gapped, HashKey.ORIGIN));
-        assertFalse(Consortium.noGaps(blocks.subList(1, blocks.size()), HashKey.ORIGIN));
-        assertFalse(Consortium.noGaps(blocks, HashKey.LAST));
+        assertEquals(1, CollaboratorContext.noGaps(gapped, cache).size());
+        assertEquals(0, CollaboratorContext.noGaps(blocks.subList(1, blocks.size()), cache).size());
+        CertifiedBlock cb = blocks.get(5);
+        cache.put(cb.getBlock().getHeader().getHeight(),
+                  new CurrentBlock(new HashKey(Conversion.hashOf(cb.getBlock().toByteString())), cb.getBlock()));
+        assertEquals(0, CollaboratorContext.noGaps(gapped, cache).size());
     }
 
     private void gatherConsortium(Context<Member> view, Function<CertifiedBlock, HashKey> consensus,
@@ -257,13 +273,13 @@ public class TestConsortium {
                                  .setSignature(() -> m.forSigning())
                                  .setContext(view)
                                  .setMsgParameters(msgParameters)
-                                 .setMaxBatchSize(20)
+                                 .setMaxBatchSize(100)
                                  .setCommunications(communications.get(m.getId()))
                                  .setMaxBatchDelay(Duration.ofMillis(100))
                                  .setGossipDuration(gossipDuration)
-                                 .setViewTimeout(Duration.ofMillis(500))
-                                 .setJoinTimeout(Duration.ofMillis(2500))
-                                 .setTransactonTimeout(Duration.ofSeconds(10))
+                                 .setViewTimeout(Duration.ofMillis(200))
+                                 .setJoinTimeout(Duration.ofSeconds(10))
+                                 .setTransactonTimeout(Duration.ofSeconds(30))
                                  .setScheduler(scheduler)
                                  .build()))
                .peek(c -> view.activate(c.getMember()))

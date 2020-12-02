@@ -7,16 +7,17 @@
 package com.salesforce.apollo.consortium.fsm;
 
 import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Entry;
-import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
-import com.salesfoce.apollo.consortium.proto.Validate;
-import com.salesforce.apollo.consortium.CurrentBlock;
+import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
@@ -26,22 +27,46 @@ import com.salesforce.apollo.membership.Member;
  */
 public enum ChangeRegency implements Transitions {
     AWAIT_SYNCHRONIZATION {
-
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
-            context().deliverStop(stop, from);
+            CollaboratorContext context = context();
+            if (stop.getNextRegent() > context.currentRegent() + 1) {
+                log.info("Delaying future Stop: {} from: {} on: {}", stop.getNextRegent(), from, context.getMember());
+                context.delay(stop, from);
+            } else {
+                log.info("Discarding stale Stop: {} from: {} on: {}", stop.getNextRegent(), from, context.getMember());
+            }
             return null;
         }
 
         @Override
         public Transitions deliverStopData(StopData stopData, Member from) {
-            context().deliverStopData(stopData, from);
-            return null;
+            CollaboratorContext context = context();
+            if (stopData.getCurrentRegent() > context.nextRegent()) {
+                log.info("Delaying future StopData: {} from: {} on: {}", stopData.getCurrentRegent(), from,
+                         context.getMember());
+                context.delay(stopData, from);
+                return null;
+            } else {
+                log.info("Discarding stale StopData: {} at: {} from: {} on: {}", stopData.getCurrentRegent(), this,
+                         from, context.getMember());
+                return null;
+            }
         }
 
         @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            context().deliverSync(syncData, from);
+        public Transitions deliverSync(Sync sync, Member from) {
+            CollaboratorContext context = context();
+            if (context().nextRegent() == sync.getCurrentRegent()) {
+                context().deliverSync(sync, from);
+            } else if (sync.getCurrentRegent() > context().nextRegent()) {
+                log.info("Delaying future Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                         context.getMember(), this);
+                context.delay(sync, from);
+            } else {
+                log.info("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                         context.getMember(), this);
+            }
             return null;
         }
 
@@ -51,13 +76,18 @@ public enum ChangeRegency implements Transitions {
         }
 
         @Override
-        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
-            return null;
+        public Transitions syncd() {
+            return SYNCHRONIZED;
         }
 
         @Override
-        public Transitions syncd() {
-            return SYNCHRONIZED;
+        public Transitions synchronize(int elected, Map<Member, StopData> regencyData) {
+            try {
+                context().synchronize(elected, regencyData);
+            } catch (Throwable t) {
+                t.printStackTrace();
+            }
+            return null;
         }
 
         @Override
@@ -74,30 +104,60 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
-            context().deliverStop(stop, from);
+            CollaboratorContext context = context();
+            if (stop.getNextRegent() > context.currentRegent() + 1) {
+                log.info("Delaying future Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
+                         context.getMember(), this);
+                context.delay(stop, from);
+            } else if (stop.getNextRegent() == context.currentRegent() + 1) {
+                context.deliverStop(stop, from);
+            } else {
+                log.info("Discarding stale Stop: {} from: {} on: {} at {}", stop.getNextRegent(), from,
+                         context.getMember(), this);
+            }
             return null;
         }
 
         @Override
         public Transitions deliverStopData(StopData stopData, Member from) {
-            context().deliverStopData(stopData, from);
+            CollaboratorContext context = context();
+            if (stopData.getCurrentRegent() > context.nextRegent()) {
+                log.info("Delaying future StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
+                         context.getMember(), this);
+                context.delay(stopData, from);
+                return null;
+            } else if (stopData.getCurrentRegent() < context.nextRegent()) {
+                log.info("Discarding stale StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
+                         context.getMember(), this);
+                return null;
+            }
+            if (context.isRegent(stopData.getCurrentRegent())) {
+                log.info("Preemptively becoming leader, StopData: {} from: {} on: {} at: {}",
+                         stopData.getCurrentRegent(), from, context.getMember(), this);
+                fsm().push(SYNCHRONIZING_LEADER).deliverStopData(stopData, from);
+            }
             return null;
         }
 
         @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            context().deliverSync(syncData, from);
+        public Transitions deliverSync(Sync sync, Member from) {
+            CollaboratorContext context = context();
+            if (context().nextRegent() == sync.getCurrentRegent()) {
+                fsm().push(AWAIT_SYNCHRONIZATION).deliverSync(sync, from);
+            } else if (sync.getCurrentRegent() > context().nextRegent()) {
+                log.info("Delaying future Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                         context.getMember(), this);
+                context.delay(sync, from);
+            } else {
+                log.info("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                         context.getMember(), this);
+            }
             return null;
         }
 
         @Override
         public Transitions establishNextRegent() {
             return AWAIT_SYNCHRONIZATION;
-        }
-
-        @Override
-        public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
-            return null;
         }
 
         @Override
@@ -110,34 +170,58 @@ public enum ChangeRegency implements Transitions {
             return SYNCHRONIZING_LEADER;
         }
     },
-    SYNCHRONIZED {
-        @Override
-        public Transitions becomeFollower() {
-            fsm().pop().becomeFollower();
-            return null;
-        }
-
-        @Override
-        public Transitions becomeLeader() {
-            fsm().pop().becomeLeader();
-            return null;
-        }
+    SYNCHRONIZED, SYNCHRONIZING_LEADER {
 
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
+            CollaboratorContext context = context();
+            if (stop.getNextRegent() > context.currentRegent() + 1) {
+                log.info("Delaying future Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
+                         context.getMember(), this);
+                context.delay(stop, from);
+            } else {
+                log.info("Discarding stale Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
+                         context.getMember(), this);
+            }
             return null;
         }
 
         @Override
         public Transitions deliverStopData(StopData stopData, Member from) {
+            CollaboratorContext context = context();
+            if (stopData.getCurrentRegent() > context.nextRegent()) {
+                log.info("Delaying future StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
+                         context.getMember(), this);
+                context.delay(stopData, from);
+                return null;
+            } else if (stopData.getCurrentRegent() < context.nextRegent()) {
+                log.info("Discarding stale StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
+                         context.getMember(), this);
+                return null;
+            }
+            log.info("Discarding stale StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
+                     context.getMember(), this);
             return null;
         }
-    },
-    SYNCHRONIZING_LEADER {
 
         @Override
-        public Transitions deliverSync(Sync syncData, Member from) {
-            context().deliverSync(syncData, from);
+        public Transitions deliverSync(Sync sync, Member from) {
+            CollaboratorContext context = context();
+            if (context().nextRegent() == sync.getCurrentRegent()) {
+                if (context.isRegent(sync.getCurrentRegent()) && context.getMember().equals(from)) {
+                    context().deliverSync(sync, from);
+                } else {
+                    log.info("Discarding invalid Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                             context.getMember(), this);
+                }
+            } else if (sync.getCurrentRegent() > context().nextRegent()) {
+                log.info("Delaying future Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                         context.getMember(), this);
+                context.delay(sync, from);
+            } else {
+                log.info("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                         context.getMember());
+            }
             return null;
         }
 
@@ -146,41 +230,9 @@ public enum ChangeRegency implements Transitions {
             return SYNCHRONIZED;
         }
 
-        @Override
-        public Transitions deliverStop(Stop stop, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverStopData(StopData stopData, Member from) {
-            return null;
-        }
-
     };
 
-    @Override
-    public Transitions deliverBlock(Block block, Member from) {
-        context().deliverBlock(block, from);
-        return null;
-    }
-
-    @Override
-    public Transitions deliverTransaction(Transaction txn, Member from) {
-        context().receive(txn);
-        return null;
-    }
-
-    @Override
-    public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
-        context().receive(txns, from);
-        return null;
-    }
-
-    @Override
-    public Transitions deliverValidate(Validate validation) {
-        context().deliverValidate(validation);
-        return null;
-    }
+    private static final Logger log = LoggerFactory.getLogger(ChangeRegency.class);
 
     @Override
     public Transitions genesisAccepted() {
@@ -191,30 +243,6 @@ public enum ChangeRegency implements Transitions {
     @Override
     public Transitions receive(Transaction transacton, Member from) {
         context().receive(transacton);
-        return null;
-    }
-
-    @Override
-    public Transitions processCheckpoint(CurrentBlock next) {
-        context().processCheckpoint(next);
-        return null;
-    }
-
-    @Override
-    public Transitions processGenesis(CurrentBlock next) {
-        context().processGenesis(next);
-        return null;
-    }
-
-    @Override
-    public Transitions processReconfigure(CurrentBlock next) {
-        context().processReconfigure(next);
-        return null;
-    }
-
-    @Override
-    public Transitions processUser(CurrentBlock next) {
-        context().processUser(next);
         return null;
     }
 }
