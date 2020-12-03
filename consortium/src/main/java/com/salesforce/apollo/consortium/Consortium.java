@@ -697,6 +697,7 @@ public class Consortium {
         }
         if (processSynchronized(msg.from, content)) {
             if (!delayed.isEmpty()) {
+                log.info("Processing delayed msgs: {} on: {}", delayed.size(), getMember());
                 List<DelayedMessage> toConsider = new ArrayList<>(delayed);
                 delayed.clear();
                 for (DelayedMessage dm : toConsider) {
@@ -705,6 +706,9 @@ public class Consortium {
                         log.error("Protocol error on: {} processing delayed, not sync message: {}", getMember(),
                                   classNameOf(dm.msg));
                     }
+                }
+                if (!delayed.isEmpty()) {
+                    log.info("Delayed msgs remain: {} on: {}", delayed.size(), getMember());
                 }
             }
         } else {

@@ -77,7 +77,7 @@ public class TestConsortium {
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
-    private final static int                               testCardinality = 7;
+    private final static int                               testCardinality = 5;
 
     @BeforeAll
     public static void beforeClass() {
@@ -132,7 +132,7 @@ public class TestConsortium {
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 5);
+        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
@@ -306,7 +306,7 @@ public class TestConsortium {
                                .count(),
                      "True follower gone bad: " + blueRibbon.stream().map(c -> {
                          Transitions cs = c.fsm().getCurrentState();
-                         return cs.getClass().getSimpleName() + "." + cs;
+                         return c.fsm().prettyPrint(cs);
                      }).collect(Collectors.toSet()));
         assertEquals(1,
                      blueRibbon.stream()

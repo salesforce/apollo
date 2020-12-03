@@ -9,9 +9,6 @@ package com.salesforce.apollo.consortium.fsm;
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.Stop;
-import com.salesfoce.apollo.consortium.proto.StopData;
-import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.Timers;
@@ -53,21 +50,7 @@ public enum EstablishView implements Transitions {
             return LEADER;
         }
     },
-    FOLLOWER {
-
-        @Override
-        public Transitions genesisAccepted() {
-            return null;
-        }
-
-        @Override
-        public Transitions processGenesis(CurrentBlock next) {
-            context().processGenesis(next);
-            return null;
-        }
-
-    },
-    LEADER {
+    FOLLOWER, LEADER {
 
         @Override
         public Transitions deliverBlock(Block block, Member from) {
@@ -94,32 +77,8 @@ public enum EstablishView implements Transitions {
     };
 
     @Override
-    public Transitions deliverStop(Stop stop, Member from) {
-        context().deliverStop(stop, from);
-        return null;
-    }
-
-    @Override
-    public Transitions deliverStopData(StopData stopData, Member from) {
-        context().deliverStopData(stopData, from);
-        return null;
-    }
-
-    @Override
-    public Transitions deliverSync(Sync syncData, Member from) {
-        context().deliverSync(syncData, from);
-        return null;
-    }
-
-    @Override
     public Transitions deliverTransaction(Transaction txn, Member from) {
         context().receiveJoin(txn);
-        return null;
-    }
-
-    @Override
-    public Transitions genesisAccepted() {
-        fsm().pop().genesisAccepted();
         return null;
     }
 

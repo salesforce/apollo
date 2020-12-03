@@ -66,8 +66,8 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     default Transitions deliverStop(Stop stop, Member from) {
         CollaboratorContext context = context();
         if (stop.getNextRegent() > context.currentRegent() + 1) {
-            log.info("Delaying future Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from, context.getMember(),
-                     this);
+            log.info("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
+                     context.currentRegent() + 1, from, context.getMember(), this);
             context.delay(stop, from);
         } else if (stop.getNextRegent() == context.currentRegent() + 1) {
             context.deliverStop(stop, from);
@@ -81,13 +81,13 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     default Transitions deliverStopData(StopData stopData, Member from) {
         CollaboratorContext context = context();
         if (stopData.getCurrentRegent() > context.nextRegent()) {
-            log.info("Delaying future StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
-                     context.getMember(), this);
+            log.info("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
+                     context.nextRegent(), from, context.getMember(), this);
             context.delay(stopData, from);
             return null;
         } else if (stopData.getCurrentRegent() < context.nextRegent()) {
-            log.info("Discarding stale StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
-                     context.getMember(), this);
+            log.info("Discarding stale StopData: {} < {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
+                     context.nextRegent(), from, context.getMember(), this);
             return null;
         }
         if (context.isRegent(stopData.getCurrentRegent())) {
@@ -108,8 +108,8 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
                 fsm().push(ChangeRegency.AWAIT_SYNCHRONIZATION).deliverSync(sync, from);
             }
         } else if (sync.getCurrentRegent() > context().nextRegent()) {
-            log.info("Delaying future Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
-                     context.getMember(), this);
+            log.info("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
+                     context.nextRegent(), from, context.getMember(), this);
             context.delay(sync, from);
         } else {
             log.info("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
@@ -150,10 +150,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions generateView() {
-        throw fsm().invalidTransitionOn();
-    }
-
-    default Transitions genesisAccepted() {
         throw fsm().invalidTransitionOn();
     }
 

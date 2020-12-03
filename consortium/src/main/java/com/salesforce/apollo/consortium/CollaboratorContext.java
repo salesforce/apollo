@@ -30,7 +30,6 @@ import java.util.stream.LongStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -341,7 +340,7 @@ public class CollaboratorContext {
                   consortium.getMember());
         currentRegent(nextRegent());
         sync.put(cReg, syncData);
-        synchronize(syncData);
+        synchronize(syncData, regent);
         consortium.getTransitions().syncd();
         resolveRegentStatus();
     }
@@ -400,6 +399,7 @@ public class CollaboratorContext {
             return;
         }
         if (consortium.getMember().equals(leader)) {
+            consortium.getTransitions().synchronizingLeader();
             consortium.getTransitions().deliverStopData(stopData, consortium.getMember());
         } else {
             ConsortiumClientCommunications link = consortium.linkFor(leader);
@@ -441,7 +441,8 @@ public class CollaboratorContext {
     }
 
     public void initializeConsensus() {
-        currentConsensus(consortium.getCurrent().getBlock().getHeader().getHeight());
+        CurrentBlock current = consortium.getCurrent();
+        currentConsensus(current != null ? current.getBlock().getHeader().getHeight() : 0);
         simulator.start();
     }
 
@@ -533,11 +534,10 @@ public class CollaboratorContext {
             return;
         }
         accept(next);
-        consortium.getTransitions().genesisAccepted();
-        reconfigure(body.getInitialView(), true);
         cancelToTimers();
         toOrder.clear();
         consortium.getSubmitted().clear();
+        reconfigure(body.getInitialView(), true);
         log.info("Processed genesis block: {} on: {}", next.getHash(), consortium.getMember());
     }
 
@@ -1289,7 +1289,7 @@ public class CollaboratorContext {
         }).filter(jt -> jt != null).anyMatch(jt -> id.equals(new HashKey(jt.getMember().getId())));
     }
 
-    private void synchronize(Sync syncData) {
+    private void synchronize(Sync syncData, Member regent) {
         CurrentBlock current = consortium.getCurrent();
         final long currentHeight = current != null ? height(current.getBlock()) : -1;
         workingBlocks.clear();
@@ -1304,6 +1304,9 @@ public class CollaboratorContext {
                 });
         log.info("Synchronized from: {} to: {} working blocks: {} on: {}", currentHeight, lastBlock(),
                  workingBlocks.size(), consortium.getMember());
+        if (getMember().equals(regent)) {
+            totalOrderDeliver();
+        }
     }
 
     private User userBody(Block block) {

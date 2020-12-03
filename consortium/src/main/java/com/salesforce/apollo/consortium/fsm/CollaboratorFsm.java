@@ -214,11 +214,6 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions genesisAccepted() {
-            return null;
-        }
-
-        @Override
         public Transitions joinAsMember() {
             return JOINING_MEMBER;
         }
@@ -239,7 +234,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions becomeClient() {
-            return RECOVERED;
+            return CLIENT;
         }
 
         @Override
@@ -266,11 +261,6 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions generateView() {
             fsm().push(EstablishView.BUILD);
             return null;
-        }
-
-        @Override
-        public Transitions genesisAccepted() {
-            return RECOVERED;
         }
 
         @Override
