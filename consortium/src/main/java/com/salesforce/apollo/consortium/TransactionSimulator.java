@@ -138,7 +138,7 @@ public class TransactionSimulator {
 
         ByteString result = null;
         try {
-            log.info("Evaluating transaction: {}", txn.getHash());
+            log.debug("Evaluating transaction: {}", txn.getHash());
             result = validator.apply(txn);
             EvaluatedTransaction eval = new EvaluatedTransaction(txn, result);
             if (evaluated.offer(eval)) {
@@ -146,7 +146,7 @@ public class TransactionSimulator {
                 totalByteSize += result.size();
             } else {
                 transactions.addFirst(() -> evaluate(txn));
-                log.info("Draining pending from: {}", txn.getHash());
+                log.debug("Draining pending from: {}", txn.getHash());
                 collaborator.drainPending();
             }
         } catch (Throwable e) {

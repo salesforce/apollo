@@ -177,7 +177,7 @@ public class CollaboratorContext {
     public void deliverBlock(Block block, Member from) {
         Member regent = consortium.viewContext().getRegent(currentRegent());
         if (!regent.equals(from)) {
-            log.info("Ignoring block from non regent: {} actual: {} on: {}", from, regent, getMember());
+            log.debug("Ignoring block from non regent: {} actual: {} on: {}", from, regent, getMember());
             return;
         }
         if (block.getBody().getType() == BodyType.GENESIS) {
@@ -631,7 +631,7 @@ public class CollaboratorContext {
         try {
             Sync synch = buildSync(elected, regencyData);
             if (synch != null) {
-                log.info("Synchronizing new regent: {} on: {} voting: {}", elected, consortium.getMember(),
+                log.debug("Synchronizing new regent: {} on: {} voting: {}", elected, consortium.getMember(),
                          regencyData.keySet().stream().map(e -> e.getId()).collect(Collectors.toList()));
                 consortium.getTransitions().synchronizingLeader();
                 consortium.publish(synch);
@@ -840,7 +840,7 @@ public class CollaboratorContext {
         SubmittedTransaction submittedTxn = consortium.getSubmitted().remove(hash);
         if (submittedTxn != null) {
             if (submittedTxn.onCompletion != null) {
-                log.info("Completing {} txn: {} on: {}", submittedTxn.submitted.getJoin() ? "JOIN" : "USER", hash,
+                log.debug("Completing {} txn: {} on: {}", submittedTxn.submitted.getJoin() ? "JOIN" : "USER", hash,
                          consortium.getMember());
                 ForkJoinPool.commonPool().execute(() -> submittedTxn.onCompletion.accept(hash));
             }
@@ -999,7 +999,7 @@ public class CollaboratorContext {
             log.debug("No transactions to generate block on: {}", consortium.getMember());
             return false;
         }
-        log.info("Generating next block on: {} height: {} transactions: {}", consortium.getMember(), thisHeight,
+        log.debug("Generating next block on: {} height: {} transactions: {}", consortium.getMember(), thisHeight,
                  processed.size());
 
         Body body = Body.newBuilder()
@@ -1111,7 +1111,7 @@ public class CollaboratorContext {
             processed.add(eqt.getHash());
         });
         if (!batch.isEmpty()) {
-            log.info("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
+            log.debug("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
         }
     }
 
@@ -1311,7 +1311,7 @@ public class CollaboratorContext {
                     lastBlock(height(cb));
                     processToOrder(cb.getBlock());
                 });
-        log.info("Synchronized from: {} to: {} working blocks: {} on: {}", currentHeight, lastBlock(),
+        log.debug("Synchronized from: {} to: {} working blocks: {} on: {}", currentHeight, lastBlock(),
                  workingBlocks.size(), consortium.getMember());
         if (getMember().equals(regent)) {
             totalOrderDeliver();

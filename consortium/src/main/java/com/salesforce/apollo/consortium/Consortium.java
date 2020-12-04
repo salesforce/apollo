@@ -96,7 +96,7 @@ public class Consortium {
                 log.debug("Join transaction: {} on: {} from consortium member : {}", enqueuedTransaction.getHash(),
                           getMember(), from);
             } else {
-                log.info("Client transaction: {} on: {} from: {}", enqueuedTransaction.getHash(), getMember(), from);
+                log.debug("Client transaction: {} on: {} from: {}", enqueuedTransaction.getHash(), getMember(), from);
             }
             transitions.receive(enqueuedTransaction.getTransaction(), member);
             return TransactionResult.getDefaultInstance();
@@ -349,7 +349,6 @@ public class Consortium {
 
     public HashKey submit(Consumer<HashKey> onCompletion, Message... transactions) throws TimeoutException {
         return submit(false, onCompletion, transactions);
-
     }
 
     void delay(Message message, Member from) {
@@ -365,7 +364,7 @@ public class Consortium {
         if (previous != null) {
             ForkJoinPool.commonPool().execute(() -> {
                 if (previous.onCompletion != null) {
-                    log.info("finalizing: {} on: {}", finald.getHash(), getMember());
+                    log.debug("finalizing: {} on: {}", finald.getHash(), getMember());
                     previous.onCompletion.accept(finald.getHash());
                 }
             });
@@ -710,24 +709,23 @@ public class Consortium {
 
     private void processDelayed() {
         if (!delayed.isEmpty()) {
-            log.info("Processing delayed msgs: {} on: {}", delayed.size(), getMember());
+            log.debug("Processing delayed msgs: {} on: {}", delayed.size(), getMember());
             List<DelayedMessage> toConsider = new ArrayList<>(delayed);
             delayed.clear();
             for (DelayedMessage dm : toConsider) {
-                log.info("Applying delayed: {} on: {}", classNameOf(dm.msg), getMember());
+                log.trace("Applying delayed: {} on: {}", classNameOf(dm.msg), getMember());
                 if (!processSynchronized(dm.from, dm.msg)) {
                     log.error("Protocol error on: {} processing delayed, not sync message: {}", getMember(),
                               classNameOf(dm.msg));
                 }
             }
             if (!delayed.isEmpty()) {
-                log.info("Delayed msgs remain: {} on: {}", delayed.size(), getMember());
+                log.debug("Delayed msgs remain: {} on: {}", delayed.size(), getMember());
             }
         }
     }
 
     private boolean processSynchronized(Member from, Any content) {
-        log.info("processing synchronous: {} from: {} on: {}", classNameOf(content), from, getMember());
         if (content.is(Stop.class)) {
             try {
                 transitions.deliverStop(content.unpack(Stop.class), from);
@@ -788,7 +786,7 @@ public class Consortium {
                                                           .setContext(viewContext().getId().toByteString())
                                                           .setTransaction(transaction.getTransaction())
                                                           .build();
-        log.info("Submitting txn: {} from: {}", transaction.getHash(), getMember());
+        log.debug("Submitting txn: {} from: {}", transaction.getHash(), getMember());
         List<TransactionResult> results;
         results = viewContext().streamRandomRing().map(c -> {
             if (getMember().equals(c)) {

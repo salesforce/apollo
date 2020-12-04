@@ -31,12 +31,12 @@ public enum ChangeRegency implements Transitions {
         public Transitions deliverStop(Stop stop, Member from) {
             CollaboratorContext context = context();
             if (stop.getNextRegent() > context.currentRegent() + 1) {
-                log.info("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
-                         context.currentRegent() + 1, from, context.getMember(), this);
+                log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
+                          context.currentRegent() + 1, from, context.getMember(), this);
                 context.delay(stop, from);
             } else {
-                log.info("Discarding stale Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
-                         context.getMember(), this);
+                log.debug("Discarding stale Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
+                          context.getMember(), this);
             }
             return null;
         }
@@ -45,13 +45,13 @@ public enum ChangeRegency implements Transitions {
         public Transitions deliverStopData(StopData stopData, Member from) {
             CollaboratorContext context = context();
             if (stopData.getCurrentRegent() > context.nextRegent()) {
-                log.info("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
-                         context.nextRegent(), from, context.getMember(), this);
+                log.debug("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
+                          context.nextRegent(), from, context.getMember(), this);
                 context.delay(stopData, from);
                 return null;
             } else {
-                log.info("Discarding stale StopData: {} at: {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
-                         this, from, context.getMember(), this);
+                log.debug("Discarding stale StopData: {} at: {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
+                          this, from, context.getMember(), this);
                 return null;
             }
         }
@@ -62,12 +62,12 @@ public enum ChangeRegency implements Transitions {
             if (context().nextRegent() == sync.getCurrentRegent()) {
                 context().deliverSync(sync, from);
             } else if (sync.getCurrentRegent() > context().nextRegent()) {
-                log.info("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
-                         context.nextRegent(), from, context.getMember(), this);
+                log.debug("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
+                          context.nextRegent(), from, context.getMember(), this);
                 context.delay(sync, from);
             } else {
-                log.info("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
-                         context.getMember(), this);
+                log.debug("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                          context.getMember(), this);
             }
             return null;
         }
@@ -98,14 +98,14 @@ public enum ChangeRegency implements Transitions {
         public Transitions deliverStop(Stop stop, Member from) {
             CollaboratorContext context = context();
             if (stop.getNextRegent() > context.currentRegent() + 1) {
-                log.info("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
-                         context.currentRegent() + 1, from, context.getMember(), this);
+                log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
+                          context.currentRegent() + 1, from, context.getMember(), this);
                 context.delay(stop, from);
             } else if (stop.getNextRegent() == context.currentRegent() + 1) {
                 context.deliverStop(stop, from);
             } else {
-                log.info("Discarding stale Stop: {} from: {} on: {} at {}", stop.getNextRegent(), from,
-                         context.getMember(), this);
+                log.debug("Discarding stale Stop: {} from: {} on: {} at {}", stop.getNextRegent(), from,
+                          context.getMember(), this);
             }
             return null;
         }
@@ -114,18 +114,18 @@ public enum ChangeRegency implements Transitions {
         public Transitions deliverStopData(StopData stopData, Member from) {
             CollaboratorContext context = context();
             if (stopData.getCurrentRegent() > context.nextRegent()) {
-                log.info("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
-                         context.nextRegent(), from, context.getMember(), this);
+                log.debug("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
+                          context.nextRegent(), from, context.getMember(), this);
                 context.delay(stopData, from);
                 return null;
             } else if (stopData.getCurrentRegent() < context.nextRegent()) {
-                log.info("Discarding stale StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
-                         context.getMember(), this);
+                log.debug("Discarding stale StopData: {} from: {} on: {} at: {}", stopData.getCurrentRegent(), from,
+                          context.getMember(), this);
                 return null;
             }
             if (context.isRegent(stopData.getCurrentRegent())) {
-                log.info("Preemptively becoming leader, StopData: {} from: {} on: {} at: {}",
-                         stopData.getCurrentRegent(), from, context.getMember(), this);
+                log.debug("Preemptively becoming leader, StopData: {} from: {} on: {} at: {}",
+                          stopData.getCurrentRegent(), from, context.getMember(), this);
                 fsm().push(SYNCHRONIZING_LEADER).deliverStopData(stopData, from);
             }
             return null;
@@ -137,12 +137,12 @@ public enum ChangeRegency implements Transitions {
             if (context.nextRegent() == sync.getCurrentRegent()) {
                 fsm().push(AWAIT_SYNCHRONIZATION).deliverSync(sync, from);
             } else if (sync.getCurrentRegent() > context().nextRegent()) {
-                log.info("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
-                         context.nextRegent(), from, context.getMember(), this);
+                log.debug("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
+                          context.nextRegent(), from, context.getMember(), this);
                 context.delay(sync, from);
             } else {
-                log.info("Discarding stale Sync: {} nextRegent: {} from: {} on: {} at: {}", sync.getCurrentRegent(),
-                         context.nextRegent(), from, context.getMember(), this);
+                log.debug("Discarding stale Sync: {} nextRegent: {} from: {} on: {} at: {}", sync.getCurrentRegent(),
+                          context.nextRegent(), from, context.getMember(), this);
             }
             return null;
         }
@@ -168,12 +168,12 @@ public enum ChangeRegency implements Transitions {
         public Transitions deliverStop(Stop stop, Member from) {
             CollaboratorContext context = context();
             if (stop.getNextRegent() > context.currentRegent() + 1) {
-                log.info("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
-                         context.currentRegent() + 1, from, context.getMember(), this);
+                log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
+                          context.currentRegent() + 1, from, context.getMember(), this);
                 context.delay(stop, from);
             } else {
-                log.info("Discarding stale Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
-                         context.getMember(), this);
+                log.debug("Discarding stale Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
+                          context.getMember(), this);
             }
             return null;
         }
@@ -182,13 +182,13 @@ public enum ChangeRegency implements Transitions {
         public Transitions deliverStopData(StopData stopData, Member from) {
             CollaboratorContext context = context();
             if (stopData.getCurrentRegent() > context.nextRegent()) {
-                log.info("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
-                         context.nextRegent(), from, context.getMember(), this);
+                log.debug("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
+                          context.nextRegent(), from, context.getMember(), this);
                 context.delay(stopData, from);
                 return null;
             } else if (stopData.getCurrentRegent() < context.nextRegent()) {
-                log.info("Discarding stale StopData: {} < {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
-                         context.currentRegent(), from, context.getMember(), this);
+                log.debug("Discarding stale StopData: {} < {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
+                          context.currentRegent(), from, context.getMember(), this);
                 return null;
             }
             context.deliverStopData(stopData, from);
@@ -202,16 +202,16 @@ public enum ChangeRegency implements Transitions {
                 if (context.isRegent(sync.getCurrentRegent()) && context.getMember().equals(from)) {
                     context().deliverSync(sync, from);
                 } else {
-                    log.info("Discarding invalid Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
-                             context.getMember(), this);
+                    log.debug("Discarding invalid Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                              context.getMember(), this);
                 }
             } else if (sync.getCurrentRegent() > context().nextRegent()) {
-                log.info("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
-                         context.nextRegent(), from, context.getMember(), this);
+                log.debug("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
+                          context.nextRegent(), from, context.getMember(), this);
                 context.delay(sync, from);
             } else {
-                log.info("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
-                         context.getMember());
+                log.debug("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
+                          context.getMember());
             }
             return null;
         }
