@@ -39,4 +39,6 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+	<name>Slushy</name>
+	<description>Initial forays into the Avalanche Snow protocol</description>
 </project>

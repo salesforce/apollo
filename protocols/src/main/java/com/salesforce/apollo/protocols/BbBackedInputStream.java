@@ -43,26 +43,28 @@ public class BbBackedInputStream extends InputStream {
     @SafeVarargs
     public static InputStream aggregate(List<ByteBuffer>... buffers) {
         return new SequenceInputStream(new Enumeration<InputStream>() {
-            private List<ByteBuffer> aggregate = Arrays.asList(buffers)
-                                                       .stream()
-                                                       .flatMap(bl -> bl.stream())
-                                                       .collect(Collectors.toList());
+            private volatile List<ByteBuffer> aggregate = Arrays.asList(buffers)
+                                                                .stream()
+                                                                .flatMap(bl -> bl.stream())
+                                                                .collect(Collectors.toList());
 
             @Override
             public boolean hasMoreElements() {
-                return !aggregate.isEmpty();
+                List<ByteBuffer> current = aggregate;
+                return !current.isEmpty();
             }
 
             @Override
             public InputStream nextElement() {
-                if (aggregate.isEmpty()) {
+                List<ByteBuffer> current = aggregate;
+                if (current.isEmpty()) {
                     throw new NoSuchElementException();
                 }
-                BbBackedInputStream is = new BbBackedInputStream(aggregate.get(0));
-                if (aggregate.size() == 1) {
+                BbBackedInputStream is = new BbBackedInputStream(current.get(0));
+                if (current.size() == 1) {
                     aggregate = Collections.emptyList();
                 } else {
-                    aggregate = aggregate.subList(1, aggregate.size());
+                    aggregate = current.subList(1, current.size());
                 }
                 return is;
             }

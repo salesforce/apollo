@@ -7,8 +7,12 @@
 package com.salesforce.apollo.consortium;
 
 import java.util.Deque;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
@@ -16,8 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.consortium.Consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
 
 /**
  * @author hal.hildebrand
@@ -41,43 +43,65 @@ public class TransactionSimulator {
 
     private final static Logger log = LoggerFactory.getLogger(TransactionSimulator.class);
 
+    private final int                                       bufferSize;
     private final CollaboratorContext                       collaborator;
     private final Deque<EvaluatedTransaction>               evaluated;
-    private final AtomicBoolean                             running = new AtomicBoolean();
+    @SuppressWarnings("unused")
+    private final int                                       maxByteSize;
+    private final AtomicBoolean                             started = new AtomicBoolean();
     private volatile int                                    totalByteSize;
-    private final Deque<EnqueuedTransaction>                transactions;
+    private final LinkedBlockingDeque<Runnable>             transactions;
     private final Function<EnqueuedTransaction, ByteString> validator;
+    private final ExecutorService                           executor;
 
-    public TransactionSimulator(int bufferSize, CollaboratorContext collaborator,
+    public TransactionSimulator(int maxByteSize, CollaboratorContext collaborator, int maxBufferSize,
             Function<EnqueuedTransaction, ByteString> validator) {
-        transactions = new LinkedBlockingDeque<>(bufferSize);
+        this.bufferSize = maxBufferSize;
+        this.maxByteSize = maxByteSize;
+        transactions = new LinkedBlockingDeque<>(bufferSize + 1);
         evaluated = new LinkedBlockingDeque<>(bufferSize);
         this.collaborator = collaborator;
         this.validator = validator;
+        new ThreadPoolExecutor(1, 1, Integer.MAX_VALUE, TimeUnit.DAYS, transactions);
+        executor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "Txn Sim: [" + collaborator.getMember() + "]");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     public boolean add(EnqueuedTransaction transaction) {
-        if (!transactions.add(transaction)) {
+        if (transactions.size() >= bufferSize) {
             return false;
         }
-        totalByteSize += transaction.totalByteSize();
-        evaluateNext();
-        return true;
+        Runnable evaluation = () -> {
+            if (started.get()) {
+                evaluate(transaction);
+            }
+        };
+        try {
+            executor.execute(evaluation);
+            totalByteSize += transaction.totalByteSize();
+            return true;
+        } catch (RejectedExecutionException e) {
+            return false;
+        }
+    }
+
+    public int available() {
+        return bufferSize - transactions.size() - 1;
     }
 
     public int evaluated() {
         return evaluated.size();
     }
 
-    public void evaluateNext() {
-        boolean started = running.compareAndExchange(false, true);
-        if (!started) {
-            ForkJoinPool.commonPool().execute(() -> evaluate());
-        }
-    }
-
     public boolean isEmpty() {
         return evaluated.isEmpty();
+    }
+
+    public EvaluatedTransaction peek() {
+        return evaluated.peek();
     }
 
     public EvaluatedTransaction poll() {
@@ -88,35 +112,46 @@ public class TransactionSimulator {
         return transactions.size();
     }
 
+    public void start() {
+        if (!started.compareAndExchange(false, true)) {
+            return;
+        }
+    }
+
+    public void stop() {
+        if (started.compareAndExchange(true, false)) {
+            return;
+        }
+        transactions.clear();
+        evaluated.clear();
+    }
+
     public int totalByteSize() {
         final int c = totalByteSize;
         return c;
     }
 
-    private void evaluate() {
-        EnqueuedTransaction txn = transactions.peek();
-        ByteString result = null;
-        while (txn != null) {
-            try {
-                log.info("Evaluating transaction: {}", txn.getHash());
-                result = validator.apply(txn);
-                if (evaluated.offer(new EvaluatedTransaction(txn, result))) {
-                    transactions.remove();
-                    totalByteSize += txn.totalByteSize();
-                    totalByteSize += result.size();
-                    txn = transactions.peek();
-                } else {
-                    collaborator.drainPending();
-                    txn = null;
-                }
-            } catch (Throwable e) {
-                log.error("Unable to evaluate transactiion {}", txn.getHash(), e);
-                transactions.remove();
-                txn = transactions.peek();
-            }
+    private void evaluate(final EnqueuedTransaction txn) {
+        if (!started.get()) {
+            return;
         }
-        running.set(false);
-        evaluateNext();
+
+        ByteString result = null;
+        try {
+            log.debug("Evaluating transaction: {}", txn.getHash());
+            result = validator.apply(txn);
+            EvaluatedTransaction eval = new EvaluatedTransaction(txn, result);
+            if (evaluated.offer(eval)) {
+                totalByteSize += txn.totalByteSize();
+                totalByteSize += result.size();
+            } else {
+                transactions.addFirst(() -> evaluate(txn));
+                log.debug("Draining pending from: {}", txn.getHash());
+                collaborator.drainPending();
+            }
+        } catch (Throwable e) {
+            log.error("Unable to evaluate transactiion {}", txn.getHash(), e);
+        }
     }
 
 }

@@ -35,7 +35,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications;
 import com.salesforce.apollo.membership.messaging.comms.MessagingServerCommunications;
 import com.salesforce.apollo.protocols.BloomFilter;
@@ -49,7 +49,7 @@ import com.salesforce.apollo.protocols.HashKey;
 public class Messenger {
 
     @FunctionalInterface
-    public interface MessageChannelHandler {
+    public interface MessageHandler {
         class Msg {
             public final Any    content;
             public final Member from;
@@ -67,7 +67,7 @@ public class Messenger {
             }
         }
 
-        void message(List<Msg> messages);
+        void message(HashKey context, List<Msg> messages);
     }
 
     public static class Parameters {
@@ -172,7 +172,7 @@ public class Messenger {
     public static final Logger log = LoggerFactory.getLogger(Messenger.class);
 
     private final MessageBuffer                                                buffer;
-    private final List<MessageChannelHandler>                                  channelHandlers = new CopyOnWriteArrayList<>();
+    private final List<MessageHandler>                                         channelHandlers = new CopyOnWriteArrayList<>();
     private final CommonCommunications<MessagingClientCommunications, Service> comm;
     private final Context<Member>                                              context;
     private volatile int                                                       lastRing        = -1;
@@ -205,6 +205,10 @@ public class Messenger {
         return member;
     }
 
+    public int getRound() {
+        return round.get();
+    }
+
     public void oneRound(Duration duration, ScheduledExecutorService scheduler) {
         if (!started.get()) {
             return;
@@ -217,6 +221,9 @@ public class Messenger {
         }
 
         commonPool().execute(() -> {
+            if (!started.get()) {
+                return;
+            }
             int gossipRound = round.incrementAndGet();
             log.trace("message gossiping[{}] from {} with {} on {}", gossipRound, member, link.getMember(), ring);
             try {
@@ -248,28 +255,29 @@ public class Messenger {
             }
             if (started.get()) {
                 roundListeners.forEach(l -> {
-                    commonPool().execute(() -> {
-                        try {
-                            l.accept(gossipRound);
-                        } catch (Throwable e) {
-                            log.error("error sending round() to listener: " + l, e);
-                        }
-                    });
+                    try {
+                        l.accept(gossipRound);
+                    } catch (Throwable e) {
+                        log.error("error sending round() to listener: " + l, e);
+                    }
                 });
                 scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
             }
         });
     }
 
-    public void publish(Any message) {
-        buffer.publish(message, member, signature.get());
+    public void publish(com.google.protobuf.Message message) {
+        if (!started.get()) {
+            return;
+        }
+        buffer.publish(Any.pack(message), member, signature.get());
     }
 
     public void register(Consumer<Integer> roundListener) {
         roundListeners.add(roundListener);
     }
 
-    public void registerHandler(MessageChannelHandler listener) {
+    public void registerHandler(MessageHandler listener) {
         channelHandlers.add(listener);
     }
 
@@ -277,9 +285,10 @@ public class Messenger {
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        Duration initialDelay = duration.plusMillis(parameters.entropy.nextInt((int) (duration.toMillis() / 2)));
         log.info("Starting Messenger[{}] for {}", context.getId(), member);
         comm.register(context.getId(), new Service());
-        scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
@@ -342,7 +351,7 @@ public class Messenger {
             } else {
                 return new Msg(from, m.getSequenceNumber(), m.getContent());
             }
-        }).filter(m -> m != null).forEach(msg -> {
+        }).filter(m -> m != null).filter(m -> !m.from.equals(member)).forEach(msg -> {
             newMessages.add(msg);
         });
         if (newMessages.isEmpty()) {
@@ -350,7 +359,15 @@ public class Messenger {
             return;
         }
         log.trace("processed {} updates", updates.size());
-        channelHandlers.forEach(handler -> commonPool().execute(() -> handler.message(newMessages)));
+        if (!newMessages.isEmpty()) {
+            channelHandlers.forEach(handler -> {
+                try {
+                    handler.message(context.getId(), newMessages);
+                } catch (Throwable e) {
+                    log.error("Error in message handler on: {}", member, e);
+                }
+            });
+        }
     }
 
     private boolean validate(HashKey hash, Message message) {
@@ -365,9 +382,5 @@ public class Messenger {
             return false;
         }
         return true;
-    }
-
-    public int getRound() {
-        return round.get();
     }
 }

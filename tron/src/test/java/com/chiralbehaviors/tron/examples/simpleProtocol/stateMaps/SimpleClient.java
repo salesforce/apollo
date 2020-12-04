@@ -16,7 +16,6 @@
 package com.chiralbehaviors.tron.examples.simpleProtocol.stateMaps;
 
 import com.chiralbehaviors.tron.Entry;
-import com.chiralbehaviors.tron.InvalidTransition;
 import com.chiralbehaviors.tron.examples.simpleProtocol.BufferHandler;
 import com.chiralbehaviors.tron.examples.simpleProtocol.SimpleFsm;
 import com.chiralbehaviors.tron.examples.simpleProtocol.SimpleProtocol;
@@ -110,22 +109,22 @@ public enum SimpleClient implements SimpleFsm {
         SimpleFsm popTransition = fsm().pop();
         popTransition.closing();
         return null;
-    } 
+    }
 
     @Override
     public SimpleFsm protocolError() {
         SimpleFsm popTransition = fsm().pop();
         popTransition.protocolError();
         return null;
-    } 
+    }
 
     @Override
     public SimpleFsm sendGoodbye() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public SimpleFsm transmitMessage(String message) {
-        throw new InvalidTransition();
-    } 
+        throw fsm().invalidTransitionOn();
+    }
 }

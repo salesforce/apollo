@@ -32,7 +32,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
@@ -40,7 +39,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler.Msg;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -62,10 +61,10 @@ public class MemberOrderTest {
         public ToReceiver(HashKey id, Messenger messenger) {
             this.messenger = messenger;
             this.id = id;
-            BiConsumer<Msg, HashKey> processor = (m, key) -> messages
-                                                                     .computeIfAbsent(m.from.getId(),
-                                                                                      k -> new CopyOnWriteArrayList<>())
-                                                                     .add(m);
+            BiConsumer<HashKey, List<Msg>> processor = (cid,
+                                                        msgs) -> msgs.forEach(m -> messages.computeIfAbsent(m.from.getId(),
+                                                                                                            k -> new CopyOnWriteArrayList<>())
+                                                                                           .add(m));
             totalOrder = new MemberOrder(processor, messenger);
         }
 
@@ -160,9 +159,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
-                m.publish(Any.pack(ByteMessage.newBuilder()
-                                              .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                              .build()));
+                m.publish(ByteMessage.newBuilder()
+                                     .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                     .build());
             });
         }
 
@@ -216,9 +215,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
-                m.publish(Any.pack(ByteMessage.newBuilder()
-                                              .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                              .build()));
+                m.publish(ByteMessage.newBuilder()
+                                     .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                     .build());
             });
         }
 
@@ -244,9 +243,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             liveRcvrs.forEach(r -> {
-                r.messenger.publish(Any.pack(ByteMessage.newBuilder()
-                                                        .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                                        .build()));
+                r.messenger.publish(ByteMessage.newBuilder()
+                                               .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                               .build());
             });
         }
 
@@ -268,9 +267,9 @@ public class MemberOrderTest {
 
         for (int i = 0; i < messageCount; i++) {
             receivers.forEach(r -> {
-                r.messenger.publish(Any.pack(ByteMessage.newBuilder()
-                                                        .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                                        .build()));
+                r.messenger.publish(ByteMessage.newBuilder()
+                                               .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                               .build());
             });
         }
 

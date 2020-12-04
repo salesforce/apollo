@@ -49,4 +49,6 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+	<name>Fireflies</name>
+	<description>Byzantine fault tolerant gossip communications discovery and overay</description>
 </project>

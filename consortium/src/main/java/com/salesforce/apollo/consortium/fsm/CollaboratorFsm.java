@@ -8,14 +8,13 @@ package com.salesforce.apollo.consortium.fsm;
 
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
-import com.chiralbehaviors.tron.InvalidTransition;
 import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.Proclamation;
+import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
+import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.CurrentBlock;
-import com.salesforce.apollo.consortium.PendingTransactions.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -25,51 +24,34 @@ import com.salesforce.apollo.membership.Member;
  *
  */
 public enum CollaboratorFsm implements Transitions {
-    CLIENT, FOLLOWER
+
+    CLIENT {
+    },
+    FOLLOWER
 
     {
 
         @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            context().deliverBlock(block, from);
-            return null;
+        public Transitions becomeClient() {
+            return CLIENT;
         }
 
         @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            context().resendUnreplicated(p, from);
-            return null;
+        public Transitions becomeFollower() {
+            return FOLLOWER;
         }
 
         @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().add(txn);
-            return null;
+        public Transitions becomeLeader() {
+            return LEADER;
         }
 
         @Override
-        public Transitions deliverValidate(Validate validation) {
-            context().validate(validation);
-            return null;
+        public Transitions joinAsMember() {
+            return JOINING_MEMBER;
         }
-
-        @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().submit(enqueuedTransaction);
-            return null;
-        }
-        
-        @Entry
-        public void cancelAll() {
-            context().cancelAll();
-        }
-
     },
     INITIAL {
-        @Entry
-        public void initialize() {
-            context().nextView();
-        }
 
         @Override
         public Transitions start() {
@@ -93,12 +75,7 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverProclamation(Proclamation p, Member from) {
-            return null;
-        }
-
-        @Override
-        public Transitions deliverTransaction(Transaction txn) {
+        public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
             return null;
         }
 
@@ -107,69 +84,106 @@ public enum CollaboratorFsm implements Transitions {
             return null;
         }
 
-        @Entry
-        public void enterView() {
-            context().enterView();
+        @Override
+        public Transitions receive(Transaction transacton, Member from) {
+            return null;
         }
 
     },
     LEADER {
 
         @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            return null;
+        public Transitions becomeClient() {
+            return CLIENT;
         }
 
         @Override
-        public Transitions deliverTransaction(Transaction txn) {
-            context().evaluate(txn);
-            return null;
+        public Transitions becomeFollower() {
+            return FOLLOWER;
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            return LEADER;
+        }
+
+        @Exit
+        public void cancelBatchGeneration() {
+            CollaboratorContext context = context();
+            context.cancel(Timers.FLUSH_BATCH);
+            context.stopSimulation();
+        }
+
+        @Override
+        public Transitions deliverBlock(Block block, Member from) {
+            throw fsm().invalidTransitionOn();
         }
 
         @Override
         public Transitions deliverValidate(Validate validation) {
-            context().validate(validation);
-            context().totalOrderDeliver();
+            CollaboratorContext context = context();
+            context.deliverValidate(validation);
+            context.totalOrderDeliver();
             return null;
         }
 
         @Override
         public Transitions drainPending() {
-            context().generateNextBlock();
+            context().drainBlocks();
             return null;
         }
 
         @Entry
         public void generate() {
-            context().becomeLeader();
+            context().initializeConsensus();
+            context().generateBlocks();
         }
 
         @Override
-        public Transitions submit(EnqueuedTransaction enqueuedTransaction) {
-            context().evaluate(enqueuedTransaction);
-            return null;
+        public Transitions joinAsMember() {
+            return JOINING_MEMBER;
         }
     },
     PROTOCOL_FAILURE {
 
         @Override
+        public Transitions becomeClient() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        @Override
+        public Transitions becomeFollower() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        @Override
+        public Transitions joinAsMember() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        @Override
         public Transitions processCheckpoint(CurrentBlock next) {
-            throw new InvalidTransition();
+            throw fsm().invalidTransitionOn();
         }
 
         @Override
         public Transitions processGenesis(CurrentBlock next) {
-            throw new InvalidTransition();
+            throw fsm().invalidTransitionOn();
         }
 
         @Override
         public Transitions processReconfigure(CurrentBlock next) {
-            throw new InvalidTransition();
+            throw fsm().invalidTransitionOn();
         }
 
         @Override
         public Transitions processUser(CurrentBlock next) {
-            throw new InvalidTransition();
+            throw fsm().invalidTransitionOn();
         }
 
         @Entry
@@ -185,8 +199,18 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions genesisAccepted() {
-            return null;
+        public Transitions becomeFollower() {
+            return FOLLOWER;
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            return LEADER;
+        }
+
+        @Override
+        public Transitions joinAsMember() {
+            return JOINING_MEMBER;
         }
 
         @Override
@@ -205,7 +229,17 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions becomeClient() {
-            return RECOVERED;
+            return CLIENT;
+        }
+
+        @Override
+        public Transitions becomeFollower() {
+            return FOLLOWER;
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            return LEADER;
         }
 
         @Exit
@@ -219,13 +253,13 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions join() {
-            fsm().push(Genesis.GENERATE);
+        public Transitions generateView() {
+            fsm().push(EstablishView.BUILD);
             return null;
         }
 
         @Override
-        public Transitions joinGenesis() {
+        public Transitions joinAsMember() {
             return JOINING_MEMBER;
         }
 
@@ -242,4 +276,45 @@ public enum CollaboratorFsm implements Transitions {
         }
     };
 
+    @Override
+    public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
+        context().receive(txns, from);
+        return null;
+    }
+
+    @Override
+    public Transitions deliverValidate(Validate validation) {
+        context().deliverValidate(validation);
+        return null;
+    }
+
+    @Override
+    public Transitions processCheckpoint(CurrentBlock next) {
+        context().processCheckpoint(next);
+        return null;
+    }
+
+    @Override
+    public Transitions processGenesis(CurrentBlock next) {
+        context().processGenesis(next);
+        return null;
+    }
+
+    @Override
+    public Transitions processReconfigure(CurrentBlock next) {
+        context().processReconfigure(next);
+        return null;
+    }
+
+    @Override
+    public Transitions processUser(CurrentBlock next) {
+        context().processUser(next);
+        return null;
+    }
+
+    @Override
+    public Transitions receive(Transaction transacton, Member from) {
+        context().receive(transacton);
+        return null;
+    }
 }

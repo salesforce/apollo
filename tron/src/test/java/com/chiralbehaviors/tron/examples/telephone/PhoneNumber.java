@@ -18,7 +18,6 @@ package com.chiralbehaviors.tron.examples.telephone;
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.chiralbehaviors.tron.Fsm;
-import com.chiralbehaviors.tron.InvalidTransition;
 
 /**
  * 
@@ -119,10 +118,8 @@ public enum PhoneNumber implements TelephoneFsm {
                 context.resetTimer("OffHookTimer");
                 return null;
             } else {
-                fsm().pop().dialingDone(context.getType(),
-                                        context.getAreaCode(),
-                                        context.getExchange(),
-                                        context.getLocal());
+                fsm().pop()
+                     .dialingDone(context.getType(), context.getAreaCode(), context.getExchange(), context.getLocal());
                 context.playTT(d);
                 context.saveLocal(d);
                 return null;
@@ -181,10 +178,8 @@ public enum PhoneNumber implements TelephoneFsm {
                 context().clearDisplay();
                 return null;
             } else if (d == 1) {
-                fsm().pop().dialingDone(context.getType(),
-                                        context.getAreaCode(),
-                                        context.getExchange(),
-                                        context.getLocal());
+                fsm().pop()
+                     .dialingDone(context.getType(), context.getAreaCode(), context.getExchange(), context.getLocal());
                 context.playTT(d);
                 context.setType(Telephone.CallType.EMERGENCY);
                 context.saveExchange(d);
@@ -239,6 +234,7 @@ public enum PhoneNumber implements TelephoneFsm {
             context().stopTimer("OffHookTimer");
         }
     };
+
     private static Telephone context() {
         Telephone context = Fsm.thisContext();
         return context;
@@ -256,23 +252,22 @@ public enum PhoneNumber implements TelephoneFsm {
 
     @Override
     public TelephoneFsm depositMoney() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
-    public TelephoneFsm dialingDone(int callType, String areaCode,
-                                    String exchange, String local) {
-        throw new InvalidTransition();
+    public TelephoneFsm dialingDone(int callType, String areaCode, String exchange, String local) {
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm digit(String digit) {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm emergency() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
@@ -284,32 +279,32 @@ public enum PhoneNumber implements TelephoneFsm {
 
     @Override
     public TelephoneFsm invalidNumber() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm leftOfHook() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm lineBusy() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm loopTimer() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm nycTemp() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm offHook() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
@@ -328,11 +323,11 @@ public enum PhoneNumber implements TelephoneFsm {
 
     @Override
     public TelephoneFsm ringTimer() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 
     @Override
     public TelephoneFsm time() {
-        throw new InvalidTransition();
+        throw fsm().invalidTransitionOn();
     }
 }

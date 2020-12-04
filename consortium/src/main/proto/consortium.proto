@@ -5,11 +5,17 @@ option java_package = "com.salesfoce.apollo.consortium.proto";
 option java_outer_classname = "ConsortiumProto";
 option objc_class_prefix = "Cp";
 import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+
 package apollo.consortium;
 
 service OrderingService { 
     rpc submit (SubmitTransaction) returns (TransactionResult) {}
-    rpc vote (Join) returns (JoinResult) {}
+    rpc join (Join) returns (JoinResult) {}
+    rpc stop(Stop) returns (google.protobuf.Empty){}
+    rpc stopData(StopData) returns (google.protobuf.Empty){}
+    rpc sync(Sync) returns (google.protobuf.Empty){}
+    rpc replicate(ReplicateTransactions) returns (google.protobuf.Empty){}
 }
 
 message Join {
@@ -51,7 +57,7 @@ message Header {
 }
 
 message Body {
-    int64 consensusId = 1;
+    int32 consensusId = 1;
     BodyType type = 2;
     bytes contents = 3;
 }
@@ -81,7 +87,7 @@ message User {
 message Reconfigure {
     bytes id = 1;
     int32 checkpointBlocks = 2;
-    int32 toleranceLevel = 3;
+    int32 tolerance = 3;
     repeated ViewMember view = 4;
     repeated ExecutedTransaction transactions = 5;
 }
@@ -92,7 +98,8 @@ message ByteTransaction {
 
 message JoinTransaction {
     ViewMember member = 1;
-    repeated Certification certification = 2;
+    int32 regency = 2;
+    repeated Certification certification = 3;
 }
 
 message ViewMember {
@@ -120,16 +127,34 @@ message ExecutedTransaction {
 }
 
 message Validate {
-    bytes id = 1;
-    bytes hash = 2;
-    bytes signature = 3;
-}
-
-message Proclamation {
-    int32 regenecy = 1;
+    bytes context = 1;
     bytes id = 2;
+    bytes hash = 3;
+    bytes signature = 4;
 }
 
 message Persist {
 }
-    
+
+message Stop { 
+    int32 nextRegent = 1;
+    bytes context = 2;
+    repeated Transaction transactions = 3;
+}
+
+message StopData {
+    bytes context = 1;
+    int32 currentRegent = 2;
+    repeated CertifiedBlock blocks = 3;
+}
+
+message Sync {
+    bytes context = 1;
+    int32 currentRegent = 2; 
+    repeated CertifiedBlock blocks = 3;
+} 
+
+message ReplicateTransactions {
+    bytes context = 1;
+    repeated Transaction transactions = 2;
+}

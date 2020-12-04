@@ -188,8 +188,8 @@ public class MessageBuffer {
                       .setSource(from.toID())
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
-                      .setContent(msg)
                       .setSignature(ByteString.copyFrom(signature))
+                      .setContent(msg)
                       .build();
     }
 

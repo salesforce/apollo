@@ -20,6 +20,7 @@ import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -31,7 +32,6 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
-import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Conversion;
@@ -41,10 +41,9 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  *
  */
-public class Validator {
+public final class SigningUtils {
     private final static KeyFactory KEY_FACTORY;
-    private static final Logger     log = LoggerFactory.getLogger(Validator.class);
-
+    private static final Logger     log = LoggerFactory.getLogger(SigningUtils.class);
     static {
         try {
             KEY_FACTORY = KeyFactory.getInstance("RSA");
@@ -98,6 +97,23 @@ public class Validator {
         }
     }
 
+    public static byte[] sign(Signature signature, SecureRandom entropy, List<byte[]> contents) {
+        for (byte[] part : contents) {
+            try {
+                signature.update(part);
+            } catch (SignatureException e) {
+                log.error("unable to sign contents", e);
+                return null;
+            }
+        }
+        try {
+            return signature.sign();
+        } catch (SignatureException e) {
+            log.error("unable to sign contents", e);
+            return null;
+        }
+    }
+
     public static Signature signatureForVerification(PublicKey key) {
         Signature signature;
         try {
@@ -113,8 +129,8 @@ public class Validator {
         return signature;
     }
 
-    public static boolean validateGenesis(CertifiedBlock block, Reconfigure initialView, Context<Member> context,
-                                          int toleranceLevel) {
+    public static boolean validateGenesis(HashKey hash, CertifiedBlock block, Reconfigure initialView,
+                                          Context<Member> context, int majority, Member node) {
         Map<HashKey, Supplier<Signature>> signatures = new HashMap<>();
         initialView.getViewList().forEach(vm -> {
             HashKey memberID = new HashKey(vm.getId());
@@ -135,11 +151,14 @@ public class Validator {
             Supplier<Signature> signature = signatures.get(h);
             return signature == null ? null : signature.get();
         };
-        return block.getCertificationsList()
-                    .parallelStream()
-                    .filter(c -> verify(validators, block.getBlock(), c))
-                    .limit(toleranceLevel + 1)
-                    .count() > toleranceLevel;
+        long certifiedCount = block.getCertificationsList()
+                                   .parallelStream()
+                                   .filter(c -> verify(validators, block.getBlock(), c))
+                                   .count();
+
+        log.debug("Certified: {} required: {} provided: {} for genesis: {} on: {}", certifiedCount, majority,
+                  signatures.size(), hash, node);
+        return certifiedCount >= majority;
     }
 
     public static boolean verify(Function<HashKey, Signature> validators, Block block, Certification c) {
@@ -150,7 +169,12 @@ public class Validator {
             log.warn("Cannot get signature for verification for: {}", memberID);
             return false;
         }
-        return verify(signature, c.getSignature().toByteArray(), Conversion.hashOf(block.getHeader().toByteString()));
+        boolean verified = verify(signature, c.getSignature().toByteArray(),
+                                  Conversion.hashOf(block.getHeader().toByteString()));
+        if (!verified) {
+            log.warn("Could not verify block using sig from: {}", memberID);
+        }
+        return verified;
     }
 
     public static boolean verify(Member member, byte[] signed, byte[]... content) {
@@ -187,69 +211,7 @@ public class Validator {
         return signature;
     }
 
-    private final Member leader;
-    private final int    toleranceLevel;
-
-    private final Context<Member> view;
-
-    public Validator(Member leader, Context<Member> view, int toleranceLevel) {
-        this.leader = leader;
-        this.view = view;
-        this.toleranceLevel = toleranceLevel;
+    private SigningUtils() {
     }
 
-    public Member getLeader() {
-        return leader;
-    }
-
-    public int getToleranceLevel() {
-        return toleranceLevel;
-    }
-
-    public Context<Member> getView() {
-        return view;
-    }
-
-    public boolean validate(Block block, Validate v, Signature signature) {
-        HashKey memberID = new HashKey(v.getId());
-        Member member = view.getMember(memberID);
-        if (member == null) {
-            log.debug("No member found for {}", memberID);
-            return false;
-        }
-
-        byte[] headerHash = Conversion.hashOf(block.getHeader().toByteString());
-        try {
-            signature.update(headerHash);
-        } catch (SignatureException e) {
-            log.error("Error updating validation signature of {}", memberID, e);
-            return false;
-        }
-        try {
-            boolean verified = signature.verify(v.getSignature().toByteArray());
-            if (!verified) {
-                log.error("Error validating block signature of {} did not match", memberID);
-            }
-            return verified;
-        } catch (SignatureException e) {
-            log.error("Error validating signature of {}", memberID, e);
-            return false;
-        }
-    }
-
-    public boolean validate(CertifiedBlock block) {
-//        Function<HashKey, Signature> validators = h -> {
-//            Member member = view.getMember(h);
-//            if (member == null) {
-//                return null;
-//            }
-//            return member.forValidation(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
-//        };
-//        return block.getCertificationsList()
-//                    .parallelStream()
-//                    .filter(c -> verify(validators, block.getBlock(), c))
-//                    .limit(toleranceLevel + 1)
-//                    .count() >= toleranceLevel + 1;
-        return true;
-    }
 }

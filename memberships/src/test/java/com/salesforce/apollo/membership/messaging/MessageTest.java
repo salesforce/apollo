@@ -36,7 +36,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.ByteMessage;
@@ -45,7 +44,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger.MessageChannelHandler;
+import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -57,7 +56,7 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
  */
 public class MessageTest {
 
-    class Receiver implements MessageChannelHandler {
+    class Receiver implements MessageHandler {
         final Set<Member>       counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger     current;
         volatile CountDownLatch round;
@@ -67,7 +66,7 @@ public class MessageTest {
         }
 
         @Override
-        public void message(List<Msg> messages) {
+        public void message(HashKey context, List<Msg> messages) {
             messages.forEach(message -> {
                 assert message.from != null : "null member";
                 ByteBuffer buf;
@@ -186,7 +185,7 @@ public class MessageTest {
             messengers.parallelStream().forEach(view -> {
                 ByteString packed = ByteString.copyFrom(buf.array());
                 assertEquals(36, packed.size());
-                view.publish(Any.pack(ByteMessage.newBuilder().setContents(packed).build()));
+                view.publish(ByteMessage.newBuilder().setContents(packed).build());
             });
             boolean success = round.await(20, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
