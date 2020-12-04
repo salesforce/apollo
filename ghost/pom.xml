@@ -50,11 +50,6 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>simple-ca</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
 			<groupId>io.dropwizard</groupId>
 			<artifactId>dropwizard-metrics</artifactId>
 			<scope>test</scope>
