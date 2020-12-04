@@ -134,15 +134,15 @@ public enum ChangeRegency implements Transitions {
         @Override
         public Transitions deliverSync(Sync sync, Member from) {
             CollaboratorContext context = context();
-            if (context().nextRegent() == sync.getCurrentRegent()) {
+            if (context.nextRegent() == sync.getCurrentRegent()) {
                 fsm().push(AWAIT_SYNCHRONIZATION).deliverSync(sync, from);
             } else if (sync.getCurrentRegent() > context().nextRegent()) {
                 log.info("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
                          context.nextRegent(), from, context.getMember(), this);
                 context.delay(sync, from);
             } else {
-                log.info("Discarding stale Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
-                         context.getMember(), this);
+                log.info("Discarding stale Sync: {} nextRegent: {} from: {} on: {} at: {}", sync.getCurrentRegent(),
+                         context.nextRegent(), from, context.getMember(), this);
             }
             return null;
         }
@@ -238,7 +238,6 @@ public enum ChangeRegency implements Transitions {
     };
 
     private static final Logger log = LoggerFactory.getLogger(ChangeRegency.class);
-
 
     @Override
     public Transitions receive(Transaction transacton, Member from) {

@@ -118,11 +118,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
-    default Transitions deliverTransaction(Transaction txn, Member from) {
-        context().receive(txn);
-        return null;
-    }
-
     default Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
         context().receive(txns, from);
         return null;
@@ -151,6 +146,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
 
     default Transitions generateView() {
         throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions genesisAccepted() {
+        return null;
     }
 
     default Transitions joinAsMember() {
@@ -183,7 +182,8 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions receive(Transaction transaction, Member from) {
-        throw fsm().invalidTransitionOn();
+        context().receive(transaction);
+        return null;
     }
 
     default Transitions start() {

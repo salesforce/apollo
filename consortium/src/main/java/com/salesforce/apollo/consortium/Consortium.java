@@ -21,10 +21,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -61,6 +63,7 @@ import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
 import com.salesforce.apollo.consortium.comms.ConsortiumServerCommunications;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
@@ -241,7 +244,7 @@ public class Consortium {
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private volatile CurrentBlock                                                                  current;
-    private final List<DelayedMessage>                                                             delayed     = new ArrayList<>();
+    private final List<DelayedMessage>                                                             delayed     = new CopyOnWriteArrayList<>();
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
     private final byte[]                                                                           genesisData = "Give me food or give me slack or kill me".getBytes();
     private volatile Messenger                                                                     messenger;
@@ -253,7 +256,7 @@ public class Consortium {
     private final AtomicBoolean                                                                    started     = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted   = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private volatile ViewContext                                                                   viewContext;
+    private final AtomicReference<ViewContext>                                                     viewContext = new AtomicReference<>();
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
@@ -282,7 +285,8 @@ public class Consortium {
         }
         Block block = certifiedBlock.getBlock();
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-        log.debug("Processing block {} : {} on: {}", hash, block.getBody().getType(), getMember());
+        log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
+                  block.getHeader().getHeight(), getMember());
         final CurrentBlock previousBlock = getCurrent();
         if (previousBlock != null) {
             if (block.getHeader().getHeight() != previousBlock.getBlock().getHeader().getHeight() + 1) {
@@ -314,8 +318,9 @@ public class Consortium {
                           hash);
                 return false;
             }
-            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), getParams().context,
-                                 viewContext().majority(), getMember())) {
+            Context<Member> context = getParams().context;
+            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), context,
+                                 context.getRingCount() - context.toleranceLevel(), getMember())) {
                 log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
                 return false;
             }
@@ -429,14 +434,14 @@ public class Consortium {
     }
 
     ViewContext getViewContext() {
-        return viewContext;
+        return viewContext.get();
     }
 
     void joinMessageGroup(ViewContext newView) {
         log.debug("Joining message group: {} on: {}", newView.getId(), getMember());
         Messenger nextMsgr = newView.createMessenger(getParams());
         setMessenger(nextMsgr);
-        nextMsgr.register(round -> getScheduler().tick(round));
+        nextMsgr.register(round -> getScheduler().tick());
         setOrder(new MemberOrder((id, messages) -> process(id, messages), nextMsgr));
     }
 
@@ -472,7 +477,7 @@ public class Consortium {
     void pause() {
         CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
         if (currentComm != null) {
-            ViewContext current = viewContext;
+            ViewContext current = viewContext.get();
             assert current != null : "No current view, but comm exists!";
             currentComm.deregister(current.getId());
         }
@@ -525,7 +530,7 @@ public class Consortium {
     }
 
     void setViewContext(ViewContext viewContext) {
-        this.viewContext = viewContext;
+        this.viewContext.set(viewContext);
     }
 
     HashKey submit(boolean join, Consumer<HashKey> onCompletion, Message... transactions) throws TimeoutException {
@@ -660,6 +665,8 @@ public class Consortium {
 
 //        log.info("processing msg: {} from: {} on: {} seq: {} ", classNameOf(content), msg.from, getMember(),
 //                 msg.sequenceNumber);
+
+        processDelayed();
         if (content.is(Block.class)) {
             try {
                 Block block = content.unpack(Block.class);
@@ -681,7 +688,7 @@ public class Consortium {
         }
         if (content.is(Transaction.class)) {
             try {
-                transitions.deliverTransaction(content.unpack(Transaction.class), msg.from);
+                transitions.receive(content.unpack(Transaction.class), msg.from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid transaction delivered from: {} on: {}", msg.from, getMember(), e);
             }
@@ -695,27 +702,28 @@ public class Consortium {
             }
             return;
         }
-        if (processSynchronized(msg.from, content)) {
-            if (!delayed.isEmpty()) {
-                log.info("Processing delayed msgs: {} on: {}", delayed.size(), getMember());
-                List<DelayedMessage> toConsider = new ArrayList<>(delayed);
-                delayed.clear();
-                for (DelayedMessage dm : toConsider) {
-                    log.info("Applying delayed: {} on: {}", classNameOf(dm.msg), getMember());
-                    if (!processSynchronized(dm.from, dm.msg)) {
-                        log.error("Protocol error on: {} processing delayed, not sync message: {}", getMember(),
-                                  classNameOf(dm.msg));
-                    }
-                }
-                if (!delayed.isEmpty()) {
-                    log.info("Delayed msgs remain: {} on: {}", delayed.size(), getMember());
-                }
-            }
-        } else {
+        if (!processSynchronized(msg.from, content)) {
             log.error("Invalid consortium message type: {} from: {} on: {}", classNameOf(content), msg.from,
                       getMember());
         }
+    }
 
+    private void processDelayed() {
+        if (!delayed.isEmpty()) {
+            log.info("Processing delayed msgs: {} on: {}", delayed.size(), getMember());
+            List<DelayedMessage> toConsider = new ArrayList<>(delayed);
+            delayed.clear();
+            for (DelayedMessage dm : toConsider) {
+                log.info("Applying delayed: {} on: {}", classNameOf(dm.msg), getMember());
+                if (!processSynchronized(dm.from, dm.msg)) {
+                    log.error("Protocol error on: {} processing delayed, not sync message: {}", getMember(),
+                              classNameOf(dm.msg));
+                }
+            }
+            if (!delayed.isEmpty()) {
+                log.info("Delayed msgs remain: {} on: {}", delayed.size(), getMember());
+            }
+        }
     }
 
     private boolean processSynchronized(Member from, Any content) {
@@ -758,7 +766,7 @@ public class Consortium {
     private void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
         CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
         if (currentComm != null) {
-            ViewContext current = viewContext;
+            ViewContext current = viewContext.get();
             assert current != null : "No current view, but comm exists!";
             currentComm.register(current.getId(), service);
         }

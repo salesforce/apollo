@@ -75,11 +75,6 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverTransaction(Transaction txn, Member from) {
-            return null;
-        }
-
-        @Override
         public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
             return null;
         }
@@ -280,12 +275,6 @@ public enum CollaboratorFsm implements Transitions {
             return null;
         }
     };
-
-    @Override
-    public Transitions deliverTransaction(Transaction txn, Member from) {
-        context().receive(txn);
-        return null;
-    }
 
     @Override
     public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {

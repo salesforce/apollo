@@ -243,20 +243,4 @@ public class Parameters {
         this.submitTimeout = submitTimeout;
         this.processedBufferSize = processedBufferSize;
     }
-
-    public int getJoinTimeoutTicks() {
-        return (int) joinTimeout.dividedBy(gossipDuration);
-    }
-
-    public int getMaxBatchDelayTicks() {
-        return (int) maxBatchDelay.dividedBy(gossipDuration);
-    }
-
-    public int getSubmitTimeoutTicks() {
-        return (int) submitTimeout.dividedBy(gossipDuration);
-    }
-
-    public int getViewTimeoutTicks() {
-        return (int) viewTimeout.dividedBy(gossipDuration);
-    }
 }

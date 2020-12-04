@@ -6,6 +6,10 @@
  */
 package com.salesforce.apollo.consortium;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.AbstractQueue;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,13 +36,13 @@ public class TickScheduler {
     public class Timer implements Comparable<Timer> {
         private final Runnable   action;
         private volatile boolean cancelled = false;
-        private final int        deadline;
+        private final Instant    deadline;
         private volatile int     heapIndex;
         private final Timers     label;
 
-        public Timer(Timers label, int deadline, Runnable action) {
+        public Timer(Timers label, Duration duration, Runnable action) {
             this.label = label;
-            this.deadline = deadline;
+            this.deadline = clock.instant().plus(duration);
             this.action = action;
         }
 
@@ -52,7 +56,7 @@ public class TickScheduler {
             if (o == null) {
                 return -1;
             }
-            return Integer.compare(deadline, o.deadline);
+            return deadline.compareTo(o.deadline);
         }
 
         public void fire() {
@@ -68,13 +72,12 @@ public class TickScheduler {
             }
         }
 
-        public int getDeadline() {
+        public Instant getDeadline() {
             return deadline;
         }
 
-        public int getDelay() {
-            int current = currentRound;
-            return deadline - current;
+        public long getDelay() {
+            return clock.instant().until(deadline, ChronoUnit.MILLIS);
         }
 
         public Timers getLabel() {
@@ -551,21 +554,28 @@ public class TickScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(TickScheduler.class);
 
-    private volatile int           currentRound;
+    private final Clock            clock;
     private final DelayedWorkQueue scheduled = new DelayedWorkQueue();
+
+    public TickScheduler() {
+        this(Clock.systemUTC());
+    }
+
+    public TickScheduler(Clock clock) {
+        this.clock = clock;
+    }
 
     public void cancelAll() {
         scheduled.clear();
     }
 
-    public Timer schedule(Timers t, Runnable action, int target) {
-        Timer timer = new Timer(t, target, action);
+    public Timer schedule(Timers t, Runnable action, Duration duration) {
+        Timer timer = new Timer(t, duration, action);
         scheduled.add(timer);
         return timer;
     }
 
-    public void tick(int current) {
-        currentRound = current;
+    public void tick() {
         List<Timer> drained = new ArrayList<>();
         Timer head = scheduled.poll();
         while (head != null) {

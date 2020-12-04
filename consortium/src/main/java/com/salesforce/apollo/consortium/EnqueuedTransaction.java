@@ -41,7 +41,7 @@ public class EnqueuedTransaction {
         return hash.equals(other.hash);
     }
 
-    public int getDelay() {
+    public long getDelay() {
         Timer current = timer;
         if (current == null) {
             return Integer.MAX_VALUE;

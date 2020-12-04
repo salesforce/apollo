@@ -7,6 +7,7 @@
 package com.salesforce.apollo.consortium;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -60,7 +61,6 @@ import com.salesforce.apollo.consortium.TransactionSimulator.EvaluatedTransactio
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -115,25 +115,23 @@ public class CollaboratorContext {
                          .collect(Collectors.toList());
     }
 
-    private final NavigableMap<Long, CurrentBlock>    blockCache       = new ConcurrentSkipListMap<>();
-    private final Consortium                          consortium;
-    private final AtomicLong                          currentConsensus = new AtomicLong(-1);
-    private final AtomicInteger                       currentRegent    = new AtomicInteger(0);
-    private final Map<Integer, Map<Member, StopData>> data             = new ConcurrentHashMap<>();
+    private final NavigableMap<Long, CurrentBlock>     blockCache        = new ConcurrentSkipListMap<>();
+    private final Consortium                           consortium;
+    private final AtomicLong                           currentConsensus  = new AtomicLong(-1);
+    private final AtomicInteger                        currentRegent     = new AtomicInteger(0);
+    private final Map<Integer, Map<Member, StopData>>  data              = new ConcurrentHashMap<>();
     @SuppressWarnings("unused")
-    private final Deque<CertifiedBlock>               decided          = new ArrayDeque<>();
-    private final AtomicLong                          lastBlock        = new AtomicLong(-1);
-    private final AtomicInteger                       nextRegent       = new AtomicInteger(-1);
-    private final ProcessedBuffer                     processed;
-    private final TransactionSimulator                simulator;
-    private final Set<EnqueuedTransaction>            stopMessages     = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private final Map<Integer, Sync>                  sync             = new ConcurrentHashMap<>();
-    private final Map<Timers, Timer>                  timers           = new ConcurrentHashMap<>();
-    private final Map<HashKey, EnqueuedTransaction>   toOrder          = new ConcurrentHashMap<>();
-
-    private final Map<Integer, Set<Member>> wantRegencyChange = new ConcurrentHashMap<>();
-
-    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks = new ConcurrentHashMap<>();
+    private final Deque<CertifiedBlock>                decided           = new ArrayDeque<>();
+    private final AtomicLong                           lastBlock         = new AtomicLong(-1);
+    private final AtomicInteger                        nextRegent        = new AtomicInteger(-1);
+    private final ProcessedBuffer                      processed;
+    private final TransactionSimulator                 simulator;
+    private final Set<EnqueuedTransaction>             stopMessages      = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Map<Integer, Sync>                   sync              = new ConcurrentHashMap<>();
+    private final Map<Timers, Timer>                   timers            = new ConcurrentHashMap<>();
+    private final Map<HashKey, EnqueuedTransaction>    toOrder           = new ConcurrentHashMap<>();
+    private final Map<Integer, Set<Member>>            wantRegencyChange = new ConcurrentHashMap<>();
+    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks     = new ConcurrentHashMap<>();
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
@@ -145,7 +143,7 @@ public class CollaboratorContext {
     public void awaitGenesis() {
         schedule(Timers.AWAIT_GENESIS, () -> {
             consortium.getTransitions().missingGenesis();
-        }, consortium.getParams().getViewTimeoutTicks());
+        }, consortium.getParams().viewTimeout);
     }
 
     public void cancel(Timers t) {
@@ -232,11 +230,7 @@ public class CollaboratorContext {
         }
         log.debug("Delivering stop: {} current: {} votes: {} from {} on: {}", data.getNextRegent(), currentRegent(),
                   votes.size(), from, consortium.getMember());
-        if (!votes.add(from)) {
-            log.trace("Ignoring stop: {} current: {} from {} on: {}, already recorded vote", data.getNextRegent(),
-                      currentRegent(), from, consortium.getMember());
-            return;
-        }
+        votes.add(from);
         if (votes.size() >= consortium.viewContext().majority()) {
             log.debug("Majority acheived, stop: {} current: {} votes: {} from {} on: {}", data.getNextRegent(),
                       currentRegent(), votes.size(), from, consortium.getMember());
@@ -537,6 +531,7 @@ public class CollaboratorContext {
         cancelToTimers();
         toOrder.clear();
         consortium.getSubmitted().clear();
+        consortium.getTransitions().genesisAccepted();
         reconfigure(body.getInitialView(), true);
         log.info("Processed genesis block: {} on: {}", next.getHash(), consortium.getMember());
     }
@@ -593,7 +588,7 @@ public class CollaboratorContext {
             } else {
                 log.trace("Client txn:{} received on: {} ", transaction.getHash(), consortium.getMember());
             }
-            transaction.setTimer(schedule(transaction, replicated));
+            schedule(transaction, replicated);
             added.set(true);
             return transaction;
         });
@@ -817,7 +812,8 @@ public class CollaboratorContext {
             if (genesis == null) {
                 return null;
             }
-            processToOrder(genesis.getInitialView().getTransactionsList());
+            cancelToTimers();
+            toOrder.clear();
             Validate validation = consortium.viewContext().generateValidation(hash, block);
             if (validation == null) {
                 log.error("Cannot validate generated genesis: {} on: {}", hash, consortium.getMember());
@@ -858,9 +854,13 @@ public class CollaboratorContext {
         transaction.setTimedOut(true);
         ReplicateTransactions.Builder builder = ReplicateTransactions.newBuilder()
                                                                      .addTransactions(transaction.getTransaction());
+
+        Parameters params = consortium.getParams();
+        long span = transaction.getTransaction().getJoin() ? params.joinTimeout.toMillis()
+                : params.submitTimeout.toMillis();
         toOrder.values()
                .stream()
-               .filter(eqt -> eqt.getDelay() <= consortium.getParams().getSubmitTimeoutTicks())
+               .filter(eqt -> eqt.getDelay() <= span)
                .limit(99)
                .peek(eqt -> eqt.cancel())
                .peek(eqt -> eqt.setTimedOut(true))
@@ -871,9 +871,8 @@ public class CollaboratorContext {
         ReplicateTransactions transactions = builder.build();
         transaction.setTimer(consortium.getScheduler()
                                        .schedule(Timers.TRANSACTION_TIMEOUT_2, () -> secondTimeout(transaction),
-                                                 transaction.getTransaction().getJoin()
-                                                         ? consortium.getParams().getJoinTimeoutTicks()
-                                                         : consortium.getParams().getSubmitTimeoutTicks()));
+                                                 transaction.getTransaction().getJoin() ? params.joinTimeout
+                                                         : params.submitTimeout));
         consortium.publish(transactions);
     }
 
@@ -968,7 +967,6 @@ public class CollaboratorContext {
         final long currentHeight = lastBlock();
         final CurrentBlock currentBlock = blockCache.get(currentHeight);
         final long thisHeight = currentHeight + 1;
-
         if (currentBlock == null) {
             log.debug("Cannot generate next block: {} on: {}, as previous block for height: {} not found", thisHeight,
                       consortium.getMember(), currentHeight);
@@ -1062,21 +1060,29 @@ public class CollaboratorContext {
 
     private void joinView(int attempt) {
         boolean selfJoin = selfJoinRecorded();
-        if (attempt < 20 && selfJoin && toOrder.size() == consortium.viewContext().toleranceLevel()) {
-            log.trace("View formed on: {} have: {} require: {} self join: {}", consortium.getMember(), toOrder.size(),
-                      consortium.viewContext().majority(), selfJoin);
-            consortium.getTransitions().formView();
-        } else if (attempt >= 20 && selfJoin && toOrder.size() >= consortium.viewContext().majority()) {
-            log.trace("View formed on: {} have: {} require: {} self join: {}", consortium.getMember(), toOrder.size(),
-                      consortium.viewContext().majority(), selfJoin);
-            consortium.getTransitions().formView();
-        } else {
-            log.trace("View has not been formed, rescheduling on: {} have: {} require: {} self join: {}",
-                      consortium.getMember(), toOrder.size(), consortium.viewContext().majority(), selfJoin);
-            join();
-            schedule(Timers.AWAIT_VIEW_MEMBERS, () -> joinView(attempt + 1),
-                     consortium.getParams().getViewTimeoutTicks());
+        int majority = consortium.viewContext().majority();
+        if (attempt < 20) {
+            if (selfJoin && toOrder.size() == consortium.viewContext().activeCardinality()) {
+                log.trace("View formed, attempt: {} on: {} have: {} require: {} self join: {}", attempt,
+                          consortium.getMember(), toOrder.size(), majority, selfJoin);
+                consortium.getTransitions().formView();
+                return;
+            }
         }
+
+        if (attempt >= 20) {
+            if (selfJoin && toOrder.size() >= majority) {
+                log.trace("View formed, attempt: {} on: {} have: {} require: {} self join: {}", attempt,
+                          consortium.getMember(), toOrder.size(), majority, selfJoin);
+                consortium.getTransitions().formView();
+                return;
+            }
+        }
+
+        log.trace("View has not been formed, attempt: {} rescheduling on: {} have: {} require: {} self join: {}",
+                  attempt, consortium.getMember(), toOrder.size(), majority, selfJoin);
+        join();
+        schedule(Timers.AWAIT_VIEW_MEMBERS, () -> joinView(attempt + 1), consortium.getParams().viewTimeout);
     }
 
     private long lastBlock() {
@@ -1201,7 +1207,7 @@ public class CollaboratorContext {
                           toOrder.size(), consortium.viewContext().majority(), selfJoin, consortium.getMember());
                 rescheduleGenesis();
             }
-        }, consortium.getParams().getViewTimeoutTicks());
+        }, consortium.getParams().viewTimeout);
     }
 
     private void resolveStatus() {
@@ -1225,11 +1231,11 @@ public class CollaboratorContext {
 
     private Timer schedule(EnqueuedTransaction eqt, boolean replicated) {
         eqt.cancel();
-        int target = eqt.getTransaction().getJoin() ? consortium.getParams().getJoinTimeoutTicks()
-                : consortium.getParams().getSubmitTimeoutTicks();
-//        log.info("scheduling transaction: {} for: {} first: {} on: {}", eqt.getHash(), target, !replicated,
+        Parameters params = consortium.getParams();
+        Duration delta = eqt.getTransaction().getJoin() ? params.joinTimeout : params.submitTimeout;
+//        log.info("scheduling transaction: {} for: {} ms first: {} on: {}", eqt.getHash(), delta.toMillis(), !replicated,
 //                 consortium.getMember());
-        return consortium.getScheduler().schedule(Timers.TRANSACTION_TIMEOUT_1, () -> {
+        Timer timer = consortium.getScheduler().schedule(Timers.TRANSACTION_TIMEOUT_1, () -> {
             if (replicated) {
                 eqt.setTimedOut(true);
                 secondTimeout(eqt);
@@ -1237,10 +1243,12 @@ public class CollaboratorContext {
                 eqt.setTimedOut(false);
                 firstTimeout(eqt);
             }
-        }, target);
+        }, delta);
+        eqt.setTimer(timer);
+        return timer;
     }
 
-    private void schedule(Timers label, Runnable a, int delta) {
+    private void schedule(Timers label, Runnable a, Duration delta) {
         Transitions timerState = consortium.fsm().getCurrentState();
         Runnable action = () -> {
             timers.remove(label);
@@ -1252,25 +1260,24 @@ public class CollaboratorContext {
                           currentState, consortium.getMember());
             }
         };
-        Messenger messenger = consortium.getMessenger();
-        int current = messenger == null ? 0 : messenger.getRound();
         timers.computeIfAbsent(label, k -> {
-            int target = current + delta;
-            log.trace("Setting timer for: {} target: {} on: {}", label, target, consortium.getMember());
-            return consortium.getScheduler().schedule(k, action, target);
+            log.trace("Setting timer for: {} duration: {} ms on: {}", label, delta.toMillis(), consortium.getMember());
+            return consortium.getScheduler().schedule(k, action, delta);
         });
     }
 
     private void scheduleFlush() {
-        schedule(Timers.FLUSH_BATCH, () -> generateBlocks(), consortium.getParams().getMaxBatchDelayTicks());
+        schedule(Timers.FLUSH_BATCH, () -> generateBlocks(), consortium.getParams().maxBatchDelay);
     }
 
     private void secondTimeout(EnqueuedTransaction transaction) {
         log.debug("Second timeout for: {} on: {}", transaction.getHash(), consortium.getMember());
+        Parameters params = consortium.getParams();
+        long span = transaction.getTransaction().getJoin() ? params.joinTimeout.toMillis()
+                : params.submitTimeout.toMillis();
         List<EnqueuedTransaction> timedOut = toOrder.values()
                                                     .stream()
-                                                    .filter(eqt -> eqt.getDelay() <= consortium.getParams()
-                                                                                               .getSubmitTimeoutTicks())
+                                                    .filter(eqt -> eqt.getDelay() <= span)
                                                     .limit(99)
                                                     .peek(eqt -> eqt.cancel())
                                                     .collect(Collectors.toList());
@@ -1298,7 +1305,9 @@ public class CollaboratorContext {
                 .sorted((a, b) -> Long.compare(height(a), height(b)))
                 .filter(cb -> height(cb) > currentHeight)
                 .forEach(cb -> {
-                    workingBlocks.put(new HashKey(Conversion.hashOf(cb.getBlock().toByteString())), cb.toBuilder());
+                    HashKey hash = new HashKey(Conversion.hashOf(cb.getBlock().toByteString()));
+                    workingBlocks.put(hash, cb.toBuilder());
+                    blockCache.put(cb.getBlock().getHeader().getHeight(), new CurrentBlock(hash, cb.getBlock()));
                     lastBlock(height(cb));
                     processToOrder(cb.getBlock());
                 });

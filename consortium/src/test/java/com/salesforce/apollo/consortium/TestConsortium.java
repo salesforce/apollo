@@ -134,6 +134,7 @@ public class TestConsortium {
 
         Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
+                                                                 .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(100)
                                                                  .setEntropy(new SecureRandom())
                                                                  .build();
@@ -209,8 +210,8 @@ public class TestConsortium {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        Semaphore outstanding = new Semaphore(5); // 20 outstanding txns
-        int bunchCount = 10_000;
+        Semaphore outstanding = new Semaphore(100); //  outstanding, unfinalized txns
+        int bunchCount = 1_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
@@ -275,11 +276,11 @@ public class TestConsortium {
                                  .setMsgParameters(msgParameters)
                                  .setMaxBatchSize(100)
                                  .setCommunications(communications.get(m.getId()))
-                                 .setMaxBatchDelay(Duration.ofMillis(100))
+                                 .setMaxBatchDelay(Duration.ofMillis(500))
                                  .setGossipDuration(gossipDuration)
-                                 .setViewTimeout(Duration.ofMillis(200))
+                                 .setViewTimeout(Duration.ofMillis(500))
                                  .setJoinTimeout(Duration.ofSeconds(10))
-                                 .setTransactonTimeout(Duration.ofSeconds(30))
+                                 .setTransactonTimeout(Duration.ofSeconds(60))
                                  .setScheduler(scheduler)
                                  .build()))
                .peek(c -> view.activate(c.getMember()))
@@ -293,11 +294,12 @@ public class TestConsortium {
                                              .map(c -> c.fsm().getCurrentState())
                                              .filter(b -> b != CollaboratorFsm.CLIENT)
                                              .count();
-        Set<Consortium> failedMembers = consortium.values()
-                                                  .stream()
-                                                  .filter(c -> !blueRibbon.contains(c))
-                                                  .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
-                                                  .collect(Collectors.toSet());
+        Set<Transitions> failedMembers = consortium.values()
+                                                   .stream()
+                                                   .filter(c -> !blueRibbon.contains(c))
+                                                   .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
+                                                   .map(c -> c.fsm().getCurrentState())
+                                                   .collect(Collectors.toSet());
         assertEquals(0, clientsInWrongState, "True clients gone bad: " + failedMembers);
         assertEquals(view.getRingCount() - 1,
                      blueRibbon.stream()
@@ -319,13 +321,13 @@ public class TestConsortium {
                                                                               .map(c -> c.getState())
                                                                               .map(cc -> cc.getToOrder().size())
                                                                               .collect(Collectors.toList()));
-//        assertEquals(0,
-//                     blueRibbon.stream()
-//                               .map(c -> c.getState())
-//                               .map(cc -> cc.getToOrder().size())
-//                               .filter(c -> c > 0)
-//                               .count(),
-//                     "Blue ribbion committee did not flush toOrder");
+        assertEquals(0,
+                     blueRibbon.stream()
+                               .map(c -> c.getState())
+                               .map(cc -> cc.getToOrder().size())
+                               .filter(c -> c > 0)
+                               .count(),
+                     "Blue ribbion committee did not flush toOrder");
     }
 
 }
