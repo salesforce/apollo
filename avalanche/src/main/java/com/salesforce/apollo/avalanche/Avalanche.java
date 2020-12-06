@@ -210,7 +210,8 @@ public class Avalanche {
     }
 
     public HashKey submitGenesis(byte[] data) {
-        return submit(WellKnownDescriptions.GENESIS.toHash(), data, WorkingSet.GENESIS_CONFLICT_SET, true);
+        return submit(WellKnownDescriptions.GENESIS.toHash(), ByteString.copyFrom(data),
+                      WorkingSet.GENESIS_CONFLICT_SET, true);
     }
 
     /**
@@ -233,6 +234,18 @@ public class Avalanche {
      * @return the HashKey of the transaction, null if invalid
      */
     public HashKey submitTransaction(HashKey description, byte[] data, HashKey conflictSet) {
+        return submitTransaction(description, ByteString.copyFrom(data), conflictSet);
+    }
+
+    /**
+     * Submit a transaction to the group.
+     * 
+     * @param description - the transaction classification
+     * @param data        - the transaction content
+     * @param conflictSet - the conflict set key for this transaction
+     * @return the HashKey of the transaction, null if invalid
+     */
+    public HashKey submitTransaction(HashKey description, ByteString data, HashKey conflictSet) {
         return submit(description, data, conflictSet, false);
     }
 
@@ -534,7 +547,7 @@ public class Avalanche {
         }
     }
 
-    private HashKey submit(HashKey description, byte[] data, HashKey conflictSet, boolean genesis) {
+    private HashKey submit(HashKey description, ByteString data, HashKey conflictSet, boolean genesis) {
         if (!running.get()) {
             throw new IllegalStateException("Service is not running");
         }
@@ -566,9 +579,7 @@ public class Avalanche {
         Timer.Context timer = metrics == null ? null : metrics.getSubmissionTimer().time();
         try {
 
-            Builder builder = DagEntry.newBuilder()
-                                      .setDescription(description.toID())
-                                      .setData(ByteString.copyFrom(data));
+            Builder builder = DagEntry.newBuilder().setDescription(description.toID()).setData(data);
             parents.stream().map(e -> e.toID()).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
 

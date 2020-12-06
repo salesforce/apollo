@@ -20,7 +20,6 @@ import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
-import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Avalanche;
@@ -43,7 +42,6 @@ public class AvalancheClientCommunications implements Avalanche {
     private final AvalancheMetrics        metrics;
 
     public AvalancheClientCommunications(ManagedServerConnection conn, Member member, AvalancheMetrics metrics) {
-        assert !(member instanceof Node) : "whoops : " + member + " is not to defined for instance of Node";
         this.channel = conn;
         this.member = member;
         this.client = AvalancheGrpc.newBlockingStub(conn.channel).withCompression("gzip");

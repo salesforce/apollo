@@ -833,7 +833,8 @@ public class WorkingSet {
                 byte[] entry = finalized.get(key);
                 return entry == null ? null : ByteString.copyFrom(entry);
             }
-            return n.getEntry().toByteString();
+            DagEntry entry = n.getEntry();
+            return entry == null ? null : entry.toByteString();
         }).filter(n -> n != null).collect(Collectors.toList());
     }
 
