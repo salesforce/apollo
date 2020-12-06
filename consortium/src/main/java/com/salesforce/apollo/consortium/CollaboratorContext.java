@@ -365,9 +365,9 @@ public class CollaboratorContext {
     }
 
     public void establishGenesisView() {
-        ViewContext newView = new ViewContext(Consortium.GENESIS_VIEW_ID, consortium.getParams().context,
-                consortium.getMember(), consortium.nextViewConsensusKey(), Collections.emptyList(),
-                consortium.entropy());
+        ViewContext newView = new ViewContext(new HashKey(Conversion.hashOf(consortium.getParams().genesisData)),
+                consortium.getParams().context, consortium.getMember(), consortium.nextViewConsensusKey(),
+                Collections.emptyList(), consortium.entropy());
         newView.activeAll();
         consortium.viewChange(newView);
         if (consortium.viewContext().isMember()) {
@@ -632,7 +632,7 @@ public class CollaboratorContext {
             Sync synch = buildSync(elected, regencyData);
             if (synch != null) {
                 log.debug("Synchronizing new regent: {} on: {} voting: {}", elected, consortium.getMember(),
-                         regencyData.keySet().stream().map(e -> e.getId()).collect(Collectors.toList()));
+                          regencyData.keySet().stream().map(e -> e.getId()).collect(Collectors.toList()));
                 consortium.getTransitions().synchronizingLeader();
                 consortium.publish(synch);
                 consortium.getTransitions().deliverSync(synch, consortium.getMember());
@@ -841,7 +841,7 @@ public class CollaboratorContext {
         if (submittedTxn != null) {
             if (submittedTxn.onCompletion != null) {
                 log.debug("Completing {} txn: {} on: {}", submittedTxn.submitted.getJoin() ? "JOIN" : "USER", hash,
-                         consortium.getMember());
+                          consortium.getMember());
                 ForkJoinPool.commonPool().execute(() -> submittedTxn.onCompletion.accept(hash));
             }
         } else {
@@ -915,7 +915,7 @@ public class CollaboratorContext {
         Body genesisBody = Body.newBuilder()
                                .setType(BodyType.GENESIS)
                                .setContents(Consortium.compress(Genesis.newBuilder()
-                                                                       .setGenesisData(ByteString.copyFrom(consortium.getGenesisData()))
+                                                                       .setGenesisData(ByteString.copyFrom(consortium.getParams().genesisData))
                                                                        .setInitialView(genesisView)
                                                                        .build()
                                                                        .toByteString()))
@@ -982,7 +982,7 @@ public class CollaboratorContext {
         int processedBytes = 0;
         List<HashKey> processed = new ArrayList<>();
 
-        while (simulator.peek() != null && processed.size() <= consortium.getParams().maxBatchByteSize
+        while (simulator.peek() != null && processed.size() <= consortium.getParams().maxBatchSize
                 && processedBytes <= consortium.getParams().maxBatchByteSize) {
             EvaluatedTransaction txn = simulator.poll();
             if (txn != null) {
@@ -1000,7 +1000,7 @@ public class CollaboratorContext {
             return false;
         }
         log.debug("Generating next block on: {} height: {} transactions: {}", consortium.getMember(), thisHeight,
-                 processed.size());
+                  processed.size());
 
         Body body = Body.newBuilder()
                         .setType(BodyType.USER)
@@ -1111,7 +1111,7 @@ public class CollaboratorContext {
             processed.add(eqt.getHash());
         });
         if (!batch.isEmpty()) {
-            log.debug("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
+            log.trace("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
         }
     }
 
@@ -1312,7 +1312,7 @@ public class CollaboratorContext {
                     processToOrder(cb.getBlock());
                 });
         log.debug("Synchronized from: {} to: {} working blocks: {} on: {}", currentHeight, lastBlock(),
-                 workingBlocks.size(), consortium.getMember());
+                  workingBlocks.size(), consortium.getMember());
         if (getMember().equals(regent)) {
             totalOrderDeliver();
         }

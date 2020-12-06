@@ -77,7 +77,8 @@ public class TestConsortium {
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
-    private final static int                               testCardinality = 5;
+    private final static int                               testCardinality = 100;
+    private static final byte[]                            GENESIS_DATA    = "Give me FOOD or give me SLACK or KILL ME".getBytes();
 
     @BeforeAll
     public static void beforeClass() {
@@ -132,7 +133,7 @@ public class TestConsortium {
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
+        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), parameters.rings);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(100)
@@ -155,7 +156,7 @@ public class TestConsortium {
         gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
-        ViewContext.viewFor(Consortium.GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
+        ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
@@ -210,7 +211,7 @@ public class TestConsortium {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        Semaphore outstanding = new Semaphore(100); //  outstanding, unfinalized txns
+        Semaphore outstanding = new Semaphore(100); // outstanding, unfinalized txns
         int bunchCount = 1_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
@@ -274,14 +275,16 @@ public class TestConsortium {
                                  .setSignature(() -> m.forSigning())
                                  .setContext(view)
                                  .setMsgParameters(msgParameters)
+                                 .setMaxBatchByteSize(1024 * 1024)
                                  .setMaxBatchSize(1000)
                                  .setCommunications(communications.get(m.getId()))
-                                 .setMaxBatchDelay(Duration.ofMillis(1000))
+                                 .setMaxBatchDelay(Duration.ofMillis(100))
                                  .setGossipDuration(gossipDuration)
                                  .setViewTimeout(Duration.ofMillis(500))
-                                 .setJoinTimeout(Duration.ofSeconds(2))
-                                 .setTransactonTimeout(Duration.ofSeconds(5))
+                                 .setJoinTimeout(Duration.ofSeconds(5))
+                                 .setTransactonTimeout(Duration.ofSeconds(15))
                                  .setScheduler(scheduler)
+                                 .setGenesisData(GENESIS_DATA)
                                  .build()))
                .peek(c -> view.activate(c.getMember()))
                .forEach(e -> consortium.put(e.getMember(), e));

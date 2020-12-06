@@ -25,6 +25,7 @@ public class Parameters {
         private Router                                    communications;
         private Function<CertifiedBlock, HashKey>         consensus;
         private Context<Member>                           context;
+        private byte[]                                    genesisData         = "Give me food or give me slack or kill me".getBytes();
         private Duration                                  gossipDuration;
         private Duration                                  joinTimeout         = Duration.ofMillis(500);
         private int                                       maxBatchByteSize    = 4 * 1024;
@@ -42,7 +43,7 @@ public class Parameters {
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, validator, maxBatchDelay, joinTimeout, viewTimeout,
-                    submitTimeout, processedBufferSize);
+                    submitTimeout, processedBufferSize, genesisData);
         }
 
         public Router getCommunications() {
@@ -55,6 +56,10 @@ public class Parameters {
 
         public Context<Member> getContext() {
             return context;
+        }
+
+        public byte[] getGenesisData() {
+            return genesisData;
         }
 
         public Duration getGossipDuration() {
@@ -126,6 +131,11 @@ public class Parameters {
         @SuppressWarnings("unchecked")
         public Parameters.Builder setContext(Context<? extends Member> context) {
             this.context = (Context<Member>) context;
+            return this;
+        }
+
+        public Builder setGenesisData(byte[] genesisData) {
+            this.genesisData = genesisData;
             return this;
         }
 
@@ -207,6 +217,7 @@ public class Parameters {
     public final Router                                    communications;
     public final Function<CertifiedBlock, HashKey>         consensus;
     public final Context<Member>                           context;
+    public final byte[]                                    genesisData;
     public final Duration                                  gossipDuration;
     public final Duration                                  joinTimeout;
     public final int                                       maxBatchByteSize;
@@ -225,7 +236,7 @@ public class Parameters {
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             Function<CertifiedBlock, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Function<EnqueuedTransaction, ByteString> validator, Duration maxBatchDelay, Duration joinTimeout,
-            Duration viewTimeout, Duration submitTimeout, int processedBufferSize) {
+            Duration viewTimeout, Duration submitTimeout, int processedBufferSize, byte[] genesisData) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -242,5 +253,6 @@ public class Parameters {
         this.viewTimeout = viewTimeout;
         this.submitTimeout = submitTimeout;
         this.processedBufferSize = processedBufferSize;
+        this.genesisData = genesisData;
     }
 }

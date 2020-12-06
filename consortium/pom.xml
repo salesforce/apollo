@@ -19,6 +19,10 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>tron</artifactId>
 		</dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>avalanche</artifactId>
+        </dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>
@@ -29,11 +33,6 @@
 		<dependency>
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>fireflies</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
