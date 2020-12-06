@@ -9,10 +9,8 @@ package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
 import static com.salesforce.apollo.protocols.Conversion.manifestDag;
-import static com.salesforce.apollo.protocols.Conversion.serialize;
 import static java.util.concurrent.ConcurrentHashMap.newKeySet;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -39,7 +37,7 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.protocols.HashKey;
@@ -96,7 +94,7 @@ public class WorkingSet {
         private final List<MaterializedNode> dependents = new ArrayList<>();
         private volatile boolean             finalized  = false;
 
-        public KnownNode(HashKey key, byte[] entry, ArrayList<Node> links, HashKey cs, long discovered) {
+        public KnownNode(HashKey key, DagEntry entry, ArrayList<Node> links, HashKey cs, long discovered) {
             super(key, entry, links, discovered);
             conflictSet = conflictSets.computeIfAbsent(cs, k -> new ConflictSet(k, this));
             conflictSet.add(this);
@@ -272,10 +270,10 @@ public class WorkingSet {
     abstract public class MaterializedNode extends Node {
         protected volatile boolean      chit = false;
         protected final ArrayList<Node> links;
-        private final byte[]            entry;
+        private final DagEntry          entry;
         private volatile Result         isStronglyPreferred;
 
-        public MaterializedNode(HashKey key, byte[] entry, ArrayList<Node> links, long discovered) {
+        public MaterializedNode(HashKey key, DagEntry entry, ArrayList<Node> links, long discovered) {
             super(key, discovered);
             this.entry = entry;
             this.links = links;
@@ -305,7 +303,7 @@ public class WorkingSet {
         }
 
         @Override
-        public byte[] getEntry() {
+        public DagEntry getEntry() {
             return entry;
         }
 
@@ -474,7 +472,7 @@ public class WorkingSet {
             return discovered;
         }
 
-        abstract public byte[] getEntry();
+        abstract public DagEntry getEntry();
 
         public HashKey getKey() {
             return key;
@@ -546,7 +544,7 @@ public class WorkingSet {
 
     public class NoOpNode extends MaterializedNode {
 
-        public NoOpNode(HashKey key, byte[] entry, ArrayList<Node> links, long discovered) {
+        public NoOpNode(HashKey key, DagEntry entry, ArrayList<Node> links, long discovered) {
             super(key, entry, links, discovered);
         }
 
@@ -617,7 +615,7 @@ public class WorkingSet {
         }
 
         @Override
-        public byte[] getEntry() {
+        public DagEntry getEntry() {
             return null;
         }
 
@@ -822,21 +820,21 @@ public class WorkingSet {
     public DagEntry getDagEntry(HashKey key) {
         final Node node = unfinalized.get(key);
         if (node != null) {
-            return manifestDag(node.getEntry());
+            return node.getEntry();
         }
         byte[] entry = finalized.get(key);
         return entry == null ? null : manifestDag(entry);
     }
 
-    public List<ByteBuffer> getEntries(List<HashKey> collect) {
+    public List<ByteString> getEntries(List<HashKey> collect) {
         return collect.stream().map(key -> {
             Node n = unfinalized.get(key);
             if (n == null) {
                 byte[] entry = finalized.get(key);
-                return entry == null ? null : entry;
+                return entry == null ? null : ByteString.copyFrom(entry);
             }
-            return n.getEntry();
-        }).filter(n -> n != null).map(e -> ByteBuffer.wrap(e)).collect(Collectors.toList());
+            return n.getEntry().toByteString();
+        }).filter(n -> n != null).collect(Collectors.toList());
     }
 
     public DagWood getFinalized() {
@@ -847,16 +845,8 @@ public class WorkingSet {
         return parameters;
     }
 
-    public List<ByteBuffer> getQuerySerializedEntries(List<HashKey> keys) {
-        List<ByteBuffer> entries = keys.stream()
-                                       .map(key -> getBytes(key))
-                                       .filter(entry -> entry != null)
-                                       .map(entry -> ByteBuffer.wrap(entry))
-                                       .collect(Collectors.toList());
-        for (ByteBuffer entry : entries) {
-            assert entry.hasRemaining() : "Whoops!";
-        }
-        return entries;
+    public List<ByteString> getQuerySerializedEntries(List<HashKey> keys) {
+        return keys.stream().map(key -> getBytes(key)).filter(entry -> entry != null).collect(Collectors.toList());
     }
 
     public Map<HashKey, Node> getUnfinalized() {
@@ -872,18 +862,12 @@ public class WorkingSet {
     }
 
     public HashKey insert(DagEntry entry, HashKey conflictSet, long discovered) {
-        byte[] serialized = serialize(entry);
-        try {
-            assert entry.equals(DagEntry.parseFrom(serialized)) : "Something lost in translation";
-        } catch (InvalidProtocolBufferException e) {
-            throw new IllegalStateException(e);
-        }
-        HashKey key = new HashKey(hashOf(serialized));
+        HashKey key = new HashKey(hashOf(entry.toByteString()));
         conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET : conflictSet == null ? key : conflictSet;
         if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
             assert new HashKey(entry.getDescription()).equals(GENESIS_CONFLICT_SET) : "Not in the genesis set";
         }
-        insert(key, entry, serialized, entry.getDescription() == null, discovered, conflictSet);
+        insert(key, entry, entry.getDescription() == null, discovered, conflictSet);
         return key;
     }
 
@@ -895,23 +879,19 @@ public class WorkingSet {
         return entries.stream().map(entry -> insert(entry, discovered)).collect(Collectors.toList());
     }
 
-    public List<HashKey> insertSerialized(List<ByteBuffer> transactions, long discovered) {
-        return insertSerializedRaw(transactions.stream().map(e -> e.array()).collect(Collectors.toList()), discovered);
-    }
-
-    public List<HashKey> insertSerializedRaw(List<byte[]> transactions, long discovered) {
+    public List<HashKey> insertSerialized(List<ByteString> transactions, long discovered) {
         return transactions.stream().map(t -> {
-            assert t.length > 0 : "whoopsie";
+            assert t.size() > 0 : "whoopsie";
             HashKey key = new HashKey(hashOf(t));
             Node node = unfinalized.get(key);
             if (node == null || node.isUnknown()) {
                 DagEntry entry = manifestDag(t);
                 HashKey conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
-                        : processor.conflictSetOf(key, entry);
+                        : processor.validate(key, entry);
                 if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
                     assert new HashKey(entry.getDescription()).equals(GENESIS_CONFLICT_SET) : "Not in the genesis set";
                 }
-                insert(key, entry, t, entry.getDescription() == null, discovered, conflictSet);
+                insert(key, entry, entry.getDescription() == null, discovered, conflictSet);
             }
             return key;
         }).collect(Collectors.toList());
@@ -1057,7 +1037,7 @@ public class WorkingSet {
         unfinalized.entrySet()
                    .stream()
                    .filter(e -> !e.getValue().isFinalized())
-                   .forEach(e -> p.accept(e.getKey(), manifestDag(e.getValue().getEntry())));
+                   .forEach(e -> p.accept(e.getKey(), e.getValue().getEntry()));
         finalized.keySet().forEach(e -> p.accept(e, getDagEntry(e)));
     }
 
@@ -1115,14 +1095,14 @@ public class WorkingSet {
         }
     }
 
-    void insert(HashKey key, DagEntry entry, byte[] serialized, boolean noOp, long discovered, HashKey cs) {
+    void insert(HashKey key, DagEntry entry, boolean noOp, long discovered, HashKey cs) {
         final ReentrantLock l = lock;
         l.lock(); // sux, but without this, we get dup's which is teh bad.
         try {
             final Node found = unfinalized.get(key);
             if (found == null) {
                 if (!finalized.containsKey(key)) {
-                    Node node = nodeFor(key, serialized, entry, noOp, discovered, cs);
+                    Node node = nodeFor(key, entry, noOp, discovered, cs);
                     unfinalized.put(key, node);
                     unqueried.add(key);
                     if (unknown.remove(key)) {
@@ -1136,7 +1116,7 @@ public class WorkingSet {
                     }
                 }
             } else if (found.isUnknown()) {
-                Node replacement = nodeFor(key, serialized, entry, noOp, discovered, cs);
+                Node replacement = nodeFor(key, entry, noOp, discovered, cs);
                 unfinalized.put(key, replacement);
                 replacement.replace(((UnknownNode) found));
                 unknown.remove(key);
@@ -1161,9 +1141,9 @@ public class WorkingSet {
                        .collect(Collectors.toCollection(ArrayList::new));
     }
 
-    Node nodeFor(HashKey k, byte[] entry, DagEntry dagEntry, boolean noOp, long discovered, HashKey cs) {
-        return noOp ? new NoOpNode(k, entry, linksOf(dagEntry, discovered), discovered)
-                : new KnownNode(k, entry, linksOf(dagEntry, discovered), cs, discovered);
+    Node nodeFor(HashKey k, DagEntry dagEntry, boolean noOp, long discovered, HashKey cs) {
+        return noOp ? new NoOpNode(k, dagEntry, linksOf(dagEntry, discovered), discovered)
+                : new KnownNode(k, dagEntry, linksOf(dagEntry, discovered), cs, discovered);
     }
 
     Node resolve(HashKey key, long discovered) {
@@ -1183,18 +1163,18 @@ public class WorkingSet {
         return exist;
     }
 
-    private byte[] getBytes(HashKey key) {
+    private ByteString getBytes(HashKey key) {
         final Node node = unfinalized.get(key);
         if (node != null) {
             if (!node.isComplete()) {
                 queueUnqueried(node.getKey());
                 return null;
             } else {
-                return node.getEntry();
+                return node.getEntry().toByteString();
             }
         }
         byte[] bs = finalized.get(key);
         assert bs.length > 0 : "invalid stored for: " + key;
-        return bs;
+        return ByteString.copyFrom(bs);
     }
 }

@@ -6,10 +6,8 @@
  */
 package com.salesforce.apollo.avalanche.communications;
 
-import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.AvalancheGrpc;
@@ -57,11 +55,9 @@ public class AvalancheClientCommunications implements Avalanche {
     }
 
     @Override
-    public QueryResult query(HashKey context, List<ByteBuffer> transactions, Collection<HashKey> wanted) {
+    public QueryResult query(HashKey context, List<ByteString> transactions, Collection<HashKey> wanted) {
         Builder builder = Query.newBuilder().setContext(context.toID());
-        transactions.stream()
-                    .filter(e -> e.hasRemaining())
-                    .forEach(e -> builder.addTransactions(ByteString.copyFrom(e.array())));
+        transactions.stream().filter(e -> e.size() > 0).forEach(e -> builder.addTransactions(e));
         wanted.forEach(e -> builder.addWanted(e.toID()));
         try {
             Query query = builder.build();
@@ -83,7 +79,7 @@ public class AvalancheClientCommunications implements Avalanche {
     }
 
     @Override
-    public List<byte[]> requestDAG(HashKey context, Collection<HashKey> want) {
+    public List<ByteString> requestDAG(HashKey context, Collection<HashKey> want) {
         com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder().setContext(context.toID());
         want.forEach(e -> builder.addEntries(e.toID()));
         try {
@@ -95,7 +91,7 @@ public class AvalancheClientCommunications implements Avalanche {
                 metrics.outboundRequestDag().update(request.getSerializedSize());
                 metrics.requestDagResponse().update(requested.getSerializedSize());
             }
-            return requested.getEntriesList().stream().map(e -> e.toByteArray()).collect(Collectors.toList());
+            return requested.getEntriesList();
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         }

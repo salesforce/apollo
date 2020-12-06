@@ -92,6 +92,22 @@ public final class Conversion {
         return hashOf(is);
     }
 
+    public static DagEntry manifestDag(ByteString data) {
+        if (data.size() == 0) {
+            System.out.println(" Invalid data");
+        }
+        try {
+            DagEntry entry = DagEntry.parseFrom(data);
+            if (entry.getLinksCount() == 0) {
+                assert new HashKey(
+                        entry.getDescription()).equals(HashKey.ORIGIN) : "Should be, but is not a genesis node: ";
+            }
+            return entry;
+        } catch (InvalidProtocolBufferException e) {
+            throw new IllegalArgumentException("invalid data");
+        }
+    }
+
     public static DagEntry manifestDag(byte[] data) {
         if (data.length == 0) {
             System.out.println(" Invalid data");

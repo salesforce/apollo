@@ -157,9 +157,6 @@ abstract public class AvalancheFunctionalTest {
             aParams.outstandingQueries = 5;
             aParams.noOpQueryFactor = 40;
 
-            // # of firefly rounds per noOp generation round
-            aParams.delta = 1;
-
             AvaMetrics avaMetrics = new AvaMetrics(frist.get() ? node0registry : registry);
             frist.set(false);
             TimedProcessor processor = new TimedProcessor();

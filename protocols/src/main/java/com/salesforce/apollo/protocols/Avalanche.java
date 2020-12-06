@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.protocols;
 
-import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.QueryResult;
 
 /**
@@ -18,8 +18,8 @@ import com.salesfoce.apollo.proto.QueryResult;
  */
 public interface Avalanche {
 
-    QueryResult query(HashKey context, List<ByteBuffer> transactions, Collection<HashKey> wanted);
+    QueryResult query(HashKey context, List<ByteString> transactions, Collection<HashKey> wanted);
 
-    List<byte[]> requestDAG(HashKey context, Collection<HashKey> want);
+    List<ByteString> requestDAG(HashKey context, Collection<HashKey> want);
 
 }

@@ -19,6 +19,7 @@ import org.mapdb.DataOutput2;
 import org.mapdb.HTreeMap;
 import org.mapdb.Serializer;
 
+import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -113,10 +114,9 @@ public class DagWood {
         return cache.keySet();
     }
 
-    public void put(HashKey key, byte[] entry) {
+    public void put(HashKey key, DagEntry entry) {
         assert key != null : "Must have non null key";
-        assert entry.length > 0 : "Must have >0 byte[] entry";
-        cache.putIfAbsent(key, entry);
+        cache.putIfAbsent(key, entry.toByteArray());
     }
 
     public int size() {

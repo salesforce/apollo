@@ -27,13 +27,13 @@ public interface Processor {
     class NullProcessor implements Processor {
 
         @Override
-        public HashKey conflictSetOf(HashKey key, DagEntry entry) {
-            return key;
+        public void finalize(FinalizationData finalized) {
+            // do nothing
         }
 
         @Override
-        public void finalize(FinalizationData finalized) {
-            // do nothing
+        public HashKey validate(HashKey key, DagEntry entry) {
+            return key;
         }
 
     }
@@ -62,11 +62,6 @@ public interface Processor {
 
         private Avalanche                                        avalanche;
         private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentHashMap<>();
-
-        @Override
-        public HashKey conflictSetOf(HashKey key, DagEntry entry) {
-            return key;
-        }
 
         /**
          * Create the genesis block for this view
@@ -143,6 +138,11 @@ public interface Processor {
             return future;
         }
 
+        @Override
+        public HashKey validate(HashKey key, DagEntry entry) {
+            return key;
+        }
+
         /**
          * Timeout the pending transaction
          * 
@@ -159,8 +159,16 @@ public interface Processor {
 
     }
 
-    HashKey conflictSetOf(HashKey key, DagEntry entry);
-
+    /**
+     * Finalize the transactions
+     */
     void finalize(FinalizationData finalized);
+
+    /**
+     * Validate the entry.
+     * 
+     * @return HashKey of the conflict set for the entry, or null if invalid.
+     */
+    HashKey validate(HashKey key, DagEntry entry);
 
 }
