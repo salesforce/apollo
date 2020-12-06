@@ -8,7 +8,9 @@ package com.salesforce.apollo.consortium;
 
 import java.security.Signature;
 import java.time.Duration;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.google.common.base.Supplier;
@@ -22,23 +24,23 @@ import com.salesforce.apollo.protocols.HashKey;
 
 public class Parameters {
     public static class Builder {
-        private Router                                    communications;
-        private Function<CertifiedBlock, HashKey>         consensus;
-        private Context<Member>                           context;
-        private byte[]                                    genesisData         = "Give me food or give me slack or kill me".getBytes();
-        private Duration                                  gossipDuration;
-        private Duration                                  joinTimeout         = Duration.ofMillis(500);
-        private int                                       maxBatchByteSize    = 4 * 1024;
-        private Duration                                  maxBatchDelay       = Duration.ofMillis(200);
-        private int                                       maxBatchSize        = 10;
-        private Member                                    member;
-        private Messenger.Parameters                      msgParameters;
-        private int                                       processedBufferSize = 1000;
-        private ScheduledExecutorService                  scheduler;
-        private Supplier<Signature>                       signature;
-        private Duration                                  submitTimeout       = Duration.ofSeconds(30);
-        private Function<EnqueuedTransaction, ByteString> validator;
-        private Duration                                  viewTimeout         = Duration.ofSeconds(60);
+        private Router                                         communications;
+        private BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
+        private Context<Member>                                context;
+        private byte[]                                         genesisData         = "Give me food or give me slack or kill me".getBytes();
+        private Duration                                       gossipDuration;
+        private Duration                                       joinTimeout         = Duration.ofMillis(500);
+        private int                                            maxBatchByteSize    = 4 * 1024;
+        private Duration                                       maxBatchDelay       = Duration.ofMillis(200);
+        private int                                            maxBatchSize        = 10;
+        private Member                                         member;
+        private Messenger.Parameters                           msgParameters;
+        private int                                            processedBufferSize = 1000;
+        private ScheduledExecutorService                       scheduler;
+        private Supplier<Signature>                            signature;
+        private Duration                                       submitTimeout       = Duration.ofSeconds(30);
+        private Function<EnqueuedTransaction, ByteString>      validator;
+        private Duration                                       viewTimeout         = Duration.ofSeconds(60);
 
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
@@ -50,7 +52,7 @@ public class Parameters {
             return communications;
         }
 
-        public Function<CertifiedBlock, HashKey> getConsensus() {
+        public BiFunction<CertifiedBlock, Future<?>, HashKey> getConsensus() {
             return consensus;
         }
 
@@ -123,7 +125,7 @@ public class Parameters {
             return this;
         }
 
-        public Builder setConsensus(Function<CertifiedBlock, HashKey> consensus) {
+        public Builder setConsensus(BiFunction<CertifiedBlock, Future<?>, HashKey> consensus) {
             this.consensus = consensus;
             return this;
         }
@@ -214,27 +216,27 @@ public class Parameters {
         return new Builder();
     }
 
-    public final Router                                    communications;
-    public final Function<CertifiedBlock, HashKey>         consensus;
-    public final Context<Member>                           context;
-    public final byte[]                                    genesisData;
-    public final Duration                                  gossipDuration;
-    public final Duration                                  joinTimeout;
-    public final int                                       maxBatchByteSize;
-    public final Duration                                  maxBatchDelay;
-    public final int                                       maxBatchSize;
-    public final Member                                    member;
-    public final Messenger.Parameters                      msgParameters;
-    public final int                                       processedBufferSize;
-    public final ScheduledExecutorService                  scheduler;
-    public final Supplier<Signature>                       signature;
-    public final Duration                                  submitTimeout;
-    public final Function<EnqueuedTransaction, ByteString> validator;
-    public final Duration                                  viewTimeout;
+    public final Router                                         communications;
+    public final BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
+    public final Context<Member>                                context;
+    public final byte[]                                         genesisData;
+    public final Duration                                       gossipDuration;
+    public final Duration                                       joinTimeout;
+    public final int                                            maxBatchByteSize;
+    public final Duration                                       maxBatchDelay;
+    public final int                                            maxBatchSize;
+    public final Member                                         member;
+    public final Messenger.Parameters                           msgParameters;
+    public final int                                            processedBufferSize;
+    public final ScheduledExecutorService                       scheduler;
+    public final Supplier<Signature>                            signature;
+    public final Duration                                       submitTimeout;
+    public final Function<EnqueuedTransaction, ByteString>      validator;
+    public final Duration                                       viewTimeout;
 
     public Parameters(Context<Member> context, Router communications, Member member, Messenger.Parameters msgParameters,
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
-            Function<CertifiedBlock, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
+            BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Function<EnqueuedTransaction, ByteString> validator, Duration maxBatchDelay, Duration joinTimeout,
             Duration viewTimeout, Duration submitTimeout, int processedBufferSize, byte[] genesisData) {
         this.context = context;

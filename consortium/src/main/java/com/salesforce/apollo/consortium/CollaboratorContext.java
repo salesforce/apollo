@@ -662,7 +662,7 @@ public class CollaboratorContext {
                              currentConsensus(e.getValue().getBlock().getHeader().getHeight());
                              log.info("Totally ordering block: {} height: {} on: {}", e.getKey(),
                                       e.getValue().getBlock().getHeader().getHeight(), consortium.getMember());
-                             consortium.getParams().consensus.apply(e.getValue().build());
+                             consortium.getParams().consensus.apply(e.getValue().build(), null);
                              published.add(e.getKey());
                          }
                      });

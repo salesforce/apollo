@@ -26,13 +26,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -142,7 +143,7 @@ public class TestConsortium {
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        Function<CertifiedBlock, HashKey> consensus = c -> {
+        BiFunction<CertifiedBlock, Future<?>, HashKey> consensus = (c, f) -> {
             HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
             if (decided.add(hash)) {
                 cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
@@ -263,7 +264,7 @@ public class TestConsortium {
         assertEquals(0, CollaboratorContext.noGaps(gapped, cache).size());
     }
 
-    private void gatherConsortium(Context<Member> view, Function<CertifiedBlock, HashKey> consensus,
+    private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters) {
         members.stream()

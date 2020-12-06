@@ -19,10 +19,6 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>tron</artifactId>
 		</dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>avalanche</artifactId>
-        </dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>
@@ -38,6 +34,11 @@
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>test-population</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>avalanche</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
