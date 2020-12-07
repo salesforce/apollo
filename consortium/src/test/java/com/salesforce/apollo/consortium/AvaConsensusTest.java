@@ -11,6 +11,7 @@ import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.security.SecureRandom;
@@ -24,7 +25,10 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -34,7 +38,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
 import com.salesforce.apollo.avalanche.DagDao;
@@ -158,6 +164,56 @@ public class AvaConsensusTest {
         awaitGenesis(processed, blueRibbon);
 
         System.out.println("genesis processing complete, validating state");
+
+        processed.set(new CountDownLatch(testCardinality));
+        Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
+        AtomicBoolean txnProcessed = new AtomicBoolean();
+
+        System.out.println("Submitting transaction");
+        HashKey hash;
+        try {
+            hash = client.submit(h -> txnProcessed.set(true),
+                                 ByteTransaction.newBuilder()
+                                                .setContent(ByteString.copyFromUtf8("Hello world"))
+                                                .build());
+        } catch (TimeoutException e) {
+            fail();
+            return;
+        }
+
+        System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
+        assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
+
+        System.out.println("block processed, waiting for transaction completion: " + hash);
+        assertTrue(Utils.waitForCondition(5_000, () -> txnProcessed.get()), "Transaction not completed");
+        System.out.println("transaction completed: " + hash);
+        System.out.println();
+
+        Semaphore outstanding = new Semaphore(100); // outstanding, unfinalized txns
+        int bunchCount = 1_000;
+        System.out.println("Submitting bunch: " + bunchCount);
+        ArrayList<HashKey> submitted = new ArrayList<>();
+        CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+        for (int i = 0; i < bunchCount; i++) {
+            outstanding.acquire();
+            try {
+                HashKey pending = client.submit(h -> {
+                    outstanding.release();
+                    submitted.remove(h);
+                    submittedBunch.countDown();
+                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build()));
+                submitted.add(pending);
+            } catch (TimeoutException e) {
+                fail();
+                return;
+            }
+        }
+
+        System.out.println("Awaiting " + bunchCount + " transactions");
+        boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
+        submittedBunch.getCount();
+        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
+        System.out.println("Completed additional " + bunchCount + " transactions");
     }
 
     private void awaitGenesis(AtomicReference<CountDownLatch> processed,
