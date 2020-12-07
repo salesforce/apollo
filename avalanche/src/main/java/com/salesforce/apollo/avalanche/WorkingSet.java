@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
+import com.salesfoce.apollo.proto.ID;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -868,7 +869,7 @@ public class WorkingSet {
         if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
             assert new HashKey(entry.getDescription()).equals(GENESIS_CONFLICT_SET) : "Not in the genesis set";
         }
-        insert(key, entry, entry.getDescription() == null, discovered, conflictSet);
+        insert(key, entry, entry.getDescription() == ID.getDefaultInstance(), discovered, conflictSet);
         return key;
     }
 
@@ -887,12 +888,13 @@ public class WorkingSet {
             Node node = unfinalized.get(key);
             if (node == null || node.isUnknown()) {
                 DagEntry entry = manifestDag(t);
-                HashKey conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
-                        : processor.validate(key, entry);
+                boolean isNoOp = entry.getDescription() == ID.getDefaultInstance();
+                HashKey conflictSet = isNoOp ? key : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
+                                             : processor.validate(key, entry);
                 if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
                     assert new HashKey(entry.getDescription()).equals(GENESIS_CONFLICT_SET) : "Not in the genesis set";
                 }
-                insert(key, entry, entry.getDescription() == null, discovered, conflictSet);
+                insert(key, entry, isNoOp, discovered, conflictSet);
             }
             return key;
         }).collect(Collectors.toList());
@@ -904,6 +906,11 @@ public class WorkingSet {
 
     public Boolean isStronglyPreferred(HashKey key) {
         return isStronglyPreferred(Collections.singletonList(key)).get(0);
+    }
+
+    public Boolean isNoOp(HashKey key) {
+        Node node = unfinalized.get(key);
+        return node == null ? null : node.isNoOp();
     }
 
     public List<Boolean> isStronglyPreferred(List<HashKey> keys) {
@@ -1017,6 +1024,7 @@ public class WorkingSet {
     public List<HashKey> singularFrontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
+                                          .filter(n -> !n.isNoOp())
                                           .filter(node -> node.isPreferredAndSingular(parameters.core.beta1 / 2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
@@ -1027,6 +1035,7 @@ public class WorkingSet {
     public List<HashKey> singularNoOpFrontier(Random entropy) {
         List<HashKey> sample = unfinalized.values()
                                           .stream()
+                                          .filter(n -> !n.isNoOp())
                                           .filter(node -> node.isPreferredAndSingular(parameters.core.beta2 - 1))
                                           .map(node -> node.getKey())
                                           .collect(Collectors.toList());
