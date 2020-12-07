@@ -15,7 +15,7 @@
 		</encoder>
 	</appender> 
     
-    <logger name="com.salesforce.apollo.avalanche" level="debug"
+    <logger name="com.salesforce.apollo.avalanche" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

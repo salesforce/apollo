@@ -39,7 +39,7 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.avalanche" level="INFO"
+    <logger name="com.salesforce.apollo.avalanche" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>  

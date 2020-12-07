@@ -922,6 +922,7 @@ public class CollaboratorContext {
                                .build();
         Block block = Block.newBuilder()
                            .setHeader(Header.newBuilder()
+                                            .setPrevious(ByteString.copyFrom(Conversion.hashOf(consortium.getParams().genesisData)))
                                             .setHeight(0)
                                             .setBodyHash(ByteString.copyFrom(Conversion.hashOf(genesisBody.toByteString())))
                                             .build())

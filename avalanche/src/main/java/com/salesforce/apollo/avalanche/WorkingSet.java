@@ -863,11 +863,14 @@ public class WorkingSet {
         return unknown;
     }
 
-    public HashKey insert(DagEntry entry, HashKey conflictSet, long discovered) {
+    public HashKey insert(DagEntry entry, HashKey cs, long discovered) {
         HashKey key = new HashKey(hashOf(entry.toByteString()));
-        conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET : conflictSet == null ? key : conflictSet;
+        HashKey conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET : cs == null ? key : cs;
         if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
-            assert new HashKey(entry.getDescription()).equals(GENESIS_CONFLICT_SET) : "Not in the genesis set";
+            assert new HashKey(
+                    entry.getDescription()).equals(WellKnownDescriptions.GENESIS.toHash()) : "Not in the genesis set: "
+                            + key + " links: " + entry.getLinksCount() + " description: "
+                            + new HashKey(entry.getDescription()) + " calculated: " + conflictSet + " supplied: " + cs;
         }
         insert(key, entry, entry.getDescription() == ID.getDefaultInstance(), discovered, conflictSet);
         return key;
