@@ -45,15 +45,12 @@ public class AvalancheParameters {
      */
     public DagWoodParameters dagWood                  = new DagWoodParameters();
     /**
-     * The number of FF rounds per NoOp generation round
-     */
-    public int               delta                    = 1;
-    /**
      * Max # of parents to apply to a NoOp txn
      */
     public int               maxNoOpParents           = 10;
     /**
-     * Periodic rate we cull "finalized" NoOps that have propagated throughout the network, so can be "culled"
+     * Periodic rate we cull "finalized" NoOps that have propagated throughout the
+     * network, so can be "culled"
      */
     public long              noOpGenerationCullMillis = 60_000;
     /**
@@ -65,7 +62,8 @@ public class AvalancheParameters {
      */
     public int               noOpsPerRound            = 10;
     /**
-     * Number of threads to allocate per queries - i.e. how many simultaneous outbound queries we can make.
+     * Number of threads to allocate per queries - i.e. how many simultaneous
+     * outbound queries we can make.
      */
     public int               outstandingQueries       = 10;                     // Currently same as K
     /**

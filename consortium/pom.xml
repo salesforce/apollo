@@ -33,12 +33,12 @@
 		</dependency>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>fireflies</artifactId>
+			<artifactId>test-population</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>test-population</artifactId>
+			<artifactId>avalanche</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

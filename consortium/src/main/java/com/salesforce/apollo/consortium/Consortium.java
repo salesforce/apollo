@@ -203,8 +203,6 @@ public class Consortium {
         }
     }
 
-    public static final HashKey GENESIS_VIEW_ID = HashKey.ORIGIN.prefix("Genesis".getBytes());
-
     private static final Logger log = LoggerFactory.getLogger(Consortium.class);
 
     public static ByteString compress(ByteString input) {
@@ -246,7 +244,6 @@ public class Consortium {
     private volatile CurrentBlock                                                                  current;
     private final List<DelayedMessage>                                                             delayed     = new CopyOnWriteArrayList<>();
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
-    private final byte[]                                                                           genesisData = "Give me food or give me slack or kill me".getBytes();
     private volatile Messenger                                                                     messenger;
     private volatile ViewMember                                                                    nextView;
     private volatile KeyPair                                                                       nextViewConsensusKeyPair;
@@ -389,10 +386,6 @@ public class Consortium {
     CurrentBlock getCurrent() {
         final CurrentBlock cb = current;
         return cb;
-    }
-
-    byte[] getGenesisData() {
-        return genesisData;
     }
 
     Messenger getMessenger() {

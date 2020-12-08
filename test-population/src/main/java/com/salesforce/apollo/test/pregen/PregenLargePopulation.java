@@ -25,10 +25,6 @@ import io.github.olivierlemasle.ca.RootCertificate;
  * @since 220
  */
 public class PregenLargePopulation {
-    public class Pair {
-
-    }
-
     private static final String alias                = "foo";
     private static final File   caDir                = new File("src/main/resources/large/ca");
     private static final String caKeystoreFile       = "ca.p12";

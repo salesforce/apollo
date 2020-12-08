@@ -14,14 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
-import java.security.cert.X509Certificate;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -43,10 +42,9 @@ import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -74,18 +72,14 @@ abstract public class AvalancheFunctionalTest {
 
     protected File                     baseDir;
     protected MetricRegistry           registry;
-    protected Random                   entropy;
+    protected SecureRandom             entropy;
     protected List<Node>               members;
     protected ScheduledExecutorService scheduler;
-    protected List<X509Certificate>    seeds;
-    protected List<View>               views;
     private Map<HashKey, Router>       communications = new HashMap<>();
     protected MetricRegistry           node0registry;
 
     @AfterEach
     public void after() {
-        views.forEach(e -> e.getService().stop());
-        views.clear();
         communications.values().forEach(e -> e.close());
         communications.clear();
     }
@@ -97,9 +91,8 @@ abstract public class AvalancheFunctionalTest {
         baseDir.mkdirs();
         node0registry = new MetricRegistry();
         registry = new MetricRegistry();
-        entropy = new Random(0x666);
+        entropy = new SecureRandom();
 
-        seeds = new ArrayList<>();
         int testCardinality = testCardinality();
         members = new ArrayList<>();
         for (CertificateWithPrivateKey cert : certs.values()) {
@@ -112,79 +105,33 @@ abstract public class AvalancheFunctionalTest {
 
         assertEquals(testCardinality, members.size());
 
-        while (seeds.size() < Math.min(parameters.toleranceLevel + 1, certs.size())) {
-            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(testCardinality)).getId());
-            if (!seeds.contains(cert.getX509Certificate())) {
-                seeds.add(cert.getX509Certificate());
-            }
-        }
-
-        System.out.println("Test cardinality: " + testCardinality + " seeds: "
-                + seeds.stream().map(e -> Utils.getMemberId(e)).collect(Collectors.toList()));
+        System.out.println("Test cardinality: " + testCardinality);
         scheduler = Executors.newScheduledThreadPool(20);
-
-        AtomicBoolean frist = new AtomicBoolean(true);
-        views = members.stream().map(node -> {
-            Router comms = getCommunications(node, frist.get());
-            communications.put(node.getId(), comms);
-            FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.get() ? node0registry : registry);
-            frist.set(false);
-            return new View(HashKey.ORIGIN, node, comms, metrics);
-        }).collect(Collectors.toList());
+        boolean first = true;
+        for (Node node : members) {
+            communications.put(node.getId(), getCommunications(node, first));
+            first = false;
+        }
     }
 
     protected abstract int testCardinality();
 
     @Test
     public void smoke() throws Exception {
+        HashKey vid = HashKey.ORIGIN.prefix(1, 2, 3);
+        Context<Node> context = new Context<>(vid, 9);
+        members.forEach(n -> context.activate(n));
         AtomicBoolean frist = new AtomicBoolean(true);
-        List<TimedProcessor> processors = views.stream().map(view -> {
-            AvalancheParameters aParams = new AvalancheParameters();
-            aParams.dagWood.maxCache = 1_000_000;
-
-            // Avalanche protocol parameters
-            aParams.core.alpha = 0.6;
-            aParams.core.k = 10;
-            aParams.core.beta1 = 3;
-            aParams.core.beta2 = 5;
-
-            // Avalanche implementation parameters
-            // parent selection target for avalanche dag voting
-            aParams.parentCount = 5;
-            aParams.queryBatchSize = 400;
-            aParams.noOpsPerRound = 10;
-            aParams.maxNoOpParents = 10;
-            aParams.outstandingQueries = 5;
-            aParams.noOpQueryFactor = 40;
-
-            // # of firefly rounds per noOp generation round
-            aParams.delta = 1;
-
-            AvaMetrics avaMetrics = new AvaMetrics(frist.get() ? node0registry : registry);
-            frist.set(false);
-            TimedProcessor processor = new TimedProcessor();
-            Avalanche avalanche = new Avalanche(view, communications.get(view.getNode().getId()), aParams, avaMetrics,
-                    processor);
-            processor.setAvalanche(avalanche);
-            return processor;
+        List<TimedProcessor> processors = members.stream().map(m -> {
+            return createAva(m, context, frist);
         }).collect(Collectors.toList());
 
         // # of txns per node
         int target = 4_000;
-        Duration ffRound = Duration.ofMillis(1_00);
         int outstanding = 400;
         int runtime = (int) Duration.ofSeconds(180).toMillis();
 
         communications.values().forEach(e -> e.start());
-        views.parallelStream().forEach(view -> view.getService().start(ffRound, seeds, scheduler));
-
-        assertTrue(Utils.waitForCondition(60_000, 3_000, () -> {
-            return views.stream()
-                        .map(view -> view.getLive().size() != views.size() ? view : null)
-                        .filter(view -> view != null)
-                        .count() == 0;
-        }), "Could not stabilize view membership)");
-
         processors.forEach(p -> p.getAvalanche().start(scheduler));
 
         // generate the genesis transaction
@@ -196,7 +143,6 @@ abstract public class AvalancheFunctionalTest {
             genesisKey = genesis.get(10, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             processors.forEach(p -> p.getAvalanche().stop());
-            views.forEach(v -> v.getService().stop());
             communications.values().forEach(c -> c.close());
             fail("Genesis timeout");
 
@@ -234,7 +180,6 @@ abstract public class AvalancheFunctionalTest {
 
         System.out.println("Completed in " + duration + " ms");
         transactioneers.forEach(t -> t.stop());
-        views.forEach(v -> v.getService().stop());
         processors.forEach(p -> p.getAvalanche().stop());
         Thread.sleep(2_000); // drain the swamp
 
@@ -274,6 +219,34 @@ abstract public class AvalancheFunctionalTest {
 //                .render(Format.PNG)
 //                .toFile(new File("smoke.png"));
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
+    }
+
+    private TimedProcessor createAva(Node m, Context<Node> context, AtomicBoolean frist) {
+        AvalancheParameters aParams = new AvalancheParameters();
+        aParams.dagWood.maxCache = 1_000_000;
+
+        // Avalanche protocol parameters
+        aParams.core.alpha = 0.6;
+        aParams.core.k = 10;
+        aParams.core.beta1 = 3;
+        aParams.core.beta2 = 5;
+
+        // Avalanche implementation parameters
+        // parent selection target for avalanche dag voting
+        aParams.parentCount = 5;
+        aParams.queryBatchSize = 400;
+        aParams.noOpsPerRound = 10;
+        aParams.maxNoOpParents = 10;
+        aParams.outstandingQueries = 5;
+        aParams.noOpQueryFactor = 40;
+
+        AvaMetrics avaMetrics = new AvaMetrics(frist.get() ? node0registry : registry);
+        frist.set(false);
+        TimedProcessor processor = new TimedProcessor();
+        Avalanche avalanche = new Avalanche(m, context, entropy, communications.get(m.getId()), aParams, avaMetrics,
+                processor);
+        processor.setAvalanche(avalanche);
+        return processor;
     }
 
     abstract protected Router getCommunications(Node node, boolean first);

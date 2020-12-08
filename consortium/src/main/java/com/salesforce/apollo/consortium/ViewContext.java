@@ -126,6 +126,18 @@ public class ViewContext implements MembershipListener<Member> {
         this(new HashKey(view.getId()), baseContext, member, consensusKeyPair, view.getViewList(), entropy);
     }
 
+    public void activeAll() {
+        context.getOffline().forEach(m -> context.activate(m));
+    }
+
+    public int activeCardinality() {
+        return context.getActive().size();
+    }
+
+    public Stream<Member> allMembers() {
+        return context.allMembers();
+    }
+
     public int cardinality() {
         return context.cardinality();
     }
@@ -164,6 +176,10 @@ public class ViewContext implements MembershipListener<Member> {
 
     public Member getActiveMember(HashKey fromID) {
         return context.getActiveMember(fromID);
+    }
+
+    public KeyPair getConsensusKey() {
+        return consensusKeyPair;
     }
 
     public HashKey getId() {
@@ -206,6 +222,10 @@ public class ViewContext implements MembershipListener<Member> {
 
     public boolean isViewMember() {
         return isViewMember;
+    }
+
+    public int majority() {
+        return cardinality() - toleranceLevel();
     }
 
     @Override
@@ -274,21 +294,5 @@ public class ViewContext implements MembershipListener<Member> {
 //              .limit(toleranceLevel + 1)
 //              .count() >= toleranceLevel + 1;
         return true;
-    }
-
-    public KeyPair getConsensusKey() {
-        return consensusKeyPair;
-    }
-
-    public int majority() {
-        return cardinality() - toleranceLevel();
-    }
-
-    public int activeCardinality() {
-        return context.getActive().size();
-    }
-
-    public void activeAll() {
-        context.getOffline().forEach(m -> context.activate(m));
     }
 }

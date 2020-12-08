@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.avalanche.communications;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -44,10 +43,7 @@ public class AvalancheServerCommunications extends AvalancheImplBase {
     @Override
     public void query(Query request, StreamObserver<QueryResult> responseObserver) {
         router.evaluate(responseObserver, request.getContext(), s -> {
-            QueryResult result = s.onQuery(request.getTransactionsList()
-                                                  .stream()
-                                                  .map(e -> ByteBuffer.wrap(e.toByteArray()))
-                                                  .collect(Collectors.toList()),
+            QueryResult result = s.onQuery(request.getTransactionsList(),
                                            request.getWantedList()
                                                   .stream()
                                                   .map(e -> new HashKey(e))
@@ -66,13 +62,11 @@ public class AvalancheServerCommunications extends AvalancheImplBase {
     @Override
     public void requestDag(DagNodes request, StreamObserver<SuppliedDagNodes> responseObserver) {
         router.evaluate(responseObserver, request.getContext(), s -> {
-            List<ByteBuffer> result = s.requestDAG(request.getEntriesList()
+            List<ByteString> result = s.requestDAG(request.getEntriesList()
                                                           .stream()
                                                           .map(e -> new HashKey(e))
                                                           .collect(Collectors.toList()));
-            com.salesfoce.apollo.proto.SuppliedDagNodes.Builder builder = SuppliedDagNodes.newBuilder();
-            result.forEach(e -> builder.addEntries(ByteString.copyFrom(e)));
-            SuppliedDagNodes dags = builder.build();
+            SuppliedDagNodes dags = SuppliedDagNodes.newBuilder().addAllEntries(result).build();
             responseObserver.onNext(dags);
             responseObserver.onCompleted();
             if (metrics != null) {
