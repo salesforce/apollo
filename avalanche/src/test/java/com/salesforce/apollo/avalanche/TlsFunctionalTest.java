@@ -20,6 +20,7 @@ import com.salesforce.apollo.fireflies.View;
  */
 public class TlsFunctionalTest extends AvalancheFunctionalTest {
 
+    @Override
     protected Router getCommunications(Node node, boolean first) {
         Builder builder = ServerConnectionCache.newBuilder()
                                                .setTarget(30)

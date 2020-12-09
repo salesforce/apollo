@@ -75,11 +75,11 @@ public class TestConsortium {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static final byte[]                            GENESIS_DATA    = "Give me FOOD or give me SLACK or KILL ME".getBytes();
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
     private final static int                               testCardinality = 5;
-    private static final byte[]                            GENESIS_DATA    = "Give me FOOD or give me SLACK or KILL ME".getBytes();
 
     @BeforeAll
     public static void beforeClass() {
