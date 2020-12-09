@@ -146,7 +146,7 @@ public class Consortium {
                 log.warn("Received ReplicateTransactions from non consortium member: {} on: {}", from, getMember());
                 return;
             }
-            transitions.deliverTransactions(request, member);
+            transitions.receive(request, member);
         }
 
         public void stop(Stop stop, HashKey from) {
@@ -745,7 +745,7 @@ public class Consortium {
         }
         if (content.is(ReplicateTransactions.class)) {
             try {
-                transitions.deliverTransactions(content.unpack(ReplicateTransactions.class), from);
+                transitions.receive(content.unpack(ReplicateTransactions.class), from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid replication of transactions delivered from: {} on: {}", from, getMember(), e);
             }

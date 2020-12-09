@@ -88,7 +88,7 @@ public enum EstablishView implements Transitions {
         }
 
         @Override
-        public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
+        public Transitions receive(ReplicateTransactions txns, Member from) {
             context().delay(txns, from);
             return null;
         }
@@ -135,12 +135,6 @@ public enum EstablishView implements Transitions {
         }
 
         @Override
-        public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
-            context().delay(txns, from);
-            return null;
-        }
-
-        @Override
         public Transitions deliverValidate(Validate validation) {
             context().deliverValidate(validation);
             context().totalOrderDeliver();
@@ -159,16 +153,16 @@ public enum EstablishView implements Transitions {
         }
 
         @Override
+        public Transitions receive(ReplicateTransactions txns, Member from) {
+            context().delay(txns, from);
+            return null;
+        }
+
+        @Override
         public Transitions startRegencyChange(List<EnqueuedTransaction> transactions) {
             return null;
         }
     };
-
-    @Override
-    public Transitions deliverBlock(Block block, Member from) {
-        context().deliverBlock(block, from);
-        return null;
-    }
 
     @Override
     public Transitions genesisAccepted() {

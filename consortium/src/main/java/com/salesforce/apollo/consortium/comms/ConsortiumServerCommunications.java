@@ -58,25 +58,6 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     }
 
     @Override
-    public void stopData(StopData request, StreamObserver<Empty> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
-                        s -> {
-                            responseObserver.onNext(Empty.getDefaultInstance());
-                            responseObserver.onCompleted();
-                            s.stopData(request, identity.getFrom());
-                        });
-    }
-
-    @Override
-    public void submit(SubmitTransaction request, StreamObserver<TransactionResult> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
-                        s -> {
-                            responseObserver.onNext(s.clientSubmit(request, identity.getFrom()));
-                            responseObserver.onCompleted();
-                        });
-    }
-
-    @Override
     public void replicate(ReplicateTransactions request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                         s -> {
@@ -105,6 +86,25 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
                                 LoggerFactory.getLogger(ConsortiumServerCommunications.class)
                                              .error("error processing stop", t);
                             }
+                        });
+    }
+
+    @Override
+    public void stopData(StopData request, StreamObserver<Empty> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                        s -> {
+                            responseObserver.onNext(Empty.getDefaultInstance());
+                            responseObserver.onCompleted();
+                            s.stopData(request, identity.getFrom());
+                        });
+    }
+
+    @Override
+    public void submit(SubmitTransaction request, StreamObserver<TransactionResult> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                        s -> {
+                            responseObserver.onNext(s.clientSubmit(request, identity.getFrom()));
+                            responseObserver.onCompleted();
                         });
     }
 

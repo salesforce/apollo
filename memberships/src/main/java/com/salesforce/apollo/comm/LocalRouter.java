@@ -65,7 +65,7 @@ public class LocalRouter extends Router {
 
         @Override
         public Certificate[] getCerts() {
-            return new Certificate[] { (Certificate) getCert() };
+            return new Certificate[] { getCert() };
         }
 
         @Override

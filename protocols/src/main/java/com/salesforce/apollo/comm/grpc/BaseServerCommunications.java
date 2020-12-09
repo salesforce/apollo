@@ -38,7 +38,7 @@ public interface BaseServerCommunications<T> {
     }
 
     default X509Certificate getCert() {
-        return (X509Certificate) getClientIdentity().getCert();
+        return getClientIdentity().getCert();
     }
 
     ClientIdentity getClientIdentity();

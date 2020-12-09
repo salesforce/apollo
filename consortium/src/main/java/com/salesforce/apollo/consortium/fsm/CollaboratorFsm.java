@@ -75,12 +75,12 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
+        public Transitions deliverValidate(Validate validation) {
             return null;
         }
 
         @Override
-        public Transitions deliverValidate(Validate validation) {
+        public Transitions receive(ReplicateTransactions txns, Member from) {
             return null;
         }
 
@@ -275,46 +275,4 @@ public enum CollaboratorFsm implements Transitions {
             return null;
         }
     };
-
-    @Override
-    public Transitions deliverTransactions(ReplicateTransactions txns, Member from) {
-        context().receive(txns, from);
-        return null;
-    }
-
-    @Override
-    public Transitions deliverValidate(Validate validation) {
-        context().deliverValidate(validation);
-        return null;
-    }
-
-    @Override
-    public Transitions processCheckpoint(CurrentBlock next) {
-        context().processCheckpoint(next);
-        return null;
-    }
-
-    @Override
-    public Transitions processGenesis(CurrentBlock next) {
-        context().processGenesis(next);
-        return null;
-    }
-
-    @Override
-    public Transitions processReconfigure(CurrentBlock next) {
-        context().processReconfigure(next);
-        return null;
-    }
-
-    @Override
-    public Transitions processUser(CurrentBlock next) {
-        context().processUser(next);
-        return null;
-    }
-
-    @Override
-    public Transitions receive(Transaction transacton, Member from) {
-        context().receive(transacton);
-        return null;
-    }
 }

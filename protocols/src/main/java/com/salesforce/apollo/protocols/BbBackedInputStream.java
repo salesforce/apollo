@@ -87,6 +87,7 @@ public class BbBackedInputStream extends InputStream {
         return buf.remaining();
     }
 
+    @Override
     public int read() throws IOException {
         if (!buf.hasRemaining()) {
             return -1;
@@ -94,6 +95,7 @@ public class BbBackedInputStream extends InputStream {
         return buf.get() & 0xFF;
     }
 
+    @Override
     public int read(byte[] bytes, int off, int len) throws IOException {
         if (!buf.hasRemaining()) {
             return -1;

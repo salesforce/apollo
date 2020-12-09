@@ -59,12 +59,14 @@ public interface AvalancheMetrics extends BandwidthMetrics {
 
     Meter getWantedRate();
 
+    @Override
     Meter inboundBandwidth();
 
     Histogram inboundQuery();
 
     Histogram inboundRequestDag();
 
+    @Override
     Meter outboundBandwidth();
 
     Histogram outboundQuery();

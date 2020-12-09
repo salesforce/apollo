@@ -59,9 +59,9 @@ public enum ChangeRegency implements Transitions {
         @Override
         public Transitions deliverSync(Sync sync, Member from) {
             CollaboratorContext context = context();
-            if (context().nextRegent() == sync.getCurrentRegent()) {
-                context().deliverSync(sync, from);
-            } else if (sync.getCurrentRegent() > context().nextRegent()) {
+            if (context.nextRegent() == sync.getCurrentRegent()) {
+                context.deliverSync(sync, from);
+            } else if (sync.getCurrentRegent() > context.nextRegent()) {
                 log.debug("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
                           context.nextRegent(), from, context.getMember(), this);
                 context.delay(sync, from);
@@ -136,7 +136,7 @@ public enum ChangeRegency implements Transitions {
             CollaboratorContext context = context();
             if (context.nextRegent() == sync.getCurrentRegent()) {
                 fsm().push(AWAIT_SYNCHRONIZATION).deliverSync(sync, from);
-            } else if (sync.getCurrentRegent() > context().nextRegent()) {
+            } else if (sync.getCurrentRegent() > context.nextRegent()) {
                 log.debug("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
                           context.nextRegent(), from, context.getMember(), this);
                 context.delay(sync, from);
@@ -198,14 +198,14 @@ public enum ChangeRegency implements Transitions {
         @Override
         public Transitions deliverSync(Sync sync, Member from) {
             CollaboratorContext context = context();
-            if (context().nextRegent() == sync.getCurrentRegent()) {
+            if (context.nextRegent() == sync.getCurrentRegent()) {
                 if (context.isRegent(sync.getCurrentRegent()) && context.getMember().equals(from)) {
-                    context().deliverSync(sync, from);
+                    context.deliverSync(sync, from);
                 } else {
                     log.debug("Discarding invalid Sync: {} from: {} on: {} at: {}", sync.getCurrentRegent(), from,
                               context.getMember(), this);
                 }
-            } else if (sync.getCurrentRegent() > context().nextRegent()) {
+            } else if (sync.getCurrentRegent() > context.nextRegent()) {
                 log.debug("Delaying future Sync: {} > {} from: {} on: {} at: {}", sync.getCurrentRegent(),
                           context.nextRegent(), from, context.getMember(), this);
                 context.delay(sync, from);

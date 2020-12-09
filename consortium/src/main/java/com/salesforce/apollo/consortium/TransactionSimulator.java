@@ -46,13 +46,13 @@ public class TransactionSimulator {
     private final int                                       bufferSize;
     private final CollaboratorContext                       collaborator;
     private final Deque<EvaluatedTransaction>               evaluated;
+    private final ExecutorService                           executor;
     @SuppressWarnings("unused")
     private final int                                       maxByteSize;
     private final AtomicBoolean                             started = new AtomicBoolean();
     private volatile int                                    totalByteSize;
     private final LinkedBlockingDeque<Runnable>             transactions;
     private final Function<EnqueuedTransaction, ByteString> validator;
-    private final ExecutorService                           executor;
 
     public TransactionSimulator(int maxByteSize, CollaboratorContext collaborator, int maxBufferSize,
             Function<EnqueuedTransaction, ByteString> validator) {
