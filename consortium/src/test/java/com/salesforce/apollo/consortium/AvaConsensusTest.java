@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
 import com.salesforce.apollo.avalanche.DagDao;
@@ -296,7 +297,9 @@ public class AvaConsensusTest {
     }
 
     private HashKey genesis(Avalanche master) {
-        HashKey genesisKey = master.submitGenesis("Genesis".getBytes());
+        HashKey genesisKey = master.submitGenesis(ByteMessage.newBuilder()
+                                                             .setContents(ByteString.copyFromUtf8("Genesis"))
+                                                             .build());
         assertNotNull(genesisKey);
         DagDao dao = new DagDao(master.getDag());
         boolean completed = Utils.waitForCondition(10_000, () -> dao.isFinalized(genesisKey));

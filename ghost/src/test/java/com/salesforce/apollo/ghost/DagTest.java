@@ -33,7 +33,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesforce.apollo.comm.LocalRouter;
@@ -142,7 +144,10 @@ public class DagTest {
 
         Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
 
-        Builder builder = DagEntry.newBuilder().setData(ByteString.copyFrom("root node".getBytes()));
+        Builder builder = DagEntry.newBuilder()
+                                  .setData(Any.pack(ByteMessage.newBuilder()
+                                                               .setContents(ByteString.copyFromUtf8("root node"))
+                                                               .build()));
         DagEntry root = builder.build();
         stored.put(ghosties.get(0).putDagEntry(root), root);
 
@@ -150,9 +155,16 @@ public class DagTest {
 
         for (int i = 0; i < rounds; i++) {
             for (Ghost ghost : ghosties) {
-                Builder b = DagEntry.newBuilder().setData(ByteString.copyFrom("root node".getBytes()));
-                b.setData(ByteString.copyFrom(String.format("Member: %s round: %s", ghost.getNode().getId(), i)
-                                                    .getBytes()));
+                Builder b = DagEntry.newBuilder()
+                                    .setData(Any.pack(ByteMessage.newBuilder()
+                                                                 .setContents(ByteString.copyFromUtf8("root node"))
+                                                                 .build()));
+                b.setData(Any.pack(ByteMessage.newBuilder()
+                                              .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
+                                                                                                 ghost.getNode()
+                                                                                                      .getId(),
+                                                                                                 i)))
+                                              .build()));
                 randomLinksTo(stored).forEach(e -> b.addLinks(e.toID()));
 
                 DagEntry entry = builder.build();

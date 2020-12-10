@@ -28,8 +28,9 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
 import com.codahale.metrics.annotation.Timed;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
-import com.salesforce.apollo.avalanche.WellKnownDescriptions;
 import com.salesforce.apollo.protocols.HashKey;
 
 @Path("/api/byteTransaction")
@@ -106,8 +107,9 @@ public class ByteTransactionApi {
                     Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
         }
 
-        CompletableFuture<HashKey> submitted = processor.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
-                                                                           data,
+        CompletableFuture<HashKey> submitted = processor.submitTransaction(ByteMessage.newBuilder()
+                                                                                      .setContents(ByteString.copyFrom(data))
+                                                                                      .build(),
                                                                            Duration.ofMillis(transaction.timeoutMillis),
                                                                            scheduler);
         HashKey result;
@@ -146,7 +148,9 @@ public class ByteTransactionApi {
                         Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
             }
             final HashKey key = processor.getAvalanche()
-                                         .submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), data);
+                                         .submitTransaction(ByteMessage.newBuilder()
+                                                                       .setContents(ByteString.copyFrom(data))
+                                                                       .build());
             if (key != null) {
                 result.add(key.b64Encoded());
             } else {
@@ -175,7 +179,9 @@ public class ByteTransactionApi {
         }
 
         final HashKey key = processor.getAvalanche()
-                                     .submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), data);
+                                     .submitTransaction(ByteMessage.newBuilder()
+                                                                   .setContents(ByteString.copyFrom(data))
+                                                                   .build());
         if (key == null) {
             throw new WebApplicationException(
                     Response.status(Status.BAD_REQUEST).entity("No parents available for the transaction").build());

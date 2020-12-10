@@ -25,11 +25,13 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.bootstrap.BootstrapCA;
 import com.salesforce.apollo.bootstrap.BootstrapConfiguration;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils; 
+import com.salesforce.apollo.protocols.Utils;
 
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit5.DropwizardAppExtension;
@@ -87,8 +89,10 @@ public class BoostrapTest {
                 + oracles.size() + " members");
         TimedProcessor master = oracles.get(0).getProcessor();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
-                                                                  scheduler);
+        CompletableFuture<HashKey> genesis = master.createGenesis(ByteMessage.newBuilder()
+                                                                             .setContents(ByteString.copyFromUtf8("Genesis"))
+                                                                             .build(),
+                                                                  Duration.ofSeconds(90), scheduler);
         HashKey genesisKey = null;
         try {
             genesisKey = genesis.get(60, TimeUnit.SECONDS);

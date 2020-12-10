@@ -39,7 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
-import com.salesfoce.apollo.proto.ID;
+import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -867,12 +867,11 @@ public class WorkingSet {
         HashKey key = new HashKey(hashOf(entry.toByteString()));
         HashKey conflictSet = entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET : cs == null ? key : cs;
         if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
-            assert new HashKey(
-                    entry.getDescription()).equals(WellKnownDescriptions.GENESIS.toHash()) : "Not in the genesis set: "
-                            + key + " links: " + entry.getLinksCount() + " description: "
-                            + new HashKey(entry.getDescription()) + " calculated: " + conflictSet + " supplied: " + cs;
+            assert entry.getDescription().equals(EntryType.GENSIS) : "Not in the genesis set: " + key + " links: "
+                    + entry.getLinksCount() + " description: " + entry.getDescription() + " calculated: " + conflictSet
+                    + " supplied: " + cs;
         }
-        insert(key, entry, entry.getDescription() == ID.getDefaultInstance(), discovered, conflictSet);
+        insert(key, entry, entry.getDescription() == EntryType.NO_OP, discovered, conflictSet);
         return key;
     }
 
@@ -891,11 +890,11 @@ public class WorkingSet {
             Node node = unfinalized.get(key);
             if (node == null || node.isUnknown()) {
                 DagEntry entry = manifestDag(t);
-                boolean isNoOp = entry.getDescription() == ID.getDefaultInstance();
+                boolean isNoOp = entry.getDescription() == EntryType.NO_OP;
                 HashKey conflictSet = isNoOp ? key : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
                                              : processor.validate(key, entry);
                 if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
-                    assert new HashKey(entry.getDescription()).equals(GENESIS_CONFLICT_SET) : "Not in the genesis set";
+                    assert entry.getDescription() == EntryType.GENSIS : "Not in the genesis set";
                 }
                 insert(key, entry, isNoOp, discovered, conflictSet);
             }

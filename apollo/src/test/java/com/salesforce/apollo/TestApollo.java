@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
@@ -118,8 +120,10 @@ public class TestApollo {
                 + oracles.size() + " members");
         TimedProcessor master = oracles.get(0).getProcessor();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
-                                                                  scheduler);
+        CompletableFuture<HashKey> genesis = master.createGenesis(ByteMessage.newBuilder()
+                                                                             .setContents(ByteString.copyFromUtf8("Genesis"))
+                                                                             .build(),
+                                                                  Duration.ofSeconds(90), scheduler);
         HashKey genesisKey = null;
         try {
             genesisKey = genesis.get(60, TimeUnit.SECONDS);

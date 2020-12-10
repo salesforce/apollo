@@ -11,7 +11,6 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
@@ -98,10 +97,6 @@ public final class Conversion {
         }
         try {
             DagEntry entry = DagEntry.parseFrom(data);
-            if (entry.getLinksCount() == 0) {
-                assert new HashKey(
-                        entry.getDescription()).equals(HashKey.ORIGIN) : "Should be, but is not a genesis node: ";
-            }
             return entry;
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalArgumentException("invalid data");
@@ -114,11 +109,6 @@ public final class Conversion {
         }
         try {
             DagEntry entry = DagEntry.parseFrom(data);
-            if (entry.getLinksCount() == 0) {
-                assert new HashKey(
-                        entry.getDescription()).equals(HashKey.ORIGIN) : "Should be, but is not a genesis node: "
-                                + Base64.getUrlEncoder().withoutPadding().encodeToString(data);
-            }
             return entry;
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalArgumentException("invalid data");

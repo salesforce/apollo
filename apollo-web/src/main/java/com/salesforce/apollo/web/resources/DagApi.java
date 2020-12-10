@@ -24,6 +24,8 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
 import com.codahale.metrics.annotation.Timed;
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.avalanche.DagDao;
 import com.salesforce.apollo.protocols.HashKey;
@@ -36,24 +38,18 @@ public class DagApi {
 
     public static class DagNode {
         private String       data;
-        private String       description;
         private List<String> links;
 
         public DagNode() {
         }
 
-        public DagNode(String data, List<String> links, String description) {
+        public DagNode(String data, List<String> links) {
             this.data = data;
             this.links = links;
-            this.description = description;
         }
 
         public String getData() {
             return data;
-        }
-
-        public String getDescription() {
-            return description;
         }
 
         public List<String> getLinks() {
@@ -108,7 +104,12 @@ public class DagApi {
         if (dagEntry == null) {
             return null;
         }
-        return dagEntry.getData() == null ? null : ENCODER.encodeToString(dagEntry.getData().toByteArray());
+        try {
+            return dagEntry.getData() == null ? null
+                    : ENCODER.encodeToString(dagEntry.getData().unpack(ByteMessage.class).getContents().toByteArray());
+        } catch (InvalidProtocolBufferException e) {
+            throw new WebApplicationException("Unable to deserialize body", e);
+        }
     }
 
     @POST()
@@ -127,8 +128,13 @@ public class DagApi {
                           .stream()
                           .map(h -> ENCODER.encodeToString(h.toByteArray()))
                           .collect(Collectors.toList());
-        return new DagNode(dagEntry.getData() == null ? null : ENCODER.encodeToString(dagEntry.getData().toByteArray()),
-                links, ENCODER.encodeToString(dagEntry.getData().toByteArray()));
+        try {
+            return new DagNode(dagEntry.getData() == null ? null
+                    : ENCODER.encodeToString(dagEntry.getData().unpack(ByteMessage.class).getContents().toByteArray()),
+                    links);
+        } catch (InvalidProtocolBufferException e) {
+            throw new WebApplicationException("Unable to serialze DagNode", e);
+        }
     }
 
     @POST()
