@@ -37,6 +37,7 @@ import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.avalanche.Processor.NullProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
+import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -619,7 +620,7 @@ public class TransactionsTest {
     HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links,
                         HashKey conflictSet, boolean store) {
         DagEntry entry = dag(contents.getBytes(), links);
-        HashKey key = store ? dag.insert(entry, conflictSet, 0) : new HashKey(entry.toByteString());
+        HashKey key = store ? dag.insert(entry, conflictSet, 0) : new HashKey(Conversion.hashOf(entry.toByteString()));
         stored.put(key, entry);
         ordered.add(key);
         return key;
