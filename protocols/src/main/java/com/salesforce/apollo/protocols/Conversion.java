@@ -69,7 +69,7 @@ public final class Conversion {
      * @return the hash value of the entry
      */
     public static byte[] hashOf(DagEntry entry) {
-        return hashOf(serialize(entry));
+        return hashOf(entry.toByteString());
     }
 
     public static byte[] hashOf(InputStream is) {

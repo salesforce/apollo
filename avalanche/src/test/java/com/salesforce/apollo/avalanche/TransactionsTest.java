@@ -7,8 +7,6 @@
 package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.avalanche.DagTest.dag;
-import static com.salesforce.apollo.protocols.Conversion.hashOf;
-import static com.salesforce.apollo.protocols.Conversion.serialize;
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -621,7 +619,7 @@ public class TransactionsTest {
     HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links,
                         HashKey conflictSet, boolean store) {
         DagEntry entry = dag(contents.getBytes(), links);
-        HashKey key = store ? dag.insert(entry, conflictSet, 0) : new HashKey(hashOf(serialize(entry)));
+        HashKey key = store ? dag.insert(entry, conflictSet, 0) : new HashKey(entry.toByteString());
         stored.put(key, entry);
         ordered.add(key);
         return key;
