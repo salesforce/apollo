@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.state.proto";
+option java_outer_classname = "CdcProto";
+option objc_class_prefix = "Cdc";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+
+package apollo.cdc;
+
+message Insert {
+    int32 table =1;
+    int64 key = 2;
+    repeated bytes values = 3;
+}
+
+message Update {
+    int32 table =1;
+    int64 key = 2;
+    map<int32, bytes> row = 3;
+}
+
+message Delete {
+    int32 table =1;
+    int64 key = 2;
+}
+
+message Results {
+    repeated Result results = 1;
+}
+
+message Result {
+    oneof event {
+        Insert insert = 1;
+        Update update = 2;
+        Delete delete = 3;
+    }
+} 
+
+message Statement {
+    string sql = 1;
+    map<string, bytes> parameters = 2;
+}
+
+message Txn {
+    repeated Statement statements = 1;
+}

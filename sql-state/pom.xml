@@ -112,25 +112,7 @@
 				<version>1.6.2</version>
 			</extension>
 		</extensions>
-		<plugins>
-			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>build-helper-maven-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>add-source</id>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>add-source</goal>
-						</goals>
-						<configuration>
-							<sources>
-								<source>${project.basedir}/target/generated-sources/jooq</source>
-							</sources>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
+		<plugins> 
 			<plugin>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-maven-plugin</artifactId>
@@ -234,6 +216,7 @@
 						</goals>
 						<configuration>
 							<sources>
+                                <source>${project.basedir}/target/generated-sources/jooq</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/java</source>
 								<source>${project.basedir}/src/main/proto</source>
