@@ -27,6 +27,7 @@ public class Parameters {
         private Router                                         communications;
         private BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
         private Context<Member>                                context;
+        private TransactionExecutor                            executor            = TransactionExecutor.NULL_EXECUTOR;
         private byte[]                                         genesisData         = "Give me food or give me slack or kill me".getBytes();
         private Duration                                       gossipDuration;
         private Duration                                       joinTimeout         = Duration.ofMillis(500);
@@ -45,7 +46,7 @@ public class Parameters {
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, validator, maxBatchDelay, joinTimeout, viewTimeout,
-                    submitTimeout, processedBufferSize, genesisData);
+                    submitTimeout, processedBufferSize, genesisData, executor);
         }
 
         public Router getCommunications() {
@@ -58,6 +59,10 @@ public class Parameters {
 
         public Context<Member> getContext() {
             return context;
+        }
+
+        public TransactionExecutor getExecutor() {
+            return executor;
         }
 
         public byte[] getGenesisData() {
@@ -133,6 +138,11 @@ public class Parameters {
         @SuppressWarnings("unchecked")
         public Parameters.Builder setContext(Context<? extends Member> context) {
             this.context = (Context<Member>) context;
+            return this;
+        }
+
+        public Builder setExecutor(TransactionExecutor executor) {
+            this.executor = executor;
             return this;
         }
 
@@ -219,6 +229,7 @@ public class Parameters {
     public final Router                                         communications;
     public final BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
     public final Context<Member>                                context;
+    public final TransactionExecutor                            executor;
     public final byte[]                                         genesisData;
     public final Duration                                       gossipDuration;
     public final Duration                                       joinTimeout;
@@ -238,7 +249,8 @@ public class Parameters {
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Function<EnqueuedTransaction, Message> validator, Duration maxBatchDelay, Duration joinTimeout,
-            Duration viewTimeout, Duration submitTimeout, int processedBufferSize, byte[] genesisData) {
+            Duration viewTimeout, Duration submitTimeout, int processedBufferSize, byte[] genesisData,
+            TransactionExecutor executor) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -256,5 +268,6 @@ public class Parameters {
         this.submitTimeout = submitTimeout;
         this.processedBufferSize = processedBufferSize;
         this.genesisData = genesisData;
+        this.executor = executor;
     }
 }

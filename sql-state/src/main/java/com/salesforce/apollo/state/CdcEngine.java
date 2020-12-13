@@ -15,6 +15,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Savepoint;
+import java.sql.Statement;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
@@ -32,6 +33,8 @@ import org.apache.calcite.sql.parser.SqlParserImplFactory;
 import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
 import org.h2.jdbc.JdbcConnection;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesforce.apollo.consortium.EnqueuedTransaction;
 import com.salesforce.apollo.state.ddl.ApolloDdlExecutor;
@@ -119,18 +122,46 @@ public class CdcEngine implements Function<EnqueuedTransaction, Message> {
     private Savepoint            checkpoint;
     private final JdbcConnection connection;
     private final DS             ds = new DS();
+    private final Properties     jdbcProperties;
+    private final String         jdbcUrl;
     private Capture              transaction;
 
     public CdcEngine(String url, Properties info) throws SQLException {
         connection = new JdbcConnection(url, info);
         capture = (CdcSession) connection.getSession();
         capture.setCdc(NullCapture.INSTANCE);
+        this.jdbcUrl = url;
+        this.jdbcProperties = info;
     }
 
     @Override
     public Message apply(EnqueuedTransaction t) {
+
+        Connection connection = beginTransaction();
+        Statement statement;
+        try {
+            statement = connection.createStatement();
+        } catch (SQLException e) {
+            rollback();
+            throw new IllegalStateException("Unable to create a statement", e);
+        }
         if (transaction == null) {
             return null;
+        }
+        for (Any a : t.getTransaction().getBatchList()) {
+            com.salesfoce.apollo.state.proto.Statement stmt;
+            try {
+                stmt = a.unpack(com.salesfoce.apollo.state.proto.Statement.class);
+            } catch (InvalidProtocolBufferException e) {
+                rollback();
+                throw new IllegalStateException("Unable to deserialize batch statement", e);
+            }
+            try {
+                statement.execute(stmt.getSql());
+            } catch (SQLException e) {
+                rollback();
+                throw new IllegalStateException("Error processing statement: " + stmt.getSql(), e);
+            }
         }
         return transaction.results();
     }
@@ -182,6 +213,14 @@ public class CdcEngine implements Function<EnqueuedTransaction, Message> {
 
     public Capture getTransaction() {
         return transaction;
+    }
+
+    public JdbcConnection newConnection() {
+        try {
+            return new JdbcConnection(jdbcUrl, jdbcProperties);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Cannot create new JDBC connection: " + jdbcUrl, e);
+        }
     }
 
     public void rollback() {

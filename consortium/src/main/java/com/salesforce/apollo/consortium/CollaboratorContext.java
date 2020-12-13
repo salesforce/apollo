@@ -545,6 +545,10 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
+        TransactionExecutor executor = consortium.getParams().executor;
+        executor.begin();
+        body.getTransactionsList().forEach(executor);
+        executor.complete();
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);

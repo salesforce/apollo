@@ -119,7 +119,7 @@ public class Capture implements Cdc {
         }
     }
 
-    private static final NullHandler NULL = new NullHandler();
+    public static final NullHandler NULL = new NullHandler();
 
     private final List<CdcEvent> changes = new ArrayList<>();
 
