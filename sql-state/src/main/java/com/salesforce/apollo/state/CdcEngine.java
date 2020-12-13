@@ -63,7 +63,7 @@ public class CdcEngine {
     private class DS implements DataSource {
         /**
          * The PrintWriter to which log messages should be directed.
-         */ 
+         */
         private volatile PrintWriter logWriter = new PrintWriter(
                 new OutputStreamWriter(System.out, StandardCharsets.UTF_8));
 
@@ -113,11 +113,11 @@ public class CdcEngine {
 
     }
 
-    private final CdcSession        capture;
-    private Savepoint               checkpoint;
-    private final JdbcConnection    connection;
-    private final DS                ds           = new DS();
-    private final List<Transaction> transactions = new ArrayList<>();
+    private final CdcSession     capture;
+    private Savepoint            checkpoint;
+    private final JdbcConnection connection;
+    private final DS             ds           = new DS();
+    private final List<Capture>  transactions = new ArrayList<>();
 
     public CdcEngine(String url, Properties info) throws SQLException {
         connection = new JdbcConnection(url, info);
@@ -146,9 +146,9 @@ public class CdcEngine {
     }
 
     public Connection beginTransaction() {
-        Transaction t = new Transaction();
+        Capture t = new Capture();
         transactions.add(t);
-        capture.setCdc((table, op, row) -> t.log(table, op, row));
+        capture.setCdc(t);
         try {
             connection.setAutoCommit(false);
         } catch (SQLException e) {
@@ -170,7 +170,7 @@ public class CdcEngine {
         return ds;
     }
 
-    public List<Transaction> getTransactions() {
+    public List<Capture> getTransactions() {
         return transactions;
     }
 

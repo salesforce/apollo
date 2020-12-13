@@ -15,6 +15,8 @@ import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
 
+import com.salesfoce.apollo.state.proto.Results;
+
 /**
  * @author hal.hildebrand
  *
@@ -36,16 +38,16 @@ public class CdcEngineTest {
         statement.execute("insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)");
         statement.execute("insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)");
 
-        List<Transaction> transactions = engine.getTransactions();
+        List<Capture> transactions = engine.getTransactions();
 
         assertEquals(1, transactions.size());
-        Transaction transaction = transactions.get(0);
+        Capture transaction = transactions.get(0);
 
         assertEquals(5, transaction.getChanges().size());
 
-        byte[] serialized = transaction.serialize();
+        Results results = transaction.results();
 
-        assertEquals(228, serialized.length);
+        assertEquals(293, results.toByteString().size());
 
     }
 }

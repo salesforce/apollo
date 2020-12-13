@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.state.h2;
 
+import org.h2.engine.Session.CDC;
 import org.h2.result.Row;
 import org.h2.table.Table;
 
@@ -16,7 +17,7 @@ import org.h2.table.Table;
 public class NullCapture implements Cdc {
 
     @Override
-    public void log(Table table, short operation, Row row) {
+    public void cdc(Table table, Row prev, CDC operation, Row row) {
     }
 
 }

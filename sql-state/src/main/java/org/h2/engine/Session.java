@@ -72,6 +72,7 @@ import org.h2.value.VersionedValue;
  * SessionRemote object on the client side.
  */
 public class Session extends SessionWithState implements TransactionStore.RollbackListener, CastDataProvider {
+    public enum CDC { INSERT, UPDATE, DELETE }
 
     public enum State { INIT, RUNNING, BLOCKED, SLEEP, THROTTLED, SUSPENDED, CLOSED }
 
@@ -1025,6 +1026,11 @@ public class Session extends SessionWithState implements TransactionStore.Rollba
             }
             undoLog.add(log);
         }
+    }
+    
+
+    public void cdc(Table table, Row prev, CDC operation, Row row) {
+        // do nothing
     }
 
     /**

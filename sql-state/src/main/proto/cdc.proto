@@ -17,13 +17,16 @@ message Execution {
 message Insert {
     int32 table =1;
     int64 key = 2;
-    repeated bytes values = 3;
+    int32 count = 3;
+    bytes values = 4;
 }
 
 message Update {
     int32 table =1;
     int64 key = 2;
-    map<int32, bytes> row = 3;
+    int32 count = 3;
+    bytes values = 4;
+    repeated int32 mapping = 5;
 }
 
 message Delete {

@@ -27,12 +27,11 @@ public class CdcSession extends Session {
     @Override
     public void cancel() {
         super.cancel();
-    }
+    } 
 
     @Override
-    public void log(Table table, short operation, Row row) {
-        cdc.log(table, operation, row);
-        super.log(table, operation, row);
+    public void cdc(Table table, Row prev, CDC operation, Row row) {
+        cdc.cdc(table, prev, operation, row);
     }
 
     public void setCdc(Cdc cdc) {
