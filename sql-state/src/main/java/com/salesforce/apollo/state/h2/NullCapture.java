@@ -15,6 +15,10 @@ import org.h2.table.Table;
  *
  */
 public class NullCapture implements Cdc {
+    public static final NullCapture INSTANCE = new NullCapture();
+
+    private NullCapture() {
+    }
 
     @Override
     public void cdc(Table table, Row prev, CDC operation, Row row) {

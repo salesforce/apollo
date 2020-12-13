@@ -15,10 +15,9 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Savepoint;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.logging.Logger;
 
 import javax.sql.DataSource;
@@ -33,17 +32,20 @@ import org.apache.calcite.sql.parser.SqlParserImplFactory;
 import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
 import org.h2.jdbc.JdbcConnection;
 
+import com.google.protobuf.Message;
+import com.salesforce.apollo.consortium.EnqueuedTransaction;
 import com.salesforce.apollo.state.ddl.ApolloDdlExecutor;
 import com.salesforce.apollo.state.ddl.ApolloSchema;
 import com.salesforce.apollo.state.ddl.ChainSchema;
 import com.salesforce.apollo.state.h2.CdcSession;
+import com.salesforce.apollo.state.h2.NullCapture;
 import com.salesforce.apollo.state.jdbc.CdcConnection;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class CdcEngine {
+public class CdcEngine implements Function<EnqueuedTransaction, Message> {
     public static class Factory implements SchemaFactory {
         private final DataSource ds;
 
@@ -116,39 +118,26 @@ public class CdcEngine {
     private final CdcSession     capture;
     private Savepoint            checkpoint;
     private final JdbcConnection connection;
-    private final DS             ds           = new DS();
-    private final List<Capture>  transactions = new ArrayList<>();
+    private final DS             ds = new DS();
+    private Capture              transaction;
 
     public CdcEngine(String url, Properties info) throws SQLException {
         connection = new JdbcConnection(url, info);
         capture = (CdcSession) connection.getSession();
+        capture.setCdc(NullCapture.INSTANCE);
     }
 
-    public JdbcConnection connect(String modelUri) throws SQLException {
-        Properties config = new Properties();
-
-        config.put(CalciteConnectionProperty.PARSER_FACTORY.camelName(), new SqlParserImplFactory() {
-            @Override
-            public SqlAbstractParserImpl getParser(Reader stream) {
-                return SqlDdlParserImpl.FACTORY.getParser(stream);
-            }
-
-            @Override
-            public DdlExecutor getDdlExecutor() {
-                return new ApolloDdlExecutor();
-            }
-        });
-        config.put(CalciteConnectionProperty.MATERIALIZATIONS_ENABLED.camelName(), "true");
-        config.put(CalciteConnectionProperty.FUN.camelName(), "standard,oracle");
-        config.put(CalciteConnectionProperty.CASE_SENSITIVE.camelName(), "false");
-
-        return (JdbcConnection) DriverManager.getConnection("jdbc:calcite:", config);
+    @Override
+    public Message apply(EnqueuedTransaction t) {
+        if (transaction == null) {
+            return null;
+        }
+        return transaction.results();
     }
 
     public Connection beginTransaction() {
-        Capture t = new Capture();
-        transactions.add(t);
-        capture.setCdc(t);
+        transaction = new Capture();
+        capture.setCdc(transaction);
         try {
             connection.setAutoCommit(false);
         } catch (SQLException e) {
@@ -162,6 +151,27 @@ public class CdcEngine {
         return new CdcConnection(this, connection);
     }
 
+    public JdbcConnection connect(String modelUri) throws SQLException {
+        Properties config = new Properties();
+
+        config.put(CalciteConnectionProperty.PARSER_FACTORY.camelName(), new SqlParserImplFactory() {
+            @Override
+            public DdlExecutor getDdlExecutor() {
+                return new ApolloDdlExecutor();
+            }
+
+            @Override
+            public SqlAbstractParserImpl getParser(Reader stream) {
+                return SqlDdlParserImpl.FACTORY.getParser(stream);
+            }
+        });
+        config.put(CalciteConnectionProperty.MATERIALIZATIONS_ENABLED.camelName(), "true");
+        config.put(CalciteConnectionProperty.FUN.camelName(), "standard,oracle");
+        config.put(CalciteConnectionProperty.CASE_SENSITIVE.camelName(), "false");
+
+        return (JdbcConnection) DriverManager.getConnection("jdbc:calcite:", config);
+    }
+
     public Connection getConnection() {
         return connection;
     }
@@ -170,12 +180,13 @@ public class CdcEngine {
         return ds;
     }
 
-    public List<Capture> getTransactions() {
-        return transactions;
+    public Capture getTransaction() {
+        return transaction;
     }
 
     public void rollback() {
-        transactions.remove(transactions.size() - 1);
+        capture.setCdc(NullCapture.INSTANCE);
+        transaction = null;
         try {
             connection.rollback(checkpoint);
         } catch (SQLException e) {

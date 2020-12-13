@@ -81,7 +81,6 @@ message Genesis {
 
 message User {
     repeated ExecutedTransaction transactions = 1;
-    repeated bytes responses = 2;
 }
 
 message Reconfigure {

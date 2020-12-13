@@ -273,7 +273,9 @@ public class AvaConsensusTest {
             Consortium member = new Consortium(
                     Parameters.newBuilder()
                               .setConsensus(adapter.getConsensus())
-                              .setValidator(txn -> ByteString.copyFromUtf8("Give Me Food Or Give Me Slack Or Kill Me"))
+                              .setValidator(txn -> ByteMessage.newBuilder()
+                                                              .setContents(ByteString.copyFromUtf8("Give Me Food Or Give Me Slack Or Kill Me"))
+                                                              .build())
                               .setMember(m)
                               .setSignature(() -> m.forSigning())
                               .setContext(view)

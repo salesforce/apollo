@@ -31,6 +31,7 @@ import java.util.stream.LongStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -974,8 +975,8 @@ public class CollaboratorContext {
                 processedBytes += txn.getSerializedSize();
                 user.addTransactions(ExecutedTransaction.newBuilder()
                                                         .setHash(txn.transaction.getHash().toByteString())
-                                                        .setTransaction(txn.transaction.getTransaction()))
-                    .addResponses(txn.result);
+                                                        .setTransaction(txn.transaction.getTransaction())
+                                                        .setResult(Any.pack(txn.result)));
                 processed.add(txn.transaction.getHash());
             }
         }

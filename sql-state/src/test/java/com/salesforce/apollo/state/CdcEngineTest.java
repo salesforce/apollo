@@ -7,10 +7,10 @@
 package com.salesforce.apollo.state;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.sql.Connection;
 import java.sql.Statement;
-import java.util.List;
 import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
@@ -38,15 +38,11 @@ public class CdcEngineTest {
         statement.execute("insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)");
         statement.execute("insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)");
 
-        List<Capture> transactions = engine.getTransactions();
-
-        assertEquals(1, transactions.size());
-        Capture transaction = transactions.get(0);
-
+        Capture transaction = engine.getTransaction();
+        assertNotNull(transaction);
         assertEquals(5, transaction.getChanges().size());
 
         Results results = transaction.results();
-
         assertEquals(293, results.toByteString().size());
 
     }

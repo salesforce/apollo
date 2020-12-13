@@ -14,7 +14,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.google.common.base.Supplier;
-import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.membership.Context;
@@ -39,7 +39,7 @@ public class Parameters {
         private ScheduledExecutorService                       scheduler;
         private Supplier<Signature>                            signature;
         private Duration                                       submitTimeout       = Duration.ofSeconds(30);
-        private Function<EnqueuedTransaction, ByteString>      validator;
+        private Function<EnqueuedTransaction, Message>         validator;
         private Duration                                       viewTimeout         = Duration.ofSeconds(60);
 
         public Parameters build() {
@@ -112,7 +112,7 @@ public class Parameters {
             return submitTimeout;
         }
 
-        public Function<EnqueuedTransaction, ByteString> getValidator() {
+        public Function<EnqueuedTransaction, Message> getValidator() {
             return validator;
         }
 
@@ -201,7 +201,7 @@ public class Parameters {
             return this;
         }
 
-        public Builder setValidator(Function<EnqueuedTransaction, ByteString> validator) {
+        public Builder setValidator(Function<EnqueuedTransaction, Message> validator) {
             this.validator = validator;
             return this;
         }
@@ -231,13 +231,13 @@ public class Parameters {
     public final ScheduledExecutorService                       scheduler;
     public final Supplier<Signature>                            signature;
     public final Duration                                       submitTimeout;
-    public final Function<EnqueuedTransaction, ByteString>      validator;
+    public final Function<EnqueuedTransaction, Message>         validator;
     public final Duration                                       viewTimeout;
 
     public Parameters(Context<Member> context, Router communications, Member member, Messenger.Parameters msgParameters,
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
-            Function<EnqueuedTransaction, ByteString> validator, Duration maxBatchDelay, Duration joinTimeout,
+            Function<EnqueuedTransaction, Message> validator, Duration maxBatchDelay, Duration joinTimeout,
             Duration viewTimeout, Duration submitTimeout, int processedBufferSize, byte[] genesisData) {
         this.context = context;
         this.communications = communications;

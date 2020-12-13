@@ -48,6 +48,7 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Header;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -271,7 +272,9 @@ public class TestConsortium {
                .map(m -> new Consortium(
                        Parameters.newBuilder()
                                  .setConsensus(consensus)
-                                 .setValidator(txn -> ByteString.copyFromUtf8("Give Me Food Or Give Me Slack Or Kill Me"))
+                                 .setValidator(txn -> ByteMessage.newBuilder()
+                                                                 .setContents(ByteString.copyFromUtf8("Give Me Food Or Give Me Slack Or Kill Me"))
+                                                                 .build())
                                  .setMember(m)
                                  .setSignature(() -> m.forSigning())
                                  .setContext(view)

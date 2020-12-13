@@ -18,7 +18,7 @@ import org.h2.table.Table;
  */
 public class CdcSession extends Session {
 
-    private Cdc cdc = new NullCapture();
+    private Cdc cdc = NullCapture.INSTANCE;
 
     public CdcSession(Database database, User user, int id) {
         super(database, user, id);
@@ -27,7 +27,7 @@ public class CdcSession extends Session {
     @Override
     public void cancel() {
         super.cancel();
-    } 
+    }
 
     @Override
     public void cdc(Table table, Row prev, CDC operation, Row row) {

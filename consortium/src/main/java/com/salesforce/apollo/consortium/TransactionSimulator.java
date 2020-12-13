@@ -19,7 +19,7 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 
 /**
  * @author hal.hildebrand
@@ -28,10 +28,10 @@ import com.google.protobuf.ByteString;
 public class TransactionSimulator {
 
     public static class EvaluatedTransaction {
-        public final ByteString          result;
+        public final Message             result;
         public final EnqueuedTransaction transaction;
 
-        public EvaluatedTransaction(EnqueuedTransaction transaction, ByteString result) {
+        public EvaluatedTransaction(EnqueuedTransaction transaction, Message result) {
             this.transaction = transaction;
             this.result = result;
         }
@@ -43,19 +43,19 @@ public class TransactionSimulator {
 
     private final static Logger log = LoggerFactory.getLogger(TransactionSimulator.class);
 
-    private final int                                       bufferSize;
-    private final CollaboratorContext                       collaborator;
-    private final Deque<EvaluatedTransaction>               evaluated;
-    private final ExecutorService                           executor;
+    private final int                                    bufferSize;
+    private final CollaboratorContext                    collaborator;
+    private final Deque<EvaluatedTransaction>            evaluated;
+    private final ExecutorService                        executor;
     @SuppressWarnings("unused")
-    private final int                                       maxByteSize;
-    private final AtomicBoolean                             started = new AtomicBoolean();
-    private volatile int                                    totalByteSize;
-    private final LinkedBlockingDeque<Runnable>             transactions;
-    private final Function<EnqueuedTransaction, ByteString> validator;
+    private final int                                    maxByteSize;
+    private final AtomicBoolean                          started = new AtomicBoolean();
+    private volatile int                                 totalByteSize;
+    private final LinkedBlockingDeque<Runnable>          transactions;
+    private final Function<EnqueuedTransaction, Message> validator;
 
     public TransactionSimulator(int maxByteSize, CollaboratorContext collaborator, int maxBufferSize,
-            Function<EnqueuedTransaction, ByteString> validator) {
+            Function<EnqueuedTransaction, Message> validator) {
         this.bufferSize = maxBufferSize;
         this.maxByteSize = maxByteSize;
         transactions = new LinkedBlockingDeque<>(bufferSize + 1);
@@ -136,14 +136,14 @@ public class TransactionSimulator {
             return;
         }
 
-        ByteString result = null;
+        Message result = null;
         try {
             log.debug("Evaluating transaction: {}", txn.getHash());
             result = validator.apply(txn);
             EvaluatedTransaction eval = new EvaluatedTransaction(txn, result);
             if (evaluated.offer(eval)) {
                 totalByteSize += txn.totalByteSize();
-                totalByteSize += result.size();
+                totalByteSize += result.toByteString().size();
             } else {
                 transactions.addFirst(() -> evaluate(txn));
                 log.debug("Draining pending from: {}", txn.getHash());
