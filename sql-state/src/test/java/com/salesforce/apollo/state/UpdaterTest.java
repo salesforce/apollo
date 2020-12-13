@@ -33,7 +33,7 @@ public class UpdaterTest {
 
     @Test
     public void smoke() throws Exception {
-        CdcEngine engine = new CdcEngine("jdbc:h2:mem:test_mem", new Properties());
+        CdcEngine engine = new CdcEngine("jdbc:h2:mem:test_update", new Properties());
         Updater updater = new Updater(engine);
 
         Connection connection = engine.newConnection();

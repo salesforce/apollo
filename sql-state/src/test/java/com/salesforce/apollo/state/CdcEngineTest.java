@@ -25,7 +25,7 @@ public class CdcEngineTest {
 
     @Test
     public void smoke() throws Exception {
-        CdcEngine engine = new CdcEngine("jdbc:h2:mem:test_mem", new Properties());
+        CdcEngine engine = new CdcEngine("jdbc:h2:mem:test_engine", new Properties());
 
         Connection connection = engine.beginTransaction();
 
