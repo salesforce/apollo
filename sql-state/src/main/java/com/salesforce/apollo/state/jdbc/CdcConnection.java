@@ -26,8 +26,8 @@ public class CdcConnection extends DelegatingConnection {
 
     @Override
     public void commit() throws SQLException {
-        engine.commit();
-        super.rollback();
+        // Commit is just continuation of the generation of the block CDC state,
+        // demarcated by savepoints in the session
     }
 
     @Override

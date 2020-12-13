@@ -13,6 +13,11 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>consortium</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
+		<dependency>
 			<groupId>org.jooq</groupId>
 			<artifactId>jooq</artifactId>
 		</dependency>
@@ -21,22 +26,8 @@
 			<artifactId>commons-dbcp2</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.google.guava</groupId>
-			<artifactId>guava</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>com.google.code.findbugs</groupId>
-					<artifactId>jsr305</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>jcl-over-slf4j</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>io.grpc</groupId>
-			<artifactId>grpc-protobuf</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.calcite</groupId>
@@ -96,12 +87,6 @@
 			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>consortium</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
-			<scope>test</scope>
-		</dependency>
 	</dependencies>
 
 	<build>
@@ -112,7 +97,7 @@
 				<version>1.6.2</version>
 			</extension>
 		</extensions>
-		<plugins> 
+		<plugins>
 			<plugin>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-maven-plugin</artifactId>
@@ -216,7 +201,7 @@
 						</goals>
 						<configuration>
 							<sources>
-                                <source>${project.basedir}/target/generated-sources/jooq</source>
+								<source>${project.basedir}/target/generated-sources/jooq</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/java</source>
 								<source>${project.basedir}/src/main/proto</source>

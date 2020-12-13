@@ -9,6 +9,11 @@ import "google/protobuf/empty.proto";
 
 package apollo.cdc;
 
+message Execution {
+    repeated bytes parameters = 1;
+    bytes wasm = 2;
+}
+
 message Insert {
     int32 table =1;
     int64 key = 2;
@@ -40,9 +45,12 @@ message Result {
 
 message Statement {
     string sql = 1;
-    map<string, bytes> parameters = 2;
+    repeated bytes parameters = 2;
 }
 
 message Txn {
-    repeated Statement statements = 1;
+    oneof execution {
+        Statement statement = 1;
+        Execution block = 2;
+    }
 }

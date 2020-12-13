@@ -63,7 +63,7 @@ public class CdcEngine {
     private class DS implements DataSource {
         /**
          * The PrintWriter to which log messages should be directed.
-         */
+         */ 
         private volatile PrintWriter logWriter = new PrintWriter(
                 new OutputStreamWriter(System.out, StandardCharsets.UTF_8));
 
@@ -160,15 +160,6 @@ public class CdcEngine {
             throw new IllegalStateException("Cannot set savepoint for transaction");
         }
         return new CdcConnection(this, connection);
-    }
-
-    public void commit() {
-        // TODO Auto-generated method stub
-
-    }
-
-    public void commit(Transaction t) {
-
     }
 
     public Connection getConnection() {
