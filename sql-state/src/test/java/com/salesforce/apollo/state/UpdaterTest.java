@@ -34,7 +34,7 @@ public class UpdaterTest {
     @Test
     public void smoke() throws Exception {
         CdcEngine engine = new CdcEngine("jdbc:h2:mem:test_update", new Properties());
-        Updater updater = new Updater(engine);
+        Updater updater = engine.getUpdater();
 
         Connection connection = engine.newConnection();
 
@@ -62,11 +62,11 @@ public class UpdaterTest {
 
         ResultSet books = statement.executeQuery("select * from books");
         assertFalse(books.first());
-        
+
         updater.begin();
         updater.accept(ExecutedTransaction.newBuilder().setResult(Any.pack(results)).build());
         updater.complete();
-        
+
         books = statement.executeQuery("select * from books");
         assertTrue(books.first());
         for (int i = 0; i < 4; i++) {

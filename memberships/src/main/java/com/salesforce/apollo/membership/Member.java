@@ -78,6 +78,10 @@ public class Member implements Comparable<Member> {
         this.id = id;
     }
 
+    public Member(X509Certificate cert) {
+        this(getMemberId(cert), cert);
+    }
+
     @Override
     public int compareTo(Member o) {
         return id.compareTo(o.getId());

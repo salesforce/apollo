@@ -79,12 +79,16 @@
 			<artifactId>logback-classic</artifactId>
 			<scope>test</scope>
 		</dependency>
-
 		<dependency>
 			<groupId>org.apache.calcite</groupId>
 			<artifactId>calcite-core</artifactId>
 			<version>${calcite.version}</version>
 			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>test-population</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

@@ -215,6 +215,10 @@ public class CdcEngine implements Function<EnqueuedTransaction, Message> {
         return transaction;
     }
 
+    public Updater getUpdater() {
+        return new Updater(this);
+    }
+
     public JdbcConnection newConnection() {
         try {
             return new JdbcConnection(jdbcUrl, jdbcProperties);
@@ -222,7 +226,7 @@ public class CdcEngine implements Function<EnqueuedTransaction, Message> {
             throw new IllegalStateException("Cannot create new JDBC connection: " + jdbcUrl, e);
         }
     }
-
+    
     public void rollback() {
         capture.setCdc(NullCapture.INSTANCE);
         transaction = null;

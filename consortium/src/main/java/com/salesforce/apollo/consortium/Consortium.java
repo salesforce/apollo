@@ -369,7 +369,7 @@ public class Consortium {
     }
 
     // test access
-    Fsm<CollaboratorContext, Transitions> fsm() {
+    public Fsm<CollaboratorContext, Transitions> fsm() {
         return fsm;
     }
 
@@ -412,7 +412,7 @@ public class Consortium {
     }
 
     // test access
-    CollaboratorContext getState() {
+    public CollaboratorContext getState() {
         return fsm.getContext();
     }
 
