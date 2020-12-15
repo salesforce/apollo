@@ -505,7 +505,8 @@ public class CollaboratorContext {
             finalized(hash);
         });
         accept(next);
-        log.info("Processed checkpoint block: {} on: {}", next.getHash(), consortium.getMember());
+        log.info("Processed checkpoint block: {} height: {} on: {}", next.getHash(), height(next.getBlock()),
+                 consortium.getMember());
     }
 
     public void processGenesis(CurrentBlock next) {
@@ -529,7 +530,8 @@ public class CollaboratorContext {
         }
         accept(next);
         reconfigure(body, false);
-        log.info("Processed reconfigure block: {} on: {}", next.getHash(), consortium.getMember());
+        log.info("Processed reconfigure block: {} height: {} on: {}", next.getHash(), height(next.getBlock()),
+                 consortium.getMember());
     }
 
     public void processUser(CurrentBlock next) {
@@ -544,7 +546,8 @@ public class CollaboratorContext {
             consortium.getParams().executor.accept(txn, submitted == null ? null : submitted.onCompletion);
         });
         accept(next);
-        log.info("Processed user block: {} on: {}", next.getHash(), consortium.getMember());
+        log.info("Processed user block: {} height: {} on: {}", next.getHash(), height(next.getBlock()),
+                 consortium.getMember());
     }
 
     public void receive(ReplicateTransactions transactions, Member from) {

@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -190,7 +191,7 @@ public class AvaConsensusTest {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        Semaphore outstanding = new Semaphore(100); // outstanding, unfinalized txns
+        Semaphore outstanding = new Semaphore(100, true); // outstanding, unfinalized txns
         int bunchCount = 1_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
@@ -282,6 +283,13 @@ public class AvaConsensusTest {
                                                          .setMaxBatchDelay(Duration.ofMillis(100))
                                                          .setGossipDuration(gossipDuration)
                                                          .setViewTimeout(Duration.ofMillis(500))
+                                                         .setExecutor((t, c) -> {
+                                                             if (c != null) {
+                                                                 ForkJoinPool.commonPool()
+                                                                             .execute(() -> c.accept(new HashKey(
+                                                                                     t.getHash()), null));
+                                                             }
+                                                         })
                                                          .setJoinTimeout(Duration.ofSeconds(5))
                                                          .setTransactonTimeout(Duration.ofSeconds(15))
                                                          .setScheduler(scheduler)

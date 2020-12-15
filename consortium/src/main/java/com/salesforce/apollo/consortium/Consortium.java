@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.consortium;
 
+import static com.salesforce.apollo.consortium.CollaboratorContext.height;
 import static com.salesforce.apollo.consortium.SigningUtils.generateKeyPair;
 import static com.salesforce.apollo.consortium.SigningUtils.sign;
 import static com.salesforce.apollo.consortium.SigningUtils.validateGenesis;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -241,18 +243,20 @@ public class Consortium {
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private volatile CurrentBlock                                                                  current;
-    private final List<DelayedMessage>                                                             delayed     = new CopyOnWriteArrayList<>();
+    private final PriorityBlockingQueue<CurrentBlock>                                              deferedBlocks = new PriorityBlockingQueue<>(
+            1024, (a, b) -> Long.compare(height(a.getBlock()), height(b.getBlock())));
+    private final List<DelayedMessage>                                                             delayed       = new CopyOnWriteArrayList<>();
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
     private volatile Messenger                                                                     messenger;
     private volatile ViewMember                                                                    nextView;
     private volatile KeyPair                                                                       nextViewConsensusKeyPair;
     private volatile MemberOrder                                                                   order;
     private final Parameters                                                                       params;
-    private final TickScheduler                                                                    scheduler   = new TickScheduler();
-    private final AtomicBoolean                                                                    started     = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>                                               submitted   = new ConcurrentHashMap<>();
+    private final TickScheduler                                                                    scheduler     = new TickScheduler();
+    private final AtomicBoolean                                                                    started       = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted     = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final AtomicReference<ViewContext>                                                     viewContext = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                                     viewContext   = new AtomicReference<>();
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
@@ -267,12 +271,22 @@ public class Consortium {
         nextViewConsensusKey();
     }
 
+    // test access
+    public Fsm<CollaboratorContext, Transitions> fsm() {
+        return fsm;
+    }
+
     public Logger getLog() {
         return log;
     }
 
     public Member getMember() {
         return getParams().member;
+    }
+
+    // test access
+    public CollaboratorContext getState() {
+        return fsm.getContext();
     }
 
     public boolean process(CertifiedBlock certifiedBlock) {
@@ -285,13 +299,20 @@ public class Consortium {
                   block.getHeader().getHeight(), getMember());
         final CurrentBlock previousBlock = getCurrent();
         if (previousBlock != null) {
-            if (block.getHeader().getHeight() != previousBlock.getBlock().getHeader().getHeight() + 1) {
-                log.error("Protocol violation on {}.  Block: {} height should be {} and next block height is {}",
+            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
+            long height = height(block);
+            long prevHeight = height(previousBlock.getBlock());
+            if (height <= prevHeight) {
+                log.info("Discarding previously committed block: {} height: {} current height: {} on: {}", hash, height,
+                         prevHeight, getMember());
+            }
+            if (height != prevHeight + 1) {
+                deferedBlocks.add(new CurrentBlock(hash, block));
+                log.error("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
                           getMember(), hash, previousBlock.getBlock().getHeader().getHeight() + 1,
                           block.getHeader().getHeight());
-                return false;
+                return true;
             }
-            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
             if (!previousBlock.getHash().equals(prev)) {
                 log.error("Protocol violation ons {}. New block does not refer to current block hash. Should be {} and next block's prev is {}",
                           getMember(), previousBlock.getHash(), prev);
@@ -321,7 +342,33 @@ public class Consortium {
                 return false;
             }
         }
-        return next(new CurrentBlock(hash, block));
+        if (next(new CurrentBlock(hash, block))) {
+            processDeferred();
+            return true;
+        }
+        return false;
+    }
+
+    private void processDeferred() {
+        CurrentBlock delayed = deferedBlocks.poll();
+        while (delayed != null) {
+            long height = height(delayed.getBlock());
+            long currentHeight = height(getCurrent().getBlock());
+            if (height <= currentHeight) {
+                log.info("dropping deferred block: {} height: {} <= current height: {} on: {}", delayed.getHash(),
+                         height, currentHeight, getMember());
+                delayed = deferedBlocks.poll();
+            } else if (height == currentHeight + 1) {
+                log.info("processing deferred block: {} height: {} on: {}", delayed.getHash(), height, getMember());
+                next(delayed);
+                delayed = deferedBlocks.poll();
+            } else {
+                log.info("current height: {} so re-deferring block: {} height: {} on: {}", currentHeight,
+                         delayed.getHash(), height, getMember());
+                deferedBlocks.add(delayed);
+                delayed = null;
+            }
+        }
     }
 
     public void start() {
@@ -354,11 +401,6 @@ public class Consortium {
 
     SecureRandom entropy() {
         return getParams().msgParameters.entropy;
-    }
-
-    // test access
-    public Fsm<CollaboratorContext, Transitions> fsm() {
-        return fsm;
     }
 
     InputStream getBody(Block block) {
@@ -397,11 +439,6 @@ public class Consortium {
 
     TickScheduler getScheduler() {
         return scheduler;
-    }
-
-    // test access
-    public CollaboratorContext getState() {
-        return fsm.getContext();
     }
 
     Map<HashKey, SubmittedTransaction> getSubmitted() {
