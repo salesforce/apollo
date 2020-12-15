@@ -270,27 +270,23 @@ public class AvaConsensusTest {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
             AvaAdapter adapter = new AvaAdapter(processed);
-            Consortium member = new Consortium(
-                    Parameters.newBuilder()
-                              .setConsensus(adapter.getConsensus())
-                              .setValidator(txn -> ByteMessage.newBuilder()
-                                                              .setContents(ByteString.copyFromUtf8("Give Me Food Or Give Me Slack Or Kill Me"))
-                                                              .build())
-                              .setMember(m)
-                              .setSignature(() -> m.forSigning())
-                              .setContext(view)
-                              .setMsgParameters(msgParameters)
-                              .setMaxBatchByteSize(1024 * 1024)
-                              .setMaxBatchSize(1000)
-                              .setCommunications(communications.get(m.getId()))
-                              .setMaxBatchDelay(Duration.ofMillis(100))
-                              .setGossipDuration(gossipDuration)
-                              .setViewTimeout(Duration.ofMillis(500))
-                              .setJoinTimeout(Duration.ofSeconds(5))
-                              .setTransactonTimeout(Duration.ofSeconds(15))
-                              .setScheduler(scheduler)
-                              .setGenesisData(GENESIS_DATA)
-                              .build());
+            Consortium member = new Consortium(Parameters.newBuilder()
+                                                         .setConsensus(adapter.getConsensus())
+                                                         .setMember(m)
+                                                         .setSignature(() -> m.forSigning())
+                                                         .setContext(view)
+                                                         .setMsgParameters(msgParameters)
+                                                         .setMaxBatchByteSize(1024 * 1024)
+                                                         .setMaxBatchSize(1000)
+                                                         .setCommunications(communications.get(m.getId()))
+                                                         .setMaxBatchDelay(Duration.ofMillis(100))
+                                                         .setGossipDuration(gossipDuration)
+                                                         .setViewTimeout(Duration.ofMillis(500))
+                                                         .setJoinTimeout(Duration.ofSeconds(5))
+                                                         .setTransactonTimeout(Duration.ofSeconds(15))
+                                                         .setScheduler(scheduler)
+                                                         .setGenesisData(GENESIS_DATA)
+                                                         .build());
             adapter.setConsortium(member);
             adapters.put(m, adapter);
             return member;

@@ -537,15 +537,12 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
-        TransactionExecutor executor = consortium.getParams().executor;
-        executor.begin();
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
             SubmittedTransaction submitted = consortium.getSubmitted().remove(hash);
-            executor.accept(txn, submitted == null ? null : submitted.onCompletion);
+            consortium.getParams().executor.accept(txn, submitted == null ? null : submitted.onCompletion);
         });
-        executor.complete();
         accept(next);
         log.info("Processed user block: {} on: {}", next.getHash(), consortium.getMember());
     }

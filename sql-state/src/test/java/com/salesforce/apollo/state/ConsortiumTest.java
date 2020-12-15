@@ -87,7 +87,6 @@ public class ConsortiumTest {
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private Map<HashKey, Router>          communications = new HashMap<>();
     private final Map<Member, Consortium> consortium     = new HashMap<>();
-    private final Map<Member, CdcEngine>  engines        = new HashMap<>();
     private SecureRandom                  entropy;
     private List<Member>                  members;
     private final Map<Member, Updater>    updaters       = new HashMap<>();
@@ -98,8 +97,6 @@ public class ConsortiumTest {
         consortium.clear();
         communications.values().forEach(e -> e.close());
         communications.clear();
-        engines.values().forEach(cdc -> cdc.close());
-        engines.clear();
         updaters.values().forEach(up -> up.close());
         updaters.clear();
     }
@@ -247,11 +244,9 @@ public class ConsortiumTest {
         members.stream().map(m -> {
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);
-            CdcEngine engine = new CdcEngine(url, new Properties());
-            engines.put(m, engine);
-            Updater up = engine.getUpdater();
+            Updater up = new Updater(url, new Properties());
             updaters.put(m, up);
-            Connection connection = engine.newConnection();
+            Connection connection = up.newConnection();
 
             java.sql.Statement statement;
             try {
@@ -263,7 +258,6 @@ public class ConsortiumTest {
             Consortium c = new Consortium(
                     Parameters.newBuilder()
                               .setConsensus(consensus)
-                              .setValidator(engine)
                               .setMember(m)
                               .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
                                                                           entropy))
