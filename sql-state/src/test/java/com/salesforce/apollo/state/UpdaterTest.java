@@ -64,7 +64,7 @@ public class UpdaterTest {
         assertFalse(books.first());
 
         updater.begin();
-        updater.accept(ExecutedTransaction.newBuilder().setResult(Any.pack(results)).build());
+        updater.accept(ExecutedTransaction.newBuilder().setResult(Any.pack(results)).build(), null);
         updater.complete();
 
         books = statement.executeQuery("select * from books");

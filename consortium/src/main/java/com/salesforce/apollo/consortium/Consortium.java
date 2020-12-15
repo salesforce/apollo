@@ -22,12 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.zip.DeflaterInputStream;
@@ -344,7 +343,8 @@ public class Consortium {
         transitions.stop();
     }
 
-    public HashKey submit(Consumer<HashKey> onCompletion, Message... transactions) throws TimeoutException {
+    public HashKey submit(BiConsumer<HashKey, Throwable> onCompletion,
+                          Message... transactions) throws TimeoutException {
         return submit(false, onCompletion, transactions);
     }
 
@@ -354,18 +354,6 @@ public class Consortium {
 
     SecureRandom entropy() {
         return getParams().msgParameters.entropy;
-    }
-
-    void finalized(final EnqueuedTransaction finald) {
-        final SubmittedTransaction previous = getSubmitted().remove(finald.getHash());
-        if (previous != null) {
-            ForkJoinPool.commonPool().execute(() -> {
-                if (previous.onCompletion != null) {
-                    log.debug("finalizing: {} on: {}", finald.getHash(), getMember());
-                    previous.onCompletion.accept(finald.getHash());
-                }
-            });
-        }
     }
 
     // test access
@@ -525,7 +513,8 @@ public class Consortium {
         this.viewContext.set(viewContext);
     }
 
-    HashKey submit(boolean join, Consumer<HashKey> onCompletion, Message... transactions) throws TimeoutException {
+    HashKey submit(boolean join, BiConsumer<HashKey, Throwable> onCompletion,
+                   Message... transactions) throws TimeoutException {
         if (viewContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
@@ -771,7 +760,8 @@ public class Consortium {
         }
     }
 
-    private void submit(EnqueuedTransaction transaction, Consumer<HashKey> onCompletion) throws TimeoutException {
+    private void submit(EnqueuedTransaction transaction,
+                        BiConsumer<HashKey, Throwable> onCompletion) throws TimeoutException {
         assert transaction.getHash().equals(hashOf(transaction.getTransaction())) : "Hash does not match!";
 
         getSubmitted().put(transaction.getHash(), new SubmittedTransaction(transaction.getTransaction(), onCompletion));

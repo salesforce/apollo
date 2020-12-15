@@ -196,7 +196,7 @@ public class TestConsortium {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit(h -> txnProcessed.set(true),
+            hash = client.submit((h, t) -> txnProcessed.set(true),
                                  ByteTransaction.newBuilder()
                                                 .setContent(ByteString.copyFromUtf8("Hello world"))
                                                 .build());
@@ -221,7 +221,7 @@ public class TestConsortium {
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
             try {
-                HashKey pending = client.submit(h -> {
+                HashKey pending = client.submit((h, t) -> {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();

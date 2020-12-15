@@ -13,6 +13,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,6 +22,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -41,11 +44,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.google.protobuf.Any;
-import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.state.proto.Statement;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -87,8 +87,10 @@ public class ConsortiumTest {
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private Map<HashKey, Router>          communications = new HashMap<>();
     private final Map<Member, Consortium> consortium     = new HashMap<>();
+    private final Map<Member, CdcEngine>  engines        = new HashMap<>();
     private SecureRandom                  entropy;
     private List<Member>                  members;
+    private final Map<Member, Updater>    updaters       = new HashMap<>();
 
     @AfterEach
     public void after() {
@@ -96,6 +98,10 @@ public class ConsortiumTest {
         consortium.clear();
         communications.values().forEach(e -> e.close());
         communications.clear();
+        engines.values().forEach(cdc -> cdc.close());
+        engines.clear();
+        updaters.values().forEach(up -> up.close());
+        updaters.clear();
     }
 
     @BeforeEach
@@ -180,7 +186,7 @@ public class ConsortiumTest {
                                        .map(c -> c.getMember())
                                        .collect(Collectors.toList()));
 
-        System.out.println("processing complete, validating state");
+        System.out.println("genesis processing complete");
 
         processed.set(new CountDownLatch(testCardinality));
         Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
@@ -189,10 +195,8 @@ public class ConsortiumTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit(h -> txnProcessed.set(true),
-                                 ByteTransaction.newBuilder()
-                                                .setContent(ByteString.copyFromUtf8("Hello world"))
-                                                .build());
+            hash = client.submit((h, t) -> txnProcessed.set(true),
+                                 batch("insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)"));
         } catch (TimeoutException e) {
             fail();
             return;
@@ -214,11 +218,15 @@ public class ConsortiumTest {
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
             try {
-                HashKey pending = client.submit(h -> {
+                HashKey pending = client.submit((h, t) -> {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build()));
+                }, batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)"),
+                                                batch("insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)"),
+                                                batch("insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)"),
+                                                batch("insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)"),
+                                                batch("insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
                 submitted.add(pending);
             } catch (TimeoutException e) {
                 fail();
@@ -236,31 +244,48 @@ public class ConsortiumTest {
     private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters) {
-        members.stream()
-               .map(m -> new Consortium(
-                       Parameters.newBuilder()
-                                 .setConsensus(consensus)
-                                 .setValidator(txn -> ByteMessage.newBuilder()
-                                                                 .setContents(ByteString.copyFromUtf8("Give Me Food Or Give Me Slack Or Kill Me"))
-                                                                 .build())
-                                 .setMember(m)
-                                 .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
-                                                                             entropy))
-                                 .setContext(view)
-                                 .setMsgParameters(msgParameters)
-                                 .setMaxBatchByteSize(1024 * 1024)
-                                 .setMaxBatchSize(1000)
-                                 .setCommunications(communications.get(m.getId()))
-                                 .setMaxBatchDelay(Duration.ofMillis(100))
-                                 .setGossipDuration(gossipDuration)
-                                 .setViewTimeout(Duration.ofMillis(500))
-                                 .setJoinTimeout(Duration.ofSeconds(5))
-                                 .setTransactonTimeout(Duration.ofSeconds(15))
-                                 .setScheduler(scheduler)
-                                 .setGenesisData(GENESIS_DATA)
-                                 .build()))
-               .peek(c -> view.activate(c.getMember()))
-               .forEach(e -> consortium.put(e.getMember(), e));
+        members.stream().map(m -> {
+            String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
+            System.out.println("DB URL: " + url);
+            CdcEngine engine = new CdcEngine(url, new Properties());
+            engines.put(m, engine);
+            Updater up = engine.getUpdater();
+            updaters.put(m, up);
+            Connection connection = engine.newConnection();
+
+            java.sql.Statement statement;
+            try {
+                statement = connection.createStatement();
+                statement.execute("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))");
+            } catch (SQLException e1) {
+                throw new IllegalStateException(e1);
+            }
+            Consortium c = new Consortium(
+                    Parameters.newBuilder()
+                              .setConsensus(consensus)
+                              .setValidator(engine)
+                              .setMember(m)
+                              .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
+                                                                          entropy))
+                              .setContext(view)
+                              .setMsgParameters(msgParameters)
+                              .setMaxBatchByteSize(1024 * 1024)
+                              .setMaxBatchSize(1000)
+                              .setCommunications(communications.get(m.getId()))
+                              .setMaxBatchDelay(Duration.ofMillis(100))
+                              .setGossipDuration(gossipDuration)
+                              .setViewTimeout(Duration.ofMillis(500))
+                              .setJoinTimeout(Duration.ofSeconds(5))
+                              .setTransactonTimeout(Duration.ofSeconds(15))
+                              .setExecutor(up)
+                              .setScheduler(scheduler)
+                              .setGenesisData(GENESIS_DATA)
+                              .build());
+            return c;
+        }).peek(c -> view.activate(c.getMember())).forEach(e -> consortium.put(e.getMember(), e));
     }
 
+    private Statement batch(String sql) {
+        return Statement.newBuilder().setSql(sql).build();
+    }
 }

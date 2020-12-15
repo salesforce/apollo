@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.consortium;
 
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesforce.apollo.protocols.HashKey;
@@ -18,10 +18,10 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class SubmittedTransaction {
-    public final Consumer<HashKey> onCompletion;
-    public final Transaction       submitted;
+    public final BiConsumer<HashKey, Throwable> onCompletion;
+    public final Transaction                    submitted;
 
-    public SubmittedTransaction(Transaction submitted, Consumer<HashKey> onCompletion) {
+    public SubmittedTransaction(Transaction submitted, BiConsumer<HashKey, Throwable> onCompletion) {
         this.submitted = submitted;
         this.onCompletion = onCompletion;
     }

@@ -6,20 +6,17 @@
  */
 package com.salesforce.apollo.consortium;
 
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface TransactionExecutor extends Consumer<ExecutedTransaction> {
+public interface TransactionExecutor extends BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> {
     static final TransactionExecutor NULL_EXECUTOR = new TransactionExecutor() {
-
-        @Override
-        public void accept(ExecutedTransaction t) {
-        }
 
         @Override
         public void begin() {
@@ -28,6 +25,11 @@ public interface TransactionExecutor extends Consumer<ExecutedTransaction> {
         @Override
         public void complete() {
         }
+
+        @Override
+        public void accept(ExecutedTransaction t, BiConsumer<HashKey, Throwable> u) {
+        }
+
     };
 
     void begin();

@@ -122,7 +122,6 @@ message Transaction {
 message ExecutedTransaction {
     bytes hash = 1;
     Transaction transaction = 2;
-    google.protobuf.Any result = 3;
 }
 
 message Validate {
