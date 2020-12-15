@@ -13,8 +13,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.security.SecureRandom;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -194,7 +192,7 @@ public class ConsortiumTest {
         HashKey hash;
         try {
             hash = client.submit((h, t) -> txnProcessed.set(true),
-                                 batch("insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)"));
+                                 batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
         } catch (TimeoutException e) {
             fail();
             return;
@@ -213,18 +211,28 @@ public class ConsortiumTest {
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+        HashKey pending = client.submit((h, t) -> {
+            outstanding.release();
+            submitted.remove(h);
+            submittedBunch.countDown();
+        }, batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)"),
+                                        batch("insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)"),
+                                        batch("insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)"),
+                                        batch("insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)"),
+                                        batch("insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
+        submitted.add(pending);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
             try {
-                HashKey pending = client.submit((h, t) -> {
+                pending = client.submit((h, t) -> {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
-                }, batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)"),
-                                                batch("insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)"),
-                                                batch("insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)"),
-                                                batch("insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)"),
-                                                batch("insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
+                }, batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
+                                        batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
+                                        batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
+                                        batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
+                                        batch("update books set qty = " + entropy.nextInt() + " where id = 1005"));
                 submitted.add(pending);
             } catch (TimeoutException e) {
                 fail();
@@ -247,15 +255,6 @@ public class ConsortiumTest {
             System.out.println("DB URL: " + url);
             Updater up = new Updater(url, new Properties());
             updaters.put(m, up);
-            Connection connection = up.newConnection();
-
-            java.sql.Statement statement;
-            try {
-                statement = connection.createStatement();
-                statement.execute("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))");
-            } catch (SQLException e1) {
-                throw new IllegalStateException(e1);
-            }
             Consortium c = new Consortium(
                     Parameters.newBuilder()
                               .setConsensus(consensus)

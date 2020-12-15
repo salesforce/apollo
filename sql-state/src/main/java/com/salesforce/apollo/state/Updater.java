@@ -48,21 +48,17 @@ public class Updater implements BiConsumer<ExecutedTransaction, BiConsumer<HashK
             try {
                 statement = txn.unpack(Statement.class);
             } catch (InvalidProtocolBufferException e) {
-                log.error("unable to deserialize Statement from txn: {} : {}", t.getHash(), e.toString());
+                log.error("unable to deserialize Statement from txn: {} : {}", new HashKey(t.getHash()), e.toString());
                 complete(completion, e);
                 return;
             }
             try {
                 java.sql.Statement exec = connection.createStatement();
-                if (exec.execute(statement.getSql())) {
-                    complete(completion, new HashKey(t.getHash()));
-                } else {
-                    log.debug("Unable to execute Statement: {} from txn: {}", statement.getSql(), t.getHash());
-                    complete(completion, new SQLException("unable to execute transaction"));
-                }
+                exec.execute(statement.getSql());
+                complete(completion, new HashKey(t.getHash()));
             } catch (SQLException e) {
-                log.debug("Error executing Statement: {} from txn: {} : {}", statement.getSql(), t.getHash(),
-                          e.toString());
+                log.warn("Error executing Statement: {} from txn: {} : {}", statement.getSql(),
+                         new HashKey(t.getHash()), e.toString());
                 complete(completion, e);
                 return;
             }
