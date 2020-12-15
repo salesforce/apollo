@@ -206,8 +206,9 @@ public class ConsortiumTest {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        Semaphore outstanding = new Semaphore(100); // outstanding, unfinalized txns
-        int bunchCount = 1_000;
+        long then = System.currentTimeMillis();
+        Semaphore outstanding = new Semaphore(200); // outstanding, unfinalized txns
+        int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
@@ -221,30 +222,70 @@ public class ConsortiumTest {
                                         batch("insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)"),
                                         batch("insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
         submitted.add(pending);
-        for (int i = 0; i < bunchCount; i++) {
-            outstanding.acquire();
+        IntStream.range(0, bunchCount).forEach(i -> {
             try {
-                pending = client.submit((h, t) -> {
+                outstanding.acquire();
+            } catch (InterruptedException e1) {
+                throw new IllegalStateException(e1);
+            }
+            try {
+                HashKey key = client.submit((h, t) -> {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
                 }, batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
-                                        batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
-                                        batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
-                                        batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
-                                        batch("update books set qty = " + entropy.nextInt() + " where id = 1005"));
-                submitted.add(pending);
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
+                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"));
+                submitted.add(key);
             } catch (TimeoutException e) {
                 fail();
                 return;
             }
-        }
+        });
 
-        System.out.println("Awaiting " + bunchCount + " transactions");
+        System.out.println("Awaiting " + bunchCount + " batches");
         boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
         submittedBunch.getCount();
         assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
         System.out.println("Completed additional " + bunchCount + " transactions");
+        System.out.println("TPS: " + (bunchCount * 40) / ((System.currentTimeMillis() - then) / 1000.0));
     }
 
     private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
