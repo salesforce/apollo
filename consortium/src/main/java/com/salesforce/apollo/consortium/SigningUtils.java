@@ -52,6 +52,21 @@ public final class SigningUtils {
         }
     }
 
+    public static Signature forSigning(PrivateKey privateKey, SecureRandom entropy) {
+        Signature signature;
+        try {
+            signature = Signature.getInstance(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("no such algorithm: " + Conversion.DEFAULT_SIGNATURE_ALGORITHM, e);
+        }
+        try {
+            signature.initSign(privateKey, entropy);
+        } catch (InvalidKeyException e) {
+            throw new IllegalStateException("invalid private key", e);
+        }
+        return signature;
+    }
+
     public static KeyPair generateKeyPair(final int keySize, String algorithm) {
         try {
             final KeyPairGenerator gen = KeyPairGenerator.getInstance(algorithm);
@@ -194,21 +209,6 @@ public final class SigningUtils {
             return false;
         }
         return true;
-    }
-
-    private static Signature forSigning(PrivateKey privateKey, SecureRandom entropy) {
-        Signature signature;
-        try {
-            signature = Signature.getInstance(Conversion.DEFAULT_SIGNATURE_ALGORITHM);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("no such algorithm: " + Conversion.DEFAULT_SIGNATURE_ALGORITHM, e);
-        }
-        try {
-            signature.initSign(privateKey, entropy);
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException("invalid private key", e);
-        }
-        return signature;
     }
 
     private SigningUtils() {

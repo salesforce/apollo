@@ -20,7 +20,6 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,7 +56,6 @@ import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.Result;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.TickScheduler.Timer;
-import com.salesforce.apollo.consortium.TransactionSimulator.EvaluatedTransaction;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.membership.Member;
@@ -125,7 +123,6 @@ public class CollaboratorContext {
     private final AtomicLong                           lastBlock         = new AtomicLong(-1);
     private final AtomicInteger                        nextRegent        = new AtomicInteger(-1);
     private final ProcessedBuffer                      processed;
-    private final TransactionSimulator                 simulator;
     private final Set<EnqueuedTransaction>             stopMessages      = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Map<Integer, Sync>                   sync              = new ConcurrentHashMap<>();
     private final Map<Timers, Timer>                   timers            = new ConcurrentHashMap<>();
@@ -137,7 +134,6 @@ public class CollaboratorContext {
         this.consortium = consortium;
         Parameters params = consortium.getParams();
         processed = new ProcessedBuffer(params.processedBufferSize);
-        simulator = new TransactionSimulator(params.maxBatchByteSize, this, params.maxBatchSize, params.validator);
     }
 
     public void awaitGenesis() {
@@ -399,7 +395,6 @@ public class CollaboratorContext {
     }
 
     public void generateBlocks() {
-        nextBatch();
         generate();
         scheduleFlush();
     }
@@ -421,7 +416,6 @@ public class CollaboratorContext {
     public void initializeConsensus() {
         CurrentBlock current = consortium.getCurrent();
         currentConsensus(current != null ? height(current.getBlock()) : 0);
-        simulator.start();
     }
 
     public boolean isRegent(int regency) {
@@ -485,8 +479,7 @@ public class CollaboratorContext {
 
         HashKey txnHash;
         try {
-            txnHash = consortium.submit(true, h -> {
-            }, joinTxn);
+            txnHash = consortium.submit(true, null, joinTxn);
         } catch (TimeoutException e) {
             return;
         }
@@ -547,6 +540,8 @@ public class CollaboratorContext {
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
+            SubmittedTransaction submitted = consortium.getSubmitted().remove(hash);
+            consortium.getParams().executor.accept(txn, submitted == null ? null : submitted.onCompletion);
         });
         accept(next);
         log.info("Processed user block: {} on: {}", next.getHash(), consortium.getMember());
@@ -613,10 +608,6 @@ public class CollaboratorContext {
 
     public void shutdown() {
         consortium.stop();
-    }
-
-    public void stopSimulation() {
-        simulator.stop();
     }
 
     public void synchronize(int elected, Map<Member, StopData> regencyData) {
@@ -819,17 +810,6 @@ public class CollaboratorContext {
         if (removed != null) {
             removed.cancel();
             processed.add(removed.getHash());
-            consortium.finalized(removed);
-        }
-        SubmittedTransaction submittedTxn = consortium.getSubmitted().remove(hash);
-        if (submittedTxn != null) {
-            if (submittedTxn.onCompletion != null) {
-                log.debug("Completing {} txn: {} on: {}", submittedTxn.submitted.getJoin() ? "JOIN" : "USER", hash,
-                          consortium.getMember());
-                ForkJoinPool.commonPool().execute(() -> submittedTxn.onCompletion.accept(hash));
-            }
-        } else {
-            log.debug("Processing txn: {} on: {}", hash, consortium.getMember());
         }
     }
 
@@ -957,28 +937,19 @@ public class CollaboratorContext {
                       consortium.getMember(), currentHeight);
             return false;
         }
-
-        if (simulator.peek() == null) {
-//            log.trace("No transactions to generate block on: {}", consortium.getMember());
+        List<EnqueuedTransaction> batch = nextBatch();
+        if (batch.isEmpty()) {
             return false;
         }
-
         User.Builder user = User.newBuilder();
-        int processedBytes = 0;
         List<HashKey> processed = new ArrayList<>();
 
-        while (simulator.peek() != null && processed.size() <= consortium.getParams().maxBatchSize
-                && processedBytes <= consortium.getParams().maxBatchByteSize) {
-            EvaluatedTransaction txn = simulator.poll();
-            if (txn != null) {
-                processedBytes += txn.getSerializedSize();
-                user.addTransactions(ExecutedTransaction.newBuilder()
-                                                        .setHash(txn.transaction.getHash().toByteString())
-                                                        .setTransaction(txn.transaction.getTransaction()))
-                    .addResponses(txn.result);
-                processed.add(txn.transaction.getHash());
-            }
-        }
+        batch.forEach(eqt -> {
+            user.addTransactions(ExecutedTransaction.newBuilder()
+                                                    .setHash(eqt.getHash().toByteString())
+                                                    .setTransaction(eqt.getTransaction()));
+            processed.add(eqt.getHash());
+        });
 
         if (processed.size() == 0) {
             log.debug("No transactions to generate block on: {}", consortium.getMember());
@@ -1078,16 +1049,18 @@ public class CollaboratorContext {
         lastBlock.set(l);
     }
 
-    private void nextBatch() {
+    private List<EnqueuedTransaction> nextBatch() {
         if (toOrder.isEmpty()) {
 //            log.debug("No transactions available to batch on: {}:{}", consortium.getMember(), toOrder.size());
-            return;
+            return Collections.emptyList();
         }
+
+        AtomicInteger processedBytes = new AtomicInteger(0);
         List<EnqueuedTransaction> batch = toOrder.values()
                                                  .stream()
-                                                 .limit(simulator.available())
-                                                 .map(eqt -> simulator.add(eqt) ? eqt : null)
+                                                 .limit(consortium.getParams().maxBatchSize)
                                                  .filter(eqt -> eqt != null)
+                                                 .filter(eqt -> processedBytes.addAndGet(eqt.getSerializedSize()) <= consortium.getParams().maxBatchByteSize)
                                                  .peek(eqt -> eqt.cancel())
                                                  .collect(Collectors.toList());
         batch.forEach(eqt -> {
@@ -1095,9 +1068,7 @@ public class CollaboratorContext {
             toOrder.remove(eqt.getHash());
             processed.add(eqt.getHash());
         });
-        if (!batch.isEmpty()) {
-            log.trace("submitting batch: {} for simulation on: {}", batch.size(), consortium.getMember());
-        }
+        return batch;
     }
 
     private void nextRegent(int n) {

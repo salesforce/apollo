@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -47,6 +48,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.consortium.proto.Header;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -75,7 +77,7 @@ public class TestConsortium {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final byte[]                            GENESIS_DATA    = "Give me FOOD or give me SLACK or KILL ME".getBytes();
+    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
@@ -154,7 +156,12 @@ public class TestConsortium {
             }
             return hash;
         };
-        gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters);
+        BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor = (et, c) -> {
+            if (c != null) {
+                c.accept(new HashKey(et.getHash()), null);
+            }
+        };
+        gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters, executor);
 
         Set<Consortium> blueRibbon = new HashSet<>();
         ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
@@ -195,7 +202,7 @@ public class TestConsortium {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit(h -> txnProcessed.set(true),
+            hash = client.submit((h, t) -> txnProcessed.set(true),
                                  ByteTransaction.newBuilder()
                                                 .setContent(ByteString.copyFromUtf8("Hello world"))
                                                 .build());
@@ -220,7 +227,7 @@ public class TestConsortium {
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
             try {
-                HashKey pending = client.submit(h -> {
+                HashKey pending = client.submit((h, t) -> {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
@@ -266,27 +273,27 @@ public class TestConsortium {
 
     private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
-                                  Messenger.Parameters msgParameters) {
+                                  Messenger.Parameters msgParameters,
+                                  BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor) {
         members.stream()
-               .map(m -> new Consortium(
-                       Parameters.newBuilder()
-                                 .setConsensus(consensus)
-                                 .setValidator(txn -> ByteString.copyFromUtf8("Give Me Food Or Give Me Slack Or Kill Me"))
-                                 .setMember(m)
-                                 .setSignature(() -> m.forSigning())
-                                 .setContext(view)
-                                 .setMsgParameters(msgParameters)
-                                 .setMaxBatchByteSize(1024 * 1024)
-                                 .setMaxBatchSize(1000)
-                                 .setCommunications(communications.get(m.getId()))
-                                 .setMaxBatchDelay(Duration.ofMillis(100))
-                                 .setGossipDuration(gossipDuration)
-                                 .setViewTimeout(Duration.ofMillis(500))
-                                 .setJoinTimeout(Duration.ofSeconds(5))
-                                 .setTransactonTimeout(Duration.ofSeconds(15))
-                                 .setScheduler(scheduler)
-                                 .setGenesisData(GENESIS_DATA)
-                                 .build()))
+               .map(m -> new Consortium(Parameters.newBuilder()
+                                                  .setConsensus(consensus)
+                                                  .setMember(m)
+                                                  .setSignature(() -> m.forSigning())
+                                                  .setContext(view)
+                                                  .setMsgParameters(msgParameters)
+                                                  .setMaxBatchByteSize(1024 * 1024)
+                                                  .setMaxBatchSize(1000)
+                                                  .setCommunications(communications.get(m.getId()))
+                                                  .setMaxBatchDelay(Duration.ofMillis(100))
+                                                  .setGossipDuration(gossipDuration)
+                                                  .setViewTimeout(Duration.ofMillis(500))
+                                                  .setJoinTimeout(Duration.ofSeconds(5))
+                                                  .setTransactonTimeout(Duration.ofSeconds(15))
+                                                  .setScheduler(scheduler)
+                                                  .setExecutor(executor)
+                                                  .setGenesisData(GENESIS_DATA.toByteArray())
+                                                  .build()))
                .peek(c -> view.activate(c.getMember()))
                .forEach(e -> consortium.put(e.getMember(), e));
     }

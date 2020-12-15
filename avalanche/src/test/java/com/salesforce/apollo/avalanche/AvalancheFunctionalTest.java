@@ -37,6 +37,8 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
@@ -136,8 +138,10 @@ abstract public class AvalancheFunctionalTest {
 
         // generate the genesis transaction
         TimedProcessor master = processors.get(0);
-        CompletableFuture<HashKey> genesis = master.createGenesis("Genesis".getBytes(), Duration.ofSeconds(90),
-                                                                  scheduler);
+        CompletableFuture<HashKey> genesis = master.createGenesis(ByteMessage.newBuilder()
+                                                                             .setContents(ByteString.copyFromUtf8("Genesis"))
+                                                                             .build(),
+                                                                  Duration.ofSeconds(90), scheduler);
         HashKey genesisKey = null;
         try {
             genesisKey = genesis.get(10, TimeUnit.SECONDS);

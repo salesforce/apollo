@@ -18,6 +18,7 @@ import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.protocols.HashKey;
@@ -73,7 +74,7 @@ public interface Processor {
          *         The returned HashKey is the hash key of the the finalized genesis
          *         transaction in the DAG
          */
-        public CompletableFuture<HashKey> createGenesis(byte[] data, Duration timeout,
+        public CompletableFuture<HashKey> createGenesis(Message data, Duration timeout,
                                                         ScheduledExecutorService scheduler) {
             CompletableFuture<HashKey> futureSailor = new CompletableFuture<>();
             HashKey key = avalanche.submitGenesis(data);
@@ -121,9 +122,9 @@ public interface Processor {
          * @param future  - optional future to be notified of finalization
          * @return the HashKey of the transaction, null if invalid
          */
-        public HashKey submitTransaction(HashKey description, byte[] data, Duration timeout,
-                                         CompletableFuture<HashKey> future, ScheduledExecutorService scheduler) {
-            HashKey key = avalanche.submitTransaction(description, data);
+        public HashKey submitTransaction(Message data, Duration timeout, CompletableFuture<HashKey> future,
+                                         ScheduledExecutorService scheduler) {
+            HashKey key = avalanche.submitTransaction(data);
             if (future != null) {
                 pendingTransactions.put(key, new PendingTransaction(future,
                         scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
@@ -131,10 +132,10 @@ public interface Processor {
             return key;
         }
 
-        public CompletableFuture<HashKey> submitTransaction(HashKey description, byte[] data, Duration timeout,
+        public CompletableFuture<HashKey> submitTransaction(Message data, Duration timeout,
                                                             ScheduledExecutorService scheduler) {
             CompletableFuture<HashKey> future = new CompletableFuture<>();
-            submitTransaction(description, data, timeout, future, scheduler);
+            submitTransaction(data, timeout, future, scheduler);
             return future;
         }
 

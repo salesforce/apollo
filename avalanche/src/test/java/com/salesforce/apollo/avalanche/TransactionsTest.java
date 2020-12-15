@@ -7,8 +7,6 @@
 package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.avalanche.DagTest.dag;
-import static com.salesforce.apollo.protocols.Conversion.hashOf;
-import static com.salesforce.apollo.protocols.Conversion.serialize;
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,6 +37,7 @@ import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.avalanche.Processor.NullProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
+import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -68,7 +67,7 @@ public class TransactionsTest {
         entropy = new Random(0x1638);
         parameters = new AvalancheParameters();
         dag = new WorkingSet(new NullProcessor(), parameters, new DagWood(parameters.dagWood), null);
-        root = dag(WellKnownDescriptions.GENESIS.toHash(), "Ye root".getBytes());
+        root = dag("Ye root".getBytes());
         rootKey = dag.insert(root, 0);
         assertNotNull(rootKey);
     }
@@ -242,20 +241,17 @@ public class TransactionsTest {
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
-        DagEntry entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 1).getBytes(),
-                             asList(rootKey));
+        DagEntry entry = dag(String.format("DagEntry: %s", 1).getBytes(), asList(rootKey));
         HashKey key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 2).getBytes(),
-                    asList(key));
+        entry = dag(String.format("DagEntry: %s", 2).getBytes(), asList(key));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 3).getBytes(),
-                    asList(ordered.get(1), ordered.get(2)));
+        entry = dag(String.format("DagEntry: %s", 3).getBytes(), asList(ordered.get(1), ordered.get(2)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -277,8 +273,7 @@ public class TransactionsTest {
             assertTrue(dag.isStronglyPreferred(test), String.format("node %s is not strongly preferred", i));
         }
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 4).getBytes(),
-                    asList(ordered.get(1), ordered.get(2)));
+        entry = dag(String.format("DagEntry: %s", 4).getBytes(), asList(ordered.get(1), ordered.get(2)));
         key = dag.insert(entry, ordered.get(3), 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -294,7 +289,7 @@ public class TransactionsTest {
             assertTrue(dag.isStronglyPreferred(ordered.get(it)), String.format("node %s is not strongly preferred", i));
         }
 
-        entry = dag(null, String.format("DagEntry: %s", 5).getBytes(), asList(ordered.get(1), ordered.get(4)));
+        entry = dag(String.format("DagEntry: %s", 5).getBytes(), asList(ordered.get(1), ordered.get(4)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -410,8 +405,7 @@ public class TransactionsTest {
         assertEquals(1, sampled.size());
         assertTrue(sampled.contains(ordered.get(0)));
 
-        DagEntry entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 1).getBytes(),
-                             asList(rootKey));
+        DagEntry entry = dag(String.format("DagEntry: %s", 1).getBytes(), asList(rootKey));
         HashKey key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -420,8 +414,7 @@ public class TransactionsTest {
         assertEquals(1, sampled.size());
         assertTrue(sampled.contains(ordered.get(1)));
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 2).getBytes(),
-                    asList(key));
+        entry = dag(String.format("DagEntry: %s", 2).getBytes(), asList(key));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -431,20 +424,17 @@ public class TransactionsTest {
         assertTrue(sampled.contains(ordered.get(1)));
         assertTrue(sampled.contains(ordered.get(2)));
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 3).getBytes(),
-                    asList(ordered.get(1), ordered.get(2)));
+        entry = dag(String.format("DagEntry: %s", 3).getBytes(), asList(ordered.get(1), ordered.get(2)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 4).getBytes(),
-                    asList(ordered.get(1), ordered.get(2)));
+        entry = dag(String.format("DagEntry: %s", 4).getBytes(), asList(ordered.get(1), ordered.get(2)));
         key = dag.insert(entry, ordered.get(3), 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 5).getBytes(),
-                    asList(ordered.get(1), ordered.get(3)));
+        entry = dag(String.format("DagEntry: %s", 5).getBytes(), asList(ordered.get(1), ordered.get(3)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -457,8 +447,7 @@ public class TransactionsTest {
         assertTrue(sampled.contains(ordered.get(5)));
 
         // Add a new node to the frontier
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 6).getBytes(),
-                    asList(ordered.get(1), ordered.get(5)));
+        entry = dag(String.format("DagEntry: %s", 6).getBytes(), asList(ordered.get(1), ordered.get(5)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -480,32 +469,27 @@ public class TransactionsTest {
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
-        DagEntry entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 1).getBytes(),
-                             asList(rootKey));
+        DagEntry entry = dag(String.format("DagEntry: %s", 1).getBytes(), asList(rootKey));
         HashKey key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 2).getBytes(),
-                    asList(key));
+        entry = dag(String.format("DagEntry: %s", 2).getBytes(), asList(key));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 3).getBytes(),
-                    asList(ordered.get(1), ordered.get(2)));
+        entry = dag(String.format("DagEntry: %s", 3).getBytes(), asList(ordered.get(1), ordered.get(2)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 4).getBytes(),
-                    asList(ordered.get(1), ordered.get(2)));
+        entry = dag(String.format("DagEntry: %s", 4).getBytes(), asList(ordered.get(1), ordered.get(2)));
         key = dag.insert(entry, ordered.get(3), 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 5).getBytes(),
-                    asList(ordered.get(1), ordered.get(3)));
+        entry = dag(String.format("DagEntry: %s", 5).getBytes(), asList(ordered.get(1), ordered.get(3)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -521,8 +505,7 @@ public class TransactionsTest {
         assertFalse(frontier.contains(ordered.get(4)));
 
         // Add a new node to the frontier
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 6).getBytes(),
-                    asList(ordered.get(1), ordered.get(5)));
+        entry = dag(String.format("DagEntry: %s", 6).getBytes(), asList(ordered.get(1), ordered.get(5)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -548,33 +531,28 @@ public class TransactionsTest {
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
-        DagEntry entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 1).getBytes(),
-                             asList(rootKey));
+        DagEntry entry = dag(String.format("DagEntry: %s", 1).getBytes(), asList(rootKey));
         HashKey key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 2).getBytes(),
-                    asList(key));
+        entry = dag(String.format("DagEntry: %s", 2).getBytes(), asList(key));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
         // Nodes 3, 4 conflict. 3 is the preference initially
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 3).getBytes(),
-                    asList(ordered.get(1), ordered.get(2)));
+        entry = dag(String.format("DagEntry: %s", 3).getBytes(), asList(ordered.get(1), ordered.get(2)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 4).getBytes(),
-                    asList(ordered.get(1), ordered.get(2)));
+        entry = dag(String.format("DagEntry: %s", 4).getBytes(), asList(ordered.get(1), ordered.get(2)));
         key = dag.insert(entry, ordered.get(3), 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 5).getBytes(),
-                    asList(ordered.get(1), ordered.get(4)));
+        entry = dag(String.format("DagEntry: %s", 5).getBytes(), asList(ordered.get(1), ordered.get(4)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -612,8 +590,7 @@ public class TransactionsTest {
         assertTrue(dag.isStronglyPreferred(ordered.get(3)));
         assertFalse(dag.isStronglyPreferred(ordered.get(4)), String.format("node 4 is strongly preferred"));
 
-        entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), String.format("DagEntry: %s", 6).getBytes(),
-                    asList(ordered.get(1), ordered.get(5)));
+        entry = dag(String.format("DagEntry: %s", 6).getBytes(), asList(ordered.get(1), ordered.get(5)));
         key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
@@ -642,8 +619,8 @@ public class TransactionsTest {
 
     HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links,
                         HashKey conflictSet, boolean store) {
-        DagEntry entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(), contents.getBytes(), links);
-        HashKey key = store ? dag.insert(entry, conflictSet, 0) : new HashKey(hashOf(serialize(entry)));
+        DagEntry entry = dag(contents.getBytes(), links);
+        HashKey key = store ? dag.insert(entry, conflictSet, 0) : new HashKey(Conversion.hashOf(entry.toByteString()));
         stored.put(key, entry);
         ordered.add(key);
         return key;

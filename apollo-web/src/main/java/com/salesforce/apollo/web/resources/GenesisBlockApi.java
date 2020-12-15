@@ -23,6 +23,8 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
 import com.codahale.metrics.annotation.Timed;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -70,7 +72,10 @@ public class GenesisBlockApi {
                     Response.status(Status.BAD_REQUEST).entity("Cannot decode B64 url encoded content").build());
         }
 
-        CompletableFuture<HashKey> submitted = processor.createGenesis(data, Duration.ofMillis(30_000), scheduler);
+        CompletableFuture<HashKey> submitted = processor.createGenesis(ByteMessage.newBuilder()
+                                                                                  .setContents(ByteString.copyFrom(data))
+                                                                                  .build(),
+                                                                       Duration.ofMillis(30_000), scheduler);
         HashKey result;
         try {
             result = submitted.get(30_000, TimeUnit.MILLISECONDS);

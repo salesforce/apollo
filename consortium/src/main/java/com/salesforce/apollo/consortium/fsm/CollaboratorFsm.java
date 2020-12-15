@@ -111,7 +111,6 @@ public enum CollaboratorFsm implements Transitions {
         public void cancelBatchGeneration() {
             CollaboratorContext context = context();
             context.cancel(Timers.FLUSH_BATCH);
-            context.stopSimulation();
         }
 
         @Override

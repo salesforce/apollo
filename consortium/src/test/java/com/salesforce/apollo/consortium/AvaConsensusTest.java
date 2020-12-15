@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
 import com.salesforce.apollo.avalanche.DagDao;
@@ -71,7 +72,7 @@ public class AvaConsensusTest {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final byte[]                            GENESIS_DATA    = "Give me FOOD or give me SLACK or KILL ME".getBytes();
+    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
@@ -172,7 +173,7 @@ public class AvaConsensusTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit(h -> txnProcessed.set(true),
+            hash = client.submit((h, t) -> txnProcessed.set(true),
                                  ByteTransaction.newBuilder()
                                                 .setContent(ByteString.copyFromUtf8("Hello world"))
                                                 .build());
@@ -197,7 +198,7 @@ public class AvaConsensusTest {
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
             try {
-                HashKey pending = client.submit(h -> {
+                HashKey pending = client.submit((h, t) -> {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
@@ -269,25 +270,23 @@ public class AvaConsensusTest {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
             AvaAdapter adapter = new AvaAdapter(processed);
-            Consortium member = new Consortium(
-                    Parameters.newBuilder()
-                              .setConsensus(adapter.getConsensus())
-                              .setValidator(txn -> ByteString.copyFromUtf8("Give Me Food Or Give Me Slack Or Kill Me"))
-                              .setMember(m)
-                              .setSignature(() -> m.forSigning())
-                              .setContext(view)
-                              .setMsgParameters(msgParameters)
-                              .setMaxBatchByteSize(1024 * 1024)
-                              .setMaxBatchSize(1000)
-                              .setCommunications(communications.get(m.getId()))
-                              .setMaxBatchDelay(Duration.ofMillis(100))
-                              .setGossipDuration(gossipDuration)
-                              .setViewTimeout(Duration.ofMillis(500))
-                              .setJoinTimeout(Duration.ofSeconds(5))
-                              .setTransactonTimeout(Duration.ofSeconds(15))
-                              .setScheduler(scheduler)
-                              .setGenesisData(GENESIS_DATA)
-                              .build());
+            Consortium member = new Consortium(Parameters.newBuilder()
+                                                         .setConsensus(adapter.getConsensus())
+                                                         .setMember(m)
+                                                         .setSignature(() -> m.forSigning())
+                                                         .setContext(view)
+                                                         .setMsgParameters(msgParameters)
+                                                         .setMaxBatchByteSize(1024 * 1024)
+                                                         .setMaxBatchSize(1000)
+                                                         .setCommunications(communications.get(m.getId()))
+                                                         .setMaxBatchDelay(Duration.ofMillis(100))
+                                                         .setGossipDuration(gossipDuration)
+                                                         .setViewTimeout(Duration.ofMillis(500))
+                                                         .setJoinTimeout(Duration.ofSeconds(5))
+                                                         .setTransactonTimeout(Duration.ofSeconds(15))
+                                                         .setScheduler(scheduler)
+                                                         .setGenesisData(GENESIS_DATA.toByteArray())
+                                                         .build());
             adapter.setConsortium(member);
             adapters.put(m, adapter);
             return member;
@@ -296,7 +295,9 @@ public class AvaConsensusTest {
     }
 
     private HashKey genesis(Avalanche master) {
-        HashKey genesisKey = master.submitGenesis("Genesis".getBytes());
+        HashKey genesisKey = master.submitGenesis(ByteMessage.newBuilder()
+                                                             .setContents(ByteString.copyFromUtf8("Genesis"))
+                                                             .build());
         assertNotNull(genesisKey);
         DagDao dao = new DagDao(master.getDag());
         boolean completed = Utils.waitForCondition(10_000, () -> dao.isFinalized(genesisKey));

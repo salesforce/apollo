@@ -33,9 +33,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
+import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.QueryResult.Vote;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
@@ -209,44 +213,29 @@ public class Avalanche {
         }
     }
 
-    public HashKey submitGenesis(byte[] data) {
-        return submit(WellKnownDescriptions.GENESIS.toHash(), ByteString.copyFrom(data),
-                      WorkingSet.GENESIS_CONFLICT_SET, true);
+    public HashKey submitGenesis(Message data) {
+        return submit(EntryType.GENSIS, data, WorkingSet.GENESIS_CONFLICT_SET);
     }
 
     /**
      * Submit a transaction to the group.
      * 
-     * @param description - the transaction classification
-     * @param data        - the transaction content
+     * @param data - the transaction content
      * @return the HashKey of the transaction, null if invalid
      */
-    public HashKey submitTransaction(HashKey description, byte[] data) {
-        return submitTransaction(description, data, null);
+    public HashKey submitTransaction(Message data) {
+        return submitTransaction(data, null);
     }
 
     /**
      * Submit a transaction to the group.
      * 
-     * @param description - the transaction classification
      * @param data        - the transaction content
      * @param conflictSet - the conflict set key for this transaction
      * @return the HashKey of the transaction, null if invalid
      */
-    public HashKey submitTransaction(HashKey description, byte[] data, HashKey conflictSet) {
-        return submitTransaction(description, ByteString.copyFrom(data), conflictSet);
-    }
-
-    /**
-     * Submit a transaction to the group.
-     * 
-     * @param description - the transaction classification
-     * @param data        - the transaction content
-     * @param conflictSet - the conflict set key for this transaction
-     * @return the HashKey of the transaction, null if invalid
-     */
-    public HashKey submitTransaction(HashKey description, ByteString data, HashKey conflictSet) {
-        return submit(description, data, conflictSet, false);
+    public HashKey submitTransaction(Message data, HashKey conflictSet) {
+        return submit(EntryType.USER, data, conflictSet);
     }
 
     private void finalize(List<HashKey> preferings) {
@@ -288,7 +277,10 @@ public class Avalanche {
             }
             byte[] dummy = new byte[4];
             getEntropy().nextBytes(dummy);
-            Builder builder = DagEntry.newBuilder().setData(ByteString.copyFrom(dummy));
+            Builder builder = DagEntry.newBuilder()
+                                      .setData(Any.pack(ByteMessage.newBuilder()
+                                                                   .setContents(ByteString.copyFrom(dummy))
+                                                                   .build()));
             parents.stream().map(e -> e.toID()).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
             assert dagEntry.getLinksCount() > 0 : "Whoopsie";
@@ -547,7 +539,7 @@ public class Avalanche {
         }
     }
 
-    private HashKey submit(HashKey description, ByteString data, HashKey conflictSet, boolean genesis) {
+    private HashKey submit(EntryType type, Message data, HashKey conflictSet) {
         if (!running.get()) {
             throw new IllegalStateException("Service is not running");
         }
@@ -556,10 +548,7 @@ public class Avalanche {
         }
         Set<HashKey> parents;
 
-        if (genesis) {
-            if (!WellKnownDescriptions.GENESIS.toHash().equals(description)) {
-                throw new IllegalArgumentException("Must use GENESIS description for genesis block");
-            }
+        if (EntryType.GENSIS == type) {
             parents = Collections.emptySet();
         } else {
             parents = new HashSet<>();
@@ -579,7 +568,7 @@ public class Avalanche {
         Timer.Context timer = metrics == null ? null : metrics.getSubmissionTimer().time();
         try {
 
-            Builder builder = DagEntry.newBuilder().setDescription(description.toID()).setData(data);
+            Builder builder = DagEntry.newBuilder().setDescription(type).setData(Any.pack(data));
             parents.stream().map(e -> e.toID()).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
 

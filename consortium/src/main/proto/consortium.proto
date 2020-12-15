@@ -81,7 +81,6 @@ message Genesis {
 
 message User {
     repeated ExecutedTransaction transactions = 1;
-    repeated bytes responses = 2;
 }
 
 message Reconfigure {
@@ -123,7 +122,6 @@ message Transaction {
 message ExecutedTransaction {
     bytes hash = 1;
     Transaction transaction = 2;
-    google.protobuf.Any result = 3;
 }
 
 message Validate {

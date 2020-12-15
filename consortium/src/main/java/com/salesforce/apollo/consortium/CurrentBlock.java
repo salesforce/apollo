@@ -13,7 +13,7 @@ public class CurrentBlock {
     private final Block   block;
     private final HashKey hash;
 
-    CurrentBlock(HashKey hash, Block block) {
+    public CurrentBlock(HashKey hash, Block block) {
         this.hash = hash;
         this.block = block;
     }

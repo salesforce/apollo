@@ -13,7 +13,6 @@ import java.sql.SQLException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 import javax.sql.DataSource;
@@ -31,7 +30,6 @@ import org.apache.calcite.schema.Table;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
-import com.salesforce.apollo.state.CdcEngine;
 
 /**
  * @author hal.hildebrand
@@ -45,12 +43,12 @@ public class ChainSchema implements SchemaPlus {
     private final Map<String, SchemaPlus>       schemaMap = new HashMap<>();
     private final Map<String, Table>            tableMap  = new HashMap<>();
     private final Map<String, RelProtoDataType> typeMap   = new HashMap<>();
-    private final CdcEngine                     engine;
+    private final Connection                    connection;
 
-    public ChainSchema(CdcEngine engine) throws SQLException {
-        this.engine = Objects.requireNonNull(engine);
+    public ChainSchema(Connection connection) throws SQLException {
+        this.connection = connection;
         snapshot = tableMap != null;
-        initializeFrom(engine.getConnection().getMetaData());
+        initializeFrom(connection.getMetaData());
     }
 
     @Override
@@ -237,11 +235,11 @@ public class ChainSchema implements SchemaPlus {
     }
 
     public Connection getConnection() {
-        return engine.getConnection();
+        return connection;
     }
 
     public DataSource getDatasource() {
-        return engine.getDatasource();
+        return null;
     }
 
 }

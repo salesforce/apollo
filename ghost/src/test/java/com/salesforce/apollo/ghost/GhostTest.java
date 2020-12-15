@@ -29,7 +29,9 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesforce.apollo.comm.LocalRouter;
@@ -134,9 +136,12 @@ public class GhostTest {
         for (int i = 0; i < rounds; i++) {
             for (Ghost ghost : ghosties) {
                 Builder builder = DagEntry.newBuilder()
-                                          .setData(ByteString.copyFrom(String.format("Member: %s round: %s",
-                                                                                     ghost.getNode().getId(), i)
-                                                                             .getBytes()));
+                                          .setData(Any.pack(ByteMessage.newBuilder()
+                                                                       .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
+                                                                                                                          ghost.getNode()
+                                                                                                                               .getId(),
+                                                                                                                          i)))
+                                                                       .build()));
                 DagEntry entry = builder.build();
                 stored.put(ghost.putDagEntry(entry), entry);
             }

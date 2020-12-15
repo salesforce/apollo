@@ -53,6 +53,10 @@ public class EnqueuedTransaction {
         return hash;
     }
 
+    public int getSerializedSize() {
+        return transaction.toByteString().size();
+    }
+
     public Timer getTimer() {
         final Timer c = timer;
         return c;

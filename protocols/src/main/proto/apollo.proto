@@ -194,10 +194,16 @@ message Update {
     }
 
 message DagEntry {
-        ID description = 1;
-        repeated ID links = 2;
-        bytes data = 3;
-    }
+    enum EntryType {
+        INVALID = 0;
+        GENSIS = 1; 
+        NO_OP = 2;
+        USER = 3;
+    } 
+    EntryType description = 1;
+    repeated ID links = 2;
+    google.protobuf.Any data = 3;
+}
 
 message Interval {
         ID start = 1;

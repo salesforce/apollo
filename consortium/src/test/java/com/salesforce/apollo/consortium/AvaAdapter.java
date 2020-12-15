@@ -19,7 +19,6 @@ import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.avalanche.Processor;
-import com.salesforce.apollo.avalanche.WellKnownDescriptions;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -51,8 +50,7 @@ public class AvaAdapter implements Processor {
     }
 
     public BiFunction<CertifiedBlock, Future<?>, HashKey> getConsensus() {
-        return (cb, f) -> avalanche.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(), cb.toByteString(),
-                                                      new HashKey(cb.getBlock().getHeader().getPrevious()));
+        return (cb, f) -> avalanche.submitTransaction(cb, new HashKey(cb.getBlock().getHeader().getPrevious()));
     }
 
     public Consortium getConsortium() {
@@ -84,10 +82,12 @@ public class AvaAdapter implements Processor {
 
     private CertifiedBlock certifiedBlock(DagEntry entry) {
         try {
-            return CertifiedBlock.parseFrom(entry.getData());
+            if (entry.getData().is(CertifiedBlock.class)) {
+                return entry.getData().unpack(CertifiedBlock.class);
+            }
         } catch (InvalidProtocolBufferException e) {
-            return null;
         }
+        return null;
     }
 
     private CertifiedBlock certifiedBlock(Finalized f) {

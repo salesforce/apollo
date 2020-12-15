@@ -35,6 +35,7 @@ Consortium uses a mixture of Broadcast as well as point to point messaging.  Cli
 
 ## Pluggable Consensus
 
-Consortium is designed to use another, group wide consensus mechanism to totally order blocks within the underlying Consortium Context.  The committee is used simply to distribute processing load fairly and randomly throughout the
+Consortium is designed to use another, group wide consensus mechanism to totally order blocks within the underlying Consortium Context.  Consortium also relies upon this underlying consensus to replicate the blocks throughout the 
+membership.  The committee is used simply to distribute processing load - transaction simulation and result production - fairly and randomly throughout the
 membership (selection process may be policy weighted, 'natch).  Block generation is leader based and generated blocks, once validated, are submitted to the supplied consensus.  In Apollo, this is currently tested with the Avalanche
 consensus, but will likely be moved to a Snowball protocol or similar, due to the linear nature of the log (i.e. not DAG based).

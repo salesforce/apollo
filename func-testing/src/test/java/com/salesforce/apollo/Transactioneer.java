@@ -16,8 +16,9 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
-import com.salesforce.apollo.avalanche.WellKnownDescriptions;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -91,9 +92,11 @@ public class Transactioneer {
     }
 
     private void addTransaction(Duration txnWait, ScheduledExecutorService scheduler) {
-        outstanding.add(processor.submitTransaction(WellKnownDescriptions.BYTE_CONTENT.toHash(),
-                                                    ("transaction for: " + processor.getAvalanche().getNode().getId()
-                                                            + " : " + counter.incrementAndGet()).getBytes(),
+        outstanding.add(processor.submitTransaction(ByteMessage.newBuilder()
+                                                               .setContents(ByteString.copyFromUtf8(("transaction for: "
+                                                                       + processor.getAvalanche().getNode().getId()
+                                                                       + " : " + counter.incrementAndGet())))
+                                                               .build(),
                                                     txnWait, scheduler));
     }
 }

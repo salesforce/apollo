@@ -27,9 +27,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
+import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesforce.apollo.avalanche.Processor.NullProcessor;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -57,15 +60,18 @@ public class DagTest {
     public void after() {
     }
 
-    public static DagEntry dag(HashKey description, byte[] data) {
-        return dag(description, data, Collections.emptyList());
+    public static DagEntry dag(byte[] data) {
+        return dag(EntryType.GENSIS, data, Collections.emptyList());
     }
 
-    public static DagEntry dag(HashKey description, byte[] data, List<HashKey> links) {
+    public static DagEntry dag(byte[] data, List<HashKey> links) {
+        return dag(EntryType.USER, data, links);
+    }
+
+    public static DagEntry dag(EntryType type, byte[] data, List<HashKey> links) {
         Builder builder = DagEntry.newBuilder();
-        if (description != null)
-            builder.setDescription(description.toID());
-        builder.setData(ByteString.copyFrom(data));
+        builder.setDescription(type);
+        builder.setData(Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFrom(data)).build()));
         links.forEach(e -> builder.addLinks(e.toID()));
         return builder.build();
     }
@@ -75,7 +81,7 @@ public class DagTest {
         entropy = new Random(0x666);
         final AvalancheParameters parameters = new AvalancheParameters();
         workingSet = new WorkingSet(new NullProcessor(), parameters, new DagWood(parameters.dagWood), null);
-        root = dag(WellKnownDescriptions.GENESIS.toHash(), "Ye root".getBytes());
+        root = dag("Ye root".getBytes());
         rootKey = workingSet.insert(root, 0);
         assertNotNull(rootKey);
     }
@@ -94,8 +100,7 @@ public class DagTest {
         stored.put(rootKey, root);
 
         for (int i = 0; i < 500; i++) {
-            DagEntry entry = dag(WellKnownDescriptions.BYTE_CONTENT.toHash(),
-                                 String.format("DagEntry: %s", i).getBytes(), randomLinksTo(stored));
+            DagEntry entry = dag(EntryType.USER, String.format("DagEntry: %s", i).getBytes(), randomLinksTo(stored));
             HashKey key = workingSet.insert(entry, 0);
             stored.put(key, entry);
             ordered.add(key);
