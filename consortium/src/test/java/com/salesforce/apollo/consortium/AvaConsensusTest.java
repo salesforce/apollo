@@ -72,7 +72,7 @@ public class AvaConsensusTest {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final byte[]                            GENESIS_DATA    = "Give me FOOD or give me SLACK or KILL ME".getBytes();
+    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
@@ -285,7 +285,7 @@ public class AvaConsensusTest {
                                                          .setJoinTimeout(Duration.ofSeconds(5))
                                                          .setTransactonTimeout(Duration.ofSeconds(15))
                                                          .setScheduler(scheduler)
-                                                         .setGenesisData(GENESIS_DATA)
+                                                         .setGenesisData(GENESIS_DATA.toByteArray())
                                                          .build());
             adapter.setConsortium(member);
             adapters.put(m, adapter);

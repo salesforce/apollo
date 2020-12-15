@@ -44,6 +44,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesforce.apollo.comm.LocalRouter;
@@ -71,7 +72,7 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 public class ConsortiumTest {
 
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final byte[]                            GENESIS_DATA    = "Give me FOOD or give me SLACK or KILL ME".getBytes();
+    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private final static int                               testCardinality = 5;
 
@@ -263,7 +264,7 @@ public class ConsortiumTest {
                                                                           entropy))
                               .setContext(view)
                               .setMsgParameters(msgParameters)
-                              .setMaxBatchByteSize(1024 * 1024)
+                              .setMaxBatchByteSize(1024 * 1024 * 32)
                               .setMaxBatchSize(1000)
                               .setCommunications(communications.get(m.getId()))
                               .setMaxBatchDelay(Duration.ofMillis(100))
@@ -273,7 +274,7 @@ public class ConsortiumTest {
                               .setTransactonTimeout(Duration.ofSeconds(15))
                               .setExecutor(up)
                               .setScheduler(scheduler)
-                              .setGenesisData(GENESIS_DATA)
+                              .setGenesisData(GENESIS_DATA.toByteArray())
                               .build());
             return c;
         }).peek(c -> view.activate(c.getMember())).forEach(e -> consortium.put(e.getMember(), e));
