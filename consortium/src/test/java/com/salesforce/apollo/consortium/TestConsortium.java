@@ -149,9 +149,8 @@ public class TestConsortium {
             HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
             if (decided.add(hash)) {
                 cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
-                    if (m.process(c)) {
-                        processed.get().countDown();
-                    }
+                    m.process(c);
+                    processed.get().countDown();
                 }));
             }
             return hash;
@@ -287,9 +286,9 @@ public class TestConsortium {
                                                   .setCommunications(communications.get(m.getId()))
                                                   .setMaxBatchDelay(Duration.ofMillis(100))
                                                   .setGossipDuration(gossipDuration)
-                                                  .setViewTimeout(Duration.ofMillis(500))
+                                                  .setViewTimeout(Duration.ofMillis(1500))
                                                   .setJoinTimeout(Duration.ofSeconds(5))
-                                                  .setTransactonTimeout(Duration.ofSeconds(15))
+                                                  .setTransactonTimeout(Duration.ofSeconds(30))
                                                   .setScheduler(scheduler)
                                                   .setExecutor(executor)
                                                   .setGenesisData(GENESIS_DATA.toByteArray())

@@ -91,6 +91,11 @@
 			<artifactId>test-population</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>avalanche</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

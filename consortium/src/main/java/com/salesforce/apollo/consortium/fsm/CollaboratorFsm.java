@@ -115,7 +115,8 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions deliverBlock(Block block, Member from) {
-            throw fsm().invalidTransitionOn();
+            context().deliverBlock(block, from);
+            return null;
         }
 
         @Override

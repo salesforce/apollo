@@ -14,17 +14,22 @@
         </encoder>
     </appender>  
 
-    <logger name="com.salesforce.apollo.fireflies" level="WARN"
+    <logger name="com.salesforce.apollo.avalanche" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ghost" level="INFO"
+    <logger name="com.salesforce.apollo.consortium" level="INFO"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <root level="INFO">
+    <logger name="com.salesforce.apollo.state" level="INFO"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <root level="WARN">
         <appender-ref ref="STDOUT" />
     </root>
 

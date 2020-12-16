@@ -6,8 +6,10 @@
  */
 package com.salesforce.apollo.state;
 
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -15,25 +17,20 @@ import java.io.File;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -43,8 +40,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesfoce.apollo.state.proto.Statement;
+import com.salesforce.apollo.avalanche.Avalanche;
+import com.salesforce.apollo.avalanche.AvalancheParameters;
+import com.salesforce.apollo.avalanche.DagDao;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -54,6 +54,9 @@ import com.salesforce.apollo.consortium.Parameters;
 import com.salesforce.apollo.consortium.SigningUtils;
 import com.salesforce.apollo.consortium.ViewContext;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
+import com.salesforce.apollo.fireflies.FirefliesParameters;
+import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
@@ -62,17 +65,22 @@ import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
+import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class ConsortiumTest {
+public class AvaTest {
 
+    private static final RootCertificate                   ca             = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
-    private static final Duration                          gossipDuration  = Duration.ofMillis(10);
-    private final static int                               testCardinality = 5;
+    private static final ByteString                        GENESIS_DATA   = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
+    private static final Duration                          gossipDuration = Duration.ofMillis(10);
+
+    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+
+    private final static int testCardinality = 5;
 
     @BeforeAll
     public static void beforeClass() {
@@ -82,16 +90,19 @@ public class ConsortiumTest {
                          .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
+    private final Map<Member, Avalanche>  avas           = new HashMap<>();
     private File                          baseDir;
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private Map<HashKey, Router>          communications = new HashMap<>();
     private final Map<Member, Consortium> consortium     = new HashMap<>();
     private SecureRandom                  entropy;
-    private List<Member>                  members;
+    private List<Node>                    members;
     private final Map<Member, Updater>    updaters       = new HashMap<>();
 
     @AfterEach
     public void after() {
+        avas.values().forEach(e -> e.stop());
+        avas.clear();
         consortium.values().forEach(e -> e.stop());
         consortium.clear();
         communications.values().forEach(e -> e.close());
@@ -113,7 +124,7 @@ public class ConsortiumTest {
         members = new ArrayList<>();
         for (CertificateWithPrivateKey cert : certs.values()) {
             if (members.size() < testCardinality) {
-                members.add(new Member(cert.getX509Certificate()));
+                members.add(new Node(new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()), parameters));
             } else {
                 break;
             }
@@ -132,26 +143,13 @@ public class ConsortiumTest {
         Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
-                                                                 .setBufferSize(100)
+                                                                 .setBufferSize(1000)
                                                                  .setEntropy(new SecureRandom())
                                                                  .build();
-        Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
-        Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        BiFunction<CertifiedBlock, Future<?>, HashKey> consensus = (c, f) -> {
-            HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
-            if (decided.add(hash)) {
-                cPipeline.execute(() -> {
-                    Map<Member, Consortium> copy = new HashMap<>(consortium);
-                    copy.values().parallelStream().forEach(m -> {
-                        m.process(c);
-                        processed.get().countDown();
-                    });
-                });
-            }
-            return hash;
-        };
-        gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters);
+        Map<Member, AvaAdapter> adapters = gatherConsortium(view, processed, gossipDuration, scheduler, msgParameters);
+        gatherAvalanche(view, adapters);
+        gatherAvalanche(view, adapters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
         ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
@@ -159,11 +157,14 @@ public class ConsortiumTest {
         });
 
         communications.values().forEach(r -> r.start());
+        adapters.values().forEach(p -> p.getAvalanche().start(scheduler, Duration.ofMillis(50)));
+        genesis(adapters.get(members.get(0)).getAvalanche());
 
         System.out.println("starting consortium");
         consortium.values().forEach(e -> e.start());
 
         System.out.println("awaiting genesis processing");
+        awaitGenesis(processed, blueRibbon);
 
         assertTrue(processed.get().await(30, TimeUnit.SECONDS),
                    "Did not converge, end state of true clients gone bad: "
@@ -287,17 +288,70 @@ public class ConsortiumTest {
         System.out.println("TPS: " + (bunchCount * 40) / ((System.currentTimeMillis() - then) / 1000.0));
     }
 
-    private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
-                                  Duration gossipDuration, ScheduledExecutorService scheduler,
-                                  Messenger.Parameters msgParameters) {
+    private Statement batch(String sql) {
+        return Statement.newBuilder().setSql(sql).build();
+    }
+
+    private void awaitGenesis(AtomicReference<CountDownLatch> processed,
+                              Set<Consortium> blueRibbon) throws InterruptedException {
+        assertTrue(processed.get().await(30, TimeUnit.SECONDS),
+                   "Did not converge, end state of true clients gone bad: "
+                           + consortium.values()
+                                       .stream()
+                                       .filter(c -> !blueRibbon.contains(c))
+                                       .map(c -> c.fsm().getCurrentState())
+                                       .filter(b -> b != CollaboratorFsm.CLIENT)
+                                       .collect(Collectors.toSet())
+                           + " : "
+                           + consortium.values()
+                                       .stream()
+                                       .filter(c -> !blueRibbon.contains(c))
+                                       .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
+                                       .map(c -> c.getMember())
+                                       .collect(Collectors.toList()));
+    }
+
+    private void gatherAvalanche(Context<Member> view, Map<Member, AvaAdapter> adapters) {
+        members.forEach(node -> {
+            AvalancheParameters aParams = new AvalancheParameters();
+            aParams.dagWood.maxCache = 1_000_000;
+
+            // Avalanche protocol parameters
+            aParams.core.alpha = 0.6;
+            aParams.core.k = Math.min(9, testCardinality);
+            aParams.core.beta1 = 3;
+            aParams.core.beta2 = 5;
+
+            // Avalanche implementation parameters
+            // parent selection target for avalanche dag voting
+            aParams.parentCount = 5;
+            aParams.queryBatchSize = 400;
+            aParams.noOpsPerRound = 10;
+            aParams.maxNoOpParents = 10;
+            aParams.outstandingQueries = 5;
+            aParams.noOpQueryFactor = 40;
+
+            AvaAdapter adapter = adapters.get(node);
+            Avalanche ava = new Avalanche(node, view, entropy, communications.get(node.getId()), aParams, null,
+                    adapter);
+            adapter.setAva(ava);
+            avas.put(node, ava);
+        });
+    }
+
+    private Map<Member, AvaAdapter> gatherConsortium(Context<Member> view, AtomicReference<CountDownLatch> processed,
+                                                     Duration gossipDuration, ScheduledExecutorService scheduler,
+                                                     Messenger.Parameters msgParameters) {
+        Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
+            AvaAdapter adapter = new AvaAdapter(processed);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);
             Updater up = new Updater(url, new Properties());
             updaters.put(m, up);
             Consortium c = new Consortium(
                     Parameters.newBuilder()
-                              .setConsensus(consensus)
+                              .setConsensus(adapter.getConsensus())
                               .setMember(m)
                               .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
                                                                           entropy))
@@ -315,11 +369,22 @@ public class ConsortiumTest {
                               .setScheduler(scheduler)
                               .setGenesisData(GENESIS_DATA.toByteArray())
                               .build());
+            adapter.setConsortium(c);
+            adapters.put(m, adapter);
             return c;
         }).peek(c -> view.activate(c.getMember())).forEach(e -> consortium.put(e.getMember(), e));
+        return adapters;
     }
 
-    private Statement batch(String sql) {
-        return Statement.newBuilder().setSql(sql).build();
+    private HashKey genesis(Avalanche master) {
+        HashKey genesisKey = master.submitGenesis(ByteMessage.newBuilder()
+                                                             .setContents(ByteString.copyFromUtf8("Genesis"))
+                                                             .build());
+        assertNotNull(genesisKey);
+        DagDao dao = new DagDao(master.getDag());
+        boolean completed = Utils.waitForCondition(10_000, () -> dao.isFinalized(genesisKey));
+        assertTrue(completed, "did not generate genesis root");
+        return genesisKey;
     }
+
 }

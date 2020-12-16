@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -139,9 +140,10 @@ public class AvaConsensusTest {
 
         Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
-                                                                 .setFalsePositiveRate(0.001)
-                                                                 .setBufferSize(100)
+                                                                 .setFalsePositiveRate(0.00001)
+                                                                 .setBufferSize(1000)
                                                                  .setEntropy(new SecureRandom())
+                                                                 .setFjPool(new ForkJoinPool())
                                                                  .build();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Map<Member, AvaAdapter> adapters = gatherConsortium(view, processed, gossipDuration, scheduler, msgParameters);
@@ -153,7 +155,7 @@ public class AvaConsensusTest {
         });
 
         communications.values().forEach(r -> r.start());
-        adapters.values().forEach(p -> p.getAvalanche().start(scheduler));
+        adapters.values().forEach(p -> p.getAvalanche().start(scheduler, Duration.ofMillis(2)));
         genesis(adapters.get(members.get(0)).getAvalanche());
 
         System.out.println("starting consortium");
@@ -190,8 +192,8 @@ public class AvaConsensusTest {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        Semaphore outstanding = new Semaphore(100); // outstanding, unfinalized txns
-        int bunchCount = 1_000;
+        Semaphore outstanding = new Semaphore(100, true); // outstanding, unfinalized txns
+        int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
@@ -237,6 +239,7 @@ public class AvaConsensusTest {
     }
 
     private void gatherAvalanche(Context<Member> view, Map<Member, AvaAdapter> adapters) {
+        ForkJoinPool avaPool = new ForkJoinPool(members.size() * 10);
         members.forEach(node -> {
             AvalancheParameters aParams = new AvalancheParameters();
             aParams.dagWood.maxCache = 1_000_000;
@@ -257,8 +260,8 @@ public class AvaConsensusTest {
             aParams.noOpQueryFactor = 40;
 
             AvaAdapter adapter = adapters.get(node);
-            Avalanche ava = new Avalanche(node, view, entropy, communications.get(node.getId()), aParams, null,
-                    adapter);
+            Avalanche ava = new Avalanche(node, view, entropy, communications.get(node.getId()), aParams, null, adapter,
+                    avaPool);
             adapter.setAva(ava);
             avas.put(node, ava);
         });
@@ -282,6 +285,13 @@ public class AvaConsensusTest {
                                                          .setMaxBatchDelay(Duration.ofMillis(100))
                                                          .setGossipDuration(gossipDuration)
                                                          .setViewTimeout(Duration.ofMillis(500))
+                                                         .setExecutor((t, c) -> {
+                                                             if (c != null) {
+                                                                 ForkJoinPool.commonPool()
+                                                                             .execute(() -> c.accept(new HashKey(
+                                                                                     t.getHash()), null));
+                                                             }
+                                                         })
                                                          .setJoinTimeout(Duration.ofSeconds(5))
                                                          .setTransactonTimeout(Duration.ofSeconds(15))
                                                          .setScheduler(scheduler)

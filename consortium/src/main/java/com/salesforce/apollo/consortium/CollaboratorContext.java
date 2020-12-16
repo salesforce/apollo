@@ -38,6 +38,7 @@ import com.salesfoce.apollo.consortium.proto.Body;
 import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock.Builder;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.consortium.proto.Genesis;
@@ -192,20 +193,22 @@ public class CollaboratorContext {
 //            return;
 //        }
         workingBlocks.computeIfAbsent(hash, k -> {
-            Validate validation = consortium.viewContext().generateValidation(hash, block);
-            if (validation == null) {
-                log.debug("Rejecting block proposal: {}, cannot validate from: {} on: {}", hash, from,
-                          consortium.getMember());
-                return null;
-            }
+            log.debug("Delivering block: {} from: {} on: {}", hash, from, getMember());
+            Builder builder = CertifiedBlock.newBuilder().setBlock(block);
             lastBlock(height(block));
             processToOrder(block);
-            consortium.publish(validation);
-            return CertifiedBlock.newBuilder()
-                                 .setBlock(block)
-                                 .addCertifications(Certification.newBuilder()
-                                                                 .setId(validation.getId())
-                                                                 .setSignature(validation.getSignature()));
+            consortium.getParams().msgParameters.fjPool.execute(() -> {
+                Validate validation = consortium.viewContext().generateValidation(hash, block);
+                if (validation == null) {
+                    log.debug("Rejecting block proposal: {}, cannot validate from: {} on: {}", hash, from,
+                              consortium.getMember());
+                    workingBlocks.remove(hash);
+                    return;
+                }
+                consortium.publish(validation);
+                deliverValidate(validation);
+            });
+            return builder;
         });
     }
 
@@ -323,9 +326,10 @@ public class CollaboratorContext {
         HashKey hash = new HashKey(v.getHash());
         CertifiedBlock.Builder certifiedBlock = workingBlocks.get(hash);
         if (certifiedBlock == null) {
-            log.debug("No working block to validate: {} on: {}", hash, consortium.getMember());
+            log.trace("No working block to validate: {} on: {}", hash, consortium.getMember());
             return;
         }
+        log.debug("Delivering validate: {} on: {}", hash, consortium.getMember());
         HashKey memberID = new HashKey(v.getId());
         if (consortium.viewContext().validate(certifiedBlock.getBlock(), v)) {
             certifiedBlock.addCertifications(Certification.newBuilder()
@@ -505,7 +509,8 @@ public class CollaboratorContext {
             finalized(hash);
         });
         accept(next);
-        log.info("Processed checkpoint block: {} on: {}", next.getHash(), consortium.getMember());
+        log.info("Processed checkpoint block: {} height: {} on: {}", next.getHash(), height(next.getBlock()),
+                 consortium.getMember());
     }
 
     public void processGenesis(CurrentBlock next) {
@@ -529,7 +534,8 @@ public class CollaboratorContext {
         }
         accept(next);
         reconfigure(body, false);
-        log.info("Processed reconfigure block: {} on: {}", next.getHash(), consortium.getMember());
+        log.info("Processed reconfigure block: {} height: {} on: {}", next.getHash(), height(next.getBlock()),
+                 consortium.getMember());
     }
 
     public void processUser(CurrentBlock next) {
@@ -544,7 +550,8 @@ public class CollaboratorContext {
             consortium.getParams().executor.accept(txn, submitted == null ? null : submitted.onCompletion);
         });
         accept(next);
-        log.info("Processed user block: {} on: {}", next.getHash(), consortium.getMember());
+        log.info("Processed user block: {} height: {} on: {}", next.getHash(), height(next.getBlock()),
+                 consortium.getMember());
     }
 
     public void receive(ReplicateTransactions transactions, Member from) {
@@ -626,18 +633,20 @@ public class CollaboratorContext {
     }
 
     public void totalOrderDeliver() {
+        long current = currentConsensus();
         log.trace("Attempting total ordering of working blocks: {} current consensus: {} on: {}", workingBlocks.size(),
-                  currentConsensus(), consortium.getMember());
+                  current, consortium.getMember());
         List<HashKey> published = new ArrayList<>();
         workingBlocks.entrySet()
                      .stream()
-                     .peek(e -> log.trace("TO Consider: {}:{} on: {}", e.getKey(),
-                                          e.getValue().getCertificationsCount(), consortium.getMember()))
+//                     .peek(e -> log.trace("TO Consider: {} count:{} height: {} on: {}", e.getKey(),
+//                                          e.getValue().getCertificationsCount(), height(e.getValue().getBlock()),
+//                                          consortium.getMember()))
                      .filter(e -> e.getValue().getCertificationsCount() >= consortium.viewContext().majority())
                      .sorted((a, b) -> Long.compare(height(a.getValue().getBlock()), height(b.getValue().getBlock())))
-                     .filter(e -> height(e.getValue().getBlock()) >= currentConsensus() + 1)
+                     .filter(e -> height(e.getValue().getBlock()) >= current + 1)
                      .forEach(e -> {
-                         if (height(e.getValue().getBlock()) == currentConsensus() + 1) {
+                         if (height(e.getValue().getBlock()) == current + 1) {
                              currentConsensus(height(e.getValue().getBlock()));
                              log.info("Totally ordering block: {} height: {} on: {}", e.getKey(),
                                       height(e.getValue().getBlock()), consortium.getMember());
@@ -674,8 +683,9 @@ public class CollaboratorContext {
         ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
                 genesis ? consortium.viewContext().getConsensusKey() : consortium.nextViewConsensusKey(),
                 consortium.entropy());
-        currentRegent(genesis ? 2 : 0);
-        nextRegent(-1);
+        int current = genesis ? 2 : 0;
+        currentRegent(current);
+        nextRegent(current);
         consortium.viewChange(newView);
         resolveStatus();
     }
@@ -975,9 +985,6 @@ public class CollaboratorContext {
 
         CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
                                                                                                 .setBlock(block));
-        blockCache.put(thisHeight, new CurrentBlock(hash, block));
-        consortium.publish(block);
-        lastBlock(thisHeight);
 
         Validate validation = consortium.viewContext().generateValidation(hash, block);
         if (validation == null) {
@@ -987,6 +994,9 @@ public class CollaboratorContext {
         builder.addCertifications(Certification.newBuilder()
                                                .setId(validation.getId())
                                                .setSignature(validation.getSignature()));
+        blockCache.put(thisHeight, new CurrentBlock(hash, block));
+        lastBlock(thisHeight);
+        consortium.publish(block);
         consortium.publish(validation);
 
         log.info("Generated next block: {} height: {} on: {} txns: {}", hash, thisHeight, consortium.getMember(),
