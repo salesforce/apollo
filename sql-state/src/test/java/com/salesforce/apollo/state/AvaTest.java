@@ -75,7 +75,7 @@ public class AvaTest {
 
     private static final RootCertificate                   ca             = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final ByteString                        GENESIS_DATA   = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
+    private static final ByteString                        GENESIS_DATA   = ByteString.copyFromUtf8("Give me FooD or give me SLACK or KILL ME");
     private static final Duration                          gossipDuration = Duration.ofMillis(10);
 
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
