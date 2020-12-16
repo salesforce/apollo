@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.membership;
 
-import static java.util.concurrent.ForkJoinPool.commonPool;
-
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -143,13 +141,11 @@ public class Context<T extends Member> {
             ring.insert(m);
         }
         membershipListeners.stream().forEach(l -> {
-            commonPool().execute(() -> {
-                try {
-                    l.recover(m);
-                } catch (Throwable e) {
-                    log.error("error recoving member in listener: " + l, e);
-                }
-            });
+            try {
+                l.recover(m);
+            } catch (Throwable e) {
+                log.error("error recoving member in listener: " + l, e);
+            }
         });
     }
 
@@ -273,13 +269,11 @@ public class Context<T extends Member> {
             ring.delete(m);
         }
         membershipListeners.stream().forEach(l -> {
-            commonPool().execute(() -> {
-                try {
-                    l.fail(m);
-                } catch (Throwable e) {
-                    log.error("error sending fail to listener: " + l, e);
-                }
-            });
+            try {
+                l.fail(m);
+            } catch (Throwable e) {
+                log.error("error sending fail to listener: " + l, e);
+            }
         });
     }
 

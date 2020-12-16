@@ -289,9 +289,9 @@ public class Consortium {
         return fsm.getContext();
     }
 
-    public boolean process(CertifiedBlock certifiedBlock) {
+    public synchronized void process(CertifiedBlock certifiedBlock) {
         if (!started.get()) {
-            return false;
+            return;
         }
         Block block = certifiedBlock.getBlock();
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
@@ -303,29 +303,30 @@ public class Consortium {
             long height = height(block);
             long prevHeight = height(previousBlock.getBlock());
             if (height <= prevHeight) {
-                log.info("Discarding previously committed block: {} height: {} current height: {} on: {}", hash, height,
+                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash, height,
                          prevHeight, getMember());
+                return;
             }
             if (height != prevHeight + 1) {
                 deferedBlocks.add(new CurrentBlock(hash, block));
-                log.error("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
+                log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
                           getMember(), hash, previousBlock.getBlock().getHeader().getHeight() + 1,
                           block.getHeader().getHeight());
-                return true;
+                return;
             }
             if (!previousBlock.getHash().equals(prev)) {
                 log.error("Protocol violation ons {}. New block does not refer to current block hash. Should be {} and next block's prev is {}",
                           getMember(), previousBlock.getHash(), prev);
-                return false;
+                return;
             }
             if (!viewContext().validate(certifiedBlock)) {
                 log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
-                return false;
+                return;
             }
         } else {
             if (block.getBody().getType() != BodyType.GENESIS) {
                 log.error("Invalid genesis block on: {} block: {}", getMember(), block.getBody().getType());
-                return false;
+                return;
             }
             Genesis body;
             try {
@@ -333,20 +334,18 @@ public class Consortium {
             } catch (IOException e) {
                 log.error("Protocol violation ont: {}. Genesis block body cannot be deserialized {}", getMember(),
                           hash);
-                return false;
+                return;
             }
             Context<Member> context = getParams().context;
             if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), context,
                                  context.getRingCount() - context.toleranceLevel(), getMember())) {
                 log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
-                return false;
+                return;
             }
         }
         if (next(new CurrentBlock(hash, block))) {
             processDeferred();
-            return true;
         }
-        return false;
     }
 
     private void processDeferred() {
@@ -355,15 +354,15 @@ public class Consortium {
             long height = height(delayed.getBlock());
             long currentHeight = height(getCurrent().getBlock());
             if (height <= currentHeight) {
-                log.info("dropping deferred block: {} height: {} <= current height: {} on: {}", delayed.getHash(),
+                log.debug("dropping deferred block: {} height: {} <= current height: {} on: {}", delayed.getHash(),
                          height, currentHeight, getMember());
                 delayed = deferedBlocks.poll();
             } else if (height == currentHeight + 1) {
-                log.info("processing deferred block: {} height: {} on: {}", delayed.getHash(), height, getMember());
+                log.debug("processing deferred block: {} height: {} on: {}", delayed.getHash(), height, getMember());
                 next(delayed);
                 delayed = deferedBlocks.poll();
             } else {
-                log.info("current height: {} so re-deferring block: {} height: {} on: {}", currentHeight,
+                log.debug("current height: {} so re-deferring block: {} height: {} on: {}", currentHeight,
                          delayed.getHash(), height, getMember());
                 deferedBlocks.add(delayed);
                 delayed = null;

@@ -59,6 +59,19 @@ public class ApolloConfiguration {
         IdentitySource getIdentitySource(String caAlias, String identityAlias);
     }
 
+    public static class MtlsCommunicationsFactory implements CommunicationsFactory {
+        public int target = 30;
+
+        @Override
+        public Router getComms(MetricRegistry metrics, HashKey id) {
+            EndpointProvider ep = null;
+            return new MtlsRouter(
+                    ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
+                    ep);
+        }
+
+    }
+
     public static class ResourceIdentitySource implements IdentityStoreSource {
 
         public char[] password = DEFAULT_PASSWORD;
@@ -73,19 +86,6 @@ public class ApolloConfiguration {
                 throw new IllegalStateException("Cannot create resource identity source", e);
             }
         }
-    }
-
-    public static class MtlsCommunicationsFactory implements CommunicationsFactory {
-        public int target = 30;
-
-        @Override
-        public Router getComms(MetricRegistry metrics, HashKey id) {
-            EndpointProvider ep = null;
-            return new MtlsRouter(
-                    ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
-                    ep);
-        }
-
     }
 
     public static class SimCommunicationsFactory implements CommunicationsFactory {
@@ -104,6 +104,7 @@ public class ApolloConfiguration {
     public static final Duration DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(500);
     public static final String   DEFAULT_IDENTITY_ALIAS  = "identity";
     public static final char[]   DEFAULT_PASSWORD        = "".toCharArray();
+    public static final Duration DEFAULT_QUERY_INTERVAL = Duration.ofMillis(50);
     public static final String   DEFAULT_TYPE            = "PKCS12";
 
     public AvalancheParameters   avalanche      = new AvalancheParameters();
@@ -113,9 +114,11 @@ public class ApolloConfiguration {
                     @Type(value = MtlsCommunicationsFactory.class, name = "mtls") })
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
     public CommunicationsFactory communications = new MtlsCommunicationsFactory();
+    public String                contextBase    = HashKey.ORIGIN.b64Encoded();
     public GhostParameters       ghost          = new GhostParameters();
     public Duration              gossipInterval = DEFAULT_GOSSIP_INTERVAL;
     public String                identity       = DEFAULT_IDENTITY_ALIAS;
+    public Duration queryInterval = DEFAULT_QUERY_INTERVAL;
     @JsonSubTypes({ @Type(value = FileIdentitySource.class, name = "file"),
                     @Type(value = ResourceIdentitySource.class, name = "resource"),
                     @Type(value = BootstrapIdSource.class, name = "bootstrap"),
@@ -123,5 +126,4 @@ public class ApolloConfiguration {
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
     public IdentityStoreSource   source;
     public int                   threadPool     = 1;
-    public String                contextBase    = HashKey.ORIGIN.b64Encoded();
 }

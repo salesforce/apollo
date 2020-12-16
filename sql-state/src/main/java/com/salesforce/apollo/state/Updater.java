@@ -28,12 +28,18 @@ import com.salesforce.apollo.protocols.HashKey;
 public class Updater implements BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> {
     private static final Logger  log = LoggerFactory.getLogger(Updater.class);
     private final JdbcConnection connection;
-    private final String         url;
+    private final ForkJoinPool   fjPool;
     private final Properties     info;
+    private final String         url;
 
     public Updater(String url, Properties info) {
+        this(url, info, ForkJoinPool.commonPool());
+    }
+
+    public Updater(String url, Properties info, ForkJoinPool fjPool) {
         this.url = url;
         this.info = info;
+        this.fjPool = fjPool;
         try {
             connection = new JdbcConnection(url, info);
         } catch (SQLException e) {
@@ -65,31 +71,10 @@ public class Updater implements BiConsumer<ExecutedTransaction, BiConsumer<HashK
         });
     }
 
-    private void complete(BiConsumer<HashKey, Throwable> completion, HashKey hashKey) {
-        if (completion == null) {
-            return;
-        }
-        ForkJoinPool.commonPool().execute(() -> completion.accept(hashKey, null));
-    }
-
-    private void complete(BiConsumer<HashKey, Throwable> completion, Throwable e) {
-        if (completion == null) {
-            return;
-        }
-        ForkJoinPool.commonPool().execute(() -> completion.accept(null, e));
-    }
-
     public void close() {
         rollback();
         try {
             connection.close();
-        } catch (SQLException e) {
-        }
-    }
-
-    private void rollback() {
-        try {
-            connection.rollback();
         } catch (SQLException e) {
         }
     }
@@ -99,6 +84,27 @@ public class Updater implements BiConsumer<ExecutedTransaction, BiConsumer<HashK
             return new JdbcConnection(url, info);
         } catch (SQLException e) {
             throw new IllegalStateException("cannot get JDBC connection", e);
+        }
+    }
+
+    private void complete(BiConsumer<HashKey, Throwable> completion, HashKey hashKey) {
+        if (completion == null) {
+            return;
+        }
+        fjPool.execute(() -> completion.accept(hashKey, null));
+    }
+
+    private void complete(BiConsumer<HashKey, Throwable> completion, Throwable e) {
+        if (completion == null) {
+            return;
+        }
+        fjPool.execute(() -> completion.accept(null, e));
+    }
+
+    private void rollback() {
+        try {
+            connection.rollback();
+        } catch (SQLException e) {
         }
     }
 }

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -124,8 +125,9 @@ abstract public class AvalancheFunctionalTest {
         Context<Node> context = new Context<>(vid, 9);
         members.forEach(n -> context.activate(n));
         AtomicBoolean frist = new AtomicBoolean(true);
+        ForkJoinPool fjPool = new ForkJoinPool();
         List<TimedProcessor> processors = members.stream().map(m -> {
-            return createAva(m, context, frist);
+            return createAva(m, context, frist, fjPool);
         }).collect(Collectors.toList());
 
         // # of txns per node
@@ -134,7 +136,7 @@ abstract public class AvalancheFunctionalTest {
         int runtime = (int) Duration.ofSeconds(180).toMillis();
 
         communications.values().forEach(e -> e.start());
-        processors.forEach(p -> p.getAvalanche().start(scheduler));
+        processors.forEach(p -> p.getAvalanche().start(scheduler, Duration.ofMillis(50)));
 
         // generate the genesis transaction
         TimedProcessor master = processors.get(0);
@@ -225,7 +227,7 @@ abstract public class AvalancheFunctionalTest {
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);
     }
 
-    private TimedProcessor createAva(Node m, Context<Node> context, AtomicBoolean frist) {
+    private TimedProcessor createAva(Node m, Context<Node> context, AtomicBoolean frist, ForkJoinPool fjPool) {
         AvalancheParameters aParams = new AvalancheParameters();
         aParams.dagWood.maxCache = 1_000_000;
 
@@ -248,7 +250,7 @@ abstract public class AvalancheFunctionalTest {
         frist.set(false);
         TimedProcessor processor = new TimedProcessor();
         Avalanche avalanche = new Avalanche(m, context, entropy, communications.get(m.getId()), aParams, avaMetrics,
-                processor);
+                processor, fjPool);
         processor.setAvalanche(avalanche);
         return processor;
     }

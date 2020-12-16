@@ -149,9 +149,8 @@ public class TestConsortium {
             HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
             if (decided.add(hash)) {
                 cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
-                    if (m.process(c)) {
-                        processed.get().countDown();
-                    }
+                    m.process(c);
+                    processed.get().countDown();
                 }));
             }
             return hash;

@@ -7,7 +7,6 @@
 package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.communications.FfClientCommunications.getCreate;
-import static java.util.concurrent.ForkJoinPool.commonPool;
 
 import java.io.ByteArrayInputStream;
 import java.security.InvalidKeyException;
@@ -327,7 +326,7 @@ public class View {
 
             long interval = d.toMillis();
             int initialDelay = getParameters().entropy.nextInt((int) interval * 2);
-            futureGossip = scheduler.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
+            futureGossip = scheduler.schedule(() -> fjPool.execute(() -> {
                 try {
                     oneRound(d, scheduler);
                 } catch (Throwable e) {
@@ -444,6 +443,8 @@ public class View {
      */
     private final int diameter;
 
+    private final ForkJoinPool fjPool;
+
     @SuppressWarnings("unused")
     private final FireflyMetrics metrics;
 
@@ -483,8 +484,13 @@ public class View {
     private final ConcurrentMap<HashKey, Participant> view = new ConcurrentHashMap<>();
 
     public View(HashKey id, Node node, Router communications, FireflyMetrics metrics) {
+        this(id, node, communications, metrics, ForkJoinPool.commonPool());
+    }
+
+    public View(HashKey id, Node node, Router communications, FireflyMetrics metrics, ForkJoinPool fjPool) {
         this.metrics = metrics;
         this.node = node;
+        this.fjPool = fjPool;
         this.comm = communications.create(node, id, service,
                                           r -> new FfServerCommunications(service,
                                                   communications.getClientIdentityProvider(), metrics, r),
@@ -1099,7 +1105,7 @@ public class View {
         }
 
         roundListeners.forEach(l -> {
-            commonPool().execute(() -> {
+            fjPool.execute(() -> {
                 try {
                     l.run();
                 } catch (Throwable e) {
@@ -1107,7 +1113,7 @@ public class View {
                 }
             });
         });
-        scheduler.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
+        scheduler.schedule(() -> fjPool.execute(() -> {
             try {
                 oneRound(d, scheduler);
             } catch (Throwable e) {

@@ -7,6 +7,7 @@
 package com.salesforce.apollo.avalanche;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -123,6 +124,7 @@ public class Avalanche {
     private com.salesforce.apollo.membership.Context<? extends Member>         context;
     private final WorkingSet                                                   dag;
     private final SecureRandom                                                 entropy;
+    private final ForkJoinPool                                                 fjPool;
     private final int                                                          invalidThreshold;
     private final AvalancheMetrics                                             metrics;
     private final Node                                                         node;
@@ -138,11 +140,17 @@ public class Avalanche {
 
     public Avalanche(Node node, Context<? extends Member> context, SecureRandom entropy, Router communications,
             AvalancheParameters p, AvalancheMetrics metrics, Processor processor) {
+        this(node, context, entropy, communications, p, metrics, processor, ForkJoinPool.commonPool());
+    }
+
+    public Avalanche(Node node, Context<? extends Member> context, SecureRandom entropy, Router communications,
+            AvalancheParameters p, AvalancheMetrics metrics, Processor processor, ForkJoinPool fjPool) {
         this.metrics = metrics;
         parameters = p;
         this.node = node;
         this.context = context;
         this.entropy = entropy;
+        this.fjPool = fjPool;
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new AvalancheServerCommunications(
                                                   communications.getClientIdentityProvider(), metrics, r),
@@ -155,12 +163,14 @@ public class Avalanche {
     }
 
     public Avalanche(View view, Router communications, AvalancheParameters p, AvalancheMetrics metrics,
-            Processor processor) {
-        this(view.getNode(), view.getContext(), view.getParameters().entropy, communications, p, metrics, processor);
+            Processor processor, ForkJoinPool fjPool) {
+        this(view.getNode(), view.getContext(), view.getParameters().entropy, communications, p, metrics, processor,
+                fjPool);
     }
 
-    public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor) {
-        this(view, communications, p, null, processor);
+    public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor,
+            ForkJoinPool fjPool) {
+        this(view, communications, p, null, processor, fjPool);
     }
 
     public WorkingSet getDag() {
@@ -179,18 +189,18 @@ public class Avalanche {
         return service;
     }
 
-    public void start(ScheduledExecutorService timer) {
+    public void start(ScheduledExecutorService timer, Duration period) {
         if (!running.compareAndSet(false, true)) {
             return;
         }
         comm.register(context.getId(), service);
         queryRounds.set(0);
 
-        queryFuture = timer.schedule(() -> {
+        queryFuture = timer.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
             if (running.get()) {
-                round(timer);
+                round(timer, period);
             }
-        }, 50, TimeUnit.MICROSECONDS);
+        }), period.toMillis(), TimeUnit.MILLISECONDS);
 
         scheduledNoOpsCull = timer.scheduleWithFixedDelay(() -> dag.purgeNoOps(), parameters.noOpGenerationCullMillis,
                                                           parameters.noOpGenerationCullMillis, TimeUnit.MILLISECONDS);
@@ -248,7 +258,7 @@ public class Avalanche {
         if (metrics != null) {
             metrics.getFinalizerRate().mark(finalized.finalized.size());
         }
-        ForkJoinPool.commonPool().execute(() -> {
+        fjPool.execute(() -> {
             processor.finalize(finalized);
         });
         log.debug("Finalizing: {}, deleting: {} in {} ms", finalized.finalized.size(), finalized.deleted.size(),
@@ -433,7 +443,7 @@ public class Avalanche {
             metrics.getWantedRate().mark(want.size());
         }
 
-        CompletionService<Boolean> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
+        CompletionService<Boolean> frist = new ExecutorCompletionService<>(fjPool);
         List<Future<Boolean>> futures;
         Member wanted = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size()));
         futures = sample.stream().map(m -> frist.submit(() -> {
@@ -524,18 +534,18 @@ public class Avalanche {
         return queryResults;
     }
 
-    private void round(ScheduledExecutorService timer) {
+    private void round(ScheduledExecutorService timer, Duration period) {
         try {
             query();
             generateNoOpTxns();
         } catch (Throwable t) {
             log.error("Error performing Avalanche batch round", t);
         } finally {
-            queryFuture = timer.schedule(() -> {
+            queryFuture = timer.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
                 if (running.get()) {
-                    round(timer);
+                    round(timer, period);
                 }
-            }, 50, TimeUnit.MICROSECONDS);
+            }), period.toMillis(), TimeUnit.MILLISECONDS);
         }
     }
 

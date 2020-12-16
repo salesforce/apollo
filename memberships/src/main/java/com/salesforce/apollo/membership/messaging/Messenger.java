@@ -7,7 +7,6 @@
 package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
-import static java.util.concurrent.ForkJoinPool.commonPool;
 
 import java.security.SecureRandom;
 import java.security.Signature;
@@ -15,6 +14,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -76,10 +76,11 @@ public class Messenger {
             private int              bufferSize        = 1000;
             private SecureRandom     entropy;
             private double           falsePositiveRate = 0.25;
+            private ForkJoinPool     fjPool            = ForkJoinPool.commonPool();
             private MessagingMetrics metrics;
 
             public Parameters build() {
-                return new Parameters(falsePositiveRate, entropy, bufferSize, metrics);
+                return new Parameters(falsePositiveRate, entropy, bufferSize, metrics, fjPool);
             }
 
             @Override
@@ -103,6 +104,10 @@ public class Messenger {
                 return falsePositiveRate;
             }
 
+            public ForkJoinPool getFjPool() {
+                return fjPool;
+            }
+
             public MessagingMetrics getMetrics() {
                 return metrics;
             }
@@ -122,6 +127,11 @@ public class Messenger {
                 return this;
             }
 
+            public Builder setFjPool(ForkJoinPool fjPool) {
+                this.fjPool = fjPool;
+                return this;
+            }
+
             public Builder setMetrics(MessagingMetrics metrics) {
                 this.metrics = metrics;
                 return this;
@@ -136,13 +146,16 @@ public class Messenger {
         public final int              bufferSize;
         public final SecureRandom     entropy;
         public final double           falsePositiveRate;
+        public final ForkJoinPool     fjPool;
         public final MessagingMetrics metrics;
 
-        public Parameters(double falsePositiveRate, SecureRandom entropy, int bufferSize, MessagingMetrics metrics) {
+        public Parameters(double falsePositiveRate, SecureRandom entropy, int bufferSize, MessagingMetrics metrics,
+                ForkJoinPool fjPool) {
             this.falsePositiveRate = falsePositiveRate;
             this.entropy = entropy;
             this.metrics = metrics;
             this.bufferSize = bufferSize;
+            this.fjPool = fjPool;
         }
     }
 
@@ -220,7 +233,7 @@ public class Messenger {
             return;
         }
 
-        commonPool().execute(() -> {
+        parameters.fjPool.execute(() -> {
             if (!started.get()) {
                 return;
             }
