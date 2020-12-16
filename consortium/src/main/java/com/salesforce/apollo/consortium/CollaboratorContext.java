@@ -637,8 +637,7 @@ public class CollaboratorContext {
         log.trace("Attempting total ordering of working blocks: {} current consensus: {} on: {}", workingBlocks.size(),
                   current, consortium.getMember());
         List<HashKey> published = new ArrayList<>();
-        workingBlocks.entrySet()
-                     .stream()
+        workingBlocks.entrySet().stream()
 //                     .peek(e -> log.trace("TO Consider: {} count:{} height: {} on: {}", e.getKey(),
 //                                          e.getValue().getCertificationsCount(), height(e.getValue().getBlock()),
 //                                          consortium.getMember()))
@@ -851,10 +850,7 @@ public class CollaboratorContext {
     }
 
     private void generate() {
-        boolean generated = generateNextBlock();
-        while (generated) {
-            generated = generateNextBlock();
-        }
+        generateNextBlock();
     }
 
     private void generateGenesisBlock() {
