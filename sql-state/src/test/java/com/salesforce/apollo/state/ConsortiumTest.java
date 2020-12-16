@@ -132,7 +132,7 @@ public class ConsortiumTest {
         Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
-                                                                 .setBufferSize(100)
+                                                                 .setBufferSize(1000)
                                                                  .setEntropy(new SecureRandom())
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
