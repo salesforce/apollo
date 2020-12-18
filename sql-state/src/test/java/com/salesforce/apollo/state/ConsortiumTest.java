@@ -208,7 +208,7 @@ public class ConsortiumTest {
         long then = System.currentTimeMillis();
         Semaphore outstanding = new Semaphore(200); // outstanding, unfinalized txns
         int bunchCount = 10_000;
-        System.out.println("Submitting bunch: " + bunchCount);
+        System.out.println("Submitting batches: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         HashKey pending = client.submit((h, t) -> {
@@ -282,9 +282,12 @@ public class ConsortiumTest {
         System.out.println("Awaiting " + bunchCount + " batches");
         boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
         submittedBunch.getCount();
-        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
+        assertTrue(completed, "Did not process transaction batches: " + submittedBunch.getCount());
         System.out.println("Completed additional " + bunchCount + " transactions");
-        System.out.println("TPS: " + (bunchCount * 40) / ((System.currentTimeMillis() - then) / 1000.0));
+        long now = System.currentTimeMillis() - then;
+        double perSecond = now / 1000.0;
+        System.out.println("Statements per second: " + (bunchCount * 40) / perSecond);
+        System.out.println("Transactions per second: " + (bunchCount) / perSecond);
     }
 
     private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,

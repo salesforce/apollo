@@ -49,26 +49,38 @@ public class Updater implements BiConsumer<ExecutedTransaction, BiConsumer<HashK
 
     @Override
     public void accept(ExecutedTransaction t, BiConsumer<HashKey, Throwable> completion) {
-        t.getTransaction().getBatchList().forEach(txn -> {
-            Statement statement;
+        try {
+            t.getTransaction().getBatchList().forEach(txn -> {
+                Statement statement;
+                try {
+                    statement = txn.unpack(Statement.class);
+                } catch (InvalidProtocolBufferException e) {
+                    log.error("unable to deserialize Statement from txn: {} : {}", new HashKey(t.getHash()),
+                              e.toString());
+                    complete(completion, e);
+                    return;
+                }
+                try {
+                    java.sql.Statement exec = connection.createStatement();
+                    exec.execute(statement.getSql());
+                    complete(completion, new HashKey(t.getHash()));
+                } catch (SQLException e) {
+                    log.warn("Error executing Statement: {} from txn: {} : {}", statement.getSql(),
+                             new HashKey(t.getHash()), e.toString());
+                    complete(completion, e);
+                    return;
+                }
+            });
+            connection.commit();
+        } catch (Exception e) {
             try {
-                statement = txn.unpack(Statement.class);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("unable to deserialize Statement from txn: {} : {}", new HashKey(t.getHash()), e.toString());
-                complete(completion, e);
-                return;
+                log.warn("Rolling back transaction: {}, {}", new HashKey(t.getHash()), e.toString());
+                connection.rollback();
+            } catch (SQLException e1) {
+                log.error("unable to rollback: {}", new HashKey(t.getHash()), e1);
+                throw new IllegalStateException("Cannot rollback txn", e1);
             }
-            try {
-                java.sql.Statement exec = connection.createStatement();
-                exec.execute(statement.getSql());
-                complete(completion, new HashKey(t.getHash()));
-            } catch (SQLException e) {
-                log.warn("Error executing Statement: {} from txn: {} : {}", statement.getSql(),
-                         new HashKey(t.getHash()), e.toString());
-                complete(completion, e);
-                return;
-            }
-        });
+        }
     }
 
     public void close() {
