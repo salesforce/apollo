@@ -24,24 +24,24 @@ import com.salesforce.apollo.protocols.HashKey;
 
 public class Parameters {
     public static class Builder {
-        private Router                                                          communications;
-        private BiFunction<CertifiedBlock, Future<?>, HashKey>                  consensus;
-        private Context<Member>                                                 context;
-        private BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor            = (et, c) -> {
-                                                                                                    };
-        private byte[]                                                          genesisData         = "Give me food or give me slack or kill me".getBytes();
-        private Duration                                                        gossipDuration;
-        private Duration                                                        joinTimeout         = Duration.ofMillis(500);
-        private int                                                             maxBatchByteSize    = 4 * 1024;
-        private Duration                                                        maxBatchDelay       = Duration.ofMillis(200);
-        private int                                                             maxBatchSize        = 10;
-        private Member                                                          member;
-        private Messenger.Parameters                                            msgParameters;
-        private int                                                             processedBufferSize = 1000;
-        private ScheduledExecutorService                                        scheduler;
-        private Supplier<Signature>                                             signature;
-        private Duration                                                        submitTimeout       = Duration.ofSeconds(30);
-        private Duration                                                        viewTimeout         = Duration.ofSeconds(60);
+        private Router                                                         communications;
+        private BiFunction<CertifiedBlock, Future<?>, HashKey>                 consensus;
+        private Context<Member>                                                context;
+        private BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> executor            = (et, c) -> {
+                                                                                                   };
+        private byte[]                                                         genesisData         = "Give me food or give me slack or kill me".getBytes();
+        private Duration                                                       gossipDuration;
+        private Duration                                                       joinTimeout         = Duration.ofMillis(500);
+        private int                                                            maxBatchByteSize    = 4 * 1024;
+        private Duration                                                       maxBatchDelay       = Duration.ofMillis(200);
+        private int                                                            maxBatchSize        = 10;
+        private Member                                                         member;
+        private Messenger.Parameters                                           msgParameters;
+        private int                                                            processedBufferSize = 1000;
+        private ScheduledExecutorService                                       scheduler;
+        private Supplier<Signature>                                            signature;
+        private Duration                                                       submitTimeout       = Duration.ofSeconds(30);
+        private Duration                                                       viewTimeout         = Duration.ofSeconds(60);
 
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
@@ -61,7 +61,7 @@ public class Parameters {
             return context;
         }
 
-        public BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> getExecutor() {
+        public BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> getExecutor() {
             return executor;
         }
 
@@ -121,7 +121,7 @@ public class Parameters {
             return viewTimeout;
         }
 
-        public Parameters.Builder setCommunications(Router communications) {
+        public Builder setCommunications(Router communications) {
             this.communications = communications;
             return this;
         }
@@ -137,7 +137,7 @@ public class Parameters {
             return this;
         }
 
-        public Builder setExecutor(BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor) {
+        public Builder setExecutor(BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> executor) {
             this.executor = executor;
             return this;
         }
@@ -217,30 +217,30 @@ public class Parameters {
         return new Builder();
     }
 
-    public final Router                                                          communications;
-    public final BiFunction<CertifiedBlock, Future<?>, HashKey>                  consensus;
-    public final Context<Member>                                                 context;
-    public final BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor;
-    public final byte[]                                                          genesisData;
-    public final Duration                                                        gossipDuration;
-    public final Duration                                                        joinTimeout;
-    public final int                                                             maxBatchByteSize;
-    public final Duration                                                        maxBatchDelay;
-    public final int                                                             maxBatchSize;
-    public final Member                                                          member;
-    public final Messenger.Parameters                                            msgParameters;
-    public final int                                                             processedBufferSize;
-    public final ScheduledExecutorService                                        scheduler;
-    public final Supplier<Signature>                                             signature;
-    public final Duration                                                        submitTimeout;
-    public final Duration                                                        viewTimeout;
+    public final Router                                                         communications;
+    public final BiFunction<CertifiedBlock, Future<?>, HashKey>                 consensus;
+    public final Context<Member>                                                context;
+    public final BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> executor;
+    public final byte[]                                                         genesisData;
+    public final Duration                                                       gossipDuration;
+    public final Duration                                                       joinTimeout;
+    public final int                                                            maxBatchByteSize;
+    public final Duration                                                       maxBatchDelay;
+    public final int                                                            maxBatchSize;
+    public final Member                                                         member;
+    public final Messenger.Parameters                                           msgParameters;
+    public final int                                                            processedBufferSize;
+    public final ScheduledExecutorService                                       scheduler;
+    public final Supplier<Signature>                                            signature;
+    public final Duration                                                       submitTimeout;
+    public final Duration                                                       viewTimeout;
 
     public Parameters(Context<Member> context, Router communications, Member member, Messenger.Parameters msgParameters,
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Duration maxBatchDelay, Duration joinTimeout, Duration viewTimeout, Duration submitTimeout,
             int processedBufferSize, byte[] genesisData,
-            BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor) {
+            BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> executor) {
         this.context = context;
         this.communications = communications;
         this.member = member;

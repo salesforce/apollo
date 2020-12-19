@@ -116,7 +116,7 @@ message Transaction {
     bytes source = 2;
     bytes nonce = 3;
     bytes signature = 4;
-    repeated google.protobuf.Any batch = 5;
+    google.protobuf.Any txn = 5;
 }
 
 message ExecutedTransaction {

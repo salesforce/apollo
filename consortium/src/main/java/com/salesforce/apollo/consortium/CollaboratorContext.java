@@ -24,6 +24,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
@@ -547,7 +548,10 @@ public class CollaboratorContext {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
             SubmittedTransaction submitted = consortium.getSubmitted().remove(hash);
-            consortium.getParams().executor.accept(txn, submitted == null ? null : submitted.onCompletion);
+            if (submitted != null) {
+                BiConsumer<Object, Throwable> completion = submitted.onCompletion;
+                consortium.getParams().executor.accept(txn, submitted == null ? null : completion);
+            }
         });
         accept(next);
         log.info("Processed user block: {} height: {} on: {}", next.getHash(), height(next.getBlock()),
@@ -572,7 +576,7 @@ public class CollaboratorContext {
             if (txn.getJoin()) {
                 JoinTransaction join;
                 try {
-                    join = txn.getBatch(0).unpack(JoinTransaction.class);
+                    join = txn.getTxn().unpack(JoinTransaction.class);
                 } catch (InvalidProtocolBufferException e) {
                     log.debug("Cannot deserialize join on: {}", consortium.getMember(), e);
                     return null;
@@ -866,7 +870,7 @@ public class CollaboratorContext {
         toOrder.values().forEach(join -> {
             JoinTransaction txn;
             try {
-                txn = join.getTransaction().getBatch(0).unpack(JoinTransaction.class);
+                txn = join.getTransaction().getTxn().unpack(JoinTransaction.class);
             } catch (InvalidProtocolBufferException e) {
                 log.error("Cannot generate genesis, unable to parse Join txnL {} on: {}", join.getHash(),
                           consortium.getMember());
@@ -1137,7 +1141,7 @@ public class CollaboratorContext {
         Map<HashKey, EnqueuedTransaction> reduced = new HashMap<>(); // Member ID -> join txn
         toOrder.forEach((h, eqt) -> {
             try {
-                JoinTransaction join = eqt.getTransaction().getBatch(0).unpack(JoinTransaction.class);
+                JoinTransaction join = eqt.getTransaction().getTxn().unpack(JoinTransaction.class);
                 EnqueuedTransaction prev = reduced.put(new HashKey(join.getMember().getId()), eqt);
                 if (prev != null) {
                     prev.cancel();
@@ -1246,7 +1250,7 @@ public class CollaboratorContext {
         HashKey id = consortium.getMember().getId();
         return toOrder.values().stream().map(eqt -> eqt.getTransaction()).map(t -> {
             try {
-                return t.getBatch(0).unpack(JoinTransaction.class);
+                return t.getTxn().unpack(JoinTransaction.class);
             } catch (InvalidProtocolBufferException e) {
                 log.error("Cannot generate genesis, unable to parse Join txn on: {}", consortium.getMember());
                 return null;

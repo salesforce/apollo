@@ -222,9 +222,7 @@ public class Consortium {
         buffers.add(transaction.getNonce());
         buffers.add(ByteString.copyFrom(transaction.getJoin() ? new byte[] { 1 } : new byte[] { 0 }));
         buffers.add(transaction.getSource());
-        for (int i = 0; i < transaction.getBatchCount(); i++) {
-            buffers.add(transaction.getBatch(i).toByteString());
-        }
+        buffers.add(transaction.getTxn().toByteString());
 
         return new HashKey(Conversion.hashOf(BbBackedInputStream.aggregate(buffers)));
     }
@@ -303,8 +301,8 @@ public class Consortium {
             long height = height(block);
             long prevHeight = height(previousBlock.getBlock());
             if (height <= prevHeight) {
-                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash, height,
-                         prevHeight, getMember());
+                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
+                          height, prevHeight, getMember());
                 return;
             }
             if (height != prevHeight + 1) {
@@ -355,7 +353,7 @@ public class Consortium {
             long currentHeight = height(getCurrent().getBlock());
             if (height <= currentHeight) {
                 log.debug("dropping deferred block: {} height: {} <= current height: {} on: {}", delayed.getHash(),
-                         height, currentHeight, getMember());
+                          height, currentHeight, getMember());
                 delayed = deferedBlocks.poll();
             } else if (height == currentHeight + 1) {
                 log.debug("processing deferred block: {} height: {} on: {}", delayed.getHash(), height, getMember());
@@ -363,7 +361,7 @@ public class Consortium {
                 delayed = deferedBlocks.poll();
             } else {
                 log.debug("current height: {} so re-deferring block: {} height: {} on: {}", currentHeight,
-                         delayed.getHash(), height, getMember());
+                          delayed.getHash(), height, getMember());
                 deferedBlocks.add(delayed);
                 delayed = null;
             }
@@ -389,9 +387,8 @@ public class Consortium {
         transitions.stop();
     }
 
-    public HashKey submit(BiConsumer<HashKey, Throwable> onCompletion,
-                          Message... transactions) throws TimeoutException {
-        return submit(false, onCompletion, transactions);
+    public HashKey submit(BiConsumer<Object, Throwable> onCompletion, Message transaction) throws TimeoutException {
+        return submit(false, onCompletion, transaction);
     }
 
     void delay(Message message, Member from) {
@@ -549,13 +546,12 @@ public class Consortium {
         this.viewContext.set(viewContext);
     }
 
-    HashKey submit(boolean join, BiConsumer<HashKey, Throwable> onCompletion,
-                   Message... transactions) throws TimeoutException {
+    HashKey submit(boolean join, BiConsumer<Object, Throwable> onCompletion, Message txn) throws TimeoutException {
         if (viewContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
         }
-        EnqueuedTransaction transaction = build(join, transactions);
+        EnqueuedTransaction transaction = build(join, txn);
         submit(transaction, onCompletion);
         return transaction.getHash();
     }
@@ -588,7 +584,7 @@ public class Consortium {
         return getViewContext();
     }
 
-    private EnqueuedTransaction build(boolean join, Message... transactions) {
+    private EnqueuedTransaction build(boolean join, Message transaction) {
         byte[] nonce = new byte[32];
         entropy().nextBytes(nonce);
 
@@ -596,9 +592,7 @@ public class Consortium {
                                                  .setJoin(join)
                                                  .setSource(getParams().member.getId().toByteString())
                                                  .setNonce(ByteString.copyFrom(nonce));
-        for (Message t : transactions) {
-            builder.addBatch(Any.pack(t));
-        }
+        builder.setTxn(Any.pack(transaction));
 
         HashKey hash = hashOf(builder);
 
@@ -797,7 +791,7 @@ public class Consortium {
     }
 
     private void submit(EnqueuedTransaction transaction,
-                        BiConsumer<HashKey, Throwable> onCompletion) throws TimeoutException {
+                        BiConsumer<Object, Throwable> onCompletion) throws TimeoutException {
         assert transaction.getHash().equals(hashOf(transaction.getTransaction())) : "Hash does not match!";
 
         getSubmitted().put(transaction.getHash(), new SubmittedTransaction(transaction.getTransaction(), onCompletion));

@@ -44,7 +44,11 @@ message Result {
         Update update = 2;
         Delete delete = 3;
     }
-} 
+}
+
+message BatchStatements {
+    repeated string statements = 1;
+}
 
 message Statement {
     string sql = 1;

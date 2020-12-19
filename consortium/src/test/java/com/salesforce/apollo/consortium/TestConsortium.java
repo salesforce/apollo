@@ -155,7 +155,7 @@ public class TestConsortium {
             }
             return hash;
         };
-        BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor = (et, c) -> {
+        BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> executor = (et, c) -> {
             if (c != null) {
                 c.accept(new HashKey(et.getHash()), null);
             }
@@ -273,7 +273,7 @@ public class TestConsortium {
     private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters,
-                                  BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor) {
+                                  BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> executor) {
         members.stream()
                .map(m -> new Consortium(Parameters.newBuilder()
                                                   .setConsensus(consensus)

@@ -9,7 +9,6 @@ package com.salesforce.apollo.consortium;
 import java.util.function.BiConsumer;
 
 import com.salesfoce.apollo.consortium.proto.Transaction;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * A pending transaction submitted by a client
@@ -18,10 +17,10 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class SubmittedTransaction {
-    public final BiConsumer<HashKey, Throwable> onCompletion;
-    public final Transaction                    submitted;
+    public final BiConsumer<Object, Throwable> onCompletion;
+    public final Transaction                   submitted;
 
-    public SubmittedTransaction(Transaction submitted, BiConsumer<HashKey, Throwable> onCompletion) {
+    public SubmittedTransaction(Transaction submitted, BiConsumer<Object, Throwable> onCompletion) {
         this.submitted = submitted;
         this.onCompletion = onCompletion;
     }
