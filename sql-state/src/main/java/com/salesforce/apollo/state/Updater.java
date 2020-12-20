@@ -27,13 +27,14 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.state.proto.BatchStatements;
 import com.salesfoce.apollo.state.proto.Statement;
+import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class Updater implements BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> {
+public class Updater implements TransactionExecutor {
     private static final RowSetFactory factory;
     private static final Logger        log = LoggerFactory.getLogger(Updater.class);
     static {
@@ -64,7 +65,8 @@ public class Updater implements BiConsumer<ExecutedTransaction, BiConsumer<Objec
     }
 
     @Override
-    public void accept(ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
+    public void execute(HashKey blockHash, long blockHeight, ExecutedTransaction t,
+                        BiConsumer<Object, Throwable> completion) {
         if (t.getTransaction().getTxn().is(Statement.class)) {
             acceptStatement(t, completion);
         } else if (t.getTransaction().getTxn().is(BatchStatements.class)) {

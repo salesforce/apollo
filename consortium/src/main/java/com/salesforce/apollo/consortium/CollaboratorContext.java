@@ -544,13 +544,14 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
+        long height = height(next.getBlock());
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
             SubmittedTransaction submitted = consortium.getSubmitted().remove(hash);
             if (submitted != null) {
                 BiConsumer<Object, Throwable> completion = submitted.onCompletion;
-                consortium.getParams().executor.accept(txn, submitted == null ? null : completion);
+                consortium.getParams().executor.execute(next.getHash(), height, txn, completion);
             }
         });
         accept(next);

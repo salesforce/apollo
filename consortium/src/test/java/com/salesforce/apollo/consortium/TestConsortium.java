@@ -33,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -48,7 +47,6 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.consortium.proto.Header;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -155,7 +153,7 @@ public class TestConsortium {
             }
             return hash;
         };
-        BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> executor = (et, c) -> {
+        TransactionExecutor executor = (h, bh, et, c) -> {
             if (c != null) {
                 c.accept(new HashKey(et.getHash()), null);
             }
@@ -272,8 +270,7 @@ public class TestConsortium {
 
     private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
-                                  Messenger.Parameters msgParameters,
-                                  BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> executor) {
+                                  Messenger.Parameters msgParameters, TransactionExecutor executor) {
         members.stream()
                .map(m -> new Consortium(Parameters.newBuilder()
                                                   .setConsensus(consensus)

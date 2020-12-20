@@ -31,7 +31,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -43,7 +42,6 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
-import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
@@ -275,13 +273,11 @@ public class AvaConsensusTest {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
             AvaAdapter adapter = new AvaAdapter(processed);
-            BiConsumer<ExecutedTransaction, BiConsumer<Object, Throwable>> executor = (t, c) -> {
-                 if (c != null) {
-                     ForkJoinPool.commonPool()
-                                 .execute(() -> c.accept(new HashKey(
-                                         t.getHash()), null));
-                 }
-             };
+            TransactionExecutor executor = (h, hgt, t, c) -> {
+                if (c != null) {
+                    ForkJoinPool.commonPool().execute(() -> c.accept(new HashKey(t.getHash()), null));
+                }
+            };
             Consortium member = new Consortium(Parameters.newBuilder()
                                                          .setConsensus(adapter.getConsensus())
                                                          .setMember(m)

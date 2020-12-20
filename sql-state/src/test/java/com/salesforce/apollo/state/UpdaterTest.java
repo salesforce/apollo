@@ -43,7 +43,7 @@ public class UpdaterTest {
                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
         Transaction transaction = builder.build();
 
-        updater.accept(ExecutedTransaction.newBuilder().setTransaction(transaction).build(), null);
+        updater.execute(null, 0, ExecutedTransaction.newBuilder().setTransaction(transaction).build(), null);
 
         ResultSet books = statement.executeQuery("select * from books");
         assertTrue(books.first());
