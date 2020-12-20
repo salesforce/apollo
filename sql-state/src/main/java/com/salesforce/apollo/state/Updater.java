@@ -19,6 +19,7 @@ import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
 
+import org.h2.engine.Session;
 import org.h2.jdbc.JdbcConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,9 +69,9 @@ public class Updater implements TransactionExecutor {
     public void execute(HashKey blockHash, long blockHeight, ExecutedTransaction t,
                         BiConsumer<Object, Throwable> completion) {
         if (t.getTransaction().getTxn().is(Statement.class)) {
-            acceptStatement(t, completion);
+            acceptStatement(blockHeight, t, completion);
         } else if (t.getTransaction().getTxn().is(BatchStatements.class)) {
-            acceptBatch(t, completion);
+            acceptBatch(blockHeight, t, completion);
         } else {
             log.error("Unknown transaction: {} type: {}", t.getHash(), t.getTransaction().getTxn().getTypeUrl());
         }
@@ -92,7 +93,7 @@ public class Updater implements TransactionExecutor {
         }
     }
 
-    private void acceptBatch(ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
+    private void acceptBatch(long blockHeight, ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
         try {
             BatchStatements batch;
             try {
@@ -103,6 +104,7 @@ public class Updater implements TransactionExecutor {
                 complete(null, e);
                 return;
             }
+            getSession().setBlockHeight(blockHeight);
             try (java.sql.Statement exec = connection.createStatement();) {
                 batch.getStatementsList().forEach(sql -> {
                     try {
@@ -131,7 +133,7 @@ public class Updater implements TransactionExecutor {
         }
     }
 
-    private void acceptStatement(ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
+    private void acceptStatement(long blockHeight, ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
         try {
             Statement statement;
             try {
@@ -141,6 +143,7 @@ public class Updater implements TransactionExecutor {
                 complete(null, e);
                 return;
             }
+            getSession().setBlockHeight(blockHeight);
             try (java.sql.Statement exec = connection.createStatement()) {
                 if (exec.execute(statement.getSql())) {
                     CachedRowSet rowset = factory.createCachedRowSet();
@@ -193,5 +196,9 @@ public class Updater implements TransactionExecutor {
             connection.rollback();
         } catch (SQLException e) {
         }
+    }
+    
+    private Session getSession() {
+        return (Session) connection.getSession();
     }
 }
