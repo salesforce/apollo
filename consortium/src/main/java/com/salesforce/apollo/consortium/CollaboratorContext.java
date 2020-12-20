@@ -549,10 +549,8 @@ public class CollaboratorContext {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
             SubmittedTransaction submitted = consortium.getSubmitted().remove(hash);
-            if (submitted != null) {
-                BiConsumer<Object, Throwable> completion = submitted.onCompletion;
-                consortium.getParams().executor.execute(next.getHash(), height, txn, completion);
-            }
+            BiConsumer<Object, Throwable> completion = submitted == null ? null : submitted.onCompletion;
+            consortium.getParams().executor.execute(next.getHash(), height, txn, completion);
         });
         accept(next);
         log.info("Processed user block: {} height: {} on: {}", next.getHash(), height(next.getBlock()),

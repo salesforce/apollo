@@ -13,6 +13,10 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -122,6 +126,8 @@ public class ConsortiumTest {
         assertEquals(testCardinality, members.size());
 
         members.forEach(node -> communications.put(node.getId(), new LocalRouter(node.getId(), builder)));
+
+        System.out.println(members.stream().map(m -> m.getId()).collect(Collectors.toList()));
 
     }
 
@@ -287,13 +293,30 @@ public class ConsortiumTest {
         double perSecond = now / 1000.0;
         System.out.println("Statements per second: " + (bunchCount * 40) / perSecond);
         System.out.println("Transactions per second: " + (bunchCount) / perSecond);
+
+        Connection connection = updaters.get(members.get(0)).newConnection();
+        Statement statement = connection.createStatement();
+        ResultSet results = statement.executeQuery("select ID, __BLOCK_HEIGHT__ from books");
+        ResultSetMetaData rsmd = results.getMetaData(); 
+        int columnsNumber = rsmd.getColumnCount();
+        while (results.next()) {
+            for (int i = 1; i <= columnsNumber; i++) {
+                if (i > 1) System.out.print(",  ");
+                Object columnValue = results.getObject(i);
+                System.out.print(columnValue + " " + rsmd.getColumnName(i));
+            }
+            System.out.println("");
+        }
+        System.out.println(results);
     }
 
     private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters) {
+        AtomicBoolean frist = new AtomicBoolean(true);
         members.stream().map(m -> {
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
+            frist.set(false);
             System.out.println("DB URL: " + url);
             Updater up = new Updater(url, new Properties());
             updaters.put(m, up);

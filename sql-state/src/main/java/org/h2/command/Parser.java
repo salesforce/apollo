@@ -1281,8 +1281,12 @@ public class Parser {
         TableFilter filter = readSimpleTableFilter(0, null);
         command.setTableFilter(filter);
         parseUpdateSetClause(command, filter, start, limit == null);
-        command.setAssignment(new Column(BLOCK_HEIGHT, TypeInfo.TYPE_LONG),  // Apollo
-                              ValueExpression.get(ValueLong.get(session.getBlockHeight())));
+
+        Column bh = filter.getTable().getColumn(BLOCK_HEIGHT, true);
+        if (bh != null) {
+            command.setAssignment(bh, // Apollo
+                                  ValueExpression.get(ValueLong.get(session.getBlockHeight())));
+        }
         return command;
     }
 
@@ -1597,13 +1601,16 @@ public class Parser {
                 return command;
             }
             Column[] columns = parseColumnList(table);
-            
-            Column[] transformed = new Column[columns.length + 1];  // Apollo
-            for (int i = 0; i < columns.length; i++) {
-                transformed[i] = columns[i];
+
+            Column bh = table.getColumn(BLOCK_HEIGHT, true);
+            if (bh != null) {
+                Column[] transformed = new Column[columns.length + 1]; // Apollo
+                for (int i = 0; i < columns.length; i++) {
+                    transformed[i] = columns[i];
+                }
+                transformed[columns.length] = bh;
+                columns = transformed;
             }
-            transformed[columns.length] = new Column(BLOCK_HEIGHT, TypeInfo.TYPE_LONG);
-            columns = transformed;
             
             command.setColumns(columns);
         }
@@ -1781,6 +1788,7 @@ public class Parser {
 
     private Insert parseInsertGivenTable(Insert command, Table table) {
         Column[] columns = null;
+        Column bh = table.getColumn(BLOCK_HEIGHT, true);
         if (readIf(OPEN_PAREN)) {
             if (isQuery()) {
                 command.setQuery(parseQuery());
@@ -1788,13 +1796,15 @@ public class Parser {
                 return command;
             }
             columns = parseColumnList(table);
-            // apollo
-            Column[] transformed = new Column[columns.length + 1];
-            for (int i = 0; i < columns.length; i++) {
-                transformed[i] = columns[i];
+            if (bh != null) {
+                // apollo
+                Column[] transformed = new Column[columns.length + 1];
+                for (int i = 0; i < columns.length; i++) {
+                    transformed[i] = columns[i];
+                }
+                transformed[columns.length] = bh;
+                columns = transformed;
             }
-            transformed[columns.length] = new Column(BLOCK_HEIGHT, TypeInfo.TYPE_LONG); // Apollo
-            columns = transformed;
             
             command.setColumns(columns);
         }
@@ -1820,7 +1830,7 @@ public class Parser {
                 read(EQUAL);
                 values.add(readExpressionOrDefault());
             } while (readIf(COMMA));
-            columnList.add(new Column(BLOCK_HEIGHT, TypeInfo.TYPE_LONG)); // Apollo
+            columnList.add(bh); // Apollo
             command.setColumns(columnList.toArray(new Column[0]));
             command.addRow(values.toArray(new Expression[0]));
         } else {
@@ -1874,7 +1884,7 @@ public class Parser {
                 }
             } else {
                 values.add(readIf("DEFAULT") ? null : readExpression());
-            }
+            } 
             values.add(ValueExpression.get(ValueLong.get(session.getBlockHeight())));
             command.addRow(values.toArray(new Expression[0]));
         } while (readIf(COMMA)); 

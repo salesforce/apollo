@@ -67,7 +67,7 @@ public class Updater implements TransactionExecutor {
 
     @Override
     public void execute(HashKey blockHash, long blockHeight, ExecutedTransaction t,
-                        BiConsumer<Object, Throwable> completion) {
+                        BiConsumer<Object, Throwable> completion) { 
         if (t.getTransaction().getTxn().is(Statement.class)) {
             acceptStatement(blockHeight, t, completion);
         } else if (t.getTransaction().getTxn().is(BatchStatements.class)) {
@@ -78,7 +78,10 @@ public class Updater implements TransactionExecutor {
     }
 
     public void close() {
-        rollback();
+        try {
+            connection.rollback();
+        } catch (SQLException e1) {
+        }
         try {
             connection.close();
         } catch (SQLException e) {
@@ -95,6 +98,7 @@ public class Updater implements TransactionExecutor {
 
     private void acceptBatch(long blockHeight, ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
         try {
+            connection.setAutoCommit(false);
             BatchStatements batch;
             try {
                 batch = t.getTransaction().getTxn().unpack(BatchStatements.class);
@@ -135,6 +139,7 @@ public class Updater implements TransactionExecutor {
 
     private void acceptStatement(long blockHeight, ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
         try {
+            connection.setAutoCommit(false);
             Statement statement;
             try {
                 statement = t.getTransaction().getTxn().unpack(Statement.class);
@@ -161,13 +166,13 @@ public class Updater implements TransactionExecutor {
                 } else {
                     complete(completion, null);
                 }
+                connection.commit();
             } catch (SQLException e) {
                 log.warn("Error executing Statement: {} from txn: {} : {}", statement.getSql(),
                          new HashKey(t.getHash()), e.toString());
                 exception(completion, e);
                 return;
             }
-            connection.commit();
         } catch (Exception e) {
             try {
                 log.warn("Rolling back transaction: {}, {}", new HashKey(t.getHash()), e.toString());
@@ -191,13 +196,6 @@ public class Updater implements TransactionExecutor {
         completion.accept(null, e);
     }
 
-    private void rollback() {
-        try {
-            connection.rollback();
-        } catch (SQLException e) {
-        }
-    }
-    
     private Session getSession() {
         return (Session) connection.getSession();
     }
