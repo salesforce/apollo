@@ -14,6 +14,16 @@ databaseChangeLog:
 
       -  createTable:
             schemaName: kernel
+            tableName: watermark
+            columns:
+            -  column:
+                  name: value
+                  type: VARCHAR
+                  constraints:
+                     primaryKey: true
+                     
+      -  createTable:
+            schemaName: kernel
             tableName: lambda
             columns:
             -  column:
