@@ -136,7 +136,7 @@ public enum CollaboratorFsm implements Transitions {
         @Entry
         public void generate() {
             context().initializeConsensus();
-            context().generateBlocks();
+            context().generateBlock();
         }
 
         @Override

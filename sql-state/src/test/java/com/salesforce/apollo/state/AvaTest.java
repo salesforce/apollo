@@ -41,7 +41,6 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.ByteMessage;
-import com.salesfoce.apollo.state.proto.BatchStatements;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
 import com.salesforce.apollo.avalanche.DagDao;
@@ -191,8 +190,8 @@ public class AvaTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit((h, t) -> txnProcessed.set(true),
-                                 batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
+            String[] statements = { "create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))" };
+            hash = client.submit((h, t) -> txnProcessed.set(true), Helper.batched(Helper.batch(statements)));
         } catch (TimeoutException e) {
             fail();
             return;
@@ -212,15 +211,16 @@ public class AvaTest {
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+        String[] statements = { "insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)" };
         HashKey pending = client.submit((h, t) -> {
             outstanding.release();
             submitted.remove(h);
             submittedBunch.countDown();
-        }, batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                 "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                 "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                 "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                 "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
+        }, Helper.batched(Helper.batch(statements)));
         submitted.add(pending);
         IntStream.range(0, bunchCount).forEach(i -> {
             try {
@@ -229,50 +229,51 @@ public class AvaTest {
                 throw new IllegalStateException(e1);
             }
             try {
+                String[] statements1 = { "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005" };
                 HashKey key = client.submit((h, t) -> {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
-                }, batch("update books set qty = " + entropy.nextInt() + " where id = 1001",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                         "update books set qty = " + entropy.nextInt() + " where id = 1005"));
+                }, Helper.batched(Helper.batch(statements1)));
                 submitted.add(key);
             } catch (TimeoutException e) {
                 fail();
@@ -288,14 +289,6 @@ public class AvaTest {
         double perSecond = now / 1000.0;
         System.out.println("Statements per second: " + (bunchCount * 40) / perSecond);
         System.out.println("Transactions per second: " + (bunchCount) / perSecond);
-    }
-
-    private BatchStatements batch(String... statements) {
-        BatchStatements.Builder builder = BatchStatements.newBuilder();
-        for (String statement : statements) {
-            builder.addStatements(statement);
-        }
-        return builder.build();
     }
 
     private void awaitGenesis(AtomicReference<CountDownLatch> processed,
@@ -371,7 +364,7 @@ public class AvaTest {
                               .setViewTimeout(Duration.ofMillis(500))
                               .setJoinTimeout(Duration.ofSeconds(5))
                               .setTransactonTimeout(Duration.ofSeconds(15))
-                              .setExecutor(up)
+                              .setExecutor(up.getExecutor())
                               .setScheduler(scheduler)
                               .setGenesisData(GENESIS_DATA.toByteArray())
                               .build());

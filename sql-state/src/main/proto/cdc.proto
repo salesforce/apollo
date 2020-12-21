@@ -9,55 +9,39 @@ import "google/protobuf/empty.proto";
 
 package apollo.cdc;
 
-message Execution {
-    repeated bytes parameters = 1;
-    bytes wasm = 2;
-}
-
-message Insert {
-    int32 table =1;
-    int64 key = 2;
-    int32 count = 3;
-    bytes values = 4;
-}
-
-message Update {
-    int32 table =1;
-    int64 key = 2;
-    int32 count = 3;
-    bytes values = 4;
-    repeated int32 mapping = 5;
-}
-
-message Delete {
-    int32 table =1;
-    int64 key = 2;
-}
-
-message Results {
-    repeated Result results = 1;
-}
-
-message Result {
-    oneof event {
-        Insert insert = 1;
-        Update update = 2;
-        Delete delete = 3;
-    }
-}
-
-message BatchStatements {
+message Batch{
     repeated string statements = 1;
+}
+
+message Arguments {
+    repeated bytes args = 1;
 }
 
 message Statement {
     string sql = 1;
-    repeated bytes parameters = 2;
+    Arguments arguments = 2;
+}
+
+message Call {
+    string sql = 1;
+    Arguments arguments = 2;
+    repeated int32 outParameters = 3; // value is enum of java.sql.SQLType
+}
+
+message BatchedTransaction {
+    repeated Txn transactions = 1;
+}
+
+message BatchUpdate {
+    string sql = 1;
+    repeated Arguments batch = 2;
 }
 
 message Txn {
     oneof execution {
         Statement statement = 1;
-        Execution block = 2;
+        Call call = 2;
+        Batch batch = 3;
+        BatchUpdate batchUpdate = 4;
     }
 }

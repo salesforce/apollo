@@ -6,13 +6,16 @@
  */
 package com.salesforce.apollo.state;
 
+import java.sql.CallableStatement;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 
 import javax.sql.rowset.CachedRowSet;
@@ -21,13 +24,23 @@ import javax.sql.rowset.RowSetProvider;
 
 import org.h2.engine.Session;
 import org.h2.jdbc.JdbcConnection;
+import org.h2.store.Data;
+import org.h2.value.Value;
+import org.hibernate.validator.internal.util.privilegedactions.GetResolvedMemberMethods;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
-import com.salesfoce.apollo.state.proto.BatchStatements;
+import com.salesfoce.apollo.state.proto.Arguments;
+import com.salesfoce.apollo.state.proto.Batch;
+import com.salesfoce.apollo.state.proto.BatchUpdate;
+import com.salesfoce.apollo.state.proto.BatchedTransaction;
+import com.salesfoce.apollo.state.proto.Call;
 import com.salesfoce.apollo.state.proto.Statement;
+import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -35,9 +48,47 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  *
  */
-public class Updater implements TransactionExecutor {
+public class Updater {
+    public static class CallResult {
+        public final List<Object>    outValues;
+        public final List<ResultSet> results;
+
+        public CallResult(List<Object> out, List<ResultSet> results) {
+            this.outValues = out;
+            this.results = results;
+        }
+
+        public <ValueType> ValueType get(int index) {
+            @SuppressWarnings("unchecked")
+            ValueType v = (ValueType) outValues.get(index);
+            return v;
+        }
+    }
+
+    public class TxnExec implements TransactionExecutor {
+
+        @Override
+        public void execute(HashKey blockHash, long blockHeight, ExecutedTransaction t,
+                            BiConsumer<Object, Throwable> completion) {
+            Any tx = t.getTransaction().getTxn();
+            HashKey txnHash = new HashKey(t.getHash());
+
+            if (tx.is(BatchedTransaction.class)) {
+                executeBatchTransaction(blockHeight, t, completion, tx, txnHash);
+            } else if (tx.is(Batch.class)) {
+                executeBatch(blockHash, blockHeight, completion, tx, txnHash);
+            } else if (tx.is(BatchUpdate.class)) {
+                executeBatchUpdate(blockHash, blockHeight, completion, tx, txnHash);
+            } else if (tx.is(Statement.class)) {
+                executeStatement(blockHash, blockHeight, completion, tx, txnHash);
+            }
+
+        }
+    }
+
     private static final RowSetFactory factory;
-    private static final Logger        log = LoggerFactory.getLogger(Updater.class);
+    private static final Logger log = LoggerFactory.getLogger(Updater.class);
+
     static {
         try {
             factory = RowSetProvider.newFactory();
@@ -45,7 +96,9 @@ public class Updater implements TransactionExecutor {
             throw new IllegalStateException("Cannot create row set factory", e);
         }
     }
+    
     private final JdbcConnection connection;
+    private final TxnExec        executor = new TxnExec();
     private final ForkJoinPool   fjPool;
     private final Properties     info;
     private final String         url;
@@ -65,18 +118,6 @@ public class Updater implements TransactionExecutor {
         }
     }
 
-    @Override
-    public void execute(HashKey blockHash, long blockHeight, ExecutedTransaction t,
-                        BiConsumer<Object, Throwable> completion) { 
-        if (t.getTransaction().getTxn().is(Statement.class)) {
-            acceptStatement(blockHeight, t, completion);
-        } else if (t.getTransaction().getTxn().is(BatchStatements.class)) {
-            acceptBatch(blockHeight, t, completion);
-        } else {
-            log.error("Unknown transaction: {} type: {}", t.getHash(), t.getTransaction().getTxn().getTypeUrl());
-        }
-    }
-
     public void close() {
         try {
             connection.rollback();
@@ -88,6 +129,10 @@ public class Updater implements TransactionExecutor {
         }
     }
 
+    public TxnExec getExecutor() {
+        return executor;
+    }
+
     public Connection newConnection() {
         try {
             return new JdbcConnection(url, info);
@@ -96,93 +141,92 @@ public class Updater implements TransactionExecutor {
         }
     }
 
-    private void acceptBatch(long blockHeight, ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
-        try {
-            connection.setAutoCommit(false);
-            BatchStatements batch;
-            try {
-                batch = t.getTransaction().getTxn().unpack(BatchStatements.class);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("unable to deserialize BatchStatements from txn: {} : {}", new HashKey(t.getHash()),
-                          e.toString());
-                complete(null, e);
-                return;
+    private int[] acceptBatch(HashKey hash, long blockHeight, Batch batch) throws SQLException {
+        connection.setAutoCommit(false);
+        getSession().setBlockHeight(blockHeight);
+
+        int[] updated = new int[0];
+        try (java.sql.Statement exec = connection.createStatement()) {
+            for (String sql : batch.getStatementsList()) {
+                exec.addBatch(sql);
             }
-            getSession().setBlockHeight(blockHeight);
-            try (java.sql.Statement exec = connection.createStatement();) {
-                batch.getStatementsList().forEach(sql -> {
-                    try {
-                        exec.addBatch(sql);
-                    } catch (SQLException e) {
-                        complete(completion, e);
-                        return;
-                    }
-                });
-                int[] count = exec.executeBatch();
-                complete(completion, count);
-            } catch (SQLException e) {
-                exception(completion, e);
-                return;
-            }
+            updated = exec.executeBatch();
             connection.commit();
-        } catch (Exception e) {
-            try {
-                log.warn("Rolling back transaction: {}, {}", new HashKey(t.getHash()), e.toString());
-                connection.rollback();
-                exception(completion, e);
-            } catch (SQLException e1) {
-                log.error("unable to rollback: {}", new HashKey(t.getHash()), e1);
-                throw new IllegalStateException("Cannot rollback txn", e1);
+        }
+        return updated;
+    }
+
+    private int[] acceptBatchUpdate(HashKey hash, long blockHeight, BatchUpdate batchUpdate) throws SQLException {
+        AtomicInteger i = new AtomicInteger();
+        try (PreparedStatement exec = connection.prepareStatement(batchUpdate.getSql())) {
+            for (Arguments args : batchUpdate.getBatchList()) {
+                for (ByteString argument : args.getArgsList()) {
+                    Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
+                    setArgument(exec, i.getAndIncrement(), data.readValue());
+                    exec.addBatch();
+                }
             }
+            return exec.executeBatch();
         }
     }
 
-    private void acceptStatement(long blockHeight, ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
-        try {
-            connection.setAutoCommit(false);
-            Statement statement;
-            try {
-                statement = t.getTransaction().getTxn().unpack(Statement.class);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("unable to deserialize Statement from txn: {} : {}", new HashKey(t.getHash()), e.toString());
-                complete(null, e);
-                return;
+    private CallResult acceptCall(HashKey hash, long blockHeight, Call call) throws SQLException {
+        List<ResultSet> results = new ArrayList<>();
+        AtomicInteger i = new AtomicInteger();
+        try (CallableStatement exec = connection.prepareCall(call.getSql())) {
+            for (ByteString argument : call.getArguments().getArgsList()) {
+                Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
+                setArgument(exec, i.getAndIncrement(), data.readValue());
+                exec.addBatch();
             }
-            getSession().setBlockHeight(blockHeight);
-            try (java.sql.Statement exec = connection.createStatement()) {
-                if (exec.execute(statement.getSql())) {
-                    CachedRowSet rowset = factory.createCachedRowSet();
+            for (int p = 0; p < call.getOutParametersCount(); p++) {
+                exec.registerOutParameter(p, call.getOutParameters(p));
+            }
+            List<Object> out = new ArrayList<>();
+            if (exec.execute()) {
+                CachedRowSet rowset = factory.createCachedRowSet();
 
-                    List<ResultSet> results = new ArrayList<>();
+                rowset.populate(exec.getResultSet());
+                results.add(rowset);
+
+                while (exec.getMoreResults()) {
+                    rowset = factory.createCachedRowSet();
                     rowset.populate(exec.getResultSet());
                     results.add(rowset);
-
-                    while (exec.getMoreResults()) {
-                        rowset = factory.createCachedRowSet();
-                        rowset.populate(exec.getResultSet());
-                        results.add(rowset);
-                    }
-                    complete(completion, results);
-                } else {
-                    complete(completion, null);
                 }
-                connection.commit();
-            } catch (SQLException e) {
-                log.warn("Error executing Statement: {} from txn: {} : {}", statement.getSql(),
-                         new HashKey(t.getHash()), e.toString());
-                exception(completion, e);
-                return;
             }
-        } catch (Exception e) {
-            try {
-                log.warn("Rolling back transaction: {}, {}", new HashKey(t.getHash()), e.toString());
-                connection.rollback();
-                exception(completion, e);
-            } catch (SQLException e1) {
-                log.error("unable to rollback: {}", new HashKey(t.getHash()), e1);
-                throw new IllegalStateException("Cannot rollback txn", e1);
+            for (int j = 0; j < call.getOutParametersCount(); j++) {
+                out.add(exec.getObject(j));
+            }
+            return new CallResult(out, results);
+        }
+    }
+
+    private List<ResultSet> acceptPreparedStatement(HashKey hash, long blockHeight,
+                                                    Statement statement) throws SQLException {
+        List<ResultSet> results = new ArrayList<>();
+        connection.setAutoCommit(false);
+        getSession().setBlockHeight(blockHeight);
+        AtomicInteger i = new AtomicInteger();
+        try (PreparedStatement exec = connection.prepareStatement(statement.getSql())) {
+            for (ByteString argument : statement.getArguments().getArgsList()) {
+                Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
+                setArgument(exec, i.getAndIncrement(), data.readValue());
+            }
+            if (exec.execute()) {
+                CachedRowSet rowset = factory.createCachedRowSet();
+
+                rowset.populate(exec.getResultSet());
+                results.add(rowset);
+
+                while (exec.getMoreResults()) {
+                    rowset = factory.createCachedRowSet();
+                    rowset.populate(exec.getResultSet());
+                    results.add(rowset);
+                }
             }
         }
+        return results;
     }
 
     private void complete(BiConsumer<Object, Throwable> completion, Object results) {
@@ -196,7 +240,146 @@ public class Updater implements TransactionExecutor {
         completion.accept(null, e);
     }
 
+    private Object execute(long blockHeight, ExecutedTransaction t, BiConsumer<Object, Throwable> completion, Txn txn,
+                           HashKey hash) {
+        try {
+            if (txn.hasStatement()) {
+                return acceptPreparedStatement(hash, blockHeight, txn.getStatement());
+            } else if (txn.hasBatch()) {
+                return acceptBatch(hash, blockHeight, txn.getBatch());
+            } else if (txn.hasCall()) {
+                return acceptCall(hash, blockHeight, txn.getCall());
+            } else if (txn.hasBatchUpdate()) {
+                return acceptBatchUpdate(hash, blockHeight, txn.getBatchUpdate());
+            } else {
+                log.error("Unknown transaction type: {}", t.getHash());
+                return null;
+            }
+        } catch (Throwable th) {
+            return th;
+        }
+    }
+
+    private void executeBatch(HashKey blockHash, long blockHeight, BiConsumer<Object, Throwable> completion, Any tx,
+                              HashKey txnHash) {
+        Batch batch;
+        try {
+            batch = tx.unpack(Batch.class);
+        } catch (InvalidProtocolBufferException e) {
+            log.warn("Cannot deserialize batch: {} of block: {}", txnHash, blockHash);
+            return;
+        }
+        int[] result;
+        try {
+            result = acceptBatch(txnHash, blockHeight, batch);
+        } catch (SQLException e) {
+            log.info("Exception processing batch: {} of block: {}", txnHash, blockHash, e);
+            exception(completion, e);
+            return;
+        }
+        try {
+            connection.commit();
+        } catch (SQLException e) {
+            log.info("Exception committing batch: {} of block: {}", txnHash, blockHash, e);
+            exception(completion, e);
+            return;
+        }
+        complete(completion, result);
+    }
+
+    private void executeBatchTransaction(long blockHeight, ExecutedTransaction t,
+                                         BiConsumer<Object, Throwable> completion, Any tx, HashKey txnHash) {
+        BatchedTransaction txns;
+        try {
+            txns = tx.unpack(BatchedTransaction.class);
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Error deserializing transaction: {}  ", t.getHash());
+            return;
+        }
+        List<Object> results = new ArrayList<Object>();
+        for (Txn txn : txns.getTransactionsList()) {
+
+            Object result = Updater.this.execute(blockHeight, t, completion, txn, txnHash);
+            if (result instanceof Throwable) {
+                complete(completion, (Throwable) result);
+                return;
+            } else {
+                results.add(result);
+            }
+        }
+
+        try {
+            connection.commit();
+            complete(completion, results);
+        } catch (SQLException e) {
+            log.info("Error executing txn: {} : {}", txnHash, e.toString());
+            exception(completion, e);
+        }
+    }
+
+    private void executeBatchUpdate(HashKey blockHash, long blockHeight, BiConsumer<Object, Throwable> completion,
+                                    Any tx, HashKey txnHash) {
+        BatchUpdate batch;
+        try {
+            batch = tx.unpack(BatchUpdate.class);
+        } catch (InvalidProtocolBufferException e) {
+            log.warn("Cannot deserialize batch update: {} of block: {}", txnHash, blockHash);
+            return;
+        }
+        int[] result;
+        try {
+            result = acceptBatchUpdate(txnHash, blockHeight, batch);
+        } catch (SQLException e) {
+            log.info("Exception processing batch update: {} of block: {}", txnHash, blockHash, e);
+            exception(completion, e);
+            return;
+        }
+        try {
+            connection.commit();
+        } catch (SQLException e) {
+            log.info("Exception committing batch update: {} of block: {}", txnHash, blockHash, e);
+            exception(completion, e);
+            return;
+        }
+        complete(completion, result);
+    }
+
+    private void executeStatement(HashKey blockHash, long blockHeight, BiConsumer<Object, Throwable> completion, Any tx,
+                                  HashKey txnHash) {
+        Statement statement;
+        try {
+            statement = tx.unpack(Statement.class);
+        } catch (InvalidProtocolBufferException e) {
+            log.warn("Cannot deserialize Statement {} of block: {}", txnHash, blockHash);
+            return;
+        }
+        List<ResultSet> result;
+        try {
+            result = acceptPreparedStatement(txnHash, blockHeight, statement);
+        } catch (SQLException e) {
+            log.info("Exception processing Statement: {} of block: {}", txnHash, blockHash, e);
+            exception(completion, e);
+            return;
+        }
+        try {
+            connection.commit();
+        } catch (SQLException e) {
+            log.info("Exception committing Statement: {} of block: {}", txnHash, blockHash, e);
+            exception(completion, e);
+            return;
+        }
+        complete(completion, result);
+    }
+
     private Session getSession() {
         return (Session) connection.getSession();
+    }
+
+    private void setArgument(PreparedStatement exec, int i, Value value) {
+        try {
+            exec.setObject(i, value);
+        } catch (SQLException e) {
+            throw new IllegalArgumentException("Illegal argument value: " + value);
+        }
     }
 }

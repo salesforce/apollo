@@ -45,10 +45,12 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.Persist;
+import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
@@ -238,23 +240,27 @@ public class Consortium {
         }
     }
 
+    private final Map<Long, Checkpoint>                                                            cachedCheckpoints = new ConcurrentHashMap<>();
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private volatile CurrentBlock                                                                  current;
-    private final PriorityBlockingQueue<CurrentBlock>                                              deferedBlocks = new PriorityBlockingQueue<>(
+    private final PriorityBlockingQueue<CurrentBlock>                                              deferedBlocks     = new PriorityBlockingQueue<>(
             1024, (a, b) -> Long.compare(height(a.getBlock()), height(b.getBlock())));
-    private final List<DelayedMessage>                                                             delayed       = new CopyOnWriteArrayList<>();
+    private final List<DelayedMessage>                                                             delayed           = new CopyOnWriteArrayList<>();
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
+    private volatile CertifiedBlock                                                                genesis;
+    private volatile int                                                                           lastCheckpoint;
+    private volatile Reconfigure                                                                   lastViewChange;
     private volatile Messenger                                                                     messenger;
     private volatile ViewMember                                                                    nextView;
     private volatile KeyPair                                                                       nextViewConsensusKeyPair;
     private volatile MemberOrder                                                                   order;
     private final Parameters                                                                       params;
-    private final TickScheduler                                                                    scheduler     = new TickScheduler();
-    private final AtomicBoolean                                                                    started       = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>                                               submitted     = new ConcurrentHashMap<>();
+    private final TickScheduler                                                                    scheduler         = new TickScheduler();
+    private final AtomicBoolean                                                                    started           = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted         = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final AtomicReference<ViewContext>                                                     viewContext   = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                                     viewContext       = new AtomicReference<>();
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
@@ -343,28 +349,6 @@ public class Consortium {
         }
         if (next(new CurrentBlock(hash, block))) {
             processDeferred();
-        }
-    }
-
-    private void processDeferred() {
-        CurrentBlock delayed = deferedBlocks.poll();
-        while (delayed != null) {
-            long height = height(delayed.getBlock());
-            long currentHeight = height(getCurrent().getBlock());
-            if (height <= currentHeight) {
-                log.debug("dropping deferred block: {} height: {} <= current height: {} on: {}", delayed.getHash(),
-                          height, currentHeight, getMember());
-                delayed = deferedBlocks.poll();
-            } else if (height == currentHeight + 1) {
-                log.debug("processing deferred block: {} height: {} on: {}", delayed.getHash(), height, getMember());
-                next(delayed);
-                delayed = deferedBlocks.poll();
-            } else {
-                log.debug("current height: {} so re-deferring block: {} height: {} on: {}", currentHeight,
-                          delayed.getHash(), height, getMember());
-                deferedBlocks.add(delayed);
-                delayed = null;
-            }
         }
     }
 
@@ -716,6 +700,28 @@ public class Consortium {
         if (!processSynchronized(msg.from, content)) {
             log.error("Invalid consortium message type: {} from: {} on: {}", classNameOf(content), msg.from,
                       getMember());
+        }
+    }
+
+    private void processDeferred() {
+        CurrentBlock delayed = deferedBlocks.poll();
+        while (delayed != null) {
+            long height = height(delayed.getBlock());
+            long currentHeight = height(getCurrent().getBlock());
+            if (height <= currentHeight) {
+                log.debug("dropping deferred block: {} height: {} <= current height: {} on: {}", delayed.getHash(),
+                          height, currentHeight, getMember());
+                delayed = deferedBlocks.poll();
+            } else if (height == currentHeight + 1) {
+                log.debug("processing deferred block: {} height: {} on: {}", delayed.getHash(), height, getMember());
+                next(delayed);
+                delayed = deferedBlocks.poll();
+            } else {
+                log.debug("current height: {} so re-deferring block: {} height: {} on: {}", currentHeight,
+                          delayed.getHash(), height, getMember());
+                deferedBlocks.add(delayed);
+                delayed = null;
+            }
         }
     }
 

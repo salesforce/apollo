@@ -14,6 +14,7 @@ import java.util.function.BiFunction;
 
 import com.google.common.base.Supplier;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -22,29 +23,38 @@ import com.salesforce.apollo.protocols.HashKey;
 
 public class Parameters {
     public static class Builder {
-        private Router                                         communications;
+        private Supplier<Checkpoint> checkpointer = () -> {
+                                                      throw new IllegalStateException("No checkpointer defined");
+                                                  };
+        private Router               communications;
+
         private BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
-        private Context<Member>                                context;
-        private TransactionExecutor                            executor            = (bh, hght, et, c) -> {
-                                                                                   };
-        private byte[]                                         genesisData         = "Give me food or give me slack or kill me".getBytes();
-        private Duration                                       gossipDuration;
-        private Duration                                       joinTimeout         = Duration.ofMillis(500);
-        private int                                            maxBatchByteSize    = 4 * 1024;
-        private Duration                                       maxBatchDelay       = Duration.ofMillis(200);
-        private int                                            maxBatchSize        = 10;
-        private Member                                         member;
-        private Messenger.Parameters                           msgParameters;
-        private int                                            processedBufferSize = 1000;
-        private ScheduledExecutorService                       scheduler;
-        private Supplier<Signature>                            signature;
-        private Duration                                       submitTimeout       = Duration.ofSeconds(30);
-        private Duration                                       viewTimeout         = Duration.ofSeconds(60);
+
+        private Context<Member>          context;
+        private TransactionExecutor      executor            = (bh, hght, et, c) -> {
+                                                             };
+        private byte[]                   genesisData         = "Give me food or give me slack or kill me".getBytes();
+        private Duration                 gossipDuration;
+        private Duration                 joinTimeout         = Duration.ofMillis(500);
+        private int                      maxBatchByteSize    = 4 * 1024;
+        private Duration                 maxBatchDelay       = Duration.ofMillis(200);
+        private int                      maxBatchSize        = 10;
+        private Member                   member;
+        private Messenger.Parameters     msgParameters;
+        private int                      processedBufferSize = 1000;
+        private ScheduledExecutorService scheduler;
+        private Supplier<Signature>      signature;
+        private Duration                 submitTimeout       = Duration.ofSeconds(30);
+        private Duration                 viewTimeout         = Duration.ofSeconds(60);
 
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, viewTimeout, submitTimeout,
-                    processedBufferSize, genesisData, executor);
+                    processedBufferSize, genesisData, executor, checkpointer);
+        }
+
+        public Supplier<Checkpoint> getCheckpointer() {
+            return checkpointer;
         }
 
         public Router getCommunications() {
@@ -117,6 +127,11 @@ public class Parameters {
 
         public Duration getViewTimeout() {
             return viewTimeout;
+        }
+
+        public Builder setCheckpointer(Supplier<Checkpoint> checkpointer) {
+            this.checkpointer = checkpointer;
+            return this;
         }
 
         public Builder setCommunications(Router communications) {
@@ -215,6 +230,7 @@ public class Parameters {
         return new Builder();
     }
 
+    public final Supplier<Checkpoint>                           checkpointer;
     public final Router                                         communications;
     public final BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
     public final Context<Member>                                context;
@@ -237,7 +253,8 @@ public class Parameters {
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Duration maxBatchDelay, Duration joinTimeout, Duration viewTimeout, Duration submitTimeout,
-            int processedBufferSize, byte[] genesisData, TransactionExecutor executor) {
+            int processedBufferSize, byte[] genesisData, TransactionExecutor executor,
+            Supplier<Checkpoint> checkpointer) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -255,5 +272,6 @@ public class Parameters {
         this.processedBufferSize = processedBufferSize;
         this.genesisData = genesisData;
         this.executor = executor;
+        this.checkpointer = checkpointer;
     }
 }

@@ -345,7 +345,7 @@ public class CollaboratorContext {
 
     public void drainBlocks() {
         cancel(Timers.FLUSH_BATCH);
-        generate();
+        generateNextBlock();
         scheduleFlush();
     }
 
@@ -399,8 +399,8 @@ public class CollaboratorContext {
         }
     }
 
-    public void generateBlocks() {
-        generate();
+    public void generateBlock() {
+        generateNextBlock();
         scheduleFlush();
     }
 
@@ -852,10 +852,6 @@ public class CollaboratorContext {
         consortium.publish(transactions);
     }
 
-    private void generate() {
-        generateNextBlock();
-    }
-
     private void generateGenesisBlock() {
         reduceJoinTransactions();
         assert toOrder.size() >= consortium.viewContext().majority() : "Whoops";
@@ -1228,7 +1224,7 @@ public class CollaboratorContext {
     }
 
     private void scheduleFlush() {
-        schedule(Timers.FLUSH_BATCH, () -> generateBlocks(), consortium.getParams().maxBatchDelay);
+        schedule(Timers.FLUSH_BATCH, () -> generateBlock(), consortium.getParams().maxBatchDelay);
     }
 
     private void secondTimeout(EnqueuedTransaction transaction) {

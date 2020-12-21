@@ -16,6 +16,31 @@ service OrderingService {
     rpc stopData(StopData) returns (google.protobuf.Empty){}
     rpc sync(Sync) returns (google.protobuf.Empty){}
     rpc replicate(ReplicateTransactions) returns (google.protobuf.Empty){}
+    
+    rpc fetch (CheckpointBiff) returns (CheckpointBlocks) {}
+    rpc checkPoint(CheckpointQuery) returns (CheckpointHeader) {}
+}
+
+message CheckpointHeader {
+    int64 checkpoint = 1;
+    repeated bytes hashes = 2;
+}
+
+message CheckpointQuery {
+    int64 latestCheckpoint = 1;
+}
+
+message CheckpointBiff{
+        int64 checkpoint = 1;
+        int32 m = 2;
+        int32 k = 3;
+        int32 seed = 4;
+        bytes bits = 5;
+        int32 limit = 6;
+}
+
+message CheckpointBlocks {
+    repeated bytes blocks = 1;
 }
 
 message Join {
