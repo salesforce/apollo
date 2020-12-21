@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
@@ -48,6 +49,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     default Transitions becomeLeader() {
         fsm().pop().becomeLeader();
         return null;
+    }
+
+    default Transitions checkpoint() {
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions) {
@@ -121,10 +126,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     default Transitions deliverValidate(Validate validation) {
         context().deliverValidate(validation);
         return null;
-    }
-
-    default Transitions drainPending() {
-        throw fsm().invalidTransitionOn();
     }
 
     default Transitions establishNextRegent() {
@@ -205,6 +206,11 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
 
     default Transitions synchronize(int elected, Map<Member, StopData> regencyData) {
         throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions synchronizedProcess(CertifiedBlock block) {
+        context().synchronizedProcess(block);
+        return null;
     }
 
     default Transitions synchronizingLeader() {

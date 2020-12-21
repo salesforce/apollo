@@ -125,13 +125,7 @@ public enum CollaboratorFsm implements Transitions {
             context.deliverValidate(validation);
             context.totalOrderDeliver();
             return null;
-        }
-
-        @Override
-        public Transitions drainPending() {
-            context().drainBlocks();
-            return null;
-        }
+        } 
 
         @Entry
         public void generate() {

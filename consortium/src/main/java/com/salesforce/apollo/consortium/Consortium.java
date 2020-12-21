@@ -248,8 +248,8 @@ public class Consortium {
             1024, (a, b) -> Long.compare(height(a.getBlock()), height(b.getBlock())));
     private final List<DelayedMessage>                                                             delayed           = new CopyOnWriteArrayList<>();
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
-    private volatile CertifiedBlock                                                                genesis;
-    private volatile int                                                                           lastCheckpoint;
+    private volatile Block                                                                         genesis;
+    private volatile long                                                                          lastCheckpoint;
     private volatile Reconfigure                                                                   lastViewChange;
     private volatile Messenger                                                                     messenger;
     private volatile ViewMember                                                                    nextView;
@@ -280,6 +280,21 @@ public class Consortium {
         return fsm;
     }
 
+    public Block getGenesis() {
+        Block c = genesis;
+        return c;
+    }
+
+    public long getLastCheckpoint() {
+        long c = lastCheckpoint;
+        return c;
+    }
+
+    public Reconfigure getLastViewChange() {
+        Reconfigure c = lastViewChange;
+        return c;
+    }
+
     public Logger getLog() {
         return log;
     }
@@ -293,63 +308,8 @@ public class Consortium {
         return fsm.getContext();
     }
 
-    public synchronized void process(CertifiedBlock certifiedBlock) {
-        if (!started.get()) {
-            return;
-        }
-        Block block = certifiedBlock.getBlock();
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-        log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
-                  block.getHeader().getHeight(), getMember());
-        final CurrentBlock previousBlock = getCurrent();
-        if (previousBlock != null) {
-            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
-            long height = height(block);
-            long prevHeight = height(previousBlock.getBlock());
-            if (height <= prevHeight) {
-                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
-                          height, prevHeight, getMember());
-                return;
-            }
-            if (height != prevHeight + 1) {
-                deferedBlocks.add(new CurrentBlock(hash, block));
-                log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
-                          getMember(), hash, previousBlock.getBlock().getHeader().getHeight() + 1,
-                          block.getHeader().getHeight());
-                return;
-            }
-            if (!previousBlock.getHash().equals(prev)) {
-                log.error("Protocol violation ons {}. New block does not refer to current block hash. Should be {} and next block's prev is {}",
-                          getMember(), previousBlock.getHash(), prev);
-                return;
-            }
-            if (!viewContext().validate(certifiedBlock)) {
-                log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
-                return;
-            }
-        } else {
-            if (block.getBody().getType() != BodyType.GENESIS) {
-                log.error("Invalid genesis block on: {} block: {}", getMember(), block.getBody().getType());
-                return;
-            }
-            Genesis body;
-            try {
-                body = Genesis.parseFrom(getBody(block));
-            } catch (IOException e) {
-                log.error("Protocol violation ont: {}. Genesis block body cannot be deserialized {}", getMember(),
-                          hash);
-                return;
-            }
-            Context<Member> context = getParams().context;
-            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), context,
-                                 context.getRingCount() - context.toleranceLevel(), getMember())) {
-                log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
-                return;
-            }
-        }
-        if (next(new CurrentBlock(hash, block))) {
-            processDeferred();
-        }
+    public void process(CertifiedBlock certifiedBlock) {
+        transitions.synchronizedProcess(certifiedBlock);
     }
 
     public void start() {
@@ -510,6 +470,18 @@ public class Consortium {
         this.current = current;
     }
 
+    void setGenesis(Block genesis) {
+        this.genesis = genesis;
+    }
+
+    void setLastCheckpoint(long lastCheckpoint) {
+        this.lastCheckpoint = lastCheckpoint;
+    }
+
+    void setLastViewChange(Reconfigure lastViewChange) {
+        this.lastViewChange = lastViewChange;
+    }
+
     void setMessenger(Messenger messenger) {
         this.messenger = messenger;
     }
@@ -538,6 +510,73 @@ public class Consortium {
         EnqueuedTransaction transaction = build(join, txn);
         submit(transaction, onCompletion);
         return transaction.getHash();
+    }
+
+    void synchronizedProcess(CertifiedBlock certifiedBlock) {
+        if (!started.get()) {
+            return;
+        }
+        Block block = certifiedBlock.getBlock();
+        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
+                  block.getHeader().getHeight(), getMember());
+        final CurrentBlock previousBlock = getCurrent();
+        if (previousBlock != null) {
+            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
+            long height = height(block);
+            long prevHeight = height(previousBlock.getBlock());
+            if (height <= prevHeight) {
+                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
+                          height, prevHeight, getMember());
+                return;
+            }
+            if (height != prevHeight + 1) {
+                deferedBlocks.add(new CurrentBlock(hash, block));
+                log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
+                          getMember(), hash, previousBlock.getBlock().getHeader().getHeight() + 1,
+                          block.getHeader().getHeight());
+                return;
+            }
+            if (!previousBlock.getHash().equals(prev)) {
+                log.error("Protocol violation ons {}. New block does not refer to current block hash. Should be {} and next block's prev is {}",
+                          getMember(), previousBlock.getHash(), prev);
+                return;
+            }
+            if (!viewContext().validate(certifiedBlock)) {
+                log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
+                return;
+            }
+        } else {
+            if (block.getBody().getType() != BodyType.GENESIS) {
+                log.error("Invalid genesis block on: {} block: {}", getMember(), block.getBody().getType());
+                return;
+            }
+            Genesis body;
+            try {
+                body = Genesis.parseFrom(getBody(block));
+            } catch (IOException e) {
+                log.error("Protocol violation ont: {}. Genesis block body cannot be deserialized {}", getMember(),
+                          hash);
+                return;
+            }
+            Context<Member> context = getParams().context;
+            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), context,
+                                 context.getRingCount() - context.toleranceLevel(), getMember())) {
+                log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
+                return;
+            }
+        }
+        if (next(new CurrentBlock(hash, block))) {
+            processDeferred();
+        }
+    }
+
+    long targetCheckpoint() {
+        Reconfigure currentView = getLastViewChange();
+        if (currentView == null) {
+            return Long.MAX_VALUE;
+        }
+        return getLastCheckpoint() + currentView.getCheckpointBlocks();
     }
 
     /**

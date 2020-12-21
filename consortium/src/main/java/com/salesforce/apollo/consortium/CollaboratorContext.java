@@ -343,12 +343,6 @@ public class CollaboratorContext {
         }
     }
 
-    public void drainBlocks() {
-        cancel(Timers.FLUSH_BATCH);
-        generateNextBlock();
-        scheduleFlush();
-    }
-
     public void establishGenesisView() {
         ViewContext newView = new ViewContext(new HashKey(Conversion.hashOf(consortium.getParams().genesisData)),
                 consortium.getParams().context, consortium.getMember(), consortium.nextViewConsensusKey(),
@@ -400,6 +394,9 @@ public class CollaboratorContext {
     }
 
     public void generateBlock() {
+        if (needCheckpoint()) {
+            consortium.getTransitions().checkpoint();
+        }
         generateNextBlock();
         scheduleFlush();
     }
@@ -510,6 +507,7 @@ public class CollaboratorContext {
             finalized(hash);
         });
         accept(next);
+        consortium.setLastCheckpoint(height(next.getBlock()));
         log.info("Processed checkpoint block: {} height: {} on: {}", next.getHash(), height(next.getBlock()),
                  consortium.getMember());
     }
@@ -523,6 +521,7 @@ public class CollaboratorContext {
         cancelToTimers();
         toOrder.clear();
         consortium.getSubmitted().clear();
+        consortium.setGenesis(next.getBlock());
         consortium.getTransitions().genesisAccepted();
         reconfigure(body.getInitialView(), true);
         log.info("Processed genesis block: {} on: {}", next.getHash(), consortium.getMember());
@@ -640,10 +639,8 @@ public class CollaboratorContext {
         log.trace("Attempting total ordering of working blocks: {} current consensus: {} on: {}", workingBlocks.size(),
                   current, consortium.getMember());
         List<HashKey> published = new ArrayList<>();
-        workingBlocks.entrySet().stream()
-//                     .peek(e -> log.trace("TO Consider: {} count:{} height: {} on: {}", e.getKey(),
-//                                          e.getValue().getCertificationsCount(), height(e.getValue().getBlock()),
-//                                          consortium.getMember()))
+        workingBlocks.entrySet()
+                     .stream()
                      .filter(e -> e.getValue().getCertificationsCount() >= consortium.viewContext().majority())
                      .sorted((a, b) -> Long.compare(height(a.getValue().getBlock()), height(b.getValue().getBlock())))
                      .filter(e -> height(e.getValue().getBlock()) >= current + 1)
@@ -672,16 +669,13 @@ public class CollaboratorContext {
         workingBlocks.clear();
     }
 
-    void drainPending() {
-        consortium.getTransitions().drainPending();
-    }
-
     Map<HashKey, EnqueuedTransaction> getToOrder() {
         return toOrder;
     }
 
     void reconfigure(Reconfigure view, boolean genesis) {
         consortium.pause();
+        consortium.setLastViewChange(view);
         ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
                 genesis ? consortium.viewContext().getConsensusKey() : consortium.nextViewConsensusKey(),
                 consortium.entropy());
@@ -850,7 +844,7 @@ public class CollaboratorContext {
                                                  transaction.getTransaction().getJoin() ? params.joinTimeout
                                                          : params.submitTimeout));
         consortium.publish(transactions);
-    }
+    } 
 
     private void generateGenesisBlock() {
         reduceJoinTransactions();
@@ -1052,6 +1046,10 @@ public class CollaboratorContext {
 
     private void lastBlock(long l) {
         lastBlock.set(l);
+    }
+
+    private boolean needCheckpoint() {
+        return height(consortium.getCurrent().getBlock()) >= consortium.targetCheckpoint();
     }
 
     private List<EnqueuedTransaction> nextBatch() {
@@ -1304,5 +1302,9 @@ public class CollaboratorContext {
             return false;
         }
         return true;
+    }
+
+    public void synchronizedProcess(CertifiedBlock block) {
+        consortium.synchronizedProcess(block);
     }
 }
