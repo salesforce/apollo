@@ -45,7 +45,7 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.salesfoce.apollo.consortium.proto.Checkpointing;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
@@ -240,7 +240,7 @@ public class Consortium {
         }
     }
 
-    private final Map<Long, Checkpoint>                                                            cachedCheckpoints = new ConcurrentHashMap<>();
+    private final Map<Long, CheckpointState>                                                       cachedCheckpoints = new ConcurrentHashMap<>();
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private volatile CurrentBlock                                                                  current;
@@ -256,6 +256,7 @@ public class Consortium {
     private volatile KeyPair                                                                       nextViewConsensusKeyPair;
     private volatile MemberOrder                                                                   order;
     private final Parameters                                                                       params;
+    private volatile long                                                                          pendingCheckpoint;
     private final TickScheduler                                                                    scheduler         = new TickScheduler();
     private final AtomicBoolean                                                                    started           = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted         = new ConcurrentHashMap<>();
@@ -328,11 +329,15 @@ public class Consortium {
         log.info("Stopping consortium on {}", getMember());
         clear();
         transitions.context().clear();
-        transitions.stop();
+        transitions.shutdown();
     }
 
     public HashKey submit(BiConsumer<Object, Throwable> onCompletion, Message transaction) throws TimeoutException {
         return submit(false, onCompletion, transaction);
+    }
+
+    void checkpoint(long height, CheckpointState checkpoint) {
+        cachedCheckpoints.put(height, checkpoint);
     }
 
     void delay(Message message, Member from) {
@@ -346,6 +351,10 @@ public class Consortium {
     InputStream getBody(Block block) {
         return new InflaterInputStream(
                 BbBackedInputStream.aggregate(block.getBody().getContents().asReadOnlyByteBufferList()));
+    }
+
+    CheckpointState getChekpoint(long checkpoint) {
+        return cachedCheckpoints.get(checkpoint);
     }
 
     CommonCommunications<ConsortiumClientCommunications, Service> getComm() {
@@ -375,6 +384,11 @@ public class Consortium {
 
     Parameters getParams() {
         return params;
+    }
+
+    long getPendingCheckpoint() {
+        long c = pendingCheckpoint;
+        return c;
     }
 
     TickScheduler getScheduler() {
@@ -496,6 +510,10 @@ public class Consortium {
 
     void setOrder(MemberOrder order) {
         this.order = order;
+    }
+
+    void setPendingCheckpoint(long pendingCheckpoint) {
+        this.pendingCheckpoint = pendingCheckpoint;
     }
 
     void setViewContext(ViewContext viewContext) {
@@ -697,9 +715,6 @@ public class Consortium {
         assert !msg.from.equals(getMember()) : "Whoopsie";
         Any content = msg.content;
 
-//        log.info("processing msg: {} from: {} on: {} seq: {} ", classNameOf(content), msg.from, getMember(),
-//                 msg.sequenceNumber);
-
         processDelayed();
         if (content.is(Block.class)) {
             try {
@@ -731,6 +746,14 @@ public class Consortium {
         if (content.is(Validate.class)) {
             try {
                 transitions.deliverValidate(content.unpack(Validate.class));
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid validate delivered from: {} on: {}", msg.from, getMember(), e);
+            }
+            return;
+        }
+        if (content.is(Checkpointing.class)) {
+            try {
+                transitions.deliverCheckpointing(content.unpack(Checkpointing.class), msg.from);
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid validate delivered from: {} on: {}", msg.from, getMember(), e);
             }

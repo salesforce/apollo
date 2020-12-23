@@ -18,12 +18,7 @@ service OrderingService {
     rpc replicate(ReplicateTransactions) returns (google.protobuf.Empty){}
     
     rpc fetch (CheckpointBiff) returns (CheckpointBlocks) {}
-    rpc checkPoint(CheckpointQuery) returns (CheckpointHeader) {}
-}
-
-message CheckpointHeader {
-    int64 checkpoint = 1;
-    repeated bytes hashes = 2;
+    rpc checkPoint(CheckpointQuery) returns (Checkpoint) {}
 }
 
 message CheckpointQuery {
@@ -133,8 +128,15 @@ message ViewMember {
 }
 
 message Checkpoint {
-    repeated ExecutedTransaction transactions = 1;
-} 
+    int64 checkpoint = 1;
+    int64 byteSize = 2;
+    bytes stateHash = 3;
+    repeated bytes segments = 4;
+}
+
+message Checkpointing {
+    int64 checkpoint = 1;
+}
 
 message Transaction {
     bool join = 1;

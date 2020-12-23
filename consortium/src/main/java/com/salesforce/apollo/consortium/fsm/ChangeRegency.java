@@ -148,7 +148,7 @@ public enum ChangeRegency implements Transitions {
         }
 
         @Override
-        public Transitions establishNextRegent() {
+        public Transitions stopped() {
             return AWAIT_SYNCHRONIZATION;
         }
 

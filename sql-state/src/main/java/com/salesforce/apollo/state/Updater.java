@@ -26,7 +26,6 @@ import org.h2.engine.Session;
 import org.h2.jdbc.JdbcConnection;
 import org.h2.store.Data;
 import org.h2.value.Value;
-import org.hibernate.validator.internal.util.privilegedactions.GetResolvedMemberMethods;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

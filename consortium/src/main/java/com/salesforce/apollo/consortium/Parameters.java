@@ -6,11 +6,13 @@
  */
 package com.salesforce.apollo.consortium;
 
+import java.io.File;
 import java.security.Signature;
 import java.time.Duration;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import com.google.common.base.Supplier;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
@@ -23,10 +25,10 @@ import com.salesforce.apollo.protocols.HashKey;
 
 public class Parameters {
     public static class Builder {
-        private Supplier<Checkpoint> checkpointer = () -> {
-                                                      throw new IllegalStateException("No checkpointer defined");
-                                                  };
-        private Router               communications;
+        private Function<Checkpoint, File> checkpointer = c -> {
+                                                            throw new IllegalStateException("No checkpointer defined");
+                                                        };
+        private Router                     communications;
 
         private BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
 
@@ -53,7 +55,7 @@ public class Parameters {
                     processedBufferSize, genesisData, executor, checkpointer);
         }
 
-        public Supplier<Checkpoint> getCheckpointer() {
+        public Function<Checkpoint, File> getCheckpointer() {
             return checkpointer;
         }
 
@@ -129,7 +131,7 @@ public class Parameters {
             return viewTimeout;
         }
 
-        public Builder setCheckpointer(Supplier<Checkpoint> checkpointer) {
+        public Builder setCheckpointer(Function<Checkpoint, File> checkpointer) {
             this.checkpointer = checkpointer;
             return this;
         }
@@ -230,7 +232,7 @@ public class Parameters {
         return new Builder();
     }
 
-    public final Supplier<Checkpoint>                           checkpointer;
+    public final Function<Checkpoint, File>                     checkpointer;
     public final Router                                         communications;
     public final BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
     public final Context<Member>                                context;
@@ -254,7 +256,7 @@ public class Parameters {
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Duration maxBatchDelay, Duration joinTimeout, Duration viewTimeout, Duration submitTimeout,
             int processedBufferSize, byte[] genesisData, TransactionExecutor executor,
-            Supplier<Checkpoint> checkpointer) {
+            Function<Checkpoint, File> checkpointer2) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -272,6 +274,6 @@ public class Parameters {
         this.processedBufferSize = processedBufferSize;
         this.genesisData = genesisData;
         this.executor = executor;
-        this.checkpointer = checkpointer;
+        this.checkpointer = checkpointer2;
     }
 }
