@@ -191,7 +191,7 @@ public class AvaTest {
         HashKey hash;
         try {
             String[] statements = { "create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))" };
-            hash = client.submit((h, t) -> txnProcessed.set(true), Helper.batched(Helper.batch(statements)));
+            hash = client.submit((h, t) -> txnProcessed.set(true), Helper.batch(Helper.batch(statements)));
         } catch (TimeoutException e) {
             fail();
             return;
@@ -220,7 +220,7 @@ public class AvaTest {
             outstanding.release();
             submitted.remove(h);
             submittedBunch.countDown();
-        }, Helper.batched(Helper.batch(statements)));
+        }, Helper.batch(Helper.batch(statements)));
         submitted.add(pending);
         IntStream.range(0, bunchCount).forEach(i -> {
             try {
@@ -273,7 +273,7 @@ public class AvaTest {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
-                }, Helper.batched(Helper.batch(statements1)));
+                }, Helper.batch(Helper.batch(statements1)));
                 submitted.add(key);
             } catch (TimeoutException e) {
                 fail();

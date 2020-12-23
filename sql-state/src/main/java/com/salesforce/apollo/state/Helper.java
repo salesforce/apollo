@@ -43,26 +43,7 @@ public final class Helper {
                                                                                             }
                                                                                         });
 
-    private Helper() {
-    }
-
-    public static Call call(String sql, List<SQLType> outParameters, Value... arguments) {
-        Arguments.Builder args = Arguments.newBuilder();
-        Call.Builder builder = Call.newBuilder().setSql(sql).setArguments(args);
-        Data data = Data.create(NULL_HANDLER, 1024, false);
-        for (Value argument : arguments) {
-            int valueLen = Data.getValueLen(argument, false);
-            data.checkCapacity(valueLen);
-            data.writeValue(argument);
-            byte[] serialized = data.getBytes();
-            args.addArgs(ByteString.copyFrom(serialized, 0, valueLen));
-            data.reset();
-        }
-
-        return builder.build();
-    }
-
-    public static BatchedTransaction batched(Message... messages) {
+    public static BatchedTransaction batch(Message... messages) {
         BatchedTransaction.Builder builder = BatchedTransaction.newBuilder();
         for (Message message : messages) {
             if (message instanceof Call) {
@@ -76,6 +57,14 @@ public final class Helper {
             } else {
                 throw new IllegalArgumentException("Unknown transaction batch element type: " + message.getClass());
             }
+        }
+        return builder.build();
+    }
+
+    public static Batch batch(String... statements) {
+        Batch.Builder builder = Batch.newBuilder();
+        for (String sql : statements) {
+            builder.addStatements(sql);
         }
         return builder.build();
     }
@@ -99,11 +88,19 @@ public final class Helper {
         return builder.build();
     }
 
-    public static Batch batch(String... statements) {
-        Batch.Builder builder = Batch.newBuilder();
-        for (String sql : statements) {
-            builder.addStatements(sql);
+    public static Call call(String sql, List<SQLType> outParameters, Value... arguments) {
+        Arguments.Builder args = Arguments.newBuilder();
+        Call.Builder builder = Call.newBuilder().setSql(sql).setArguments(args);
+        Data data = Data.create(NULL_HANDLER, 1024, false);
+        for (Value argument : arguments) {
+            int valueLen = Data.getValueLen(argument, false);
+            data.checkCapacity(valueLen);
+            data.writeValue(argument);
+            byte[] serialized = data.getBytes();
+            args.addArgs(ByteString.copyFrom(serialized, 0, valueLen));
+            data.reset();
         }
+
         return builder.build();
     }
 
@@ -121,5 +118,8 @@ public final class Helper {
         }
 
         return builder.build();
+    }
+
+    private Helper() {
     }
 }
