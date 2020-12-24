@@ -137,6 +137,7 @@ import org.h2.command.ddl.SetComment;
 import org.h2.command.ddl.TruncateTable;
 import org.h2.command.dml.AlterTableSet;
 import org.h2.command.dml.BackupCommand;
+import org.h2.command.dml.BlockScriptCommand;
 import org.h2.command.dml.Call;
 import org.h2.command.dml.CommandWithValues;
 import org.h2.command.dml.DataChangeStatement;
@@ -280,7 +281,7 @@ import org.h2.value.ValueTimestampTimeZone;
  */
 public class Parser {
 
-    private static final String BLOCK_HEIGHT = "__BLOCK_HEIGHT__";
+    public static final String BLOCK_HEIGHT = "__BLOCK_HEIGHT__";
 
     private static final String WITH_STATEMENT_SUPPORTS_LIMITED_SUB_STATEMENTS = "WITH statement supports only SELECT, TABLE, VALUES, "
             + "CREATE TABLE, INSERT, UPDATE, MERGE or DELETE statements";
@@ -892,6 +893,8 @@ public class Parser {
                     c = parseBackup();
                 } else if (readIf("BEGIN")) {
                     c = parseBegin();
+                } else if (readIf("BLOCKSCRIPT")) {
+                    c = parseBlockScript();
                 }
                 break;
             case 'C':
@@ -8746,5 +8749,75 @@ public class Parser {
     @Override
     public String toString() {
         return StringUtils.addAsterisk(sqlCommand, parseIndex);
+    }
+
+    private BlockScriptCommand parseBlockScript() {
+        BlockScriptCommand command = new BlockScriptCommand(session);
+        boolean data = true, passwords = true, settings = true;
+        boolean dropTables = false, simple = false, withColumns = false;
+
+        if (readIf("BLOCKHEIGHT")) {
+            long blockHeight = readLong();
+            command.setMaxBlockHeight(blockHeight);
+        }
+        
+        if (readIf("NODATA")) {
+            data = false;
+        } else {
+            if (readIf("SIMPLE")) {
+                simple = true;
+            }
+            if (readIf("COLUMNS")) {
+                withColumns = true;
+            }
+        }
+        if (readIf("NOPASSWORDS")) {
+            passwords = false;
+        }
+        if (readIf("NOSETTINGS")) {
+            settings = false;
+        }
+        if (readIf("DROP")) {
+            dropTables = true;
+        }
+        if (readIf("BLOCKSIZE")) {
+            long blockSize = readLong();
+            command.setLobBlockSize(blockSize);
+        }
+        command.setData(data);
+        command.setPasswords(passwords);
+        command.setSettings(settings);
+        command.setDrop(dropTables);
+        command.setSimple(simple);
+        command.setWithColumns(withColumns);
+        if (readIf("TO")) {
+            command.setFileNameExpr(readExpression());
+            if (readIf("COMPRESSION")) {
+                command.setCompressionAlgorithm(readUniqueIdentifier());
+            }
+            if (readIf("CIPHER")) {
+                command.setCipher(readUniqueIdentifier());
+                if (readIf("PASSWORD")) {
+                    command.setPassword(readExpression());
+                }
+            }
+            if (readIf("CHARSET")) {
+                command.setCharset(Charset.forName(readString()));
+            }
+        }
+        if (readIf("SCHEMA")) {
+            HashSet<String> schemaNames = new HashSet<>();
+            do {
+                schemaNames.add(readUniqueIdentifier());
+            } while (readIf(COMMA));
+            command.setSchemaNames(schemaNames);
+        } else if (readIf(TABLE)) {
+            ArrayList<Table> tables = Utils.newSmallArrayList();
+            do {
+                tables.add(readTableOrView());
+            } while (readIf(COMMA));
+            command.setTables(tables);
+        }
+        return command;
     }
 }
