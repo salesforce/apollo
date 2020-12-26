@@ -9,7 +9,7 @@ package com.salesforce.apollo.consortium.fsm;
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
@@ -31,12 +31,6 @@ public enum CollaboratorFsm implements Transitions {
     FOLLOWER {
 
         @Override
-        public Transitions deliverCheckpoint(Checkpoint checkpoint, Member from) {
-            fsm().push(Checkpointing.FOLLOWER).deliverCheckpoint(checkpoint, from);
-            return null;
-        }
-
-        @Override
         public Transitions becomeClient() {
             return CLIENT;
         }
@@ -54,6 +48,12 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions joinAsMember() {
             return JOINING_MEMBER;
+        }
+
+        @Override
+        public Transitions deliverCheckpointing(CheckpointProcessing checkpointProcessing, Member from) {
+            context().deliverCheckpointing(checkpointProcessing, from);
+            return Checkpointing.FOLLOWER;
         }
     },
     INITIAL {
@@ -98,12 +98,6 @@ public enum CollaboratorFsm implements Transitions {
     LEADER {
 
         @Override
-        public Transitions checkpoint() {
-            fsm().push(Checkpointing.LEADER).checkpoint();
-            return null;
-        }
-
-        @Override
         public Transitions becomeClient() {
             return CLIENT;
         }
@@ -142,6 +136,11 @@ public enum CollaboratorFsm implements Transitions {
         public void generate() {
             context().initializeConsensus();
             context().generateBlock();
+        }
+
+        @Override
+        public Transitions generateCheckpoint() {
+            return Checkpointing.LEADER;
         }
 
         @Override

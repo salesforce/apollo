@@ -8,10 +8,13 @@ package com.salesforce.apollo.consortium.fsm;
 
 import java.util.List;
 
-import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.chiralbehaviors.tron.Entry;
+import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
+import com.salesfoce.apollo.consortium.proto.Validate;
+import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
@@ -24,20 +27,35 @@ import com.salesforce.apollo.membership.Member;
  */
 public enum Checkpointing implements Transitions {
     FOLLOWER {
+
         @Override
-        public Transitions deliverCheckpoint(Checkpoint checkpoint, Member from) {
-            context().deliverCheckpoint(checkpoint, from);
+        public Transitions deliverCheckpointing(CheckpointProcessing checkpointProcessing, Member from) {
+            context().deliverCheckpointing(checkpointProcessing, from);
             return null;
+        }
+        @Override
+        public Transitions checkpointGenerated() {
+            return CollaboratorFsm.FOLLOWER;
         }
     },
     LEADER {
-
         @Override
-        public Transitions checkpoint() {
-            context().generateCheckpointBlock();
-            return null;
+        public Transitions checkpointGenerated() {
+            return CollaboratorFsm.LEADER;
         }
 
+        @Entry
+        public void generateCheckpointBlock() {
+            context().generateCheckpointBlock();
+        }
+
+        @Override
+        public Transitions deliverValidate(Validate validation) {
+            CollaboratorContext context = context();
+            context.deliverValidate(validation);
+            context.totalOrderDeliver();
+            return null;
+        }
     };
 
     @Override

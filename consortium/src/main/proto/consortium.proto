@@ -134,7 +134,7 @@ message Checkpoint {
     repeated bytes segments = 4;
 }
 
-message Checkpointing {
+message CheckpointProcessing {
     int64 checkpoint = 1;
 }
 

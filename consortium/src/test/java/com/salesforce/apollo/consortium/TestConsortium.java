@@ -13,6 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -289,6 +291,20 @@ public class TestConsortium {
                                                   .setScheduler(scheduler)
                                                   .setExecutor(executor)
                                                   .setGenesisData(GENESIS_DATA.toByteArray())
+                                                  .setCheckpointer(l -> {
+                                                      File temp;
+                                                      try {
+                                                          temp = File.createTempFile("foo", "bar");
+                                                          try (FileOutputStream fos = new FileOutputStream(temp)) {
+                                                              fos.write("Give me food or give me slack or kill me".getBytes());
+                                                              fos.flush();
+                                                          }
+                                                      } catch (IOException e) {
+                                                          throw new IllegalStateException("Cannot create temp file", e);
+                                                      }
+
+                                                      return temp;
+                                                  })
                                                   .build()))
                .peek(c -> view.activate(c.getMember()))
                .forEach(e -> consortium.put(e.getMember(), e));

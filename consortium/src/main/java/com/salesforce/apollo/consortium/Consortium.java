@@ -45,7 +45,7 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.consortium.proto.Checkpointing;
+import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
@@ -183,7 +183,7 @@ public class Consortium {
 
     public enum Timers {
         AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, FLUSH_BATCH, PROCLAIM,
-        TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
+        TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2, CHECKPOINTING;
     }
 
     static class Result {
@@ -256,7 +256,6 @@ public class Consortium {
     private volatile KeyPair                                                                       nextViewConsensusKeyPair;
     private volatile MemberOrder                                                                   order;
     private final Parameters                                                                       params;
-    private volatile long                                                                          pendingCheckpoint;
     private final TickScheduler                                                                    scheduler         = new TickScheduler();
     private final AtomicBoolean                                                                    started           = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted         = new ConcurrentHashMap<>();
@@ -386,11 +385,6 @@ public class Consortium {
         return params;
     }
 
-    long getPendingCheckpoint() {
-        long c = pendingCheckpoint;
-        return c;
-    }
-
     TickScheduler getScheduler() {
         return scheduler;
     }
@@ -510,10 +504,6 @@ public class Consortium {
 
     void setOrder(MemberOrder order) {
         this.order = order;
-    }
-
-    void setPendingCheckpoint(long pendingCheckpoint) {
-        this.pendingCheckpoint = pendingCheckpoint;
     }
 
     void setViewContext(ViewContext viewContext) {
@@ -751,11 +741,11 @@ public class Consortium {
             }
             return;
         }
-        if (content.is(Checkpointing.class)) {
+        if (content.is(CheckpointProcessing.class)) {
             try {
-                transitions.deliverCheckpointing(content.unpack(Checkpointing.class), msg.from);
+                transitions.deliverCheckpointing(content.unpack(CheckpointProcessing.class), msg.from);
             } catch (InvalidProtocolBufferException e) {
-                log.error("invalid validate delivered from: {} on: {}", msg.from, getMember(), e);
+                log.error("invalid checkpointing delivered from: {} on: {}", msg.from, getMember(), e);
             }
             return;
         }

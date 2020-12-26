@@ -15,8 +15,7 @@ import org.slf4j.LoggerFactory;
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.consortium.proto.Checkpoint;
-import com.salesfoce.apollo.consortium.proto.Checkpointing;
+import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
@@ -53,14 +52,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
-    default Transitions checkpoint() {
-        throw fsm().invalidTransitionOn();
-    }
-
-    default Transitions checkpointGenerated() {
-        throw fsm().invalidTransitionOn();
-    }
-
     default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions) {
         throw fsm().invalidTransitionOn();
     }
@@ -70,11 +61,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
-    default Transitions deliverCheckpoint(Checkpoint checkpoint, Member from) {
-        throw fsm().invalidTransitionOn();
-    }
-
-    default Transitions deliverCheckpointing(Checkpointing unpack, Member from) {
+    default Transitions deliverCheckpointing(CheckpointProcessing checkpointProcessing, Member from) {
         throw fsm().invalidTransitionOn();
     }
 
@@ -147,6 +134,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions formView() {
+        throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions generateCheckpoint() {
         throw fsm().invalidTransitionOn();
     }
 
@@ -228,6 +219,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions synchronizingLeader() {
+        throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions checkpointGenerated() {
         throw fsm().invalidTransitionOn();
     }
 }
