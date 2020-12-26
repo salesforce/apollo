@@ -460,9 +460,10 @@ public class CollaboratorContext {
                         .setContents(Consortium.compress(checkpoint.toByteString()))
                         .build();
 
+        CurrentBlock prev = blockCache.get(lastBlock());
         Block block = Block.newBuilder()
                            .setHeader(Header.newBuilder()
-                                            .setPrevious(current.getHash().toByteString())
+                                            .setPrevious(prev.getHash().toByteString())
                                             .setHeight(thisHeight)
                                             .setBodyHash(ByteString.copyFrom(Conversion.hashOf(body.toByteString())))
                                             .build())

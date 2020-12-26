@@ -295,6 +295,7 @@ public class TestConsortium {
                                                       File temp;
                                                       try {
                                                           temp = File.createTempFile("foo", "bar");
+                                                          temp.deleteOnExit();
                                                           try (FileOutputStream fos = new FileOutputStream(temp)) {
                                                               fos.write("Give me food or give me slack or kill me".getBytes());
                                                               fos.flush();

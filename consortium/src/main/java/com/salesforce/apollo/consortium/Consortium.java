@@ -541,13 +541,12 @@ public class Consortium {
             if (height != prevHeight + 1) {
                 deferedBlocks.add(new CurrentBlock(hash, block));
                 log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
-                          getMember(), hash, previousBlock.getBlock().getHeader().getHeight() + 1,
-                          block.getHeader().getHeight());
+                          getMember(), hash, height(previousBlock.getBlock()) + 1, block.getHeader().getHeight());
                 return;
             }
             if (!previousBlock.getHash().equals(prev)) {
-                log.error("Protocol violation ons {}. New block does not refer to current block hash. Should be {} and next block's prev is {}",
-                          getMember(), previousBlock.getHash(), prev);
+                log.error("Protocol violation on {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {}",
+                          getMember(), previousBlock.getHash(), prev, prevHeight, height);
                 return;
             }
             if (!viewContext().validate(certifiedBlock)) {
