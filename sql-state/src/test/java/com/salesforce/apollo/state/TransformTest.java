@@ -66,7 +66,7 @@ public class TransformTest {
     }
 
     private Connection connect() throws SQLException {
-        Updater engine = new Updater("jdbc:h2:mem:test_mem", new Properties(), new File("target/chkpoints", "tst"));
+        SqlStateMachine engine = new SqlStateMachine("jdbc:h2:mem:test_mem", new Properties(), new File("target/chkpoints", "tst"));
         return engine.newConnection();
     }
 }

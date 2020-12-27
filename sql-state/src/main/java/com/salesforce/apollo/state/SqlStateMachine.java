@@ -54,7 +54,7 @@ import com.salesforce.apollo.protocols.Utils;
  * @author hal.hildebrand
  *
  */
-public class Updater {
+public class SqlStateMachine {
     public static class CallResult {
         public final List<Object>    outValues;
         public final List<ResultSet> results;
@@ -93,7 +93,7 @@ public class Updater {
     }
 
     private static final RowSetFactory factory;
-    private static final Logger        log = LoggerFactory.getLogger(Updater.class);
+    private static final Logger        log = LoggerFactory.getLogger(SqlStateMachine.class);
 
     static {
         try {
@@ -111,11 +111,11 @@ public class Updater {
     private File                 temp;
     private final String         url;
 
-    public Updater(String url, Properties info, File checkpointDirectory) {
+    public SqlStateMachine(String url, Properties info, File checkpointDirectory) {
         this(url, info, checkpointDirectory, ForkJoinPool.commonPool());
     }
 
-    public Updater(String url, Properties info, File cpDir, ForkJoinPool fjPool) {
+    public SqlStateMachine(String url, Properties info, File cpDir, ForkJoinPool fjPool) {
         this.url = url;
         this.info = info;
         this.fjPool = fjPool;
@@ -350,7 +350,7 @@ public class Updater {
         List<Object> results = new ArrayList<Object>();
         for (Txn txn : txns.getTransactionsList()) {
 
-            Object result = Updater.this.execute(blockHeight, t, completion, txn, txnHash);
+            Object result = SqlStateMachine.this.execute(blockHeight, t, completion, txn, txnHash);
             if (result instanceof Throwable) {
                 complete(completion, (Throwable) result);
                 return;

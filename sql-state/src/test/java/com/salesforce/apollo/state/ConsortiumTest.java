@@ -92,7 +92,7 @@ public class ConsortiumTest {
     private final Map<Member, Consortium> consortium     = new HashMap<>();
     private SecureRandom                  entropy;
     private List<Member>                  members;
-    private final Map<Member, Updater>    updaters       = new HashMap<>();
+    private final Map<Member, SqlStateMachine>    updaters       = new HashMap<>();
 
     @AfterEach
     public void after() {
@@ -321,7 +321,7 @@ public class ConsortiumTest {
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             frist.set(false);
             System.out.println("DB URL: " + url);
-            Updater up = new Updater(url, new Properties(), new File(checkpointDirBase, m.getId().toString()));
+            SqlStateMachine up = new SqlStateMachine(url, new Properties(), new File(checkpointDirBase, m.getId().toString()));
             updaters.put(m, up);
             Consortium c = new Consortium(
                     Parameters.newBuilder()

@@ -73,7 +73,7 @@ import com.salesforce.apollo.protocols.HashKey;
 public class CollaboratorContext {
 
     private static final Logger log               = LoggerFactory.getLogger(CollaboratorContext.class);
-    private static final int    SEGMENT_BYTE_SIZE = 1024;
+    private static final int    SEGMENT_BYTE_SIZE = 8192;
 
     public static Map<HashKey, HashKey> gapsOf(Map<HashKey, CertifiedBlock> hashed, HashKey lastBlock) {
         Map<HashKey, HashKey> missing = new HashMap<>();
@@ -871,12 +871,11 @@ public class CollaboratorContext {
     private CheckpointState checkpoint(Checkpoint body) {
         HashKey stateHash;
         CheckpointState checkpoint = consortium.getChekpoint(body.getCheckpoint());
-        ByteString bodyStateHash = body.getStateHash();
+        HashKey bsh = new HashKey(body.getStateHash());
         if (checkpoint != null) {
-            ByteString sh = checkpoint.checkpoint.getStateHash();
-            if (!bodyStateHash.equals(sh)) {
-                log.error("Invalid checkpoint state hash: {} does not equal recorded: {} on: {}", sh,
-                          new HashKey(bodyStateHash), getMember());
+            if (!body.getStateHash().equals(checkpoint.checkpoint.getStateHash())) {
+                log.error("Invalid checkpoint state hash: {} does not equal recorded: {} on: {}",
+                          new HashKey(checkpoint.checkpoint.getStateHash()), bsh, getMember());
                 return null;
             }
         } else {
@@ -887,9 +886,9 @@ public class CollaboratorContext {
                 log.error("Invalid checkpoint!", e);
                 return null;
             }
-            if (!stateHash.equals(new HashKey(bodyStateHash))) {
-                log.error("Cannot replicate checkpoint state hash: {} does not equal recorded: {} on: {}", stateHash,
-                          new HashKey(bodyStateHash), getMember());
+            if (!stateHash.equals(bsh)) {
+                log.error("Cannot replicate checkpoint: {} state hash: {} does not equal recorded: {} on: {}",
+                          body.getCheckpoint(), stateHash, bsh, getMember());
                 state.delete();
                 return null;
             }

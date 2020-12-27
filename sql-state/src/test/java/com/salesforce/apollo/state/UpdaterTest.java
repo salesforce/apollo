@@ -28,7 +28,7 @@ public class UpdaterTest {
 
     @Test
     public void smoke() throws Exception {
-        Updater updater = new Updater("jdbc:h2:mem:test_update", new Properties(), new File("target/chkpoints"));
+        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(), new File("target/chkpoints"));
 
         Connection connection = updater.newConnection();
 
