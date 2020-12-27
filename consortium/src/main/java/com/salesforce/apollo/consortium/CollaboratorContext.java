@@ -448,6 +448,7 @@ public class CollaboratorContext {
             return;
         }
         Checkpoint checkpoint = Checkpoint.newBuilder()
+                                          .setCheckpoint(currentHeight)
                                           .setByteSize(state.length())
                                           .setStateHash(stateHash.toByteString())
                                           .addAllSegments(segments.stream()

@@ -9,6 +9,7 @@ package com.salesforce.apollo.state;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -65,7 +66,7 @@ public class TransformTest {
     }
 
     private Connection connect() throws SQLException {
-        Updater engine = new Updater("jdbc:h2:mem:test_mem", new Properties());
+        Updater engine = new Updater("jdbc:h2:mem:test_mem", new Properties(), new File("target/chkpoints", "tst"));
         return engine.newConnection();
     }
 }

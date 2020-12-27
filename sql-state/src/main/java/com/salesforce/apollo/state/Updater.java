@@ -6,6 +6,10 @@
  */
 package com.salesforce.apollo.state;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -17,6 +21,8 @@ import java.util.Properties;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.zip.GZIPOutputStream;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
@@ -42,6 +48,7 @@ import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * @author hal.hildebrand
@@ -86,7 +93,7 @@ public class Updater {
     }
 
     private static final RowSetFactory factory;
-    private static final Logger log = LoggerFactory.getLogger(Updater.class);
+    private static final Logger        log = LoggerFactory.getLogger(Updater.class);
 
     static {
         try {
@@ -95,21 +102,34 @@ public class Updater {
             throw new IllegalStateException("Cannot create row set factory", e);
         }
     }
-    
+
+    private final File           checkpointDirectory;
     private final JdbcConnection connection;
     private final TxnExec        executor = new TxnExec();
     private final ForkJoinPool   fjPool;
     private final Properties     info;
+    private File                 temp;
     private final String         url;
 
-    public Updater(String url, Properties info) {
-        this(url, info, ForkJoinPool.commonPool());
+    public Updater(String url, Properties info, File checkpointDirectory) {
+        this(url, info, checkpointDirectory, ForkJoinPool.commonPool());
     }
 
-    public Updater(String url, Properties info, ForkJoinPool fjPool) {
+    public Updater(String url, Properties info, File cpDir, ForkJoinPool fjPool) {
         this.url = url;
         this.info = info;
         this.fjPool = fjPool;
+        this.checkpointDirectory = cpDir;
+        if (checkpointDirectory.exists()) {
+            if (!checkpointDirectory.isDirectory()) {
+                throw new IllegalArgumentException("Must be a directory: " + checkpointDirectory.getAbsolutePath());
+            }
+        } else {
+            if (!checkpointDirectory.mkdirs()) {
+                throw new IllegalArgumentException(
+                        "Cannot create checkpoint directory: " + checkpointDirectory.getAbsolutePath());
+            }
+        }
         try {
             connection = new JdbcConnection(url, info);
         } catch (SQLException e) {
@@ -126,6 +146,38 @@ public class Updater {
             connection.close();
         } catch (SQLException e) {
         }
+    }
+
+    public Function<Long, File> getCheckpointer() {
+        return height -> {
+            java.sql.Statement statement;
+            try {
+                temp = File.createTempFile("checkpoint-" + height, "sql");
+            } catch (IOException e) {
+                log.error("Unable to create temporary checkpoint file: {}", height, e);
+                return null;
+            }
+            temp.deleteOnExit();
+            try {
+                statement = connection.createStatement();
+                statement.execute(String.format("BLOCKSCRIPT BLOCKHEIGHT 1 TO '%s'", temp.getAbsolutePath()));
+            } catch (SQLException e) {
+                log.error("unable to checkpoint: {}", height, e);
+                return null;
+            }
+            File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s.sql.gzip", height));
+            try (FileInputStream fis = new FileInputStream(temp);
+                    FileOutputStream fos = new FileOutputStream(checkpoint)) {
+                GZIPOutputStream gzos = new GZIPOutputStream(fos);
+                Utils.copy(fis, gzos);
+                gzos.flush();
+            } catch (IOException e) {
+                log.error("unable to checkpoint: {}", height, e);
+            } finally {
+                temp.delete();
+            }
+            return checkpoint;
+        };
     }
 
     public TxnExec getExecutor() {

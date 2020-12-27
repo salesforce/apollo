@@ -68,7 +68,7 @@ public class TickScheduler {
             try {
                 action.run();
             } catch (Throwable t) {
-                log.trace("Error executing action {}", label, t);
+                log.error("Error executing action {}", label, t);
             }
         }
 

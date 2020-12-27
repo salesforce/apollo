@@ -87,6 +87,7 @@ public class ConsortiumTest {
 
     private File                          baseDir;
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
+    private File                          checkpointDirBase;
     private Map<HashKey, Router>          communications = new HashMap<>();
     private final Map<Member, Consortium> consortium     = new HashMap<>();
     private SecureRandom                  entropy;
@@ -105,7 +106,8 @@ public class ConsortiumTest {
 
     @BeforeEach
     public void before() {
-
+        checkpointDirBase = new File("target/ava-chkpoints");
+        Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
@@ -319,7 +321,7 @@ public class ConsortiumTest {
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             frist.set(false);
             System.out.println("DB URL: " + url);
-            Updater up = new Updater(url, new Properties());
+            Updater up = new Updater(url, new Properties(), new File(checkpointDirBase, m.getId().toString()));
             updaters.put(m, up);
             Consortium c = new Consortium(
                     Parameters.newBuilder()
@@ -340,6 +342,7 @@ public class ConsortiumTest {
                               .setExecutor(up.getExecutor())
                               .setScheduler(scheduler)
                               .setGenesisData(GENESIS_DATA.toByteArray())
+                              .setCheckpointer(up.getCheckpointer())
                               .build());
             return c;
         }).peek(c -> view.activate(c.getMember())).forEach(e -> consortium.put(e.getMember(), e));

@@ -92,6 +92,7 @@ public class AvaTest {
     private final Map<Member, Avalanche>  avas           = new HashMap<>();
     private File                          baseDir;
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
+    private File                          checkpointDirBase;
     private Map<HashKey, Router>          communications = new HashMap<>();
     private final Map<Member, Consortium> consortium     = new HashMap<>();
     private SecureRandom                  entropy;
@@ -112,7 +113,8 @@ public class AvaTest {
 
     @BeforeEach
     public void before() {
-
+        checkpointDirBase = new File("target/ava-chkpoints");
+        Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
@@ -346,7 +348,7 @@ public class AvaTest {
             AvaAdapter adapter = new AvaAdapter(processed);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);
-            Updater up = new Updater(url, new Properties());
+            Updater up = new Updater(url, new Properties(), new File(checkpointDirBase, m.getId().toString()));
             updaters.put(m, up);
             Consortium c = new Consortium(
                     Parameters.newBuilder()
@@ -367,6 +369,7 @@ public class AvaTest {
                               .setExecutor(up.getExecutor())
                               .setScheduler(scheduler)
                               .setGenesisData(GENESIS_DATA.toByteArray())
+                              .setCheckpointer(up.getCheckpointer())
                               .build());
             adapter.setConsortium(c);
             adapters.put(m, adapter);

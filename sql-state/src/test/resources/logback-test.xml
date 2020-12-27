@@ -24,6 +24,11 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
+    <logger name="com.salesforce.apollo.tron" level="INFO"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
     <logger name="com.salesforce.apollo.state" level="INFO"
         additivity="false">
         <appender-ref ref="STDOUT" />
