@@ -106,7 +106,7 @@ public class ConsortiumTest {
 
     @BeforeEach
     public void before() {
-        checkpointDirBase = new File("target/ava-chkpoints");
+        checkpointDirBase = new File("target/ct-chkpoints");
         Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
