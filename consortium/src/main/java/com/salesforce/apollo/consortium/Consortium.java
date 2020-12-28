@@ -35,6 +35,7 @@ import java.util.zip.DeflaterInputStream;
 import java.util.zip.InflaterInputStream;
 
 import org.h2.mvstore.MVStore;
+import org.h2.mvstore.MVStore.Builder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -241,6 +242,15 @@ public class Consortium {
         }
     }
 
+    private static Builder defaultBuilder(Parameters params) {
+
+        MVStore.Builder builder = new MVStore.Builder();
+        if (params.storeFile != null) {
+            builder.fileName(params.storeFile.getAbsolutePath());
+        }
+        return builder;
+    }
+
     final MVStore                                                                                  store;
     private final Map<Long, CheckpointState>                                                       cachedCheckpoints = new ConcurrentHashMap<>();
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
@@ -265,8 +275,12 @@ public class Consortium {
     private final AtomicReference<ViewContext>                                                     viewContext       = new AtomicReference<>();
 
     public Consortium(Parameters parameters) {
+        this(parameters, defaultBuilder(parameters));
+    }
+
+    public Consortium(Parameters parameters, MVStore.Builder builder) {
         this.params = parameters;
-        store = MVStore.open(params.storeFile == null ? null : params.storeFile.getAbsolutePath());
+        store = builder.open();
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, new Service(),
                                                                        r -> new ConsortiumServerCommunications(
                                                                                parameters.communications.getClientIdentityProvider(),

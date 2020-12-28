@@ -151,12 +151,7 @@ public class SqlStateMachine {
     public Function<Long, File> getCheckpointer() {
         return height -> {
             java.sql.Statement statement;
-            try {
-                temp = File.createTempFile("checkpoint-" + height, "sql");
-            } catch (IOException e) {
-                log.error("Unable to create temporary checkpoint file: {}", height, e);
-                return null;
-            }
+            temp = new File(checkpointDirectory, String.format("checkpoint-%s.sql", height));
             temp.deleteOnExit();
             try {
                 statement = connection.createStatement();

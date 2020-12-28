@@ -138,7 +138,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions fail() {
-        throw fsm().invalidTransitionOn();
+        return CollaboratorFsm.PROTOCOL_FAILURE;
     }
 
     default Transitions formView() {
