@@ -45,13 +45,14 @@ public class Parameters {
         private int                      processedBufferSize = 1000;
         private ScheduledExecutorService scheduler;
         private Supplier<Signature>      signature;
+        private File                     storeFile;
         private Duration                 submitTimeout       = Duration.ofSeconds(30);
         private Duration                 viewTimeout         = Duration.ofSeconds(60);
 
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, viewTimeout, submitTimeout,
-                    processedBufferSize, genesisData, executor, checkpointer);
+                    processedBufferSize, genesisData, executor, checkpointer, storeFile);
         }
 
         public Function<Long, File> getCheckpointer() {
@@ -116,6 +117,10 @@ public class Parameters {
 
         public Supplier<Signature> getSignature() {
             return signature;
+        }
+
+        public File getStoreFile() {
+            return storeFile;
         }
 
         public Duration getSubmitTimeout() {
@@ -211,6 +216,11 @@ public class Parameters {
             return this;
         }
 
+        public Builder setStoreFile(File storeFile) {
+            this.storeFile = storeFile;
+            return this;
+        }
+
         public Builder setSubmitTimeout(Duration submitTimeout) {
             this.submitTimeout = submitTimeout;
             return this;
@@ -247,6 +257,7 @@ public class Parameters {
     public final int                                            processedBufferSize;
     public final ScheduledExecutorService                       scheduler;
     public final Supplier<Signature>                            signature;
+    public final File                                           storeFile;
     public final Duration                                       submitTimeout;
     public final Duration                                       viewTimeout;
 
@@ -255,7 +266,7 @@ public class Parameters {
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Duration maxBatchDelay, Duration joinTimeout, Duration viewTimeout, Duration submitTimeout,
             int processedBufferSize, byte[] genesisData, TransactionExecutor executor,
-            Function<Long, File> checkpointer) {
+            Function<Long, File> checkpointer, File storeFile) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -274,5 +285,6 @@ public class Parameters {
         this.genesisData = genesisData;
         this.executor = executor;
         this.checkpointer = checkpointer;
+        this.storeFile = storeFile;
     }
 }

@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 import java.util.zip.DeflaterInputStream;
 import java.util.zip.InflaterInputStream;
 
+import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -182,8 +183,8 @@ public class Consortium {
     }
 
     public enum Timers {
-        AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, FLUSH_BATCH, PROCLAIM,
-        TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2, CHECKPOINTING;
+        AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, CHECKPOINT_TIMEOUT, CHECKPOINTING,
+        FLUSH_BATCH, PROCLAIM, TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
     }
 
     static class Result {
@@ -240,6 +241,7 @@ public class Consortium {
         }
     }
 
+    final MVStore                                                                                  store;
     private final Map<Long, CheckpointState>                                                       cachedCheckpoints = new ConcurrentHashMap<>();
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
@@ -264,6 +266,7 @@ public class Consortium {
 
     public Consortium(Parameters parameters) {
         this.params = parameters;
+        store = MVStore.open(params.storeFile == null ? null : params.storeFile.getAbsolutePath());
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, new Service(),
                                                                        r -> new ConsortiumServerCommunications(
                                                                                parameters.communications.getClientIdentityProvider(),
@@ -275,7 +278,6 @@ public class Consortium {
         nextViewConsensusKey();
     }
 
-    // test access
     public Fsm<CollaboratorContext, Transitions> fsm() {
         return fsm;
     }

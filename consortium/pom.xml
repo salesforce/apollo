@@ -19,6 +19,10 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>tron</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2-mvstore</artifactId>
+		</dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>

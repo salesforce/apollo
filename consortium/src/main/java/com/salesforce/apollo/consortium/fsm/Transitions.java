@@ -52,6 +52,14 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
+    default Transitions checkpointGenerated() {
+        throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions checkpointTimeout() {
+        throw fsm().invalidTransitionOn();
+    }
+
     default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions) {
         throw fsm().invalidTransitionOn();
     }
@@ -219,10 +227,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions synchronizingLeader() {
-        throw fsm().invalidTransitionOn();
-    }
-
-    default Transitions checkpointGenerated() {
         throw fsm().invalidTransitionOn();
     }
 }
