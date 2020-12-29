@@ -48,7 +48,6 @@ import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
 
 /**
  * @author hal.hildebrand
@@ -155,17 +154,23 @@ public class SqlStateMachine {
             temp.deleteOnExit();
             try {
                 statement = connection.createStatement();
-                statement.execute(String.format("BLOCKSCRIPT BLOCKHEIGHT 1 TO '%s'", temp.getAbsolutePath()));
+                statement.execute(String.format("BLOCKSCRIPT BLOCKHEIGHT 1 DROP TO '%s'", temp.getAbsolutePath()));
             } catch (SQLException e) {
                 log.error("unable to checkpoint: {}", height, e);
                 return null;
             }
             File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s.sql.gzip", height));
             try (FileInputStream fis = new FileInputStream(temp);
-                    FileOutputStream fos = new FileOutputStream(checkpoint)) {
-                GZIPOutputStream gzos = new GZIPOutputStream(fos);
-                Utils.copy(fis, gzos);
+                    FileOutputStream fos = new FileOutputStream(checkpoint);
+                    GZIPOutputStream gzos = new GZIPOutputStream(fos);) {
+
+                byte[] buffer = new byte[6 * 1024];
+                for (int read = fis.read(buffer); read > 0; read = fis.read(buffer)) {
+                    gzos.write(buffer, 0, read);
+                }
+                gzos.finish();
                 gzos.flush();
+                fos.flush();
             } catch (IOException e) {
                 log.error("unable to checkpoint: {}", height, e);
             } finally {

@@ -163,6 +163,7 @@ public class SmokeTest {
             while ((data = fis.read()) != -1) {
                 dos.write(data);
             }
+            dos.finish();
             dos.flush();
             dos.close();
         }
