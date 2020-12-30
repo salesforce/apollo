@@ -82,6 +82,7 @@ import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.consortium.support.Store;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler;
+import com.salesforce.apollo.consortium.support.ViewContext;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.ReservoirSampler;

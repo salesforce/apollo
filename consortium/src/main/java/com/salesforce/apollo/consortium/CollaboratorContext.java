@@ -64,6 +64,7 @@ import com.salesforce.apollo.consortium.support.CurrentBlock;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.Store;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
+import com.salesforce.apollo.consortium.support.ViewContext;
 import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Conversion;
