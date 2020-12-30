@@ -6,7 +6,9 @@
  */
 package com.salesforce.apollo.consortium;
 
+import java.util.Iterator;
 import java.util.Map;
+import java.util.stream.LongStream;
 
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
@@ -68,5 +70,14 @@ public class Store {
         blocks.put(height, block);
         hashes.put(height, hash);
         hashToHeight.put(hash, height);
+    }
+
+    public Iterator<Long> blocksFrom(long from) {
+        return blocks.keyIterator(from); 
+    }
+
+    public byte[] getBlockBits(Long height) {
+        // TODO Auto-generated method stub
+        return null;
     }
 }

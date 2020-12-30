@@ -11,31 +11,29 @@ package apollo.consortium;
 
 service OrderingService { 
     rpc submit (SubmitTransaction) returns (TransactionResult) {}
-    rpc join (Join) returns (JoinResult) {}
-    rpc stop(Stop) returns (google.protobuf.Empty){}
+    rpc join (Join) returns (JoinResult) {} 
     rpc stopData(StopData) returns (google.protobuf.Empty){}
-    rpc sync(Sync) returns (google.protobuf.Empty){}
-    rpc replicate(ReplicateTransactions) returns (google.protobuf.Empty){}
     
-    rpc fetch (CheckpointBiff) returns (CheckpointBlocks) {}
-    rpc checkPoint(CheckpointQuery) returns (Checkpoint) {}
+    rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
+    rpc checkpointSync(CheckpointSync) returns (Checkpoint) {}
 }
 
-message CheckpointQuery {
-    int64 latestCheckpoint = 1;
+message CheckpointReplication {
+    bytes context = 1;
+    int64 checkpoint = 2;
+    bytes checkpointSegments = 3;
+    bytes blocks = 4;
 }
 
-message CheckpointBiff{
-        int64 checkpoint = 1;
-        int32 m = 2;
-        int32 k = 3;
-        int32 seed = 4;
-        bytes bits = 5;
-        int32 limit = 6;
+message CheckpointSync {
+    bytes context = 1;
+    int64 currentCheckpoint = 2;
 }
 
-message CheckpointBlocks {
-    repeated bytes blocks = 1;
+
+message CheckpointSegments {
+    repeated bytes segments = 1;
+    repeated bytes blocks = 2;
 }
 
 message Join {
@@ -130,8 +128,9 @@ message ViewMember {
 message Checkpoint {
     int64 checkpoint = 1;
     int64 byteSize = 2;
-    bytes stateHash = 3;
-    repeated bytes segments = 4;
+    int32 segmentSize = 3;
+    bytes stateHash = 4;
+    repeated bytes segments = 5;
 }
 
 message CheckpointProcessing {

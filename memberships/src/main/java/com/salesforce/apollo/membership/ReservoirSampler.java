@@ -36,7 +36,7 @@ public class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
     }
 
     @Override
-    public Set<java.util.stream.Collector.Characteristics> characteristics() {
+    public Set<Characteristics> characteristics() {
         return EnumSet.of(Collector.Characteristics.UNORDERED, Collector.Characteristics.IDENTITY_FINISH);
     }
 

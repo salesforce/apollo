@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import java.util.zip.DeflaterInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -40,6 +41,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
+import com.google.common.hash.BloomFilter;
+import com.google.common.hash.Funnels;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -47,7 +50,11 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
+import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
+import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
+import com.salesfoce.apollo.consortium.proto.CheckpointSync;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
@@ -70,6 +77,7 @@ import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
@@ -84,6 +92,19 @@ import com.salesforce.apollo.protocols.HashKey;
 public class Consortium {
 
     public class Service {
+
+        public Checkpoint checkpointSync(CheckpointSync request, HashKey from) {
+            Member member = getParams().context.getMember(from);
+            if (member == null) {
+                log.warn("Received checkpoint sync from non member: {} on: {}", from, getMember());
+                return Checkpoint.getDefaultInstance();
+            }
+            Checkpoint c = lastCheckpoint;
+            if (c == null) {
+                return Checkpoint.getDefaultInstance();
+            }
+            return c;
+        }
 
         public TransactionResult clientSubmit(SubmitTransaction request, HashKey from) {
             Member member = getParams().context.getMember(from);
@@ -105,6 +126,15 @@ public class Consortium {
             }
             transitions.receive(enqueuedTransaction.getTransaction(), member);
             return TransactionResult.getDefaultInstance();
+        }
+
+        public CheckpointSegments fetch(CheckpointReplication request, HashKey from) {
+            Member member = getParams().context.getMember(from);
+            if (member == null) {
+                log.warn("Received checkpoint fetch from non member: {} on: {}", from, getMember());
+                return CheckpointSegments.getDefaultInstance();
+            }
+            return Consortium.this.fetch(request);
         }
 
         public JoinResult join(Join request, HashKey fromID) {
@@ -145,24 +175,6 @@ public class Consortium {
             }
         }
 
-        public void replicate(ReplicateTransactions request, HashKey from) {
-            Member member = viewContext().getMember(from);
-            if (member == null) {
-                log.warn("Received ReplicateTransactions from non consortium member: {} on: {}", from, getMember());
-                return;
-            }
-            transitions.receive(request, member);
-        }
-
-        public void stop(Stop stop, HashKey from) {
-            Member member = viewContext().getMember(from);
-            if (member == null) {
-                log.warn("Received Stop from non consortium member: {} on: {}", from, getMember());
-                return;
-            }
-            transitions.deliverStop(stop, member);
-        }
-
         public void stopData(StopData stopData, HashKey from) {
             Member member = viewContext().getMember(from);
             if (member == null) {
@@ -170,15 +182,6 @@ public class Consortium {
                 return;
             }
             transitions.deliverStopData(stopData, member);
-        }
-
-        public void sync(Sync sync, HashKey from) {
-            Member member = viewContext().getMember(from);
-            if (member == null) {
-                log.warn("Received Sync from non consortium member: {} on: {}", from, getMember());
-                return;
-            }
-            ((Runnable) () -> transitions.deliverSync(sync, member)).run();
         }
 
     }
@@ -208,7 +211,9 @@ public class Consortium {
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(Consortium.class);
+    private static final Logger log          = LoggerFactory.getLogger(Consortium.class);
+    private static final int    MAX_BLOCKS   = 200;
+    private static final int    MAX_SEGMENTS = 200;
 
     public static ByteString compress(ByteString input) {
         DeflaterInputStream dis = new DeflaterInputStream(
@@ -251,7 +256,8 @@ public class Consortium {
         return builder;
     }
 
-    final MVStore                                                                                  store;
+    final Store store;
+
     private final Map<Long, CheckpointState>                                                       cachedCheckpoints = new ConcurrentHashMap<>();
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
@@ -261,7 +267,7 @@ public class Consortium {
     private final List<DelayedMessage>                                                             delayed           = new CopyOnWriteArrayList<>();
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
     private volatile Block                                                                         genesis;
-    private volatile long                                                                          lastCheckpoint;
+    private volatile Checkpoint                                                                    lastCheckpoint;
     private volatile Reconfigure                                                                   lastViewChange;
     private volatile Messenger                                                                     messenger;
     private volatile ViewMember                                                                    nextView;
@@ -280,7 +286,7 @@ public class Consortium {
 
     public Consortium(Parameters parameters, MVStore.Builder builder) {
         this.params = parameters;
-        store = builder.open();
+        store = new Store(builder.open());
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, new Service(),
                                                                        r -> new ConsortiumServerCommunications(
                                                                                parameters.communications.getClientIdentityProvider(),
@@ -302,8 +308,8 @@ public class Consortium {
     }
 
     public long getLastCheckpoint() {
-        long c = lastCheckpoint;
-        return c;
+        Checkpoint c = lastCheckpoint;
+        return c == null ? 0 : c.getCheckpoint();
     }
 
     public Reconfigure getLastViewChange() {
@@ -342,8 +348,9 @@ public class Consortium {
             return;
         }
         log.info("Stopping consortium on {}", getMember());
+        cachedCheckpoints.values().forEach(cp -> cp.close());
         clear();
-        transitions.context().clear();
+        fsm.getContext().clear();
         transitions.shutdown();
     }
 
@@ -409,7 +416,6 @@ public class Consortium {
         return submitted;
     }
 
-    // test accessible
     Transitions getTransitions() {
         return transitions;
     }
@@ -498,7 +504,7 @@ public class Consortium {
         this.genesis = genesis;
     }
 
-    void setLastCheckpoint(long lastCheckpoint) {
+    void setLastCheckpoint(Checkpoint lastCheckpoint) {
         this.lastCheckpoint = lastCheckpoint;
     }
 
@@ -667,6 +673,39 @@ public class Consortium {
         messenger = null;
         nextView = null;
         order = null;
+    }
+
+    private CheckpointSegments fetch(CheckpointReplication request) {
+        CheckpointState state = cachedCheckpoints.get(request.getCheckpoint());
+        if (state == null) {
+            log.debug("No cached checkpoint for {} on: {}", request.getCheckpoint(), getMember());
+            return CheckpointSegments.getDefaultInstance();
+        }
+        BloomFilter<Integer> segmentsBff;
+        try {
+            segmentsBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(request.getCheckpointSegments()),
+                                               Funnels.integerFunnel());
+        } catch (IOException e) {
+            throw new IllegalStateException("unable to read Bloomfilter", e);
+        }
+        BloomFilter<Long> blocksBff;
+        try {
+            blocksBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(request.getCheckpointSegments()),
+                                             Funnels.longFunnel());
+        } catch (IOException e) {
+            throw new IllegalStateException("unable to read Bloomfilter", e);
+        }
+        CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
+        StreamSupport.stream(((Iterable<Long>) () -> store.blocksFrom(state.checkpoint.getCheckpoint())).spliterator(),
+                             false)
+                     .collect(new ReservoirSampler<Long>(-1, MAX_BLOCKS, params.msgParameters.entropy))
+                     .stream()
+                     .filter(s -> !blocksBff.mightContain(s))
+                     .map(height -> store.getBlockBits(height))
+                     .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
+        state.fetchSegments(segmentsBff, MAX_SEGMENTS, params.msgParameters.entropy)
+             .forEach(block -> ByteString.copyFrom(block));
+        return replication.build();
     }
 
     private MemberOrder getOrder() {

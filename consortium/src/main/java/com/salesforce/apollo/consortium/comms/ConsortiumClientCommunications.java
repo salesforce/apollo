@@ -12,11 +12,8 @@ import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc;
 import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc.OrderingServiceFutureStub;
-import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
-import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
-import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -87,22 +84,7 @@ public class ConsortiumClientCommunications implements OrderingService {
     }
 
     @Override
-    public void replicate(ReplicateTransactions transactions) {
-        client.replicate(transactions);
-    }
-
-    @Override
-    public void stop(Stop stop) {
-        client.stop(stop);
-    }
-
-    @Override
     public void stopData(StopData stopData) {
         client.stopData(stopData);
-    }
-
-    @Override
-    public void sync(Sync sync) {
-        client.sync(sync);
     }
 }
