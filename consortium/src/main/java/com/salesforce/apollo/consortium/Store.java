@@ -8,7 +8,6 @@ package com.salesforce.apollo.consortium;
 
 import java.util.Iterator;
 import java.util.Map;
-import java.util.stream.LongStream;
 
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
@@ -24,10 +23,10 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class Store {
-    private static final Logger log            = LoggerFactory.getLogger(Store.class);
     private static final String BLOCKS         = "BLOCKS";
     private static final String HASH_TO_HEIGHT = "HASH_TO_HEIGHT";
     private static final String HASHES         = "HASHES";
+    private static final Logger log            = LoggerFactory.getLogger(Store.class);
 
     private final MVMap<Long, byte[]> blocks;
     private final MVMap<Long, byte[]> hashes;
@@ -48,6 +47,10 @@ public class Store {
         return blocks.get(height);
     }
 
+    public Iterator<Long> blocksFrom(long from) {
+        return blocks.keyIterator(from);
+    }
+
     public CurrentBlock getBlock(long height) {
         byte[] block = block(height);
         try {
@@ -56,6 +59,10 @@ public class Store {
             log.error("Cannot deserialize block height: {}", height);
             return null;
         }
+    }
+
+    public byte[] getBlockBits(Long height) {
+        return blocks.get(height);
     }
 
     public byte[] hash(long height) {
@@ -70,14 +77,5 @@ public class Store {
         blocks.put(height, block);
         hashes.put(height, hash);
         hashToHeight.put(hash, height);
-    }
-
-    public Iterator<Long> blocksFrom(long from) {
-        return blocks.keyIterator(from); 
-    }
-
-    public byte[] getBlockBits(Long height) {
-        // TODO Auto-generated method stub
-        return null;
     }
 }
