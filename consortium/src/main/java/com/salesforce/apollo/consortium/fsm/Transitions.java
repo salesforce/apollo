@@ -23,8 +23,8 @@ import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.CurrentBlock;
-import com.salesforce.apollo.consortium.EnqueuedTransaction;
+import com.salesforce.apollo.consortium.support.CurrentBlock;
+import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 

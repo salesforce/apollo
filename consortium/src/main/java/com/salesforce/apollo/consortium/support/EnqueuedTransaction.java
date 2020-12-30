@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.consortium;
+package com.salesforce.apollo.consortium.support;
 
 import com.salesfoce.apollo.consortium.proto.Transaction;
-import com.salesforce.apollo.consortium.TickScheduler.Timer;
+import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
 import com.salesforce.apollo.protocols.HashKey;
 
 public class EnqueuedTransaction {

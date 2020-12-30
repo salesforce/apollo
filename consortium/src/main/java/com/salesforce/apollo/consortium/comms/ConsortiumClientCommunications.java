@@ -17,7 +17,6 @@ import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
-import com.salesforce.apollo.consortium.ConsortiumMetrics;
 import com.salesforce.apollo.consortium.OrderingService;
 import com.salesforce.apollo.membership.Member;
 

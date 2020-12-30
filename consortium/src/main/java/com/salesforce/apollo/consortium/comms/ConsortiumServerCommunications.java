@@ -19,7 +19,6 @@ import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.consortium.Consortium.Service;
-import com.salesforce.apollo.consortium.ConsortiumMetrics;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 
