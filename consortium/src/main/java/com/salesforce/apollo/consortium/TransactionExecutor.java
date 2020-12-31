@@ -8,6 +8,7 @@ package com.salesforce.apollo.consortium;
 
 import java.util.function.BiConsumer;
 
+import com.google.protobuf.Any;
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -19,4 +20,8 @@ import com.salesforce.apollo.protocols.HashKey;
 public interface TransactionExecutor {
     void execute(HashKey blockHash, long blockHeight, ExecutedTransaction txn,
                  BiConsumer<Object, Throwable> completion);
+
+    default void processGenesis(Any genesisData) {
+        // default for functional interface
+    }
 }

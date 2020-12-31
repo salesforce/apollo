@@ -646,6 +646,7 @@ public class CollaboratorContext {
         consortium.setGenesis(next.getBlock());
         consortium.getTransitions().genesisAccepted();
         reconfigure(body.getInitialView(), true);
+        consortium.getParams().executor.processGenesis(body.getGenesisData());
         log.info("Processed genesis block: {} on: {}", next.getHash(), consortium.getMember());
     }
 

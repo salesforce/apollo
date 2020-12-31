@@ -89,6 +89,47 @@ public class SqlStateMachine {
             }
 
         }
+
+        @Override
+        public void processGenesis(Any genesisData) {
+            if (!genesisData.is(BatchedTransaction.class)) {
+                log.info("Unknown genesis data type: {}", genesisData.getTypeUrl());
+                return;
+            }
+            BatchedTransaction txns;
+            try {
+                txns = genesisData.unpack(BatchedTransaction.class);
+            } catch (InvalidProtocolBufferException e1) {
+                log.info("Error unpacking batched transaction genesis");
+                return;
+            }
+            HashKey hash = HashKey.ORIGIN;
+            for (Txn txn : txns.getTransactionsList()) {
+                try {
+                    if (txn.hasStatement()) {
+                        acceptPreparedStatement(hash, 0, txn.getStatement());
+                    } else if (txn.hasBatch()) {
+                        acceptBatch(hash, 0, txn.getBatch());
+                    } else if (txn.hasCall()) {
+                        acceptCall(hash, 0, txn.getCall());
+                    } else if (txn.hasBatchUpdate()) {
+                        acceptBatchUpdate(hash, 0, txn.getBatchUpdate());
+                    } else {
+                        log.error("Unknown transaction type");
+                        return;
+                    }
+                } catch (SQLException e) {
+                    log.error("Unable to process transaction", e);
+                    return;
+                }
+            }
+
+            try {
+                connection.commit();
+            } catch (SQLException e) {
+                log.error("Error committing genesis transaction");
+            }
+        }
     }
 
     private static final RowSetFactory factory;
@@ -288,7 +329,9 @@ public class SqlStateMachine {
     }
 
     private void exception(BiConsumer<Object, Throwable> completion, Throwable e) {
-        completion.accept(null, e);
+        if (completion != null) {
+            completion.accept(null, e);
+        }
     }
 
     private Object execute(long blockHeight, ExecutedTransaction t, BiConsumer<Object, Throwable> completion, Txn txn,

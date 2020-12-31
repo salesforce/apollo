@@ -75,9 +75,7 @@ public class AvaTest {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final Message                           GENESIS_DATA    = ByteMessage.newBuilder()
-                                                                                        .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                                                        .build();
+    private static final Message                           GENESIS_DATA    = Helper.batch(Helper.batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
     private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
             Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
@@ -197,13 +195,16 @@ public class AvaTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            String[] statements = { "create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))" };
-            hash = client.submit((h, t) -> txnProcessed.set(true), Helper.batch(Helper.batch(statements)));
+            hash = client.submit((h, t) -> txnProcessed.set(true),
+                                 Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                              "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
         } catch (TimeoutException e) {
             fail();
             return;
         }
-
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
 
@@ -218,17 +219,6 @@ public class AvaTest {
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
-        String[] statements = { "insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)" };
-        HashKey pending = client.submit((h, t) -> {
-            outstanding.release();
-            submitted.remove(h);
-            submittedBunch.countDown();
-        }, Helper.batch(Helper.batch(statements)));
-        submitted.add(pending);
         IntStream.range(0, bunchCount).forEach(i -> {
             try {
                 outstanding.acquire();
