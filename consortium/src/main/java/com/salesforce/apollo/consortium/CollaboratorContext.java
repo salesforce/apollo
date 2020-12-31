@@ -62,6 +62,7 @@ import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.consortium.support.CurrentBlock;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
+import com.salesforce.apollo.consortium.support.ProcessedBuffer;
 import com.salesforce.apollo.consortium.support.Store;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.ViewContext;
