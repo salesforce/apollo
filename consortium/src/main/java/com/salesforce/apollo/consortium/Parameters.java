@@ -15,6 +15,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.google.common.base.Supplier;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.membership.Context;
@@ -34,7 +35,8 @@ public class Parameters {
         private Context<Member>          context;
         private TransactionExecutor      executor            = (bh, hght, et, c) -> {
                                                              };
-        private byte[]                   genesisData         = "Give me food or give me slack or kill me".getBytes();
+        private Message                  genesisData;
+        private HashKey                  genesisViewId;
         private Duration                 gossipDuration;
         private Duration                 joinTimeout         = Duration.ofMillis(500);
         private int                      maxBatchByteSize    = 4 * 1024;
@@ -52,7 +54,7 @@ public class Parameters {
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, viewTimeout, submitTimeout,
-                    processedBufferSize, genesisData, executor, checkpointer, storeFile);
+                    processedBufferSize, genesisData, genesisViewId, executor, checkpointer, storeFile);
         }
 
         public Function<Long, File> getCheckpointer() {
@@ -75,8 +77,12 @@ public class Parameters {
             return executor;
         }
 
-        public byte[] getGenesisData() {
+        public Message getGenesisData() {
             return genesisData;
+        }
+
+        public HashKey getGenesisViewId() {
+            return genesisViewId;
         }
 
         public Duration getGossipDuration() {
@@ -161,8 +167,13 @@ public class Parameters {
             return this;
         }
 
-        public Builder setGenesisData(byte[] genesisData) {
+        public Builder setGenesisData(Message genesisData) {
             this.genesisData = genesisData;
+            return this;
+        }
+
+        public Builder setGenesisViewId(HashKey genesisViewId) {
+            this.genesisViewId = genesisViewId;
             return this;
         }
 
@@ -246,7 +257,8 @@ public class Parameters {
     public final BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
     public final Context<Member>                                context;
     public final TransactionExecutor                            executor;
-    public final byte[]                                         genesisData;
+    public final Message                                        genesisData;
+    public final HashKey                                        genesisViewId;
     public final Duration                                       gossipDuration;
     public final Duration                                       joinTimeout;
     public final int                                            maxBatchByteSize;
@@ -265,7 +277,7 @@ public class Parameters {
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Duration maxBatchDelay, Duration joinTimeout, Duration viewTimeout, Duration submitTimeout,
-            int processedBufferSize, byte[] genesisData, TransactionExecutor executor,
+            int processedBufferSize, Message genesisData, HashKey genesisViewId, TransactionExecutor executor,
             Function<Long, File> checkpointer, File storeFile) {
         this.context = context;
         this.communications = communications;
@@ -286,5 +298,6 @@ public class Parameters {
         this.executor = executor;
         this.checkpointer = checkpointer;
         this.storeFile = storeFile;
+        this.genesisViewId = genesisViewId;
     }
 }

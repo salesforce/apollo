@@ -43,6 +43,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Avalanche;
@@ -76,7 +77,11 @@ public class AvaConsensusTest {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FooD or give me SLACK or KILL ME");
+    private static final Message                           GENESIS_DATA    = ByteMessage.newBuilder()
+                                                                                        .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                                        .build();
+    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
+            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
@@ -153,7 +158,7 @@ public class AvaConsensusTest {
         gatherAvalanche(view, adapters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
-        ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
+        ViewContext.viewFor(GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
@@ -297,18 +302,21 @@ public class AvaConsensusTest {
                                                          .setJoinTimeout(Duration.ofSeconds(5))
                                                          .setTransactonTimeout(Duration.ofSeconds(15))
                                                          .setScheduler(scheduler)
-                                                         .setGenesisData(GENESIS_DATA.toByteArray())
+                                                         .setGenesisData(GENESIS_DATA)
+                                                         .setGenesisViewId(GENESIS_VIEW_ID)
                                                          .setCheckpointer(l -> {
                                                              File temp;
                                                              try {
                                                                  temp = File.createTempFile("foo", "bar");
                                                                  temp.deleteOnExit();
-                                                                 try (FileOutputStream fos = new FileOutputStream(temp)) {
+                                                                 try (FileOutputStream fos = new FileOutputStream(
+                                                                         temp)) {
                                                                      fos.write("Give me food or give me slack or kill me".getBytes());
                                                                      fos.flush();
                                                                  }
                                                              } catch (IOException e) {
-                                                                 throw new IllegalStateException("Cannot create temp file", e);
+                                                                 throw new IllegalStateException(
+                                                                         "Cannot create temp file", e);
                                                              }
 
                                                              return temp;

@@ -30,6 +30,7 @@ import org.bouncycastle.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -65,8 +66,8 @@ import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.ProcessedBuffer;
 import com.salesforce.apollo.consortium.support.Store;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
-import com.salesforce.apollo.consortium.support.ViewContext;
 import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
+import com.salesforce.apollo.consortium.support.ViewContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -365,9 +366,9 @@ public class CollaboratorContext {
     }
 
     public void establishGenesisView() {
-        ViewContext newView = new ViewContext(new HashKey(Conversion.hashOf(consortium.getParams().genesisData)),
-                consortium.getParams().context, consortium.getMember(), consortium.nextViewConsensusKey(),
-                Collections.emptyList(), consortium.entropy());
+        ViewContext newView = new ViewContext(consortium.getParams().genesisViewId, consortium.getParams().context,
+                consortium.getMember(), consortium.nextViewConsensusKey(), Collections.emptyList(),
+                consortium.entropy());
         newView.activeAll();
         consortium.viewChange(newView);
         if (consortium.viewContext().isMember()) {
@@ -588,9 +589,7 @@ public class CollaboratorContext {
                       consortium.viewContext().majority(), votes.size(), consortium.getMember());
             return;
         }
-        JoinTransaction.Builder txn = JoinTransaction.newBuilder()
-                                                     .setRegency(currentRegent())
-                                                     .setMember(voteForMe.getMember());
+        JoinTransaction.Builder txn = JoinTransaction.newBuilder().setMember(voteForMe.getMember());
         for (Result vote : votes) {
             txn.addCertification(Certification.newBuilder()
                                               .setId(vote.member.getId().toByteString())
@@ -1063,14 +1062,14 @@ public class CollaboratorContext {
         Body genesisBody = Body.newBuilder()
                                .setType(BodyType.GENESIS)
                                .setContents(Consortium.compress(Genesis.newBuilder()
-                                                                       .setGenesisData(ByteString.copyFrom(consortium.getParams().genesisData))
+                                                                       .setGenesisData(Any.pack(consortium.getParams().genesisData))
                                                                        .setInitialView(genesisView)
                                                                        .build()
                                                                        .toByteString()))
                                .build();
         Block block = Block.newBuilder()
                            .setHeader(Header.newBuilder()
-                                            .setPrevious(ByteString.copyFrom(Conversion.hashOf(consortium.getParams().genesisData)))
+                                            .setPrevious(consortium.getParams().genesisViewId.toByteString())
                                             .setHeight(0)
                                             .setBodyHash(ByteString.copyFrom(Conversion.hashOf(genesisBody.toByteString())))
                                             .build())

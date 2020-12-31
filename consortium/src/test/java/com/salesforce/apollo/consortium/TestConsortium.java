@@ -46,10 +46,12 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Header;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -79,7 +81,11 @@ public class TestConsortium {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
+    private static final Message                           GENESIS_DATA    = ByteMessage.newBuilder()
+                                                                                        .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                                        .build();
+    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
+            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
@@ -165,7 +171,7 @@ public class TestConsortium {
         gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters, executor);
 
         Set<Consortium> blueRibbon = new HashSet<>();
-        ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
+        ViewContext.viewFor(GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
@@ -292,7 +298,8 @@ public class TestConsortium {
                                                   .setTransactonTimeout(Duration.ofSeconds(30))
                                                   .setScheduler(scheduler)
                                                   .setExecutor(executor)
-                                                  .setGenesisData(GENESIS_DATA.toByteArray())
+                                                  .setGenesisData(GENESIS_DATA)
+                                                  .setGenesisViewId(GENESIS_VIEW_ID)
                                                   .setCheckpointer(l -> {
                                                       File temp;
                                                       try {

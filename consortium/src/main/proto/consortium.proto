@@ -93,7 +93,7 @@ enum BodyType {
 }
 
 message Genesis {
-    bytes genesisData = 1;
+    google.protobuf.Any genesisData = 1;
     Reconfigure initialView = 2;
 }
 
@@ -114,9 +114,8 @@ message ByteTransaction {
 }
 
 message JoinTransaction {
-    ViewMember member = 1;
-    int32 regency = 2;
-    repeated Certification certification = 3;
+    ViewMember member = 1; 
+    repeated Certification certification = 2;
 }
 
 message ViewMember {

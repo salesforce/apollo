@@ -47,7 +47,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -73,7 +75,11 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 public class ConsortiumTest {
 
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
+    private static final Message                           GENESIS_DATA    = ByteMessage.newBuilder()
+                                                                                        .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                                        .build();
+    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
+            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private final static int                               testCardinality = 5;
 
@@ -85,14 +91,14 @@ public class ConsortiumTest {
                          .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
-    private File                          baseDir;
-    private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
-    private File                          checkpointDirBase;
-    private Map<HashKey, Router>          communications = new HashMap<>();
-    private final Map<Member, Consortium> consortium     = new HashMap<>();
-    private SecureRandom                  entropy;
-    private List<Member>                  members;
-    private final Map<Member, SqlStateMachine>    updaters       = new HashMap<>();
+    private File                               baseDir;
+    private Builder                            builder        = ServerConnectionCache.newBuilder().setTarget(30);
+    private File                               checkpointDirBase;
+    private Map<HashKey, Router>               communications = new HashMap<>();
+    private final Map<Member, Consortium>      consortium     = new HashMap<>();
+    private SecureRandom                       entropy;
+    private List<Member>                       members;
+    private final Map<Member, SqlStateMachine> updaters       = new HashMap<>();
 
     @AfterEach
     public void after() {
@@ -161,7 +167,7 @@ public class ConsortiumTest {
         gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
-        ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
+        ViewContext.viewFor(GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
@@ -321,7 +327,8 @@ public class ConsortiumTest {
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             frist.set(false);
             System.out.println("DB URL: " + url);
-            SqlStateMachine up = new SqlStateMachine(url, new Properties(), new File(checkpointDirBase, m.getId().toString()));
+            SqlStateMachine up = new SqlStateMachine(url, new Properties(),
+                    new File(checkpointDirBase, m.getId().toString()));
             updaters.put(m, up);
             Consortium c = new Consortium(
                     Parameters.newBuilder()
@@ -341,7 +348,8 @@ public class ConsortiumTest {
                               .setTransactonTimeout(Duration.ofSeconds(15))
                               .setExecutor(up.getExecutor())
                               .setScheduler(scheduler)
-                              .setGenesisData(GENESIS_DATA.toByteArray())
+                              .setGenesisData(GENESIS_DATA)
+                              .setGenesisViewId(GENESIS_VIEW_ID)
                               .setCheckpointer(up.getCheckpointer())
                               .build());
             return c;

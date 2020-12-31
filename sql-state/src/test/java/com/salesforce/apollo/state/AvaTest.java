@@ -40,6 +40,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
@@ -72,10 +73,14 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class AvaTest {
 
-    private static final RootCertificate                   ca             = getCa();
+    private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final ByteString                        GENESIS_DATA   = ByteString.copyFromUtf8("Give me FooD or give me SLACK or KILL ME");
-    private static final Duration                          gossipDuration = Duration.ofMillis(10);
+    private static final Message                           GENESIS_DATA    = ByteMessage.newBuilder()
+                                                                                        .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                                        .build();
+    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
+            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
+    private static final Duration                          gossipDuration  = Duration.ofMillis(10);
 
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
@@ -89,15 +94,15 @@ public class AvaTest {
                          .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
-    private final Map<Member, Avalanche>  avas           = new HashMap<>();
-    private File                          baseDir;
-    private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
-    private File                          checkpointDirBase;
-    private Map<HashKey, Router>          communications = new HashMap<>();
-    private final Map<Member, Consortium> consortium     = new HashMap<>();
-    private SecureRandom                  entropy;
-    private List<Node>                    members;
-    private final Map<Member, SqlStateMachine>    updaters       = new HashMap<>();
+    private final Map<Member, Avalanche>       avas           = new HashMap<>();
+    private File                               baseDir;
+    private Builder                            builder        = ServerConnectionCache.newBuilder().setTarget(30);
+    private File                               checkpointDirBase;
+    private Map<HashKey, Router>               communications = new HashMap<>();
+    private final Map<Member, Consortium>      consortium     = new HashMap<>();
+    private SecureRandom                       entropy;
+    private List<Node>                         members;
+    private final Map<Member, SqlStateMachine> updaters       = new HashMap<>();
 
     @AfterEach
     public void after() {
@@ -153,7 +158,7 @@ public class AvaTest {
         gatherAvalanche(view, adapters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
-        ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
+        ViewContext.viewFor(GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
@@ -348,7 +353,8 @@ public class AvaTest {
             AvaAdapter adapter = new AvaAdapter(processed);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);
-            SqlStateMachine up = new SqlStateMachine(url, new Properties(), new File(checkpointDirBase, m.getId().toString()));
+            SqlStateMachine up = new SqlStateMachine(url, new Properties(),
+                    new File(checkpointDirBase, m.getId().toString()));
             updaters.put(m, up);
             Consortium c = new Consortium(
                     Parameters.newBuilder()
@@ -368,7 +374,8 @@ public class AvaTest {
                               .setTransactonTimeout(Duration.ofSeconds(15))
                               .setExecutor(up.getExecutor())
                               .setScheduler(scheduler)
-                              .setGenesisData(GENESIS_DATA.toByteArray())
+                              .setGenesisData(GENESIS_DATA)
+                              .setGenesisViewId(GENESIS_VIEW_ID)
                               .setCheckpointer(up.getCheckpointer())
                               .build());
             adapter.setConsortium(c);
