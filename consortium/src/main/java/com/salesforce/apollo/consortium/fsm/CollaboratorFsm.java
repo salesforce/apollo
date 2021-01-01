@@ -26,6 +26,32 @@ import com.salesforce.apollo.membership.Member;
  */
 public enum CollaboratorFsm implements Transitions {
 
+    CHECKPOINT_RECOVERY {
+
+        @Override
+        public Transitions processCheckpoint(CurrentBlock next) {
+            // TODO Auto-generated method stub
+            return super.processCheckpoint(next);
+        }
+
+        @Override
+        public Transitions processGenesis(CurrentBlock next) {
+            // TODO Auto-generated method stub
+            return super.processGenesis(next);
+        }
+
+        @Override
+        public Transitions processReconfigure(CurrentBlock next) {
+            // TODO Auto-generated method stub
+            return super.processReconfigure(next);
+        }
+
+        @Override
+        public Transitions processUser(CurrentBlock next) {
+            // TODO Auto-generated method stub
+            return super.processUser(next);
+        }
+    },
     CLIENT {
     },
     FOLLOWER {
@@ -46,14 +72,14 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions joinAsMember() {
-            return JOINING_MEMBER;
-        }
-
-        @Override
         public Transitions deliverCheckpointing(CheckpointProcessing checkpointProcessing, Member from) {
             context().deliverCheckpointing(checkpointProcessing, from);
             return Checkpointing.FOLLOWER;
+        }
+
+        @Override
+        public Transitions joinAsMember() {
+            return JOINING_MEMBER;
         }
     },
     INITIAL {

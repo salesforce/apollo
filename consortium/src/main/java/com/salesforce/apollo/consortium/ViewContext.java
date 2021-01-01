@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.consortium.support;
+package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
 
@@ -30,7 +30,7 @@ import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
-import com.salesforce.apollo.consortium.Parameters;
+import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;

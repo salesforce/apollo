@@ -64,10 +64,8 @@ import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.consortium.support.CurrentBlock;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.ProcessedBuffer;
-import com.salesforce.apollo.consortium.support.Store;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
-import com.salesforce.apollo.consortium.support.ViewContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -508,7 +506,7 @@ public class CollaboratorContext {
         builder.addCertifications(Certification.newBuilder()
                                                .setId(validation.getId())
                                                .setSignature(validation.getSignature()));
-        store().put(thisHeight, hash.toByteString().toByteArray(), block.toByteArray());
+        store().put(hash, block);
         lastBlock(thisHeight);
         consortium.publish(block);
         consortium.publish(validation);
@@ -830,7 +828,7 @@ public class CollaboratorContext {
     private void accept(CurrentBlock next) {
         workingBlocks.remove(next.getHash());
         consortium.setCurrent(next);
-        store().put(height(next.getBlock()), next.getHash().bytes(), next.getBlock().toByteArray());
+        store().put(next.getHash(), next.getBlock());
     }
 
     private StopData buildStopData(int currentRegent) {
@@ -1169,7 +1167,7 @@ public class CollaboratorContext {
         builder.addCertifications(Certification.newBuilder()
                                                .setId(validation.getId())
                                                .setSignature(validation.getSignature()));
-        store().put(height(block), hash.bytes(), block.toByteArray());
+        store().put(hash, block);
         lastBlock(thisHeight);
         consortium.publish(block);
         consortium.publish(validation);
@@ -1449,7 +1447,7 @@ public class CollaboratorContext {
                 .forEach(cb -> {
                     HashKey hash = new HashKey(Conversion.hashOf(cb.getBlock().toByteString()));
                     workingBlocks.put(hash, cb.toBuilder());
-                    store().put(height(cb.getBlock()), hash.bytes(), cb.getBlock().toByteArray());
+                    store().put(hash, cb);
                     lastBlock(height(cb));
                     processToOrder(cb.getBlock());
                 });
