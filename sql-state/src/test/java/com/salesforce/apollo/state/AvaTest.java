@@ -367,6 +367,7 @@ public class AvaTest {
                               .setGenesisData(GENESIS_DATA)
                               .setGenesisViewId(GENESIS_VIEW_ID)
                               .setCheckpointer(up.getCheckpointer())
+                              .setDeltaCheckpointBlocks(10)
                               .build());
             adapter.setConsortium(c);
             adapters.put(m, adapter);

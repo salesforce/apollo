@@ -8,7 +8,12 @@ package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.consortium.CollaboratorContext.height;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +28,7 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.Certifications;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesforce.apollo.consortium.support.CurrentBlock;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -33,16 +39,18 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class Store {
-    private static final String BLOCKS         = "BLOCKS";
-    private static final String CERTIFICATIONS = "CERTIFICATIONS";
-    private static final String HASH_TO_HEIGHT = "HASH_TO_HEIGHT";
-    private static final String HASHES         = "HASHES";
-    private static final Logger log            = LoggerFactory.getLogger(Store.class);
+    private static final String BLOCKS              = "BLOCKS";
+    private static final String CERTIFICATIONS      = "CERTIFICATIONS";
+    private static final String CHECKPOINT_TEMPLATE = "CHECKPOINT-%s";
+    private static final String HASH_TO_HEIGHT      = "HASH_TO_HEIGHT";
+    private static final String HASHES              = "HASHES";
+    private static final Logger log                 = LoggerFactory.getLogger(Store.class);
 
-    private final MVMap<Long, byte[]> blocks;
-    private final MVMap<Long, byte[]> certifications;
-    private final MVMap<Long, byte[]> hashes;
-    private final MVMap<byte[], Long> hashToHeight;
+    private final MVMap<Long, byte[]>               blocks;
+    private final MVMap<Long, byte[]>               certifications;
+    private final Map<Long, MVMap<Integer, byte[]>> checkpoints = new HashMap<>();
+    private final MVMap<Long, byte[]>               hashes;
+    private final MVMap<byte[], Long>               hashToHeight;
 
     public Store(MVStore store) {
         hashes = store.openMap(HASHES);
@@ -119,5 +127,34 @@ public class Store {
         Certifications certs = Certifications.newBuilder().addAllCerts(cb.getCertificationsList()).build();
         put(hash, cb.getBlock());
         certifications.put(height, certs.toByteArray());
+    }
+
+    public MVMap<Integer, byte[]> putCheckpoint(long blockHeight, File state, Checkpoint checkpoint) {
+        MVMap<Integer, byte[]> cp = checkpoints.get(blockHeight);
+        if (cp != null) {
+            return cp;
+        }
+        cp = blocks.store.openMap(String.format(CHECKPOINT_TEMPLATE, blockHeight));
+
+        byte[] buffer = new byte[checkpoint.getSegmentSize()];
+        try (FileInputStream fis = new FileInputStream(state)) {
+            for (int i = 0; i < checkpoint.getSegmentsCount(); i++) {
+                int read = fis.read(buffer);
+                if (read != buffer.length) {
+                    if (fis.available() != 0) {
+                        throw new IllegalStateException("Should have been able to read a full buffer");
+                    }
+                    cp.put(i, Arrays.copyOf(buffer, read));
+                } else {
+                    cp.put(i, buffer);
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Error storing checkpoint " + blockHeight, e);
+        }
+        assert cp.size() == checkpoint.getSegmentsCount() : "Invalid number of segments: " + cp.size() + " should be: "
+                + checkpoint.getSegmentsCount();
+        checkpoints.put(blockHeight, cp);
+        return cp;
     }
 }

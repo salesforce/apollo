@@ -303,6 +303,7 @@ public class AvaConsensusTest {
                                                          .setScheduler(scheduler)
                                                          .setGenesisData(GENESIS_DATA)
                                                          .setGenesisViewId(GENESIS_VIEW_ID)
+                                                         .setDeltaCheckpointBlocks(10)
                                                          .setCheckpointer(l -> {
                                                              File temp;
                                                              try {

@@ -6,17 +6,13 @@
  */
 package com.salesforce.apollo.consortium.support;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import org.h2.mvstore.MVMap;
 
 import com.google.common.hash.BloomFilter;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
@@ -27,26 +23,16 @@ import com.salesforce.apollo.membership.ReservoirSampler;
  *
  */
 public class CheckpointState {
-    public final Checkpoint        checkpoint;
-    public final File              state;
-    private final RandomAccessFile contents;
+    public final Checkpoint             checkpoint;
+    public final MVMap<Integer, byte[]> state;
 
-    public CheckpointState(Checkpoint checkpoint, File state) {
+    public CheckpointState(Checkpoint checkpoint, MVMap<Integer, byte[]> stored) {
         this.checkpoint = checkpoint;
-        this.state = state;
-        try {
-            contents = new RandomAccessFile(state, "r");
-        } catch (FileNotFoundException e) {
-            throw new IllegalStateException("Cannot access state contents: " + checkpoint.getCheckpoint() + " state: "
-                    + state.getAbsolutePath());
-        }
+        this.state = stored;
     }
 
     public void close() {
-        try {
-            contents.close();
-        } catch (IOException e) {
-        }
+        state.clear();
     }
 
     public List<byte[]> fetchSegments(BloomFilter<Integer> bff, int maxSegments, SecureRandom entropy) {
@@ -57,23 +43,8 @@ public class CheckpointState {
                                           .filter(s -> !bff.mightContain(s))
                                           .collect(Collectors.toList());
         List<byte[]> slices = new ArrayList<>();
-        Collections.sort(segments);
-        byte[] buffer = new byte[checkpoint.getSegmentSize()];
         for (int i : segments) {
-            try {
-                contents.seek(i * checkpoint.getSegmentSize());
-            } catch (IOException e) {
-                throw new IllegalStateException("Error accessing state contents: " + checkpoint.getCheckpoint()
-                        + " state: " + state.getAbsolutePath() + " @ " + i, e);
-            }
-            int read;
-            try {
-                read = contents.read(buffer);
-            } catch (IOException e) {
-                throw new IllegalStateException("Error accessing state contents: " + checkpoint.getCheckpoint()
-                        + " state: " + state.getAbsolutePath() + " @ " + i, e);
-            }
-            slices.add(Arrays.copyOf(buffer, read));
+            slices.add(state.get(i));
         }
         return slices;
     }

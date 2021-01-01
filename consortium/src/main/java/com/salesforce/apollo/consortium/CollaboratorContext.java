@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import org.bouncycastle.util.Arrays;
+import org.h2.mvstore.MVMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -909,7 +910,9 @@ public class CollaboratorContext {
                 state.delete();
                 return null;
             }
-            checkpoint = new CheckpointState(body, state);
+            MVMap<Integer, byte[]> stored = store().putCheckpoint(body.getCheckpoint(), state, body);
+            checkpoint = new CheckpointState(body, stored);
+            state.delete();
         }
         return checkpoint;
     }
@@ -1486,6 +1489,12 @@ public class CollaboratorContext {
             return false;
         }
         return true;
+    }
+
+    @SuppressWarnings("unused")
+    // Incrementally assemble target checkpoint from random gossip
+    private void recoverFromCheckpoint() {
+
     }
 
     private void validateCheckpoint(HashKey hash, Block block, Member from) {

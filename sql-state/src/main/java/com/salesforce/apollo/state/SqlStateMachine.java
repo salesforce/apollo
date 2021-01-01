@@ -52,10 +52,15 @@ import com.salesforce.apollo.protocols.HashKey;
 /**
  * This is ye Jesus Nut of sql state via distribute linear logs. We use H2 as a
  * the local materialized view that is constructed by SQL DML and DDL embedded
- * in the log as SQL statements. Checkpointing is accomplished by a new
+ * in the log as SQL statements. Checkpointing is accomplished by a *new* H2
  * BLOCKSCRIPT command that will output SQL to recreate the state of the DB at a
  * given block height (i.e. the checkpoint). Mutation is interactive with the
- * submitter of the transaction statements.
+ * submitter of the transaction statements - i.e. result sets n' multiple result
+ * sets n' out params (in calls). This provides a "reasonable" asynchronous
+ * interaction with this log based mutation (through consensus).
+ * <p>
+ * Batch oriented, but low enough latency to make it worth the wait (with the
+ * right system wide consensus/distribution, 'natch).
  * 
  * @author hal.hildebrand
  *
@@ -203,6 +208,7 @@ public class SqlStateMachine {
             try {
                 statement = connection.createStatement();
                 statement.execute(String.format("BLOCKSCRIPT BLOCKHEIGHT 1 DROP TO '%s'", temp.getAbsolutePath()));
+                statement.close();
             } catch (SQLException e) {
                 log.error("unable to checkpoint: {}", height, e);
                 return null;

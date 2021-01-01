@@ -334,6 +334,7 @@ public class ConsortiumTest {
                               .setGossipDuration(gossipDuration)
                               .setViewTimeout(Duration.ofMillis(500))
                               .setJoinTimeout(Duration.ofSeconds(5))
+                              .setDeltaCheckpointBlocks(10)
                               .setTransactonTimeout(Duration.ofSeconds(15))
                               .setExecutor(up.getExecutor())
                               .setScheduler(scheduler)
