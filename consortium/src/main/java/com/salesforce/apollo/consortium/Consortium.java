@@ -217,9 +217,7 @@ public class Consortium {
         }
     }
 
-    private static final Logger log          = LoggerFactory.getLogger(Consortium.class);
-    private static final int    MAX_BLOCKS   = 200;
-    private static final int    MAX_SEGMENTS = 200;
+    private static final Logger log = LoggerFactory.getLogger(Consortium.class);
 
     public static ByteString compress(ByteString input) {
         DeflaterInputStream dis = new DeflaterInputStream(
@@ -704,12 +702,12 @@ public class Consortium {
         CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
         StreamSupport.stream(((Iterable<Long>) () -> store.blocksFrom(state.checkpoint.getCheckpoint())).spliterator(),
                              false)
-                     .collect(new ReservoirSampler<Long>(-1, MAX_BLOCKS, params.msgParameters.entropy))
+                     .collect(new ReservoirSampler<Long>(-1, params.maxCheckpointBlocks, params.msgParameters.entropy))
                      .stream()
                      .filter(s -> !blocksBff.mightContain(s))
                      .map(height -> store.getBlockBits(height))
                      .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
-        state.fetchSegments(segmentsBff, MAX_SEGMENTS, params.msgParameters.entropy)
+        state.fetchSegments(segmentsBff, params.maxCheckpointSegments, params.msgParameters.entropy)
              .forEach(block -> ByteString.copyFrom(block));
         return replication.build();
     }

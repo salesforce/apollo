@@ -76,8 +76,7 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class CollaboratorContext {
 
-    private static final Logger log               = LoggerFactory.getLogger(CollaboratorContext.class);
-    private static final int    SEGMENT_BYTE_SIZE = 8192;
+    private static final Logger log = LoggerFactory.getLogger(CollaboratorContext.class);
 
     public static Map<HashKey, HashKey> gapsOf(Map<HashKey, CertifiedBlock> hashed, HashKey lastBlock) {
         Map<HashKey, HashKey> missing = new HashMap<>();
@@ -449,7 +448,7 @@ public class CollaboratorContext {
             return;
         }
         List<HashKey> segments = new ArrayList<>();
-        byte[] buff = new byte[SEGMENT_BYTE_SIZE];
+        byte[] buff = new byte[consortium.getParams().checkpointBlockSize];
         try (FileInputStream fis = new FileInputStream(state)) {
             for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
                 segments.add(new HashKey(Conversion.hashOf(Arrays.copyOf(buff, read))));
@@ -462,7 +461,7 @@ public class CollaboratorContext {
         Checkpoint checkpoint = Checkpoint.newBuilder()
                                           .setCheckpoint(currentHeight)
                                           .setByteSize(state.length())
-                                          .setSegmentSize(SEGMENT_BYTE_SIZE)
+                                          .setSegmentSize(consortium.getParams().checkpointBlockSize)
                                           .setStateHash(stateHash.toByteString())
                                           .addAllSegments(segments.stream()
                                                                   .map(e -> e.toByteString())

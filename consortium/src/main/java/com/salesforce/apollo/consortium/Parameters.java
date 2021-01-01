@@ -25,36 +25,44 @@ import com.salesforce.apollo.protocols.HashKey;
 
 public class Parameters {
     public static class Builder {
-        private Function<Long, File> checkpointer = c -> {
-                                                      throw new IllegalStateException("No checkpointer defined");
-                                                  };
-        private Router               communications;
+        private int                  checkpointBlockSize = 8192;
+        private Function<Long, File> checkpointer        = c -> {
+                                                             throw new IllegalStateException("No checkpointer defined");
+                                                         };
+
+        private Router communications;
 
         private BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
-
-        private Context<Member>          context;
-        private TransactionExecutor      executor            = (bh, hght, et, c) -> {
-                                                             };
-        private Message                  genesisData;
-        private HashKey                  genesisViewId;
-        private Duration                 gossipDuration;
-        private Duration                 joinTimeout         = Duration.ofMillis(500);
-        private int                      maxBatchByteSize    = 4 * 1024;
-        private Duration                 maxBatchDelay       = Duration.ofMillis(200);
-        private int                      maxBatchSize        = 10;
-        private Member                   member;
-        private Messenger.Parameters     msgParameters;
-        private int                      processedBufferSize = 1000;
-        private ScheduledExecutorService scheduler;
-        private Supplier<Signature>      signature;
-        private File                     storeFile;
-        private Duration                 submitTimeout       = Duration.ofSeconds(30);
-        private Duration                 viewTimeout         = Duration.ofSeconds(60);
+        private Context<Member>                                context;
+        private TransactionExecutor                            executor              = (bh, hght, et, c) -> {
+                                                                                     };
+        private Message                                        genesisData;
+        private HashKey                                        genesisViewId;
+        private Duration                                       gossipDuration;
+        private Duration                                       joinTimeout           = Duration.ofMillis(500);
+        private int                                            maxBatchByteSize      = 4 * 1024;
+        private Duration                                       maxBatchDelay         = Duration.ofMillis(200);
+        private int                                            maxBatchSize          = 10;
+        private int                                            maxCheckpointBlocks   = DEFAULT_MAX_BLOCKS;
+        private int                                            maxCheckpointSegments = DEFAULT_MAX_SEGMENTS;
+        private Member                                         member;
+        private Messenger.Parameters                           msgParameters;
+        private int                                            processedBufferSize   = 1000;
+        private ScheduledExecutorService                       scheduler;
+        private Supplier<Signature>                            signature;
+        private File                                           storeFile;
+        private Duration                                       submitTimeout         = Duration.ofSeconds(30);
+        private Duration                                       viewTimeout           = Duration.ofSeconds(60);
 
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
-                    consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, viewTimeout, submitTimeout,
-                    processedBufferSize, genesisData, genesisViewId, executor, checkpointer, storeFile);
+                    consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, maxCheckpointSegments,
+                    viewTimeout, submitTimeout, processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks,
+                    executor, checkpointer, storeFile, checkpointBlockSize);
+        }
+
+        public int getCheckpointBlockSize() {
+            return checkpointBlockSize;
         }
 
         public Function<Long, File> getCheckpointer() {
@@ -105,6 +113,14 @@ public class Parameters {
             return maxBatchSize;
         }
 
+        public int getMaxCheckpointBlocks() {
+            return maxCheckpointBlocks;
+        }
+
+        public int getMaxCheckpointSegments() {
+            return maxCheckpointSegments;
+        }
+
         public Member getMember() {
             return member;
         }
@@ -139,6 +155,11 @@ public class Parameters {
 
         public Duration getViewTimeout() {
             return viewTimeout;
+        }
+
+        public Builder setCheckpointBlockSize(int checkpointBlockSize) {
+            this.checkpointBlockSize = checkpointBlockSize;
+            return this;
         }
 
         public Builder setCheckpointer(Function<Long, File> checkpointer) {
@@ -202,6 +223,16 @@ public class Parameters {
             return this;
         }
 
+        public Builder setMaxCheckpointBlocks(int maxCheckpointBlocks) {
+            this.maxCheckpointBlocks = maxCheckpointBlocks;
+            return this;
+        }
+
+        public Builder setMaxCheckpointSegments(int maxCheckpointSegments) {
+            this.maxCheckpointSegments = maxCheckpointSegments;
+            return this;
+        }
+
         public Parameters.Builder setMember(Member member) {
             this.member = member;
             return this;
@@ -248,10 +279,14 @@ public class Parameters {
         }
     }
 
+    public static final int DEFAULT_MAX_BLOCKS   = 200;
+    public static final int DEFAULT_MAX_SEGMENTS = 200;
+
     public static Parameters.Builder newBuilder() {
         return new Builder();
     }
 
+    public final int                                            checkpointBlockSize;
     public final Function<Long, File>                           checkpointer;
     public final Router                                         communications;
     public final BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
@@ -264,6 +299,8 @@ public class Parameters {
     public final int                                            maxBatchByteSize;
     public final Duration                                       maxBatchDelay;
     public final int                                            maxBatchSize;
+    public final int                                            maxCheckpointBlocks;
+    public final int                                            maxCheckpointSegments;
     public final Member                                         member;
     public final Messenger.Parameters                           msgParameters;
     public final int                                            processedBufferSize;
@@ -276,9 +313,10 @@ public class Parameters {
     public Parameters(Context<Member> context, Router communications, Member member, Messenger.Parameters msgParameters,
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
-            Duration maxBatchDelay, Duration joinTimeout, Duration viewTimeout, Duration submitTimeout,
-            int processedBufferSize, Message genesisData, HashKey genesisViewId, TransactionExecutor executor,
-            Function<Long, File> checkpointer, File storeFile) {
+            Duration maxBatchDelay, Duration joinTimeout, int maxCheckpointSegments, Duration viewTimeout,
+            Duration submitTimeout, int processedBufferSize, Message genesisData, HashKey genesisViewId,
+            int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer, File storeFile,
+            int checkpointBlockSize) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -299,5 +337,8 @@ public class Parameters {
         this.checkpointer = checkpointer;
         this.storeFile = storeFile;
         this.genesisViewId = genesisViewId;
+        this.maxCheckpointBlocks = maxCheckpointBlocks;
+        this.maxCheckpointSegments = maxCheckpointSegments;
+        this.checkpointBlockSize = checkpointBlockSize;
     }
 }

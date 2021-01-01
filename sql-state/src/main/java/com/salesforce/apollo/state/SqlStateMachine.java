@@ -50,6 +50,13 @@ import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
+ * This is ye Jesus Nut of sql state via distribute linear logs. We use H2 as a
+ * the local materialized view that is constructed by SQL DML and DDL embedded
+ * in the log as SQL statements. Checkpointing is accomplished by a new
+ * BLOCKSCRIPT command that will output SQL to recreate the state of the DB at a
+ * given block height (i.e. the checkpoint). Mutation is interactive with the
+ * submitter of the transaction statements.
+ * 
  * @author hal.hildebrand
  *
  */
