@@ -1035,7 +1035,7 @@ public class CollaboratorContext {
         byte[] nextView = new byte[32];
         consortium.entropy().nextBytes(nextView);
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
-                                                     .setCheckpointBlocks(10)
+                                                     .setCheckpointBlocks(consortium.getParams().deltaCheckpointBlocks)
                                                      .setId(ByteString.copyFrom(nextView))
                                                      .setTolerance(consortium.viewContext().majority());
         toOrder.values().forEach(join -> {

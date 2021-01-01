@@ -8,9 +8,9 @@ package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.consortium.CollaboratorContext.height;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import org.h2.mvstore.MVMap;
@@ -20,11 +20,15 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.Certification;
+import com.salesfoce.apollo.consortium.proto.Certifications;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.consortium.support.CurrentBlock;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
+ * Kind of a DAO for "nosql" block storage with MVStore from H2
+ * 
  * @author hal.hildebrand
  *
  */
@@ -60,18 +64,38 @@ public class Store {
         return blocks.keyIterator(from);
     }
 
+    public List<Certification> certifications(long height) {
+        byte[] bs = certifications.get(height);
+        if (bs == null) {
+            return null;
+        }
+        try {
+            return Certifications.parseFrom(bs).getCertsList();
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Could not deserialize certifications for {}", height);
+            return Collections.emptyList();
+        }
+    }
+
     public CurrentBlock getBlock(long height) {
         byte[] block = block(height);
         try {
             return block == null ? null : new CurrentBlock(new HashKey(hash(height)), Block.parseFrom(block));
         } catch (InvalidProtocolBufferException e) {
-            log.error("Cannot deserialize block height: {}", height);
+            log.error("Cannot deserialize block height: {}", height, e);
             return null;
         }
     }
 
     public byte[] getBlockBits(Long height) {
         return blocks.get(height);
+    }
+
+    public CertifiedBlock getCertifiedBlock(long height) {
+        return CertifiedBlock.newBuilder()
+                             .setBlock(getBlock(height).getBlock())
+                             .addAllCertifications(certifications(height))
+                             .build();
     }
 
     public byte[] hash(long height) {
@@ -82,25 +106,18 @@ public class Store {
         return hashes;
     }
 
-    public void put(HashKey hash, CertifiedBlock cb) {
-        long height = height(cb.getBlock());
-        put(hash, cb.getBlock());
-        ByteArrayOutputStream certs = new ByteArrayOutputStream(cb.getCertificationsCount() * 1024);
-        cb.getCertificationsList().forEach(cert -> {
-            try {
-                cert.toByteString().writeTo(certs);
-            } catch (IOException e) {
-                throw new IllegalStateException("unable to write certification for " + hash, e);
-            }
-        });
-        certifications.put(height, certs.toByteArray());
-    }
-
     public void put(HashKey h, Block block) {
         long height = height(block);
         byte[] hash = h.bytes();
         blocks.put(height, block.toByteArray());
         hashes.put(height, hash);
         hashToHeight.put(hash, height);
+    }
+
+    public void put(HashKey hash, CertifiedBlock cb) {
+        long height = height(cb.getBlock());
+        Certifications certs = Certifications.newBuilder().addAllCerts(cb.getCertificationsList()).build();
+        put(hash, cb.getBlock());
+        certifications.put(height, certs.toByteArray());
     }
 }

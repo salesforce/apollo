@@ -371,6 +371,7 @@ public class BlockScriptCommand extends ScriptBase {
                 add(comment.getCreateSQL(), false);
             }
             if (out != null) {
+                out.flush();
                 out.close();
             }
         } catch (IOException e) {

@@ -25,15 +25,15 @@ import com.salesforce.apollo.protocols.HashKey;
 
 public class Parameters {
     public static class Builder {
-        private int                  checkpointBlockSize = 8192;
-        private Function<Long, File> checkpointer        = c -> {
-                                                             throw new IllegalStateException("No checkpointer defined");
-                                                         };
-
-        private Router communications;
-
+        private int                                            checkpointBlockSize   = 8192;
+        private Function<Long, File>                           checkpointer          = c -> {
+                                                                                         throw new IllegalStateException(
+                                                                                                 "No checkpointer defined");
+                                                                                     };
+        private Router                                         communications;
         private BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
         private Context<Member>                                context;
+        private int                                             deltaCheckpointBlocks = 500;
         private TransactionExecutor                            executor              = (bh, hght, et, c) -> {
                                                                                      };
         private Message                                        genesisData;
@@ -58,7 +58,7 @@ public class Parameters {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, maxCheckpointSegments,
                     viewTimeout, submitTimeout, processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks,
-                    executor, checkpointer, storeFile, checkpointBlockSize);
+                    executor, checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize);
         }
 
         public int getCheckpointBlockSize() {
@@ -79,6 +79,10 @@ public class Parameters {
 
         public Context<Member> getContext() {
             return context;
+        }
+
+        public int getDeltaCheckpointBlocks() {
+            return deltaCheckpointBlocks;
         }
 
         public TransactionExecutor getExecutor() {
@@ -180,6 +184,11 @@ public class Parameters {
         @SuppressWarnings("unchecked")
         public Parameters.Builder setContext(Context<? extends Member> context) {
             this.context = (Context<Member>) context;
+            return this;
+        }
+
+        public Builder setDeltaCheckpointBlocks(int deltaCheckpointBlocks) {
+            this.deltaCheckpointBlocks = deltaCheckpointBlocks;
             return this;
         }
 
@@ -291,6 +300,7 @@ public class Parameters {
     public final Router                                         communications;
     public final BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
     public final Context<Member>                                context;
+    public final int                                            deltaCheckpointBlocks;
     public final TransactionExecutor                            executor;
     public final Message                                        genesisData;
     public final HashKey                                        genesisViewId;
@@ -315,8 +325,8 @@ public class Parameters {
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Duration maxBatchDelay, Duration joinTimeout, int maxCheckpointSegments, Duration viewTimeout,
             Duration submitTimeout, int processedBufferSize, Message genesisData, HashKey genesisViewId,
-            int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer, File storeFile,
-            int checkpointBlockSize) {
+            int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
+            int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -340,5 +350,6 @@ public class Parameters {
         this.maxCheckpointBlocks = maxCheckpointBlocks;
         this.maxCheckpointSegments = maxCheckpointSegments;
         this.checkpointBlockSize = checkpointBlockSize;
+        this.deltaCheckpointBlocks = deltaCheckpointBlocks;
     }
 }

@@ -85,6 +85,10 @@ message Certification {
     bytes signature = 2;
 }
 
+message Certifications {
+    repeated Certification certs = 1;
+}
+
 enum BodyType {
     GENESIS = 0;
     USER = 1;
