@@ -8,7 +8,7 @@ package com.salesforce.apollo.consortium.comms;
 
 import java.util.concurrent.ExecutionException;
 
-import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.CheckpointSync;
@@ -48,7 +48,7 @@ public class ConsortiumClientCommunications implements ConsortiumService {
     }
 
     @Override
-    public Checkpoint checkpointSync(CheckpointSync sync) {
+    public CertifiedBlock checkpointSync(CheckpointSync sync) {
         try {
             return client.checkpointSync(sync).get();
         } catch (InterruptedException e) {

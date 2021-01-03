@@ -7,7 +7,9 @@
 package com.salesforce.apollo.consortium.comms;
 
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.salesfoce.apollo.consortium.proto.BlockReplication;
+import com.salesfoce.apollo.consortium.proto.Blocks;
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.CheckpointSync;
@@ -42,7 +44,16 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     }
 
     @Override
-    public void checkpointSync(CheckpointSync request, StreamObserver<Checkpoint> responseObserver) {
+    public void fetchBlocks(BlockReplication request, StreamObserver<Blocks> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                        s -> {
+                            responseObserver.onNext(s.fetchBlocks(request, identity.getFrom()));
+                            responseObserver.onCompleted();
+                        });
+    }
+
+    @Override
+    public void checkpointSync(CheckpointSync request, StreamObserver<CertifiedBlock> responseObserver) {
         router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                         s -> {
                             responseObserver.onNext(s.checkpointSync(request, identity.getFrom()));

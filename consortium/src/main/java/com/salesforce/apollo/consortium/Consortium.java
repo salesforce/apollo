@@ -48,9 +48,10 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.BlockReplication;
+import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
@@ -99,17 +100,20 @@ public class Consortium {
 
     public class Service {
 
-        public Checkpoint checkpointSync(CheckpointSync request, HashKey from) {
+        public CertifiedBlock checkpointSync(CheckpointSync request, HashKey from) {
             Member member = getParams().context.getMember(from);
             if (member == null) {
                 log.warn("Received checkpoint sync from non member: {} on: {}", from, getMember());
-                return Checkpoint.getDefaultInstance();
+                return CertifiedBlock.getDefaultInstance();
             }
-            Checkpoint c = lastCheckpoint;
+            HashedBlock c = lastCheckpoint;
             if (c == null) {
-                return Checkpoint.getDefaultInstance();
+                return CertifiedBlock.getDefaultInstance();
             }
-            return c;
+            return CertifiedBlock.newBuilder()
+                                 .addAllCertifications(store.certifications(c.height()))
+                                 .setBlock(c.block)
+                                 .build();
         }
 
         public TransactionResult clientSubmit(SubmitTransaction request, HashKey from) {
@@ -141,6 +145,11 @@ public class Consortium {
                 return CheckpointSegments.getDefaultInstance();
             }
             return Consortium.this.fetch(request);
+        }
+
+        public Blocks fetchBlocks(BlockReplication request, HashKey from) {
+            // TODO Auto-generated method stub
+            return null;
         }
 
         public JoinResult join(Join request, HashKey fromID) {
@@ -262,28 +271,28 @@ public class Consortium {
 
     final Store store;
 
-    private final Map<Long, CheckpointState>                                                       cachedCheckpoints   = new ConcurrentHashMap<>();
+    private final Map<Long, CheckpointState>                                                       cachedCheckpoints     = new ConcurrentHashMap<>();
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private volatile HashedBlock                                                                   current;
-    private final PriorityBlockingQueue<HashedBlock>                                               deferedBlocks       = new PriorityBlockingQueue<>(
+    private final PriorityBlockingQueue<HashedBlock>                                               deferedBlocks         = new PriorityBlockingQueue<>(
             1024, (a, b) -> Long.compare(height(a.block), height(b.block)));
-    private final List<DelayedMessage>                                                             delayed             = new CopyOnWriteArrayList<>();
+    private final List<DelayedMessage>                                                             delayed               = new CopyOnWriteArrayList<>();
+    private volatile long                                                                          deltaCheckpointBlocks = Integer.MAX_VALUE;
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
-    private volatile Block                                                                         genesis;
-    private volatile Checkpoint                                                                    lastCheckpoint;
-    private volatile Reconfigure                                                                   lastViewChange;
-    private volatile long                                                                          lastViewChangeBlock = 0;
+    private volatile HashedBlock                                                                   genesis;
+    private volatile HashedBlock                                                                   lastCheckpoint;
+    private volatile HashedBlock                                                                   lastViewChange;
     private volatile Messenger                                                                     messenger;
     private volatile ViewMember                                                                    nextView;
     private volatile KeyPair                                                                       nextViewConsensusKeyPair;
     private volatile MemberOrder                                                                   order;
     private final Parameters                                                                       params;
-    private final TickScheduler                                                                    scheduler           = new TickScheduler();
-    private final AtomicBoolean                                                                    started             = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>                                               submitted           = new ConcurrentHashMap<>();
+    private final TickScheduler                                                                    scheduler             = new TickScheduler();
+    private final AtomicBoolean                                                                    started               = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted             = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final AtomicReference<ViewContext>                                                     viewContext         = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                                     viewContext           = new AtomicReference<>();
 
     public Consortium(Parameters parameters) {
         this(parameters, defaultBuilder(parameters));
@@ -307,18 +316,28 @@ public class Consortium {
         return fsm;
     }
 
-    public Block getGenesis() {
-        Block c = genesis;
+    public HashedBlock getGenesis() {
+        final HashedBlock c = genesis;
         return c;
     }
 
     public long getLastCheckpoint() {
-        Checkpoint c = lastCheckpoint;
-        return c == null ? 0 : c.getCheckpoint();
+        final HashedBlock c = lastCheckpoint;
+        return c == null ? 0 : c.height();
     }
 
-    public Reconfigure getLastViewChange() {
-        Reconfigure c = lastViewChange;
+    public HashedBlock getLastCheckpointBlock() {
+        final HashedBlock c = lastCheckpoint;
+        return c;
+    }
+
+    public long getLastViewChange() {
+        final HashedBlock c = lastViewChange;
+        return c == null ? 0 : c.height();
+    }
+
+    public HashedBlock getLastViewChangeBlock() {
+        final HashedBlock c = lastViewChange;
         return c;
     }
 
@@ -394,12 +413,8 @@ public class Consortium {
         return cb;
     }
 
-    long getLastViewChangeBlock() {
-        return lastViewChangeBlock;
-    }
-
     Messenger getMessenger() {
-        Messenger currentMsgr = messenger;
+        final Messenger currentMsgr = messenger;
         return currentMsgr;
     }
 
@@ -493,7 +508,6 @@ public class Consortium {
             log.error("skipping message publish as no messenger");
             return;
         }
-//        log.info("publish message: {} on: {}", message.getClass().getSimpleName(), getMember());
         currentMsgr.publish(message);
     }
 
@@ -509,21 +523,22 @@ public class Consortium {
         this.current = current;
     }
 
-    void setGenesis(Block genesis) {
-        this.genesis = genesis;
+    void setGenesis(HashedBlock next) {
+        final HashedBlock c = this.genesis;
+        if (c != null) {
+            log.error("Genesis block already established");
+            return;
+        }
+        this.genesis = next;
     }
 
-    void setLastCheckpoint(Checkpoint lastCheckpoint) {
-        this.lastCheckpoint = lastCheckpoint;
+    void setLastCheckpoint(HashedBlock next) {
+        this.lastCheckpoint = next;
     }
 
-    void setLastViewChange(long block, Reconfigure lastViewChange) {
-        this.lastViewChange = lastViewChange;
-        this.lastViewChangeBlock = block;
-    }
-
-    void setLastViewChangeBlock(long lastViewChangeBlock) {
-        this.lastViewChangeBlock = lastViewChangeBlock;
+    void setLastViewChange(HashedBlock block, Reconfigure view) {
+        lastViewChange = block;
+        deltaCheckpointBlocks = view.getCheckpointBlocks();
     }
 
     void setMessenger(Messenger messenger) {
@@ -615,11 +630,9 @@ public class Consortium {
     }
 
     long targetCheckpoint() {
-        Reconfigure currentView = getLastViewChange();
-        if (currentView == null) {
-            return Long.MAX_VALUE;
-        }
-        return getLastCheckpoint() + currentView.getCheckpointBlocks();
+        final long c = deltaCheckpointBlocks;
+        final HashedBlock cp = lastCheckpoint;
+        return cp == null ? c : cp.height() + c;
     }
 
     /**

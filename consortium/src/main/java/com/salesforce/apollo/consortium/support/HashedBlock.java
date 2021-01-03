@@ -7,14 +7,24 @@
 package com.salesforce.apollo.consortium.support;
 
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesforce.apollo.consortium.CollaboratorContext;
+import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
 public class HashedBlock {
     public final Block   block;
     public final HashKey hash;
 
+    public HashedBlock(Block block) {
+        this(new HashKey(Conversion.hashOf(block.toByteString())), block);
+    }
+
     public HashedBlock(HashKey hash, Block block) {
         this.hash = hash;
         this.block = block;
+    }
+
+    public long height() {
+        return CollaboratorContext.height(block);
     }
 }

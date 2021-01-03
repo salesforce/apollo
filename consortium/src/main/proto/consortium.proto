@@ -16,7 +16,17 @@ service OrderingService {
     rpc stopData(StopData) returns (google.protobuf.Empty){}
     
     rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
-    rpc checkpointSync(CheckpointSync) returns (Checkpoint) {}
+    rpc checkpointSync(CheckpointSync) returns (CertifiedBlock) {}
+    rpc fetchBlocks(BlockReplication) returns (Blocks) {}
+}
+
+message BlockReplication {
+    bytes context = 1;
+    repeated bytes blocks = 2;
+}
+
+message Blocks {
+    repeated bytes blocks = 1;
 }
 
 message CheckpointReplication {
@@ -69,13 +79,11 @@ message Block {
 message Header {
     bytes previous = 1;
     int64 height = 2;
-    google.protobuf.Timestamp timestamp = 3;
-    int64 lastCheckpoint = 4;
-    bytes lastCheckpointHash = 5;
-    int64 lastReconfig = 6;
-    bytes lastReconfigHash = 7;
-    bytes bodyHash = 8;
-    bytes nonce = 9;
+    google.protobuf.Timestamp timestamp = 3; 
+    bytes lastCheckpoint = 4; 
+    bytes lastReconfig = 5;
+    bytes bodyHash = 6;
+    bytes nonce = 7;
 }
 
 message Body {

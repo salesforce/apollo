@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.consortium.comms;
 
-import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.CheckpointSync;
@@ -21,7 +21,7 @@ import com.salesfoce.apollo.consortium.proto.TransactionResult;
  *
  */
 public interface ConsortiumService {
-    Checkpoint checkpointSync(CheckpointSync sync);
+    CertifiedBlock checkpointSync(CheckpointSync sync);
 
     TransactionResult clientSubmit(SubmitTransaction request);
 

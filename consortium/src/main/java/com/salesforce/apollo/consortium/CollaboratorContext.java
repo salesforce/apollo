@@ -506,7 +506,7 @@ public class CollaboratorContext {
         lastBlock(thisHeight);
         consortium.publish(block);
         consortium.publish(validation);
-        consortium.setLastCheckpoint(checkpoint);
+        consortium.setLastCheckpoint(new HashedBlock(hash, block));
         cancel(Timers.CHECKPOINTING);
 
         log.info("Generated next checkpoint block: {} height: {} on: {} ", hash, thisHeight, consortium.getMember());
@@ -622,7 +622,7 @@ public class CollaboratorContext {
             return;
         }
         accept(next);
-        consortium.setLastCheckpoint(body);
+        consortium.setLastCheckpoint(next);
         consortium.checkpoint(height(next.block), checkpointState);
         log.info("Processed checkpoint block: {} height: {} on: {}", hash, height(next.block), consortium.getMember());
     }
@@ -636,9 +636,9 @@ public class CollaboratorContext {
         cancelToTimers();
         toOrder.clear();
         consortium.getSubmitted().clear();
-        consortium.setGenesis(next.block);
+        consortium.setGenesis(next);
         consortium.getTransitions().genesisAccepted();
-        reconfigure(height(next.block), body.getInitialView(), true);
+        reconfigure(next, body.getInitialView(), true);
         consortium.getParams().executor.processGenesis(body.getGenesisData());
         log.info("Processed genesis block: {} on: {}", next.hash, consortium.getMember());
     }
@@ -649,7 +649,7 @@ public class CollaboratorContext {
             return;
         }
         accept(next);
-        reconfigure(height(next.block), body, false);
+        reconfigure(next, body, false);
         log.info("Processed reconfigure block: {} height: {} on: {}", next.hash, height(next.block),
                  consortium.getMember());
     }
@@ -805,11 +805,13 @@ public class CollaboratorContext {
     Block generate(byte[] previous, final long height, Body body) {
         Instant time = Instant.now();
         Timestamp timestamp = Timestamp.newBuilder().setSeconds(time.getEpochSecond()).setNanos(time.getNano()).build();
+        HashedBlock cp = consortium.getLastCheckpointBlock();
+        HashedBlock vc = consortium.getLastViewChangeBlock();
         Block block = Block.newBuilder()
                            .setHeader(Header.newBuilder()
                                             .setTimestamp(timestamp)
-                                            .setLastCheckpoint(consortium.getLastCheckpoint())
-                                            .setLastReconfig(consortium.getLastViewChangeBlock())
+                                            .setLastCheckpoint((cp == null ? HashKey.ORIGIN : cp.hash).toByteString())
+                                            .setLastReconfig((vc == null ? HashKey.ORIGIN : vc.hash).toByteString())
                                             .setPrevious(ByteString.copyFrom(previous))
                                             .setHeight(height)
                                             .setBodyHash(ByteString.copyFrom(Conversion.hashOf(body.toByteString())))
@@ -823,7 +825,7 @@ public class CollaboratorContext {
         return toOrder;
     }
 
-    void reconfigure(long block, Reconfigure view, boolean genesis) {
+    void reconfigure(HashedBlock block, Reconfigure view, boolean genesis) {
         consortium.pause();
         consortium.setLastViewChange(block, view);
         ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
