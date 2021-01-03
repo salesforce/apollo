@@ -85,6 +85,14 @@ public class Store {
         }
     }
 
+    public boolean containsBlock(long l) {
+        return blocks.containsKey(l);
+    }
+
+    public MVMap<Integer, byte[]> createCheckpoint(long blockHeight) {
+        return blocks.store.openMap(String.format(CHECKPOINT_TEMPLATE, blockHeight));
+    }
+
     public CurrentBlock getBlock(long height) {
         byte[] block = block(height);
         try {
@@ -134,7 +142,7 @@ public class Store {
         if (cp != null) {
             return cp;
         }
-        cp = blocks.store.openMap(String.format(CHECKPOINT_TEMPLATE, blockHeight));
+        cp = createCheckpoint(blockHeight);
 
         byte[] buffer = new byte[checkpoint.getSegmentSize()];
         try (FileInputStream fis = new FileInputStream(state)) {

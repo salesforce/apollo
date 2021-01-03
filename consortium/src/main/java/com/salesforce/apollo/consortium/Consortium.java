@@ -262,27 +262,28 @@ public class Consortium {
 
     final Store store;
 
-    private final Map<Long, CheckpointState>                                                       cachedCheckpoints = new ConcurrentHashMap<>();
+    private final Map<Long, CheckpointState>                                                       cachedCheckpoints   = new ConcurrentHashMap<>();
     private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
     private volatile CurrentBlock                                                                  current;
-    private final PriorityBlockingQueue<CurrentBlock>                                              deferedBlocks     = new PriorityBlockingQueue<>(
+    private final PriorityBlockingQueue<CurrentBlock>                                              deferedBlocks       = new PriorityBlockingQueue<>(
             1024, (a, b) -> Long.compare(height(a.getBlock()), height(b.getBlock())));
-    private final List<DelayedMessage>                                                             delayed           = new CopyOnWriteArrayList<>();
+    private final List<DelayedMessage>                                                             delayed             = new CopyOnWriteArrayList<>();
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
     private volatile Block                                                                         genesis;
     private volatile Checkpoint                                                                    lastCheckpoint;
     private volatile Reconfigure                                                                   lastViewChange;
+    private volatile long                                                                          lastViewChangeBlock = 0;
     private volatile Messenger                                                                     messenger;
     private volatile ViewMember                                                                    nextView;
     private volatile KeyPair                                                                       nextViewConsensusKeyPair;
     private volatile MemberOrder                                                                   order;
     private final Parameters                                                                       params;
-    private final TickScheduler                                                                    scheduler         = new TickScheduler();
-    private final AtomicBoolean                                                                    started           = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>                                               submitted         = new ConcurrentHashMap<>();
+    private final TickScheduler                                                                    scheduler           = new TickScheduler();
+    private final AtomicBoolean                                                                    started             = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted           = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final AtomicReference<ViewContext>                                                     viewContext       = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                                     viewContext         = new AtomicReference<>();
 
     public Consortium(Parameters parameters) {
         this(parameters, defaultBuilder(parameters));
@@ -391,6 +392,10 @@ public class Consortium {
     CurrentBlock getCurrent() {
         final CurrentBlock cb = current;
         return cb;
+    }
+
+    long getLastViewChangeBlock() {
+        return lastViewChangeBlock;
     }
 
     Messenger getMessenger() {
@@ -512,8 +517,13 @@ public class Consortium {
         this.lastCheckpoint = lastCheckpoint;
     }
 
-    void setLastViewChange(Reconfigure lastViewChange) {
+    void setLastViewChange(long block, Reconfigure lastViewChange) {
         this.lastViewChange = lastViewChange;
+        this.lastViewChangeBlock = block;
+    }
+
+    void setLastViewChangeBlock(long lastViewChangeBlock) {
+        this.lastViewChangeBlock = lastViewChangeBlock;
     }
 
     void setMessenger(Messenger messenger) {

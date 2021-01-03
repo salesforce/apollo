@@ -6,6 +6,7 @@ option java_outer_classname = "ConsortiumProto";
 option objc_class_prefix = "Cp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 
 package apollo.consortium;
 
@@ -68,10 +69,13 @@ message Block {
 message Header {
     bytes previous = 1;
     int64 height = 2;
-    int64 lastCheckpoint = 3;
-    int64 lastReconfig = 4;
-    bytes bodyHash = 5;
-    bytes nonce = 6;
+    google.protobuf.Timestamp timestamp = 3;
+    int64 lastCheckpoint = 4;
+    bytes lastCheckpointHash = 5;
+    int64 lastReconfig = 6;
+    bytes lastReconfigHash = 7;
+    bytes bodyHash = 8;
+    bytes nonce = 9;
 }
 
 message Body {

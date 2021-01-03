@@ -8,6 +8,10 @@ package com.salesforce.apollo.consortium.comms;
 
 import java.util.concurrent.ExecutionException;
 
+import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
+import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
+import com.salesfoce.apollo.consortium.proto.CheckpointSync;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc;
@@ -17,14 +21,13 @@ import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
-import com.salesforce.apollo.consortium.OrderingService;
 import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class ConsortiumClientCommunications implements OrderingService {
+public class ConsortiumClientCommunications implements ConsortiumService {
 
     public static CreateClientCommunications<ConsortiumClientCommunications> getCreate(ConsortiumMetrics metrics) {
         return (t, f, c) -> new ConsortiumClientCommunications(c, t, metrics);
@@ -45,9 +48,39 @@ public class ConsortiumClientCommunications implements OrderingService {
     }
 
     @Override
+    public Checkpoint checkpointSync(CheckpointSync sync) {
+        try {
+            return client.checkpointSync(sync).get();
+        } catch (InterruptedException e) {
+            throw new IllegalStateException("error communicating with: " + member, e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            throw new IllegalStateException("error communicating with: " + member, e);
+        }
+    }
+
+    @Override
     public TransactionResult clientSubmit(SubmitTransaction txn) {
         try {
             return client.submit(txn).get();
+        } catch (InterruptedException e) {
+            throw new IllegalStateException("error communicating with: " + member, e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            throw new IllegalStateException("error communicating with: " + member, e);
+        }
+    }
+
+    @Override
+    public CheckpointSegments fetch(CheckpointReplication request) {
+        try {
+            return client.fetch(request).get();
         } catch (InterruptedException e) {
             throw new IllegalStateException("error communicating with: " + member, e);
         } catch (ExecutionException e) {
