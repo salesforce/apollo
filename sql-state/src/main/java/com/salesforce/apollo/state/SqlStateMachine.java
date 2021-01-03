@@ -209,6 +209,7 @@ public class SqlStateMachine {
                 statement = connection.createStatement();
                 statement.execute(String.format("BLOCKSCRIPT BLOCKHEIGHT 1 DROP TO '%s'", temp.getAbsolutePath()));
                 statement.close();
+                connection.commit();
             } catch (SQLException e) {
                 log.error("unable to checkpoint: {}", height, e);
                 return null;
