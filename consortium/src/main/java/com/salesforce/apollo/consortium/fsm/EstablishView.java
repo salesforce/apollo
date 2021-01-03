@@ -18,7 +18,7 @@ import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.Consortium.Timers;
-import com.salesforce.apollo.consortium.support.CurrentBlock;
+import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
@@ -147,7 +147,7 @@ public enum EstablishView implements Transitions {
         }
 
         @Override
-        public Transitions processGenesis(CurrentBlock next) {
+        public Transitions processGenesis(HashedBlock next) {
             context().processGenesis(next);
             return null;
         }

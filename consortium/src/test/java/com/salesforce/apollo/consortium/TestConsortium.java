@@ -58,7 +58,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
-import com.salesforce.apollo.consortium.support.CurrentBlock;
+import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.CertWithKey;
@@ -265,7 +265,7 @@ public class TestConsortium {
             blocks.add(CertifiedBlock.newBuilder().setBlock(block).build());
             prev = new HashKey(Conversion.hashOf(block.toByteString()));
         }
-        Map<Long, CurrentBlock> cache = new HashMap<>();
+        Map<Long, HashedBlock> cache = new HashMap<>();
         assertEquals(0, CollaboratorContext.noGaps(blocks, cache).size());
         ArrayList<CertifiedBlock> gapped = new ArrayList<>(blocks);
         gapped.remove(5);
@@ -273,7 +273,7 @@ public class TestConsortium {
         assertEquals(0, CollaboratorContext.noGaps(blocks.subList(1, blocks.size()), cache).size());
         CertifiedBlock cb = blocks.get(5);
         cache.put(cb.getBlock().getHeader().getHeight(),
-                  new CurrentBlock(new HashKey(Conversion.hashOf(cb.getBlock().toByteString())), cb.getBlock()));
+                  new HashedBlock(new HashKey(Conversion.hashOf(cb.getBlock().toByteString())), cb.getBlock()));
         assertEquals(0, CollaboratorContext.noGaps(gapped, cache).size());
     }
 

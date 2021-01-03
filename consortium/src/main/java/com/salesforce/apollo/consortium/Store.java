@@ -29,7 +29,7 @@ import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.Certifications;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
-import com.salesforce.apollo.consortium.support.CurrentBlock;
+import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -93,10 +93,10 @@ public class Store {
         return blocks.store.openMap(String.format(CHECKPOINT_TEMPLATE, blockHeight));
     }
 
-    public CurrentBlock getBlock(long height) {
+    public HashedBlock getBlock(long height) {
         byte[] block = block(height);
         try {
-            return block == null ? null : new CurrentBlock(new HashKey(hash(height)), Block.parseFrom(block));
+            return block == null ? null : new HashedBlock(new HashKey(hash(height)), Block.parseFrom(block));
         } catch (InvalidProtocolBufferException e) {
             log.error("Cannot deserialize block height: {}", height, e);
             return null;
@@ -109,7 +109,7 @@ public class Store {
 
     public CertifiedBlock getCertifiedBlock(long height) {
         return CertifiedBlock.newBuilder()
-                             .setBlock(getBlock(height).getBlock())
+                             .setBlock(getBlock(height).block)
                              .addAllCertifications(certifications(height))
                              .build();
     }

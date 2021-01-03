@@ -23,7 +23,7 @@ import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.support.CurrentBlock;
+import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
@@ -166,22 +166,22 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
-    default Transitions processCheckpoint(CurrentBlock next) {
+    default Transitions processCheckpoint(HashedBlock next) {
         context().processCheckpoint(next);
         return null;
     }
 
-    default Transitions processGenesis(CurrentBlock next) {
+    default Transitions processGenesis(HashedBlock next) {
         context().processGenesis(next);
         return null;
     }
 
-    default Transitions processReconfigure(CurrentBlock next) {
+    default Transitions processReconfigure(HashedBlock next) {
         context().processReconfigure(next);
         return null;
     }
 
-    default Transitions processUser(CurrentBlock next) {
+    default Transitions processUser(HashedBlock next) {
         context().processUser(next);
         return null;
     }

@@ -9,20 +9,12 @@ package com.salesforce.apollo.consortium.support;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesforce.apollo.protocols.HashKey;
 
-public class CurrentBlock {
-    private final Block   block;
-    private final HashKey hash;
+public class HashedBlock {
+    public final Block   block;
+    public final HashKey hash;
 
-    public CurrentBlock(HashKey hash, Block block) {
+    public HashedBlock(HashKey hash, Block block) {
         this.hash = hash;
         this.block = block;
-    }
-
-    public Block getBlock() {
-        return block;
-    }
-
-    public HashKey getHash() {
-        return hash;
     }
 }
