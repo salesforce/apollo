@@ -35,8 +35,8 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public class CheckpointAssembler {
-    private static final Logger                                                 log = LoggerFactory.getLogger(CheckpointAssembler.class);
+public class Bootstrapper {
+    private static final Logger                                                 log = LoggerFactory.getLogger(Bootstrapper.class);
     private final Checkpoint                                                    checkpoint;
     private final CommonCommunications<ConsortiumClientCommunications, Service> comms;
     private final Context<Member>                                               context;
@@ -47,7 +47,7 @@ public class CheckpointAssembler {
     private final double                                                        fpr;
     private final int                                                           checkpointSpan;
 
-    public CheckpointAssembler(Member member, int sampleSize, Checkpoint checkpoint, Store store,
+    public Bootstrapper(Member member, int sampleSize, Checkpoint checkpoint, Store store,
             CommonCommunications<ConsortiumClientCommunications, Service> comms, int checkpointSpan,
             Context<Member> context, double falsePositiveRate) {
         this.member = member;
