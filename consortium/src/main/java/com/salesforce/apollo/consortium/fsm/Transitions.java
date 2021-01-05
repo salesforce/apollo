@@ -53,7 +53,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions checkpointGenerated() {
-        throw fsm().invalidTransitionOn();
+        return null;
     }
 
     default Transitions checkpointTimeout() {

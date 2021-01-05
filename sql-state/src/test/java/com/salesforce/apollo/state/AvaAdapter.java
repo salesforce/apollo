@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.consortium.CollaboratorContext.height;
-
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,7 +39,6 @@ public class AvaAdapter implements Processor {
         finalized.finalized.stream()
                            .map(f -> certifiedBlock(f))
                            .filter(cb -> cb != null)
-                           .sorted((a, b) -> Long.compare(height(a.getBlock()), height(b.getBlock())))
                            .peek(cb -> consortium.process(cb))
                            .forEach(cb -> processed.get().countDown());
     }

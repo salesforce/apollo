@@ -355,6 +355,9 @@ public class Consortium {
     }
 
     public void process(CertifiedBlock certifiedBlock) {
+        if (!started.get()) {
+            return;
+        }
         transitions.synchronizedProcess(certifiedBlock);
     }
 
@@ -371,9 +374,9 @@ public class Consortium {
         if (!started.compareAndSet(true, false)) {
             return;
         }
+        clear();
         log.info("Stopping consortium on {}", getMember());
         cachedCheckpoints.values().forEach(cp -> cp.close());
-        clear();
         fsm.getContext().clear();
         transitions.shutdown();
     }
@@ -583,7 +586,7 @@ public class Consortium {
         if (previousBlock != null) {
             HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
             long height = height(block);
-            long prevHeight = height(previousBlock.block);
+            long prevHeight = previousBlock.height();
             if (height <= prevHeight) {
                 log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
                           height, prevHeight, getMember());
@@ -592,7 +595,7 @@ public class Consortium {
             if (height != prevHeight + 1) {
                 deferedBlocks.add(new HashedBlock(hash, block));
                 log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
-                          getMember(), hash, height(previousBlock.block) + 1, block.getHeader().getHeight());
+                          getMember(), hash,  previousBlock.height() + 1, block.getHeader().getHeight());
                 return;
             }
             if (!previousBlock.hash.equals(prev)) {
@@ -839,8 +842,8 @@ public class Consortium {
     private void processDeferred() {
         HashedBlock delayed = deferedBlocks.poll();
         while (delayed != null) {
-            long height = height(delayed.block);
-            long currentHeight = height(getCurrent().block);
+            long height = delayed.height();
+            long currentHeight = getCurrent().height();
             if (height <= currentHeight) {
                 log.debug("dropping deferred block: {} height: {} <= current height: {} on: {}", delayed.hash, height,
                           currentHeight, getMember());

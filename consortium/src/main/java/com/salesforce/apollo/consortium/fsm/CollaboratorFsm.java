@@ -85,6 +85,26 @@ public enum CollaboratorFsm implements Transitions {
     INITIAL {
 
         @Override
+        public Transitions processCheckpoint(HashedBlock next) {
+            return null;
+        }
+
+        @Override
+        public Transitions processGenesis(HashedBlock next) {
+            return null;
+        }
+
+        @Override
+        public Transitions processReconfigure(HashedBlock next) {
+            return null;
+        }
+
+        @Override
+        public Transitions processUser(HashedBlock next) {
+            return null;
+        }
+
+        @Override
         public Transitions start() {
             return RECOVERING;
         }
@@ -142,12 +162,6 @@ public enum CollaboratorFsm implements Transitions {
         public void cancelBatchGeneration() {
             CollaboratorContext context = context();
             context.cancel(Timers.FLUSH_BATCH);
-        }
-
-        @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            context().deliverBlock(block, from);
-            return null;
         }
 
         @Override

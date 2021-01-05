@@ -428,7 +428,7 @@ public class CollaboratorContext {
 
     public void generateCheckpointBlock() {
         HashedBlock current = consortium.getCurrent();
-        final long currentHeight = height(current.block);
+        final long currentHeight = current.height();
         final long thisHeight = lastBlock() + 1;
 
         log.debug("Generating checkpoint block on: {} height: {} ", consortium.getMember(), currentHeight);
@@ -531,7 +531,7 @@ public class CollaboratorContext {
             return;
         }
         HashedBlock current = consortium.getCurrent();
-        currentConsensus(current != null ? height(current.block) : 0);
+        currentConsensus(current != null ? current.height(): 0);
     }
 
     public boolean isRegent(int regency) {
@@ -623,8 +623,8 @@ public class CollaboratorContext {
         }
         accept(next);
         consortium.setLastCheckpoint(next);
-        consortium.checkpoint(height(next.block), checkpointState);
-        log.info("Processed checkpoint block: {} height: {} on: {}", hash, height(next.block), consortium.getMember());
+        consortium.checkpoint(next.height(), checkpointState);
+        log.info("Processed checkpoint block: {} height: {} on: {}", hash, next.height(), consortium.getMember());
     }
 
     public void processGenesis(HashedBlock next) {
@@ -650,7 +650,7 @@ public class CollaboratorContext {
         }
         accept(next);
         reconfigure(next, body, false);
-        log.info("Processed reconfigure block: {} height: {} on: {}", next.hash, height(next.block),
+        log.info("Processed reconfigure block: {} height: {} on: {}", next.hash, next.height(),
                  consortium.getMember());
     }
 
@@ -659,7 +659,7 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
-        long height = height(next.block);
+        long height = next.height();
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
@@ -668,7 +668,7 @@ public class CollaboratorContext {
             consortium.getParams().executor.execute(next.hash, height, txn, completion);
         });
         accept(next);
-        log.info("Processed user block: {} height: {} on: {}", next.hash, height(next.block), consortium.getMember());
+        log.info("Processed user block: {} height: {} on: {}", next.hash, next.height(), consortium.getMember());
     }
 
     public void receive(ReplicateTransactions transactions, Member from) {
@@ -911,6 +911,10 @@ public class CollaboratorContext {
             }
         } else {
             File state = consortium.getParams().checkpointer.apply(body.getCheckpoint());
+            if (state == null) { 
+                log.error("Invalid checkpoint on: {}", getMember());
+                return null;
+            }
             try (FileInputStream fis = new FileInputStream(state)) {
                 stateHash = new HashKey(Conversion.hashOf(fis));
             } catch (IOException e) {
@@ -974,9 +978,10 @@ public class CollaboratorContext {
 
     private void deliverGenesisBlock(final Block block, Member from) {
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-        if (height(block) != 0) {
+        long height = height(block);
+        if (height != 0) {
             log.debug("Rejecting genesis block proposal: {} height: {} from {}, not block height 0", hash,
-                      height(block), from);
+                      height, from);
         }
 
         if (block.getBody().getType() != BodyType.GENESIS) {
@@ -998,7 +1003,7 @@ public class CollaboratorContext {
                 log.error("Cannot validate generated genesis: {} on: {}", hash, consortium.getMember());
                 return null;
             }
-            lastBlock(height(block));
+            lastBlock(height);
             consortium.setViewContext(consortium.viewContext().cloneWith(genesis.getInitialView().getViewList()));
             consortium.publish(validation);
             return CertifiedBlock.newBuilder()
@@ -1441,7 +1446,7 @@ public class CollaboratorContext {
 
     private void synchronize(Sync syncData, Member regent) {
         HashedBlock current = consortium.getCurrent();
-        final long currentHeight = current != null ? height(current.block) : -1;
+        final long currentHeight = current != null ? current.height() : -1;
         workingBlocks.clear();
         syncData.getBlocksList()
                 .stream()
@@ -1496,7 +1501,7 @@ public class CollaboratorContext {
         Checkpoint checkpoint = checkpointBody(block);
 
         HashedBlock current = consortium.getCurrent();
-        if (height(current.block) >= checkpoint.getCheckpoint()) {
+        if (current.height() >= checkpoint.getCheckpoint()) {
             if (checkpoint(checkpoint) == null) {
                 log.error("Unable to generate checkpoint: {} on {}", checkpoint.getCheckpoint(), getMember());
                 consortium.getTransitions().fail();

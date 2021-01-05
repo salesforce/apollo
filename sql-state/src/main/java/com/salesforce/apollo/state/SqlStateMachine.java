@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -160,7 +161,6 @@ public class SqlStateMachine {
     private final TxnExec        executor = new TxnExec();
     private final ForkJoinPool   fjPool;
     private final Properties     info;
-    private File                 temp;
     private final String         url;
 
     public SqlStateMachine(String url, Properties info, File checkpointDirectory) {
@@ -202,19 +202,22 @@ public class SqlStateMachine {
 
     public Function<Long, File> getCheckpointer() {
         return height -> {
+            String rndm = UUID.randomUUID().toString();
             java.sql.Statement statement;
-            temp = new File(checkpointDirectory, String.format("checkpoint-%s.sql", height));
-            temp.deleteOnExit();
+            File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
             try {
                 statement = connection.createStatement();
                 statement.execute(String.format("BLOCKSCRIPT BLOCKHEIGHT 1 DROP TO '%s'", temp.getAbsolutePath()));
                 statement.close();
-                connection.commit();
             } catch (SQLException e) {
                 log.error("unable to checkpoint: {}", height, e);
                 return null;
             }
-            File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s.sql.gzip", height));
+            if (!temp.exists()) {
+                log.error("Written file does not exist: {}", temp.getAbsolutePath());
+                return null;
+            }
+            File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s--%s.gzip", height, rndm));
             try (FileInputStream fis = new FileInputStream(temp);
                     FileOutputStream fos = new FileOutputStream(checkpoint);
                     GZIPOutputStream gzos = new GZIPOutputStream(fos);) {
@@ -231,6 +234,7 @@ public class SqlStateMachine {
             } finally {
                 temp.delete();
             }
+            assert checkpoint.exists() : "Written file does not exist: " + checkpoint.getAbsolutePath();
             return checkpoint;
         };
     }

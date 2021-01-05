@@ -333,7 +333,7 @@ public class ConsortiumTest {
                               .setMaxBatchDelay(Duration.ofMillis(500))
                               .setGossipDuration(gossipDuration)
                               .setViewTimeout(Duration.ofMillis(500))
-                              .setJoinTimeout(Duration.ofSeconds(5))
+                              .setJoinTimeout(Duration.ofSeconds(2))
                               .setDeltaCheckpointBlocks(10)
                               .setTransactonTimeout(Duration.ofSeconds(15))
                               .setExecutor(up.getExecutor())
