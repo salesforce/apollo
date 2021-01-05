@@ -59,7 +59,6 @@ import com.salesfoce.apollo.consortium.proto.CheckpointSync;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
-import com.salesfoce.apollo.consortium.proto.Persist;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
@@ -595,7 +594,7 @@ public class Consortium {
             if (height != prevHeight + 1) {
                 deferedBlocks.add(new HashedBlock(hash, block));
                 log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
-                          getMember(), hash,  previousBlock.height() + 1, block.getHeader().getHeight());
+                          getMember(), hash, previousBlock.height() + 1, block.getHeader().getHeight());
                 return;
             }
             if (!previousBlock.hash.equals(prev)) {
@@ -797,16 +796,6 @@ public class Consortium {
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid block delivered from: {} on: {}", msg.from, getMember(), e);
             }
-            return;
-        }
-        if (content.is(Persist.class)) {
-            try {
-                @SuppressWarnings("unused")
-                Persist persist = content.unpack(Persist.class);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("invalid persist delivered from: {} on: {}", msg.from, getMember(), e);
-            }
-            transitions.deliverPersist(HashKey.ORIGIN);
             return;
         }
         if (content.is(Transaction.class)) {

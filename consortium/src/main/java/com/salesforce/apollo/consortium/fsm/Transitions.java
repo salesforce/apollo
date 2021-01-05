@@ -73,10 +73,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
-    default Transitions deliverPersist(HashKey hash) {
-        throw fsm().invalidTransitionOn();
-    }
-
     default Transitions deliverStop(Stop stop, Member from) {
         CollaboratorContext context = context();
         if (stop.getNextRegent() > context.currentRegent() + 1) {

@@ -172,9 +172,6 @@ message Validate {
     bytes signature = 4;
 }
 
-message Persist {
-}
-
 message Stop { 
     int32 nextRegent = 1;
     bytes context = 2;
