@@ -24,6 +24,7 @@ import com.google.common.hash.Funnels;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
+import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.Store;
@@ -38,14 +39,14 @@ import com.salesforce.apollo.membership.Member;
 public class Bootstrapper {
     private static final Logger                                                 log = LoggerFactory.getLogger(Bootstrapper.class);
     private final Checkpoint                                                    checkpoint;
+    private final int                                                           checkpointSpan;
     private final CommonCommunications<ConsortiumClientCommunications, Service> comms;
     private final Context<Member>                                               context;
+    private final double                                                        fpr;
     private final Member                                                        member;
     private final int                                                           sampleSize;
     private final MVMap<Integer, byte[]>                                        state;
     private final Store                                                         store;
-    private final double                                                        fpr;
-    private final int                                                           checkpointSpan;
 
     public Bootstrapper(Member member, int sampleSize, Checkpoint checkpoint, Store store,
             CommonCommunications<ConsortiumClientCommunications, Service> comms, int checkpointSpan,
@@ -65,7 +66,7 @@ public class Bootstrapper {
         scheduler.schedule(() -> gossip(scheduler, duration, entropy), duration.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    private void gossip(ScheduledExecutorService scheduler, Duration gossipDuration, SecureRandom entropy) {
+    private void gossip(ScheduledExecutorService scheduler, Duration duration, SecureRandom entropy) {
         for (Member m : context.sample(sampleSize, entropy, member.getId())) {
             ConsortiumClientCommunications link = comms.apply(m, member);
             CheckpointReplication.Builder request = CheckpointReplication.newBuilder()
@@ -97,8 +98,18 @@ public class Bootstrapper {
                 continue;
             }
             request.setBlocks(ByteString.copyFrom(baos.toByteArray()));
+            try {
+                process(link.fetch(request.build()));
+            } catch (Throwable t) {
+                log.debug("Unable to fetch from: {} on: {}", m, member);
+            }
 
-            link.fetch(request.build());
         }
+        scheduler.schedule(() -> gossip(scheduler, duration, entropy), duration.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private void process(CheckpointSegments segments) {
+        // TODO Auto-generated method stub
+
     }
 }
