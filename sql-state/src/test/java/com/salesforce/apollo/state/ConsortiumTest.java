@@ -219,8 +219,8 @@ public class ConsortiumTest {
         System.out.println();
 
         long then = System.currentTimeMillis();
-        Semaphore outstanding = new Semaphore(500); // outstanding, unfinalized txns
-        int bunchCount = 10_000;
+        Semaphore outstanding = new Semaphore(1500); // outstanding, unfinalized txns
+        int bunchCount = 50_000;
         System.out.println("Submitting batches: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
@@ -328,9 +328,9 @@ public class ConsortiumTest {
                               .setContext(view)
                               .setMsgParameters(msgParameters)
                               .setMaxBatchByteSize(1024 * 1024 * 32)
-                              .setMaxBatchSize(1000)
+                              .setMaxBatchSize(100)
                               .setCommunications(communications.get(m.getId()))
-                              .setMaxBatchDelay(Duration.ofMillis(500))
+                              .setMaxBatchDelay(Duration.ofMillis(100))
                               .setGossipDuration(gossipDuration)
                               .setViewTimeout(Duration.ofMillis(500))
                               .setJoinTimeout(Duration.ofSeconds(2))

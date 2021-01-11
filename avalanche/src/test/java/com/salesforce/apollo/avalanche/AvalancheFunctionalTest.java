@@ -31,6 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.h2.mvstore.MVStore;
+import org.h2.mvstore.OffHeapStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -193,7 +195,7 @@ abstract public class AvalancheFunctionalTest {
                 + transactioneers.stream().mapToInt(e -> e.getSuccess()).sum() / (duration / 1000));
 
         System.out.println("Max tps per node: "
-                + processors.stream().mapToInt(p -> p.getAvalanche().getDag().getFinalized().size()).max().orElse(0)
+                + processors.stream().mapToInt(p -> p.getAvalanche().getDag().getFinalizedCount()).max().orElse(0)
                         / (duration / 1000));
         processors.forEach(p -> summary(p.getAvalanche()));
 
@@ -228,8 +230,7 @@ abstract public class AvalancheFunctionalTest {
     }
 
     private TimedProcessor createAva(Node m, Context<Node> context, AtomicBoolean frist, ForkJoinPool fjPool) {
-        AvalancheParameters aParams = new AvalancheParameters();
-        aParams.dagWood.maxCache = 1_000_000;
+        AvalancheParameters aParams = new AvalancheParameters(); 
 
         // Avalanche protocol parameters
         aParams.core.alpha = 0.6;
@@ -249,8 +250,9 @@ abstract public class AvalancheFunctionalTest {
         AvaMetrics avaMetrics = new AvaMetrics(frist.get() ? node0registry : registry);
         frist.set(false);
         TimedProcessor processor = new TimedProcessor();
+        MVStore s = new MVStore.Builder().open();
         Avalanche avalanche = new Avalanche(m, context, entropy, communications.get(m.getId()), aParams, avaMetrics,
-                processor, fjPool);
+                processor, fjPool, s);
         processor.setAvalanche(avalanche);
         return processor;
     }
@@ -279,7 +281,7 @@ abstract public class AvalancheFunctionalTest {
     private void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
 
-        Integer finalized = node.getDag().getFinalized().size();
+        Integer finalized = node.getDag().getFinalizedCount();
         Integer unfinalizedUser = node.getDag()
                                       .getUnfinalized()
                                       .values()

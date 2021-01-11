@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -34,6 +35,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.h2.mvstore.MVMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -371,7 +373,7 @@ public class WorkingSet {
 
         @Override
         public void snip() {
-            finalized.put(key, getEntry());
+            finalized.put(key, getEntry().toByteArray());
             unfinalized.remove(key);
             List<Node> deps;
             synchronized (this) {
@@ -737,7 +739,7 @@ public class WorkingSet {
     private static final ArrayList<Node> EMPTY_ARRAY_LIST     = new ArrayList<>();
 
     private final Map<HashKey, ConflictSet> conflictSets = new ConcurrentHashMap<>();
-    private final DagWood                   finalized;
+    private final MVMap<HashKey, byte[]>    finalized;
     private final ReentrantLock             lock         = new ReentrantLock(true);
     private final AvalancheMetrics          metrics;
     private final AvalancheParameters       parameters;
@@ -746,15 +748,16 @@ public class WorkingSet {
     private final Set<HashKey>              unknown      = newKeySet();
     private final BlockingDeque<HashKey>    unqueried    = new LinkedBlockingDeque<>();
 
-    public WorkingSet(Processor processor, AvalancheParameters parameters, DagWood wood, AvalancheMetrics metrics) {
+    public WorkingSet(Processor processor, AvalancheParameters parameters, MVMap<HashKey, byte[]> wood,
+            AvalancheMetrics metrics) {
         this.parameters = parameters;
         finalized = wood;
         this.metrics = metrics;
         this.processor = processor;
     }
-
-    public List<HashKey> allFinalized() {
-        return finalized.allFinalized();
+    
+    public Iterator<HashKey> allFinalized() {
+        return finalized.keyIterator(HashKey.ORIGIN);
     }
 
     public Collection<HashKey> finalized() {
@@ -839,8 +842,8 @@ public class WorkingSet {
         }).filter(n -> n != null).collect(Collectors.toList());
     }
 
-    public DagWood getFinalized() {
-        return finalized;
+    public int getFinalizedCount() {
+        return finalized.size();
     }
 
     public AvalancheParameters getParameters() {
@@ -906,20 +909,20 @@ public class WorkingSet {
         return finalized.containsKey(key);
     }
 
-    public Boolean isStronglyPreferred(HashKey key) {
-        return isStronglyPreferred(Collections.singletonList(key)).get(0);
-    }
-
     public Boolean isNoOp(HashKey key) {
         Node node = unfinalized.get(key);
         return node == null ? null : node.isNoOp();
+    }
+
+    public Boolean isStronglyPreferred(HashKey key) {
+        return isStronglyPreferred(Collections.singletonList(key)).get(0);
     }
 
     public List<Boolean> isStronglyPreferred(List<HashKey> keys) {
         return keys.stream().map((Function<? super HashKey, ? extends Boolean>) key -> {
             Node node = unfinalized.get(key);
             if (node == null) {
-                final Boolean isFinalized = finalized.cacheContainsKey(key) ? true : null;
+                final Boolean isFinalized = finalized.containsKey(key) ? true : null;
                 if (isFinalized == null) {
                     unknown.add(key);
                 }

@@ -28,6 +28,7 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
+import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,7 +67,7 @@ public class TransactionsTest {
     public void before() throws Exception {
         entropy = new Random(0x1638);
         parameters = new AvalancheParameters();
-        dag = new WorkingSet(new NullProcessor(), parameters, new DagWood(parameters.dagWood), null);
+        dag = new WorkingSet(new NullProcessor(), parameters, new MVStore.Builder().open().openMap("test2"), null);
         root = dag("Ye root".getBytes());
         rootKey = dag.insert(root, 0);
         assertNotNull(rootKey);

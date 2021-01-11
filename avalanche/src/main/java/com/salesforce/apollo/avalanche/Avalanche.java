@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.avalanche;
 
+import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -30,6 +31,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import org.h2.mvstore.MVMap;
+import org.h2.mvstore.MVStore;
+import org.h2.mvstore.WriteBuffer;
+import org.h2.mvstore.type.DataType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +66,91 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 220
  */
 public class Avalanche {
+
+    public static class BytesType implements DataType {
+
+        public static final BytesType INSTANCE = new BytesType();
+
+        @Override
+        public int compare(Object a, Object b) {
+            return HashKey.compare(((byte[]) a), ((byte[]) b));
+        }
+
+        @Override
+        public int getMemory(Object obj) {
+            return HashKey.BYTE_SIZE;
+        }
+
+        @Override
+        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
+            for (int i = 0; i < len; i++) {
+                obj[i] = read(buff);
+            }
+        }
+
+        @Override
+        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
+            for (int i = 0; i < len; i++) {
+                write(buff, obj[i]);
+            }
+        }
+
+        @Override
+        public byte[] read(ByteBuffer buff) {
+            byte[] bytes = new byte[buff.getInt()];
+            buff.get(bytes);
+            return bytes;
+        }
+
+        @Override
+        public void write(WriteBuffer buff, Object obj) {
+            byte[] bytes = (byte[]) obj;
+            buff.putInt(bytes.length);
+            buff.put(bytes);
+        }
+
+    }
+
+    public static class HashKeyType implements DataType {
+
+        public static final HashKeyType INSTANCE = new HashKeyType();
+
+        @Override
+        public int compare(Object a, Object b) {
+            return ((HashKey) a).compareTo(((HashKey) b));
+        }
+
+        @Override
+        public int getMemory(Object obj) {
+            return HashKey.BYTE_SIZE;
+        }
+
+        @Override
+        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
+            for (int i = 0; i < len; i++) {
+                obj[i] = read(buff);
+            }
+        }
+
+        @Override
+        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
+            for (int i = 0; i < len; i++) {
+                write(buff, obj[i]);
+            }
+        }
+
+        @Override
+        public HashKey read(ByteBuffer buff) {
+            return new HashKey(new long[] { buff.getLong(), buff.getLong(), buff.getLong(), buff.getLong() });
+        }
+
+        @Override
+        public void write(WriteBuffer buff, Object obj) {
+            for (long l : ((HashKey) obj).longs()) {
+                buff.putLong(l);
+            }
+        }
+    }
 
     public static class Finalized {
         public final DagEntry entry;
@@ -118,7 +208,8 @@ public class Avalanche {
         }
     }
 
-    private final static Logger log = LoggerFactory.getLogger(Avalanche.class);
+    private final static Logger log                = LoggerFactory.getLogger(Avalanche.class);
+    private final static String STORE_MAP_TEMPLATE = "%s-%s-blocks";
 
     private final CommonCommunications<AvalancheClientCommunications, Service> comm;
     private com.salesforce.apollo.membership.Context<? extends Member>         context;
@@ -139,12 +230,12 @@ public class Avalanche {
     private final Service                                                      service      = new Service();
 
     public Avalanche(Node node, Context<? extends Member> context, SecureRandom entropy, Router communications,
-            AvalancheParameters p, AvalancheMetrics metrics, Processor processor) {
-        this(node, context, entropy, communications, p, metrics, processor, ForkJoinPool.commonPool());
+            AvalancheParameters p, AvalancheMetrics metrics, Processor processor, MVStore store) {
+        this(node, context, entropy, communications, p, metrics, processor, ForkJoinPool.commonPool(), store);
     }
 
     public Avalanche(Node node, Context<? extends Member> context, SecureRandom entropy, Router communications,
-            AvalancheParameters p, AvalancheMetrics metrics, Processor processor, ForkJoinPool fjPool) {
+            AvalancheParameters p, AvalancheMetrics metrics, Processor processor, ForkJoinPool fjPool, MVStore store) {
         this.metrics = metrics;
         parameters = p;
         this.node = node;
@@ -155,7 +246,12 @@ public class Avalanche {
                                           r -> new AvalancheServerCommunications(
                                                   communications.getClientIdentityProvider(), metrics, r),
                                           AvalancheClientCommunications.getCreate(metrics));
-        this.dag = new WorkingSet(processor, parameters, new DagWood(parameters.dagWood), metrics);
+        DataType vB = null;
+        MVMap.Builder<HashKey, byte[]> builder = new MVMap.Builder<HashKey, byte[]>().keyType(HashKeyType.INSTANCE)
+                                                                                     .valueType(vB);
+
+        this.dag = new WorkingSet(processor, parameters,
+                store.openMap(String.format(STORE_MAP_TEMPLATE, node.getId(), context.getId()), builder), metrics);
 
         required = (int) (parameters.core.k * parameters.core.alpha);
         invalidThreshold = parameters.core.k - required - 1;
@@ -163,14 +259,14 @@ public class Avalanche {
     }
 
     public Avalanche(View view, Router communications, AvalancheParameters p, AvalancheMetrics metrics,
-            Processor processor, ForkJoinPool fjPool) {
+            Processor processor, ForkJoinPool fjPool, MVStore store) {
         this(view.getNode(), view.getContext(), view.getParameters().entropy, communications, p, metrics, processor,
-                fjPool);
+                fjPool, store);
     }
 
-    public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor,
-            ForkJoinPool fjPool) {
-        this(view, communications, p, null, processor, fjPool);
+    public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor, ForkJoinPool fjPool,
+            MVStore store) {
+        this(view, communications, p, null, processor, fjPool, store);
     }
 
     public WorkingSet getDag() {

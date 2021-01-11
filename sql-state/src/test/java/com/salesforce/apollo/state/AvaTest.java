@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -310,7 +311,6 @@ public class AvaTest {
     private void gatherAvalanche(Context<Member> view, Map<Member, AvaAdapter> adapters) {
         members.forEach(node -> {
             AvalancheParameters aParams = new AvalancheParameters();
-            aParams.dagWood.maxCache = 1_000_000;
 
             // Avalanche protocol parameters
             aParams.core.alpha = 0.6;
@@ -328,8 +328,8 @@ public class AvaTest {
             aParams.noOpQueryFactor = 40;
 
             AvaAdapter adapter = adapters.get(node);
-            Avalanche ava = new Avalanche(node, view, entropy, communications.get(node.getId()), aParams, null,
-                    adapter);
+            Avalanche ava = new Avalanche(node, view, entropy, communications.get(node.getId()), aParams, null, adapter,
+                    new MVStore.Builder().open());
             adapter.setAva(ava);
             avas.put(node, ava);
         });

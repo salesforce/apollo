@@ -42,7 +42,7 @@ public class TestApollo {
     public static void summarize(List<Apollo> nodes) {
         int finalized = nodes.stream()
                              .map(a -> a.getAvalanche())
-                             .map(n -> n.getDag().getFinalized().size())
+                             .map(n -> n.getDag().getFinalizedCount())
                              .reduce(0, (a, b) -> a + b);
         System.out.println("Total finalized : " + finalized);
         System.out.println();
@@ -51,7 +51,7 @@ public class TestApollo {
     public static void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
 
-        Integer finalized = node.getDag().getFinalized().size();
+        Integer finalized = node.getDag().getFinalizedCount();
         Integer unfinalizedUser = node.getDag()
                                       .getUnfinalized()
                                       .values()

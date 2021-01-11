@@ -7,7 +7,7 @@
 
 package com.salesforce.apollo.avalanche;
 
-import java.util.List;
+import java.util.Iterator;
 
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.protocols.HashKey;
@@ -32,7 +32,7 @@ public class DagDao {
         return dag.isFinalized(hash);
     }
 
-    public List<HashKey> allFinalized() {
+    public Iterator<HashKey> allFinalized() {
         return dag.allFinalized();
     }
 
