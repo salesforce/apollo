@@ -6,9 +6,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -18,16 +15,10 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.zip.DeflaterOutputStream;
 
-import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.parser.SqlParser;
-import org.apache.calcite.sql.parser.SqlParser.Config;
-import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
-import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.h2.engine.Session;
 import org.h2.jdbc.JdbcConnection;
 import org.junit.jupiter.api.Test;
 
-import com.google.common.io.CharStreams;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -104,25 +95,6 @@ public class SmokeTest {
         HashKey hash2 = new HashKey(Conversion.hashOf(new FileInputStream(chkpnt2zip)));
 
         assertEquals(hash1, hash2);
-    }
-
-    @Test
-    public void smokin() throws Exception {
-        Config sqlParserConfig = SqlParser.configBuilder()
-                                          .setParserFactory(SqlDdlParserImpl.FACTORY)
-                                          .setConformance(SqlConformanceEnum.BABEL)
-                                          .build();
-
-        InputStream is = getClass().getResourceAsStream("/sql/smoke.sql");
-        String sql = null;
-        try (Reader reader = new InputStreamReader(is)) {
-            sql = CharStreams.toString(reader);
-        }
-
-        SqlParser parser = SqlParser.create(sql, sqlParserConfig);
-
-        SqlNode exp = parser.parseStmtList();
-        System.out.println(exp);
     }
 
     private Statement createAndInsert(Connection connection) throws SQLException {
