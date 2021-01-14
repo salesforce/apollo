@@ -43,6 +43,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
+import com.salesforce.apollo.avalanche.Avalanche.PreferredResult;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -755,7 +756,7 @@ public class WorkingSet {
         this.metrics = metrics;
         this.processor = processor;
     }
-    
+
     public Iterator<HashKey> allFinalized() {
         return finalized.keyIterator(HashKey.ORIGIN);
     }
@@ -914,21 +915,22 @@ public class WorkingSet {
         return node == null ? null : node.isNoOp();
     }
 
-    public Boolean isStronglyPreferred(HashKey key) {
+    public PreferredResult isStronglyPreferred(HashKey key) {
         return isStronglyPreferred(Collections.singletonList(key)).get(0);
     }
 
-    public List<Boolean> isStronglyPreferred(List<HashKey> keys) {
-        return keys.stream().map((Function<? super HashKey, ? extends Boolean>) key -> {
+    public List<PreferredResult> isStronglyPreferred(List<HashKey> keys) {
+        return keys.stream().map((Function<? super HashKey, PreferredResult>) key -> {
             Node node = unfinalized.get(key);
             if (node == null) {
                 final Boolean isFinalized = finalized.containsKey(key) ? true : null;
                 if (isFinalized == null) {
                     unknown.add(key);
+                    return PreferredResult.UNRESOLVED;
                 }
-                return isFinalized;
+                return isFinalized ? PreferredResult.TRUE : PreferredResult.UNKNOWN;
             }
-            return node.isStronglyPreferred();
+            return node.isStronglyPreferred() ? PreferredResult.TRUE : PreferredResult.FALSE;
 
         }).collect(Collectors.toList());
 
