@@ -27,13 +27,11 @@ public class AvaMetrics implements AvalancheMetrics {
     private final Meter         inboundQueryRate;
     private final Timer         inboundQueryTimer;
     private final Meter         inboundQueryUnknownRate;
-    private final Histogram     inboundRequery;
     private final Histogram     inboundRequestDag;
     private final Meter         inputRate;
     private final Meter         noOpGeneration;
     private final Meter         outboundBandwidth;
     private final Histogram     outboundQuery;
-    private final Histogram     outboundRequery;
     private final Histogram     outboundRequestDag;
     private final Meter         preferRate;
     private final Timer         preferTimer;
@@ -99,10 +97,8 @@ public class AvaMetrics implements AvalancheMetrics {
         });
 
         inboundQuery = registry.histogram("Inbound Query Bytes");
-        inboundRequery = registry.histogram("Inbound Requery Bytes");
         inboundRequestDag = registry.histogram("Inbound Request DAG Bytes");
         outboundQuery = registry.histogram("Outbound Query Bytes");
-        outboundRequery = registry.histogram("Outbound Requery Bytes");
         outboundRequestDag = registry.histogram("Outbound Request DAG Bytes");
         queryReply = registry.histogram("Outbound Query Reply Bytes");
         queryResponse = registry.histogram("Inbound Query Response Bytes");
@@ -221,11 +217,6 @@ public class AvaMetrics implements AvalancheMetrics {
     }
 
     @Override
-    public Histogram inboundRequery() {
-        return inboundRequery;
-    }
-
-    @Override
     public Histogram inboundRequestDag() {
         return inboundRequestDag;
     }
@@ -238,11 +229,6 @@ public class AvaMetrics implements AvalancheMetrics {
     @Override
     public Histogram outboundQuery() {
         return outboundQuery;
-    }
-
-    @Override
-    public Histogram outboundRequery() {
-        return outboundRequery;
     }
 
     @Override

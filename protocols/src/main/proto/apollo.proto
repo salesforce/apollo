@@ -65,8 +65,6 @@ service Avalanche {
      */
     rpc query (Query) returns (QueryResult) {}
     
-    rpc requery (ReQuery) returns (QueryResult) {}
-    
     /**
      * parent gossip
      */
@@ -115,13 +113,8 @@ message Intervals {
 
 message Query {
     ID context = 1;
-    repeated ID transactions = 2;
-    repeated ID wanted = 3;
-}
-
-message ReQuery {
-    ID context = 1;
     repeated bytes transactions = 2;
+    repeated ID wanted = 3;
 }
 
 message Get {
@@ -230,7 +223,6 @@ message QueryResult {
     } 
     repeated Vote result = 1;
     repeated bytes wanted = 2;
-    repeated ID unresolved = 3;
 }
 
 message ID {

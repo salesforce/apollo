@@ -14,7 +14,6 @@ import com.salesfoce.apollo.proto.AvalancheGrpc.AvalancheImplBase;
 import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.QueryResult;
-import com.salesfoce.apollo.proto.ReQuery;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.Avalanche.Service;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
@@ -55,21 +54,6 @@ public class AvalancheServerCommunications extends AvalancheImplBase {
                 metrics.inboundBandwidth().mark(request.getSerializedSize());
                 metrics.outboundBandwidth().mark(result.getSerializedSize());
                 metrics.inboundQuery().update(request.getSerializedSize());
-                metrics.queryReply().update(result.getSerializedSize());
-            }
-        });
-    }
-
-    @Override
-    public void requery(ReQuery request, StreamObserver<QueryResult> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
-            QueryResult result = s.requery(request.getTransactionsList());
-            responseObserver.onNext(result);
-            responseObserver.onCompleted();
-            if (metrics != null) {
-                metrics.inboundBandwidth().mark(request.getSerializedSize());
-                metrics.outboundBandwidth().mark(result.getSerializedSize());
-                metrics.inboundRequery().update(request.getSerializedSize());
                 metrics.queryReply().update(result.getSerializedSize());
             }
         });

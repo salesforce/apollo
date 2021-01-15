@@ -13,11 +13,9 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.AvalancheGrpc;
 import com.salesfoce.apollo.proto.AvalancheGrpc.AvalancheBlockingStub;
 import com.salesfoce.apollo.proto.DagNodes;
-import com.salesfoce.apollo.proto.ID;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.Query.Builder;
 import com.salesfoce.apollo.proto.QueryResult;
-import com.salesfoce.apollo.proto.ReQuery;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
@@ -55,9 +53,9 @@ public class AvalancheClientCommunications implements Avalanche {
     }
 
     @Override
-    public QueryResult query(HashKey context, List<ID> transactions, Collection<HashKey> wanted) {
+    public QueryResult query(HashKey context, List<ByteString> transactions, Collection<HashKey> wanted) {
         Builder builder = Query.newBuilder().setContext(context.toID());
-        transactions.stream().forEach(e -> builder.addTransactions(e));
+        transactions.stream().filter(e -> e.size() > 0).forEach(e -> builder.addTransactions(e));
         wanted.forEach(e -> builder.addWanted(e.toID()));
         try {
             Query query = builder.build();
@@ -100,24 +98,5 @@ public class AvalancheClientCommunications implements Avalanche {
     @Override
     public String toString() {
         return String.format("->[%s]", member);
-    }
-
-    @Override
-    public QueryResult requery(HashKey context, List<ByteString> transactions) {
-        ReQuery.Builder builder = ReQuery.newBuilder().setContext(context.toID());
-        transactions.stream().forEach(e -> builder.addTransactions(e));
-        try {
-            ReQuery query = builder.build();
-            QueryResult result = client.requery(query);
-            if (metrics != null) {
-                metrics.outboundBandwidth().mark(query.getSerializedSize());
-                metrics.inboundBandwidth().mark(result.getSerializedSize());
-                metrics.outboundRequery().update(query.getSerializedSize());
-                metrics.queryResponse().update(result.getSerializedSize());
-            }
-            return result;
-        } catch (Throwable e) {
-            throw new IllegalStateException("Unexpected exception in communication", e);
-        }
     }
 }

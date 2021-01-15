@@ -43,7 +43,6 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
-import com.salesforce.apollo.avalanche.Avalanche.PreferredResult;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -641,7 +640,7 @@ public class WorkingSet {
 
         @Override
         public Boolean isStronglyPreferred() {
-            log.trace("{} failed to strongly prefer because querying unknown", key);
+            log.info("{} failed to strongly prefer because querying unknown", key);
             return null;
         }
 
@@ -756,7 +755,7 @@ public class WorkingSet {
         this.metrics = metrics;
         this.processor = processor;
     }
-
+    
     public Iterator<HashKey> allFinalized() {
         return finalized.keyIterator(HashKey.ORIGIN);
     }
@@ -915,24 +914,21 @@ public class WorkingSet {
         return node == null ? null : node.isNoOp();
     }
 
-    public PreferredResult isStronglyPreferred(HashKey key) {
+    public Boolean isStronglyPreferred(HashKey key) {
         return isStronglyPreferred(Collections.singletonList(key)).get(0);
     }
 
-    public List<PreferredResult> isStronglyPreferred(List<HashKey> keys) {
-        return keys.stream().map((Function<? super HashKey, PreferredResult>) key -> {
+    public List<Boolean> isStronglyPreferred(List<HashKey> keys) {
+        return keys.stream().map((Function<? super HashKey, ? extends Boolean>) key -> {
             Node node = unfinalized.get(key);
             if (node == null) {
                 final Boolean isFinalized = finalized.containsKey(key) ? true : null;
                 if (isFinalized == null) {
                     unknown.add(key);
-                    return PreferredResult.UNRESOLVED;
                 }
-                return isFinalized ? PreferredResult.TRUE : PreferredResult.UNKNOWN;
+                return isFinalized;
             }
-            Boolean stronglyPreferred = node.isStronglyPreferred();
-            return stronglyPreferred == null ? PreferredResult.UNRESOLVED : stronglyPreferred ? PreferredResult.TRUE
-                                     : PreferredResult.FALSE;
+            return node.isStronglyPreferred();
 
         }).collect(Collectors.toList());
 

@@ -10,7 +10,6 @@ import java.util.Collection;
 import java.util.List;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.ID;
 import com.salesfoce.apollo.proto.QueryResult;
 
 /**
@@ -19,9 +18,7 @@ import com.salesfoce.apollo.proto.QueryResult;
  */
 public interface Avalanche {
 
-    QueryResult query(HashKey context, List<ID> transactions, Collection<HashKey> wanted);
-
-    QueryResult requery(HashKey context, List<ByteString> transactions);
+    QueryResult query(HashKey context, List<ByteString> transactions, Collection<HashKey> wanted);
 
     List<ByteString> requestDAG(HashKey context, Collection<HashKey> want);
 
