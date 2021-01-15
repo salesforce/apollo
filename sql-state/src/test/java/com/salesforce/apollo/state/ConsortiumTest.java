@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
@@ -224,7 +225,8 @@ public class ConsortiumTest {
         System.out.println("Submitting batches: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
-        IntStream.range(0, bunchCount).forEach(i -> {
+        Executor exec = Executors.newFixedThreadPool(4);
+        IntStream.range(0, bunchCount).parallel().forEach(i -> exec.execute(() -> {
             try {
                 outstanding.acquire();
             } catch (InterruptedException e1) {
@@ -281,7 +283,7 @@ public class ConsortiumTest {
                 fail();
                 return;
             }
-        });
+        }));
 
         System.out.println("Awaiting " + bunchCount + " batches");
         boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
@@ -313,11 +315,12 @@ public class ConsortiumTest {
                                   Messenger.Parameters msgParameters) {
         AtomicBoolean frist = new AtomicBoolean(true);
         members.stream().map(m -> {
+            ForkJoinPool fj = new ForkJoinPool(2);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             frist.set(false);
             System.out.println("DB URL: " + url);
             SqlStateMachine up = new SqlStateMachine(url, new Properties(),
-                    new File(checkpointDirBase, m.getId().toString()));
+                    new File(checkpointDirBase, m.getId().toString()), fj);
             updaters.put(m, up);
             Consortium c = new Consortium(
                     Parameters.newBuilder()
@@ -328,9 +331,9 @@ public class ConsortiumTest {
                               .setContext(view)
                               .setMsgParameters(msgParameters)
                               .setMaxBatchByteSize(1024 * 1024 * 32)
-                              .setMaxBatchSize(100)
+                              .setMaxBatchSize(1000)
                               .setCommunications(communications.get(m.getId()))
-                              .setMaxBatchDelay(Duration.ofMillis(100))
+                              .setMaxBatchDelay(Duration.ofMillis(500))
                               .setGossipDuration(gossipDuration)
                               .setViewTimeout(Duration.ofMillis(500))
                               .setJoinTimeout(Duration.ofSeconds(2))

@@ -23,6 +23,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
@@ -115,7 +116,7 @@ public class CollaboratorContext {
     private final AtomicLong                           currentConsensus  = new AtomicLong(-1);
     private final AtomicInteger                        currentRegent     = new AtomicInteger(0);
     private final Map<Integer, Map<Member, StopData>>  data              = new ConcurrentHashMap<>();
-    private final AtomicLong                           lastBlock         = new AtomicLong(-1);
+    private final AtomicReference<HashedBlock>         lastBlock         = new AtomicReference<>();
     private final AtomicInteger                        nextRegent        = new AtomicInteger(-1);
     private final ProcessedBuffer                      processed;
     private final Set<EnqueuedTransaction>             stopMessages      = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -460,7 +461,8 @@ public class CollaboratorContext {
                                                                   .collect(Collectors.toList()))
                                           .build();
 
-        byte[] previous = store().hash(lastBlock());
+        HashedBlock lb = lastBlock.get();
+        byte[] previous = lb == null ? null : lb.hash.bytes();
         if (previous == null) {
             log.error("Cannot generate checkpoint block on: {} height: {} no previous block: {}",
                       consortium.getMember(), currentHeight, lastBlock());
@@ -486,7 +488,7 @@ public class CollaboratorContext {
                                                .setId(validation.getId())
                                                .setSignature(validation.getSignature()));
         store().put(hash, block);
-        lastBlock(thisHeight);
+        lastBlock(new HashedBlock(hash, block));
         consortium.publish(block);
         consortium.publish(validation);
         consortium.setLastCheckpoint(new HashedBlock(hash, block));
@@ -779,7 +781,7 @@ public class CollaboratorContext {
         timers.clear();
         cancelToTimers();
         toOrder.clear();
-        lastBlock(-1);
+        lastBlock(null);
         consortium.getScheduler().cancelAll();
         workingBlocks.clear();
     }
@@ -966,7 +968,7 @@ public class CollaboratorContext {
                 log.error("Cannot validate generated genesis: {} on: {}", hash, consortium.getMember());
                 return null;
             }
-            lastBlock(height);
+            lastBlock(new HashedBlock(block));
             consortium.setViewContext(consortium.viewContext().cloneWith(genesis.getInitialView().getViewList()));
             consortium.publish(validation);
             return CertifiedBlock.newBuilder()
@@ -1068,7 +1070,7 @@ public class CollaboratorContext {
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
         log.info("Genesis block: {} generated on {}", hash, consortium.getMember());
         workingBlocks.computeIfAbsent(hash, k -> {
-            lastBlock(0);
+            lastBlock(new HashedBlock(hash, block));
             Validate validation = consortium.viewContext().generateValidation(hash, block);
             if (validation == null) {
                 log.error("Cannot validate generated genesis block: {} on: {}", hash, consortium.getMember());
@@ -1104,7 +1106,8 @@ public class CollaboratorContext {
     private boolean generateNextBlock() {
         final long currentHeight = lastBlock();
         final long thisHeight = currentHeight + 1;
-        byte[] curr = store().hash(currentHeight);
+        HashedBlock lb = lastBlock.get();
+        byte[] curr = lb == null ? null : lb.hash.bytes();
         if (curr == null) {
             log.debug("Cannot generate next block: {} on: {}, as previous block for height: {} not found", thisHeight,
                       consortium.getMember(), currentHeight);
@@ -1146,7 +1149,7 @@ public class CollaboratorContext {
                                                .setId(validation.getId())
                                                .setSignature(validation.getSignature()));
         store().put(hash, block);
-        lastBlock(thisHeight);
+        lastBlock(new HashedBlock(hash, block));
         consortium.publish(block);
         consortium.publish(validation);
 
@@ -1207,11 +1210,12 @@ public class CollaboratorContext {
     }
 
     private long lastBlock() {
-        return lastBlock.get();
+        HashedBlock lb = lastBlock.get();
+        return lb == null ? -1 : lb.height();
     }
 
-    private void lastBlock(long l) {
-        lastBlock.set(l);
+    private void lastBlock(HashedBlock block) {
+        lastBlock.set(block);
     }
 
     private boolean needCheckpoint() {
@@ -1435,7 +1439,7 @@ public class CollaboratorContext {
                     HashKey hash = new HashKey(Conversion.hashOf(cb.getBlock().toByteString()));
                     workingBlocks.put(hash, cb.toBuilder());
                     store().put(hash, cb);
-                    lastBlock(height(cb));
+                    lastBlock(new HashedBlock(hash, cb.getBlock()));
                     processToOrder(cb.getBlock());
                 });
         log.debug("Synchronized from: {} to: {} working blocks: {} on: {}", currentHeight, lastBlock(),

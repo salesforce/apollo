@@ -25,6 +25,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -340,11 +341,12 @@ public class AvaTest {
                                                      Messenger.Parameters msgParameters) {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
+            ForkJoinPool fj = new ForkJoinPool();
             AvaAdapter adapter = new AvaAdapter(processed);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);
             SqlStateMachine up = new SqlStateMachine(url, new Properties(),
-                    new File(checkpointDirBase, m.getId().toString()));
+                    new File(checkpointDirBase, m.getId().toString()), fj);
             updaters.put(m, up);
             Consortium c = new Consortium(
                     Parameters.newBuilder()

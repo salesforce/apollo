@@ -292,7 +292,7 @@ public class Avalanche {
         comm.register(context.getId(), service);
         queryRounds.set(0);
 
-        queryFuture = timer.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
+        queryFuture = timer.schedule(() -> fjPool.execute(() -> {
             if (running.get()) {
                 round(timer, period);
             }
@@ -637,7 +637,7 @@ public class Avalanche {
         } catch (Throwable t) {
             log.error("Error performing Avalanche batch round", t);
         } finally {
-            queryFuture = timer.schedule(() -> ForkJoinPool.commonPool().execute(() -> {
+            queryFuture = timer.schedule(() -> fjPool.execute(() -> {
                 if (running.get()) {
                     round(timer, period);
                 }
