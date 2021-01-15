@@ -230,7 +230,7 @@ message QueryResult {
     } 
     repeated Vote result = 1;
     repeated bytes wanted = 2;
-    repeated ID unknown = 3;
+    repeated ID unresolved = 3;
 }
 
 message ID {

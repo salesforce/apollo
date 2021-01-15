@@ -69,7 +69,7 @@ public class AvalancheServerCommunications extends AvalancheImplBase {
             if (metrics != null) {
                 metrics.inboundBandwidth().mark(request.getSerializedSize());
                 metrics.outboundBandwidth().mark(result.getSerializedSize());
-                metrics.inboundQuery().update(request.getSerializedSize());
+                metrics.inboundRequery().update(request.getSerializedSize());
                 metrics.queryReply().update(result.getSerializedSize());
             }
         });

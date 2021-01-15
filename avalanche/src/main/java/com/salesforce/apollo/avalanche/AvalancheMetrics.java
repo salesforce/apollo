@@ -82,4 +82,8 @@ public interface AvalancheMetrics extends BandwidthMetrics {
     Histogram requestDagReply();
 
     Histogram requestDagResponse();
+
+    Histogram inboundRequery();
+
+    Histogram outboundRequery();
 }

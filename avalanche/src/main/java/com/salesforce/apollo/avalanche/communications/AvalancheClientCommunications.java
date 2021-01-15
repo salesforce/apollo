@@ -112,7 +112,7 @@ public class AvalancheClientCommunications implements Avalanche {
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(query.getSerializedSize());
                 metrics.inboundBandwidth().mark(result.getSerializedSize());
-                metrics.outboundQuery().update(query.getSerializedSize());
+                metrics.outboundRequery().update(query.getSerializedSize());
                 metrics.queryResponse().update(result.getSerializedSize());
             }
             return result;

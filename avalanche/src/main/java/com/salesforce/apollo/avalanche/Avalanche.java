@@ -162,7 +162,7 @@ public class Avalanche {
             }
         }
     }
-    
+
     public static enum PreferredResult {
         UNRESOLVED, UNKNOWN, TRUE, FALSE;
     }
@@ -180,38 +180,102 @@ public class Avalanche {
                 }
                 return QueryResult.newBuilder().addAllResult(results).build();
             }
-            long now = System.currentTimeMillis();
+//            long now = System.currentTimeMillis();
             Timer.Context timer = metrics == null ? null : metrics.getInboundQueryTimer().time();
 
             List<PreferredResult> stronglyPreferred = dag.isStronglyPreferred(list.stream()
-                                                                          .map(id -> new HashKey(id))
-                                                                          .collect(Collectors.toList()));
-            log.trace("onquery {} txn in {} ms", stronglyPreferred, System.currentTimeMillis() - now);
-            List<Vote> queried = stronglyPreferred.stream().map(r -> {
-                if (r == null) {
+                                                                                  .map(id -> new HashKey(id))
+                                                                                  .collect(Collectors.toList()));
+//            log.trace("onquery {} txn in {} ms", stronglyPreferred, System.currentTimeMillis() - now);
+            QueryResult.Builder builder = QueryResult.newBuilder().addAllWanted(dag.getEntries(wanted));
+            for (int i = 0; i < stronglyPreferred.size(); i++) {
+                PreferredResult r = stronglyPreferred.get(i);
+                switch (r) {
+                case UNKNOWN:
                     if (metrics != null) {
                         metrics.getInboundQueryUnknownRate().mark();
                     }
-                    return Vote.UNKNOWN;
-                } else if (r) {
-                    return Vote.TRUE;
-                } else {
-                    return Vote.FALSE;
+                    builder.addResult(Vote.UNKNOWN);
+                    break;
+                case UNRESOLVED:
+                    if (metrics != null) {
+                        metrics.getInboundQueryUnknownRate().mark();
+                    }
+                    builder.addUnresolved(list.get(i)).addResult(Vote.UNKNOWN);
+                    break;
+                case FALSE:
+                    builder.addResult(Vote.FALSE);
+                    break;
+                case TRUE:
+                    builder.addResult(Vote.TRUE);
+                    break;
+                default:
+                    throw new IllegalStateException("Uknown result: " + r);
                 }
-            }).collect(Collectors.toList());
+            }
 
             if (timer != null) {
                 timer.close();
                 metrics.getInboundQueryRate().mark(list.size());
             }
-            assert queried.size() == list.size() : "on query results " + queried.size() + " != " + list.size();
+            assert builder.getResultCount() == list.size() : "on query results " + builder.getResultCount() + " != "
+                    + list.size();
 
-            return QueryResult.newBuilder().addAllResult(queried).addAllWanted(dag.getEntries(wanted)).build();
+            return builder.build();
         }
 
-        public QueryResult requery(List<ByteString> transactionsList) {
-            // TODO Auto-generated method stub
-            return null;
+        public QueryResult requery(List<ByteString> list) {
+            if (!running.get()) {
+                ArrayList<Vote> results = new ArrayList<>();
+                for (int i = 0; i < list.size(); i++) {
+                    results.add(Vote.UNKNOWN);
+                    if (metrics != null) {
+                        metrics.getInboundQueryUnknownRate().mark();
+                    }
+                }
+                return QueryResult.newBuilder().addAllResult(results).build();
+            }
+//            long now = System.currentTimeMillis();
+            Timer.Context timer = metrics == null ? null : metrics.getInboundQueryTimer().time();
+            final List<HashKey> inserted = dag.insertSerialized(list, System.currentTimeMillis());
+            List<PreferredResult> stronglyPreferred = dag.isStronglyPreferred(inserted);
+
+//            log.trace("onquery {} txn in {} ms", stronglyPreferred, System.currentTimeMillis() - now);
+            QueryResult.Builder builder = QueryResult.newBuilder();
+            for (int i = 0; i < stronglyPreferred.size(); i++) {
+                PreferredResult r = stronglyPreferred.get(i);
+                switch (r) {
+                case UNKNOWN:
+                    if (metrics != null) {
+                        metrics.getInboundQueryUnknownRate().mark();
+                    }
+                    builder.addResult(Vote.UNKNOWN);
+                    break;
+                case UNRESOLVED:
+                    if (metrics != null) {
+                        metrics.getInboundQueryUnknownRate().mark();
+                    }
+                    builder.addResult(Vote.UNKNOWN);
+                    break;
+                case FALSE:
+                    builder.addResult(Vote.FALSE);
+                    break;
+                case TRUE:
+                    builder.addResult(Vote.TRUE);
+                    break;
+                default:
+                    throw new IllegalStateException("Uknown result: " + r);
+                }
+            }
+
+            if (timer != null) {
+                timer.close();
+                metrics.getInboundQueryRate().mark(list.size());
+            }
+            assert builder.getResultCount() == list.size() : "on query results " + builder.getResultCount() + " != "
+                    + list.size();
+
+            return builder.build();
         }
 
         public List<ByteString> requestDAG(List<HashKey> want) {
@@ -413,12 +477,12 @@ public class Avalanche {
                 break;
             }
         }
-        if (result.getUnknownCount() > 0) {
-            List<HashKey> unknown = result.getUnknownList()
-                                          .stream()
-                                          .map(id -> new HashKey(id))
-                                          .collect(Collectors.toList());
-            result = connection.requery(context.getId(), dag.getQuerySerializedEntries(unknown));
+        if (result.getUnresolvedCount() > 0) {
+            List<HashKey> unresolved = result.getUnresolvedList()
+                                             .stream()
+                                             .map(id -> new HashKey(id))
+                                             .collect(Collectors.toList());
+            result = connection.requery(context.getId(), dag.getQuerySerializedEntries(unresolved));
             if (result.getResultList().isEmpty() || result.getResultCount() != query.size()) {
                 log.trace("Requerying: {} invalid result size: {} expected: {} for: {} on: {}", m,
                           result.getResultCount(), query.size(), query, node.getId());
@@ -431,11 +495,11 @@ public class Avalanche {
                 case FALSE:
                     break;
                 case TRUE:
-                    votes[query.indexOf(unknown.get(i))].incrementAndGet();
+                    votes[query.indexOf(unresolved.get(i))].incrementAndGet();
                     break;
                 case UNKNOWN:
                 case UNRECOGNIZED:
-                    invalid[query.indexOf(unknown.get(i))].incrementAndGet();
+                    invalid[query.indexOf(unresolved.get(i))].incrementAndGet();
                     break;
                 }
             }

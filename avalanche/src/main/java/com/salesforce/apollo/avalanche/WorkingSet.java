@@ -641,7 +641,7 @@ public class WorkingSet {
 
         @Override
         public Boolean isStronglyPreferred() {
-            log.info("{} failed to strongly prefer because querying unknown", key);
+            log.trace("{} failed to strongly prefer because querying unknown", key);
             return null;
         }
 
@@ -930,7 +930,9 @@ public class WorkingSet {
                 }
                 return isFinalized ? PreferredResult.TRUE : PreferredResult.UNKNOWN;
             }
-            return node.isStronglyPreferred() ? PreferredResult.TRUE : PreferredResult.FALSE;
+            Boolean stronglyPreferred = node.isStronglyPreferred();
+            return stronglyPreferred == null ? PreferredResult.UNRESOLVED : stronglyPreferred ? PreferredResult.TRUE
+                                     : PreferredResult.FALSE;
 
         }).collect(Collectors.toList());
 
