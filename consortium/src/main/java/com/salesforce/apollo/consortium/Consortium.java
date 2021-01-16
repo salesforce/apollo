@@ -27,6 +27,7 @@ import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -105,7 +106,7 @@ public class Consortium {
                 log.warn("Received checkpoint sync from non member: {} on: {}", from, getMember());
                 return CertifiedBlock.getDefaultInstance();
             }
-            HashedBlock c = lastCheckpoint;
+            HashedBlock c = lastCheckpoint.get();
             if (c == null) {
                 return CertifiedBlock.getDefaultInstance();
             }
@@ -270,28 +271,29 @@ public class Consortium {
 
     final Store store;
 
-    private final Map<Long, CheckpointState>                                                       cachedCheckpoints     = new ConcurrentHashMap<>();
-    private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
+    private final Map<Long, CheckpointState>                                                       cachedCheckpoints        = new ConcurrentHashMap<>();
+    private final AtomicReference<CommonCommunications<ConsortiumClientCommunications, Service>>   comm                     = new AtomicReference<>();
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
-    private volatile HashedBlock                                                                   current;
-    private final PriorityBlockingQueue<HashedBlock>                                               deferedBlocks         = new PriorityBlockingQueue<>(
+    private final PriorityBlockingQueue<HashedBlock>                                               deferedBlocks            = new PriorityBlockingQueue<>(
             1024, (a, b) -> Long.compare(height(a.block), height(b.block)));
-    private final List<DelayedMessage>                                                             delayed               = new CopyOnWriteArrayList<>();
-    private volatile long                                                                          deltaCheckpointBlocks = Integer.MAX_VALUE;
+    private final List<DelayedMessage>                                                             delayed                  = new CopyOnWriteArrayList<>();
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
-    private volatile HashedBlock                                                                   genesis;
-    private volatile HashedBlock                                                                   lastCheckpoint;
-    private volatile HashedBlock                                                                   lastViewChange;
-    private volatile Messenger                                                                     messenger;
-    private volatile ViewMember                                                                    nextView;
-    private volatile KeyPair                                                                       nextViewConsensusKeyPair;
-    private volatile MemberOrder                                                                   order;
+    private final AtomicInteger                                                                    deltaCheckpointBlocks    = new AtomicInteger(
+            Integer.MAX_VALUE);
+    private final AtomicReference<HashedBlock>                                                     genesis                  = new AtomicReference<>();
+    private final AtomicReference<HashedBlock>                                                     current                  = new AtomicReference<>();
+    private final AtomicReference<HashedBlock>                                                     lastCheckpoint           = new AtomicReference<>();
+    private final AtomicReference<HashedBlock>                                                     lastViewChange           = new AtomicReference<>();
+    private final AtomicReference<Messenger>                                                       messenger                = new AtomicReference<>();
+    private final AtomicReference<ViewMember>                                                      nextView                 = new AtomicReference<>();
+    private final AtomicReference<KeyPair>                                                         nextViewConsensusKeyPair = new AtomicReference<>();
+    private final AtomicReference<MemberOrder>                                                     order                    = new AtomicReference<>();
     private final Parameters                                                                       params;
-    private final TickScheduler                                                                    scheduler             = new TickScheduler();
-    private final AtomicBoolean                                                                    started               = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>                                               submitted             = new ConcurrentHashMap<>();
+    private final TickScheduler                                                                    scheduler                = new TickScheduler();
+    private final AtomicBoolean                                                                    started                  = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted                = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final AtomicReference<ViewContext>                                                     viewContext           = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                                     viewContext              = new AtomicReference<>();
 
     public Consortium(Parameters parameters) {
         this(parameters, defaultBuilder(parameters));
@@ -316,27 +318,25 @@ public class Consortium {
     }
 
     public HashedBlock getGenesis() {
-        final HashedBlock c = genesis;
-        return c;
+        return genesis.get();
     }
 
     public long getLastCheckpoint() {
-        final HashedBlock c = lastCheckpoint;
-        return c == null ? 0 : c.height();
+        HashedBlock c = lastCheckpoint.get();
+        return c == null ? 0 : lastCheckpoint.get().height();
     }
 
     public HashedBlock getLastCheckpointBlock() {
-        final HashedBlock c = lastCheckpoint;
-        return c;
+        return lastCheckpoint.get();
     }
 
     public long getLastViewChange() {
-        final HashedBlock c = lastViewChange;
+        final HashedBlock c = lastViewChange.get();
         return c == null ? 0 : c.height();
     }
 
     public HashedBlock getLastViewChangeBlock() {
-        final HashedBlock c = lastViewChange;
+        final HashedBlock c = lastViewChange.get();
         return c;
     }
 
@@ -406,27 +406,25 @@ public class Consortium {
     }
 
     CommonCommunications<ConsortiumClientCommunications, Service> getComm() {
-        final CommonCommunications<ConsortiumClientCommunications, Service> cc = comm;
-        return cc;
+        return comm.get();
     }
 
     HashedBlock getCurrent() {
-        final HashedBlock cb = current;
-        return cb;
+        return current.get();
     }
 
     Messenger getMessenger() {
-        final Messenger currentMsgr = messenger;
+        final Messenger currentMsgr = messenger.get();
         return currentMsgr;
     }
 
     ViewMember getNextView() {
-        final ViewMember c = nextView;
+        final ViewMember c = nextView.get();
         return c;
     }
 
     KeyPair getNextViewConsensusKeyPair() {
-        final KeyPair c = nextViewConsensusKeyPair;
+        final KeyPair c = nextViewConsensusKeyPair.get();
         return c;
     }
 
@@ -518,45 +516,42 @@ public class Consortium {
     }
 
     void setComm(CommonCommunications<ConsortiumClientCommunications, Service> comm) {
-        this.comm = comm;
+        this.comm.set(comm);
     }
 
     void setCurrent(HashedBlock current) {
-        this.current = current;
+        this.current.set(current);
     }
 
     void setGenesis(HashedBlock next) {
-        final HashedBlock c = this.genesis;
-        if (c != null) {
-            log.error("Genesis block already established");
-            return;
+        if (!this.genesis.compareAndSet(null, next)) {
+            throw new IllegalStateException("Genesis already set on: " + getMember());
         }
-        this.genesis = next;
     }
 
     void setLastCheckpoint(HashedBlock next) {
-        this.lastCheckpoint = next;
+        this.lastCheckpoint.set(next);
     }
 
     void setLastViewChange(HashedBlock block, Reconfigure view) {
-        lastViewChange = block;
-        deltaCheckpointBlocks = view.getCheckpointBlocks();
+        lastViewChange.set(block);
+        deltaCheckpointBlocks.set(view.getCheckpointBlocks());
     }
 
     void setMessenger(Messenger messenger) {
-        this.messenger = messenger;
+        this.messenger.set(messenger);
     }
 
     void setNextView(ViewMember nextView) {
-        this.nextView = nextView;
+        this.nextView.set(null);
     }
 
     void setNextViewConsensusKeyPair(KeyPair nextViewConsensusKeyPair) {
-        this.nextViewConsensusKeyPair = nextViewConsensusKeyPair;
+        this.nextViewConsensusKeyPair.set(nextViewConsensusKeyPair);
     }
 
     void setOrder(MemberOrder order) {
-        this.order = order;
+        this.order.set(order);
     }
 
     void setViewContext(ViewContext viewContext) {
@@ -632,9 +627,9 @@ public class Consortium {
     }
 
     long targetCheckpoint() {
-        final long c = deltaCheckpointBlocks;
-        final HashedBlock cp = lastCheckpoint;
-        return cp == null ? c : cp.height() + c;
+        final long delta = deltaCheckpointBlocks.get();
+        final HashedBlock cp = lastCheckpoint.get();
+        return cp == null ? delta : cp.height() + delta;
     }
 
     /**
@@ -696,12 +691,12 @@ public class Consortium {
 
     private void clear() {
         pause();
-        comm = null;
-        order = null;
-        current = null;
-        messenger = null;
-        nextView = null;
-        order = null;
+        comm.set(null);
+        order.set(null);
+        current.set(null);
+        messenger.set(null);
+        nextView.set(null);
+        nextViewConsensusKeyPair.set(null);
     }
 
     private CheckpointSegments fetch(CheckpointReplication request) {
@@ -736,10 +731,9 @@ public class Consortium {
              .forEach(block -> ByteString.copyFrom(block));
         return replication.build();
     }
-
+    
     private MemberOrder getOrder() {
-        final MemberOrder cTo = order;
-        return cTo;
+        return order.get();
     }
 
     private boolean next(HashedBlock next) {
