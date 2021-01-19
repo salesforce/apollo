@@ -384,6 +384,7 @@ public class Avalanche {
             byte[] dummy = new byte[4];
             getEntropy().nextBytes(dummy);
             Builder builder = DagEntry.newBuilder()
+                                      .setDescription(EntryType.NO_OP)
                                       .setData(Any.pack(ByteMessage.newBuilder()
                                                                    .setContents(ByteString.copyFrom(dummy))
                                                                    .build()));

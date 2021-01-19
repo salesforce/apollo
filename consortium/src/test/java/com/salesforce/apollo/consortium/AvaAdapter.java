@@ -71,13 +71,12 @@ public class AvaAdapter implements Processor {
 
     @Override
     public HashKey validate(HashKey key, DagEntry entry) {
-        return key;
-//        CertifiedBlock cb = certifiedBlock(entry);
-//        if (cb == null) {
-//            System.out.println("null from: " + key + " descr: " + entry.getDescription());
-//            return key;
-//        }
-//        return new HashKey(cb.getBlock().getHeader().getPrevious());
+        CertifiedBlock cb = certifiedBlock(entry);
+        if (cb == null) {
+            System.out.println("null from: " + key + " descr: " + entry.getDescription());
+            return key;
+        }
+        return new HashKey(cb.getBlock().getHeader().getPrevious());
     }
 
     private CertifiedBlock certifiedBlock(DagEntry entry) {

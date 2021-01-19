@@ -77,9 +77,9 @@ message Block {
 }
 
 message Header {
-    bytes previous = 1;
-    int64 height = 2;
-    google.protobuf.Timestamp timestamp = 3; 
+    int64 height = 1;
+    google.protobuf.Timestamp timestamp = 2; 
+    bytes previous = 3;
     bytes lastCheckpoint = 4; 
     bytes lastReconfig = 5;
     bytes bodyHash = 6;
@@ -87,9 +87,8 @@ message Header {
 }
 
 message Body {
-    int32 consensusId = 1;
-    BodyType type = 2;
-    bytes contents = 3;
+    BodyType type = 1;
+    bytes contents = 2;
 }
 
 message Certification {
