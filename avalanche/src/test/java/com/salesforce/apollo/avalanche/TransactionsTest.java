@@ -16,12 +16,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -58,14 +58,14 @@ public class TransactionsTest {
     }
 
     private WorkingSet          dag;
-    private Random              entropy;
+    private SecureRandom        entropy;
     private AvalancheParameters parameters;
     private DagEntry            root;
     private HashKey             rootKey;
 
     @BeforeEach
     public void before() throws Exception {
-        entropy = new Random(0x1638);
+        entropy = new SecureRandom(new byte[] { 0x16, 0x38 });
         parameters = new AvalancheParameters();
         dag = new WorkingSet(new NullProcessor(), parameters, new MVStore.Builder().open().openMap("test2"), null);
         root = dag("Ye root".getBytes());

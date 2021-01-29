@@ -32,7 +32,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.h2.mvstore.MVStore;
-import org.h2.mvstore.OffHeapStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -230,7 +229,7 @@ abstract public class AvalancheFunctionalTest {
     }
 
     private TimedProcessor createAva(Node m, Context<Node> context, AtomicBoolean frist, ForkJoinPool fjPool) {
-        AvalancheParameters aParams = new AvalancheParameters(); 
+        AvalancheParameters aParams = new AvalancheParameters();
 
         // Avalanche protocol parameters
         aParams.core.alpha = 0.6;

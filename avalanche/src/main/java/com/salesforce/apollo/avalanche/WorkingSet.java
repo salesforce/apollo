@@ -9,31 +9,37 @@ package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.protocols.Conversion.hashOf;
 import static com.salesforce.apollo.protocols.Conversion.manifestDag;
-import static java.util.concurrent.ConcurrentHashMap.newKeySet;
 
+import java.security.SecureRandom;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import org.h2.mvstore.MVMap;
 import org.slf4j.Logger;
@@ -43,6 +49,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
+import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -105,9 +112,7 @@ public class WorkingSet {
 
         @Override
         public void addDependent(MaterializedNode node) {
-            synchronized (this) {
-                dependents.add(node);
-            }
+            dependents.add(node);
         }
 
         @Override
@@ -249,22 +254,18 @@ public class WorkingSet {
                 });
                 return true;
             } else if (currentConfidence >= parameters.core.beta1 && conflictSet.getCardinality() == 1 && preferred) {
-                synchronized (this) {
-                    if (links.stream()
-                             .map(node -> node.tryFinalize(finalizedSet, visited))
-                             .filter(success -> success)
-                             .count() == links.size()) {
-                        finalizedSet.add(this);
-                        finalized = true;
-                        return true;
-                    }
+                if (links.stream()
+                         .map(node -> node.tryFinalize(finalizedSet, visited))
+                         .filter(success -> success)
+                         .count() == links.size()) {
+                    finalizedSet.add(this);
+                    finalized = true;
+                    return true;
                 }
                 final boolean current = finalized;
                 return current;
             } else {
-                synchronized (this) {
-                    links.forEach(node -> node.tryFinalize(finalizedSet, visited));
-                }
+                links.forEach(node -> node.tryFinalize(finalizedSet, visited));
                 return false;
             }
         }
@@ -280,9 +281,7 @@ public class WorkingSet {
             super(key, discovered);
             this.entry = entry;
             this.links = links;
-            synchronized (this) {
-                links.forEach(e -> e.addDependent(this));
-            }
+            links.forEach(e -> e.addDependent(this));
         }
 
         public Boolean calculateIsStronglyPreferred() {
@@ -312,9 +311,7 @@ public class WorkingSet {
 
         public void invalidate() {
             isStronglyPreferred = null;
-            synchronized (this) {
-                dependents().forEach(e -> e.invalidate());
-            }
+            dependents().forEach(e -> e.invalidate());
         }
 
         @Override
@@ -362,12 +359,10 @@ public class WorkingSet {
 
         @Override
         public void replace(UnknownNode unknownNode, Node replacement) {
-            synchronized (this) {
-                log.trace("(found) replacing {} with {}", unknownNode.getKey(), replacement.getKey());
-                if (links.remove(unknownNode)) {
-                    links.add(replacement);
-                    replacement.addDependent(this);
-                }
+            log.trace("(found) replacing {} with {}", unknownNode.getKey(), replacement.getKey());
+            if (links.remove(unknownNode)) {
+                links.add(replacement);
+                replacement.addDependent(this);
             }
         }
 
@@ -376,31 +371,23 @@ public class WorkingSet {
             finalized.put(key, getEntry().toByteArray());
             unfinalized.remove(key);
             List<Node> deps;
-            synchronized (this) {
-                deps = new ArrayList<>(dependents());
-                dependents().clear();
-            }
+            deps = new ArrayList<>(dependents());
+            dependents().clear();
             deps.forEach(e -> e.snip(this));
             traverseClosure(node -> {
                 node.snip();
                 return true;
             });
-            synchronized (this) {
-                links.clear();
-            }
+            links.clear();
         }
 
         @Override
         public void snip(Node node) {
-            synchronized (this) {
-                links.remove(node);
-            }
+            links.remove(node);
         }
 
         public int sumChits() {
-            synchronized (this) {
-                return dependents().stream().mapToInt(node -> node.sumChits()).sum() + (chit ? 1 : 0);
-            }
+            return dependents().stream().mapToInt(node -> node.sumChits()).sum() + (chit ? 1 : 0);
         }
 
         public Boolean traverseClosure(Function<Node, Boolean> p) {
@@ -409,39 +396,39 @@ public class WorkingSet {
 
         public Boolean traverseClosure(Function<Node, Boolean> test, Consumer<Node> post) {
             List<Node> stack = new ArrayList<>();
+            List<Node> traversed = new ArrayList<>(1024);
             stack.add(this);
-            Set<Node> visited = Collections.newSetFromMap(new IdentityHashMap<>(2048));
-
-            while (!stack.isEmpty()) {
-                final Node node = stack.remove(stack.size() - 1);
-                final List<Node> l;
-                synchronized (node) {
+            try {
+                while (!stack.isEmpty()) {
+                    final Node node = stack.remove(stack.size() - 1);
+                    final List<Node> l;
                     l = new ArrayList<>(node.links());
-                }
-                for (Node e : l) {
-                    if (visited.add(e)) {
-                        Boolean result = test.apply(e);
-                        if (result == null) {
-                            return null;
+                    for (Node e : l) {
+                        if (e.mark()) {
+                            traversed.add(e);
+                            Boolean result = test.apply(e);
+                            if (result == null) {
+                                return null;
+                            }
+                            if (!result) {
+                                return false;
+                            }
+                            stack.add(e);
                         }
-                        if (!result) {
-                            return false;
-                        }
-                        stack.add(e);
+                    }
+                    if (post != null) {
+                        post.accept(node);
                     }
                 }
-                if (post != null) {
-                    post.accept(node);
-                }
+                return true;
+            } finally {
+                traversed.forEach(n -> n.unmark());
             }
-            return true;
         }
 
         @Override
         public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
-            synchronized (this) {
-                links.forEach(node -> node.tryFinalize(finalizedSet, visited));
-            }
+            links.forEach(node -> node.tryFinalize(finalizedSet, visited));
             return true;
         }
 
@@ -451,6 +438,7 @@ public class WorkingSet {
     public static abstract class Node {
         protected final long    discovered;
         protected final HashKey key;
+        private boolean         marked = false;
 
         public Node(HashKey key, long discovered) {
             this.key = key;
@@ -521,6 +509,19 @@ public class WorkingSet {
             return Collections.emptyList();
         }
 
+        /**
+         * Mark the receiver.
+         * 
+         * @return true if the receiver was unmarked, false if previously marked.
+         */
+        public boolean mark() {
+            if (!marked) {
+                marked = true;
+                return true;
+            }
+            return false;
+        }
+
         abstract public void markFinalized();
 
         public void markPreferred() {
@@ -543,6 +544,10 @@ public class WorkingSet {
         abstract public void snip(Node node);
 
         abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
+
+        public void unmark() {
+            marked = false;
+        }
     }
 
     public class NoOpNode extends MaterializedNode {
@@ -602,9 +607,7 @@ public class WorkingSet {
 
         @Override
         public void addDependent(MaterializedNode node) {
-            synchronized (this) {
-                dependents.add(node);
-            }
+            dependents.add(node);
         }
 
         @Override
@@ -675,21 +678,17 @@ public class WorkingSet {
 
         public void replaceWith(Node replacement) {
             log.trace("replacing: " + replacement.getKey());
-            synchronized (this) {
-                dependents.forEach(node -> {
-                    node.replace(this, replacement);
-                    node.invalidate();
-                });
-            }
+            dependents.forEach(node -> {
+                node.replace(this, replacement);
+                node.invalidate();
+            });
         }
 
         @Override
         public void snip() {
-            synchronized (this) {
-                dependents.forEach(node -> {
-                    node.snip(this);
-                });
-            }
+            dependents.forEach(node -> {
+                node.snip(this);
+            });
         }
 
         @Override
@@ -708,44 +707,18 @@ public class WorkingSet {
         }
     }
 
-    private static enum Result {
-        FALSE {
-
-            @Override
-            Boolean value() {
-                return Boolean.FALSE;
-            }
-        },
-        TRUE {
-
-            @Override
-            Boolean value() {
-                return Boolean.TRUE;
-            }
-        },
-        UNKNOWN {
-
-            @Override
-            Boolean value() {
-                return null;
-            }
-        };
-
-        abstract Boolean value();
-    }
-
     public static final HashKey          GENESIS_CONFLICT_SET = new HashKey(new byte[32]);
     public static Logger                 log                  = LoggerFactory.getLogger(WorkingSet.class);
     private static final ArrayList<Node> EMPTY_ARRAY_LIST     = new ArrayList<>();
 
-    private final Map<HashKey, ConflictSet> conflictSets = new ConcurrentHashMap<>();
+    private final Map<HashKey, ConflictSet> conflictSets = new HashMap<>();
     private final MVMap<HashKey, byte[]>    finalized;
-    private final ReentrantLock             lock         = new ReentrantLock(true);
     private final AvalancheMetrics          metrics;
     private final AvalancheParameters       parameters;
     private final Processor                 processor;
-    private final Map<HashKey, Node>        unfinalized  = new ConcurrentHashMap<>();
-    private final Set<HashKey>              unknown      = newKeySet();
+    private final ReadWriteLock             rwLock       = new ReentrantReadWriteLock();
+    private final Map<HashKey, Node>        unfinalized  = new HashMap<>();
+    private final Set<HashKey>              unknown      = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final BlockingDeque<HashKey>    unqueried    = new LinkedBlockingDeque<>();
 
     public WorkingSet(Processor processor, AvalancheParameters parameters, MVMap<HashKey, byte[]> wood,
@@ -755,95 +728,91 @@ public class WorkingSet {
         this.metrics = metrics;
         this.processor = processor;
     }
-    
+
     public Iterator<HashKey> allFinalized() {
         return finalized.keyIterator(HashKey.ORIGIN);
     }
 
-    public Collection<HashKey> finalized() {
-        List<HashKey> l = new ArrayList<>();
-        unfinalized.values()
-                   .stream()
-                   .filter(node -> node.isFinalized())
-                   .filter(e -> l.size() < 100)
-                   .map(node -> node.getKey())
-                   .forEach(e -> l.add(e));
-        if (!l.isEmpty()) {
-            return l;
-        }
-        for (HashKey key : finalized.keySet()) {
-            l.add(key);
-            if (l.size() > 100) {
-                return l;
-            }
-        }
-        return l;
-    }
-
     public List<HashKey> frontier() {
-        return unfinalized.values()
-                          .stream()
-                          .filter(node -> node.isFrontier())
-                          .map(node -> node.getKey())
-                          .collect(Collectors.toList());
+        return read(() -> {
+            return unfinalized.values()
+                              .stream()
+                              .filter(node -> node.isFrontier())
+                              .map(node -> node.getKey())
+                              .collect(Collectors.toList());
+        });
     }
 
     public List<HashKey> frontier(Random entropy) {
-        List<HashKey> sample = unfinalized.values()
-                                          .stream()
-                                          .filter(node -> node.isPreferred(parameters.core.beta1 - 1))
-                                          .map(node -> node.getKey())
-                                          .collect(Collectors.toList());
-        Collections.shuffle(sample, entropy);
-        return sample;
+        return read(() -> {
+            List<HashKey> sample = unfinalized.values()
+                                              .stream()
+                                              .filter(node -> node.isPreferred(parameters.core.beta1 - 1))
+                                              .map(node -> node.getKey())
+                                              .collect(Collectors.toList());
+            Collections.shuffle(sample, entropy);
+            return sample;
+        });
     }
 
     public List<HashKey> frontierForNoOp(Random entropy) {
-        List<HashKey> sample = unfinalized.values()
-                                          .stream()
-                                          .filter(node -> node.isPreferred(parameters.core.beta2 - 1))
-                                          .map(node -> node.getKey())
-                                          .collect(Collectors.toList());
-        Collections.shuffle(sample, entropy);
-        return sample;
+        return read(() -> {
+            List<HashKey> sample = unfinalized.values()
+                                              .stream()
+                                              .filter(node -> node.isPreferred(parameters.core.beta2 - 1))
+                                              .map(node -> node.getKey())
+                                              .collect(Collectors.toList());
+            Collections.shuffle(sample, entropy);
+            return sample;
+        });
     }
 
     /** for testing **/
     public Node get(HashKey key) {
-        return unfinalized.get(key);
+        return read(() -> {
+            return unfinalized.get(key);
+        });
     }
 
     public ConflictSet getConflictSet(HashKey key) {
-        Node node = unfinalized.get(key);
-        if (node == null) {
-            return null;
-        }
-        return node.getConflictSet();
+        return read(() -> {
+            Node node = unfinalized.get(key);
+            if (node == null) {
+                return null;
+            }
+            return node.getConflictSet();
+        });
     }
 
     public DagEntry getDagEntry(HashKey key) {
-        final Node node = unfinalized.get(key);
-        if (node != null) {
-            return node.getEntry();
-        }
-        byte[] entry = finalized.get(key);
-        return entry == null ? null : manifestDag(entry);
+        return read(() -> {
+            final Node node = unfinalized.get(key);
+            if (node != null) {
+                return node.getEntry();
+            }
+            byte[] entry = finalized.get(key);
+            return entry == null ? null : manifestDag(entry);
+        });
     }
 
     public List<ByteString> getEntries(List<HashKey> collect) {
-        return collect.stream().map(key -> {
-            Node n = unfinalized.get(key);
-            if (n == null) {
-                byte[] entry = finalized.get(key);
-                return entry == null ? null : ByteString.copyFrom(entry);
-            }
-            DagEntry entry = n.getEntry();
-            return entry == null ? null : entry.toByteString();
-        }).filter(n -> n != null).collect(Collectors.toList());
+        return read(() -> {
+            return collect.stream().map(key -> {
+                Node n = unfinalized.get(key);
+                if (n == null) {
+                    byte[] entry = finalized.get(key);
+                    return entry == null ? null : ByteString.copyFrom(entry);
+                }
+                DagEntry entry = n.getEntry();
+                return entry == null ? null : entry.toByteString();
+            }).filter(n -> n != null).collect(Collectors.toList());
+        });
     }
 
     public int getFinalizedCount() {
-        return finalized.size();
+        return read(() -> {
+            return finalized.size();
+        });
     }
 
     public AvalancheParameters getParameters() {
@@ -851,7 +820,9 @@ public class WorkingSet {
     }
 
     public List<ByteString> getQuerySerializedEntries(List<HashKey> keys) {
-        return keys.stream().map(key -> getBytes(key)).filter(entry -> entry != null).collect(Collectors.toList());
+        return read(() -> {
+            return keys.stream().map(key -> getBytes(key)).filter(entry -> entry != null).collect(Collectors.toList());
+        });
     }
 
     public Map<HashKey, Node> getUnfinalized() {
@@ -887,22 +858,24 @@ public class WorkingSet {
     }
 
     public List<HashKey> insertSerialized(List<ByteString> transactions, long discovered) {
-        return transactions.stream().map(t -> {
-            assert t.size() > 0 : "whoopsie";
-            HashKey key = new HashKey(hashOf(t));
-            Node node = unfinalized.get(key);
-            if (node == null || node.isUnknown()) {
-                DagEntry entry = manifestDag(t);
-                boolean isNoOp = entry.getDescription() == EntryType.NO_OP;
-                HashKey conflictSet = isNoOp ? key : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
-                                             : processor.validate(key, entry);
-                if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
-                    assert entry.getDescription() == EntryType.GENSIS : "Not in the genesis set";
+        return write(() -> {
+            return transactions.stream().map(t -> {
+                assert t.size() > 0 : "whoopsie";
+                HashKey key = new HashKey(hashOf(t));
+                Node node = unfinalized.get(key);
+                if (node == null || node.isUnknown()) {
+                    DagEntry entry = manifestDag(t);
+                    boolean isNoOp = entry.getDescription() == EntryType.NO_OP;
+                    HashKey conflictSet = isNoOp ? key : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
+                                                 : processor.validate(key, entry);
+                    if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
+                        assert entry.getDescription() == EntryType.GENSIS : "Not in the genesis set";
+                    }
+                    insert(key, entry, isNoOp, discovered, conflictSet);
                 }
-                insert(key, entry, isNoOp, discovered, conflictSet);
-            }
-            return key;
-        }).collect(Collectors.toList());
+                return key;
+            }).collect(Collectors.toList());
+        });
     }
 
     public boolean isFinalized(HashKey key) {
@@ -910,32 +883,40 @@ public class WorkingSet {
     }
 
     public Boolean isNoOp(HashKey key) {
-        Node node = unfinalized.get(key);
-        return node == null ? null : node.isNoOp();
+        return read(() -> {
+            Node node = unfinalized.get(key);
+            return node == null ? null : node.isNoOp();
+        });
     }
 
     public Boolean isStronglyPreferred(HashKey key) {
-        return isStronglyPreferred(Collections.singletonList(key)).get(0);
+        return read(() -> {
+            return isStronglyPreferred(Collections.singletonList(key)).get(0);
+        });
     }
 
     public List<Boolean> isStronglyPreferred(List<HashKey> keys) {
-        return keys.stream().map((Function<? super HashKey, ? extends Boolean>) key -> {
-            Node node = unfinalized.get(key);
-            if (node == null) {
-                final Boolean isFinalized = finalized.containsKey(key) ? true : null;
-                if (isFinalized == null) {
-                    unknown.add(key);
+        return read(() -> {
+            return keys.stream().map((Function<? super HashKey, ? extends Boolean>) key -> {
+                Node node = unfinalized.get(key);
+                if (node == null) {
+                    final Boolean isFinalized = finalized.containsKey(key) ? true : null;
+                    if (isFinalized == null) {
+                        unknown.add(key);
+                    }
+                    return isFinalized;
                 }
-                return isFinalized;
-            }
-            return node.isStronglyPreferred();
+                return node.isStronglyPreferred();
 
-        }).collect(Collectors.toList());
+            }).collect(Collectors.toList());
+        });
 
     }
 
     public void prefer(Collection<HashKey> keys) {
-        keys.stream().map(key -> unfinalized.get(key)).filter(node -> node != null).forEach(node -> node.prefer());
+        write(() -> {
+            keys.stream().map(key -> unfinalized.get(key)).filter(node -> node != null).forEach(node -> node.prefer());
+        });
     }
 
     public void prefer(HashKey key) {
@@ -943,28 +924,32 @@ public class WorkingSet {
     }
 
     public List<HashKey> preferred(Random entropy) {
-        List<HashKey> sample = unfinalized.values()
-                                          .stream()
-                                          .filter(node -> node.isKnown())
-                                          .filter(node -> node.isPreferred())
-                                          .map(node -> node.getKey())
-                                          .collect(Collectors.toList());
-        Collections.shuffle(sample, entropy);
-        return sample;
+        return read(() -> {
+            List<HashKey> sample = unfinalized.values()
+                                              .stream()
+                                              .filter(node -> node.isKnown())
+                                              .filter(node -> node.isPreferred())
+                                              .map(node -> node.getKey())
+                                              .collect(Collectors.toList());
+            Collections.shuffle(sample, entropy);
+            return sample;
+        });
     }
 
     public void purgeNoOps() {
-        unfinalized.values()
-                   .stream()
-                   .filter(e -> e.isNoOp())
-                   .map(e -> (NoOpNode) e)
-                   .filter(e -> e.links().isEmpty())
-                   .forEach(e -> {
-                       unfinalized.remove(e.getKey());
-                       if (metrics != null) {
-                           metrics.purgeNoOps().mark();
-                       }
-                   });
+        write(() -> {
+            unfinalized.values()
+                       .stream()
+                       .filter(e -> e.isNoOp())
+                       .map(e -> (NoOpNode) e)
+                       .filter(e -> e.links().isEmpty())
+                       .forEach(e -> {
+                           unfinalized.remove(e.getKey());
+                           if (metrics != null) {
+                               metrics.purgeNoOps().mark();
+                           }
+                       });
+        });
     }
 
     public List<HashKey> query(int maxSize) {
@@ -989,89 +974,102 @@ public class WorkingSet {
     }
 
     public Deque<HashKey> sampleNoOpParents(Random entropy) {
-        Deque<HashKey> sample = new ArrayDeque<>();
+        return read(() -> {
+            Deque<HashKey> sample = new ArrayDeque<>();
 
-        sample.addAll(singularNoOpFrontier(entropy));
+            sample.addAll(singularNoOpFrontier(entropy));
 
-        if (sample.isEmpty()) {
-            sample.addAll(unfinalizedSingular(entropy));
-        }
-        if (sample.isEmpty()) {
-            sample.addAll(preferred(entropy));
-        }
-        return sample;
+            if (sample.isEmpty()) {
+                sample.addAll(unfinalizedSingular(entropy));
+            }
+            if (sample.isEmpty()) {
+                sample.addAll(preferred(entropy));
+            }
+            return sample;
+        });
     }
 
-    public int sampleParents(Collection<HashKey> collector, Random entropy) {
-        List<HashKey> sample = singularFrontier(entropy);
-        if (sample.isEmpty()) {
-            sample = frontier(entropy);
-        }
-        if (sample.isEmpty()) {
-            sample = unfinalizedSingular(entropy);
-        }
-        if (sample.isEmpty()) {
-            sample = preferred(entropy);
-        }
-        if (sample.isEmpty()) {
-            sample = new ArrayList<>(finalized());
-        }
-        collector.addAll(sample);
-        return sample.size();
+    public int sampleParents(Collection<HashKey> collector, SecureRandom entropy) {
+        return read(() -> {
+            List<HashKey> sample = singularFrontier(entropy);
+            if (sample.isEmpty()) {
+                sample = frontier(entropy);
+            }
+            if (sample.isEmpty()) {
+                sample = unfinalizedSingular(entropy);
+            }
+            if (sample.isEmpty()) {
+                sample = preferred(entropy);
+            }
+            if (sample.isEmpty()) {
+                sample = new ArrayList<>(finalized(entropy));
+            }
+            collector.addAll(sample);
+            return sample.size();
+        });
     }
 
-    public List<HashKey> sampleParents(Random random) {
+    public List<HashKey> sampleParents(SecureRandom random) {
         List<HashKey> collector = new ArrayList<>();
         sampleParents(collector, random);
         return collector;
     }
 
     public List<HashKey> singularFrontier(Random entropy) {
-        List<HashKey> sample = unfinalized.values()
-                                          .stream()
-                                          .filter(n -> !n.isNoOp())
-                                          .filter(node -> node.isPreferredAndSingular(parameters.core.beta1 / 2 - 1))
-                                          .map(node -> node.getKey())
-                                          .collect(Collectors.toList());
-        Collections.shuffle(sample, entropy);
-        return sample;
+        return read(() -> {
+            List<HashKey> sample = unfinalized.values()
+                                              .stream()
+                                              .filter(n -> !n.isNoOp())
+                                              .filter(node -> node.isPreferredAndSingular(parameters.core.beta1 / 2
+                                                      - 1))
+                                              .map(node -> node.getKey())
+                                              .collect(Collectors.toList());
+            Collections.shuffle(sample, entropy);
+            return sample;
+        });
     }
 
     public List<HashKey> singularNoOpFrontier(Random entropy) {
-        List<HashKey> sample = unfinalized.values()
-                                          .stream()
-                                          .filter(n -> !n.isNoOp())
-                                          .filter(node -> node.isPreferredAndSingular(parameters.core.beta2 - 1))
-                                          .map(node -> node.getKey())
-                                          .collect(Collectors.toList());
-        Collections.shuffle(sample, entropy);
-        return sample;
+        return read(() -> {
+            List<HashKey> sample = unfinalized.values()
+                                              .stream()
+                                              .filter(n -> !n.isNoOp())
+                                              .filter(node -> node.isPreferredAndSingular(parameters.core.beta2 - 1))
+                                              .map(node -> node.getKey())
+                                              .collect(Collectors.toList());
+            Collections.shuffle(sample, entropy);
+            return sample;
+        });
     }
 
     public void traverseAll(BiConsumer<HashKey, DagEntry> p) {
-        unfinalized.entrySet()
-                   .stream()
-                   .filter(e -> !e.getValue().isFinalized())
-                   .forEach(e -> p.accept(e.getKey(), e.getValue().getEntry()));
-        finalized.keySet().forEach(e -> p.accept(e, getDagEntry(e)));
+        read(() -> {
+            unfinalized.entrySet()
+                       .stream()
+                       .filter(e -> !e.getValue().isFinalized())
+                       .forEach(e -> p.accept(e.getKey(), e.getValue().getEntry()));
+            finalized.keySet().forEach(e -> p.accept(e, getDagEntry(e)));
+        });
     }
 
     public FinalizationData tryFinalize(Collection<HashKey> keys) {
-        Set<Node> finalizedSet = new HashSet<>();
-        Set<Node> visited = new HashSet<>();
-        keys.stream()
-            .map(key -> unfinalized.get(key))
-            .filter(node -> node != null)
-            .forEach(node -> node.tryFinalize(finalizedSet, visited));
+        return write(() -> {
+            Set<Node> finalizedSet = new HashSet<>();
+            Set<Node> visited = new HashSet<>();
+            keys.stream()
+                .map(key -> unfinalized.get(key))
+                .filter(node -> node != null)
+                .forEach(node -> node.tryFinalize(finalizedSet, visited));
 
-        if (finalizedSet.isEmpty()) {
-            return new FinalizationData();
-        }
-        FinalizationData data = new FinalizationData();
-        finalizedSet.stream().forEach(node -> {
-            finalize(node, data);
+            if (finalizedSet.isEmpty()) {
+                return new FinalizationData();
+            }
+            FinalizationData data = new FinalizationData();
+            finalizedSet.stream().forEach(node -> {
+                finalize(node, data);
+            });
+            return data;
         });
-        return data;
     }
 
     public FinalizationData tryFinalize(HashKey key) {
@@ -1079,13 +1077,15 @@ public class WorkingSet {
     }
 
     public List<HashKey> unfinalizedSingular(Random entropy) {
-        List<HashKey> sample = unfinalized.values()
-                                          .stream()
-                                          .filter(node -> node.isUnfinalizedSingular())
-                                          .map(node -> node.getKey())
-                                          .collect(Collectors.toList());
-        Collections.shuffle(sample, entropy);
-        return sample;
+        return read(() -> {
+            List<HashKey> sample = unfinalized.values()
+                                              .stream()
+                                              .filter(node -> node.isUnfinalizedSingular())
+                                              .map(node -> node.getKey())
+                                              .collect(Collectors.toList());
+            Collections.shuffle(sample, entropy);
+            return sample;
+        });
     }
 
     /** for testing **/
@@ -1094,26 +1094,28 @@ public class WorkingSet {
         if (node == null) {
             return;
         }
-        finalize(node, new FinalizationData());
+        write(() -> {
+            finalize(node, new FinalizationData());
+        });
     }
 
     void finalize(Node node, FinalizationData data) {
-        node.snip();
-        if (!node.isUnknown()) {
-            final ConflictSet conflictSet = node.getConflictSet();
-            conflictSets.remove(conflictSet.getKey());
-            conflictSet.getLosers().forEach(loser -> {
-                data.deleted.add(loser.getKey());
-                unfinalized.remove(loser.getKey());
-            });
-            data.finalized.add(new Finalized(node.getKey(), node.getEntry()));
-        }
+        write(() -> {
+            node.snip();
+            if (!node.isUnknown()) {
+                final ConflictSet conflictSet = node.getConflictSet();
+                conflictSets.remove(conflictSet.getKey());
+                conflictSet.getLosers().forEach(loser -> {
+                    data.deleted.add(loser.getKey());
+                    unfinalized.remove(loser.getKey());
+                });
+                data.finalized.add(new Finalized(node.getKey(), node.getEntry()));
+            }
+        });
     }
 
     void insert(HashKey key, DagEntry entry, boolean noOp, long discovered, HashKey cs) {
-        final ReentrantLock l = lock;
-        l.lock(); // sux, but without this, we get dup's which is teh bad.
-        try {
+        write(() -> {
             final Node found = unfinalized.get(key);
             if (found == null) {
                 if (!finalized.containsKey(key)) {
@@ -1141,19 +1143,19 @@ public class WorkingSet {
                     metrics.getUnknown().decrementAndGet();
                 }
             }
-        } finally {
-            l.unlock();
-        }
+        });
     }
 
     ArrayList<Node> linksOf(DagEntry entry, long discovered) {
-        return entry.getLinksCount() == 0 ? EMPTY_ARRAY_LIST
-                : entry.getLinksList()
-                       .stream()
-                       .map(link -> new HashKey(link))
-                       .map(link -> resolve(link, discovered))
-                       .filter(node -> node != null)
-                       .collect(Collectors.toCollection(ArrayList::new));
+        return read(() -> {
+            return entry.getLinksCount() == 0 ? EMPTY_ARRAY_LIST
+                    : entry.getLinksList()
+                           .stream()
+                           .map(link -> new HashKey(link))
+                           .map(link -> resolve(link, discovered))
+                           .filter(node -> node != null)
+                           .collect(Collectors.toCollection(ArrayList::new));
+        });
     }
 
     Node nodeFor(HashKey k, DagEntry dagEntry, boolean noOp, long discovered, HashKey cs) {
@@ -1178,6 +1180,13 @@ public class WorkingSet {
         return exist;
     }
 
+    private Collection<HashKey> finalized(SecureRandom entropy) {
+        return StreamSupport.stream(Spliterators.spliteratorUnknownSize(finalized.keyIterator(HashKey.ORIGIN),
+                                                                        Spliterator.ORDERED),
+                                    false)
+                            .collect(new ReservoirSampler<>(null, parameters.parentCount, entropy));
+    }
+
     private ByteString getBytes(HashKey key) {
         final Node node = unfinalized.get(key);
         if (node != null) {
@@ -1191,5 +1200,53 @@ public class WorkingSet {
         byte[] bs = finalized.get(key);
         assert bs.length > 0 : "invalid stored for: " + key;
         return ByteString.copyFrom(bs);
+    }
+
+    private <T> T read(Callable<T> call) {
+        final Lock l = rwLock.readLock();
+        l.lock();
+        try {
+            return call.call();
+        } catch (Exception e) {
+            throw new IllegalStateException("Error in read lock", e);
+        } finally {
+            l.unlock();
+        }
+    }
+
+    private void read(Runnable r) {
+        final Lock l = rwLock.readLock();
+        l.lock();
+        try {
+            r.run();
+        } catch (Exception e) {
+            throw new IllegalStateException("Error in read lock", e);
+        } finally {
+            l.unlock();
+        }
+    }
+
+    private <T> T write(Callable<T> call) {
+        final Lock l = rwLock.writeLock();
+        l.lock();
+        try {
+            return call.call();
+        } catch (Exception e) {
+            throw new IllegalStateException("Error in write lock", e);
+        } finally {
+            l.unlock();
+        }
+    }
+
+    private void write(Runnable r) {
+        final Lock l = rwLock.writeLock();
+        l.lock();
+        try {
+            r.run();
+        } catch (Exception e) {
+            throw new IllegalStateException("Error in write lock", e);
+        } finally {
+            l.unlock();
+        }
     }
 }

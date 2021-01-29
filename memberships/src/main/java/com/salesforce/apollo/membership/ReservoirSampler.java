@@ -59,7 +59,7 @@ public class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
     }
 
     private void addIt(final List<T> in, T s) {
-        if (exclude.equals(s)) {
+        if (s.equals(exclude)) {
             return;
         }
         if (in.size() < sz) {
