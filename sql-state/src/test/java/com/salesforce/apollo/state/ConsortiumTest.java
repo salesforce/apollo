@@ -223,7 +223,7 @@ public class ConsortiumTest {
         Semaphore outstanding = new Semaphore(1500); // outstanding, unfinalized txns
         int bunchCount = 50_000;
         System.out.println("Submitting batches: " + bunchCount);
-        ArrayList<HashKey> submitted = new ArrayList<>();
+        Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         Executor exec = Executors.newFixedThreadPool(4);
         IntStream.range(0, bunchCount).parallel().forEach(i -> exec.execute(() -> {

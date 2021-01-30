@@ -131,7 +131,7 @@ abstract public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 4_000;
+        int target = 12_000;
         int outstanding = 400;
         int runtime = (int) Duration.ofSeconds(180).toMillis();
 
@@ -249,8 +249,8 @@ abstract public class AvalancheFunctionalTest {
         frist.set(false);
         TimedProcessor processor = new TimedProcessor();
         MVStore s = new MVStore.Builder().open();
-        Avalanche avalanche = new Avalanche(m, context, entropy, communications.get(m.getId()), aParams, avaMetrics,
-                processor, s);
+        Avalanche avalanche = new Avalanche(m, context, new SecureRandom(), communications.get(m.getId()), aParams,
+                avaMetrics, processor, s);
         processor.setAvalanche(avalanche);
         return processor;
     }

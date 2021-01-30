@@ -229,11 +229,12 @@ public class WorkingSet {
         }
 
         @Override
-        public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
+        public boolean tryFinalize(Set<Node> finalizedSet, List<Node> visited) {
             final boolean isFinalized = finalized;
-            if (!visited.add(this)) {
+            if (!mark()) {
                 return isFinalized;
             }
+            visited.add(this);
             if (isFinalized) {
                 return true;
             }
@@ -425,7 +426,7 @@ public class WorkingSet {
         }
 
         @Override
-        public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
+        public boolean tryFinalize(Set<Node> finalizedSet, List<Node> visited) {
             links.forEach(node -> node.tryFinalize(finalizedSet, visited));
             return true;
         }
@@ -541,7 +542,7 @@ public class WorkingSet {
 
         abstract public void snip(Node node);
 
-        abstract public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited);
+        abstract public boolean tryFinalize(Set<Node> finalizedSet, List<Node> visited);
 
         public void unmark() {
             marked = false;
@@ -700,7 +701,7 @@ public class WorkingSet {
         }
 
         @Override
-        public boolean tryFinalize(Set<Node> finalizedSet, Set<Node> visited) {
+        public boolean tryFinalize(Set<Node> finalizedSet, List<Node> visited) {
             return false;
         }
     }
@@ -938,8 +939,10 @@ public class WorkingSet {
                        .filter(e -> e.isNoOp())
                        .map(e -> (NoOpNode) e)
                        .filter(e -> e.links().isEmpty())
+                       .map(e -> e.getKey())
+                       .collect(Collectors.toList())
                        .forEach(e -> {
-                           unfinalized.remove(e.getKey());
+                           unfinalized.remove(e);
                            if (metrics != null) {
                                metrics.purgeNoOps().mark();
                            }
@@ -1042,20 +1045,24 @@ public class WorkingSet {
     public FinalizationData tryFinalize(Collection<HashKey> keys) {
         return write(() -> {
             Set<Node> finalizedSet = new HashSet<>();
-            Set<Node> visited = new HashSet<>();
-            keys.stream()
-                .map(key -> unfinalized.get(key))
-                .filter(node -> node != null)
-                .forEach(node -> node.tryFinalize(finalizedSet, visited));
+            List<Node> visited = new ArrayList<>();
+            try {
+                keys.stream()
+                    .map(key -> unfinalized.get(key))
+                    .filter(node -> node != null)
+                    .forEach(node -> node.tryFinalize(finalizedSet, visited));
 
-            if (finalizedSet.isEmpty()) {
-                return new FinalizationData();
+                if (finalizedSet.isEmpty()) {
+                    return new FinalizationData();
+                }
+                FinalizationData data = new FinalizationData();
+                finalizedSet.stream().forEach(node -> {
+                    finalize(node, data);
+                });
+                return data;
+            } finally {
+                visited.forEach(n -> n.unmark());
             }
-            FinalizationData data = new FinalizationData();
-            finalizedSet.stream().forEach(node -> {
-                finalize(node, data);
-            });
-            return data;
         });
     }
 

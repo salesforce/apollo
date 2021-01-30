@@ -219,7 +219,7 @@ public class AvaTest {
         Semaphore outstanding = new Semaphore(500); // outstanding, unfinalized txns
         int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
-        ArrayList<HashKey> submitted = new ArrayList<>();
+        Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         IntStream.range(0, bunchCount).forEach(i -> {
             try {
