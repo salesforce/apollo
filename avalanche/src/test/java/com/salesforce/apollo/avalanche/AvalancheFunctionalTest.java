@@ -126,9 +126,8 @@ abstract public class AvalancheFunctionalTest {
         Context<Node> context = new Context<>(vid, 9);
         members.forEach(n -> context.activate(n));
         AtomicBoolean frist = new AtomicBoolean(true);
-        ForkJoinPool fjPool = new ForkJoinPool();
         List<TimedProcessor> processors = members.stream().map(m -> {
-            return createAva(m, context, frist, fjPool);
+            return createAva(m, context, frist, new ForkJoinPool());
         }).collect(Collectors.toList());
 
         // # of txns per node
@@ -199,7 +198,7 @@ abstract public class AvalancheFunctionalTest {
         processors.forEach(p -> summary(p.getAvalanche()));
 
         System.out.println("wanted: ");
-        System.out.println(master.getAvalanche().getDag().getWanted());
+        System.out.println(master.getAvalanche().getDag().getWanted(entropy, 100_000));
         System.out.println();
         transactioneers.forEach(t -> {
             System.out.println("finalized " + t.getSuccess() + " and failed to finalize " + t.getFailed() + " for "
@@ -251,7 +250,7 @@ abstract public class AvalancheFunctionalTest {
         TimedProcessor processor = new TimedProcessor();
         MVStore s = new MVStore.Builder().open();
         Avalanche avalanche = new Avalanche(m, context, entropy, communications.get(m.getId()), aParams, avaMetrics,
-                processor, fjPool, s);
+                processor, s);
         processor.setAvalanche(avalanche);
         return processor;
     }

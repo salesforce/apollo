@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -161,7 +162,7 @@ public class TestApollo {
         oracles.forEach(node -> summary(node.getAvalanche()));
 
         System.out.println("wanted: ");
-        System.out.println(master.getAvalanche().getDag().getWanted().stream().collect(Collectors.toList()));
+        System.out.println(master.getAvalanche().getDag().getWanted(new SecureRandom(), 100_000).stream().collect(Collectors.toList()));
         System.out.println();
         System.out.println();
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);

@@ -42,6 +42,7 @@ public class AvalancheParameters {
      * Max # of parents to apply to a NoOp txn
      */
     public int            maxNoOpParents           = 10;
+    public int            maxWanted                = 100;
     /**
      * Periodic rate we cull "finalized" NoOps that have propagated throughout the
      * network, so can be "culled"
@@ -72,8 +73,9 @@ public class AvalancheParameters {
      * Query timeout
      */
     public long           timeout                  = 30;
+
     /**
      * Query timeout unit
      */
-    public TimeUnit       unit                     = TimeUnit.SECONDS;
+    public TimeUnit unit = TimeUnit.SECONDS;
 }

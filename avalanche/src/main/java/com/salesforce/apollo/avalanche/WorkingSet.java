@@ -21,7 +21,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -29,7 +28,6 @@ import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -743,26 +741,24 @@ public class WorkingSet {
         });
     }
 
-    public List<HashKey> frontier(Random entropy) {
+    public List<HashKey> frontier(SecureRandom entropy) {
         return read(() -> {
             List<HashKey> sample = unfinalized.values()
                                               .stream()
                                               .filter(node -> node.isPreferred(parameters.core.beta1 - 1))
                                               .map(node -> node.getKey())
-                                              .collect(Collectors.toList());
-            Collections.shuffle(sample, entropy);
+                                              .collect(new ReservoirSampler<HashKey>(null, 100, entropy));
             return sample;
         });
     }
 
-    public List<HashKey> frontierForNoOp(Random entropy) {
+    public List<HashKey> frontierForNoOp(SecureRandom entropy) {
         return read(() -> {
             List<HashKey> sample = unfinalized.values()
                                               .stream()
                                               .filter(node -> node.isPreferred(parameters.core.beta2 - 1))
                                               .map(node -> node.getKey())
-                                              .collect(Collectors.toList());
-            Collections.shuffle(sample, entropy);
+                                              .collect(new ReservoirSampler<HashKey>(null, 100, entropy));
             return sample;
         });
     }
@@ -833,8 +829,8 @@ public class WorkingSet {
         return unqueried;
     }
 
-    public Set<HashKey> getWanted() {
-        return unknown;
+    public Collection<HashKey> getWanted(SecureRandom secureRandom, int max) {
+        return unknown.stream().collect(new ReservoirSampler<>(null, max, secureRandom));
     }
 
     public HashKey insert(DagEntry entry, HashKey cs, long discovered) {
@@ -923,15 +919,14 @@ public class WorkingSet {
         prefer(Collections.singletonList(key));
     }
 
-    public List<HashKey> preferred(Random entropy) {
+    public List<HashKey> preferred(SecureRandom entropy) {
         return read(() -> {
             List<HashKey> sample = unfinalized.values()
                                               .stream()
                                               .filter(node -> node.isKnown())
                                               .filter(node -> node.isPreferred())
                                               .map(node -> node.getKey())
-                                              .collect(Collectors.toList());
-            Collections.shuffle(sample, entropy);
+                                              .collect(new ReservoirSampler<HashKey>(null, 100, entropy));
             return sample;
         });
     }
@@ -954,18 +949,7 @@ public class WorkingSet {
 
     public List<HashKey> query(int maxSize) {
         List<HashKey> query = new ArrayList<>();
-        for (int i = 0; i < maxSize; i++) {
-            HashKey key;
-            try {
-                key = unqueried.poll(200, TimeUnit.MICROSECONDS);
-            } catch (InterruptedException e) {
-                return query;
-            }
-            if (key == null) {
-                break;
-            }
-            query.add(key);
-        }
+        unqueried.drainTo(query, maxSize);
         return query;
     }
 
@@ -973,17 +957,22 @@ public class WorkingSet {
         unqueried.add(key);
     }
 
-    public Deque<HashKey> sampleNoOpParents(Random entropy) {
+    public Deque<HashKey> sampleNoOpParents(SecureRandom entropy) {
         return read(() -> {
             Deque<HashKey> sample = new ArrayDeque<>();
 
             sample.addAll(singularNoOpFrontier(entropy));
+            log.trace("Sampled no op frontier: {}", sample.size());
 
             if (sample.isEmpty()) {
-                sample.addAll(unfinalizedSingular(entropy));
+                List<HashKey> s = unfinalizedSingular(entropy);
+                log.trace("Sampled no op unfinalized singular: {}", s.size());
+                sample.addAll(s);
             }
             if (sample.isEmpty()) {
-                sample.addAll(preferred(entropy));
+                List<HashKey> s = preferred(entropy);
+                log.trace("Sampled no op preferred: {}", s.size());
+                sample.addAll(s);
             }
             return sample;
         });
@@ -1015,7 +1004,7 @@ public class WorkingSet {
         return collector;
     }
 
-    public List<HashKey> singularFrontier(Random entropy) {
+    public List<HashKey> singularFrontier(SecureRandom entropy) {
         return read(() -> {
             List<HashKey> sample = unfinalized.values()
                                               .stream()
@@ -1023,21 +1012,19 @@ public class WorkingSet {
                                               .filter(node -> node.isPreferredAndSingular(parameters.core.beta1 / 2
                                                       - 1))
                                               .map(node -> node.getKey())
-                                              .collect(Collectors.toList());
-            Collections.shuffle(sample, entropy);
+                                              .collect(new ReservoirSampler<HashKey>(null, 100, entropy));
             return sample;
         });
     }
 
-    public List<HashKey> singularNoOpFrontier(Random entropy) {
+    public List<HashKey> singularNoOpFrontier(SecureRandom entropy) {
         return read(() -> {
             List<HashKey> sample = unfinalized.values()
                                               .stream()
                                               .filter(n -> !n.isNoOp())
                                               .filter(node -> node.isPreferredAndSingular(parameters.core.beta2 - 1))
                                               .map(node -> node.getKey())
-                                              .collect(Collectors.toList());
-            Collections.shuffle(sample, entropy);
+                                              .collect(new ReservoirSampler<HashKey>(null, 100, entropy));
             return sample;
         });
     }
@@ -1076,14 +1063,13 @@ public class WorkingSet {
         return tryFinalize(Collections.singletonList(key));
     }
 
-    public List<HashKey> unfinalizedSingular(Random entropy) {
+    public List<HashKey> unfinalizedSingular(SecureRandom entropy) {
         return read(() -> {
             List<HashKey> sample = unfinalized.values()
                                               .stream()
                                               .filter(node -> node.isUnfinalizedSingular())
                                               .map(node -> node.getKey())
-                                              .collect(Collectors.toList());
-            Collections.shuffle(sample, entropy);
+                                              .collect(new ReservoirSampler<HashKey>(null, 100, entropy));
             return sample;
         });
     }
@@ -1198,8 +1184,7 @@ public class WorkingSet {
             }
         }
         byte[] bs = finalized.get(key);
-        assert bs.length > 0 : "invalid stored for: " + key;
-        return ByteString.copyFrom(bs);
+        return bs == null ? null : ByteString.copyFrom(bs);
     }
 
     private <T> T read(Callable<T> call) {

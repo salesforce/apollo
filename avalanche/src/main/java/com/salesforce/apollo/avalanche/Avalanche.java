@@ -19,8 +19,9 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
@@ -82,24 +83,17 @@ public class Avalanche {
         }
 
         @Override
-        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                obj[i] = read(buff);
-            }
-        }
-
-        @Override
-        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                write(buff, obj[i]);
-            }
-        }
-
-        @Override
         public byte[] read(ByteBuffer buff) {
             byte[] bytes = new byte[buff.getInt()];
             buff.get(bytes);
             return bytes;
+        }
+
+        @Override
+        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
+            for (int i = 0; i < len; i++) {
+                obj[i] = read(buff);
+            }
         }
 
         @Override
@@ -109,6 +103,23 @@ public class Avalanche {
             buff.put(bytes);
         }
 
+        @Override
+        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
+            for (int i = 0; i < len; i++) {
+                write(buff, obj[i]);
+            }
+        }
+
+    }
+
+    public static class Finalized {
+        public final DagEntry entry;
+        public final HashKey  hash;
+
+        public Finalized(HashKey hash, DagEntry dagEntry) {
+            this.hash = hash;
+            this.entry = dagEntry;
+        }
     }
 
     public static class HashKeyType implements DataType {
@@ -126,22 +137,15 @@ public class Avalanche {
         }
 
         @Override
+        public HashKey read(ByteBuffer buff) {
+            return new HashKey(new long[] { buff.getLong(), buff.getLong(), buff.getLong(), buff.getLong() });
+        }
+
+        @Override
         public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
             for (int i = 0; i < len; i++) {
                 obj[i] = read(buff);
             }
-        }
-
-        @Override
-        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                write(buff, obj[i]);
-            }
-        }
-
-        @Override
-        public HashKey read(ByteBuffer buff) {
-            return new HashKey(new long[] { buff.getLong(), buff.getLong(), buff.getLong(), buff.getLong() });
         }
 
         @Override
@@ -150,15 +154,12 @@ public class Avalanche {
                 buff.putLong(l);
             }
         }
-    }
 
-    public static class Finalized {
-        public final DagEntry entry;
-        public final HashKey  hash;
-
-        public Finalized(HashKey hash, DagEntry dagEntry) {
-            this.hash = hash;
-            this.entry = dagEntry;
+        @Override
+        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
+            for (int i = 0; i < len; i++) {
+                write(buff, obj[i]);
+            }
         }
     }
 
@@ -180,7 +181,7 @@ public class Avalanche {
 
             final List<HashKey> inserted = dag.insertSerialized(list, System.currentTimeMillis());
             List<Boolean> stronglyPreferred = dag.isStronglyPreferred(inserted);
-            log.trace("onquery {} txn in {} ms", stronglyPreferred, System.currentTimeMillis() - now);
+            log.trace("onquery {} txn in {} ms", stronglyPreferred.size(), System.currentTimeMillis() - now);
             List<Vote> queried = stronglyPreferred.stream().map(r -> {
                 if (r == null) {
                     if (metrics != null) {
@@ -215,7 +216,7 @@ public class Avalanche {
     private com.salesforce.apollo.membership.Context<? extends Member>         context;
     private final WorkingSet                                                   dag;
     private final SecureRandom                                                 entropy;
-    private final ForkJoinPool                                                 fjPool;
+    private final Executor                                                     queryExecutor;
     private final int                                                          invalidThreshold;
     private final AvalancheMetrics                                             metrics;
     private final Node                                                         node;
@@ -231,17 +232,12 @@ public class Avalanche {
 
     public Avalanche(Node node, Context<? extends Member> context, SecureRandom entropy, Router communications,
             AvalancheParameters p, AvalancheMetrics metrics, Processor processor, MVStore store) {
-        this(node, context, entropy, communications, p, metrics, processor, ForkJoinPool.commonPool(), store);
-    }
-
-    public Avalanche(Node node, Context<? extends Member> context, SecureRandom entropy, Router communications,
-            AvalancheParameters p, AvalancheMetrics metrics, Processor processor, ForkJoinPool fjPool, MVStore store) {
         this.metrics = metrics;
         parameters = p;
         this.node = node;
         this.context = context;
         this.entropy = entropy;
-        this.fjPool = fjPool;
+        this.queryExecutor = Executors.newCachedThreadPool();
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new AvalancheServerCommunications(
                                                   communications.getClientIdentityProvider(), metrics, r),
@@ -259,14 +255,13 @@ public class Avalanche {
     }
 
     public Avalanche(View view, Router communications, AvalancheParameters p, AvalancheMetrics metrics,
-            Processor processor, ForkJoinPool fjPool, MVStore store) {
+            Processor processor, MVStore store) {
         this(view.getNode(), view.getContext(), view.getParameters().entropy, communications, p, metrics, processor,
-                fjPool, store);
+                store);
     }
 
-    public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor, ForkJoinPool fjPool,
-            MVStore store) {
-        this(view, communications, p, null, processor, fjPool, store);
+    public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor, MVStore store) {
+        this(view, communications, p, null, processor, store);
     }
 
     public WorkingSet getDag() {
@@ -292,7 +287,7 @@ public class Avalanche {
         comm.register(context.getId(), service);
         queryRounds.set(0);
 
-        queryFuture = timer.schedule(() -> fjPool.execute(() -> {
+        queryFuture = timer.schedule(() -> queryExecutor.execute(() -> {
             if (running.get()) {
                 round(timer, period);
             }
@@ -354,7 +349,7 @@ public class Avalanche {
         if (metrics != null) {
             metrics.getFinalizerRate().mark(finalized.finalized.size());
         }
-        fjPool.execute(() -> {
+        queryExecutor.execute(() -> {
             processor.finalize(finalized);
         });
         log.debug("Finalizing: {}, deleting: {} in {} ms", finalized.finalized.size(), finalized.deleted.size(),
@@ -442,7 +437,7 @@ public class Avalanche {
             if (timer != null) {
                 timer.close();
             }
-            Set<HashKey> wanted = dag.getWanted();
+            Collection<HashKey> wanted = dag.getWanted(getEntropy(), parameters.maxWanted);
             if (wanted.isEmpty()) {
                 log.trace("no wanted DAG entries");
                 return 0;
@@ -535,12 +530,12 @@ public class Avalanche {
             invalid[i] = new AtomicInteger();
             votes[i] = new AtomicInteger();
         }
-        Set<HashKey> want = dag.getWanted();
+        Collection<HashKey> want = dag.getWanted(entropy, parameters.maxWanted);
         if (want.size() > 0 && metrics != null) {
             metrics.getWantedRate().mark(want.size());
         }
 
-        CompletionService<Boolean> frist = new ExecutorCompletionService<>(fjPool);
+        CompletionService<Boolean> frist = new ExecutorCompletionService<>(queryExecutor);
         List<Future<Boolean>> futures;
         Member wanted = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size()));
         futures = sample.stream().map(m -> frist.submit(() -> {
@@ -564,7 +559,7 @@ public class Avalanche {
             } finally {
                 connection.release();
             }
-            log.trace("queried: {} for: {} result: {}", m, query.size(), result.getResultList());
+            log.trace("queried: {} for: {} result: {}", m, query.size(), result.getResultList().size());
             dag.insertSerialized(result.getWantedList(), System.currentTimeMillis());
             if (want.size() > 0 && metrics != null && m == wanted) {
                 metrics.getSatisfiedRate().mark(want.size());
@@ -638,7 +633,7 @@ public class Avalanche {
         } catch (Throwable t) {
             log.error("Error performing Avalanche batch round", t);
         } finally {
-            queryFuture = timer.schedule(() -> fjPool.execute(() -> {
+            queryFuture = timer.schedule(() -> queryExecutor.execute(() -> {
                 if (running.get()) {
                     round(timer, period);
                 }
