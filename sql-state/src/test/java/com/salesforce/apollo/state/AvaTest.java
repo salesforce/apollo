@@ -150,7 +150,6 @@ public class AvaTest {
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
-                                                                 .setEntropy(new SecureRandom())
                                                                  .build();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Map<Member, AvaAdapter> adapters = gatherConsortium(view, processed, gossipDuration, scheduler, msgParameters);
@@ -329,8 +328,7 @@ public class AvaTest {
             aParams.noOpQueryFactor = 40;
 
             AvaAdapter adapter = adapters.get(node);
-            Avalanche ava = new Avalanche(node, view, entropy, communications.get(node.getId()), aParams, null, adapter,
-                    new MVStore.Builder().open());
+            Avalanche ava = new Avalanche(node, view, communications.get(node.getId()), aParams, null, adapter, new MVStore.Builder().open());
             adapter.setAva(ava);
             avas.put(node, ava);
         });

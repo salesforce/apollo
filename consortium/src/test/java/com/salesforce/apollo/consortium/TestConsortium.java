@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -102,8 +101,6 @@ public class TestConsortium {
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private Map<HashKey, Router>          communications = new HashMap<>();
     private final Map<Member, Consortium> consortium     = new HashMap<>();
-    @SuppressWarnings("unused")
-    private SecureRandom                  entropy;
     private List<Node>                    members;
 
     @AfterEach
@@ -120,7 +117,6 @@ public class TestConsortium {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        entropy = new SecureRandom();
 
         assertTrue(certs.size() >= testCardinality);
 
@@ -147,7 +143,6 @@ public class TestConsortium {
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
-                                                                 .setEntropy(new SecureRandom())
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));

@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.KeyPair;
 import java.security.PublicKey;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -91,6 +91,7 @@ import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.protocols.BbBackedInputStream;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * @author hal.hildebrand
@@ -274,14 +275,14 @@ public class Consortium {
     private final Map<Long, CheckpointState>                                                       cachedCheckpoints        = new ConcurrentHashMap<>();
     private final AtomicReference<CommonCommunications<ConsortiumClientCommunications, Service>>   comm                     = new AtomicReference<>();
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
+    private final AtomicReference<HashedBlock>                                                     current                  = new AtomicReference<>();
     private final PriorityBlockingQueue<HashedBlock>                                               deferedBlocks            = new PriorityBlockingQueue<>(
             1024, (a, b) -> Long.compare(height(a.block), height(b.block)));
     private final List<DelayedMessage>                                                             delayed                  = new CopyOnWriteArrayList<>();
-    private final Fsm<CollaboratorContext, Transitions>                                            fsm;
     private final AtomicInteger                                                                    deltaCheckpointBlocks    = new AtomicInteger(
             Integer.MAX_VALUE);
+    private final Fsm<CollaboratorContext, Transitions>                                            fsm;
     private final AtomicReference<HashedBlock>                                                     genesis                  = new AtomicReference<>();
-    private final AtomicReference<HashedBlock>                                                     current                  = new AtomicReference<>();
     private final AtomicReference<HashedBlock>                                                     lastCheckpoint           = new AtomicReference<>();
     private final AtomicReference<HashedBlock>                                                     lastViewChange           = new AtomicReference<>();
     private final AtomicReference<Messenger>                                                       messenger                = new AtomicReference<>();
@@ -290,6 +291,8 @@ public class Consortium {
     private final AtomicReference<MemberOrder>                                                     order                    = new AtomicReference<>();
     private final Parameters                                                                       params;
     private final TickScheduler                                                                    scheduler                = new TickScheduler();
+    private final Semaphore                                                                        sequencer                = new Semaphore(
+            1);
     private final AtomicBoolean                                                                    started                  = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted                = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
@@ -357,7 +360,14 @@ public class Consortium {
         if (!started.get()) {
             return;
         }
-        transitions.synchronizedProcess(certifiedBlock);
+        try {
+            sequencer.acquire();
+            synchronizedProcess(certifiedBlock);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(e);
+        } finally {
+            sequencer.release();
+        }
     }
 
     public void start() {
@@ -390,10 +400,6 @@ public class Consortium {
 
     void delay(Message message, Member from) {
         delayed.add(new DelayedMessage(from, message));
-    }
-
-    SecureRandom entropy() {
-        return getParams().msgParameters.entropy;
     }
 
     InputStream getBody(Block block) {
@@ -568,64 +574,6 @@ public class Consortium {
         return transaction.hash;
     }
 
-    void synchronizedProcess(CertifiedBlock certifiedBlock) {
-        if (!started.get()) {
-            return;
-        }
-        Block block = certifiedBlock.getBlock();
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-        log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
-                  block.getHeader().getHeight(), getMember());
-        final HashedBlock previousBlock = getCurrent();
-        if (previousBlock != null) {
-            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
-            long height = height(block);
-            long prevHeight = previousBlock.height();
-            if (height <= prevHeight) {
-                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
-                          height, prevHeight, getMember());
-                return;
-            }
-            if (height != prevHeight + 1) {
-                deferedBlocks.add(new HashedBlock(hash, block));
-                log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
-                          getMember(), hash, previousBlock.height() + 1, block.getHeader().getHeight());
-                return;
-            }
-            if (!previousBlock.hash.equals(prev)) {
-                log.error("Protocol violation on {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {}",
-                          getMember(), previousBlock.hash, prev, prevHeight, height);
-                return;
-            }
-            if (!viewContext().validate(certifiedBlock)) {
-                log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
-                return;
-            }
-        } else {
-            if (block.getBody().getType() != BodyType.GENESIS) {
-                log.error("Invalid genesis block on: {} block: {}", getMember(), block.getBody().getType());
-                return;
-            }
-            Genesis body;
-            try {
-                body = Genesis.parseFrom(getBody(block));
-            } catch (IOException e) {
-                log.error("Protocol violation ont: {}. Genesis block body cannot be deserialized {}", getMember(),
-                          hash);
-                return;
-            }
-            Context<Member> context = getParams().context;
-            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), context,
-                                 context.getRingCount() - context.toleranceLevel(), getMember())) {
-                log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
-                return;
-            }
-        }
-        if (next(new HashedBlock(hash, block))) {
-            processDeferred();
-        }
-    }
-
     long targetCheckpoint() {
         final long delta = deltaCheckpointBlocks.get();
         final HashedBlock cp = lastCheckpoint.get();
@@ -662,7 +610,7 @@ public class Consortium {
 
     private EnqueuedTransaction build(boolean join, Message transaction) {
         byte[] nonce = new byte[32];
-        entropy().nextBytes(nonce);
+        Utils.entropy().nextBytes(nonce);
 
         Transaction.Builder builder = Transaction.newBuilder()
                                                  .setJoin(join)
@@ -722,16 +670,16 @@ public class Consortium {
         CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
         StreamSupport.stream(((Iterable<Long>) () -> store.blocksFrom(state.checkpoint.getCheckpoint())).spliterator(),
                              false)
-                     .collect(new ReservoirSampler<Long>(-1, params.maxCheckpointBlocks, params.msgParameters.entropy))
+                     .collect(new ReservoirSampler<Long>(-1, params.maxCheckpointBlocks, Utils.entropy()))
                      .stream()
                      .filter(s -> !blocksBff.mightContain(s))
                      .map(height -> store.getBlockBits(height))
                      .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
-        state.fetchSegments(segmentsBff, params.maxCheckpointSegments, params.msgParameters.entropy)
+        state.fetchSegments(segmentsBff, params.maxCheckpointSegments, Utils.entropy())
              .forEach(block -> ByteString.copyFrom(block));
         return replication.build();
     }
-    
+
     private MemberOrder getOrder() {
         return order.get();
     }
@@ -739,16 +687,16 @@ public class Consortium {
     private boolean next(HashedBlock next) {
         switch (next.block.getBody().getType()) {
         case CHECKPOINT:
-            transitions.processCheckpoint(next);
+            getState().processCheckpoint(next);
             break;
         case GENESIS:
-            transitions.processGenesis(next);
+            getState().processGenesis(next);
             break;
         case RECONFIGURE:
-            transitions.processReconfigure(next);
+            getState().processReconfigure(next);
             break;
         case USER:
-            transitions.processUser(next);
+            getState().processUser(next);
             break;
         case UNRECOGNIZED:
         default:
@@ -950,6 +898,61 @@ public class Consortium {
             log.debug("Cannot submit txn {} on: {} responses: {} required: {}", transaction.hash, getMember(),
                       results.size(), viewContext().majority());
             throw new TimeoutException("Cannot submit transaction " + transaction.hash);
+        }
+    }
+
+    private void synchronizedProcess(CertifiedBlock certifiedBlock) {
+        Block block = certifiedBlock.getBlock();
+        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
+                  block.getHeader().getHeight(), getMember());
+        final HashedBlock previousBlock = getCurrent();
+        if (previousBlock != null) {
+            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
+            long height = height(block);
+            long prevHeight = previousBlock.height();
+            if (height <= prevHeight) {
+                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
+                          height, prevHeight, getMember());
+                return;
+            }
+            if (height != prevHeight + 1) {
+                deferedBlocks.add(new HashedBlock(hash, block));
+                log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
+                          getMember(), hash, previousBlock.height() + 1, block.getHeader().getHeight());
+                return;
+            }
+            if (!previousBlock.hash.equals(prev)) {
+                log.error("Protocol violation on {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {}",
+                          getMember(), previousBlock.hash, prev, prevHeight, height);
+                return;
+            }
+            if (!viewContext().validate(certifiedBlock)) {
+                log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
+                return;
+            }
+        } else {
+            if (block.getBody().getType() != BodyType.GENESIS) {
+                log.error("Invalid genesis block on: {} block: {}", getMember(), block.getBody().getType());
+                return;
+            }
+            Genesis body;
+            try {
+                body = Genesis.parseFrom(getBody(block));
+            } catch (IOException e) {
+                log.error("Protocol violation ont: {}. Genesis block body cannot be deserialized {}", getMember(),
+                          hash);
+                return;
+            }
+            Context<Member> context = getParams().context;
+            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), context,
+                                 context.getRingCount() - context.toleranceLevel(), getMember())) {
+                log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
+                return;
+            }
+        }
+        if (next(new HashedBlock(hash, block))) {
+            processDeferred();
         }
     }
 }

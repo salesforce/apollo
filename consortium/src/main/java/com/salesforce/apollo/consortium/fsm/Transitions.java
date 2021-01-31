@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesfoce.apollo.consortium.proto.Block;
-import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
@@ -24,7 +23,6 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
-import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -161,26 +159,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
-    default Transitions processCheckpoint(HashedBlock next) {
-        context().processCheckpoint(next);
-        return null;
-    }
-
-    default Transitions processGenesis(HashedBlock next) {
-        context().processGenesis(next);
-        return null;
-    }
-
-    default Transitions processReconfigure(HashedBlock next) {
-        context().processReconfigure(next);
-        return null;
-    }
-
-    default Transitions processUser(HashedBlock next) {
-        context().processUser(next);
-        return null;
-    }
-
     default Transitions receive(ReplicateTransactions txns, Member from) {
         context().receive(txns, from);
         return null;
@@ -214,11 +192,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
 
     default Transitions synchronize(int elected, Map<Member, StopData> regencyData) {
         throw fsm().invalidTransitionOn();
-    }
-
-    default Transitions synchronizedProcess(CertifiedBlock block) {
-        context().synchronizedProcess(block);
-        return null;
     }
 
     default Transitions synchronizingLeader() {

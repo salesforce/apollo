@@ -41,6 +41,7 @@ import java.net.SocketException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.channels.ClosedChannelException;
+import java.security.SecureRandom;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.Collection;
@@ -67,9 +68,17 @@ import org.bouncycastle.cert.X509CertificateHolder;
  */
 
 public class Utils {
+
     private static enum ParsingState {
         BRACKET, DOLLAR, PASS_THROUGH
     }
+
+    private static ThreadLocal<SecureRandom> ENTROPY = new ThreadLocal<>() {
+        @Override
+        protected SecureRandom initialValue() {
+            return new SecureRandom();
+        }
+    };
 
     public static Object accessField(String fieldName, Object target) throws SecurityException, NoSuchFieldException,
                                                                       IllegalArgumentException, IllegalAccessException {
@@ -343,6 +352,10 @@ public class Utils {
         zos.flush();
     }
 
+    public static SecureRandom entropy() {
+        return ENTROPY.get();
+    }
+
     /**
      * Expand the zip resource into the destination, replacing any ${propName} style
      * properties with the corresponding values in the substitutions map
@@ -591,6 +604,19 @@ public class Utils {
             }
             return iface;
         }
+    }
+
+    public static HashKey getMemberId(X509Certificate c) {
+        X509CertificateHolder holder;
+        try {
+            holder = new X509CertificateHolder(c.getEncoded());
+        } catch (CertificateEncodingException | IOException e) {
+            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
+        }
+        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
+
+        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
+        return new HashKey(id);
     }
 
     /**
@@ -987,10 +1013,6 @@ public class Utils {
         return props;
     }
 
-    public static boolean waitForCondition(int maxWaitTime, Supplier<Boolean> condition) {
-        return waitForCondition(maxWaitTime, 100, condition);
-    }
-
     public static boolean waitForCondition(int maxWaitTime, final int sleepTime, Supplier<Boolean> condition) {
         long endTime = System.currentTimeMillis() + maxWaitTime;
         while (System.currentTimeMillis() < endTime) {
@@ -1006,16 +1028,7 @@ public class Utils {
         return false;
     }
 
-    public static HashKey getMemberId(X509Certificate c) {
-        X509CertificateHolder holder;
-        try {
-            holder = new X509CertificateHolder(c.getEncoded());
-        } catch (CertificateEncodingException | IOException e) {
-            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
-        }
-        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
-    
-        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
-        return new HashKey(id);
+    public static boolean waitForCondition(int maxWaitTime, Supplier<Boolean> condition) {
+        return waitForCondition(maxWaitTime, 100, condition);
     }
 }

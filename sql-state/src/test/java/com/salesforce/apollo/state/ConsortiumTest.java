@@ -25,6 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -93,7 +94,6 @@ public class ConsortiumTest {
     private File                               checkpointDirBase;
     private Map<HashKey, Router>               communications = new HashMap<>();
     private final Map<Member, Consortium>      consortium     = new HashMap<>();
-    private SecureRandom                       entropy;
     private List<Member>                       members;
     private final Map<Member, SqlStateMachine> updaters       = new HashMap<>();
 
@@ -114,8 +114,6 @@ public class ConsortiumTest {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        entropy = new SecureRandom();
-
         assertTrue(certs.size() >= testCardinality);
 
         members = new ArrayList<>();
@@ -143,7 +141,6 @@ public class ConsortiumTest {
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
-                                                                 .setEntropy(new SecureRandom())
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
@@ -226,6 +223,7 @@ public class ConsortiumTest {
         Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         Executor exec = Executors.newFixedThreadPool(4);
+        Random entropy = new Random(0x1638);
         IntStream.range(0, bunchCount).parallel().forEach(i -> exec.execute(() -> {
             try {
                 outstanding.acquire();
@@ -314,6 +312,7 @@ public class ConsortiumTest {
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters) {
         AtomicBoolean frist = new AtomicBoolean(true);
+        Random entropy = new Random(0x1638);
         members.stream().map(m -> {
             ForkJoinPool fj = new ForkJoinPool(2);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
@@ -327,11 +326,11 @@ public class ConsortiumTest {
                               .setConsensus(consensus)
                               .setMember(m)
                               .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
-                                                                          entropy))
+                                                                          new SecureRandom()))
                               .setContext(view)
                               .setMsgParameters(msgParameters)
                               .setMaxBatchByteSize(1024 * 1024 * 32)
-                              .setMaxBatchSize(1000)
+                              .setMaxBatchSize(2000)
                               .setCommunications(communications.get(m.getId()))
                               .setMaxBatchDelay(Duration.ofMillis(500))
                               .setGossipDuration(gossipDuration)

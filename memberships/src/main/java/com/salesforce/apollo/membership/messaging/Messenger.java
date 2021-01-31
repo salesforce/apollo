@@ -8,13 +8,13 @@ package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
-import java.security.SecureRandom;
 import java.security.Signature;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,6 +41,7 @@ import com.salesforce.apollo.membership.messaging.comms.MessagingServerCommunica
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * @author hal.hildebrand
@@ -74,13 +75,11 @@ public class Messenger {
         public static class Builder implements Cloneable {
 
             private int              bufferSize        = 1000;
-            private SecureRandom     entropy;
             private double           falsePositiveRate = 0.25;
-            private ForkJoinPool     fjPool            = ForkJoinPool.commonPool();
             private MessagingMetrics metrics;
 
             public Parameters build() {
-                return new Parameters(falsePositiveRate, entropy, bufferSize, metrics, fjPool);
+                return new Parameters(falsePositiveRate, bufferSize, metrics);
             }
 
             @Override
@@ -96,16 +95,8 @@ public class Messenger {
                 return bufferSize;
             }
 
-            public SecureRandom getEntropy() {
-                return entropy;
-            }
-
             public double getFalsePositiveRate() {
                 return falsePositiveRate;
-            }
-
-            public ForkJoinPool getFjPool() {
-                return fjPool;
             }
 
             public MessagingMetrics getMetrics() {
@@ -117,18 +108,8 @@ public class Messenger {
                 return this;
             }
 
-            public Builder setEntropy(SecureRandom entropy) {
-                this.entropy = entropy;
-                return this;
-            }
-
             public Builder setFalsePositiveRate(double falsePositiveRate) {
                 this.falsePositiveRate = falsePositiveRate;
-                return this;
-            }
-
-            public Builder setFjPool(ForkJoinPool fjPool) {
-                this.fjPool = fjPool;
                 return this;
             }
 
@@ -144,18 +125,13 @@ public class Messenger {
         }
 
         public final int              bufferSize;
-        public final SecureRandom     entropy;
         public final double           falsePositiveRate;
-        public final ForkJoinPool     fjPool;
         public final MessagingMetrics metrics;
 
-        public Parameters(double falsePositiveRate, SecureRandom entropy, int bufferSize, MessagingMetrics metrics,
-                ForkJoinPool fjPool) {
+        public Parameters(double falsePositiveRate, int bufferSize, MessagingMetrics metrics) {
             this.falsePositiveRate = falsePositiveRate;
-            this.entropy = entropy;
             this.metrics = metrics;
             this.bufferSize = bufferSize;
-            this.fjPool = fjPool;
         }
     }
 
@@ -167,7 +143,7 @@ public class Messenger {
                           context.getId(), member, from, inbound.getRing(), predecessor);
                 return Messages.getDefaultInstance();
             }
-            return buffer.process(new BloomFilter(inbound.getDigests()), parameters.entropy.nextInt(),
+            return buffer.process(new BloomFilter(inbound.getDigests()), Utils.entropy().nextInt(),
                                   parameters.falsePositiveRate);
         }
 
@@ -195,6 +171,7 @@ public class Messenger {
     private final List<Consumer<Integer>>                                      roundListeners  = new CopyOnWriteArrayList<>();
     private final Supplier<Signature>                                          signature;
     private final AtomicBoolean                                                started         = new AtomicBoolean();
+    private final Executor                                                     executor;
 
     @SuppressWarnings("unchecked")
     public Messenger(Member member, Supplier<Signature> signature, Context<? extends Member> context,
@@ -208,6 +185,11 @@ public class Messenger {
                                           r -> new MessagingServerCommunications(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
                                           getCreate(parameters.metrics));
+        AtomicInteger seq = new AtomicInteger();
+        this.executor = Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "Messenger[" + member.getId() + "] - " + seq.incrementAndGet());
+            return t;
+        });
     }
 
     public Context<? extends Member> getContext() {
@@ -233,7 +215,7 @@ public class Messenger {
             return;
         }
 
-        parameters.fjPool.execute(() -> {
+        executor.execute(() -> {
             if (!started.get()) {
                 return;
             }
@@ -246,7 +228,7 @@ public class Messenger {
                     gossip = link.gossip(MessageBff.newBuilder()
                                                    .setContext(context.getId().toID())
                                                    .setRing(ring)
-                                                   .setDigests(buffer.getBff(parameters.entropy.nextInt(),
+                                                   .setDigests(buffer.getBff(Utils.entropy().nextInt(),
                                                                              parameters.falsePositiveRate)
                                                                      .toBff())
                                                    .build());
@@ -298,7 +280,7 @@ public class Messenger {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        Duration initialDelay = duration.plusMillis(parameters.entropy.nextInt((int) (duration.toMillis() / 2)));
+        Duration initialDelay = duration.plusMillis(Utils.entropy().nextInt((int) (duration.toMillis() / 2)));
         log.info("Starting Messenger[{}] for {}", context.getId(), member);
         comm.register(context.getId(), new Service());
         scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);

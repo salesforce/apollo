@@ -7,7 +7,6 @@
 package com.salesforce.apollo.avalanche;
 
 import java.nio.ByteBuffer;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,6 +58,7 @@ import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * Implementation of the Avalanche consensus protocol.
@@ -215,7 +215,6 @@ public class Avalanche {
     private final CommonCommunications<AvalancheClientCommunications, Service> comm;
     private com.salesforce.apollo.membership.Context<? extends Member>         context;
     private final WorkingSet                                                   dag;
-    private final SecureRandom                                                 entropy;
     private final Executor                                                     queryExecutor;
     private final int                                                          invalidThreshold;
     private final AvalancheMetrics                                             metrics;
@@ -230,14 +229,17 @@ public class Avalanche {
     private volatile ScheduledFuture<?>                                        scheduledNoOpsCull;
     private final Service                                                      service      = new Service();
 
-    public Avalanche(Node node, Context<? extends Member> context, SecureRandom entropy, Router communications,
-            AvalancheParameters p, AvalancheMetrics metrics, Processor processor, MVStore store) {
+    public Avalanche(Node node, Context<? extends Member> context, Router communications, AvalancheParameters p,
+            AvalancheMetrics metrics, Processor processor, MVStore store) {
         this.metrics = metrics;
         parameters = p;
         this.node = node;
         this.context = context;
-        this.entropy = entropy;
-        this.queryExecutor = Executors.newCachedThreadPool();
+        AtomicInteger seq = new AtomicInteger();
+        this.queryExecutor = Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "Avalanche[" + node.getId() + "] - " + seq.incrementAndGet());
+            return t;
+        });
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new AvalancheServerCommunications(
                                                   communications.getClientIdentityProvider(), metrics, r),
@@ -256,8 +258,7 @@ public class Avalanche {
 
     public Avalanche(View view, Router communications, AvalancheParameters p, AvalancheMetrics metrics,
             Processor processor, MVStore store) {
-        this(view.getNode(), view.getContext(), view.getParameters().entropy, communications, p, metrics, processor,
-                store);
+        this(view.getNode(), view.getContext(), communications, p, metrics, processor, store);
     }
 
     public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor, MVStore store) {
@@ -363,7 +364,7 @@ public class Avalanche {
         if (queryRounds.get() % parameters.noOpQueryFactor != 0) {
             return;
         }
-        Deque<HashKey> sample = dag.sampleNoOpParents(getEntropy());
+        Deque<HashKey> sample = dag.sampleNoOpParents(Utils.entropy());
 
         for (int i = 0; i < parameters.noOpsPerRound; i++) {
             TreeSet<HashKey> parents = new TreeSet<>();
@@ -377,7 +378,7 @@ public class Avalanche {
                 return;
             }
             byte[] dummy = new byte[4];
-            getEntropy().nextBytes(dummy);
+            Utils.entropy().nextBytes(dummy);
             Builder builder = DagEntry.newBuilder()
                                       .setDescription(EntryType.NO_OP)
                                       .setData(Any.pack(ByteMessage.newBuilder()
@@ -394,10 +395,6 @@ public class Avalanche {
                 metrics.getNoOpGenerationRate().mark();
             }
         }
-    }
-
-    private SecureRandom getEntropy() {
-        return entropy;
     }
 
     private void prefer(List<HashKey> preferings) {
@@ -419,7 +416,7 @@ public class Avalanche {
     private int query() {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        Collection<? extends Member> sample = context.sample(parameters.core.k, getEntropy(), node.getId());
+        Collection<? extends Member> sample = context.sample(parameters.core.k, Utils.entropy(), node.getId());
 
         if (sample.isEmpty()) {
             return 0;
@@ -437,12 +434,12 @@ public class Avalanche {
             if (timer != null) {
                 timer.close();
             }
-            Collection<HashKey> wanted = dag.getWanted(getEntropy(), parameters.maxWanted);
+            Collection<HashKey> wanted = dag.getWanted(Utils.entropy(), parameters.maxWanted);
             if (wanted.isEmpty()) {
                 log.trace("no wanted DAG entries");
                 return 0;
             }
-            Member member = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size()));
+            Member member = new ArrayList<Member>(sample).get(Utils.entropy().nextInt(sample.size()));
             AvalancheClientCommunications connection = comm.apply(member, getNode());
             if (connection == null) {
                 log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
@@ -530,14 +527,14 @@ public class Avalanche {
             invalid[i] = new AtomicInteger();
             votes[i] = new AtomicInteger();
         }
-        Collection<HashKey> want = dag.getWanted(entropy, parameters.maxWanted);
+        Collection<HashKey> want = dag.getWanted(Utils.entropy(), parameters.maxWanted);
         if (want.size() > 0 && metrics != null) {
             metrics.getWantedRate().mark(want.size());
         }
 
         CompletionService<Boolean> frist = new ExecutorCompletionService<>(queryExecutor);
         List<Future<Boolean>> futures;
-        Member wanted = new ArrayList<Member>(sample).get(getEntropy().nextInt(sample.size()));
+        Member wanted = new ArrayList<Member>(sample).get(Utils.entropy().nextInt(sample.size()));
         futures = sample.stream().map(m -> frist.submit(() -> {
             QueryResult result;
             AvalancheClientCommunications connection = comm.apply(m, getNode());
@@ -646,7 +643,7 @@ public class Avalanche {
             throw new IllegalStateException("Service is not running");
         }
         if (parentSample.isEmpty()) {
-            dag.sampleParents(parentSample, getEntropy());
+            dag.sampleParents(parentSample, Utils.entropy());
         }
         Set<HashKey> parents;
 

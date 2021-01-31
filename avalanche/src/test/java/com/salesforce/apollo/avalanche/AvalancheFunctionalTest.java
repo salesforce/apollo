@@ -95,7 +95,6 @@ abstract public class AvalancheFunctionalTest {
         baseDir.mkdirs();
         node0registry = new MetricRegistry();
         registry = new MetricRegistry();
-        entropy = new SecureRandom();
 
         int testCardinality = testCardinality();
         members = new ArrayList<>();
@@ -249,8 +248,8 @@ abstract public class AvalancheFunctionalTest {
         frist.set(false);
         TimedProcessor processor = new TimedProcessor();
         MVStore s = new MVStore.Builder().open();
-        Avalanche avalanche = new Avalanche(m, context, new SecureRandom(), communications.get(m.getId()), aParams,
-                avaMetrics, processor, s);
+        Avalanche avalanche = new Avalanche(m, context, communications.get(m.getId()), aParams, avaMetrics, processor,
+                s);
         processor.setAvalanche(avalanche);
         return processor;
     }

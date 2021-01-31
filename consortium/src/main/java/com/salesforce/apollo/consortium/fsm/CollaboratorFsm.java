@@ -15,7 +15,6 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Timers;
-import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -27,30 +26,6 @@ import com.salesforce.apollo.membership.Member;
 public enum CollaboratorFsm implements Transitions {
 
     CHECKPOINT_RECOVERY {
-
-        @Override
-        public Transitions processCheckpoint(HashedBlock next) {
-            // TODO Auto-generated method stub
-            return super.processCheckpoint(next);
-        }
-
-        @Override
-        public Transitions processGenesis(HashedBlock next) {
-            // TODO Auto-generated method stub
-            return super.processGenesis(next);
-        }
-
-        @Override
-        public Transitions processReconfigure(HashedBlock next) {
-            // TODO Auto-generated method stub
-            return super.processReconfigure(next);
-        }
-
-        @Override
-        public Transitions processUser(HashedBlock next) {
-            // TODO Auto-generated method stub
-            return super.processUser(next);
-        }
     },
     CLIENT {
     },
@@ -83,26 +58,6 @@ public enum CollaboratorFsm implements Transitions {
         }
     },
     INITIAL {
-
-        @Override
-        public Transitions processCheckpoint(HashedBlock next) {
-            return null;
-        }
-
-        @Override
-        public Transitions processGenesis(HashedBlock next) {
-            return null;
-        }
-
-        @Override
-        public Transitions processReconfigure(HashedBlock next) {
-            return null;
-        }
-
-        @Override
-        public Transitions processUser(HashedBlock next) {
-            return null;
-        }
 
         @Override
         public Transitions start() {
@@ -210,26 +165,6 @@ public enum CollaboratorFsm implements Transitions {
             throw fsm().invalidTransitionOn();
         }
 
-        @Override
-        public Transitions processCheckpoint(HashedBlock next) {
-            throw fsm().invalidTransitionOn();
-        }
-
-        @Override
-        public Transitions processGenesis(HashedBlock next) {
-            throw fsm().invalidTransitionOn();
-        }
-
-        @Override
-        public Transitions processReconfigure(HashedBlock next) {
-            throw fsm().invalidTransitionOn();
-        }
-
-        @Override
-        public Transitions processUser(HashedBlock next) {
-            throw fsm().invalidTransitionOn();
-        }
-
         @Entry
         public void terminate() {
             context().shutdown();
@@ -255,12 +190,6 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions joinAsMember() {
             return JOINING_MEMBER;
-        }
-
-        @Override
-        public Transitions processGenesis(HashedBlock next) {
-            context().processGenesis(next);
-            return null;
         }
 
     },
@@ -310,12 +239,6 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions missingGenesis() {
             context().awaitGenesis();
-            return null;
-        }
-
-        @Override
-        public Transitions processGenesis(HashedBlock next) {
-            context().processGenesis(next);
             return null;
         }
     };

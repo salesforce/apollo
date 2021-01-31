@@ -6,11 +6,9 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.Map;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Util;
 import com.salesforce.apollo.protocols.Conversion;
@@ -35,12 +33,6 @@ public class FirefliesParameters {
      * The maximum cardinality of the fireflies group
      */
     public final int cardinality;
-
-    /**
-     * Secure source of randomness
-     */
-    @JsonIgnore
-    public final SecureRandom entropy;
 
     /**
      * The false positive rate for the bloomfilters used for the antientropy
@@ -78,19 +70,17 @@ public class FirefliesParameters {
     public final int    toleranceLevel;
 
     public FirefliesParameters(X509Certificate ca) {
-        this(ca, new SecureRandom(), Conversion.DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM,
-                DEFAULT_FALSE_POSITIVE_RATE);
+        this(ca, Conversion.DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, DEFAULT_FALSE_POSITIVE_RATE);
     }
 
     public FirefliesParameters(X509Certificate ca, double falsePositiveRate) {
-        this(ca, new SecureRandom(), Conversion.DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, falsePositiveRate);
+        this(ca, Conversion.DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, falsePositiveRate);
     }
 
-    public FirefliesParameters(X509Certificate ca, SecureRandom entropy, String signatureAlgorithm,
-            String hashAlgorithm, double falsePositiveRate) {
+    public FirefliesParameters(X509Certificate ca, String signatureAlgorithm, String hashAlgorithm,
+            double falsePositiveRate) {
         this.ca = ca;
         this.signatureAlgorithm = signatureAlgorithm;
-        this.entropy = entropy;
         this.hashAlgorithm = hashAlgorithm;
         this.falsePositiveRate = falsePositiveRate;
 
@@ -114,8 +104,8 @@ public class FirefliesParameters {
 
     @Override
     public String toString() {
-        return "cardinality=" + cardinality + ", entropy=" + entropy + ", faultToleranceLevel=" + faultToleranceLevel
-                + ", hashAlgorithm=" + hashAlgorithm + ", probabilityByzantine=" + probabilityByzantine + ", rings="
-                + rings + ", signatureAlgorithm=" + signatureAlgorithm + ", toleranceLevel=" + toleranceLevel;
+        return "cardinality=" + cardinality + ", faultToleranceLevel=" + faultToleranceLevel + ", hashAlgorithm="
+                + hashAlgorithm + ", probabilityByzantine=" + probabilityByzantine + ", rings=" + rings
+                + ", signatureAlgorithm=" + signatureAlgorithm + ", toleranceLevel=" + toleranceLevel;
     }
 }

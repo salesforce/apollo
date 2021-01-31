@@ -11,7 +11,6 @@ import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
 import java.security.Key;
 import java.security.KeyPair;
 import java.security.PublicKey;
-import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.util.HashMap;
@@ -37,6 +36,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * @author hal.hildebrand
@@ -73,13 +73,11 @@ public class ViewContext implements MembershipListener<Member> {
 
     private final KeyPair                 consensusKeyPair;
     private final Context<Member>         context;
-    private final SecureRandom            entropy;
     private final boolean                 isViewMember;
     private final Member                  member;
     private final Map<HashKey, PublicKey> validators = new HashMap<>();
 
-    public ViewContext(Context<Member> context, Member member, KeyPair consensusKeyPair, List<ViewMember> members,
-            SecureRandom entropy) {
+    public ViewContext(Context<Member> context, Member member, KeyPair consensusKeyPair, List<ViewMember> members) {
         assert consensusKeyPair != null;
         this.context = context;
         this.member = member;
@@ -113,18 +111,16 @@ public class ViewContext implements MembershipListener<Member> {
         isViewMember = validators.containsKey(member.getId());
         log.debug("View context established for: {} is member: {} is view member: {} validators: {}", member,
                   context.getMember(member.getId()) != null, isViewMember, validators.size());
-        this.entropy = entropy;
     }
 
     public ViewContext(HashKey id, Context<Member> baseContext, Member m, KeyPair consensusKeyPair,
-            List<ViewMember> members, SecureRandom entropy) {
-        this(viewFor(id, baseContext), m, consensusKeyPair, members, entropy);
+            List<ViewMember> members) {
+        this(viewFor(id, baseContext), m, consensusKeyPair, members);
         baseContext.register(this);
     }
 
-    public ViewContext(Reconfigure view, Context<Member> baseContext, Member member, KeyPair consensusKeyPair,
-            SecureRandom entropy) {
-        this(new HashKey(view.getId()), baseContext, member, consensusKeyPair, view.getViewList(), entropy);
+    public ViewContext(Reconfigure view, Context<Member> baseContext, Member member, KeyPair consensusKeyPair) {
+        this(new HashKey(view.getId()), baseContext, member, consensusKeyPair, view.getViewList());
     }
 
     public void activeAll() {
@@ -144,7 +140,7 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public ViewContext cloneWith(List<ViewMember> members) {
-        return new ViewContext(context, member, consensusKeyPair, members, entropy);
+        return new ViewContext(context, member, consensusKeyPair, members);
     }
 
     public Messenger createMessenger(Parameters params) {
@@ -157,7 +153,7 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public Validate generateValidation(HashKey hash, Block block) {
-        byte[] signature = sign(consensusKeyPair.getPrivate(), entropy,
+        byte[] signature = sign(consensusKeyPair.getPrivate(), Utils.entropy(),
                                 Conversion.hashOf(block.getHeader().toByteString()));
         return generateValidation(hash, signature);
     }
@@ -235,7 +231,7 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public Stream<Member> streamRandomRing() {
-        return context.ring(entropy.nextInt(context.getRingCount())).stream();
+        return context.ring(Utils.entropy().nextInt(context.getRingCount())).stream();
     }
 
     public int timeToLive() {

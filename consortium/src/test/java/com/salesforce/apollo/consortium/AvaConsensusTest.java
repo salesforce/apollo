@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -102,7 +101,6 @@ public class AvaConsensusTest {
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private Map<HashKey, Router>          communications = new HashMap<>();
     private final Map<Member, Consortium> consortium     = new HashMap<>();
-    private SecureRandom                  entropy;
     private List<Node>                    members;
 
     @AfterEach
@@ -121,7 +119,6 @@ public class AvaConsensusTest {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        entropy = new SecureRandom();
 
         assertTrue(certs.size() >= testCardinality);
 
@@ -150,8 +147,6 @@ public class AvaConsensusTest {
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.00001)
                                                                  .setBufferSize(1000)
-                                                                 .setEntropy(new SecureRandom())
-                                                                 .setFjPool(new ForkJoinPool())
                                                                  .build();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Map<Member, AvaAdapter> adapters = gatherConsortium(view, processed, gossipDuration, scheduler, msgParameters);
@@ -247,7 +242,6 @@ public class AvaConsensusTest {
     }
 
     private void gatherAvalanche(Context<Member> view, Map<Member, AvaAdapter> adapters) {
-        ForkJoinPool avaPool = new ForkJoinPool(members.size() * 10);
         members.forEach(node -> {
             AvalancheParameters aParams = new AvalancheParameters();
 
@@ -267,7 +261,7 @@ public class AvaConsensusTest {
             aParams.noOpQueryFactor = 40;
 
             AvaAdapter adapter = adapters.get(node);
-            Avalanche ava = new Avalanche(node, view, entropy, communications.get(node.getId()), aParams, null, adapter,
+            Avalanche ava = new Avalanche(node, view, communications.get(node.getId()), aParams, null, adapter,
                     new MVStore.Builder().open());
             adapter.setAva(ava);
             avas.put(node, ava);
