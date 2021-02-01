@@ -76,7 +76,7 @@ abstract public class AvalancheFunctionalTest {
 
     protected File                     baseDir;
     protected MetricRegistry           registry;
-    protected SecureRandom             entropy;
+    protected SecureRandom             entropy = new SecureRandom();
     protected List<Node>               members;
     protected ScheduledExecutorService scheduler;
     private Map<HashKey, Router>       communications = new HashMap<>();
@@ -130,7 +130,7 @@ abstract public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 12_000;
+        int target = 4_000;
         int outstanding = 400;
         int runtime = (int) Duration.ofSeconds(180).toMillis();
 
@@ -239,8 +239,8 @@ abstract public class AvalancheFunctionalTest {
         // parent selection target for avalanche dag voting
         aParams.parentCount = 5;
         aParams.queryBatchSize = 400;
-        aParams.noOpsPerRound = 10;
-        aParams.maxNoOpParents = 10;
+        aParams.noOpsPerRound = 2;
+        aParams.maxNoOpParents = 50;
         aParams.outstandingQueries = 5;
         aParams.noOpQueryFactor = 40;
 

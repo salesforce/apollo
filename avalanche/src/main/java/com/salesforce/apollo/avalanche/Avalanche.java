@@ -360,8 +360,8 @@ public class Avalanche {
     /**
      * Periodically issue no op transactions for the neglected noOp transactions
      */
-    private void generateNoOpTxns() {
-        if (queryRounds.get() % parameters.noOpQueryFactor != 0) {
+    private void generateNoOpTxns(boolean force) {
+        if (!force && queryRounds.get() % parameters.noOpQueryFactor != 0) {
             return;
         }
         Deque<HashKey> sample = dag.sampleNoOpParents(Utils.entropy());
@@ -625,8 +625,7 @@ public class Avalanche {
 
     private void round(ScheduledExecutorService timer, Duration period) {
         try {
-            query();
-            generateNoOpTxns();
+            generateNoOpTxns(query() == 0);
         } catch (Throwable t) {
             log.error("Error performing Avalanche batch round", t);
         } finally {
