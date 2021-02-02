@@ -130,7 +130,7 @@ abstract public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 4_000;
+        int target = 12_000;
         int outstanding = 400;
         int runtime = (int) Duration.ofSeconds(180).toMillis();
 
@@ -242,7 +242,7 @@ abstract public class AvalancheFunctionalTest {
         aParams.noOpsPerRound = 2;
         aParams.maxNoOpParents = 50;
         aParams.outstandingQueries = 5;
-        aParams.noOpQueryFactor = 40;
+        aParams.noOpQueryFactor = 20;
 
         AvaMetrics avaMetrics = new AvaMetrics(frist.get() ? node0registry : registry);
         frist.set(false);
