@@ -34,13 +34,15 @@ public class Transactioneer {
     private final TimedProcessor                  processor;
     private final Set<CompletableFuture<HashKey>> outstanding = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final AtomicInteger                   success     = new AtomicInteger();
-    private final AtomicInteger                   limit       = new AtomicInteger();
+    private final AtomicInteger                   remaining;
+    private final int                             limit;
     private final CountDownLatch                  gate;
     private final AtomicBoolean                   complete    = new AtomicBoolean();
 
     public Transactioneer(TimedProcessor p, int limit, CountDownLatch gate) {
         this.processor = p;
-        this.limit.set(limit);
+        this.remaining = new AtomicInteger(limit);
+        this.limit = limit;
         this.gate = gate;
     }
 
@@ -74,14 +76,7 @@ public class Transactioneer {
             if (outstanding.size() < maintain) {
                 addTransaction(txnWait, scheduler);
                 addTransaction(txnWait, scheduler);
-                limit.addAndGet(-2);
-            }
-            if (limit.get() <= 0) {
-                if (complete.compareAndExchange(false, true)) {
-                    if (gate != null) {
-                        gate.countDown();
-                    }
-                }
+                remaining.addAndGet(-2);
             }
         }, 50, 5, TimeUnit.MILLISECONDS);
     }
@@ -99,7 +94,13 @@ public class Transactioneer {
         future.whenComplete((hash, error) -> {
             outstanding.remove(future);
             if (hash != null) {
-                success.incrementAndGet();
+                if (success.incrementAndGet() >= limit) {
+                    if (complete.compareAndSet(false, true)) {
+                        if (gate != null) {
+                            gate.countDown();
+                        }
+                    }
+                }
             } else {
                 failed.incrementAndGet();
             }

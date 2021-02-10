@@ -398,8 +398,10 @@ public class WorkingSet {
 
         @Override
         public void excise() {
+            links.clear();
             unfinalized.remove(key);
             dependents().forEach(e -> e.snip(this));
+            dependents().clear();
         }
 
         @Override

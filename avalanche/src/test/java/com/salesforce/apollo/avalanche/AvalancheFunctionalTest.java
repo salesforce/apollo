@@ -132,8 +132,8 @@ abstract public class AvalancheFunctionalTest {
         int target = 12_000;
         int outstanding = 400;
         
-        ScheduledExecutorService avaScheduler = Executors.newScheduledThreadPool(40);
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(30);
+        ScheduledExecutorService avaScheduler = Executors.newScheduledThreadPool(5);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         communications.values().forEach(e -> e.start());
         processors.forEach(p -> p.getAvalanche().start(avaScheduler , Duration.ofMillis(50)));
@@ -240,7 +240,7 @@ abstract public class AvalancheFunctionalTest {
         aParams.noOpsPerRound = 2;
         aParams.maxNoOpParents = 50;
         aParams.outstandingQueries = 5;
-        aParams.noOpQueryFactor = 10;
+        aParams.noOpQueryFactor = 20;
 
         AvaMetrics avaMetrics = new AvaMetrics(frist.get() ? node0registry : registry);
         frist.set(false);
