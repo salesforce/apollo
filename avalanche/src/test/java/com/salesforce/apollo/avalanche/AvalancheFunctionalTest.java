@@ -14,14 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -31,6 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.apache.commons.math3.random.BitsStreamGenerator;
+import org.apache.commons.math3.random.MersenneTwister;
 import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -76,9 +77,8 @@ abstract public class AvalancheFunctionalTest {
 
     protected File                     baseDir;
     protected MetricRegistry           registry;
-    protected SecureRandom             entropy = new SecureRandom();
+    protected BitsStreamGenerator      entropy        = new MersenneTwister();
     protected List<Node>               members;
-    protected ScheduledExecutorService scheduler;
     private Map<HashKey, Router>       communications = new HashMap<>();
     protected MetricRegistry           node0registry;
 
@@ -109,7 +109,6 @@ abstract public class AvalancheFunctionalTest {
         assertEquals(testCardinality, members.size());
 
         System.out.println("Test cardinality: " + testCardinality);
-        scheduler = Executors.newScheduledThreadPool(20);
         boolean first = true;
         for (Node node : members) {
             communications.put(node.getId(), getCommunications(node, first));
@@ -132,17 +131,19 @@ abstract public class AvalancheFunctionalTest {
         // # of txns per node
         int target = 12_000;
         int outstanding = 400;
-        int runtime = (int) Duration.ofSeconds(180).toMillis();
+        
+        ScheduledExecutorService avaScheduler = Executors.newScheduledThreadPool(40);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(30);
 
         communications.values().forEach(e -> e.start());
-        processors.forEach(p -> p.getAvalanche().start(scheduler, Duration.ofMillis(50)));
+        processors.forEach(p -> p.getAvalanche().start(avaScheduler , Duration.ofMillis(50)));
 
         // generate the genesis transaction
         TimedProcessor master = processors.get(0);
         CompletableFuture<HashKey> genesis = master.createGenesis(ByteMessage.newBuilder()
                                                                              .setContents(ByteString.copyFromUtf8("Genesis"))
                                                                              .build(),
-                                                                  Duration.ofSeconds(90), scheduler);
+                                                                  Duration.ofSeconds(90), scheduler );
         HashKey genesisKey = null;
         try {
             genesisKey = genesis.get(10, TimeUnit.SECONDS);
@@ -155,39 +156,42 @@ abstract public class AvalancheFunctionalTest {
             // false)).render(Format.PNG).toFile(new
             // File("smoke.png"));
         }
+        HashKey k = genesisKey;
+        processors.stream().map(e -> e.getAvalanche()).forEach(a -> {
+            assertTrue(Utils.waitForCondition(5_000, () -> a.getDagDao().isFinalized(k)),
+                       "Failed to finalize genesis on: " + a.getNode().getId());
+        });
         assertNotNull(genesisKey);
 
         seed(processors);
 
         long now = System.currentTimeMillis();
-        HashKey k = genesisKey;
-        processors.stream().map(e -> e.getAvalanche()).forEach(a -> {
-            assertTrue(Utils.waitForCondition(90_000, () -> a.getDagDao().isFinalized(k)),
-                       "Failed to finalize genesis on: " + a.getNode().getId());
-        });
 
+        CountDownLatch latch = new CountDownLatch(processors.size());
         List<Transactioneer> transactioneers = processors.stream()
-                                                         .map(a -> new Transactioneer(a, 700_000))
+                                                         .map(a -> new Transactioneer(a, target, latch))
                                                          .collect(Collectors.toList());
 
-        ArrayList<Transactioneer> startUp = new ArrayList<>(transactioneers);
-        Collections.shuffle(startUp, entropy);
         transactioneers.parallelStream().forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, scheduler));
 
-        boolean finalized = Utils.waitForCondition(runtime, 3_000, () -> {
-            return transactioneers.stream()
-                                  .mapToInt(t -> t.getSuccess())
-                                  .filter(s -> s >= target)
-                                  .count() == transactioneers.size();
-        });
+        boolean finalized = latch.await(180, TimeUnit.SECONDS);
 
         long duration = System.currentTimeMillis() - now;
-
-        System.out.println("Completed in " + duration + " ms");
         transactioneers.forEach(t -> t.stop());
         processors.forEach(p -> p.getAvalanche().stop());
         Thread.sleep(2_000); // drain the swamp
 
+        System.out.println();
+        System.out.println("Node 0 Metrics");
+        ConsoleReporter.forRegistry(node0registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
+
+        System.out.println();
+        System.out.println();
+        System.out.println("Completed in " + duration + " ms");
         System.out.println("Global tps: "
                 + transactioneers.stream().mapToInt(e -> e.getSuccess()).sum() / (duration / 1000));
 
@@ -203,13 +207,7 @@ abstract public class AvalancheFunctionalTest {
             System.out.println("finalized " + t.getSuccess() + " and failed to finalize " + t.getFailed() + " for "
                     + t.getId());
         });
-        System.out.println();
-        System.out.println("Node 0 Metrics");
-        ConsoleReporter.forRegistry(node0registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+
         // System.out.println();
         // System.out.println("Comm Metrics");
         // ConsoleReporter.forRegistry(commRegistry)
@@ -237,12 +235,12 @@ abstract public class AvalancheFunctionalTest {
 
         // Avalanche implementation parameters
         // parent selection target for avalanche dag voting
-        aParams.parentCount = 5;
+        aParams.parentCount = 3;
         aParams.queryBatchSize = 400;
         aParams.noOpsPerRound = 2;
         aParams.maxNoOpParents = 50;
         aParams.outstandingQueries = 5;
-        aParams.noOpQueryFactor = 20;
+        aParams.noOpQueryFactor = 10;
 
         AvaMetrics avaMetrics = new AvaMetrics(frist.get() ? node0registry : registry);
         frist.set(false);
@@ -259,10 +257,11 @@ abstract public class AvalancheFunctionalTest {
     private void seed(List<TimedProcessor> nodes) {
         long then = System.currentTimeMillis();
         List<Transactioneer> transactioneers = nodes.stream()
-                                                    .map(a -> new Transactioneer(a, 5))
+                                                    .map(a -> new Transactioneer(a, 5, null))
                                                     .collect(Collectors.toList());
 
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 2, scheduler));
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 2, scheduler ));
 
         boolean seeded = Utils.waitForCondition(10_000, 500, () -> {
             return transactioneers.stream()
@@ -270,6 +269,7 @@ abstract public class AvalancheFunctionalTest {
                                   .filter(s -> s >= 2)
                                   .count() == transactioneers.size();
         });
+        scheduler.shutdown();
 
         assertTrue(seeded, "could not seed initial txn set");
         System.out.println("seeded initial txns in " + (System.currentTimeMillis() - then) + " ms");

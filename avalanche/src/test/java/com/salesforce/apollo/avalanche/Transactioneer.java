@@ -7,14 +7,15 @@
 package com.salesforce.apollo.avalanche;
 
 import java.time.Duration;
-import java.util.List;
+import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.protobuf.ByteString;
@@ -27,17 +28,20 @@ import com.salesforce.apollo.protocols.HashKey;
  * @since 222
  */
 public class Transactioneer {
-    private final AtomicInteger                    counter     = new AtomicInteger();
-    private final AtomicInteger                    failed      = new AtomicInteger();
-    private volatile ScheduledFuture<?>            futureSailor;
-    private final TimedProcessor                   processor;
-    private final List<CompletableFuture<HashKey>> outstanding = new CopyOnWriteArrayList<>();
-    private final AtomicInteger                    success     = new AtomicInteger();
-    private final AtomicInteger                    limit       = new AtomicInteger();
+    private final AtomicInteger                   counter     = new AtomicInteger();
+    private final AtomicInteger                   failed      = new AtomicInteger();
+    private volatile ScheduledFuture<?>           futureSailor;
+    private final TimedProcessor                  processor;
+    private final Set<CompletableFuture<HashKey>> outstanding = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final AtomicInteger                   success     = new AtomicInteger();
+    private final AtomicInteger                   limit       = new AtomicInteger();
+    private final CountDownLatch                  gate;
+    private final AtomicBoolean                   complete    = new AtomicBoolean();
 
-    public Transactioneer(TimedProcessor p, int limit) {
+    public Transactioneer(TimedProcessor p, int limit, CountDownLatch gate) {
         this.processor = p;
         this.limit.set(limit);
+        this.gate = gate;
     }
 
     public int getFailed() {
@@ -68,38 +72,38 @@ public class Transactioneer {
     public void transact(Duration txnWait, int maintain, ScheduledExecutorService scheduler) {
         scheduler.scheduleWithFixedDelay(() -> {
             if (outstanding.size() < maintain) {
-                if (limit.decrementAndGet() > 0) {
-                    addTransaction(txnWait, scheduler);
-                }
-                if (limit.decrementAndGet() > 0) {
-                    addTransaction(txnWait, scheduler);
+                addTransaction(txnWait, scheduler);
+                addTransaction(txnWait, scheduler);
+                limit.addAndGet(-2);
+            }
+            if (limit.get() <= 0) {
+                if (complete.compareAndExchange(false, true)) {
+                    if (gate != null) {
+                        gate.countDown();
+                    }
                 }
             }
         }, 50, 5, TimeUnit.MILLISECONDS);
-        futureSailor = scheduler.scheduleWithFixedDelay(() -> {
-            for (int i = 0; i < outstanding.size(); i++) {
-                try {
-                    HashKey result = outstanding.get(i).get(1, TimeUnit.MILLISECONDS);
-                    outstanding.remove(i);
-                    if (result != null) {
-                        success.incrementAndGet();
-                    } else {
-                        failed.incrementAndGet();
-                    }
-                } catch (TimeoutException | InterruptedException e) {
-                } catch (ExecutionException e) {
-                    e.getCause().printStackTrace();
-                }
-            }
-        }, 0, 50, TimeUnit.MILLISECONDS);
     }
 
     private void addTransaction(Duration txnWait, ScheduledExecutorService scheduler) {
-        outstanding.add(processor.submitTransaction((ByteMessage.newBuilder()
-                                                                .setContents(ByteString.copyFromUtf8("transaction for: "
-                                                                        + processor.getAvalanche().getNode().getId()
-                                                                        + " : " + counter.incrementAndGet()))
-                                                                .build()),
-                                                    txnWait, scheduler));
+        CompletableFuture<HashKey> future = processor.submitTransaction((ByteMessage.newBuilder()
+                                                                                    .setContents(ByteString.copyFromUtf8("transaction for: "
+                                                                                            + processor.getAvalanche()
+                                                                                                       .getNode()
+                                                                                                       .getId()
+                                                                                            + " : "
+                                                                                            + counter.incrementAndGet()))
+                                                                                    .build()),
+                                                                        txnWait, scheduler);
+        future.whenComplete((hash, error) -> {
+            outstanding.remove(future);
+            if (hash != null) {
+                success.incrementAndGet();
+            } else {
+                failed.incrementAndGet();
+            }
+        });
+        outstanding.add(future);
     }
 }

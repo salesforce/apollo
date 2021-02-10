@@ -9,7 +9,6 @@ package com.salesforce.apollo;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import org.apache.commons.math3.random.MersenneTwister;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -145,7 +145,11 @@ public class TestApollo {
         oracles.forEach(node -> summary(node.getAvalanche()));
 
         System.out.println("wanted: ");
-        System.out.println(master.getAvalanche().getDag().getWanted(new SecureRandom(), 100_000).stream().collect(Collectors.toList()));
+        System.out.println(master.getAvalanche()
+                                 .getDag()
+                                 .getWanted(new MersenneTwister(), 100_000)
+                                 .stream()
+                                 .collect(Collectors.toList()));
         System.out.println();
         System.out.println();
         assertTrue("failed to finalize " + target + " txns: " + transactioneers, finalized);

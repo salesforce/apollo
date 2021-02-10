@@ -6,16 +6,18 @@
  */
 package com.salesforce.apollo.consortium.support;
 
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.h2.mvstore.MVMap;
 
 import com.google.common.hash.BloomFilter;
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.salesfoce.apollo.consortium.proto.Slice;
 import com.salesforce.apollo.membership.ReservoirSampler;
 
 /**
@@ -35,16 +37,16 @@ public class CheckpointState {
         state.clear();
     }
 
-    public List<byte[]> fetchSegments(BloomFilter<Integer> bff, int maxSegments, SecureRandom entropy) {
+    public List<Slice> fetchSegments(BloomFilter<Integer> bff, int maxSegments, BitsStreamGenerator entropy) {
         List<Integer> segments = IntStream.range(0, checkpoint.getSegmentsCount())
                                           .mapToObj(i -> i)
                                           .collect(new ReservoirSampler<Integer>(-1, maxSegments, entropy))
                                           .stream()
                                           .filter(s -> !bff.mightContain(s))
                                           .collect(Collectors.toList());
-        List<byte[]> slices = new ArrayList<>();
+        List<Slice> slices = new ArrayList<>();
         for (int i : segments) {
-            slices.add(state.get(i));
+            slices.add(Slice.newBuilder().setIndex(i).setBlock(ByteString.copyFrom(state.get(i))).build());
         }
         return slices;
     }

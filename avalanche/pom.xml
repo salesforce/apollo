@@ -48,7 +48,7 @@
 		</dependency>
 		<dependency>
 			<groupId>guru.nidi</groupId>
-			<artifactId>graphviz-java</artifactId>
+			<artifactId>graphviz-java-all-j2v8</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

@@ -31,6 +31,10 @@
         </encoder>
     </appender>
 
+    <logger name="guru.nidi" level="TRACE"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
     <logger name="com.salesforce.apollo" level="INFO"
         additivity="false">
         <appender-ref ref="STDOUT" />

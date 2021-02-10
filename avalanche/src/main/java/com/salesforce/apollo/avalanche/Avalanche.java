@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -31,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import org.apache.commons.math3.util.Pair;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.h2.mvstore.WriteBuffer;
@@ -46,6 +48,7 @@ import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
+import com.salesfoce.apollo.proto.ID;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.QueryResult.Vote;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
@@ -57,6 +60,7 @@ import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -165,10 +169,10 @@ public class Avalanche {
 
     public class Service {
 
-        public QueryResult onQuery(List<ByteString> list, List<HashKey> wanted) {
+        public QueryResult onQuery(List<ID> hashes, List<ByteString> txns, List<HashKey> wanted) {
             if (!running.get()) {
                 ArrayList<Vote> results = new ArrayList<>();
-                for (int i = 0; i < list.size(); i++) {
+                for (int i = 0; i < txns.size(); i++) {
                     results.add(Vote.UNKNOWN);
                     if (metrics != null) {
                         metrics.getInboundQueryUnknownRate().mark();
@@ -179,7 +183,7 @@ public class Avalanche {
             long now = System.currentTimeMillis();
             Timer.Context timer = metrics == null ? null : metrics.getInboundQueryTimer().time();
 
-            final List<HashKey> inserted = dag.insertSerialized(list, System.currentTimeMillis());
+            final List<HashKey> inserted = dag.insertSerialized(hashes, txns, System.currentTimeMillis());
             List<Boolean> stronglyPreferred = dag.isStronglyPreferred(inserted);
             log.trace("onquery {} txn in {} ms", stronglyPreferred.size(), System.currentTimeMillis() - now);
             List<Vote> queried = stronglyPreferred.stream().map(r -> {
@@ -197,9 +201,9 @@ public class Avalanche {
 
             if (timer != null) {
                 timer.close();
-                metrics.getInboundQueryRate().mark(list.size());
+                metrics.getInboundQueryRate().mark(txns.size());
             }
-            assert queried.size() == list.size() : "on query results " + queried.size() + " != " + list.size();
+            assert queried.size() == txns.size() : "on query results " + queried.size() + " != " + txns.size();
 
             return QueryResult.newBuilder().addAllResult(queried).addAllWanted(dag.getEntries(wanted)).build();
         }
@@ -220,7 +224,7 @@ public class Avalanche {
     private final AvalancheMetrics                                             metrics;
     private final Node                                                         node;
     private final AvalancheParameters                                          parameters;
-    private final Deque<HashKey>                                               parentSample = new LinkedBlockingDeque<>();
+    private final BlockingDeque<HashKey>                                       parentSample = new LinkedBlockingDeque<>();
     private final Processor                                                    processor;
     private volatile ScheduledFuture<?>                                        queryFuture;
     private final AtomicLong                                                   queryRounds  = new AtomicLong();
@@ -364,7 +368,8 @@ public class Avalanche {
         if (!force && queryRounds.get() % parameters.noOpQueryFactor != 0) {
             return;
         }
-        Deque<HashKey> sample = dag.sampleNoOpParents(Utils.entropy());
+        Deque<HashKey> sample = dag.sampleNoOpParents(Utils.bitStreamEntropy(),
+                                                      parameters.noOpsPerRound * parameters.maxNoOpParents);
 
         for (int i = 0; i < parameters.noOpsPerRound; i++) {
             TreeSet<HashKey> parents = new TreeSet<>();
@@ -378,7 +383,7 @@ public class Avalanche {
                 return;
             }
             byte[] dummy = new byte[4];
-            Utils.entropy().nextBytes(dummy);
+            Utils.bitStreamEntropy().nextBytes(dummy);
             Builder builder = DagEntry.newBuilder()
                                       .setDescription(EntryType.NO_OP)
                                       .setData(Any.pack(ByteMessage.newBuilder()
@@ -416,7 +421,7 @@ public class Avalanche {
     private int query() {
         long start = System.currentTimeMillis();
         long now = System.currentTimeMillis();
-        Collection<? extends Member> sample = context.sample(parameters.core.k, Utils.entropy(), node.getId());
+        Collection<? extends Member> sample = context.sample(parameters.core.k, Utils.bitStreamEntropy(), node.getId());
 
         if (sample.isEmpty()) {
             return 0;
@@ -434,7 +439,7 @@ public class Avalanche {
             if (timer != null) {
                 timer.close();
             }
-            Collection<HashKey> wanted = dag.getWanted(Utils.entropy(), parameters.maxWanted);
+            Collection<HashKey> wanted = dag.getWanted(Utils.bitStreamEntropy(), parameters.maxWanted);
             if (wanted.isEmpty()) {
                 log.trace("no wanted DAG entries");
                 return 0;
@@ -446,7 +451,10 @@ public class Avalanche {
             }
             try {
                 List<ByteString> entries = connection.requestDAG(context.getId(), wanted);
-                dag.insertSerialized(entries, System.currentTimeMillis());
+                dag.insertSerialized(entries.stream()
+                                            .map(e -> new HashKey(Conversion.hashOf(e)).toID())
+                                            .collect(Collectors.toList()),
+                                     entries, System.currentTimeMillis());
                 if (metrics != null) {
                     metrics.getWantedRate().mark(wanted.size());
                     metrics.getSatisfiedRate().mark(entries.size());
@@ -458,7 +466,7 @@ public class Avalanche {
             }
             return 0;
         }
-        List<ByteString> query = dag.getQuerySerializedEntries(unqueried);
+        List<Pair<HashKey, ByteString>> query = dag.getQuerySerializedEntries(unqueried);
         long sampleTime = System.currentTimeMillis() - now;
 
         now = System.currentTimeMillis();
@@ -513,13 +521,15 @@ public class Avalanche {
      * Query the sample of members for their boolean opinion on the query of
      * transaction entries
      * 
+     * @param hashes
      * @param query  - the batch of unqueried nodes
      * @param sample - the random sample of members to query
+     * 
      * @return for each sampled member, the list of query results for the
      *         transaction batch, or NULL if there could not be a determination
      *         (such as comm failure) of the query for that member
      */
-    private List<Boolean> query(List<ByteString> query, Collection<? extends Member> sample) {
+    private List<Boolean> query(List<Pair<HashKey, ByteString>> query, Collection<? extends Member> sample) {
         long now = System.currentTimeMillis();
         AtomicInteger[] invalid = new AtomicInteger[query.size()];
         AtomicInteger[] votes = new AtomicInteger[query.size()];
@@ -527,14 +537,14 @@ public class Avalanche {
             invalid[i] = new AtomicInteger();
             votes[i] = new AtomicInteger();
         }
-        Collection<HashKey> want = dag.getWanted(Utils.entropy(), parameters.maxWanted);
+        Collection<HashKey> want = dag.getWanted(Utils.bitStreamEntropy(), parameters.maxWanted);
         if (want.size() > 0 && metrics != null) {
             metrics.getWantedRate().mark(want.size());
         }
 
         CompletionService<Boolean> frist = new ExecutorCompletionService<>(queryExecutor);
         List<Future<Boolean>> futures;
-        Member wanted = new ArrayList<Member>(sample).get(Utils.entropy().nextInt(sample.size()));
+        Member wanted = new ArrayList<Member>(sample).get(Utils.bitStreamEntropy().nextInt(sample.size()));
         futures = sample.stream().map(m -> frist.submit(() -> {
             QueryResult result;
             AvalancheClientCommunications connection = comm.apply(m, getNode());
@@ -557,7 +567,11 @@ public class Avalanche {
                 connection.release();
             }
             log.trace("queried: {} for: {} result: {}", m, query.size(), result.getResultList().size());
-            dag.insertSerialized(result.getWantedList(), System.currentTimeMillis());
+            dag.insertSerialized(result.getWantedList()
+                                       .stream()
+                                       .map(e -> new HashKey(Conversion.hashOf(e)).toID())
+                                       .collect(Collectors.toList()),
+                                 result.getWantedList(), System.currentTimeMillis());
             if (want.size() > 0 && metrics != null && m == wanted) {
                 metrics.getSatisfiedRate().mark(want.size());
             }
@@ -641,24 +655,23 @@ public class Avalanche {
         if (!running.get()) {
             throw new IllegalStateException("Service is not running");
         }
-        if (parentSample.isEmpty()) {
-            dag.sampleParents(parentSample, Utils.entropy());
-        }
         Set<HashKey> parents;
 
         if (EntryType.GENSIS == type) {
             parents = Collections.emptySet();
         } else {
             parents = new HashSet<>();
-            while (parents.size() < parameters.parentCount) {
-                HashKey parent = parentSample.poll();
-                if (parent == null) {
-                    break;
-                }
-                parents.add(parent);
+            if (parentSample.isEmpty()) {
+                dag.sampleParents(parentSample, 100, Utils.bitStreamEntropy());
             }
+            if (parentSample.isEmpty()) {
+                parents.addAll(dag.finalized(Utils.bitStreamEntropy(), parameters.parentCount));
+            } else {
+                parentSample.drainTo(parents, parameters.parentCount);
+            }
+
             if (parents.isEmpty()) {
-                log.error("No parents available for txn");
+                log.error("No parents available for txn: {}", dag.finalizedCount());
                 throw new IllegalStateException("No parents avaialable for transaction");
             }
         }

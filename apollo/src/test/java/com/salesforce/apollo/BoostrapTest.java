@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.net.URL;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import org.apache.commons.math3.random.MersenneTwister;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -131,7 +131,11 @@ public class BoostrapTest {
         oracles.forEach(node -> TestApollo.summary(node.getAvalanche()));
 
         System.out.println("wanted: ");
-        System.out.println(master.getAvalanche().getDag().getWanted(new SecureRandom(), 100_000).stream().collect(Collectors.toList()));
+        System.out.println(master.getAvalanche()
+                                 .getDag()
+                                 .getWanted(new MersenneTwister(), 100_000)
+                                 .stream()
+                                 .collect(Collectors.toList()));
         System.out.println();
         System.out.println();
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);

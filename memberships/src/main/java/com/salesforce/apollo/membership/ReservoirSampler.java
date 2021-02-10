@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.membership;
 
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -17,14 +16,17 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collector;
 
+import org.apache.commons.math3.random.BitsStreamGenerator;
+
 public class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
 
-    private int                c = 0;
-    private Object             exclude;
-    private final SecureRandom rand;
-    private final int          sz;
+    private int                       c = 0;
+    private Object                    exclude;
+    private final BitsStreamGenerator rand;
+    private final int                 sz;
 
-    public ReservoirSampler(Object excluded, int size, SecureRandom entropy) {
+    public ReservoirSampler(Object excluded, int size, BitsStreamGenerator entropy) {
+        assert size >= 0;
         this.exclude = excluded;
         this.sz = size;
         rand = entropy;

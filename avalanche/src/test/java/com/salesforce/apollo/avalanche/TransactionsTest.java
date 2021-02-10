@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -28,6 +27,8 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
+import org.apache.commons.math3.random.BitsStreamGenerator;
+import org.apache.commons.math3.random.MersenneTwister;
 import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,14 +59,14 @@ public class TransactionsTest {
     }
 
     private WorkingSet          dag;
-    private SecureRandom        entropy;
+    private BitsStreamGenerator entropy;
     private AvalancheParameters parameters;
     private DagEntry            root;
     private HashKey             rootKey;
 
     @BeforeEach
     public void before() throws Exception {
-        entropy = new SecureRandom(new byte[] { 0x16, 0x38 });
+        entropy = new MersenneTwister(0x1638);
         parameters = new AvalancheParameters();
         dag = new WorkingSet(new NullProcessor(), parameters, new MVStore.Builder().open().openMap("test2"), null);
         root = dag("Ye root".getBytes());
@@ -208,16 +209,16 @@ public class TransactionsTest {
         ordered.add(secondCommit);
         last = secondCommit;
 
-        TreeSet<HashKey> frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        TreeSet<HashKey> frontier = dag.frontier(entropy, 3).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(3, frontier.size());
 
         assertTrue(frontier.contains(secondCommit));
 
-        HashKey userTxn = newDagEntry("Ye test transaction", ordered, stored, dag.sampleParents(entropy));
+        HashKey userTxn = newDagEntry("Ye test transaction", ordered, stored, dag.sampleParents(entropy, 4));
         ordered.add(userTxn);
 
-        frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.frontier(entropy, 4).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(4, frontier.size());
 
@@ -227,7 +228,7 @@ public class TransactionsTest {
         last = userTxn;
         last = newDagEntry("entry: " + 0, ordered, stored, Arrays.asList(last));
 
-        frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.frontier(entropy, 5).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(5, frontier.size());
 
@@ -371,7 +372,8 @@ public class TransactionsTest {
         HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
         last = secondCommit;
 
-        HashKey userTxn = newDagEntry("Ye test transaction", ordered, stored, dag.sampleParents(entropy));
+        HashKey userTxn = newDagEntry("Ye test transaction", ordered, stored,
+                                      dag.sampleParents(entropy, parameters.parentCount));
 
         last = userTxn;
 
@@ -400,7 +402,12 @@ public class TransactionsTest {
         assertTrue(dag.isFinalized(rootKey));
 
         // 1 elegible parent, the root
-        Collection<HashKey> sampled = dag.sampleParents(entropy)
+        Collection<HashKey> sampled = dag.sampleParents(entropy, parameters.parentCount)
+                                         .stream()
+                                         .collect(Collectors.toCollection(TreeSet::new));
+        assertEquals(0, sampled.size());
+
+        sampled = dag.finalized(entropy, parameters.parentCount)
                                          .stream()
                                          .collect(Collectors.toCollection(TreeSet::new));
         assertEquals(1, sampled.size());
@@ -411,7 +418,9 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        sampled = dag.sampleParents(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        sampled = dag.sampleParents(entropy, 1)
+                     .stream()
+                     .collect(Collectors.toCollection(TreeSet::new));
         assertEquals(1, sampled.size());
         assertTrue(sampled.contains(ordered.get(1)));
 
@@ -420,7 +429,9 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        sampled = dag.sampleParents(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        sampled = dag.sampleParents(entropy, parameters.parentCount)
+                     .stream()
+                     .collect(Collectors.toCollection(TreeSet::new));
         assertEquals(2, sampled.size());
         assertTrue(sampled.contains(ordered.get(1)));
         assertTrue(sampled.contains(ordered.get(2)));
@@ -440,7 +451,9 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        sampled = dag.sampleParents(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        sampled = dag.sampleParents(entropy, 3)
+                     .stream()
+                     .collect(Collectors.toCollection(TreeSet::new));
         assertEquals(3, sampled.size());
 
         assertTrue(sampled.contains(ordered.get(1)));
@@ -453,7 +466,9 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        sampled = dag.sampleParents(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        sampled = dag.sampleParents(entropy, 4)
+                     .stream()
+                     .collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(4, sampled.size());
 
@@ -495,7 +510,7 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        Set<HashKey> frontier = dag.frontier(entropy)
+        Set<HashKey> frontier = dag.frontier(entropy, 5)
                                    .stream()
 
                                    .collect(Collectors.toCollection(TreeSet::new));
@@ -511,13 +526,13 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        frontier = dag.singularFrontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.singularFrontier(entropy, 5).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(5, frontier.size());
 
         // prefer node 6, raising the confidence of nodes 3, 2, 1 and 0
         dag.prefer(ordered.get(6));
-        frontier = dag.frontier(entropy).stream().collect(Collectors.toCollection(TreeSet::new));
+        frontier = dag.frontier(entropy, 6).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(6, frontier.size());
 

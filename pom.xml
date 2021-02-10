@@ -280,8 +280,8 @@
 			</dependency>
 			<dependency>
 				<groupId>guru.nidi</groupId>
-				<artifactId>graphviz-java</artifactId>
-				<version>0.16.3</version>
+				<artifactId>graphviz-java-all-j2v8</artifactId>
+				<version>0.18.0</version>
 			</dependency>
 			<dependency>
 				<groupId>org.hamcrest</groupId>

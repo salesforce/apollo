@@ -9,6 +9,8 @@ package com.salesforce.apollo.avalanche.communications;
 import java.util.Collection;
 import java.util.List;
 
+import org.apache.commons.math3.util.Pair;
+
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.AvalancheGrpc;
 import com.salesfoce.apollo.proto.AvalancheGrpc.AvalancheBlockingStub;
@@ -53,9 +55,13 @@ public class AvalancheClientCommunications implements Avalanche {
     }
 
     @Override
-    public QueryResult query(HashKey context, List<ByteString> transactions, Collection<HashKey> wanted) {
+    public QueryResult query(HashKey context, List<Pair<HashKey, ByteString>> transactions,
+                             Collection<HashKey> wanted) {
         Builder builder = Query.newBuilder().setContext(context.toID());
-        transactions.stream().filter(e -> e.size() > 0).forEach(e -> builder.addTransactions(e));
+        transactions.forEach(t -> {
+            builder.addHashes(t.getFirst().toID());
+            builder.addTransactions(t.getSecond());
+        });
         wanted.forEach(e -> builder.addWanted(e.toID()));
         try {
             Query query = builder.build();

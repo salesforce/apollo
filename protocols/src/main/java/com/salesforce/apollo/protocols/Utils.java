@@ -57,6 +57,8 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
+import org.apache.commons.math3.random.BitsStreamGenerator;
+import org.apache.commons.math3.random.MersenneTwister;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -72,6 +74,13 @@ public class Utils {
     private static enum ParsingState {
         BRACKET, DOLLAR, PASS_THROUGH
     }
+
+    private static ThreadLocal<BitsStreamGenerator> BIT_STREAM_ENTROPY = new ThreadLocal<>() {
+        @Override
+        protected BitsStreamGenerator initialValue() {
+            return new MersenneTwister();
+        }
+    };
 
     private static ThreadLocal<SecureRandom> ENTROPY = new ThreadLocal<>() {
         @Override
@@ -153,6 +162,15 @@ public class Utils {
         } catch (IOException e) {
         }
         return -1;
+    }
+
+    public static BitsStreamGenerator bitStreamEntropy() {
+        return BIT_STREAM_ENTROPY.get();
+    }
+
+    public static BitsStreamGenerator bitStreamGenerator() {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     /**

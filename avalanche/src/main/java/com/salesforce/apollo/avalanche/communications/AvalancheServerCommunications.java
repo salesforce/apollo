@@ -43,7 +43,7 @@ public class AvalancheServerCommunications extends AvalancheImplBase {
     @Override
     public void query(Query request, StreamObserver<QueryResult> responseObserver) {
         router.evaluate(responseObserver, request.getContext(), s -> {
-            QueryResult result = s.onQuery(request.getTransactionsList(),
+            QueryResult result = s.onQuery(request.getHashesList(), request.getTransactionsList(),
                                            request.getWantedList()
                                                   .stream()
                                                   .map(e -> new HashKey(e))

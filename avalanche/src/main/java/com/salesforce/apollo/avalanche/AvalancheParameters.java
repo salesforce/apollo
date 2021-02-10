@@ -47,7 +47,7 @@ public class AvalancheParameters {
      * Periodic rate we cull "finalized" NoOps that have propagated throughout the
      * network, so can be "culled"
      */
-    public long           noOpGenerationCullMillis = 60_000;
+    public long           noOpGenerationCullMillis = 20_000;
     /**
      * How many queries per generation of NoOps
      */

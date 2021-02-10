@@ -670,14 +670,14 @@ public class Consortium {
         CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
         StreamSupport.stream(((Iterable<Long>) () -> store.blocksFrom(state.checkpoint.getCheckpoint())).spliterator(),
                              false)
-                     .collect(new ReservoirSampler<Long>(-1, params.maxCheckpointBlocks, Utils.entropy()))
+                     .collect(new ReservoirSampler<Long>(-1, params.maxCheckpointBlocks, Utils.bitStreamGenerator()))
                      .stream()
                      .filter(s -> !blocksBff.mightContain(s))
                      .map(height -> store.getBlockBits(height))
                      .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
-        state.fetchSegments(segmentsBff, params.maxCheckpointSegments, Utils.entropy())
-             .forEach(block -> ByteString.copyFrom(block));
-        return replication.build();
+        return replication.addAllSegments(state.fetchSegments(segmentsBff, params.maxCheckpointSegments,
+                                                              Utils.bitStreamEntropy()))
+                          .build();
     }
 
     private MemberOrder getOrder() {

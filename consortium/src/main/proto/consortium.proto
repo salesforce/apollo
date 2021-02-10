@@ -43,8 +43,13 @@ message CheckpointSync {
 
 
 message CheckpointSegments {
-    repeated bytes segments = 1;
+    repeated Slice segments = 1;
     repeated bytes blocks = 2;
+}
+
+message Slice {
+    int32 index = 1;
+    bytes block = 2;
 }
 
 message Join {
