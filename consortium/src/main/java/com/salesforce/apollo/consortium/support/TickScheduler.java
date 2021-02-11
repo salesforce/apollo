@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.consortium;
+package com.salesforce.apollo.consortium.support;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -68,7 +68,7 @@ public class TickScheduler {
             try {
                 action.run();
             } catch (Throwable t) {
-                log.trace("Error executing action {}", label, t);
+                log.error("Error executing action {}", label, t);
             }
         }
 

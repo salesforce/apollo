@@ -6,16 +6,50 @@ option java_outer_classname = "ConsortiumProto";
 option objc_class_prefix = "Cp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 
 package apollo.consortium;
 
 service OrderingService { 
     rpc submit (SubmitTransaction) returns (TransactionResult) {}
-    rpc join (Join) returns (JoinResult) {}
-    rpc stop(Stop) returns (google.protobuf.Empty){}
+    rpc join (Join) returns (JoinResult) {} 
     rpc stopData(StopData) returns (google.protobuf.Empty){}
-    rpc sync(Sync) returns (google.protobuf.Empty){}
-    rpc replicate(ReplicateTransactions) returns (google.protobuf.Empty){}
+    
+    rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
+    rpc checkpointSync(CheckpointSync) returns (CertifiedBlock) {}
+    rpc fetchBlocks(BlockReplication) returns (Blocks) {}
+}
+
+message BlockReplication {
+    bytes context = 1;
+    repeated bytes blocks = 2;
+}
+
+message Blocks {
+    repeated bytes blocks = 1;
+}
+
+message CheckpointReplication {
+    bytes context = 1;
+    int64 checkpoint = 2;
+    bytes checkpointSegments = 3;
+    bytes blocks = 4;
+}
+
+message CheckpointSync {
+    bytes context = 1;
+    int64 currentCheckpoint = 2;
+}
+
+
+message CheckpointSegments {
+    repeated Slice segments = 1;
+    repeated bytes blocks = 2;
+}
+
+message Slice {
+    int32 index = 1;
+    bytes block = 2;
 }
 
 message Join {
@@ -48,23 +82,27 @@ message Block {
 }
 
 message Header {
-    bytes previous = 1;
-    int64 height = 2;
-    int64 lastCheckpoint = 3;
-    int64 lastReconfig = 4;
-    bytes bodyHash = 5;
-    bytes nonce = 6;
+    int64 height = 1;
+    google.protobuf.Timestamp timestamp = 2; 
+    bytes previous = 3;
+    bytes lastCheckpoint = 4; 
+    bytes lastReconfig = 5;
+    bytes bodyHash = 6;
+    bytes nonce = 7;
 }
 
 message Body {
-    int32 consensusId = 1;
-    BodyType type = 2;
-    bytes contents = 3;
+    BodyType type = 1;
+    bytes contents = 2;
 }
 
 message Certification {
     bytes id = 1;
     bytes signature = 2;
+}
+
+message Certifications {
+    repeated Certification certs = 1;
 }
 
 enum BodyType {
@@ -75,7 +113,7 @@ enum BodyType {
 }
 
 message Genesis {
-    bytes genesisData = 1;
+    google.protobuf.Any genesisData = 1;
     Reconfigure initialView = 2;
 }
 
@@ -96,9 +134,8 @@ message ByteTransaction {
 }
 
 message JoinTransaction {
-    ViewMember member = 1;
-    int32 regency = 2;
-    repeated Certification certification = 3;
+    ViewMember member = 1; 
+    repeated Certification certification = 2;
 }
 
 message ViewMember {
@@ -108,15 +145,23 @@ message ViewMember {
 }
 
 message Checkpoint {
-    repeated ExecutedTransaction transactions = 1;
-} 
+    int64 checkpoint = 1;
+    int64 byteSize = 2;
+    int32 segmentSize = 3;
+    bytes stateHash = 4;
+    repeated bytes segments = 5;
+}
+
+message CheckpointProcessing {
+    int64 checkpoint = 1;
+}
 
 message Transaction {
     bool join = 1;
     bytes source = 2;
     bytes nonce = 3;
     bytes signature = 4;
-    repeated google.protobuf.Any batch = 5;
+    google.protobuf.Any txn = 5;
 }
 
 message ExecutedTransaction {
@@ -129,9 +174,6 @@ message Validate {
     bytes id = 2;
     bytes hash = 3;
     bytes signature = 4;
-}
-
-message Persist {
 }
 
 message Stop { 

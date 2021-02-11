@@ -14,6 +14,16 @@ databaseChangeLog:
 
       -  createTable:
             schemaName: kernel
+            tableName: watermark
+            columns:
+            -  column:
+                  name: value
+                  type: VARCHAR
+                  constraints:
+                     primaryKey: true
+                     
+      -  createTable:
+            schemaName: kernel
             tableName: lambda
             columns:
             -  column:
@@ -69,108 +79,6 @@ databaseChangeLog:
             baseTableSchemaName: kernel
             constraintName:  fk_lambda_parameter_schema_name
             onUpdate:  RESTRICT
-            referencedColumnNames:  schema, name   
-            referencedTableName:  lambda
-            validate:  true
-
-      -  createTable:
-            schemaName: kernel
-            tableName: table_def
-            columns:
-            -  column:
-                  name: schema
-                  type: VARCHAR
-            -  column:
-                  name: name
-                  type: VARCHAR
-            -  column:
-                  name: description
-                  type: VARCHAR
-      -  addUniqueConstraint:
-            schemaName: kernel
-            tableName: table_def
-            columnNames: schema, name
-            constraintName: table_unique_schema_name
-
-      -  createTable:
-            schemaName: kernel
-            tableName: table_column
-            columns:
-            -  column:
-                  name: schema
-                  type: VARCHAR
-            -  column:
-                  name: table_def
-                  type: VARCHAR
-            -  column:
-                  name: position
-                  type: INT
-            -  column:
-                  name: name
-                  type: VARCHAR
-            -  column:
-                  name: type
-                  type: INT
-            -  column:
-                  name: description
-                  type: VARCHAR
-      -  addUniqueConstraint:
-            schemaName: kernel
-            tableName: table_column
-            columnNames: schema, table_def, position
-            constraintName: table_column_unique_position
-      -  addForeignKeyConstraint:  
-            schemaName: kernel
-            baseColumnNames:  schema, table_def 
-            baseTableName:  table_column    
-            constraintName:  fk_table_column_schema_table
-            onUpdate:  RESTRICT  
-            referencedColumnNames:  schema, name   
-            referencedTableName:  table_def
-            validate:  true
-
-      -  createTable:
-            schemaName: kernel
-            tableName: table_trigger
-            columns:
-            -  column:
-                  name: schema
-                  type: VARCHAR
-            -  column:
-                  name: table_def
-                  type: VARCHAR
-            -  column:
-                  name: event
-                  type: INT
-            -  column:
-                  name: order
-                  type: INT
-            -  column:
-                  name: lambda_schema
-                  type: VARCHAR
-            -  column:
-                  name: lambda
-                  type: VARCHAR
-      -  addUniqueConstraint:
-            schemaName: kernel
-            tableName: table_trigger
-            columnNames: schema, table_def, event, order
-            constraintName: table_trigger_unique_order
-      -  addForeignKeyConstraint:
-            schemaName: kernel
-            baseColumnNames:  schema, table_def 
-            baseTableName:  table_trigger    
-            constraintName:  fk_trigger_schema_table
-            onUpdate:  RESTRICT  
-            referencedColumnNames:  schema, name   
-            referencedTableName:  table_def
-            validate:  true
-      -  addForeignKeyConstraint:
-            schemaName: kernel
-            baseColumnNames:  lambda_schema, lambda 
-            baseTableName:  table_trigger    
-            constraintName:  fk_trigger_schema_lambda
-            onUpdate:  RESTRICT  
             referencedColumnNames:  schema, name   
             referencedTableName:  lambda
             validate:  true

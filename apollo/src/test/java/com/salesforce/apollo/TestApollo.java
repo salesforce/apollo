@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import org.apache.commons.math3.random.MersenneTwister;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,7 +43,7 @@ public class TestApollo {
     public static void summarize(List<Apollo> nodes) {
         int finalized = nodes.stream()
                              .map(a -> a.getAvalanche())
-                             .map(n -> n.getDag().getFinalized().size())
+                             .map(n -> n.getDag().getFinalizedCount())
                              .reduce(0, (a, b) -> a + b);
         System.out.println("Total finalized : " + finalized);
         System.out.println();
@@ -51,7 +52,7 @@ public class TestApollo {
     public static void summary(Avalanche node) {
         System.out.println(node.getNode().getId() + " : ");
 
-        Integer finalized = node.getDag().getFinalized().size();
+        Integer finalized = node.getDag().getFinalizedCount();
         Integer unfinalizedUser = node.getDag()
                                       .getUnfinalized()
                                       .values()
@@ -161,7 +162,11 @@ public class TestApollo {
         oracles.forEach(node -> summary(node.getAvalanche()));
 
         System.out.println("wanted: ");
-        System.out.println(master.getAvalanche().getDag().getWanted().stream().collect(Collectors.toList()));
+        System.out.println(master.getAvalanche()
+                                 .getDag()
+                                 .getWanted(new MersenneTwister(), 100_000)
+                                 .stream()
+                                 .collect(Collectors.toList()));
         System.out.println();
         System.out.println();
         assertTrue(finalized, "failed to finalize " + target + " txns: " + transactioneers);

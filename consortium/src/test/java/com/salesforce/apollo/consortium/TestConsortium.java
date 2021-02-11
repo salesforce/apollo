@@ -13,7 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
-import java.security.SecureRandom;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,7 +34,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -45,17 +45,19 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.consortium.proto.Header;
+import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
+import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.CertWithKey;
@@ -77,7 +79,11 @@ public class TestConsortium {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FOOD or give me SLACK or KILL ME");
+    private static final Message                           GENESIS_DATA    = ByteMessage.newBuilder()
+                                                                                        .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                                        .build();
+    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
+            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
@@ -95,8 +101,6 @@ public class TestConsortium {
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private Map<HashKey, Router>          communications = new HashMap<>();
     private final Map<Member, Consortium> consortium     = new HashMap<>();
-    @SuppressWarnings("unused")
-    private SecureRandom                  entropy;
     private List<Node>                    members;
 
     @AfterEach
@@ -113,7 +117,6 @@ public class TestConsortium {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        entropy = new SecureRandom();
 
         assertTrue(certs.size() >= testCardinality);
 
@@ -140,7 +143,6 @@ public class TestConsortium {
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
-                                                                 .setEntropy(new SecureRandom())
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
@@ -155,7 +157,7 @@ public class TestConsortium {
             }
             return hash;
         };
-        BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor = (et, c) -> {
+        TransactionExecutor executor = (h, bh, et, c) -> {
             if (c != null) {
                 c.accept(new HashKey(et.getHash()), null);
             }
@@ -163,7 +165,7 @@ public class TestConsortium {
         gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters, executor);
 
         Set<Consortium> blueRibbon = new HashSet<>();
-        ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
+        ViewContext.viewFor(GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
@@ -258,7 +260,7 @@ public class TestConsortium {
             blocks.add(CertifiedBlock.newBuilder().setBlock(block).build());
             prev = new HashKey(Conversion.hashOf(block.toByteString()));
         }
-        Map<Long, CurrentBlock> cache = new HashMap<>();
+        Map<Long, HashedBlock> cache = new HashMap<>();
         assertEquals(0, CollaboratorContext.noGaps(blocks, cache).size());
         ArrayList<CertifiedBlock> gapped = new ArrayList<>(blocks);
         gapped.remove(5);
@@ -266,14 +268,13 @@ public class TestConsortium {
         assertEquals(0, CollaboratorContext.noGaps(blocks.subList(1, blocks.size()), cache).size());
         CertifiedBlock cb = blocks.get(5);
         cache.put(cb.getBlock().getHeader().getHeight(),
-                  new CurrentBlock(new HashKey(Conversion.hashOf(cb.getBlock().toByteString())), cb.getBlock()));
+                  new HashedBlock(new HashKey(Conversion.hashOf(cb.getBlock().toByteString())), cb.getBlock()));
         assertEquals(0, CollaboratorContext.noGaps(gapped, cache).size());
     }
 
     private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
-                                  Messenger.Parameters msgParameters,
-                                  BiConsumer<ExecutedTransaction, BiConsumer<HashKey, Throwable>> executor) {
+                                  Messenger.Parameters msgParameters, TransactionExecutor executor) {
         members.stream()
                .map(m -> new Consortium(Parameters.newBuilder()
                                                   .setConsensus(consensus)
@@ -291,7 +292,24 @@ public class TestConsortium {
                                                   .setTransactonTimeout(Duration.ofSeconds(30))
                                                   .setScheduler(scheduler)
                                                   .setExecutor(executor)
-                                                  .setGenesisData(GENESIS_DATA.toByteArray())
+                                                  .setGenesisData(GENESIS_DATA)
+                                                  .setGenesisViewId(GENESIS_VIEW_ID)
+                                                  .setDeltaCheckpointBlocks(10)
+                                                  .setCheckpointer(l -> {
+                                                      File temp;
+                                                      try {
+                                                          temp = File.createTempFile("foo", "bar");
+                                                          temp.deleteOnExit();
+                                                          try (FileOutputStream fos = new FileOutputStream(temp)) {
+                                                              fos.write("Give me food or give me slack or kill me".getBytes());
+                                                              fos.flush();
+                                                          }
+                                                      } catch (IOException e) {
+                                                          throw new IllegalStateException("Cannot create temp file", e);
+                                                      }
+
+                                                      return temp;
+                                                  })
                                                   .build()))
                .peek(c -> view.activate(c.getMember()))
                .forEach(e -> consortium.put(e.getMember(), e));

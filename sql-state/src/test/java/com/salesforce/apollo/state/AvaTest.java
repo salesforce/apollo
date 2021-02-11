@@ -25,6 +25,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -34,14 +35,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.proto.ByteMessage;
-import com.salesfoce.apollo.state.proto.Statement;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
 import com.salesforce.apollo.avalanche.DagDao;
@@ -51,9 +53,9 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.consortium.Consortium;
 import com.salesforce.apollo.consortium.Parameters;
-import com.salesforce.apollo.consortium.SigningUtils;
 import com.salesforce.apollo.consortium.ViewContext;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
+import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.CertWithKey;
@@ -73,10 +75,12 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class AvaTest {
 
-    private static final RootCertificate                   ca             = getCa();
+    private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final ByteString                        GENESIS_DATA   = ByteString.copyFromUtf8("Give me FooD or give me SLACK or KILL ME");
-    private static final Duration                          gossipDuration = Duration.ofMillis(10);
+    private static final Message                           GENESIS_DATA    = Helper.batch(Helper.batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
+    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
+            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
+    private static final Duration                          gossipDuration  = Duration.ofMillis(10);
 
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
@@ -90,14 +94,15 @@ public class AvaTest {
                          .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
-    private final Map<Member, Avalanche>  avas           = new HashMap<>();
-    private File                          baseDir;
-    private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
-    private Map<HashKey, Router>          communications = new HashMap<>();
-    private final Map<Member, Consortium> consortium     = new HashMap<>();
-    private SecureRandom                  entropy;
-    private List<Node>                    members;
-    private final Map<Member, Updater>    updaters       = new HashMap<>();
+    private final Map<Member, Avalanche>       avas           = new HashMap<>();
+    private File                               baseDir;
+    private Builder                            builder        = ServerConnectionCache.newBuilder().setTarget(30);
+    private File                               checkpointDirBase;
+    private Map<HashKey, Router>               communications = new HashMap<>();
+    private final Map<Member, Consortium>      consortium     = new HashMap<>();
+    private SecureRandom                       entropy;
+    private List<Node>                         members;
+    private final Map<Member, SqlStateMachine> updaters       = new HashMap<>();
 
     @AfterEach
     public void after() {
@@ -113,7 +118,8 @@ public class AvaTest {
 
     @BeforeEach
     public void before() {
-
+        checkpointDirBase = new File("target/ava-chkpoints");
+        Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
@@ -144,7 +150,6 @@ public class AvaTest {
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
-                                                                 .setEntropy(new SecureRandom())
                                                                  .build();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Map<Member, AvaAdapter> adapters = gatherConsortium(view, processed, gossipDuration, scheduler, msgParameters);
@@ -152,7 +157,7 @@ public class AvaTest {
         gatherAvalanche(view, adapters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
-        ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
+        ViewContext.viewFor(GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
@@ -192,12 +197,15 @@ public class AvaTest {
         HashKey hash;
         try {
             hash = client.submit((h, t) -> txnProcessed.set(true),
-                                 batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
+                                 Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                              "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
         } catch (TimeoutException e) {
             fail();
             return;
         }
-
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
 
@@ -207,21 +215,11 @@ public class AvaTest {
         System.out.println();
 
         long then = System.currentTimeMillis();
-        Semaphore outstanding = new Semaphore(200); // outstanding, unfinalized txns
+        Semaphore outstanding = new Semaphore(500); // outstanding, unfinalized txns
         int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
-        ArrayList<HashKey> submitted = new ArrayList<>();
+        Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
-        HashKey pending = client.submit((h, t) -> {
-            outstanding.release();
-            submitted.remove(h);
-            submittedBunch.countDown();
-        }, batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)"),
-                                        batch("insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)"),
-                                        batch("insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)"),
-                                        batch("insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)"),
-                                        batch("insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
-        submitted.add(pending);
         IntStream.range(0, bunchCount).forEach(i -> {
             try {
                 outstanding.acquire();
@@ -229,50 +227,51 @@ public class AvaTest {
                 throw new IllegalStateException(e1);
             }
             try {
+                String[] statements1 = { "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
+                                         "update books set qty = " + entropy.nextInt() + " where id = 1005" };
                 HashKey key = client.submit((h, t) -> {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
-                }, batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1001"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1002"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1003"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1004"),
-                                            batch("update books set qty = " + entropy.nextInt() + " where id = 1005"));
+                }, Helper.batch(Helper.batch(statements1)));
                 submitted.add(key);
             } catch (TimeoutException e) {
                 fail();
@@ -282,14 +281,12 @@ public class AvaTest {
 
         System.out.println("Awaiting " + bunchCount + " batches");
         boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
-        submittedBunch.getCount();
+        long now = System.currentTimeMillis() - then;
         assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
         System.out.println("Completed additional " + bunchCount + " transactions");
-        System.out.println("TPS: " + (bunchCount * 40) / ((System.currentTimeMillis() - then) / 1000.0));
-    }
-
-    private Statement batch(String sql) {
-        return Statement.newBuilder().setSql(sql).build();
+        double perSecond = now / 1000.0;
+        System.out.println("Statements per second: " + (bunchCount * 40) / perSecond);
+        System.out.println("Transactions per second: " + (bunchCount) / perSecond);
     }
 
     private void awaitGenesis(AtomicReference<CountDownLatch> processed,
@@ -314,7 +311,6 @@ public class AvaTest {
     private void gatherAvalanche(Context<Member> view, Map<Member, AvaAdapter> adapters) {
         members.forEach(node -> {
             AvalancheParameters aParams = new AvalancheParameters();
-            aParams.dagWood.maxCache = 1_000_000;
 
             // Avalanche protocol parameters
             aParams.core.alpha = 0.6;
@@ -332,8 +328,7 @@ public class AvaTest {
             aParams.noOpQueryFactor = 40;
 
             AvaAdapter adapter = adapters.get(node);
-            Avalanche ava = new Avalanche(node, view, entropy, communications.get(node.getId()), aParams, null,
-                    adapter);
+            Avalanche ava = new Avalanche(node, view, communications.get(node.getId()), aParams, null, adapter, new MVStore.Builder().open());
             adapter.setAva(ava);
             avas.put(node, ava);
         });
@@ -344,10 +339,12 @@ public class AvaTest {
                                                      Messenger.Parameters msgParameters) {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
+            ForkJoinPool fj = new ForkJoinPool();
             AvaAdapter adapter = new AvaAdapter(processed);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);
-            Updater up = new Updater(url, new Properties());
+            SqlStateMachine up = new SqlStateMachine(url, new Properties(),
+                    new File(checkpointDirBase, m.getId().toString()), fj);
             updaters.put(m, up);
             Consortium c = new Consortium(
                     Parameters.newBuilder()
@@ -360,14 +357,17 @@ public class AvaTest {
                               .setMaxBatchByteSize(1024 * 1024 * 32)
                               .setMaxBatchSize(1000)
                               .setCommunications(communications.get(m.getId()))
-                              .setMaxBatchDelay(Duration.ofMillis(100))
+                              .setMaxBatchDelay(Duration.ofMillis(500))
                               .setGossipDuration(gossipDuration)
                               .setViewTimeout(Duration.ofMillis(500))
                               .setJoinTimeout(Duration.ofSeconds(5))
                               .setTransactonTimeout(Duration.ofSeconds(15))
-                              .setExecutor(up)
+                              .setExecutor(up.getExecutor())
                               .setScheduler(scheduler)
-                              .setGenesisData(GENESIS_DATA.toByteArray())
+                              .setGenesisData(GENESIS_DATA)
+                              .setGenesisViewId(GENESIS_VIEW_ID)
+                              .setCheckpointer(up.getCheckpointer())
+                              .setDeltaCheckpointBlocks(10)
                               .build());
             adapter.setConsortium(c);
             adapters.put(m, adapter);

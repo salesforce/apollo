@@ -8,7 +8,6 @@ package com.salesforce.apollo.membership;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -22,6 +21,7 @@ import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -354,7 +354,7 @@ public class Context<T extends Member> {
      * @return a random sample set of the view's live members. May be limited by the
      *         number of active members.
      */
-    public <N extends T> List<T> sample(int range, SecureRandom entropy, HashKey excluded) {
+    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, HashKey excluded) {
         return rings[entropy.nextInt(rings.length)].stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
     }
 

@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -109,8 +110,9 @@ public class PregenPopulation {
         List<X509Certificate> seeds = new ArrayList<>();
         ArrayNode seedIndexes = JsonNodeFactory.instance.arrayNode();
 
+        Random entropy = new Random(0x1638);
         while (seeds.size() < parameters.toleranceLevel + 1) {
-            int index = parameters.entropy.nextInt(memberCerts.size());
+            int index = entropy.nextInt(memberCerts.size());
             X509Certificate cert = memberCerts.get(index).getX509Certificate();
             if (!seeds.contains(cert)) {
                 seeds.add(cert);

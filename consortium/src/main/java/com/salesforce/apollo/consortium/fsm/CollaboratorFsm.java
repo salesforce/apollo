@@ -9,12 +9,12 @@ package com.salesforce.apollo.consortium.fsm;
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Timers;
-import com.salesforce.apollo.consortium.CurrentBlock;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -25,11 +25,11 @@ import com.salesforce.apollo.membership.Member;
  */
 public enum CollaboratorFsm implements Transitions {
 
+    CHECKPOINT_RECOVERY {
+    },
     CLIENT {
     },
-    FOLLOWER
-
-    {
+    FOLLOWER {
 
         @Override
         public Transitions becomeClient() {
@@ -44,6 +44,12 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions becomeLeader() {
             return LEADER;
+        }
+
+        @Override
+        public Transitions deliverCheckpointing(CheckpointProcessing checkpointProcessing, Member from) {
+            context().deliverCheckpointing(checkpointProcessing, from);
+            return Checkpointing.FOLLOWER;
         }
 
         @Override
@@ -114,12 +120,6 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions deliverBlock(Block block, Member from) {
-            context().deliverBlock(block, from);
-            return null;
-        }
-
-        @Override
         public Transitions deliverValidate(Validate validation) {
             CollaboratorContext context = context();
             context.deliverValidate(validation);
@@ -127,16 +127,15 @@ public enum CollaboratorFsm implements Transitions {
             return null;
         }
 
-        @Override
-        public Transitions drainPending() {
-            context().drainBlocks();
-            return null;
-        }
-
         @Entry
         public void generate() {
             context().initializeConsensus();
-            context().generateBlocks();
+            context().generateBlock();
+        }
+
+        @Override
+        public Transitions generateCheckpoint() {
+            return Checkpointing.LEADER;
         }
 
         @Override
@@ -166,28 +165,8 @@ public enum CollaboratorFsm implements Transitions {
             throw fsm().invalidTransitionOn();
         }
 
-        @Override
-        public Transitions processCheckpoint(CurrentBlock next) {
-            throw fsm().invalidTransitionOn();
-        }
-
-        @Override
-        public Transitions processGenesis(CurrentBlock next) {
-            throw fsm().invalidTransitionOn();
-        }
-
-        @Override
-        public Transitions processReconfigure(CurrentBlock next) {
-            throw fsm().invalidTransitionOn();
-        }
-
-        @Override
-        public Transitions processUser(CurrentBlock next) {
-            throw fsm().invalidTransitionOn();
-        }
-
         @Entry
-        public void shutdown() {
+        public void terminate() {
             context().shutdown();
         }
 
@@ -211,12 +190,6 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions joinAsMember() {
             return JOINING_MEMBER;
-        }
-
-        @Override
-        public Transitions processGenesis(CurrentBlock next) {
-            context().processGenesis(next);
-            return null;
         }
 
     },
@@ -266,12 +239,6 @@ public enum CollaboratorFsm implements Transitions {
         @Override
         public Transitions missingGenesis() {
             context().awaitGenesis();
-            return null;
-        }
-
-        @Override
-        public Transitions processGenesis(CurrentBlock next) {
-            context().processGenesis(next);
             return null;
         }
     };

@@ -7,16 +7,15 @@
 package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.consortium.CollaboratorContext.height;
-import static com.salesforce.apollo.consortium.SigningUtils.generateKeyPair;
-import static com.salesforce.apollo.consortium.SigningUtils.sign;
-import static com.salesforce.apollo.consortium.SigningUtils.validateGenesis;
-import static com.salesforce.apollo.consortium.SigningUtils.verify;
+import static com.salesforce.apollo.consortium.support.SigningUtils.generateKeyPair;
+import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
+import static com.salesforce.apollo.consortium.support.SigningUtils.validateGenesis;
+import static com.salesforce.apollo.consortium.support.SigningUtils.verify;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.KeyPair;
 import java.security.PublicKey;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,30 +24,43 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import java.util.zip.DeflaterInputStream;
 import java.util.zip.InflaterInputStream;
 
+import org.h2.mvstore.MVStore;
+import org.h2.mvstore.MVStore.Builder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
+import com.google.common.hash.BloomFilter;
+import com.google.common.hash.Funnels;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.BlockReplication;
+import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
+import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
+import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
+import com.salesfoce.apollo.consortium.proto.CheckpointSync;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
-import com.salesfoce.apollo.consortium.proto.Persist;
+import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
@@ -64,14 +76,22 @@ import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
 import com.salesforce.apollo.consortium.comms.ConsortiumServerCommunications;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
+import com.salesforce.apollo.consortium.support.CheckpointState;
+import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
+import com.salesforce.apollo.consortium.support.HashedBlock;
+import com.salesforce.apollo.consortium.support.SigningUtils;
+import com.salesforce.apollo.consortium.support.SubmittedTransaction;
+import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.protocols.BbBackedInputStream;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * @author hal.hildebrand
@@ -81,6 +101,22 @@ public class Consortium {
 
     public class Service {
 
+        public CertifiedBlock checkpointSync(CheckpointSync request, HashKey from) {
+            Member member = getParams().context.getMember(from);
+            if (member == null) {
+                log.warn("Received checkpoint sync from non member: {} on: {}", from, getMember());
+                return CertifiedBlock.getDefaultInstance();
+            }
+            HashedBlock c = lastCheckpoint.get();
+            if (c == null) {
+                return CertifiedBlock.getDefaultInstance();
+            }
+            return CertifiedBlock.newBuilder()
+                                 .addAllCertifications(store.certifications(c.height()))
+                                 .setBlock(c.block)
+                                 .build();
+        }
+
         public TransactionResult clientSubmit(SubmitTransaction request, HashKey from) {
             Member member = getParams().context.getMember(from);
             if (member == null) {
@@ -89,18 +125,32 @@ public class Consortium {
             }
             EnqueuedTransaction enqueuedTransaction = new EnqueuedTransaction(hashOf(request.getTransaction()),
                     request.getTransaction());
-            if (enqueuedTransaction.getTransaction().getJoin()) {
+            if (enqueuedTransaction.transaction.getJoin()) {
                 if (viewContext().getMember(from) == null) {
                     log.warn("Received join from non consortium member: {} on: {}", from, getMember());
                     return TransactionResult.getDefaultInstance();
                 }
-                log.debug("Join transaction: {} on: {} from consortium member : {}", enqueuedTransaction.getHash(),
+                log.debug("Join transaction: {} on: {} from consortium member : {}", enqueuedTransaction.hash,
                           getMember(), from);
             } else {
-                log.debug("Client transaction: {} on: {} from: {}", enqueuedTransaction.getHash(), getMember(), from);
+                log.debug("Client transaction: {} on: {} from: {}", enqueuedTransaction.hash, getMember(), from);
             }
-            transitions.receive(enqueuedTransaction.getTransaction(), member);
+            transitions.receive(enqueuedTransaction.transaction, member);
             return TransactionResult.getDefaultInstance();
+        }
+
+        public CheckpointSegments fetch(CheckpointReplication request, HashKey from) {
+            Member member = getParams().context.getMember(from);
+            if (member == null) {
+                log.warn("Received checkpoint fetch from non member: {} on: {}", from, getMember());
+                return CheckpointSegments.getDefaultInstance();
+            }
+            return Consortium.this.fetch(request);
+        }
+
+        public Blocks fetchBlocks(BlockReplication request, HashKey from) {
+            // TODO Auto-generated method stub
+            return null;
         }
 
         public JoinResult join(Join request, HashKey fromID) {
@@ -141,24 +191,6 @@ public class Consortium {
             }
         }
 
-        public void replicate(ReplicateTransactions request, HashKey from) {
-            Member member = viewContext().getMember(from);
-            if (member == null) {
-                log.warn("Received ReplicateTransactions from non consortium member: {} on: {}", from, getMember());
-                return;
-            }
-            transitions.receive(request, member);
-        }
-
-        public void stop(Stop stop, HashKey from) {
-            Member member = viewContext().getMember(from);
-            if (member == null) {
-                log.warn("Received Stop from non consortium member: {} on: {}", from, getMember());
-                return;
-            }
-            transitions.deliverStop(stop, member);
-        }
-
         public void stopData(StopData stopData, HashKey from) {
             Member member = viewContext().getMember(from);
             if (member == null) {
@@ -168,20 +200,11 @@ public class Consortium {
             transitions.deliverStopData(stopData, member);
         }
 
-        public void sync(Sync sync, HashKey from) {
-            Member member = viewContext().getMember(from);
-            if (member == null) {
-                log.warn("Received Sync from non consortium member: {} on: {}", from, getMember());
-                return;
-            }
-            ((Runnable) () -> transitions.deliverSync(sync, member)).run();
-        }
-
     }
 
     public enum Timers {
-        AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, FLUSH_BATCH, PROCLAIM,
-        TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
+        ASSEMBLE_CHECKPOINT, AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, CHECKPOINT_TIMEOUT,
+        CHECKPOINTING, FLUSH_BATCH, PROCLAIM, TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
     }
 
     static class Result {
@@ -222,9 +245,7 @@ public class Consortium {
         buffers.add(transaction.getNonce());
         buffers.add(ByteString.copyFrom(transaction.getJoin() ? new byte[] { 1 } : new byte[] { 0 }));
         buffers.add(transaction.getSource());
-        for (int i = 0; i < transaction.getBatchCount(); i++) {
-            buffers.add(transaction.getBatch(i).toByteString());
-        }
+        buffers.add(transaction.getTxn().toByteString());
 
         return new HashKey(Conversion.hashOf(BbBackedInputStream.aggregate(buffers)));
     }
@@ -240,26 +261,50 @@ public class Consortium {
         }
     }
 
-    private volatile CommonCommunications<ConsortiumClientCommunications, Service>                 comm;
+    private static Builder defaultBuilder(Parameters params) {
+
+        MVStore.Builder builder = new MVStore.Builder();
+        if (params.storeFile != null) {
+            builder.fileName(params.storeFile.getAbsolutePath());
+        }
+        return builder;
+    }
+
+    final Store store;
+
+    private final Map<Long, CheckpointState>                                                       cachedCheckpoints        = new ConcurrentHashMap<>();
+    private final AtomicReference<CommonCommunications<ConsortiumClientCommunications, Service>>   comm                     = new AtomicReference<>();
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
-    private volatile CurrentBlock                                                                  current;
-    private final PriorityBlockingQueue<CurrentBlock>                                              deferedBlocks = new PriorityBlockingQueue<>(
-            1024, (a, b) -> Long.compare(height(a.getBlock()), height(b.getBlock())));
-    private final List<DelayedMessage>                                                             delayed       = new CopyOnWriteArrayList<>();
+    private final AtomicReference<HashedBlock>                                                     current                  = new AtomicReference<>();
+    private final PriorityBlockingQueue<HashedBlock>                                               deferedBlocks            = new PriorityBlockingQueue<>(
+            1024, (a, b) -> Long.compare(height(a.block), height(b.block)));
+    private final List<DelayedMessage>                                                             delayed                  = new CopyOnWriteArrayList<>();
+    private final AtomicInteger                                                                    deltaCheckpointBlocks    = new AtomicInteger(
+            Integer.MAX_VALUE);
     private final Fsm<CollaboratorContext, Transitions>                                            fsm;
-    private volatile Messenger                                                                     messenger;
-    private volatile ViewMember                                                                    nextView;
-    private volatile KeyPair                                                                       nextViewConsensusKeyPair;
-    private volatile MemberOrder                                                                   order;
+    private final AtomicReference<HashedBlock>                                                     genesis                  = new AtomicReference<>();
+    private final AtomicReference<HashedBlock>                                                     lastCheckpoint           = new AtomicReference<>();
+    private final AtomicReference<HashedBlock>                                                     lastViewChange           = new AtomicReference<>();
+    private final AtomicReference<Messenger>                                                       messenger                = new AtomicReference<>();
+    private final AtomicReference<ViewMember>                                                      nextView                 = new AtomicReference<>();
+    private final AtomicReference<KeyPair>                                                         nextViewConsensusKeyPair = new AtomicReference<>();
+    private final AtomicReference<MemberOrder>                                                     order                    = new AtomicReference<>();
     private final Parameters                                                                       params;
-    private final TickScheduler                                                                    scheduler     = new TickScheduler();
-    private final AtomicBoolean                                                                    started       = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>                                               submitted     = new ConcurrentHashMap<>();
+    private final TickScheduler                                                                    scheduler                = new TickScheduler();
+    private final Semaphore                                                                        sequencer                = new Semaphore(
+            1);
+    private final AtomicBoolean                                                                    started                  = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>                                               submitted                = new ConcurrentHashMap<>();
     private final Transitions                                                                      transitions;
-    private final AtomicReference<ViewContext>                                                     viewContext   = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                                     viewContext              = new AtomicReference<>();
 
     public Consortium(Parameters parameters) {
+        this(parameters, defaultBuilder(parameters));
+    }
+
+    public Consortium(Parameters parameters, MVStore.Builder builder) {
         this.params = parameters;
+        store = new Store(builder.open());
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, new Service(),
                                                                        r -> new ConsortiumServerCommunications(
                                                                                parameters.communications.getClientIdentityProvider(),
@@ -271,9 +316,31 @@ public class Consortium {
         nextViewConsensusKey();
     }
 
-    // test access
     public Fsm<CollaboratorContext, Transitions> fsm() {
         return fsm;
+    }
+
+    public HashedBlock getGenesis() {
+        return genesis.get();
+    }
+
+    public long getLastCheckpoint() {
+        HashedBlock c = lastCheckpoint.get();
+        return c == null ? 0 : lastCheckpoint.get().height();
+    }
+
+    public HashedBlock getLastCheckpointBlock() {
+        return lastCheckpoint.get();
+    }
+
+    public long getLastViewChange() {
+        final HashedBlock c = lastViewChange.get();
+        return c == null ? 0 : c.height();
+    }
+
+    public HashedBlock getLastViewChangeBlock() {
+        final HashedBlock c = lastViewChange.get();
+        return c;
     }
 
     public Logger getLog() {
@@ -289,84 +356,17 @@ public class Consortium {
         return fsm.getContext();
     }
 
-    public synchronized void process(CertifiedBlock certifiedBlock) {
+    public void process(CertifiedBlock certifiedBlock) {
         if (!started.get()) {
             return;
         }
-        Block block = certifiedBlock.getBlock();
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-        log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
-                  block.getHeader().getHeight(), getMember());
-        final CurrentBlock previousBlock = getCurrent();
-        if (previousBlock != null) {
-            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
-            long height = height(block);
-            long prevHeight = height(previousBlock.getBlock());
-            if (height <= prevHeight) {
-                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash, height,
-                         prevHeight, getMember());
-                return;
-            }
-            if (height != prevHeight + 1) {
-                deferedBlocks.add(new CurrentBlock(hash, block));
-                log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
-                          getMember(), hash, previousBlock.getBlock().getHeader().getHeight() + 1,
-                          block.getHeader().getHeight());
-                return;
-            }
-            if (!previousBlock.getHash().equals(prev)) {
-                log.error("Protocol violation ons {}. New block does not refer to current block hash. Should be {} and next block's prev is {}",
-                          getMember(), previousBlock.getHash(), prev);
-                return;
-            }
-            if (!viewContext().validate(certifiedBlock)) {
-                log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
-                return;
-            }
-        } else {
-            if (block.getBody().getType() != BodyType.GENESIS) {
-                log.error("Invalid genesis block on: {} block: {}", getMember(), block.getBody().getType());
-                return;
-            }
-            Genesis body;
-            try {
-                body = Genesis.parseFrom(getBody(block));
-            } catch (IOException e) {
-                log.error("Protocol violation ont: {}. Genesis block body cannot be deserialized {}", getMember(),
-                          hash);
-                return;
-            }
-            Context<Member> context = getParams().context;
-            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), context,
-                                 context.getRingCount() - context.toleranceLevel(), getMember())) {
-                log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
-                return;
-            }
-        }
-        if (next(new CurrentBlock(hash, block))) {
-            processDeferred();
-        }
-    }
-
-    private void processDeferred() {
-        CurrentBlock delayed = deferedBlocks.poll();
-        while (delayed != null) {
-            long height = height(delayed.getBlock());
-            long currentHeight = height(getCurrent().getBlock());
-            if (height <= currentHeight) {
-                log.debug("dropping deferred block: {} height: {} <= current height: {} on: {}", delayed.getHash(),
-                         height, currentHeight, getMember());
-                delayed = deferedBlocks.poll();
-            } else if (height == currentHeight + 1) {
-                log.debug("processing deferred block: {} height: {} on: {}", delayed.getHash(), height, getMember());
-                next(delayed);
-                delayed = deferedBlocks.poll();
-            } else {
-                log.debug("current height: {} so re-deferring block: {} height: {} on: {}", currentHeight,
-                         delayed.getHash(), height, getMember());
-                deferedBlocks.add(delayed);
-                delayed = null;
-            }
+        try {
+            sequencer.acquire();
+            synchronizedProcess(certifiedBlock);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(e);
+        } finally {
+            sequencer.release();
         }
     }
 
@@ -383,23 +383,23 @@ public class Consortium {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.info("Stopping consortium on {}", getMember());
         clear();
-        transitions.context().clear();
-        transitions.stop();
+        log.info("Stopping consortium on {}", getMember());
+        cachedCheckpoints.values().forEach(cp -> cp.close());
+        fsm.getContext().clear();
+        transitions.shutdown();
     }
 
-    public HashKey submit(BiConsumer<HashKey, Throwable> onCompletion,
-                          Message... transactions) throws TimeoutException {
-        return submit(false, onCompletion, transactions);
+    public HashKey submit(BiConsumer<Object, Throwable> onCompletion, Message transaction) throws TimeoutException {
+        return submit(false, onCompletion, transaction);
+    }
+
+    void checkpoint(long height, CheckpointState checkpoint) {
+        cachedCheckpoints.put(height, checkpoint);
     }
 
     void delay(Message message, Member from) {
         delayed.add(new DelayedMessage(from, message));
-    }
-
-    SecureRandom entropy() {
-        return getParams().msgParameters.entropy;
     }
 
     InputStream getBody(Block block) {
@@ -407,28 +407,30 @@ public class Consortium {
                 BbBackedInputStream.aggregate(block.getBody().getContents().asReadOnlyByteBufferList()));
     }
 
-    CommonCommunications<ConsortiumClientCommunications, Service> getComm() {
-        final CommonCommunications<ConsortiumClientCommunications, Service> cc = comm;
-        return cc;
+    CheckpointState getChekpoint(long checkpoint) {
+        return cachedCheckpoints.get(checkpoint);
     }
 
-    CurrentBlock getCurrent() {
-        final CurrentBlock cb = current;
-        return cb;
+    CommonCommunications<ConsortiumClientCommunications, Service> getComm() {
+        return comm.get();
+    }
+
+    HashedBlock getCurrent() {
+        return current.get();
     }
 
     Messenger getMessenger() {
-        Messenger currentMsgr = messenger;
+        final Messenger currentMsgr = messenger.get();
         return currentMsgr;
     }
 
     ViewMember getNextView() {
-        final ViewMember c = nextView;
+        final ViewMember c = nextView.get();
         return c;
     }
 
     KeyPair getNextViewConsensusKeyPair() {
-        final KeyPair c = nextViewConsensusKeyPair;
+        final KeyPair c = nextViewConsensusKeyPair.get();
         return c;
     }
 
@@ -444,7 +446,6 @@ public class Consortium {
         return submitted;
     }
 
-    // test accessible
     Transitions getTransitions() {
         return transitions;
     }
@@ -513,7 +514,6 @@ public class Consortium {
             log.error("skipping message publish as no messenger");
             return;
         }
-//        log.info("publish message: {} on: {}", message.getClass().getSimpleName(), getMember());
         currentMsgr.publish(message);
     }
 
@@ -522,42 +522,62 @@ public class Consortium {
     }
 
     void setComm(CommonCommunications<ConsortiumClientCommunications, Service> comm) {
-        this.comm = comm;
+        this.comm.set(comm);
     }
 
-    void setCurrent(CurrentBlock current) {
-        this.current = current;
+    void setCurrent(HashedBlock current) {
+        this.current.set(current);
+    }
+
+    void setGenesis(HashedBlock next) {
+        if (!this.genesis.compareAndSet(null, next)) {
+            throw new IllegalStateException("Genesis already set on: " + getMember());
+        }
+    }
+
+    void setLastCheckpoint(HashedBlock next) {
+        this.lastCheckpoint.set(next);
+    }
+
+    void setLastViewChange(HashedBlock block, Reconfigure view) {
+        lastViewChange.set(block);
+        deltaCheckpointBlocks.set(view.getCheckpointBlocks());
     }
 
     void setMessenger(Messenger messenger) {
-        this.messenger = messenger;
+        this.messenger.set(messenger);
     }
 
     void setNextView(ViewMember nextView) {
-        this.nextView = nextView;
+        this.nextView.set(null);
     }
 
     void setNextViewConsensusKeyPair(KeyPair nextViewConsensusKeyPair) {
-        this.nextViewConsensusKeyPair = nextViewConsensusKeyPair;
+        this.nextViewConsensusKeyPair.set(nextViewConsensusKeyPair);
     }
 
     void setOrder(MemberOrder order) {
-        this.order = order;
+        this.order.set(order);
     }
 
     void setViewContext(ViewContext viewContext) {
         this.viewContext.set(viewContext);
     }
 
-    HashKey submit(boolean join, BiConsumer<HashKey, Throwable> onCompletion,
-                   Message... transactions) throws TimeoutException {
+    HashKey submit(boolean join, BiConsumer<Object, Throwable> onCompletion, Message txn) throws TimeoutException {
         if (viewContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
         }
-        EnqueuedTransaction transaction = build(join, transactions);
+        EnqueuedTransaction transaction = build(join, txn);
         submit(transaction, onCompletion);
-        return transaction.getHash();
+        return transaction.hash;
+    }
+
+    long targetCheckpoint() {
+        final long delta = deltaCheckpointBlocks.get();
+        final HashedBlock cp = lastCheckpoint.get();
+        return cp == null ? delta : cp.height() + delta;
     }
 
     /**
@@ -588,17 +608,15 @@ public class Consortium {
         return getViewContext();
     }
 
-    private EnqueuedTransaction build(boolean join, Message... transactions) {
+    private EnqueuedTransaction build(boolean join, Message transaction) {
         byte[] nonce = new byte[32];
-        entropy().nextBytes(nonce);
+        Utils.entropy().nextBytes(nonce);
 
         Transaction.Builder builder = Transaction.newBuilder()
                                                  .setJoin(join)
                                                  .setSource(getParams().member.getId().toByteString())
                                                  .setNonce(ByteString.copyFrom(nonce));
-        for (Message t : transactions) {
-            builder.addBatch(Any.pack(t));
-        }
+        builder.setTxn(Any.pack(transaction));
 
         HashKey hash = hashOf(builder);
 
@@ -621,36 +639,68 @@ public class Consortium {
 
     private void clear() {
         pause();
-        comm = null;
-        order = null;
-        current = null;
-        messenger = null;
-        nextView = null;
-        order = null;
+        comm.set(null);
+        order.set(null);
+        current.set(null);
+        messenger.set(null);
+        nextView.set(null);
+        nextViewConsensusKeyPair.set(null);
+    }
+
+    private CheckpointSegments fetch(CheckpointReplication request) {
+        CheckpointState state = cachedCheckpoints.get(request.getCheckpoint());
+        if (state == null) {
+            log.debug("No cached checkpoint for {} on: {}", request.getCheckpoint(), getMember());
+            return CheckpointSegments.getDefaultInstance();
+        }
+        BloomFilter<Integer> segmentsBff;
+        try {
+            segmentsBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(request.getCheckpointSegments()),
+                                               Funnels.integerFunnel());
+        } catch (IOException e) {
+            throw new IllegalStateException("unable to read Bloomfilter", e);
+        }
+        BloomFilter<Long> blocksBff;
+        try {
+            blocksBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(request.getCheckpointSegments()),
+                                             Funnels.longFunnel());
+        } catch (IOException e) {
+            throw new IllegalStateException("unable to read Bloomfilter", e);
+        }
+        CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
+        StreamSupport.stream(((Iterable<Long>) () -> store.blocksFrom(state.checkpoint.getCheckpoint())).spliterator(),
+                             false)
+                     .collect(new ReservoirSampler<Long>(-1, params.maxCheckpointBlocks, Utils.bitStreamGenerator()))
+                     .stream()
+                     .filter(s -> !blocksBff.mightContain(s))
+                     .map(height -> store.getBlockBits(height))
+                     .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
+        return replication.addAllSegments(state.fetchSegments(segmentsBff, params.maxCheckpointSegments,
+                                                              Utils.bitStreamEntropy()))
+                          .build();
     }
 
     private MemberOrder getOrder() {
-        final MemberOrder cTo = order;
-        return cTo;
+        return order.get();
     }
 
-    private boolean next(CurrentBlock next) {
-        switch (next.getBlock().getBody().getType()) {
+    private boolean next(HashedBlock next) {
+        switch (next.block.getBody().getType()) {
         case CHECKPOINT:
-            transitions.processCheckpoint(next);
+            getState().processCheckpoint(next);
             break;
         case GENESIS:
-            transitions.processGenesis(next);
+            getState().processGenesis(next);
             break;
         case RECONFIGURE:
-            transitions.processReconfigure(next);
+            getState().processReconfigure(next);
             break;
         case USER:
-            transitions.processUser(next);
+            getState().processUser(next);
             break;
         case UNRECOGNIZED:
         default:
-            log.error("Unrecognized block type: {} : {}", next.hashCode(), next.getBlock());
+            log.error("Unrecognized block type: {} : {}", next.hashCode(), next.block);
         }
         return getCurrent() == next;
     }
@@ -680,9 +730,6 @@ public class Consortium {
         assert !msg.from.equals(getMember()) : "Whoopsie";
         Any content = msg.content;
 
-//        log.info("processing msg: {} from: {} on: {} seq: {} ", classNameOf(content), msg.from, getMember(),
-//                 msg.sequenceNumber);
-
         processDelayed();
         if (content.is(Block.class)) {
             try {
@@ -691,16 +738,6 @@ public class Consortium {
             } catch (InvalidProtocolBufferException e) {
                 log.error("invalid block delivered from: {} on: {}", msg.from, getMember(), e);
             }
-            return;
-        }
-        if (content.is(Persist.class)) {
-            try {
-                @SuppressWarnings("unused")
-                Persist persist = content.unpack(Persist.class);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("invalid persist delivered from: {} on: {}", msg.from, getMember(), e);
-            }
-            transitions.deliverPersist(HashKey.ORIGIN);
             return;
         }
         if (content.is(Transaction.class)) {
@@ -719,9 +756,39 @@ public class Consortium {
             }
             return;
         }
+        if (content.is(CheckpointProcessing.class)) {
+            try {
+                transitions.deliverCheckpointing(content.unpack(CheckpointProcessing.class), msg.from);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("invalid checkpointing delivered from: {} on: {}", msg.from, getMember(), e);
+            }
+            return;
+        }
         if (!processSynchronized(msg.from, content)) {
             log.error("Invalid consortium message type: {} from: {} on: {}", classNameOf(content), msg.from,
                       getMember());
+        }
+    }
+
+    private void processDeferred() {
+        HashedBlock delayed = deferedBlocks.poll();
+        while (delayed != null) {
+            long height = delayed.height();
+            long currentHeight = getCurrent().height();
+            if (height <= currentHeight) {
+                log.debug("dropping deferred block: {} height: {} <= current height: {} on: {}", delayed.hash, height,
+                          currentHeight, getMember());
+                delayed = deferedBlocks.poll();
+            } else if (height == currentHeight + 1) {
+                log.debug("processing deferred block: {} height: {} on: {}", delayed.hash, height, getMember());
+                next(delayed);
+                delayed = deferedBlocks.poll();
+            } else {
+                log.debug("current height: {} so re-deferring block: {} height: {} on: {}", currentHeight, delayed.hash,
+                          height, getMember());
+                deferedBlocks.add(delayed);
+                delayed = null;
+            }
         }
     }
 
@@ -797,20 +864,20 @@ public class Consortium {
     }
 
     private void submit(EnqueuedTransaction transaction,
-                        BiConsumer<HashKey, Throwable> onCompletion) throws TimeoutException {
-        assert transaction.getHash().equals(hashOf(transaction.getTransaction())) : "Hash does not match!";
+                        BiConsumer<Object, Throwable> onCompletion) throws TimeoutException {
+        assert transaction.hash.equals(hashOf(transaction.transaction)) : "Hash does not match!";
 
-        getSubmitted().put(transaction.getHash(), new SubmittedTransaction(transaction.getTransaction(), onCompletion));
+        getSubmitted().put(transaction.hash, new SubmittedTransaction(transaction.transaction, onCompletion));
         SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
                                                           .setContext(viewContext().getId().toByteString())
-                                                          .setTransaction(transaction.getTransaction())
+                                                          .setTransaction(transaction.transaction)
                                                           .build();
-        log.debug("Submitting txn: {} from: {}", transaction.getHash(), getMember());
+        log.debug("Submitting txn: {} from: {}", transaction.hash, getMember());
         List<TransactionResult> results;
         results = viewContext().streamRandomRing().map(c -> {
             if (getMember().equals(c)) {
-                log.trace("submit: {} to self: {}", transaction.getHash(), c.getId());
-                transitions.receive(transaction.getTransaction(), getMember());
+                log.trace("submit: {} to self: {}", transaction.hash, c.getId());
+                transitions.receive(transaction.transaction, getMember());
                 return TransactionResult.getDefaultInstance();
             } else {
                 ConsortiumClientCommunications link = linkFor(c);
@@ -821,16 +888,71 @@ public class Consortium {
                 try {
                     return link.clientSubmit(submittedTxn);
                 } catch (Throwable t) {
-                    log.trace("Cannot submit txn {} to {}: {}", transaction.getHash(), c, t.getMessage());
+                    log.trace("Cannot submit txn {} to {}: {}", transaction.hash, c, t.getMessage());
                     return null;
                 }
             }
         }).filter(r -> r != null).collect(Collectors.toList());
 
         if (results.size() < viewContext().majority()) {
-            log.debug("Cannot submit txn {} on: {} responses: {} required: {}", transaction.getHash(), getMember(),
+            log.debug("Cannot submit txn {} on: {} responses: {} required: {}", transaction.hash, getMember(),
                       results.size(), viewContext().majority());
-            throw new TimeoutException("Cannot submit transaction " + transaction.getHash());
+            throw new TimeoutException("Cannot submit transaction " + transaction.hash);
+        }
+    }
+
+    private void synchronizedProcess(CertifiedBlock certifiedBlock) {
+        Block block = certifiedBlock.getBlock();
+        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
+                  block.getHeader().getHeight(), getMember());
+        final HashedBlock previousBlock = getCurrent();
+        if (previousBlock != null) {
+            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
+            long height = height(block);
+            long prevHeight = previousBlock.height();
+            if (height <= prevHeight) {
+                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
+                          height, prevHeight, getMember());
+                return;
+            }
+            if (height != prevHeight + 1) {
+                deferedBlocks.add(new HashedBlock(hash, block));
+                log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
+                          getMember(), hash, previousBlock.height() + 1, block.getHeader().getHeight());
+                return;
+            }
+            if (!previousBlock.hash.equals(prev)) {
+                log.error("Protocol violation on {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {}",
+                          getMember(), previousBlock.hash, prev, prevHeight, height);
+                return;
+            }
+            if (!viewContext().validate(certifiedBlock)) {
+                log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
+                return;
+            }
+        } else {
+            if (block.getBody().getType() != BodyType.GENESIS) {
+                log.error("Invalid genesis block on: {} block: {}", getMember(), block.getBody().getType());
+                return;
+            }
+            Genesis body;
+            try {
+                body = Genesis.parseFrom(getBody(block));
+            } catch (IOException e) {
+                log.error("Protocol violation ont: {}. Genesis block body cannot be deserialized {}", getMember(),
+                          hash);
+                return;
+            }
+            Context<Member> context = getParams().context;
+            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), context,
+                                 context.getRingCount() - context.toleranceLevel(), getMember())) {
+                log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
+                return;
+            }
+        }
+        if (next(new HashedBlock(hash, block))) {
+            processDeferred();
         }
     }
 }

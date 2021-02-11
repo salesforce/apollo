@@ -9,10 +9,14 @@ package com.salesforce.apollo.comm;
 import java.io.IOException;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -58,6 +62,15 @@ public class LocalRouter extends Router {
 
     private static final class ThreadIdentity implements ClientIdentity {
 
+        private final LoadingCache<X509Certificate, HashKey> cachedMembership = CacheBuilder.newBuilder()
+                                                                                            .build(new CacheLoader<X509Certificate, HashKey>() {
+
+                                                                                                @Override
+                                                                                                public HashKey load(X509Certificate key) throws Exception {
+                                                                                                    return Utils.getMemberId(key);
+                                                                                                }
+                                                                                            });
+
         @Override
         public X509Certificate getCert() {
             return callCertificate.get();
@@ -70,7 +83,11 @@ public class LocalRouter extends Router {
 
         @Override
         public HashKey getFrom() {
-            return Utils.getMemberId(getCert());
+            try {
+                return cachedMembership.get(getCert());
+            } catch (ExecutionException e) {
+                throw new IllegalStateException("Unable to get member id from cert", e.getCause());
+            }
         }
 
     }
@@ -104,6 +121,11 @@ public class LocalRouter extends Router {
     }
 
     @Override
+    public ClientIdentity getClientIdentityProvider() {
+        return LOCAL_IDENTITY;
+    }
+
+    @Override
     public void start() {
         try {
             server.start();
@@ -111,11 +133,6 @@ public class LocalRouter extends Router {
             log.error("Cannot start in process server for: " + id, e);
         }
         log.info("Starting server for: " + id);
-    }
-
-    @Override
-    public ClientIdentity getClientIdentityProvider() {
-        return LOCAL_IDENTITY;
     }
 
 }

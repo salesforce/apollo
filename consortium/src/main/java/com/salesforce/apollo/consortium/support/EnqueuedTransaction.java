@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.consortium;
+package com.salesforce.apollo.consortium.support;
 
 import com.salesfoce.apollo.consortium.proto.Transaction;
-import com.salesforce.apollo.consortium.TickScheduler.Timer;
+import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
 import com.salesforce.apollo.protocols.HashKey;
 
 public class EnqueuedTransaction {
-    private final HashKey     hash;
-    private volatile boolean  timedOut = false;
-    private volatile Timer    timer;
-    private final Transaction transaction;
+    public final HashKey     hash;
+    private volatile boolean timedOut = false;
+    private volatile Timer   timer;
+    public final Transaction transaction;
 
     public EnqueuedTransaction(HashKey hash, Transaction transaction) {
         assert hash != null : "requires non null hash";
@@ -49,10 +49,6 @@ public class EnqueuedTransaction {
         return timer.getDelay();
     }
 
-    public HashKey getHash() {
-        return hash;
-    }
-
     public int getSerializedSize() {
         return transaction.toByteString().size();
     }
@@ -60,10 +56,6 @@ public class EnqueuedTransaction {
     public Timer getTimer() {
         final Timer c = timer;
         return c;
-    }
-
-    public Transaction getTransaction() {
-        return transaction;
     }
 
     @Override

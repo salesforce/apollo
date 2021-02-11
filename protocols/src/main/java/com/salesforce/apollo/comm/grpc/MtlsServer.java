@@ -23,6 +23,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -40,10 +41,13 @@ import javax.net.ssl.X509ExtendedTrustManager;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import com.salesforce.apollo.protocols.CertificateValidator;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
-import com.salesforce.apollo.protocols.CertificateValidator;
 
 import io.grpc.BindableService;
 import io.grpc.Context;
@@ -67,14 +71,6 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 public class MtlsServer implements ClientIdentity {
-    public static class NodeKeyManagerFactory extends KeyManagerFactory {
-
-        public NodeKeyManagerFactory(String alias, X509Certificate certificate, PrivateKey privateKey) {
-            super(new NodeKeyManagerFactorySpi(alias, certificate, privateKey), PROVIDER, "Keys");
-        }
-
-    }
-
     /**
      * Currently grpc-java doesn't return compressed responses, even if the client
      * has sent a compressed payload. This turns on gzip compression for all
@@ -90,6 +86,14 @@ public class MtlsServer implements ClientIdentity {
             call.setCompression("gzip");
             return next.startCall(call, headers);
         }
+    }
+
+    public static class NodeKeyManagerFactory extends KeyManagerFactory {
+
+        public NodeKeyManagerFactory(String alias, X509Certificate certificate, PrivateKey privateKey) {
+            super(new NodeKeyManagerFactorySpi(alias, certificate, privateKey), PROVIDER, "Keys");
+        }
+
     }
 
     public static class NodeKeyManagerFactorySpi extends KeyManagerFactorySpi {
@@ -311,9 +315,18 @@ public class MtlsServer implements ClientIdentity {
 
     }
 
-    private final TlsInterceptor          interceptor       = new TlsInterceptor();
-    private final MutableHandlerRegistry  registry;
-    private final Server                  server;
+    private final LoadingCache<X509Certificate, HashKey> cachedMembership = CacheBuilder.newBuilder()
+                                                                                        .build(new CacheLoader<X509Certificate, HashKey>() {
+
+                                                                                                                                                                  @Override
+                                                                                                                                                                  public HashKey load(X509Certificate key) throws Exception {
+                                                                                                                                                                      return Utils.getMemberId(key);
+                                                                                                                                                                  }
+                                                                                                                                                              });
+    private final TlsInterceptor                         interceptor      = new TlsInterceptor();
+    private final MutableHandlerRegistry                 registry;
+    private final Server                                 server;
+
     private final Context.Key<SSLSession> sslSessionContext = Context.key("SSLSession");
 
     public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
@@ -356,7 +369,11 @@ public class MtlsServer implements ClientIdentity {
 
     @Override
     public HashKey getFrom() {
-        return Utils.getMemberId(getCert());
+        try {
+            return cachedMembership.get(getCert());
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("Unable to derive member id from cert", e.getCause());
+        }
     }
 
     public void start() throws IOException {

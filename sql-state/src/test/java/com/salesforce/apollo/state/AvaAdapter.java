@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.consortium.CollaboratorContext.height;
-
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,7 +39,6 @@ public class AvaAdapter implements Processor {
         finalized.finalized.stream()
                            .map(f -> certifiedBlock(f))
                            .filter(cb -> cb != null)
-                           .sorted((a, b) -> Long.compare(height(a.getBlock()), height(b.getBlock())))
                            .peek(cb -> consortium.process(cb))
                            .forEach(cb -> processed.get().countDown());
     }
@@ -72,13 +69,12 @@ public class AvaAdapter implements Processor {
 
     @Override
     public HashKey validate(HashKey key, DagEntry entry) {
-        return key;
-//        CertifiedBlock cb = certifiedBlock(entry);
-//        if (cb == null) {
-//            System.out.println("null from: " + key + " descr: " + entry.getDescription());
-//            return key;
-//        }
-//        return new HashKey(cb.getBlock().getHeader().getPrevious());
+        CertifiedBlock cb = certifiedBlock(entry);
+        if (cb == null) {
+            System.out.println("null from: " + key + " descr: " + entry.getDescription());
+            return key;
+        }
+        return new HashKey(cb.getBlock().getHeader().getPrevious());
     }
 
     private CertifiedBlock certifiedBlock(DagEntry entry) {

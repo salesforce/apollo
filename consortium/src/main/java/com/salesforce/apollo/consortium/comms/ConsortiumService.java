@@ -4,31 +4,30 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.consortium;
+package com.salesforce.apollo.consortium.comms;
 
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
+import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
+import com.salesfoce.apollo.consortium.proto.CheckpointSync;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
-import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
-import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
-import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface OrderingService {
+public interface ConsortiumService {
+    CertifiedBlock checkpointSync(CheckpointSync sync);
+
     TransactionResult clientSubmit(SubmitTransaction request);
+
+    CheckpointSegments fetch(CheckpointReplication request);
 
     JoinResult join(Join join);
 
-    void replicate(ReplicateTransactions transactions);
-
-    void stop(Stop stop);
-
     void stopData(StopData stopData);
-
-    void sync(Sync sync);
 }

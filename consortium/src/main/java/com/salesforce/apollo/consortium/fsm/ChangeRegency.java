@@ -18,7 +18,7 @@ import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesforce.apollo.consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.EnqueuedTransaction;
+import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -148,7 +148,7 @@ public enum ChangeRegency implements Transitions {
         }
 
         @Override
-        public Transitions establishNextRegent() {
+        public Transitions stopped() {
             return AWAIT_SYNCHRONIZATION;
         }
 

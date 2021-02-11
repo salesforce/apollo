@@ -40,6 +40,11 @@ public class BloomFilter {
         bits = new BitSet(h.getM());
     }
 
+    public BloomFilter(HashFunction h, BitSet bits) {
+        this.h = h;
+        this.bits = bits;
+    }
+
     public void add(HashKey element) {
         h.put(element, bits);
     }

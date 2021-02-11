@@ -14,7 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
-import java.security.SecureRandom;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,6 +35,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +43,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Avalanche;
@@ -73,7 +76,11 @@ public class AvaConsensusTest {
 
     private static final RootCertificate                   ca              = getCa();
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final ByteString                        GENESIS_DATA    = ByteString.copyFromUtf8("Give me FooD or give me SLACK or KILL ME");
+    private static final Message                           GENESIS_DATA    = ByteMessage.newBuilder()
+                                                                                        .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                                        .build();
+    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
+            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
     private static final FirefliesParameters               parameters      = new FirefliesParameters(
             ca.getX509Certificate());
@@ -94,7 +101,6 @@ public class AvaConsensusTest {
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private Map<HashKey, Router>          communications = new HashMap<>();
     private final Map<Member, Consortium> consortium     = new HashMap<>();
-    private SecureRandom                  entropy;
     private List<Node>                    members;
 
     @AfterEach
@@ -113,7 +119,6 @@ public class AvaConsensusTest {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        entropy = new SecureRandom();
 
         assertTrue(certs.size() >= testCardinality);
 
@@ -142,15 +147,13 @@ public class AvaConsensusTest {
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.00001)
                                                                  .setBufferSize(1000)
-                                                                 .setEntropy(new SecureRandom())
-                                                                 .setFjPool(new ForkJoinPool())
                                                                  .build();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Map<Member, AvaAdapter> adapters = gatherConsortium(view, processed, gossipDuration, scheduler, msgParameters);
         gatherAvalanche(view, adapters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
-        ViewContext.viewFor(new HashKey(Conversion.hashOf(GENESIS_DATA)), view).allMembers().forEach(e -> {
+        ViewContext.viewFor(GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
             blueRibbon.add(consortium.get(e));
         });
 
@@ -239,10 +242,8 @@ public class AvaConsensusTest {
     }
 
     private void gatherAvalanche(Context<Member> view, Map<Member, AvaAdapter> adapters) {
-        ForkJoinPool avaPool = new ForkJoinPool(members.size() * 10);
         members.forEach(node -> {
             AvalancheParameters aParams = new AvalancheParameters();
-            aParams.dagWood.maxCache = 1_000_000;
 
             // Avalanche protocol parameters
             aParams.core.alpha = 0.6;
@@ -260,8 +261,8 @@ public class AvaConsensusTest {
             aParams.noOpQueryFactor = 40;
 
             AvaAdapter adapter = adapters.get(node);
-            Avalanche ava = new Avalanche(node, view, entropy, communications.get(node.getId()), aParams, null, adapter,
-                    avaPool);
+            Avalanche ava = new Avalanche(node, view, communications.get(node.getId()), aParams, null, adapter,
+                    new MVStore.Builder().open());
             adapter.setAva(ava);
             avas.put(node, ava);
         });
@@ -273,6 +274,11 @@ public class AvaConsensusTest {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
             AvaAdapter adapter = new AvaAdapter(processed);
+            TransactionExecutor executor = (h, hgt, t, c) -> {
+                if (c != null) {
+                    ForkJoinPool.commonPool().execute(() -> c.accept(new HashKey(t.getHash()), null));
+                }
+            };
             Consortium member = new Consortium(Parameters.newBuilder()
                                                          .setConsensus(adapter.getConsensus())
                                                          .setMember(m)
@@ -285,17 +291,30 @@ public class AvaConsensusTest {
                                                          .setMaxBatchDelay(Duration.ofMillis(100))
                                                          .setGossipDuration(gossipDuration)
                                                          .setViewTimeout(Duration.ofMillis(500))
-                                                         .setExecutor((t, c) -> {
-                                                             if (c != null) {
-                                                                 ForkJoinPool.commonPool()
-                                                                             .execute(() -> c.accept(new HashKey(
-                                                                                     t.getHash()), null));
-                                                             }
-                                                         })
+                                                         .setExecutor(executor)
                                                          .setJoinTimeout(Duration.ofSeconds(5))
                                                          .setTransactonTimeout(Duration.ofSeconds(15))
                                                          .setScheduler(scheduler)
-                                                         .setGenesisData(GENESIS_DATA.toByteArray())
+                                                         .setGenesisData(GENESIS_DATA)
+                                                         .setGenesisViewId(GENESIS_VIEW_ID)
+                                                         .setDeltaCheckpointBlocks(10)
+                                                         .setCheckpointer(l -> {
+                                                             File temp;
+                                                             try {
+                                                                 temp = File.createTempFile("foo", "bar");
+                                                                 temp.deleteOnExit();
+                                                                 try (FileOutputStream fos = new FileOutputStream(
+                                                                         temp)) {
+                                                                     fos.write("Give me food or give me slack or kill me".getBytes());
+                                                                     fos.flush();
+                                                                 }
+                                                             } catch (IOException e) {
+                                                                 throw new IllegalStateException(
+                                                                         "Cannot create temp file", e);
+                                                             }
+
+                                                             return temp;
+                                                         })
                                                          .build());
             adapter.setConsortium(member);
             adapters.put(m, adapter);

@@ -22,6 +22,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,7 +81,8 @@ public class DagTest {
     public void before() throws SQLException {
         entropy = new Random(0x666);
         final AvalancheParameters parameters = new AvalancheParameters();
-        workingSet = new WorkingSet(new NullProcessor(), parameters, new DagWood(parameters.dagWood), null);
+        workingSet = new WorkingSet(new NullProcessor(), parameters, new MVStore.Builder().open().openMap("Test"),
+                null);
         root = dag("Ye root".getBytes());
         rootKey = workingSet.insert(root, 0);
         assertNotNull(rootKey);

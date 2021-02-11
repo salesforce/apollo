@@ -64,6 +64,7 @@ import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.CaValidator;
 import com.salesforce.apollo.protocols.HashFunction;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
@@ -298,7 +299,7 @@ public class View {
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
             }
-            int seed = getParameters().entropy.nextInt();
+            int seed = Utils.entropy().nextInt();
             return Gossip.newBuilder()
                          .setRedirect(false)
                          .setCertificates(processCertificateDigests(from, new BloomFilter(digests.getCertificateBff()),
@@ -325,7 +326,7 @@ public class View {
                  .forEach(m -> addSeed(m));
 
             long interval = d.toMillis();
-            int initialDelay = getParameters().entropy.nextInt((int) interval * 2);
+            int initialDelay = Utils.entropy().nextInt((int) interval * 2);
             futureGossip = scheduler.schedule(() -> fjPool.execute(() -> {
                 try {
                     oneRound(d, scheduler);
@@ -789,7 +790,7 @@ public class View {
      */
     void addSeed(Participant seed) {
         seed.setNote(new Note(seed.getId(), -1,
-                Node.createInitialMask(getParameters().toleranceLevel, getParameters().entropy), node.forSigning()));
+                Node.createInitialMask(getParameters().toleranceLevel, Utils.entropy()), node.forSigning()));
         context.add(seed);
         context.activate(seed);
     }
@@ -853,7 +854,7 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     Digests commonDigests() {
-        int seed = getParameters().entropy.nextInt();
+        int seed = Utils.entropy().nextInt();
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
                       .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())

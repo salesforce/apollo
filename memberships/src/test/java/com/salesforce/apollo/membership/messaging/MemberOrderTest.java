@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -97,7 +96,6 @@ public class MemberOrderTest {
     private static final Parameters                        parameters = Parameters.newBuilder()
                                                                                   .setFalsePositiveRate(0.01)
                                                                                   .setBufferSize(500)
-                                                                                  .setEntropy(new SecureRandom())
                                                                                   .build();
 
     @BeforeAll
@@ -134,7 +132,7 @@ public class MemberOrderTest {
         members.forEach(m -> context.activate(m));
 
         while (seeds.size() < 7) {
-            CertificateWithPrivateKey cert = certs.get(members.get(parameters.entropy.nextInt(members.size())).getId());
+            CertificateWithPrivateKey cert = certs.get(members.get(Utils.entropy().nextInt(members.size())).getId());
             if (!seeds.contains(cert.getX509Certificate())) {
                 seeds.add(cert.getX509Certificate());
             }
@@ -189,7 +187,7 @@ public class MemberOrderTest {
         members.forEach(m -> context.activate(m));
 
         while (seeds.size() < 7) {
-            CertificateWithPrivateKey cert = certs.get(members.get(parameters.entropy.nextInt(members.size())).getId());
+            CertificateWithPrivateKey cert = certs.get(members.get(Utils.entropy().nextInt(members.size())).getId());
             if (!seeds.contains(cert.getX509Certificate())) {
                 seeds.add(cert.getX509Certificate());
             }
@@ -297,7 +295,7 @@ public class MemberOrderTest {
             throw new IllegalStateException("no such algorithm: " + MessageTest.DEFAULT_SIGNATURE_ALGORITHM, e);
         }
         try {
-            signature.initSign(certs.get(member.getId()).getPrivateKey(), parameters.entropy);
+            signature.initSign(certs.get(member.getId()).getPrivateKey(), Utils.entropy());
         } catch (InvalidKeyException e) {
             throw new IllegalStateException("invalid private key", e);
         }

@@ -8,8 +8,8 @@
 package com.salesforce.apollo.avalanche;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.LoggerFactory;
 
@@ -23,7 +23,7 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class ConflictSet {
-    private Set<KnownNode>     conflicts = ConcurrentHashMap.newKeySet();
+    private Set<KnownNode>     conflicts = new HashSet<>();
     private volatile int       counter   = 0;
     private final HashKey      key;
     private volatile KnownNode last;

@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
@@ -21,10 +22,8 @@ import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.CurrentBlock;
-import com.salesforce.apollo.consortium.EnqueuedTransaction;
+import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * Transition interface for the Collaborator FSM model
@@ -50,6 +49,14 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
+    default Transitions checkpointGenerated() {
+        return null;
+    }
+
+    default Transitions checkpointTimeout() {
+        throw fsm().invalidTransitionOn();
+    }
+
     default Transitions continueChangeRegency(List<EnqueuedTransaction> transactions) {
         throw fsm().invalidTransitionOn();
     }
@@ -59,7 +66,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
-    default Transitions deliverPersist(HashKey hash) {
+    default Transitions deliverCheckpointing(CheckpointProcessing checkpointProcessing, Member from) {
         throw fsm().invalidTransitionOn();
     }
 
@@ -123,19 +130,15 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
-    default Transitions drainPending() {
-        throw fsm().invalidTransitionOn();
-    }
-
-    default Transitions establishNextRegent() {
-        throw fsm().invalidTransitionOn();
-    }
-
     default Transitions fail() {
-        throw fsm().invalidTransitionOn();
+        return CollaboratorFsm.PROTOCOL_FAILURE;
     }
 
     default Transitions formView() {
+        throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions generateCheckpoint() {
         throw fsm().invalidTransitionOn();
     }
 
@@ -156,26 +159,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
-    default Transitions processCheckpoint(CurrentBlock next) {
-        context().processCheckpoint(next);
-        return null;
-    }
-
-    default Transitions processGenesis(CurrentBlock next) {
-        context().processGenesis(next);
-        return null;
-    }
-
-    default Transitions processReconfigure(CurrentBlock next) {
-        context().processReconfigure(next);
-        return null;
-    }
-
-    default Transitions processUser(CurrentBlock next) {
-        context().processUser(next);
-        return null;
-    }
-
     default Transitions receive(ReplicateTransactions txns, Member from) {
         context().receive(txns, from);
         return null;
@@ -184,6 +167,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     default Transitions receive(Transaction transaction, Member from) {
         context().receive(transaction);
         return null;
+    }
+
+    default Transitions shutdown() {
+        return CollaboratorFsm.INITIAL;
     }
 
     default Transitions start() {
@@ -195,8 +182,8 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
-    default Transitions stop() {
-        return CollaboratorFsm.INITIAL;
+    default Transitions stopped() {
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions syncd() {
