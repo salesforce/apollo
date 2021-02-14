@@ -109,7 +109,7 @@ public class MtlsTest {
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry : registry);
             EndpointProvider ep = getStandardEpProvider(node);
             builder.setMetrics(metrics);
-            MtlsRouter comms = new MtlsRouter(builder, ep);
+            MtlsRouter comms = new MtlsRouter(builder, ep, Executors.newFixedThreadPool(3));
             communications.add(comms);
             return new View(HashKey.ORIGIN, node, comms, metrics);
         }).collect(Collectors.toList());

@@ -17,12 +17,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.CompletionService;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -41,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
@@ -51,6 +50,7 @@ import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesfoce.apollo.proto.ID;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.QueryResult.Vote;
+import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.communications.AvalancheClientCommunications;
 import com.salesforce.apollo.avalanche.communications.AvalancheServerCommunications;
@@ -219,13 +219,13 @@ public class Avalanche {
     private final CommonCommunications<AvalancheClientCommunications, Service> comm;
     private com.salesforce.apollo.membership.Context<? extends Member>         context;
     private final WorkingSet                                                   dag;
-    private final Executor                                                     queryExecutor;
     private final int                                                          invalidThreshold;
     private final AvalancheMetrics                                             metrics;
     private final Node                                                         node;
     private final AvalancheParameters                                          parameters;
     private final BlockingDeque<HashKey>                                       parentSample = new LinkedBlockingDeque<>();
     private final Processor                                                    processor;
+    private final Executor                                                     queryExecutor;
     private volatile ScheduledFuture<?>                                        queryFuture;
     private final AtomicLong                                                   queryRounds  = new AtomicLong();
     private final int                                                          required;
@@ -402,6 +402,39 @@ public class Avalanche {
         }
     }
 
+    private void getWanted(List<? extends Member> sample) {
+        Collection<HashKey> wanted = dag.getWanted(Utils.bitStreamEntropy(), parameters.maxWanted);
+        if (wanted.isEmpty()) {
+            log.trace("no wanted DAG entries");
+            return;
+        }
+        Member member = new ArrayList<Member>(sample).get(Utils.entropy().nextInt(sample.size()));
+        AvalancheClientCommunications connection = comm.apply(member, getNode());
+        if (connection == null) {
+            log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
+        }
+        ListenableFuture<SuppliedDagNodes> entries = connection.requestDAG(context.getId(), wanted);
+        entries.addListener(() -> {
+            try {
+                SuppliedDagNodes suppliedDagNodes = entries.get();
+
+                dag.insertSerialized(suppliedDagNodes.getEntriesList()
+                                                     .stream()
+                                                     .map(e -> new HashKey(Conversion.hashOf(e)).toID())
+                                                     .collect(Collectors.toList()),
+                                     suppliedDagNodes.getEntriesList(), System.currentTimeMillis());
+                if (metrics != null) {
+                    metrics.getWantedRate().mark(wanted.size());
+                    metrics.getSatisfiedRate().mark(suppliedDagNodes.getEntriesList().size());
+                }
+            } catch (Exception e) {
+                log.warn("Error requesting DAG {} for {}", member, wanted.size(), e);
+            } finally {
+                connection.release();
+            }
+        }, queryExecutor);
+    }
+
     private void prefer(List<HashKey> preferings) {
         Timer.Context timer = metrics == null ? null : metrics.getPreferTimer().time();
         dag.prefer(preferings);
@@ -413,242 +446,210 @@ public class Avalanche {
         }
     }
 
-    /**
-     * Query a random sample of ye members for their votes on the next batch of
-     * unqueried transactions for this node, determine confidence from the results
-     * of the query results.
-     */
-    private int query() {
-        long start = System.currentTimeMillis();
-        long now = System.currentTimeMillis();
-        Collection<? extends Member> sample = context.sample(parameters.core.k, Utils.bitStreamEntropy(), node.getId());
-
-        if (sample.isEmpty()) {
-            return 0;
+    private void process(List<Pair<HashKey, ByteString>> query, AtomicInteger[] invalid, AtomicInteger[] votes,
+                         Collection<HashKey> want, Member wanted, Member m, QueryResult result) {
+        log.trace("queried: {} for: {} result: {}", m, query.size(), result.getResultList().size());
+        dag.insertSerialized(result.getWantedList()
+                                   .stream()
+                                   .map(e -> new HashKey(Conversion.hashOf(e)).toID())
+                                   .collect(Collectors.toList()),
+                             result.getWantedList(), System.currentTimeMillis());
+        if (want.size() > 0 && metrics != null && m == wanted) {
+            metrics.getSatisfiedRate().mark(want.size());
         }
-        if (sample.size() < parameters.core.k) {
-            log.trace("not enough members in sample: {} < {}", sample.size(), parameters.core.k);
-            return 0;
-        }
-        queryRounds.incrementAndGet();
-        now = System.currentTimeMillis();
-        Timer.Context timer = metrics == null ? null : metrics.getQueryTimer().time();
-        List<HashKey> unqueried = dag.query(parameters.queryBatchSize);
-        if (unqueried.isEmpty()) {
-            log.trace("no queries available");
-            if (timer != null) {
-                timer.close();
+        if (result.getResultList().isEmpty()) {
+            for (int i = 0; i < query.size(); i++) {
+                invalid[i].incrementAndGet();
             }
-            Collection<HashKey> wanted = dag.getWanted(Utils.bitStreamEntropy(), parameters.maxWanted);
-            if (wanted.isEmpty()) {
-                log.trace("no wanted DAG entries");
-                return 0;
-            }
-            Member member = new ArrayList<Member>(sample).get(Utils.entropy().nextInt(sample.size()));
-            AvalancheClientCommunications connection = comm.apply(member, getNode());
-            if (connection == null) {
-                log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
-            }
-            try {
-                List<ByteString> entries = connection.requestDAG(context.getId(), wanted);
-                dag.insertSerialized(entries.stream()
-                                            .map(e -> new HashKey(Conversion.hashOf(e)).toID())
-                                            .collect(Collectors.toList()),
-                                     entries, System.currentTimeMillis());
-                if (metrics != null) {
-                    metrics.getWantedRate().mark(wanted.size());
-                    metrics.getSatisfiedRate().mark(entries.size());
-                }
-            } catch (Exception e) {
-                log.warn("Error requesting DAG {} for {}", member, wanted.size(), e);
-            } finally {
-                connection.release();
-            }
-            return 0;
+            return;
         }
-        List<Pair<HashKey, ByteString>> query = dag.getQuerySerializedEntries(unqueried);
-        long sampleTime = System.currentTimeMillis() - now;
-
-        now = System.currentTimeMillis();
-        List<Boolean> results = query(query, sample);
-        if (timer != null) {
-            timer.close();
-        }
-        long retrieveTime = System.currentTimeMillis() - now;
-        if (metrics != null) {
-            metrics.getQueryRate().mark(query.size());
-        }
-        List<HashKey> unpreferings = new ArrayList<>();
-        List<HashKey> preferings = new ArrayList<>();
-        for (int i = 0; i < results.size(); i++) {
-            final Boolean result = results.get(i);
-            HashKey key = unqueried.get(i);
-            if (result == null) {
-                log.trace("Could not get a valid sample on this txn, scheduling for requery: {}", key);
-                dag.queueUnqueried(key);
-                if (metrics != null) {
-                    metrics.getResampledRate().mark();
-                }
-            } else if (result) {
-                preferings.add(key);
-            } else {
-                if (metrics != null) {
-                    metrics.getFailedTxnQueryRate().mark();
-                }
-                unpreferings.add(key);
+        for (int i = 0; i < query.size(); i++) {
+            switch (result.getResult(i)) {
+            case FALSE:
+                break;
+            case TRUE:
+                votes[i].incrementAndGet();
+                break;
+            case UNKNOWN:
+            case UNRECOGNIZED:
+                invalid[i].incrementAndGet();
+                break;
             }
         }
-
-        if (metrics != null) {
-            metrics.getFailedTxnQueryRate().mark(unpreferings.size());
-        }
-        if (!unpreferings.isEmpty()) {
-            log.info("querying {} txns in {} ms failures: {}", unqueried.size(), System.currentTimeMillis() - start,
-                     unpreferings.size());
-        }
-        log.trace("querying {} txns in {} ms ({} Query) ({} Sample)", unqueried.size(),
-                  System.currentTimeMillis() - start, retrieveTime, sampleTime);
-
-        if (running.get()) {
-            prefer(preferings);
-            finalize(preferings);
-        }
-
-        return results.size();
     }
 
-    /**
-     * Query the sample of members for their boolean opinion on the query of
-     * transaction entries
-     * 
-     * @param hashes
-     * @param query  - the batch of unqueried nodes
-     * @param sample - the random sample of members to query
-     * 
-     * @return for each sampled member, the list of query results for the
-     *         transaction batch, or NULL if there could not be a determination
-     *         (such as comm failure) of the query for that member
-     */
-    private List<Boolean> query(List<Pair<HashKey, ByteString>> query, Collection<? extends Member> sample) {
-        long now = System.currentTimeMillis();
+    private CompletableFuture<List<Boolean>> query(List<Pair<HashKey, ByteString>> query,
+                                                   List<? extends Member> sample) {
         AtomicInteger[] invalid = new AtomicInteger[query.size()];
         AtomicInteger[] votes = new AtomicInteger[query.size()];
         for (int i = 0; i < votes.length; i++) {
             invalid[i] = new AtomicInteger();
             votes[i] = new AtomicInteger();
         }
+
         Collection<HashKey> want = dag.getWanted(Utils.bitStreamEntropy(), parameters.maxWanted);
         if (want.size() > 0 && metrics != null) {
             metrics.getWantedRate().mark(want.size());
         }
 
-        CompletionService<Boolean> frist = new ExecutorCompletionService<>(queryExecutor);
-        List<Future<Boolean>> futures;
+        CompletableFuture<List<Boolean>> futureSailor = new CompletableFuture<>();
         Member wanted = new ArrayList<Member>(sample).get(Utils.bitStreamEntropy().nextInt(sample.size()));
-        futures = sample.stream().map(m -> frist.submit(() -> {
-            QueryResult result;
-            AvalancheClientCommunications connection = comm.apply(m, getNode());
-            if (connection == null) {
-                log.info("No connection querying {} for {} queries", m, query.size());
-                for (int i = 0; i < query.size(); i++) {
-                    invalid[i].incrementAndGet();
-                }
-                return false;
-            }
-            try {
-                result = connection.query(context.getId(), query, m == wanted ? want : Collections.emptyList());
-            } catch (Exception e) {
-                for (int i = 0; i < query.size(); i++) {
-                    invalid[i].incrementAndGet();
-                }
-                log.debug("Error querying {} for {}", m, query, e);
-                return false;
-            } finally {
-                connection.release();
-            }
-            log.trace("queried: {} for: {} result: {}", m, query.size(), result.getResultList().size());
-            dag.insertSerialized(result.getWantedList()
-                                       .stream()
-                                       .map(e -> new HashKey(Conversion.hashOf(e)).toID())
-                                       .collect(Collectors.toList()),
-                                 result.getWantedList(), System.currentTimeMillis());
-            if (want.size() > 0 && metrics != null && m == wanted) {
-                metrics.getSatisfiedRate().mark(want.size());
-            }
-            if (result.getResultList().isEmpty()) {
-                for (int i = 0; i < query.size(); i++) {
-                    invalid[i].incrementAndGet();
-                }
-                return false;
-            }
-            for (int i = 0; i < query.size(); i++) {
-                switch (result.getResult(i)) {
-                case FALSE:
-                    break;
-                case TRUE:
-                    votes[i].incrementAndGet();
-                    break;
-                case UNKNOWN:
-                case UNRECOGNIZED:
-                    invalid[i].incrementAndGet();
-                    break;
-                }
-            }
-            return true;
-        })).collect(Collectors.toList());
-
-        long remainingTimout = parameters.unit.toMillis(parameters.timeout);
-
-        AtomicInteger responded = new AtomicInteger();
-        try {
-            while (responded.get() < futures.size() && remainingTimout > 0) {
-                long then = System.currentTimeMillis();
-                Future<Boolean> result = null;
-                try {
-                    result = frist.poll(remainingTimout, TimeUnit.MILLISECONDS);
-                    if (result != null) {
-                        responded.incrementAndGet();
-                        try {
-                            result.get();
-                        } catch (ExecutionException e) {
-                            if (log.isDebugEnabled()) {
-                                log.debug("exception querying {}", query.size(), e.getCause());
-                            }
-                        }
-                    }
-                } catch (InterruptedException e) {
-                }
-                remainingTimout = remainingTimout - (System.currentTimeMillis() - then);
-            }
-        } finally {
-            futures.forEach(f -> f.cancel(true));
-        }
+        AtomicInteger completed = new AtomicInteger(sample.size());
         List<Boolean> queryResults = new ArrayList<>();
-        for (int i = 0; i < query.size(); i++) {
-            if ((invalidThreshold <= invalid[i].get())) {
-                queryResults.add(null);
-            } else {
-                queryResults.add(votes[i].get() >= required);
+        for (int i = 0; i < sample.size(); i++) {
+            Member member = sample.get(i);
+            queryExecutor.execute(() -> query(member, query, invalid, votes, futureSailor, completed, queryResults,
+                                              want, wanted));
+        }
+        return futureSailor;
+    }
+
+    private void query(Member member, List<Pair<HashKey, ByteString>> query, AtomicInteger[] invalid,
+                       AtomicInteger[] votes, CompletableFuture<List<Boolean>> futureSailor, AtomicInteger completed,
+                       List<Boolean> queryResults, Collection<HashKey> want, Member wanted) {
+        AvalancheClientCommunications connection = comm.apply(member, getNode());
+        if (connection == null) {
+            log.info("No connection querying {} for {} queries", member, query.size());
+            for (int j = 0; j < query.size(); j++) {
+                invalid[j].incrementAndGet();
             }
+            return;
+        }
+        ListenableFuture<QueryResult> result;
+        try {
+            result = connection.query(context.getId(), query, member == wanted ? want : Collections.emptyList());
+        } catch (Exception e) {
+            for (int j = 0; j < query.size(); j++) {
+                invalid[j].incrementAndGet();
+            }
+            log.debug("Error querying {} for {}", member, query, e);
+            return;
+        }
+        result.addListener(() -> {
+            QueryResult queryResult;
+            try {
+                queryResult = result.get();
+                process(query, invalid, votes, want, wanted, member, queryResult);
+            } catch (InterruptedException e) {
+                for (int j = 0; j < query.size(); j++) {
+                    invalid[j].incrementAndGet();
+                }
+                log.trace("Interrupted", e);
+            } catch (ExecutionException e) {
+                for (int j = 0; j < query.size(); j++) {
+                    invalid[j].incrementAndGet();
+                }
+                log.trace("error querying {}", member, e.getCause());
+            }
+            if (completed.decrementAndGet() == 0) {
+                for (int v = 0; v < query.size(); v++) {
+                    if ((invalidThreshold <= invalid[v].get())) {
+                        queryResults.add(null);
+                    } else {
+                        queryResults.add(votes[v].get() >= required);
+                    }
+                }
+                futureSailor.complete(queryResults);
+            }
+        }, queryExecutor);
+    }
+
+    /**
+     * Query a random sample of ye members for their votes on the next batch of
+     * unqueried transactions for this node, determine confidence from the results
+     * of the query results.
+     */
+    private int query(Runnable reschedule) {
+        List<? extends Member> sample = context.sample(parameters.core.k, Utils.bitStreamEntropy(), node.getId());
+
+        if (sample.isEmpty()) {
+            reschedule.run();
+            return 0;
+        }
+        if (sample.size() < parameters.core.k) {
+            log.trace("not enough members in sample: {} < {}", sample.size(), parameters.core.k);
+            reschedule.run();
+            return 0;
+        }
+        queryRounds.incrementAndGet();
+        Timer.Context timer = metrics == null ? null : metrics.getQueryTimer().time();
+
+        getWanted(sample);
+        List<HashKey> unqueried = dag.query(parameters.queryBatchSize);
+        if (unqueried.isEmpty()) {
+            log.trace("no queries available");
+            if (timer != null) {
+                timer.close();
+            }
+            reschedule.run();
+            return 0;
         }
 
-        log.debug("query results: {} in: {} ms", queryResults.size(), System.currentTimeMillis() - now);
+        List<Pair<HashKey, ByteString>> query = dag.getQuerySerializedEntries(unqueried);
 
-        return queryResults;
+        CompletableFuture<List<Boolean>> results = query(query, sample);
+        results.whenComplete((queryResults, e) -> {
+            try {
+                if (timer != null) {
+                    timer.close();
+                }
+                if (metrics != null) {
+                    metrics.getQueryRate().mark(query.size());
+                }
+                List<HashKey> unpreferings = new ArrayList<>();
+                List<HashKey> preferings = new ArrayList<>();
+                for (int i = 0; i < queryResults.size(); i++) {
+                    final Boolean result = queryResults.get(i);
+                    HashKey key = unqueried.get(i);
+                    if (result == null) {
+                        log.trace("Could not get a valid sample on this txn, scheduling for requery: {}", key);
+                        dag.queueUnqueried(key);
+                        if (metrics != null) {
+                            metrics.getResampledRate().mark();
+                        }
+                    } else if (result) {
+                        preferings.add(key);
+                    } else {
+                        if (metrics != null) {
+                            metrics.getFailedTxnQueryRate().mark();
+                        }
+                        unpreferings.add(key);
+                    }
+                }
+
+                if (metrics != null) {
+                    metrics.getFailedTxnQueryRate().mark(unpreferings.size());
+                }
+                if (!unpreferings.isEmpty()) {
+                    log.info("queried {} txns   failures: {}", unqueried.size(), unpreferings.size());
+                }
+
+                if (running.get()) {
+                    prefer(preferings);
+                    finalize(preferings);
+                }
+            } finally {
+                reschedule.run();
+            }
+        });
+
+        return query.size();
     }
 
     private void round(ScheduledExecutorService timer, Duration period) {
-        try {
-            generateNoOpTxns(query() == 0);
-        } catch (Throwable t) {
-            log.error("Error performing Avalanche batch round", t);
-        } finally {
-            queryFuture = timer.schedule(() -> queryExecutor.execute(() -> {
-                if (running.get()) {
-                    round(timer, period);
-                }
-            }), period.toMillis(), TimeUnit.MILLISECONDS);
-        }
+        queryExecutor.execute(() -> {
+            try {
+                generateNoOpTxns(query(() -> {
+                    queryFuture = timer.schedule(() -> queryExecutor.execute(() -> {
+                        if (running.get()) {
+                            round(timer, period);
+                        }
+                    }), period.toMillis(), TimeUnit.MILLISECONDS);
+                }) == 0);
+            } catch (Throwable t) {
+                log.error("Error performing Avalanche batch round", t);
+            }
+        });
     }
 
     private HashKey submit(EntryType type, Message data, HashKey conflictSet) {

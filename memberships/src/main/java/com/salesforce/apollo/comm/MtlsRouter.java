@@ -7,6 +7,7 @@
 package com.salesforce.apollo.comm;
 
 import java.io.IOException;
+import java.util.concurrent.Executor;
 
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.comm.grpc.MtlsClient;
@@ -40,15 +41,16 @@ public class MtlsRouter extends Router {
     private final EndpointProvider epProvider;
     private final MtlsServer       server;
 
-    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep) {
-        this(builder, ep, new MutableHandlerRegistry());
+    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, Executor executor) {
+        this(builder, ep, new MutableHandlerRegistry(), executor);
     }
 
-    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, MutableHandlerRegistry registry) {
+    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, MutableHandlerRegistry registry,
+            Executor executor) {
         super(builder.setFactory(new MtlsServerConnectionFactory(ep)).build(), registry);
         epProvider = ep;
         this.server = new MtlsServer(epProvider.getBindAddress(), epProvider.getClientAuth(), epProvider.getAlias(),
-                epProvider.getCertificate(), epProvider.getPrivateKey(), epProvider.getValiator(), registry);
+                epProvider.getCertificate(), epProvider.getPrivateKey(), epProvider.getValiator(), registry, executor);
     }
 
     @Override

@@ -11,6 +11,7 @@ import static io.github.olivierlemasle.ca.CA.dn;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.ForkJoinPool;
 
 import org.junit.jupiter.api.Test;
 
@@ -109,7 +110,7 @@ public class TestMtls {
         CertificateWithPrivateKey serverCert = serverIdentity(ca);
 
         MtlsServer server = new MtlsServer(serverAddress, ClientAuth.REQUIRE, "foo", serverCert.getX509Certificate(),
-                serverCert.getPrivateKey(), validator(), new MutableHandlerRegistry());
+                serverCert.getPrivateKey(), validator(), new MutableHandlerRegistry(), ForkJoinPool.commonPool());
         return server;
     }
 
