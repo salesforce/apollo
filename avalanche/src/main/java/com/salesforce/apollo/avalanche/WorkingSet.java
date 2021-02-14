@@ -424,7 +424,7 @@ public class WorkingSet {
                 while (!stack.isEmpty()) {
                     final Node node = stack.remove(stack.size() - 1);
                     List<Node> linkz = node.links();
-                    for (int i = 0; i < node.links().size(); i++) {
+                    for (int i = 0; i <linkz.size(); i++) {
                         Node e = linkz.get(i);
                         if (e.mark()) {
                             Boolean result = test.apply(e);
@@ -948,7 +948,7 @@ public class WorkingSet {
                 }
                 return isFinalized;
             }
-            return node.isStronglyPreferred();
+            return read(() -> node.isStronglyPreferred());
         }).collect(Collectors.toList());
 
     }

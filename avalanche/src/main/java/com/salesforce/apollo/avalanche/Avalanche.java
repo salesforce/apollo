@@ -663,7 +663,7 @@ public class Avalanche {
         } else {
             parents = new HashSet<>();
             if (parentSample.isEmpty()) {
-                dag.sampleParents(parentSample, 100, Utils.bitStreamEntropy());
+                dag.sampleParents(parentSample, 1000, Utils.bitStreamEntropy());
             }
             if (parentSample.isEmpty()) {
                 parents.addAll(dag.finalized(Utils.bitStreamEntropy(), parameters.parentCount));

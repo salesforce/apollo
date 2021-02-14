@@ -32,6 +32,6 @@ public class TlsFunctionalTest extends AvalancheFunctionalTest {
 
     @Override
     protected int testCardinality() {
-        return 14;
+        return 17;
     }
 }
