@@ -22,7 +22,7 @@ import com.salesfoce.apollo.consortium.proto.TransactionResult;
  *
  */
 public interface ConsortiumService {
-    CertifiedBlock checkpointSync(CheckpointSync sync);
+    ListenableFuture<CertifiedBlock> checkpointSync(CheckpointSync sync);
 
     ListenableFuture<TransactionResult> clientSubmit(SubmitTransaction request);
 

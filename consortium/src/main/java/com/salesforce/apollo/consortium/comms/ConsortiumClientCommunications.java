@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.consortium.comms;
 
-import java.util.concurrent.ExecutionException;
-
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
@@ -49,18 +47,8 @@ public class ConsortiumClientCommunications implements ConsortiumService {
     }
 
     @Override
-    public CertifiedBlock checkpointSync(CheckpointSync sync) {
-        try {
-            return client.checkpointSync(sync).get();
-        } catch (InterruptedException e) {
-            throw new IllegalStateException("error communicating with: " + member, e);
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException) {
-                throw (RuntimeException) cause;
-            }
-            throw new IllegalStateException("error communicating with: " + member, e);
-        }
+    public ListenableFuture<CertifiedBlock> checkpointSync(CheckpointSync sync) {
+        return client.checkpointSync(sync);
     }
 
     @Override
