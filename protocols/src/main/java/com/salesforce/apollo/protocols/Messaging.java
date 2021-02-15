@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.protocols;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.proto.MessageBff;
 import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.Push;
@@ -16,7 +17,7 @@ import com.salesfoce.apollo.proto.Push;
  */
 public interface Messaging {
 
-    Messages gossip(MessageBff bff);
+    ListenableFuture<Messages> gossip(MessageBff bff);
 
     void update(Push push);
 

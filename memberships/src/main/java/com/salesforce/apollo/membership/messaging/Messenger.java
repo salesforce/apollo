@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -25,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Supplier;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.MessageBff;
@@ -221,21 +223,32 @@ public class Messenger {
             }
             int gossipRound = round.incrementAndGet();
             log.trace("message gossiping[{}] from {} with {} on {}", gossipRound, member, link.getMember(), ring);
-            try {
-                Messages gossip = null;
+            ListenableFuture<Messages> futureSailor;
 
+            try {
+                futureSailor = link.gossip(MessageBff.newBuilder()
+                                                     .setContext(context.getId().toID())
+                                                     .setRing(ring)
+                                                     .setDigests(buffer.getBff(Utils.entropy().nextInt(),
+                                                                               parameters.falsePositiveRate)
+                                                                       .toBff())
+                                                     .build());
+            } catch (Throwable e) {
+                log.debug("error gossiping with {}", link.getMember(), e);
+                return;
+            }
+            futureSailor.addListener(() -> {
                 try {
-                    gossip = link.gossip(MessageBff.newBuilder()
-                                                   .setContext(context.getId().toID())
-                                                   .setRing(ring)
-                                                   .setDigests(buffer.getBff(Utils.entropy().nextInt(),
-                                                                             parameters.falsePositiveRate)
-                                                                     .toBff())
-                                                   .build());
-                } catch (Throwable e) {
-                    log.debug("error gossipling with {}", link.getMember(), e);
-                }
-                if (gossip != null) {
+                    Messages gossip;
+                    try {
+                        gossip = futureSailor.get();
+                    } catch (InterruptedException e) {
+                        log.debug("error gossiping with {}", link.getMember(), e);
+                        return;
+                    } catch (ExecutionException e) {
+                        log.debug("error gossiping with {}", link.getMember(), e.getCause());
+                        return;
+                    }
                     process(gossip.getUpdatesList());
                     Builder pushBuilder = Push.newBuilder().setContext(context.getId().toID()).setRing(ring);
                     buffer.updatesFor(new BloomFilter(gossip.getBff()), pushBuilder);
@@ -244,20 +257,21 @@ public class Messenger {
                     } catch (Throwable e) {
                         log.debug("error updating {}", link.getMember(), e);
                     }
-                }
-            } finally {
-                link.release();
-            }
-            if (started.get()) {
-                roundListeners.forEach(l -> {
-                    try {
-                        l.accept(gossipRound);
-                    } catch (Throwable e) {
-                        log.error("error sending round() to listener: " + l, e);
+                } finally {
+                    link.release();
+                    if (started.get()) {
+                        roundListeners.forEach(l -> {
+                            try {
+                                l.accept(gossipRound);
+                            } catch (Throwable e) {
+                                log.error("error sending round() to listener: " + l, e);
+                            }
+                        });
+                        scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(),
+                                           TimeUnit.MILLISECONDS);
                     }
-                });
-                scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
-            }
+                }
+            }, executor);
         });
     }
 
