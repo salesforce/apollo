@@ -191,37 +191,12 @@ public class View {
                 return;
             }
             log.trace("gossiping with {} on {}", link.getMember(), lastRing);
-            boolean success;
             try {
-                success = View.this.gossip(lastRing, link);
+                View.this.gossip(lastRing, link);
             } catch (Exception e) {
                 log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing, e);
-                return;
             } finally {
                 link.release();
-            }
-            if (!success) {
-                try {
-                    link = linkFor(lastRing);
-                    if (link == null) {
-                        log.debug("No link for ring {}", lastRing);
-                        return;
-                    }
-                    success = View.this.gossip(lastRing, link);
-                } catch (Exception e) {
-                    log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing);
-                    return;
-                } finally {
-                    if (link != null) {
-                        link.release();
-                    }
-                }
-                if (!success) {
-                    log.trace("Partial redirect round of gossip with {}, ring {} not redirecting further",
-                              link.getMember(), lastRing);
-                } else {
-                    log.trace("Successful redirect round of gossip with {}, ring {}", link.getMember(), lastRing);
-                }
             }
         }
 
@@ -789,8 +764,8 @@ public class View {
      * @param seed
      */
     void addSeed(Participant seed) {
-        seed.setNote(new Note(seed.getId(), -1,
-                Node.createInitialMask(getParameters().toleranceLevel, Utils.entropy()), node.forSigning()));
+        seed.setNote(new Note(seed.getId(), -1, Node.createInitialMask(getParameters().toleranceLevel, Utils.entropy()),
+                node.forSigning()));
         context.add(seed);
         context.activate(seed);
     }
