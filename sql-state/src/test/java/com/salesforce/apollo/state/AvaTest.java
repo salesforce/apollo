@@ -138,7 +138,8 @@ public class AvaTest {
 
         assertEquals(testCardinality, members.size());
 
-        members.forEach(node -> communications.put(node.getId(), new LocalRouter(node.getId(), builder)));
+        members.forEach(node -> communications.put(node.getId(),
+                                                   new LocalRouter(node, builder, Executors.newFixedThreadPool(3))));
 
     }
 
@@ -328,7 +329,8 @@ public class AvaTest {
             aParams.noOpQueryFactor = 40;
 
             AvaAdapter adapter = adapters.get(node);
-            Avalanche ava = new Avalanche(node, view, communications.get(node.getId()), aParams, null, adapter, new MVStore.Builder().open());
+            Avalanche ava = new Avalanche(node, view, communications.get(node.getId()), aParams, null, adapter,
+                    new MVStore.Builder().open());
             adapter.setAva(ava);
             avas.put(node, ava);
         });

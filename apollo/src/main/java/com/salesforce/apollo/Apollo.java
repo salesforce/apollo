@@ -25,8 +25,8 @@ import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
+import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -73,9 +73,10 @@ public class Apollo {
         scheduler = Executors.newScheduledThreadPool(configuration.threadPool);
         IdentitySource identitySource = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
                                                                    ApolloConfiguration.DEFAULT_IDENTITY_ALIAS);
-        HashKey id = Member.getMemberId(identitySource.identity().getCertificate());
-        communications = c.communications.getComms(metrics, id);
-        view = identitySource.createView(new HashKey(c.contextBase), communications, new FireflyMetricsImpl(metrics));
+        Node node = identitySource.getNode();
+        communications = c.communications.getComms(metrics, node);
+        view = identitySource.createView(node, new HashKey(c.contextBase), communications,
+                                         new FireflyMetricsImpl(metrics));
         seeds = identitySource.seeds();
         avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics),
                 processor, new MVStore.Builder().open());

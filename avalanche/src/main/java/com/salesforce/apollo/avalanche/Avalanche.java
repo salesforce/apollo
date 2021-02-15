@@ -240,7 +240,7 @@ public class Avalanche {
         this.node = node;
         this.context = context;
         AtomicInteger seq = new AtomicInteger();
-        this.queryExecutor = Executors.newCachedThreadPool(r -> {
+        this.queryExecutor = Executors.newFixedThreadPool(p.outstandingQueries, r -> {
             Thread t = new Thread(r, "Avalanche[" + node.getId() + "] - " + seq.incrementAndGet());
             return t;
         });

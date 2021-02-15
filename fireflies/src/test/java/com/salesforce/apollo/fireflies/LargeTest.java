@@ -160,8 +160,9 @@ public class LargeTest {
         views = members.stream().map(node -> {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
                     frist.getAndSet(false) ? node0Registry : registry);
-            LocalRouter comms = new LocalRouter(node.getId(),
-                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl));
+            LocalRouter comms = new LocalRouter(node,
+                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl),
+                    Executors.newFixedThreadPool(3));
             communications.add(comms);
             return new View(HashKey.ORIGIN, node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());

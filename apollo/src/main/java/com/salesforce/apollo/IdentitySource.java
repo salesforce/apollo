@@ -189,9 +189,8 @@ public interface IdentitySource {
         }
 
         @Override
-        public View createView(HashKey context, Router communications, FireflyMetrics metrics) {
-            FirefliesParameters parameters = new FirefliesParameters(getCA());
-            return new View(context, new Node(identity(), parameters), communications, metrics);
+        public View createView(Node node, HashKey context, Router communications, FireflyMetrics metrics) {
+            return new View(context, node, communications, metrics);
         }
     }
 
@@ -199,10 +198,15 @@ public interface IdentitySource {
     public static final String DEFAULT_IDENTITY_ALIAS = "identity";
     public static final String SEED_PREFIX            = "seed.";
 
-    default <T extends Node> View createView(HashKey context, Router communications, FireflyMetrics metrics) {
-        FirefliesParameters parameters = new FirefliesParameters(getCA());
+    default <T extends Node> View createView(Node node, HashKey context, Router communications,
+                                             FireflyMetrics metrics) {
+        return new View(context, node, communications, metrics);
+    }
 
-        return new View(context, new Node(identity(), parameters), communications, metrics);
+    default Node getNode() {
+        FirefliesParameters parameters = new FirefliesParameters(getCA());
+        Node node = new Node(identity(), parameters);
+        return node;
     }
 
     X509Certificate getCA();

@@ -424,7 +424,7 @@ public class WorkingSet {
                 while (!stack.isEmpty()) {
                     final Node node = stack.remove(stack.size() - 1);
                     List<Node> linkz = node.links();
-                    for (int i = 0; i <linkz.size(); i++) {
+                    for (int i = 0; i < linkz.size(); i++) {
                         Node e = linkz.get(i);
                         if (e.mark()) {
                             Boolean result = test.apply(e);
@@ -864,12 +864,10 @@ public class WorkingSet {
     }
 
     public List<Pair<HashKey, ByteString>> getQuerySerializedEntries(List<HashKey> keys) {
-        return read(() -> {
-            return keys.stream().map(key -> {
-                ByteString bytes = getBytes(key);
-                return bytes == null ? null : new Pair<>(key, bytes);
-            }).filter(entry -> entry != null).collect(Collectors.toList());
-        });
+        return keys.stream().map(key -> {
+            ByteString bytes = read(() -> getBytes(key));
+            return bytes == null ? null : new Pair<>(key, bytes);
+        }).filter(entry -> entry != null).collect(Collectors.toList());
     }
 
     public Map<HashKey, Node> getUnfinalized() {
@@ -1144,15 +1142,20 @@ public class WorkingSet {
     }
 
     boolean insert(HashKey key, DagEntry entry, boolean noOp, long discovered, HashKey cs) {
+        Node existing = read(() -> unfinalized.get(key));
+        if (existing != null && !existing.isUnknown()) {
+            return true;
+        }
+
+        HashKey derived = new HashKey(Conversion.hashOf(entry.toByteString()));
+        if (!key.equals(derived)) {
+            log.error("Key {} does not match hash {} of entry", key, derived);
+            return false;
+        }
         return write(() -> {
             Node found = unfinalized.get(key);
             if (found == null) {
                 if (!finalized.containsKey(key)) {
-                    HashKey derived = new HashKey(Conversion.hashOf(entry.toByteString()));
-                    if (!key.equals(derived)) {
-                        log.error("Key {} does not match hash {} of entry", key, derived);
-                        return false;
-                    }
                     if (unfinalized.get(key) == null) {
                         unfinalized.put(key, nodeFor(key, entry, noOp, discovered, cs));
                         unqueried.add(key);
@@ -1168,11 +1171,6 @@ public class WorkingSet {
                     }
                 }
             } else if (found.isUnknown()) {
-                HashKey derived = new HashKey(Conversion.hashOf(entry.toByteString()));
-                if (!key.equals(derived)) {
-                    log.error("Key {} does not match hash {} of unknown entry", key, derived);
-                    return false;
-                }
                 Node replacement = nodeFor(key, entry, noOp, discovered, cs);
                 unfinalized.put(key, replacement);
                 replacement.replace(((UnknownNode) found));

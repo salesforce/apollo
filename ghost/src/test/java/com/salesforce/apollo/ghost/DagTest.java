@@ -102,7 +102,7 @@ public class DagTest {
         scheduler = Executors.newScheduledThreadPool(100);
 
         views = members.stream().map(node -> {
-            Router comm = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder());
+            Router comm = new LocalRouter(node, ServerConnectionCache.newBuilder(), Executors.newFixedThreadPool(3));
             comms.add(comm);
             View view = new View(HashKey.ORIGIN, node, comm, null);
             return view;

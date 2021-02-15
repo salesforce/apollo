@@ -9,7 +9,10 @@ package com.salesforce.apollo.comm;
 import java.io.IOException;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,9 +30,16 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
+import io.grpc.ForwardingServerCall;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Server;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.util.MutableHandlerRegistry;
@@ -49,8 +59,14 @@ public class LocalRouter extends Router {
                 @Override
                 public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
                                                                            CallOptions callOptions, Channel next) {
-                    callCertificate.set(from.getCertificate());
-                    return next.newCall(method, callOptions);
+                    return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
+                        @Override
+                        public void start(Listener<RespT> responseListener, Metadata headers) {
+                            headers.put(MEMBER_ID_KEY, from.getId().b64Encoded());
+                            super.start(new SimpleForwardingClientCallListener<RespT>(responseListener) {
+                            }, headers);
+                        }
+                    };
                 }
             };
             return InProcessChannelBuilder.forName(to.getId().b64Encoded())
@@ -73,7 +89,11 @@ public class LocalRouter extends Router {
 
         @Override
         public X509Certificate getCert() {
-            return callCertificate.get();
+            X509Certificate x509Certificate = callCertificate.get();
+            if (x509Certificate == null) {
+                throw new IllegalStateException("Thread local call certificate is NULL");
+            }
+            return x509Certificate;
         }
 
         @Override
@@ -93,29 +113,56 @@ public class LocalRouter extends Router {
     }
 
     public static ThreadLocal<X509Certificate> callCertificate = new ThreadLocal<>();
-    public static final ThreadIdentity         LOCAL_IDENTITY  = new ThreadIdentity();
 
-    private static final Logger log = LoggerFactory.getLogger(LocalRouter.class);
+    public static final ThreadIdentity       LOCAL_IDENTITY = new ThreadIdentity();
+    public static final Metadata.Key<String> MEMBER_ID_KEY  = Metadata.Key.of("from.id",
+                                                                              Metadata.ASCII_STRING_MARSHALLER);
 
-    private final HashKey id;
-    private Server        server;
+    private static final Logger               log           = LoggerFactory.getLogger(LocalRouter.class);
+    private static final Map<HashKey, Member> serverMembers = new ConcurrentHashMap<>();
 
-    public LocalRouter(HashKey id, ServerConnectionCache.Builder builder) {
-        this(id, builder, new MutableHandlerRegistry());
+    private final Member member;
+    private final Server server;
+
+    public LocalRouter(Member member, ServerConnectionCache.Builder builder, Executor executor) {
+        this(member, builder, new MutableHandlerRegistry(), executor);
     }
 
-    public LocalRouter(HashKey id, ServerConnectionCache.Builder builder, MutableHandlerRegistry registry) {
+    public LocalRouter(Member member, ServerConnectionCache.Builder builder, MutableHandlerRegistry registry,
+            Executor executor) {
         super(builder.setFactory(new LocalServerConnectionFactory()).build(), registry);
-        this.id = id;
+        this.member = member;
 
-        server = InProcessServerBuilder.forName(id.b64Encoded())
-                                       .directExecutor() // directExecutor is fine for local tests
+        server = InProcessServerBuilder.forName(member.getId().b64Encoded())
+                                       .executor(executor)
+                                       .intercept(new ServerInterceptor() {
+
+                                           @Override
+                                           public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                                                                                                        final Metadata requestHeaders,
+                                                                                                        ServerCallHandler<ReqT, RespT> next) {
+                                               String id = requestHeaders.get(MEMBER_ID_KEY);
+                                               if (id == null) {
+                                                   throw new IllegalStateException("No member ID in call");
+                                               }
+                                               Member member = serverMembers.get(new HashKey(id));
+                                               if (member == null) {
+                                                   throw new IllegalStateException("Invalid member ID in call: " + id);
+                                               }
+                                               callCertificate.set(member.getCertificate());
+                                               return next.startCall(new ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(
+                                                       call) {
+                                               }, requestHeaders);
+                                           }
+
+                                       })
                                        .fallbackHandlerRegistry(registry)
                                        .build();
     }
 
     @Override
     public void close() {
+        serverMembers.remove(member.getId());
         server.shutdownNow();
         super.close();
     }
@@ -128,11 +175,12 @@ public class LocalRouter extends Router {
     @Override
     public void start() {
         try {
+            serverMembers.put(member.getId(), member);
             server.start();
         } catch (IOException e) {
-            log.error("Cannot start in process server for: " + id, e);
+            log.error("Cannot start in process server for: " + member, e);
         }
-        log.info("Starting server for: " + id);
+        log.info("Starting server for: " + member);
     }
 
 }

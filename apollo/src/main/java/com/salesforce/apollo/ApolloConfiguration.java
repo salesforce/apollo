@@ -11,6 +11,7 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.time.Duration;
+import java.util.concurrent.Executors;
 
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -24,6 +25,7 @@ import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
+import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -34,7 +36,7 @@ import com.salesforce.apollo.protocols.HashKey;
 public class ApolloConfiguration {
     public interface CommunicationsFactory {
 
-        Router getComms(MetricRegistry metrics, HashKey id);
+        Router getComms(MetricRegistry metrics, Node node);
 
     }
 
@@ -63,11 +65,11 @@ public class ApolloConfiguration {
         public int target = 30;
 
         @Override
-        public Router getComms(MetricRegistry metrics, HashKey id) {
+        public Router getComms(MetricRegistry metrics, Node n) {
             EndpointProvider ep = null;
             return new MtlsRouter(
                     ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
-                    ep);
+                    ep, Executors.newFixedThreadPool(10));
         }
 
     }
@@ -93,9 +95,10 @@ public class ApolloConfiguration {
         public int target = 30;
 
         @Override
-        public Router getComms(MetricRegistry metrics, HashKey id) {
-            return new LocalRouter(id,
-                    ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)));
+        public Router getComms(MetricRegistry metrics, Node node) {
+            return new LocalRouter(node,
+                    ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
+                    Executors.newFixedThreadPool(5));
         }
 
     }
@@ -104,7 +107,7 @@ public class ApolloConfiguration {
     public static final Duration DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(500);
     public static final String   DEFAULT_IDENTITY_ALIAS  = "identity";
     public static final char[]   DEFAULT_PASSWORD        = "".toCharArray();
-    public static final Duration DEFAULT_QUERY_INTERVAL = Duration.ofMillis(50);
+    public static final Duration DEFAULT_QUERY_INTERVAL  = Duration.ofMillis(50);
     public static final String   DEFAULT_TYPE            = "PKCS12";
 
     public AvalancheParameters   avalanche      = new AvalancheParameters();
@@ -118,7 +121,7 @@ public class ApolloConfiguration {
     public GhostParameters       ghost          = new GhostParameters();
     public Duration              gossipInterval = DEFAULT_GOSSIP_INTERVAL;
     public String                identity       = DEFAULT_IDENTITY_ALIAS;
-    public Duration queryInterval = DEFAULT_QUERY_INTERVAL;
+    public Duration              queryInterval  = DEFAULT_QUERY_INTERVAL;
     @JsonSubTypes({ @Type(value = FileIdentitySource.class, name = "file"),
                     @Type(value = ResourceIdentitySource.class, name = "resource"),
                     @Type(value = BootstrapIdSource.class, name = "bootstrap"),

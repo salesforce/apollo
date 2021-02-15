@@ -225,8 +225,9 @@ public class SwarmTest {
         views = members.stream().map(node -> {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
                     frist.getAndSet(false) ? node0Registry : registry);
-            Router comms = new LocalRouter(node.getId(),
-                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl));
+            Router comms = new LocalRouter(node,
+                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl),
+                    Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);
             return new View(HashKey.ORIGIN, node, comms, fireflyMetricsImpl);

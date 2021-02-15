@@ -60,7 +60,7 @@ public class AvalancheParameters {
      * Number of threads to allocate per queries - i.e. how many simultaneous
      * outbound queries we can make.
      */
-    public int            outstandingQueries       = 10;                  // Currently same as K
+    public int            outstandingQueries       = 5;
     /**
      * The number of parents we desire for new txns
      */

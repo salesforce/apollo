@@ -100,7 +100,7 @@ public class GhostTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         views = members.stream().map(node -> {
-            Router com = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder());
+            Router com = new LocalRouter(node, ServerConnectionCache.newBuilder(), Executors.newFixedThreadPool(3));
             comms.add(com);
             View view = new View(HashKey.ORIGIN, node, com, null);
             return view;

@@ -95,7 +95,7 @@ public class SuccessorTest {
 
         Builder builder = ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics);
         Map<Participant, View> views = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node.getId(), builder);
+            LocalRouter comms = new LocalRouter(node, builder, Executors.newFixedThreadPool(3));
             communications.add(comms);
             comms.start();
             return new View(HashKey.ORIGIN, node, comms, metrics);

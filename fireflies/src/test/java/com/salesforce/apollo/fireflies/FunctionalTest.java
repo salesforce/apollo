@@ -95,8 +95,8 @@ public class FunctionalTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         views = members.parallelStream().map(node -> {
-            Router comms = new LocalRouter(node.getId(),
-                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics));
+            Router comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics),
+                    Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);
             return new View(HashKey.ORIGIN, node, comms, metrics);
