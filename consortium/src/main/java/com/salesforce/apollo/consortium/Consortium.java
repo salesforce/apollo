@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
@@ -44,6 +46,7 @@ import org.slf4j.LoggerFactory;
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -205,6 +208,19 @@ public class Consortium {
     public enum Timers {
         ASSEMBLE_CHECKPOINT, AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, CHECKPOINT_TIMEOUT,
         CHECKPOINTING, FLUSH_BATCH, PROCLAIM, TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
+    }
+
+    public static class TransactionSubmitFailure extends Exception {
+        private static final long serialVersionUID = 1L;
+
+        public final HashKey key;
+        public final int     suceeded;
+
+        public TransactionSubmitFailure(String message, HashKey key, int succeeded) {
+            super(message);
+            this.suceeded = succeeded;
+            this.key = key;
+        }
     }
 
     static class Result {
@@ -873,32 +889,55 @@ public class Consortium {
                                                           .setTransaction(transaction.transaction)
                                                           .build();
         log.debug("Submitting txn: {} from: {}", transaction.hash, getMember());
-        List<TransactionResult> results;
-        results = viewContext().streamRandomRing().map(c -> {
+        List<Member> group = viewContext().streamRandomRing().collect(Collectors.toList());
+        AtomicInteger pending = new AtomicInteger(group.size());
+        AtomicInteger success = new AtomicInteger();
+        AtomicBoolean completed = new AtomicBoolean();
+        group.forEach(c -> {
             if (getMember().equals(c)) {
                 log.trace("submit: {} to self: {}", transaction.hash, c.getId());
                 transitions.receive(transaction.transaction, getMember());
-                return TransactionResult.getDefaultInstance();
             } else {
                 ConsortiumClientCommunications link = linkFor(c);
                 if (link == null) {
                     log.debug("Cannot get link for {}", c.getId());
-                    return null;
+                    pending.decrementAndGet();
+                    return;
                 }
-                try {
-                    return link.clientSubmit(submittedTxn);
-                } catch (Throwable t) {
-                    log.trace("Cannot submit txn {} to {}: {}", transaction.hash, c, t.getMessage());
-                    return null;
-                }
+                ListenableFuture<TransactionResult> futureSailor = link.clientSubmit(submittedTxn);
+                futureSailor.addListener(() -> {
+                    if (completed.get()) {
+                        return;
+                    }
+                    int succeeded;
+                    try {
+                        futureSailor.get();
+                        succeeded = success.incrementAndGet();
+                    } catch (InterruptedException e) {
+                        log.debug("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(), e);
+                        succeeded = success.get();
+                    } catch (ExecutionException e) {
+                        succeeded = success.get();
+                        log.debug("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(),
+                                  e.getCause());
+                    }
+                    int remaining = pending.decrementAndGet();
+                    int majority = viewContext().majority();
+                    if (succeeded >= majority) {
+                        if (onCompletion != null && completed.compareAndSet(false, true)) {
+                            onCompletion.accept(true, null);
+                        }
+                    } else {
+                        if (remaining + succeeded < majority) {
+                            if (onCompletion != null && completed.compareAndSet(false, true)) {
+                                onCompletion.accept(null, new TransactionSubmitFailure("Failed to achieve majority",
+                                        transaction.hash, succeeded));
+                            }
+                        }
+                    }
+                }, ForkJoinPool.commonPool()); // TODO, put in passed executor
             }
-        }).filter(r -> r != null).collect(Collectors.toList());
-
-        if (results.size() < viewContext().majority()) {
-            log.debug("Cannot submit txn {} on: {} responses: {} required: {}", transaction.hash, getMember(),
-                      results.size(), viewContext().majority());
-            throw new TimeoutException("Cannot submit transaction " + transaction.hash);
-        }
+        });
     }
 
     private void synchronizedProcess(CertifiedBlock certifiedBlock) {
