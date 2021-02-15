@@ -69,18 +69,8 @@ public class ConsortiumClientCommunications implements ConsortiumService {
     }
 
     @Override
-    public CheckpointSegments fetch(CheckpointReplication request) {
-        try {
-            return client.fetch(request).get();
-        } catch (InterruptedException e) {
-            throw new IllegalStateException("error communicating with: " + member, e);
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException) {
-                throw (RuntimeException) cause;
-            }
-            throw new IllegalStateException("error communicating with: " + member, e);
-        }
+    public ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
+        return client.fetch(request);
     }
 
     public Member getMember() {

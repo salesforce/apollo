@@ -26,7 +26,7 @@ public interface ConsortiumService {
 
     ListenableFuture<TransactionResult> clientSubmit(SubmitTransaction request);
 
-    CheckpointSegments fetch(CheckpointReplication request);
+    ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request);
 
     JoinResult join(Join join);
 
