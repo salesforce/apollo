@@ -826,6 +826,24 @@ public class Consortium {
         }
     }
 
+    private void processSubmit(EnqueuedTransaction transaction, BiConsumer<Object, Throwable> onCompletion,
+                               AtomicInteger pending, AtomicBoolean completed, int succeeded) {
+        int remaining = pending.decrementAndGet();
+        int majority = viewContext().majority();
+        if (succeeded >= majority) {
+            if (onCompletion != null && completed.compareAndSet(false, true)) {
+                onCompletion.accept(true, null);
+            }
+        } else {
+            if (remaining + succeeded < majority) {
+                if (onCompletion != null && completed.compareAndSet(false, true)) {
+                    onCompletion.accept(null, new TransactionSubmitFailure("Failed to achieve majority",
+                            transaction.hash, succeeded));
+                }
+            }
+        }
+    }
+
     private boolean processSynchronized(Member from, Any content) {
         if (content.is(Stop.class)) {
             try {
@@ -897,6 +915,8 @@ public class Consortium {
             if (getMember().equals(c)) {
                 log.trace("submit: {} to self: {}", transaction.hash, c.getId());
                 transitions.receive(transaction.transaction, getMember());
+                pending.decrementAndGet();
+                processSubmit(transaction, onCompletion, pending, completed, success.incrementAndGet());
             } else {
                 ConsortiumClientCommunications link = linkFor(c);
                 if (link == null) {
@@ -921,20 +941,7 @@ public class Consortium {
                         log.debug("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(),
                                   e.getCause());
                     }
-                    int remaining = pending.decrementAndGet();
-                    int majority = viewContext().majority();
-                    if (succeeded >= majority) {
-                        if (onCompletion != null && completed.compareAndSet(false, true)) {
-                            onCompletion.accept(true, null);
-                        }
-                    } else {
-                        if (remaining + succeeded < majority) {
-                            if (onCompletion != null && completed.compareAndSet(false, true)) {
-                                onCompletion.accept(null, new TransactionSubmitFailure("Failed to achieve majority",
-                                        transaction.hash, succeeded));
-                            }
-                        }
-                    }
+                    processSubmit(transaction, onCompletion, pending, completed, succeeded);
                 }, ForkJoinPool.commonPool()); // TODO, put in passed executor
             }
         });

@@ -28,7 +28,7 @@ public interface ConsortiumService {
 
     ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request);
 
-    JoinResult join(Join join);
+    ListenableFuture<JoinResult> join(Join join);
 
     void stopData(StopData stopData);
 }

@@ -78,18 +78,8 @@ public class ConsortiumClientCommunications implements ConsortiumService {
     }
 
     @Override
-    public JoinResult join(Join join) {
-        try {
-            return client.join(join).get();
-        } catch (InterruptedException e) {
-            throw new IllegalStateException("error communicating with: " + member, e);
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException) {
-                throw (RuntimeException) cause;
-            }
-            throw new IllegalStateException("error communicating with: " + member, e);
-        }
+    public ListenableFuture<JoinResult> join(Join join) {
+        return client.join(join);
     }
 
     public void release() {
