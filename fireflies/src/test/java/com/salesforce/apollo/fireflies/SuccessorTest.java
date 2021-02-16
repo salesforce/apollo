@@ -134,14 +134,15 @@ public class SuccessorTest {
             System.out.println("ring: " + ring + " successor: " + successor);
             assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
             assertTrue(successor.isLive());
-            test.getService().gossip();
+            test.getService().gossip(() -> {
+            });
 
             ring = (ring + 1) % test.getRings().size();
             successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
             System.out.println("ring: " + ring + " successor: " + successor);
             assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
             assertTrue(successor.isLive());
-            test.getService().gossip();
+            test.getService().gossip(null);
         } finally {
             views.values().forEach(e -> e.getService().stop());
         }

@@ -106,7 +106,8 @@ public class FunctionalTest {
 
         for (int j = 0; j < 20; j++) {
             for (int i = 0; i < parameters.rings + 2; i++) {
-                views.forEach(view -> view.getService().gossip());
+                views.forEach(view -> view.getService().gossip(() -> {
+                }));
             }
         }
 

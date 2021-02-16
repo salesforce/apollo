@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.protocols;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.proto.Digests;
 import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.Signed;
@@ -17,7 +18,7 @@ import com.salesfoce.apollo.proto.Update;
  */
 public interface Fireflies {
 
-    Gossip gossip(HashKey id, Signed note, int ring, Digests gossip);
+    ListenableFuture<Gossip> gossip(HashKey id, Signed note, int ring, Digests gossip);
 
     int ping(HashKey id, int ping);
 
