@@ -893,6 +893,8 @@ public class View {
         Participant member = link.getMember();
         Signed signedNote = node.getSignedNote();
         if (signedNote == null) {
+            link.release();
+            completion.run();
             return;
         }
         Digests outbound = commonDigests();
@@ -904,7 +906,9 @@ public class View {
             } catch (Throwable e) {
                 log.debug("Exception gossiping with {}", link.getMember(), e);
                 link.release();
-                completion.run();
+                if (completion != null) {
+                    completion.run();
+                }
                 return;
             }
 
@@ -914,16 +918,20 @@ public class View {
                           gossip.getAccusations().getUpdatesCount());
             }
             if (gossip.getRedirect()) {
-                redirect(member, gossip, ring);
                 link.release();
-                completion.run();
+                redirect(member, gossip, ring);
+                if (completion != null) {
+                    completion.run();
+                }
             } else {
                 Update update = response(gossip);
                 if (!isEmpty(update)) {
                     link.update(context.getId(), ring, update);
                 }
                 link.release();
-                completion.run();
+                if (completion != null) {
+                    completion.run();
+                }
             }
         }, fjPool);
     }
