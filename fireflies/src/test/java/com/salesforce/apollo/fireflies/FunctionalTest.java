@@ -95,8 +95,8 @@ public class FunctionalTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         views = members.parallelStream().map(node -> {
-            Router comms = new LocalRouter(node.getId(),
-                    ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics));
+            Router comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics),
+                    Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);
             return new View(HashKey.ORIGIN, node, comms, metrics);
@@ -106,7 +106,8 @@ public class FunctionalTest {
 
         for (int j = 0; j < 20; j++) {
             for (int i = 0; i < parameters.rings + 2; i++) {
-                views.forEach(view -> view.getService().gossip());
+                views.forEach(view -> view.getService().gossip(() -> {
+                }));
             }
         }
 

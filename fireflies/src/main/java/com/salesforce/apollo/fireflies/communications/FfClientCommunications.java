@@ -6,10 +6,14 @@
  */
 package com.salesforce.apollo.fireflies.communications;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
+
 import com.codahale.metrics.Timer.Context;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.proto.Digests;
 import com.salesfoce.apollo.proto.FirefliesGrpc;
-import com.salesfoce.apollo.proto.FirefliesGrpc.FirefliesBlockingStub;
+import com.salesfoce.apollo.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.Null;
 import com.salesfoce.apollo.proto.SayWhat;
@@ -36,7 +40,7 @@ public class FfClientCommunications implements Fireflies {
     }
 
     private final ManagedServerConnection channel;
-    private final FirefliesBlockingStub   client;
+    private final FirefliesFutureStub     client;
     private final Participant             member;
     private final FireflyMetrics          metrics;
 
@@ -44,7 +48,7 @@ public class FfClientCommunications implements Fireflies {
         this.member = member;
         assert !(member instanceof Node) : "whoops : " + member;
         this.channel = channel;
-        this.client = FirefliesGrpc.newBlockingStub(channel.channel).withCompression("gzip");
+        this.client = FirefliesGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -53,7 +57,7 @@ public class FfClientCommunications implements Fireflies {
     }
 
     @Override
-    public Gossip gossip(HashKey context, Signed note, int ring, Digests digests) {
+    public ListenableFuture<Gossip> gossip(HashKey context, Signed note, int ring, Digests digests) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundGossipTimer().time();
@@ -65,14 +69,25 @@ public class FfClientCommunications implements Fireflies {
                                 .setRing(ring)
                                 .setGossip(digests)
                                 .build();
-            Gossip result = client.gossip(sw);
+            ListenableFuture<Gossip> result = client.gossip(sw);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(sw.getSerializedSize());
-                metrics.inboundBandwidth().mark(result.getSerializedSize());
                 metrics.outboundGossip().update(sw.getSerializedSize());
-                metrics.gossipResponse().update(result.getSerializedSize());
                 metrics.outboundGossipRate().mark();
             }
+            result.addListener(() -> {
+                if (metrics != null) {
+                    Gossip gossip;
+                    try {
+                        gossip = result.get();
+                    } catch (InterruptedException | ExecutionException e) {
+                        // ignored
+                        return;
+                    }
+                    metrics.inboundBandwidth().mark(gossip.getSerializedSize());
+                    metrics.gossipResponse().update(gossip.getSerializedSize());
+                }
+            }, ForkJoinPool.commonPool());
             return result;
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);

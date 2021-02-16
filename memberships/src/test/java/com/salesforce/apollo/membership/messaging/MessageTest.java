@@ -106,9 +106,7 @@ public class MessageTest {
     public static final String                             DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
     private static Map<HashKey, CertificateWithPrivateKey> certs;
 
-    private static final Parameters parameters = Parameters.newBuilder()
-                                                           .setBufferSize(100)
-                                                           .build();
+    private static final Parameters parameters = Parameters.newBuilder().setBufferSize(100).build();
 
     @BeforeAll
     public static void beforeClass() {
@@ -153,7 +151,8 @@ public class MessageTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         messengers = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder().setTarget(30));
+            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30),
+                    Executors.newFixedThreadPool(3));
             communications.add(comms);
             comms.start();
             return new Messenger(node, () -> forSigning(node), context, comms, parameters);

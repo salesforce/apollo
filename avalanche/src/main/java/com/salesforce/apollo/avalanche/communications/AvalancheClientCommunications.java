@@ -8,12 +8,14 @@ package com.salesforce.apollo.avalanche.communications;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
 
 import org.apache.commons.math3.util.Pair;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.AvalancheGrpc;
-import com.salesfoce.apollo.proto.AvalancheGrpc.AvalancheBlockingStub;
 import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.Query.Builder;
@@ -38,15 +40,15 @@ public class AvalancheClientCommunications implements Avalanche {
 
     }
 
-    private final ManagedServerConnection channel;
-    private final AvalancheBlockingStub   client;
-    private final Member                  member;
-    private final AvalancheMetrics        metrics;
+    private final ManagedServerConnection           channel;
+    private final AvalancheGrpc.AvalancheFutureStub client;
+    private final Member                            member;
+    private final AvalancheMetrics                  metrics;
 
     public AvalancheClientCommunications(ManagedServerConnection conn, Member member, AvalancheMetrics metrics) {
         this.channel = conn;
         this.member = member;
-        this.client = AvalancheGrpc.newBlockingStub(conn.channel).withCompression("gzip");
+        this.client = AvalancheGrpc.newFutureStub(conn.channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -55,8 +57,8 @@ public class AvalancheClientCommunications implements Avalanche {
     }
 
     @Override
-    public QueryResult query(HashKey context, List<Pair<HashKey, ByteString>> transactions,
-                             Collection<HashKey> wanted) {
+    public ListenableFuture<QueryResult> query(HashKey context, List<Pair<HashKey, ByteString>> transactions,
+                                               Collection<HashKey> wanted) {
         Builder builder = Query.newBuilder().setContext(context.toID());
         transactions.forEach(t -> {
             builder.addHashes(t.getFirst().toID());
@@ -65,12 +67,22 @@ public class AvalancheClientCommunications implements Avalanche {
         wanted.forEach(e -> builder.addWanted(e.toID()));
         try {
             Query query = builder.build();
-            QueryResult result = client.query(query);
+            ListenableFuture<QueryResult> result = client.query(query);
+
             if (metrics != null) {
-                metrics.outboundBandwidth().mark(query.getSerializedSize());
-                metrics.inboundBandwidth().mark(result.getSerializedSize());
-                metrics.outboundQuery().update(query.getSerializedSize());
-                metrics.queryResponse().update(result.getSerializedSize());
+                result.addListener(() -> {
+                    metrics.outboundBandwidth().mark(query.getSerializedSize());
+                    QueryResult queryResult;
+                    try {
+                        queryResult = result.get();
+                        metrics.inboundBandwidth().mark(queryResult.getSerializedSize());
+                        metrics.outboundQuery().update(query.getSerializedSize());
+                        metrics.queryResponse().update(queryResult.getSerializedSize());
+                    } catch (InterruptedException | ExecutionException e1) {
+                        // ignored for metrics gathering
+                    }
+                }, ForkJoinPool.commonPool());
+
             }
             return result;
         } catch (Throwable e) {
@@ -83,19 +95,27 @@ public class AvalancheClientCommunications implements Avalanche {
     }
 
     @Override
-    public List<ByteString> requestDAG(HashKey context, Collection<HashKey> want) {
+    public ListenableFuture<SuppliedDagNodes> requestDAG(HashKey context, Collection<HashKey> want) {
         com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder().setContext(context.toID());
         want.forEach(e -> builder.addEntries(e.toID()));
         try {
             DagNodes request = builder.build();
-            SuppliedDagNodes requested = client.requestDag(request);
+            ListenableFuture<SuppliedDagNodes> requested = client.requestDag(request);
             if (metrics != null) {
-                metrics.outboundBandwidth().mark(request.getSerializedSize());
-                metrics.inboundBandwidth().mark(requested.getSerializedSize());
-                metrics.outboundRequestDag().update(request.getSerializedSize());
-                metrics.requestDagResponse().update(requested.getSerializedSize());
+                requested.addListener(() -> {
+                    metrics.outboundBandwidth().mark(request.getSerializedSize());
+                    SuppliedDagNodes suppliedDagNodes;
+                    try {
+                        suppliedDagNodes = requested.get();
+                        metrics.inboundBandwidth().mark(suppliedDagNodes.getSerializedSize());
+                        metrics.outboundRequestDag().update(request.getSerializedSize());
+                        metrics.requestDagResponse().update(suppliedDagNodes.getSerializedSize());
+                    } catch (InterruptedException | ExecutionException e1) {
+                        // ignored for metrics gathering
+                    }
+                }, ForkJoinPool.commonPool());
             }
-            return requested.getEntriesList();
+            return requested;
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         }

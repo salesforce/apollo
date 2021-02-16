@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codahale.metrics.Timer;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.proto.AccusationGossip;
 import com.salesfoce.apollo.proto.AccusationGossip.Builder;
 import com.salesfoce.apollo.proto.CertificateGossip;
@@ -179,8 +181,10 @@ public class View {
         /**
          * Perform ye one ring round of gossip. Gossip is performed per ring, requiring
          * 2 * tolerance + 1 gossip rounds across all rings.
+         * 
+         * @param completion TODO
          */
-        public void gossip() {
+        public void gossip(Runnable completion) {
             if (!started.get()) {
                 return;
             }
@@ -191,38 +195,7 @@ public class View {
                 return;
             }
             log.trace("gossiping with {} on {}", link.getMember(), lastRing);
-            boolean success;
-            try {
-                success = View.this.gossip(lastRing, link);
-            } catch (Exception e) {
-                log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing, e);
-                return;
-            } finally {
-                link.release();
-            }
-            if (!success) {
-                try {
-                    link = linkFor(lastRing);
-                    if (link == null) {
-                        log.debug("No link for ring {}", lastRing);
-                        return;
-                    }
-                    success = View.this.gossip(lastRing, link);
-                } catch (Exception e) {
-                    log.debug("Partial round of gossip with {}, ring {}", link.getMember(), lastRing);
-                    return;
-                } finally {
-                    if (link != null) {
-                        link.release();
-                    }
-                }
-                if (!success) {
-                    log.trace("Partial redirect round of gossip with {}, ring {} not redirecting further",
-                              link.getMember(), lastRing);
-                } else {
-                    log.trace("Successful redirect round of gossip with {}, ring {}", link.getMember(), lastRing);
-                }
-            }
+            View.this.gossip(lastRing, link, completion);
         }
 
         public boolean isStarted() {
@@ -789,8 +762,8 @@ public class View {
      * @param seed
      */
     void addSeed(Participant seed) {
-        seed.setNote(new Note(seed.getId(), -1,
-                Node.createInitialMask(getParameters().toleranceLevel, Utils.entropy()), node.forSigning()));
+        seed.setNote(new Note(seed.getId(), -1, Node.createInitialMask(getParameters().toleranceLevel, Utils.entropy()),
+                node.forSigning()));
         context.add(seed);
         context.activate(seed);
     }
@@ -910,74 +883,90 @@ public class View {
     /**
      * Gossip with the member
      * 
-     * @param ring - the index of the gossip ring the gossip is originating from in
-     *             this view
-     * @param link - the outbound communications to the paired member
+     * @param ring       - the index of the gossip ring the gossip is originating
+     *                   from in this view
+     * @param link       - the outbound communications to the paired member
+     * @param completion
      * @throws Exception
      */
-    boolean gossip(int ring, FfClientCommunications link) throws Exception {
+    void gossip(int ring, FfClientCommunications link, Runnable completion) {
+        Participant member = link.getMember();
         Signed signedNote = node.getSignedNote();
         if (signedNote == null) {
-            return true;
+            link.release();
+            completion.run();
+            return;
         }
         Digests outbound = commonDigests();
-        Gossip gossip;
-        try {
-            gossip = link.gossip(context.getId(), signedNote, ring, outbound);
-        } catch (Throwable e) {
-            log.debug("Exception gossiping with {}", link.getMember(), e);
-            return false;
-        }
-        if (log.isTraceEnabled()) {
-            log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {} ", gossip.getRedirect(),
-                      gossip.getCertificates().getUpdatesCount(), gossip.getNotes().getUpdatesCount(),
-                      gossip.getAccusations().getUpdatesCount());
-        }
-        if (gossip.getRedirect()) {
-            if (gossip.getCertificates().getUpdatesCount() != 1 && gossip.getNotes().getUpdatesCount() != 1) {
-                log.warn("Redirect response from {} on ring {} did not contain redirect member certificate and note",
-                         link.getMember(), ring);
-                return false;
-            }
-            if (gossip.getAccusations().getUpdatesCount() > 0) {
-                // Reset our epoch to whatever the group has recorded for this recovering node
-                long max = gossip.getAccusations()
-                                 .getUpdatesList()
-                                 .stream()
-                                 .map(signed -> new Accusation(signed.getContent().toByteArray(),
-                                         signed.getSignature().toByteArray()))
-                                 .mapToLong(a -> a.getEpoch())
-                                 .max()
-                                 .orElse(-1);
-                node.nextNote(max + 1);
-            }
-            CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates(0));
-            if (certificate != null) {
-                link.release();
-                add(certificate);
-                Signed signed = gossip.getNotes().getUpdates(0);
-                Note note = new Note(signed.getContent().toByteArray(), signed.getSignature().toByteArray());
-                add(note);
-                gossip.getAccusations()
-                      .getUpdatesList()
-                      .forEach(s -> add(new Accusation(s.getContent().toByteArray(), s.getSignature().toByteArray())));
-                log.debug("Redirected from {} to {} on ring {}", link.getMember(), note.getId(), ring);
-                return false;
-            } else {
-                log.warn("Redirect certificate from {} on ring {} is null", link.getMember(), ring);
-                return false;
-            }
-        }
-        Update update = response(gossip);
-        if (!isEmpty(update)) {
+        ListenableFuture<Gossip> futureSailor = link.gossip(context.getId(), signedNote, ring, outbound);
+        futureSailor.addListener(() -> {
+            Gossip gossip;
             try {
-                link.update(context.getId(), ring, update);
+                gossip = futureSailor.get();
             } catch (Throwable e) {
-                log.debug("Exception updating {}", link.getMember(), e);
-                return false;
+                log.debug("Exception gossiping with {}", link.getMember(), e);
+                link.release();
+                if (completion != null) {
+                    completion.run();
+                }
+                return;
             }
+
+            if (log.isTraceEnabled()) {
+                log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {} ", gossip.getRedirect(),
+                          gossip.getCertificates().getUpdatesCount(), gossip.getNotes().getUpdatesCount(),
+                          gossip.getAccusations().getUpdatesCount());
+            }
+            if (gossip.getRedirect()) {
+                link.release();
+                redirect(member, gossip, ring);
+                if (completion != null) {
+                    completion.run();
+                }
+            } else {
+                Update update = response(gossip);
+                if (!isEmpty(update)) {
+                    link.update(context.getId(), ring, update);
+                }
+                link.release();
+                if (completion != null) {
+                    completion.run();
+                }
+            }
+        }, fjPool);
+    }
+
+    private void redirect(Participant member, Gossip gossip, int ring) {
+        if (gossip.getCertificates().getUpdatesCount() != 1 && gossip.getNotes().getUpdatesCount() != 1) {
+            log.warn("Redirect response from {} on ring {} did not contain redirect member certificate and note",
+                     member, ring);
+            return;
         }
-        return true;
+        if (gossip.getAccusations().getUpdatesCount() > 0) {
+            // Reset our epoch to whatever the group has recorded for this recovering node
+            long max = gossip.getAccusations()
+                             .getUpdatesList()
+                             .stream()
+                             .map(signed -> new Accusation(signed.getContent().toByteArray(),
+                                     signed.getSignature().toByteArray()))
+                             .mapToLong(a -> a.getEpoch())
+                             .max()
+                             .orElse(-1);
+            node.nextNote(max + 1);
+        }
+        CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates(0));
+        if (certificate != null) {
+            add(certificate);
+            Signed signed = gossip.getNotes().getUpdates(0);
+            Note note = new Note(signed.getContent().toByteArray(), signed.getSignature().toByteArray());
+            add(note);
+            gossip.getAccusations()
+                  .getUpdatesList()
+                  .forEach(s -> add(new Accusation(s.getContent().toByteArray(), s.getSignature().toByteArray())));
+            log.debug("Redirected from {} to {} on ring {}", member, note.getId(), ring);
+        } else {
+            log.warn("Redirect certificate from {} on ring {} is null", member, ring);
+        }
     }
 
     /**
@@ -1082,45 +1071,43 @@ public class View {
      * @param d
      */
     void oneRound(Duration d, ScheduledExecutorService scheduler) {
-        com.codahale.metrics.Timer.Context timer = null;
-        if (metrics != null) {
-            timer = metrics.gossipRoundDuration().time();
-        }
+        Timer.Context timer = metrics != null ? metrics.gossipRoundDuration().time() : null;
+        round.incrementAndGet();
         try {
-            round.incrementAndGet();
-            try {
-                service.gossip();
-            } catch (Throwable e) {
-                log.error("unexpected error during gossip round", e);
-            }
-            try {
-                service.monitor();
-            } catch (Throwable e) {
-                log.error("unexpected error during monitor round", e);
-            }
-            maintainTimers();
-        } finally {
-            if (timer != null) {
-                timer.stop();
-            }
-        }
-
-        roundListeners.forEach(l -> {
-            fjPool.execute(() -> {
+            service.gossip(() -> {
                 try {
-                    l.run();
-                } catch (Throwable e) {
-                    log.error("error sending round() to listener: " + l, e);
+                    try {
+                        service.monitor();
+                    } catch (Throwable e) {
+                        log.error("unexpected error during monitor round", e);
+                    }
+                    maintainTimers();
+                } finally {
+                    if (timer != null) {
+                        timer.stop();
+                    }
                 }
+
+                roundListeners.forEach(l -> {
+                    fjPool.execute(() -> {
+                        try {
+                            l.run();
+                        } catch (Throwable e) {
+                            log.error("error sending round() to listener: " + l, e);
+                        }
+                    });
+                });
+                scheduler.schedule(() -> fjPool.execute(() -> {
+                    try {
+                        oneRound(d, scheduler);
+                    } catch (Throwable e) {
+                        log.error("unexpected error during gossip round", e);
+                    }
+                }), d.toMillis(), TimeUnit.MILLISECONDS);
             });
-        });
-        scheduler.schedule(() -> fjPool.execute(() -> {
-            try {
-                oneRound(d, scheduler);
-            } catch (Throwable e) {
-                log.error("unexpected error during gossip round", e);
-            }
-        }), d.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (Throwable e) {
+            log.error("unexpected error during gossip round", e);
+        }
     }
 
     /**

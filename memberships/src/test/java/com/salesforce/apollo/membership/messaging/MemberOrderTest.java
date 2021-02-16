@@ -140,7 +140,8 @@ public class MemberOrderTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         messengers = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder().setTarget(30));
+            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30),
+                    Executors.newFixedThreadPool(3));
             communications.add(comms);
             comms.start();
             return new Messenger(node, () -> forSigning(node), context, comms, parameters);
@@ -195,7 +196,8 @@ public class MemberOrderTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         messengers = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node.getId(), ServerConnectionCache.newBuilder().setTarget(30));
+            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30),
+                    Executors.newFixedThreadPool(3));
             communications.add(comms);
             comms.start();
             return new Messenger(node, () -> forSigning(node), context, comms, parameters);

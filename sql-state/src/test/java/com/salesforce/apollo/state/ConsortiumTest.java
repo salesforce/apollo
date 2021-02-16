@@ -127,7 +127,8 @@ public class ConsortiumTest {
 
         assertEquals(testCardinality, members.size());
 
-        members.forEach(node -> communications.put(node.getId(), new LocalRouter(node.getId(), builder)));
+        members.forEach(node -> communications.put(node.getId(),
+                                                   new LocalRouter(node, builder, Executors.newFixedThreadPool(3))));
 
         System.out.println(members.stream().map(m -> m.getId()).collect(Collectors.toList()));
 

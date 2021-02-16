@@ -7,6 +7,8 @@
 
 package com.salesforce.apollo.avalanche;
 
+import java.util.concurrent.Executors;
+
 import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -25,11 +27,11 @@ public class TlsFunctionalTest extends AvalancheFunctionalTest {
         Builder builder = ServerConnectionCache.newBuilder()
                                                .setTarget(30)
                                                .setMetrics(new FireflyMetricsImpl(first ? node0registry : registry));
-        return new MtlsRouter(builder, View.getStandardEpProvider(node));
+        return new MtlsRouter(builder, View.getStandardEpProvider(node), Executors.newFixedThreadPool(3));
     }
 
     @Override
     protected int testCardinality() {
-        return 14;
+        return 17;
     }
 }

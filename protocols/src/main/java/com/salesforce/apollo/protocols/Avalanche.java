@@ -11,8 +11,10 @@ import java.util.List;
 
 import org.apache.commons.math3.util.Pair;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.QueryResult;
+import com.salesfoce.apollo.proto.SuppliedDagNodes;
 
 /**
  * @author hal.hildebrand
@@ -20,8 +22,8 @@ import com.salesfoce.apollo.proto.QueryResult;
  */
 public interface Avalanche {
 
-    QueryResult query(HashKey context, List<Pair<HashKey, ByteString>> transactions, Collection<HashKey> wanted);
+    ListenableFuture<QueryResult> query(HashKey context, List<Pair<HashKey, ByteString>> transactions, Collection<HashKey> wanted);
 
-    List<ByteString> requestDAG(HashKey context, Collection<HashKey> want);
+    ListenableFuture<SuppliedDagNodes> requestDAG(HashKey context, Collection<HashKey> want);
 
 }

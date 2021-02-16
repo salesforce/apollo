@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.consortium.comms;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
@@ -21,13 +22,13 @@ import com.salesfoce.apollo.consortium.proto.TransactionResult;
  *
  */
 public interface ConsortiumService {
-    CertifiedBlock checkpointSync(CheckpointSync sync);
+    ListenableFuture<CertifiedBlock> checkpointSync(CheckpointSync sync);
 
-    TransactionResult clientSubmit(SubmitTransaction request);
+    ListenableFuture<TransactionResult> clientSubmit(SubmitTransaction request);
 
-    CheckpointSegments fetch(CheckpointReplication request);
+    ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request);
 
-    JoinResult join(Join join);
+    ListenableFuture<JoinResult> join(Join join);
 
     void stopData(StopData stopData);
 }

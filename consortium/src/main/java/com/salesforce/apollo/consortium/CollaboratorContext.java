@@ -19,8 +19,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,6 +37,7 @@ import org.h2.mvstore.MVMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -542,56 +545,41 @@ public class CollaboratorContext {
                                      : consortium.getNextView())
                              .setContext(consortium.viewContext().getId().toByteString())
                              .build();
-        List<Result> votes = consortium.viewContext()
-                                       .streamRandomRing()
-                                       .filter(m -> !m.equals(consortium.getParams().member))
-                                       .map(c -> {
-                                           ConsortiumClientCommunications link = consortium.linkFor(c);
-                                           if (link == null) {
-                                               log.warn("Cannot get link for: {} on: {}", c.getId(),
-                                                        consortium.getMember());
-                                               return null;
-                                           }
-                                           JoinResult vote;
-                                           try {
-                                               vote = link.join(voteForMe);
-                                           } catch (Throwable e) {
-                                               log.trace("Unable to poll vote from: {}:{} on {}", c, e.getMessage(),
-                                                         consortium.getMember());
-                                               return null;
-                                           }
 
-                                           log.trace("One vote to join: {} : {} from: {} on: {}",
-                                                     consortium.getParams().member, consortium.viewContext().getId(), c,
-                                                     consortium.getMember());
-                                           return new Consortium.Result(c, vote);
-                                       })
-                                       .filter(r -> r != null)
-                                       .filter(r -> r.vote.isInitialized())
-                                       .limit(consortium.viewContext().majority())
-                                       .collect(Collectors.toList());
-
-        if (votes.size() < consortium.viewContext().majority()) {
-            log.debug("Did not gather votes necessary to join consortium needed: {} got: {} on: {}",
-                      consortium.viewContext().majority(), votes.size(), consortium.getMember());
-            return;
-        }
-        JoinTransaction.Builder txn = JoinTransaction.newBuilder().setMember(voteForMe.getMember());
-        for (Result vote : votes) {
-            txn.addCertification(Certification.newBuilder()
-                                              .setId(vote.member.getId().toByteString())
-                                              .setSignature(vote.vote.getSignature()));
-        }
-        JoinTransaction joinTxn = txn.build();
-
-        HashKey txnHash;
-        try {
-            txnHash = consortium.submit(true, null, joinTxn);
-        } catch (TimeoutException e) {
-            return;
-        }
-        log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash, consortium.viewContext().getId(),
-                  consortium.getParams().member);
+        List<Member> group = consortium.viewContext().streamRandomRing().collect(Collectors.toList());
+        AtomicInteger pending = new AtomicInteger(group.size());
+        AtomicInteger success = new AtomicInteger();
+        AtomicBoolean completed = new AtomicBoolean();
+        List<Result> votes = new ArrayList<>();
+        group.forEach(c -> {
+            if (getMember().equals(c)) {
+                return;
+            }
+            ConsortiumClientCommunications link = consortium.linkFor(c);
+            if (link == null) {
+                log.debug("Cannot get link for {}", c.getId());
+                pending.decrementAndGet();
+                return;
+            }
+            ListenableFuture<JoinResult> futureSailor = link.join(voteForMe);
+            futureSailor.addListener(() -> {
+                if (completed.get()) {
+                    return;
+                }
+                int succeeded;
+                try {
+                    votes.add(new Consortium.Result(c, futureSailor.get()));
+                    succeeded = success.incrementAndGet();
+                } catch (InterruptedException e) {
+                    log.debug("error submitting join txn to {} on: {}", c, getMember(), e);
+                    succeeded = success.get();
+                } catch (ExecutionException e) {
+                    succeeded = success.get();
+                    log.debug("error submitting join txn to {} on: {}", c, getMember(), e.getCause());
+                }
+                processSubmit(voteForMe, votes, pending, completed, succeeded);
+            }, ForkJoinPool.commonPool()); // TODO, put in passed executor
+        });
     }
 
     public void joinView() {
@@ -1249,6 +1237,41 @@ public class CollaboratorContext {
 
     private void nextRegent(int n) {
         nextRegent.set(n);
+    }
+
+    private void processSubmit(Join voteForMe, List<Result> votes, AtomicInteger pending, AtomicBoolean completed,
+                               int succeeded) {
+        int remaining = pending.decrementAndGet();
+        int majority = consortium.viewContext().majority();
+        if (succeeded >= majority) {
+            if (completed.compareAndSet(false, true)) {
+                JoinTransaction.Builder txn = JoinTransaction.newBuilder().setMember(voteForMe.getMember());
+                for (Result vote : votes) {
+                    txn.addCertification(Certification.newBuilder()
+                                                      .setId(vote.member.getId().toByteString())
+                                                      .setSignature(vote.vote.getSignature()));
+                }
+                JoinTransaction joinTxn = txn.build();
+
+                HashKey txnHash;
+                try {
+                    txnHash = consortium.submit(true, null, joinTxn);
+                } catch (TimeoutException e) {
+                    return;
+                }
+                log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash,
+                          consortium.viewContext().getId(), consortium.getParams().member);
+            }
+        } else {
+            if (remaining + succeeded < majority) {
+                if (completed.compareAndSet(false, true)) {
+                    if (votes.size() < consortium.viewContext().majority()) {
+                        log.debug("Did not gather votes necessary to join consortium needed: {} got: {} on: {}",
+                                  consortium.viewContext().majority(), votes.size(), consortium.getMember());
+                    }
+                }
+            }
+        }
     }
 
     private void processToOrder(Block block) {

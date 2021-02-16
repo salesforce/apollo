@@ -24,6 +24,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -330,7 +331,7 @@ public class MtlsServer implements ClientIdentity {
     private final Context.Key<SSLSession> sslSessionContext = Context.key("SSLSession");
 
     public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
-            PrivateKey privateKey, CertificateValidator validator, MutableHandlerRegistry registry) {
+            PrivateKey privateKey, CertificateValidator validator, MutableHandlerRegistry registry, Executor executor) {
         this.registry = registry;
 
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
@@ -340,6 +341,7 @@ public class MtlsServer implements ClientIdentity {
                                                        .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                        .intercept(interceptor)
                                                        .intercept(EnableCompressionInterceptor.SINGLETON);
+        builder.executor(executor);
         server = builder.build();
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override

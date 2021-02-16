@@ -14,6 +14,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -27,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
@@ -125,26 +128,37 @@ public class Bootstrapper {
                 continue;
             }
             request.setBlocks(ByteString.copyFrom(bytes.toByteArray()));
-            boolean complete = false;
-            try {
-                complete = process(link.fetch(request.build()));
-            } catch (Throwable t) {
-                log.debug("Unable to fetch from: {} on: {}", m, member);
-            }
-            if (complete) {
+            ListenableFuture<CheckpointSegments> futureSailor = link.fetch(request.build());
+            futureSailor.addListener(() -> {
+                CheckpointSegments segments;
                 try {
-                    File spFile = File.createTempFile("snapshot-" + checkpoint.getCheckpoint() + "-", "zip",
-                                                      checkpointDirectory);
-                    create(spFile);
-                    assembled.complete(spFile);
-                } catch (IOException e) {
-                    log.info("Failed to assemble checkpoint {} on: {}", checkpoint.getCheckpoint(), member, e);
-                    assembled.completeExceptionally(e);
+                    segments = futureSailor.get();
+                } catch (InterruptedException e) {
+                    log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", checkpoint.getCheckpoint(),
+                              member, e);
+                    return;
+                } catch (ExecutionException e) {
+                    log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", checkpoint.getCheckpoint(),
+                              member, e.getCause());
+                    return;
                 }
-                return;
-            }
+                boolean complete = process(segments);
+                if (complete) {
+                    try {
+                        File spFile = File.createTempFile("snapshot-" + checkpoint.getCheckpoint() + "-", "zip",
+                                                          checkpointDirectory);
+                        create(spFile);
+                        assembled.complete(spFile);
+                    } catch (IOException e) {
+                        log.info("Failed to assemble checkpoint {} on: {}", checkpoint.getCheckpoint(), member, e);
+                        assembled.completeExceptionally(e);
+                    }
+                    return;
+                }
+            }, ForkJoinPool.commonPool());
+
         }
-        scheduler.schedule(() -> gossip(scheduler, duration, entropy), duration.toMillis(), TimeUnit.MILLISECONDS);
+
     }
 
     private boolean process(CheckpointSegments segments) {

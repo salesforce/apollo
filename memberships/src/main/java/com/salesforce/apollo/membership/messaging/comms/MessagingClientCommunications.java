@@ -6,9 +6,14 @@
  */
 package com.salesforce.apollo.membership.messaging.comms;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
+
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.proto.MessageBff;
 import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.MessagingGrpc;
+import com.salesfoce.apollo.proto.MessagingGrpc.MessagingFutureStub;
 import com.salesfoce.apollo.proto.Push;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -27,15 +32,15 @@ public class MessagingClientCommunications implements Messaging {
 
     }
 
-    private final ManagedServerConnection             channel;
-    private final MessagingGrpc.MessagingBlockingStub client;
-    private final Member                              member;
-    private final MessagingMetrics                    metrics;
+    private final ManagedServerConnection channel;
+    private final MessagingFutureStub     client;
+    private final Member                  member;
+    private final MessagingMetrics        metrics;
 
     public MessagingClientCommunications(ManagedServerConnection channel, Member member, MessagingMetrics metrics) {
         this.member = member;
         this.channel = channel;
-        this.client = MessagingGrpc.newBlockingStub(channel.channel).withCompression("gzip");
+        this.client = MessagingGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -57,15 +62,23 @@ public class MessagingClientCommunications implements Messaging {
     }
 
     @Override
-    public Messages gossip(MessageBff request) {
-        Messages result = client.gossip(request);
-        if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundBandwidth().mark(result.getSerializedSize());
-            metrics.outboundGossip().update(request.getSerializedSize());
-            metrics.gossipResponse().update(result.getSerializedSize());
-            metrics.outboundGossipRate().mark();
-        }
+    public ListenableFuture<Messages> gossip(MessageBff request) {
+        ListenableFuture<Messages> result = client.gossip(request);
+        result.addListener(() -> {
+            if (metrics != null) {
+                Messages messages;
+                try {
+                    messages = result.get();
+                    metrics.inboundBandwidth().mark(messages.getSerializedSize());
+                    metrics.gossipResponse().update(messages.getSerializedSize());
+                } catch (InterruptedException | ExecutionException e) {
+                    // purposefully ignored
+                }
+                metrics.outboundGossip().update(request.getSerializedSize());
+                metrics.outboundBandwidth().mark(request.getSerializedSize());
+                metrics.outboundGossipRate().mark();
+            }
+        }, ForkJoinPool.commonPool());
         return result;
     }
 

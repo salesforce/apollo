@@ -234,10 +234,9 @@ public class WorkingSet {
         @Override
         public boolean tryFinalize(Set<Node> finalizedSet, List<Node> visited) {
             final boolean isFinalized = finalized;
-            if (!mark()) {
+            if (!visited.add(this)) {
                 return isFinalized;
             }
-            visited.add(this);
             if (isFinalized) {
                 return true;
             }
@@ -425,7 +424,7 @@ public class WorkingSet {
                 while (!stack.isEmpty()) {
                     final Node node = stack.remove(stack.size() - 1);
                     List<Node> linkz = node.links();
-                    for (int i = 0; i < node.links().size(); i++) {
+                    for (int i = 0; i < linkz.size(); i++) {
                         Node e = linkz.get(i);
                         if (e.mark()) {
                             Boolean result = test.apply(e);
@@ -865,12 +864,10 @@ public class WorkingSet {
     }
 
     public List<Pair<HashKey, ByteString>> getQuerySerializedEntries(List<HashKey> keys) {
-        return read(() -> {
-            return keys.stream().map(key -> {
-                ByteString bytes = getBytes(key);
-                return bytes == null ? null : new Pair<>(key, bytes);
-            }).filter(entry -> entry != null).collect(Collectors.toList());
-        });
+        return keys.stream().map(key -> {
+            ByteString bytes = read(() -> getBytes(key));
+            return bytes == null ? null : new Pair<>(key, bytes);
+        }).filter(entry -> entry != null).collect(Collectors.toList());
     }
 
     public Map<HashKey, Node> getUnfinalized() {
@@ -949,7 +946,7 @@ public class WorkingSet {
                 }
                 return isFinalized;
             }
-            return node.isStronglyPreferred();
+            return read(() -> node.isStronglyPreferred());
         }).collect(Collectors.toList());
 
     }
@@ -1089,23 +1086,17 @@ public class WorkingSet {
     public FinalizationData tryFinalize(Collection<HashKey> keys) {
         Set<Node> finalizedSet = new HashSet<>();
         List<Node> visited = new ArrayList<>();
-        try {
-            keys.stream()
-                .map(key -> read(() -> unfinalized.get(key)))
-                .filter(node -> node != null)
-                .forEach(node -> read(() -> node.tryFinalize(finalizedSet, visited)));
+        keys.stream()
+            .map(key -> read(() -> unfinalized.get(key)))
+            .filter(node -> node != null)
+            .forEach(node -> read(() -> node.tryFinalize(finalizedSet, visited)));
 
-            if (finalizedSet.isEmpty()) {
-                return new FinalizationData();
-            }
-            FinalizationData data = new FinalizationData();
-            finalizedSet.forEach(node -> write(() -> finalize(node, data)));
-            return data;
-        } finally {
-            for (int i = 0; i < visited.size(); i++) {
-                visited.get(i).unmark();
-            }
+        if (finalizedSet.isEmpty()) {
+            return new FinalizationData();
         }
+        FinalizationData data = new FinalizationData();
+        finalizedSet.forEach(node -> finalize(node, data));
+        return data;
     }
 
     public FinalizationData tryFinalize(HashKey key) {
@@ -1135,30 +1126,36 @@ public class WorkingSet {
     }
 
     void finalize(Node node, FinalizationData data) {
-        node.snip();
-        write(() -> {
-            if (!node.isUnknown()) {
+        if (!node.isUnknown()) {
+            finalized.put(node.getKey(), node.getEntry().toByteArray());
+            write(() -> {
+                node.excise();
                 final ConflictSet conflictSet = node.getConflictSet();
                 conflictSets.remove(conflictSet.getKey());
                 conflictSet.getLosers().forEach(loser -> {
                     data.deleted.add(loser.getKey());
                     unfinalized.remove(loser.getKey());
                 });
-                data.finalized.add(new Finalized(node.getKey(), node.getEntry()));
-            }
-        });
+            });
+            data.finalized.add(new Finalized(node.getKey(), node.getEntry()));
+        }
     }
 
     boolean insert(HashKey key, DagEntry entry, boolean noOp, long discovered, HashKey cs) {
+        Node existing = read(() -> unfinalized.get(key));
+        if (existing != null && !existing.isUnknown()) {
+            return true;
+        }
+
+        HashKey derived = new HashKey(Conversion.hashOf(entry.toByteString()));
+        if (!key.equals(derived)) {
+            log.error("Key {} does not match hash {} of entry", key, derived);
+            return false;
+        }
         return write(() -> {
             Node found = unfinalized.get(key);
             if (found == null) {
                 if (!finalized.containsKey(key)) {
-                    HashKey derived = new HashKey(Conversion.hashOf(entry.toByteString()));
-                    if (!key.equals(derived)) {
-                        log.error("Key {} does not match hash {} of entry", key, derived);
-                        return false;
-                    }
                     if (unfinalized.get(key) == null) {
                         unfinalized.put(key, nodeFor(key, entry, noOp, discovered, cs));
                         unqueried.add(key);
@@ -1174,11 +1171,6 @@ public class WorkingSet {
                     }
                 }
             } else if (found.isUnknown()) {
-                HashKey derived = new HashKey(Conversion.hashOf(entry.toByteString()));
-                if (!key.equals(derived)) {
-                    log.error("Key {} does not match hash {} of unknown entry", key, derived);
-                    return false;
-                }
                 Node replacement = nodeFor(key, entry, noOp, discovered, cs);
                 unfinalized.put(key, replacement);
                 replacement.replace(((UnknownNode) found));
