@@ -12,6 +12,7 @@ import java.security.KeyStoreException;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -79,7 +80,7 @@ public class Apollo {
                                          new FireflyMetricsImpl(metrics));
         seeds = identitySource.seeds();
         avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics),
-                processor, new MVStore.Builder().open());
+                processor, new MVStore.Builder().open(), new ForkJoinPool());
         processor.setAvalanche(avalanche);
     }
 

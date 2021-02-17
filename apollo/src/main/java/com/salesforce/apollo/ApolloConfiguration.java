@@ -12,6 +12,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.time.Duration;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -69,7 +70,7 @@ public class ApolloConfiguration {
             EndpointProvider ep = null;
             return new MtlsRouter(
                     ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
-                    ep, Executors.newFixedThreadPool(10));
+                    ep, new ForkJoinPool());
         }
 
     }

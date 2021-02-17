@@ -263,7 +263,7 @@ public class AvaConsensusTest {
 
             AvaAdapter adapter = adapters.get(node);
             Avalanche ava = new Avalanche(node, view, communications.get(node.getId()), aParams, null, adapter,
-                    new MVStore.Builder().open());
+                    new MVStore.Builder().open(), ForkJoinPool.commonPool());
             adapter.setAva(ava);
             avas.put(node, ava);
         });

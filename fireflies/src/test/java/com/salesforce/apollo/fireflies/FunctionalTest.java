@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
@@ -94,9 +95,10 @@ public class FunctionalTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
+        ExecutorService serverThreads = Executors.newFixedThreadPool(3);
         views = members.parallelStream().map(node -> {
             Router comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics),
-                    Executors.newFixedThreadPool(3));
+                    serverThreads);
             comms.start();
             communications.add(comms);
             return new View(HashKey.ORIGIN, node, comms, metrics);

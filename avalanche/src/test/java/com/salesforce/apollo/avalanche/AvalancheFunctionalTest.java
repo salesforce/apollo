@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -75,12 +76,12 @@ abstract public class AvalancheFunctionalTest {
                          .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
-    protected File                     baseDir;
-    protected MetricRegistry           registry;
-    protected BitsStreamGenerator      entropy        = new MersenneTwister();
-    protected List<Node>               members;
-    private Map<HashKey, Router>       communications = new HashMap<>();
-    protected MetricRegistry           node0registry;
+    protected File                baseDir;
+    protected MetricRegistry      registry;
+    protected BitsStreamGenerator entropy        = new MersenneTwister();
+    protected List<Node>          members;
+    private Map<HashKey, Router>  communications = new HashMap<>();
+    protected MetricRegistry      node0registry;
 
     @AfterEach
     public void after() {
@@ -110,8 +111,9 @@ abstract public class AvalancheFunctionalTest {
 
         System.out.println("Test cardinality: " + testCardinality);
         boolean first = true;
+        Executor serverThreads = ForkJoinPool.commonPool();
         for (Node node : members) {
-            communications.put(node.getId(), getCommunications(node, first));
+            communications.put(node.getId(), getCommunications(node, first, serverThreads));
             first = false;
         }
     }
@@ -124,26 +126,27 @@ abstract public class AvalancheFunctionalTest {
         Context<Node> context = new Context<>(vid, 9);
         members.forEach(n -> context.activate(n));
         AtomicBoolean frist = new AtomicBoolean(true);
+        ForkJoinPool fjPool = ForkJoinPool.commonPool();
         List<TimedProcessor> processors = members.stream().map(m -> {
-            return createAva(m, context, frist, new ForkJoinPool());
+            return createAva(m, context, frist, fjPool);
         }).collect(Collectors.toList());
 
         // # of txns per node
         int target = 12_000;
         int outstanding = 400;
-        
-        ScheduledExecutorService avaScheduler = Executors.newScheduledThreadPool(5);
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
+
+        ScheduledExecutorService avaScheduler = Executors.newScheduledThreadPool(2);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(5);
 
         communications.values().forEach(e -> e.start());
-        processors.forEach(p -> p.getAvalanche().start(avaScheduler , Duration.ofMillis(50)));
+        processors.forEach(p -> p.getAvalanche().start(avaScheduler, Duration.ofMillis(50)));
 
         // generate the genesis transaction
         TimedProcessor master = processors.get(0);
         CompletableFuture<HashKey> genesis = master.createGenesis(ByteMessage.newBuilder()
                                                                              .setContents(ByteString.copyFromUtf8("Genesis"))
                                                                              .build(),
-                                                                  Duration.ofSeconds(90), scheduler );
+                                                                  Duration.ofSeconds(90), scheduler);
         HashKey genesisKey = null;
         try {
             genesisKey = genesis.get(10, TimeUnit.SECONDS);
@@ -247,12 +250,12 @@ abstract public class AvalancheFunctionalTest {
         TimedProcessor processor = new TimedProcessor();
         MVStore s = new MVStore.Builder().open();
         Avalanche avalanche = new Avalanche(m, context, communications.get(m.getId()), aParams, avaMetrics, processor,
-                s);
+                s, fjPool);
         processor.setAvalanche(avalanche);
         return processor;
     }
 
-    abstract protected Router getCommunications(Node node, boolean first);
+    abstract protected Router getCommunications(Node node, boolean first, Executor serverThreads);
 
     private void seed(List<TimedProcessor> nodes) {
         long then = System.currentTimeMillis();
@@ -261,7 +264,7 @@ abstract public class AvalancheFunctionalTest {
                                                     .collect(Collectors.toList());
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
-        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 2, scheduler ));
+        transactioneers.forEach(t -> t.transact(Duration.ofSeconds(120), 2, scheduler));
 
         boolean seeded = Utils.waitForCondition(10_000, 500, () -> {
             return transactioneers.stream()
