@@ -1186,15 +1186,13 @@ public class WorkingSet {
     }
 
     ArrayList<Node> linksOf(DagEntry entry, long discovered) {
-        return read(() -> {
-            return entry.getLinksCount() == 0 ? EMPTY_ARRAY_LIST
-                    : entry.getLinksList()
-                           .stream()
-                           .map(link -> new HashKey(link))
-                           .map(link -> resolve(link, discovered))
-                           .filter(node -> node != null)
-                           .collect(Collectors.toCollection(ArrayList::new));
-        });
+        return entry.getLinksCount() == 0 ? EMPTY_ARRAY_LIST
+                : entry.getLinksList()
+                       .stream()
+                       .map(link -> new HashKey(link))
+                       .map(link -> resolve(link, discovered))
+                       .filter(node -> node != null)
+                       .collect(Collectors.toCollection(ArrayList::new));
     }
 
     Node nodeFor(HashKey k, DagEntry dagEntry, boolean noOp, long discovered, HashKey cs) {

@@ -7,7 +7,7 @@
 
 package com.salesforce.apollo.avalanche;
 
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -24,9 +24,9 @@ public class LocalSimFunctionalTest extends AvalancheFunctionalTest {
     private Builder builder = ServerConnectionCache.newBuilder().setTarget(30);
 
     @Override
-    protected Router getCommunications(Node node, boolean first) {
+    protected Router getCommunications(Node node, boolean first, Executor serverThreads) {
         return new LocalRouter(node, builder.setMetrics(new FireflyMetricsImpl(first ? node0registry : registry)),
-                Executors.newFixedThreadPool(3));
+                serverThreads);
     }
 
     @Override

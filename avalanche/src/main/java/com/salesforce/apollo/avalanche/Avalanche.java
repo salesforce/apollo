@@ -20,7 +20,6 @@ import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -234,16 +233,12 @@ public class Avalanche {
     private final Service                                                      service      = new Service();
 
     public Avalanche(Node node, Context<? extends Member> context, Router communications, AvalancheParameters p,
-            AvalancheMetrics metrics, Processor processor, MVStore store) {
+            AvalancheMetrics metrics, Processor processor, MVStore store, Executor queryExecutor) {
         this.metrics = metrics;
         parameters = p;
         this.node = node;
         this.context = context;
-        AtomicInteger seq = new AtomicInteger();
-        this.queryExecutor = Executors.newFixedThreadPool(p.outstandingQueries, r -> {
-            Thread t = new Thread(r, "Avalanche[" + node.getId() + "] - " + seq.incrementAndGet());
-            return t;
-        });
+        this.queryExecutor = queryExecutor;
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new AvalancheServerCommunications(
                                                   communications.getClientIdentityProvider(), metrics, r),
@@ -261,12 +256,13 @@ public class Avalanche {
     }
 
     public Avalanche(View view, Router communications, AvalancheParameters p, AvalancheMetrics metrics,
-            Processor processor, MVStore store) {
-        this(view.getNode(), view.getContext(), communications, p, metrics, processor, store);
+            Processor processor, MVStore store, Executor queryExecutor) {
+        this(view.getNode(), view.getContext(), communications, p, metrics, processor, store, queryExecutor);
     }
 
-    public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor, MVStore store) {
-        this(view, communications, p, null, processor, store);
+    public Avalanche(View view, Router communications, AvalancheParameters p, Processor processor, MVStore store,
+            Executor queryExecutor) {
+        this(view, communications, p, null, processor, store, queryExecutor);
     }
 
     public WorkingSet getDag() {
@@ -408,16 +404,23 @@ public class Avalanche {
             log.trace("no wanted DAG entries");
             return;
         }
-        Member member = new ArrayList<Member>(sample).get(Utils.entropy().nextInt(sample.size()));
+        Member member = new ArrayList<Member>(sample).get(Utils.bitStreamEntropy().nextInt(sample.size()));
         AvalancheClientCommunications connection = comm.apply(member, getNode());
         if (connection == null) {
             log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
         }
         ListenableFuture<SuppliedDagNodes> entries = connection.requestDAG(context.getId(), wanted);
         entries.addListener(() -> {
+            SuppliedDagNodes suppliedDagNodes;
             try {
-                SuppliedDagNodes suppliedDagNodes = entries.get();
+                suppliedDagNodes = entries.get();
+            } catch (Exception e) {
+                connection.release();
+                log.trace("Error requesting DAG {} for {}", member, wanted.size(), e);
+                return;
+            }
 
+            try {
                 dag.insertSerialized(suppliedDagNodes.getEntriesList()
                                                      .stream()
                                                      .map(e -> new HashKey(Conversion.hashOf(e)).toID())
@@ -427,8 +430,6 @@ public class Avalanche {
                     metrics.getWantedRate().mark(wanted.size());
                     metrics.getSatisfiedRate().mark(suppliedDagNodes.getEntriesList().size());
                 }
-            } catch (Exception e) {
-                log.warn("Error requesting DAG {} for {}", member, wanted.size(), e);
             } finally {
                 connection.release();
             }

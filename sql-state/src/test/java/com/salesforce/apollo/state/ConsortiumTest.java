@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
@@ -127,8 +128,10 @@ public class ConsortiumTest {
 
         assertEquals(testCardinality, members.size());
 
-        members.forEach(node -> communications.put(node.getId(),
-                                                   new LocalRouter(node, builder, Executors.newFixedThreadPool(3))));
+        ExecutorService serverThreads = Executors.newFixedThreadPool(members.size());
+        members.forEach(node -> {
+            communications.put(node.getId(), new LocalRouter(node, builder, serverThreads));
+        });
 
         System.out.println(members.stream().map(m -> m.getId()).collect(Collectors.toList()));
 

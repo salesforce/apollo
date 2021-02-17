@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -222,12 +223,13 @@ public class SwarmTest {
         }
 
         AtomicBoolean frist = new AtomicBoolean(true);
+        ExecutorService serverThreads = Executors.newFixedThreadPool(3);
         views = members.stream().map(node -> {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
                     frist.getAndSet(false) ? node0Registry : registry);
             Router comms = new LocalRouter(node,
                     ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl),
-                    Executors.newFixedThreadPool(3));
+                    serverThreads);
             comms.start();
             communications.add(comms);
             return new View(HashKey.ORIGIN, node, comms, fireflyMetricsImpl);
