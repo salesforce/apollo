@@ -25,6 +25,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -101,8 +102,9 @@ public class DagTest {
         System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
         scheduler = Executors.newScheduledThreadPool(100);
 
+        ForkJoinPool executor = new ForkJoinPool();
         views = members.stream().map(node -> {
-            Router comm = new LocalRouter(node, ServerConnectionCache.newBuilder(), Executors.newFixedThreadPool(3));
+            Router comm = new LocalRouter(node, ServerConnectionCache.newBuilder(), executor);
             comms.add(comm);
             View view = new View(HashKey.ORIGIN, node, comm, null);
             return view;

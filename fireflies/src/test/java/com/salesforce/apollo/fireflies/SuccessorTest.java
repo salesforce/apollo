@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -94,8 +95,9 @@ public class SuccessorTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         Builder builder = ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics);
+        ForkJoinPool executor = new ForkJoinPool();
         Map<Participant, View> views = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node, builder, Executors.newFixedThreadPool(3));
+            LocalRouter comms = new LocalRouter(node, builder, executor);
             communications.add(comms);
             comms.start();
             return new View(HashKey.ORIGIN, node, comms, metrics);

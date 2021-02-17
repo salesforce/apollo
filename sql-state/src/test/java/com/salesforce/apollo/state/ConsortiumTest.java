@@ -128,7 +128,7 @@ public class ConsortiumTest {
 
         assertEquals(testCardinality, members.size());
 
-        ExecutorService serverThreads = Executors.newFixedThreadPool(members.size());
+        ExecutorService serverThreads = new ForkJoinPool();
         members.forEach(node -> {
             communications.put(node.getId(), new LocalRouter(node, builder, serverThreads));
         });

@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -99,8 +100,9 @@ public class GhostTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
+        ForkJoinPool executor = new ForkJoinPool();
         views = members.stream().map(node -> {
-            Router com = new LocalRouter(node, ServerConnectionCache.newBuilder(), Executors.newFixedThreadPool(3));
+            Router com = new LocalRouter(node, ServerConnectionCache.newBuilder(), executor);
             comms.add(com);
             View view = new View(HashKey.ORIGIN, node, com, null);
             return view;

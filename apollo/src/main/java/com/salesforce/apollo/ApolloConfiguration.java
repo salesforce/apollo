@@ -99,7 +99,7 @@ public class ApolloConfiguration {
         public Router getComms(MetricRegistry metrics, Node node) {
             return new LocalRouter(node,
                     ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
-                    Executors.newFixedThreadPool(5));
+                    new ForkJoinPool());
         }
 
     }

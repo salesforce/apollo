@@ -22,6 +22,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -139,9 +140,9 @@ public class MemberOrderTest {
         }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
+        ForkJoinPool executor = new ForkJoinPool();
         messengers = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30),
-                    Executors.newFixedThreadPool(3));
+            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
             comms.start();
             return new Messenger(node, () -> forSigning(node), context, comms, parameters);
@@ -195,9 +196,10 @@ public class MemberOrderTest {
         }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
+        ForkJoinPool executor = new ForkJoinPool();
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30),
-                    Executors.newFixedThreadPool(3));
+                    executor);
             communications.add(comms);
             comms.start();
             return new Messenger(node, () -> forSigning(node), context, comms, parameters);

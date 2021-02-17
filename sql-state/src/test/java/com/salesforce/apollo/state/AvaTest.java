@@ -138,8 +138,9 @@ public class AvaTest {
 
         assertEquals(testCardinality, members.size());
 
+        ForkJoinPool executor = new ForkJoinPool();
         members.forEach(node -> communications.put(node.getId(),
-                                                   new LocalRouter(node, builder, Executors.newFixedThreadPool(3))));
+                                                   new LocalRouter(node, builder, executor)));
 
     }
 

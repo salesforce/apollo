@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
@@ -131,8 +132,10 @@ public class TestConsortium {
 
         assertEquals(testCardinality, members.size());
 
-        members.forEach(node -> communications.put(node.getId(),
-                                                   new LocalRouter(node, builder, Executors.newFixedThreadPool(3))));
+        ForkJoinPool executor = new ForkJoinPool();
+        members.forEach(node -> {
+            communications.put(node.getId(), new LocalRouter(node, builder, executor));
+        });
 
     }
 

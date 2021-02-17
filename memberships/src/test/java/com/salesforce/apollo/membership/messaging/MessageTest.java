@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -150,9 +151,10 @@ public class MessageTest {
         }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
+        ForkJoinPool executor = new ForkJoinPool();
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30),
-                    Executors.newFixedThreadPool(3));
+                    executor);
             communications.add(comms);
             comms.start();
             return new Messenger(node, () -> forSigning(node), context, comms, parameters);

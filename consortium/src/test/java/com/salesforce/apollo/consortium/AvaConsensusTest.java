@@ -133,8 +133,8 @@ public class AvaConsensusTest {
 
         assertEquals(testCardinality, members.size());
 
-        members.forEach(node -> communications.put(node.getId(),
-                                                   new LocalRouter(node, builder, Executors.newFixedThreadPool(3))));
+        ForkJoinPool executor = new ForkJoinPool();
+        members.forEach(node -> communications.put(node.getId(), new LocalRouter(node, builder, executor)));
 
         System.out.println("Test cardinality: " + testCardinality);
 
