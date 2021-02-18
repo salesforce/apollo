@@ -78,7 +78,7 @@ public class BoostrapTest {
             }
         });
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return oracles.stream()
                           .map(o -> o.getView())
                           .map(view -> view.getLive().size() != oracles.size() ? view : null)
@@ -89,7 +89,7 @@ public class BoostrapTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
         TimedProcessor master = oracles.get(0).getProcessor();
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(20);
         CompletableFuture<HashKey> genesis = master.createGenesis(ByteMessage.newBuilder()
                                                                              .setContents(ByteString.copyFromUtf8("Genesis"))
                                                                              .build(),
