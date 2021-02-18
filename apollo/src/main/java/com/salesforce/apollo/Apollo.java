@@ -58,7 +58,7 @@ public class Apollo {
     }
 
     private final Avalanche             avalanche;
-    private final Router                communications;
+    private final Router                avaCommunications;
     private final ApolloConfiguration   configuration;
     private final TimedProcessor        processor = new TimedProcessor();
     private final AtomicBoolean         running   = new AtomicBoolean();
@@ -71,15 +71,15 @@ public class Apollo {
 
     public Apollo(ApolloConfiguration c, MetricRegistry metrics) throws SocketException, KeyStoreException {
         configuration = c;
-        scheduler = Executors.newScheduledThreadPool(configuration.threadPool);
+        scheduler = Executors.newScheduledThreadPool(30);
         IdentitySource identitySource = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
                                                                    ApolloConfiguration.DEFAULT_IDENTITY_ALIAS);
         Node node = identitySource.getNode();
-        communications = c.communications.getComms(metrics, node);
-        view = identitySource.createView(node, new HashKey(c.contextBase), communications,
+        avaCommunications = c.communications.getComms(metrics, node);
+        view = identitySource.createView(node, new HashKey(c.contextBase), avaCommunications,
                                          new FireflyMetricsImpl(metrics));
         seeds = identitySource.seeds();
-        avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics),
+        avalanche = new Avalanche(view, avaCommunications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics),
                 processor, new MVStore.Builder().open(), new ForkJoinPool());
         processor.setAvalanche(avalanche);
     }
@@ -112,7 +112,7 @@ public class Apollo {
         if (!running.compareAndSet(false, true)) {
             return;
         }
-        communications.start();
+        avaCommunications.start();
         view.getService().start(configuration.gossipInterval, seeds, scheduler);
         avalanche.start(scheduler, configuration.queryInterval);
     }
