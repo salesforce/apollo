@@ -307,7 +307,8 @@ public class View {
                     log.error("unexpected error during gossip round", e);
                 }
             }), initialDelay, TimeUnit.MILLISECONDS);
-            log.info("{} started, initial delay: {} ms", node.getId(), initialDelay);
+            log.info("{} started, initial delay: {} ms seeds: {}", node.getId(), initialDelay,
+                     seedList.stream().map(e -> e.b64Encoded()).collect(Collectors.toList()));
         }
 
         /**
@@ -419,7 +420,6 @@ public class View {
 
     private final ForkJoinPool fjPool;
 
-    @SuppressWarnings("unused")
     private final FireflyMetrics metrics;
 
     /**

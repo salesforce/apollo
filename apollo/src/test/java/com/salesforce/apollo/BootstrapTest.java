@@ -9,28 +9,46 @@ package com.salesforce.apollo;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.net.URL;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import org.apache.commons.math3.random.MersenneTwister;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import com.codahale.metrics.MetricRegistry;
+import com.google.common.collect.Sets;
+import com.google.common.collect.Sets.SetView;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesforce.apollo.ApolloConfiguration.CommunicationsFactory;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.bootstrap.BootstrapCA;
 import com.salesforce.apollo.bootstrap.BootstrapConfiguration;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
+import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -42,27 +60,45 @@ import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
  * @author hhildebrand
  */
 @ExtendWith(DropwizardExtensionsSupport.class)
-public class BoostrapTest {
+public class BootstrapTest {
 
     private static DropwizardAppExtension<BootstrapConfiguration> EXT = new DropwizardAppExtension<BootstrapConfiguration>(
             BootstrapCA.class, ResourceHelpers.resourceFilePath("bootstrap.yml"));
+    private List<Apollo>                                          oracles;
+
+    @AfterEach
+    public void after() {
+        if (oracles != null) {
+            oracles.forEach(o -> o.stop());
+            oracles.clear();
+        }
+    }
 
     @Test
     public void smoke() throws Exception {
         File baseDir = new File("target/bootstrap");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        List<Apollo> oracles = new ArrayList<>();
+        oracles = new ArrayList<>();
         URL endpoint = new URL(String.format("http://localhost:%d/api/cnc/mint", EXT.getLocalPort()));
 
-        for (int i = 0; i <= 10; i++) {
+        for (int i = 0; i < 14; i++) {
             ApolloConfiguration config = new ApolloConfiguration();
             config.avalanche.core.alpha = 0.6;
             config.avalanche.core.k = 6;
             config.avalanche.core.beta1 = 3;
             config.avalanche.core.beta2 = 5;
-            config.gossipInterval = Duration.ofMillis(500);
-            config.communications = new ApolloConfiguration.SimCommunicationsFactory();
+            config.gossipInterval = Duration.ofMillis(50);
+            config.communications = new CommunicationsFactory() {
+                @Override
+                public Router getComms(MetricRegistry metrics, Node node) {
+                    return new LocalRouter(node,
+                            ServerConnectionCache.newBuilder()
+                                                 .setTarget(30)
+                                                 .setMetrics(new FireflyMetricsImpl(metrics)),
+                            new ForkJoinPool());
+                }
+            };
             BootstrapIdSource ks = new BootstrapIdSource();
             ks.endpoint = endpoint;
             config.source = ks;
@@ -70,6 +106,8 @@ public class BoostrapTest {
         }
         long then = System.currentTimeMillis();
 
+        oracles.get(0).start();
+        Thread.sleep(500);
         oracles.forEach(oracle -> {
             try {
                 oracle.start();
@@ -78,13 +116,25 @@ public class BoostrapTest {
             }
         });
 
-        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
+        System.out.println(oracles.size() + " apollo instances started");
+        boolean stable = Utils.waitForCondition(30_000, 1_000, () -> {
             return oracles.stream()
                           .map(o -> o.getView())
-                          .map(view -> view.getLive().size() != oracles.size() ? view : null)
+                          .map(view -> view.getLive().size() < oracles.size() ? view : null)
                           .filter(view -> view != null)
                           .count() == 0;
-        }), "Did not stabilize the view");
+        });
+        if (!stable) {
+            Set<Member> fullSet = oracles.stream().map(a -> a.getView().getNode()).collect(Collectors.toSet());
+            Map<Member, Collection<Member>> missing = new HashMap<>();
+            oracles.forEach(a -> {
+                SetView<Member> difference = Sets.difference(fullSet, new HashSet<>(a.getView().getLive()));
+                if (!difference.isEmpty()) {
+                    missing.put(a.getAvalanche().getNode(), difference);
+                }
+            });
+            fail("Did not stabilize view: " + missing);
+        }
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + oracles.size() + " members");
