@@ -54,6 +54,17 @@ public final class Conversion {
         return md.digest();
     }
 
+    /**
+     * @param entry
+     * @return the hash value of the entry
+     */
+    public static byte[] hashOf(byte[] bytes, int len) {
+        MessageDigest md = MESSAGE_DIGEST.get();
+        md.reset();
+        md.update(bytes, 0, len);
+        return md.digest();
+    }
+
     public static byte[] hashOf(ByteBuffer... buffers) {
         InputStream is = BbBackedInputStream.aggregate(buffers);
         return hashOf(is);
@@ -91,8 +102,8 @@ public final class Conversion {
         return hashOf(is);
     }
 
-    public static DagEntry manifestDag(ByteString data) {
-        if (data.size() == 0) {
+    public static DagEntry manifestDag(byte[] data) {
+        if (data.length == 0) {
             System.out.println(" Invalid data");
         }
         try {
@@ -103,8 +114,8 @@ public final class Conversion {
         }
     }
 
-    public static DagEntry manifestDag(byte[] data) {
-        if (data.length == 0) {
+    public static DagEntry manifestDag(ByteString data) {
+        if (data.size() == 0) {
             System.out.println(" Invalid data");
         }
         try {

@@ -34,7 +34,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import java.util.zip.DeflaterInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -87,7 +86,6 @@ import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
@@ -266,6 +264,27 @@ public class Consortium {
         return new HashKey(Conversion.hashOf(BbBackedInputStream.aggregate(buffers)));
     }
 
+    public static BloomFilter<Integer> intBffFrom(ByteString checkpointSegments) throws IllegalStateException {
+        BloomFilter<Integer> blocksBff;
+        try {
+            blocksBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(checkpointSegments),
+                                             Funnels.integerFunnel());
+        } catch (IOException e) {
+            throw new IllegalStateException("unable to read Bloomfilter", e);
+        }
+        return blocksBff;
+    }
+
+    public static BloomFilter<Long> longBffFrom(ByteString checkpointSegments) throws IllegalStateException {
+        BloomFilter<Long> blocksBff;
+        try {
+            blocksBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(checkpointSegments), Funnels.longFunnel());
+        } catch (IOException e) {
+            throw new IllegalStateException("unable to read Bloomfilter", e);
+        }
+        return blocksBff;
+    }
+
     public static Block manifestBlock(byte[] data) {
         if (data.length == 0) {
             System.out.println(" Invalid data");
@@ -286,8 +305,7 @@ public class Consortium {
         return builder;
     }
 
-    final Store store;
-
+    final Store                                                                                    store;
     private final Map<Long, CheckpointState>                                                       cachedCheckpoints        = new ConcurrentHashMap<>();
     private final AtomicReference<CommonCommunications<ConsortiumClientCommunications, Service>>   comm                     = new AtomicReference<>();
     private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
@@ -311,8 +329,10 @@ public class Consortium {
             1);
     private final AtomicBoolean                                                                    started                  = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted                = new ConcurrentHashMap<>();
-    private final Transitions                                                                      transitions;
-    private final AtomicReference<ViewContext>                                                     viewContext              = new AtomicReference<>();
+
+    private final Transitions transitions;
+
+    private final AtomicReference<ViewContext> viewContext = new AtomicReference<>();
 
     public Consortium(Parameters parameters) {
         this(parameters, defaultBuilder(parameters));
@@ -669,30 +689,13 @@ public class Consortium {
             log.debug("No cached checkpoint for {} on: {}", request.getCheckpoint(), getMember());
             return CheckpointSegments.getDefaultInstance();
         }
-        BloomFilter<Integer> segmentsBff;
-        try {
-            segmentsBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(request.getCheckpointSegments()),
-                                               Funnels.integerFunnel());
-        } catch (IOException e) {
-            throw new IllegalStateException("unable to read Bloomfilter", e);
-        }
-        BloomFilter<Long> blocksBff;
-        try {
-            blocksBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(request.getCheckpointSegments()),
-                                             Funnels.longFunnel());
-        } catch (IOException e) {
-            throw new IllegalStateException("unable to read Bloomfilter", e);
-        }
         CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
-        StreamSupport.stream(((Iterable<Long>) () -> store.blocksFrom(state.checkpoint.getCheckpoint())).spliterator(),
-                             false)
-                     .collect(new ReservoirSampler<Long>(-1, params.maxCheckpointBlocks, Utils.bitStreamGenerator()))
-                     .stream()
-                     .filter(s -> !blocksBff.mightContain(s))
-                     .map(height -> store.getBlockBits(height))
-                     .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
-        return replication.addAllSegments(state.fetchSegments(segmentsBff, params.maxCheckpointSegments,
-                                                              Utils.bitStreamEntropy()))
+
+        store.fetchBlocks(longBffFrom(request.getCheckpointSegments()), replication, params.maxCheckpointBlocks,
+                          state.checkpoint.getCheckpoint());
+
+        return replication.addAllSegments(state.fetchSegments(intBffFrom(request.getCheckpointSegments()),
+                                                              params.maxCheckpointSegments, Utils.bitStreamEntropy()))
                           .build();
     }
 

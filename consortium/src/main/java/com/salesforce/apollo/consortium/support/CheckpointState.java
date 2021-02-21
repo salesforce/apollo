@@ -6,6 +6,9 @@
  */
 package com.salesforce.apollo.consortium.support;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -35,6 +38,17 @@ public class CheckpointState {
 
     public void close() {
         state.clear();
+    }
+
+    public void assemble(File file) throws IOException {
+        try (FileOutputStream fos = new FileOutputStream(file)) {
+            for (byte[] bytes : IntStream.range(0, state.size())
+                                         .mapToObj(hk -> state.get(hk))
+                                         .collect(Collectors.toList())) {
+                fos.write(bytes);
+            }
+            fos.flush();
+        }
     }
 
     public List<Slice> fetchSegments(BloomFilter<Integer> bff, int maxSegments, BitsStreamGenerator entropy) {

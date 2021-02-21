@@ -32,7 +32,6 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
-import org.bouncycastle.util.Arrays;
 import org.h2.mvstore.MVMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,6 +87,31 @@ public class CollaboratorContext {
 
     private static final Logger log = LoggerFactory.getLogger(CollaboratorContext.class);
 
+    public static Checkpoint checkpoint(long currentHeight, File state, int blockSize) {
+        HashKey stateHash;
+        try (FileInputStream fis = new FileInputStream(state)) {
+            stateHash = new HashKey(Conversion.hashOf(fis));
+        } catch (IOException e) {
+            log.error("Invalid checkpoint!", e);
+            return null;
+        }
+        Checkpoint.Builder builder = Checkpoint.newBuilder()
+                                               .setCheckpoint(currentHeight)
+                                               .setByteSize(state.length())
+                                               .setSegmentSize(blockSize)
+                                               .setStateHash(stateHash.toByteString());
+        byte[] buff = new byte[blockSize];
+        try (FileInputStream fis = new FileInputStream(state)) {
+            for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
+                builder.addSegments(ByteString.copyFrom(Conversion.hashOf(buff, read)));
+            }
+        } catch (IOException e) {
+            log.error("Invalid checkpoint!", e);
+            return null;
+        }
+        return builder.build();
+    }
+
     public static long height(Block block) {
         return block.getHeader().getHeight();
     }
@@ -118,20 +142,21 @@ public class CollaboratorContext {
                          .collect(Collectors.toList());
     }
 
-    private final Consortium                           consortium;
-    private final AtomicLong                           currentConsensus  = new AtomicLong(-1);
-    private final AtomicInteger                        currentRegent     = new AtomicInteger(0);
-    private final Map<Integer, Map<Member, StopData>>  data              = new ConcurrentHashMap<>();
-    private final Executor                             executor;
-    private final AtomicReference<HashedBlock>         lastBlock         = new AtomicReference<>();
-    private final AtomicInteger                        nextRegent        = new AtomicInteger(-1);
-    private final ProcessedBuffer                      processed;
-    private final Set<EnqueuedTransaction>             stopMessages      = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private final Map<Integer, Sync>                   sync              = new ConcurrentHashMap<>();
-    private final Map<Timers, Timer>                   timers            = new ConcurrentHashMap<>();
-    private final Map<HashKey, EnqueuedTransaction>    toOrder           = new ConcurrentHashMap<>();
-    private final Map<Integer, Set<Member>>            wantRegencyChange = new ConcurrentHashMap<>();
-    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks     = new ConcurrentHashMap<>();
+    private final Consortium                          consortium;
+    private final AtomicLong                          currentConsensus  = new AtomicLong(-1);
+    private final AtomicInteger                       currentRegent     = new AtomicInteger(0);
+    private final Map<Integer, Map<Member, StopData>> data              = new ConcurrentHashMap<>();
+    private final Executor                            executor;
+    private final AtomicReference<HashedBlock>        lastBlock         = new AtomicReference<>();
+    private final AtomicInteger                       nextRegent        = new AtomicInteger(-1);
+    private final ProcessedBuffer                     processed;
+    private final Set<EnqueuedTransaction>            stopMessages      = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Map<Integer, Sync>                  sync              = new ConcurrentHashMap<>();
+    private final Map<Timers, Timer>                  timers            = new ConcurrentHashMap<>();
+    private final Map<HashKey, EnqueuedTransaction>   toOrder           = new ConcurrentHashMap<>();
+    private final Map<Integer, Set<Member>>           wantRegencyChange = new ConcurrentHashMap<>();
+
+    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks = new ConcurrentHashMap<>();
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
@@ -443,34 +468,10 @@ public class CollaboratorContext {
             consortium.getTransitions().fail();
             return;
         }
-        HashKey stateHash;
-        try (FileInputStream fis = new FileInputStream(state)) {
-            stateHash = new HashKey(Conversion.hashOf(fis));
-        } catch (IOException e) {
-            log.error("Invalid checkpoint!", e);
+        Checkpoint checkpoint = checkpoint(currentHeight, state, consortium.getParams().checkpointBlockSize);
+        if (checkpoint == null) {
             consortium.getTransitions().fail();
-            return;
         }
-        List<HashKey> segments = new ArrayList<>();
-        byte[] buff = new byte[consortium.getParams().checkpointBlockSize];
-        try (FileInputStream fis = new FileInputStream(state)) {
-            for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
-                segments.add(new HashKey(Conversion.hashOf(Arrays.copyOf(buff, read))));
-            }
-        } catch (IOException e) {
-            log.error("Invalid checkpoint!", e);
-            consortium.getTransitions().fail();
-            return;
-        }
-        Checkpoint checkpoint = Checkpoint.newBuilder()
-                                          .setCheckpoint(currentHeight)
-                                          .setByteSize(state.length())
-                                          .setSegmentSize(consortium.getParams().checkpointBlockSize)
-                                          .setStateHash(stateHash.toByteString())
-                                          .addAllSegments(segments.stream()
-                                                                  .map(e -> e.toByteString())
-                                                                  .collect(Collectors.toList()))
-                                          .build();
 
         HashedBlock lb = lastBlock.get();
         byte[] previous = lb == null ? null : lb.hash.bytes();

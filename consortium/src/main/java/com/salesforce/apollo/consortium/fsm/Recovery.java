@@ -12,5 +12,5 @@ package com.salesforce.apollo.consortium.fsm;
  */
 public enum Recovery {
 
-    INITIAL, ACQUIRE_GENESIS;
+    ACQUIRE_VIEW, ASSEMBLE_CHECKPOINT, BOOTSTRAP;
 }

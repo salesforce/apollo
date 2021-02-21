@@ -119,7 +119,7 @@ public class Context<T extends Member> {
     private final Ring<T>[] rings;
 
     public Context(HashKey id) {
-        this(id, 0);
+        this(id, 1);
     }
 
     @SuppressWarnings("unchecked")

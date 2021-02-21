@@ -114,12 +114,11 @@ public class LocalRouter extends Router {
 
     public static ThreadLocal<X509Certificate> callCertificate = new ThreadLocal<>();
 
-    public static final ThreadIdentity       LOCAL_IDENTITY = new ThreadIdentity();
-    public static final Metadata.Key<String> MEMBER_ID_KEY  = Metadata.Key.of("from.id",
-                                                                              Metadata.ASCII_STRING_MARSHALLER);
-
-    private static final Logger               log           = LoggerFactory.getLogger(LocalRouter.class);
-    private static final Map<HashKey, Member> serverMembers = new ConcurrentHashMap<>();
+    public static final ThreadIdentity        LOCAL_IDENTITY = new ThreadIdentity();
+    public static final Metadata.Key<String>  MEMBER_ID_KEY  = Metadata.Key.of("from.id",
+                                                                               Metadata.ASCII_STRING_MARSHALLER);
+    private static final Logger               log            = LoggerFactory.getLogger(LocalRouter.class);
+    private static final Map<HashKey, Member> serverMembers  = new ConcurrentHashMap<>();
 
     private final Member member;
     private final Server server;
