@@ -162,16 +162,9 @@ public class Store {
 
         byte[] buffer = new byte[checkpoint.getSegmentSize()];
         try (FileInputStream fis = new FileInputStream(state)) {
-            for (int i = 0; i < checkpoint.getSegmentsCount(); i++) {
-                int read = fis.read(buffer);
-                if (read != buffer.length) {
-                    if (fis.available() != 0) {
-                        throw new IllegalStateException("Should have been able to read a full buffer");
-                    }
-                    cp.put(i, Arrays.copyOf(buffer, read));
-                } else {
-                    cp.put(i, buffer);
-                }
+            int i = 0;
+            for (int read = fis.read(buffer); read >0; read = fis.read(buffer)) {
+                cp.put(i++, Arrays.copyOf(buffer, read)); 
             }
         } catch (IOException e) {
             throw new IllegalStateException("Error storing checkpoint " + blockHeight, e);
