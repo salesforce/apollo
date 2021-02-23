@@ -10,7 +10,6 @@ import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCo
 
 import java.security.Signature;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -21,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -145,7 +145,7 @@ public class Messenger {
                           context.getId(), member, from, inbound.getRing(), predecessor);
                 return Messages.getDefaultInstance();
             }
-            return buffer.process(new BloomFilter(inbound.getDigests()), Utils.entropy().nextInt(),
+            return buffer.process(BloomFilter.from(inbound.getDigests()), Utils.entropy().nextInt(),
                                   parameters.falsePositiveRate);
         }
 
@@ -251,7 +251,7 @@ public class Messenger {
                     }
                     process(gossip.getUpdatesList());
                     Builder pushBuilder = Push.newBuilder().setContext(context.getId().toID()).setRing(ring);
-                    buffer.updatesFor(new BloomFilter(gossip.getBff()), pushBuilder);
+                    buffer.updatesFor(BloomFilter.from(gossip.getBff()), pushBuilder);
                     try {
                         link.update(pushBuilder.build());
                     } catch (Throwable e) {
@@ -346,8 +346,7 @@ public class Messenger {
         if (updates.size() == 0) {
             return;
         }
-        List<Msg> newMessages = new ArrayList<>();
-        buffer.merge(updates, (hash, message) -> validate(hash, message)).stream().map(m -> {
+        List<Msg> newMessages = buffer.merge(updates, (hash, message) -> validate(hash, message)).stream().map(m -> {
             HashKey id = new HashKey(m.getSource());
             if (member.getId().equals(id)) {
                 log.trace("Ignoriing message from self");
@@ -360,9 +359,8 @@ public class Messenger {
             } else {
                 return new Msg(from, m.getSequenceNumber(), m.getContent());
             }
-        }).filter(m -> m != null).filter(m -> !m.from.equals(member)).forEach(msg -> {
-            newMessages.add(msg);
-        });
+        }).filter(m -> m != null).collect(Collectors.toList());
+
         if (newMessages.isEmpty()) {
             log.trace("No updates processed out of: {}", updates.size());
             return;

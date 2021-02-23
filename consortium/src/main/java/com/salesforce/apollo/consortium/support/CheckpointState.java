@@ -17,11 +17,10 @@ import java.util.stream.IntStream;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.h2.mvstore.MVMap;
 
-import com.google.common.hash.BloomFilter;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.Slice;
-import com.salesforce.apollo.membership.ReservoirSampler;
+import com.salesforce.apollo.protocols.BloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -52,15 +51,14 @@ public class CheckpointState {
     }
 
     public List<Slice> fetchSegments(BloomFilter<Integer> bff, int maxSegments, BitsStreamGenerator entropy) {
-        List<Integer> segments = IntStream.range(0, checkpoint.getSegmentsCount())
-                                          .mapToObj(i -> i)
-                                          .collect(new ReservoirSampler<Integer>(-1, maxSegments, entropy))
-                                          .stream()
-                                          .filter(s -> !bff.mightContain(s))
-                                          .collect(Collectors.toList());
         List<Slice> slices = new ArrayList<>();
-        for (int i : segments) {
-            slices.add(Slice.newBuilder().setIndex(i).setBlock(ByteString.copyFrom(state.get(i))).build());
+        for (int i = 0; i < checkpoint.getSegmentsCount(); i++) {
+            if (!bff.contains(i)) {
+                slices.add(Slice.newBuilder().setIndex(i).setBlock(ByteString.copyFrom(state.get(i))).build());
+                if (slices.size() >= maxSegments) {
+                    break;
+                }
+            }
         }
         return slices;
     }

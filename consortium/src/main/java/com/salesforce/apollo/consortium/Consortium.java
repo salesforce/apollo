@@ -42,9 +42,7 @@ import org.h2.mvstore.MVStore.Builder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.chiralbehaviors.tron.Fsm;
-import com.google.common.hash.BloomFilter;
-import com.google.common.hash.Funnels;
+import com.chiralbehaviors.tron.Fsm; 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
@@ -90,6 +88,7 @@ import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.protocols.BbBackedInputStream;
+import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -263,27 +262,7 @@ public class Consortium {
 
         return new HashKey(Conversion.hashOf(BbBackedInputStream.aggregate(buffers)));
     }
-
-    public static BloomFilter<Integer> intBffFrom(ByteString checkpointSegments) throws IllegalStateException {
-        BloomFilter<Integer> blocksBff;
-        try {
-            blocksBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(checkpointSegments),
-                                             Funnels.integerFunnel());
-        } catch (IOException e) {
-            throw new IllegalStateException("unable to read Bloomfilter", e);
-        }
-        return blocksBff;
-    }
-
-    public static BloomFilter<Long> longBffFrom(ByteString checkpointSegments) throws IllegalStateException {
-        BloomFilter<Long> blocksBff;
-        try {
-            blocksBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(checkpointSegments), Funnels.longFunnel());
-        } catch (IOException e) {
-            throw new IllegalStateException("unable to read Bloomfilter", e);
-        }
-        return blocksBff;
-    }
+  
 
     public static Block manifestBlock(byte[] data) {
         if (data.length == 0) {
@@ -691,10 +670,10 @@ public class Consortium {
         }
         CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
 
-        store.fetchBlocks(longBffFrom(request.getCheckpointSegments()), replication, params.maxCheckpointBlocks,
+        store.fetchBlocks(BloomFilter.from(request.getCheckpointSegments()), replication, params.maxCheckpointBlocks,
                           state.checkpoint.getCheckpoint());
 
-        return replication.addAllSegments(state.fetchSegments(intBffFrom(request.getCheckpointSegments()),
+        return replication.addAllSegments(state.fetchSegments(BloomFilter.from(request.getCheckpointSegments()),
                                                               params.maxCheckpointSegments, Utils.bitStreamEntropy()))
                           .build();
     }

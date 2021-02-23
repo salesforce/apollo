@@ -24,7 +24,6 @@ import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.hash.BloomFilter;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
@@ -35,6 +34,7 @@ import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.membership.ReservoirSampler;
+import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -104,7 +104,7 @@ public class Store {
         StreamSupport.stream(((Iterable<Long>) () -> blocksFrom(checkpoint)).spliterator(), false)
                      .collect(new ReservoirSampler<Long>(-1, maxCheckpointBlocks, Utils.bitStreamGenerator()))
                      .stream()
-                     .filter(s -> !blocksBff.mightContain(s))
+                     .filter(s -> !blocksBff.contains(s))
                      .map(height -> getBlockBits(height))
                      .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
     }
@@ -163,8 +163,8 @@ public class Store {
         byte[] buffer = new byte[checkpoint.getSegmentSize()];
         try (FileInputStream fis = new FileInputStream(state)) {
             int i = 0;
-            for (int read = fis.read(buffer); read >0; read = fis.read(buffer)) {
-                cp.put(i++, Arrays.copyOf(buffer, read)); 
+            for (int read = fis.read(buffer); read > 0; read = fis.read(buffer)) {
+                cp.put(i++, Arrays.copyOf(buffer, read));
             }
         } catch (IOException e) {
             throw new IllegalStateException("Error storing checkpoint " + blockHeight, e);

@@ -9,6 +9,7 @@ package com.salesforce.apollo.consortium;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -22,12 +23,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.apache.commons.math3.random.MersenneTwister;
 import org.h2.mvstore.MVStore;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
@@ -38,6 +41,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
+import com.salesfoce.apollo.consortium.proto.Slice;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
@@ -45,6 +49,7 @@ import com.salesforce.apollo.consortium.support.Bootstrapper;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -56,9 +61,6 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
  */
 public class BootstrapperTest {
 
-    /**
-     * 
-     */
     private static final int                               BLOCK_SIZE = 256;
     private static Map<HashKey, CertificateWithPrivateKey> certs;
 
@@ -68,6 +70,16 @@ public class BootstrapperTest {
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
+    }
+
+    private CompletableFuture<CheckpointState> assembled;
+
+    @AfterEach
+    public void after() {
+        if (assembled != null) {
+            assembled.completeExceptionally(new TimeoutException());
+            assembled = null;
+        }
     }
 
     @Test
@@ -95,14 +107,14 @@ public class BootstrapperTest {
 
         Member bootstrapping = members.get(0);
 
-        Store store = new Store(new MVStore.Builder().open());
-        CheckpointState state = new CheckpointState(checkpoint, store.putCheckpoint(0, chkptFile, checkpoint));
+        Store store1 = new Store(new MVStore.Builder().open());
+        CheckpointState state = new CheckpointState(checkpoint, store1.putCheckpoint(0, chkptFile, checkpoint));
 
         // Check that we can assemble the checkpoint file and create a new checkpoint
         // from that test file and generate an identical checkpoint
         File testFile = File.createTempFile("test-", "chkpt", checkpointDir);
         state.assemble(testFile);
-        
+
         assertEquals(chkptFile.length(), testFile.length());
         Checkpoint testCs = CollaboratorContext.checkpoint(0, testFile, BLOCK_SIZE);
         assertEquals(checkpoint.getSegmentsCount(), testCs.getSegmentsCount());
@@ -118,10 +130,9 @@ public class BootstrapperTest {
             public ListenableFuture<CheckpointSegments> answer(InvocationOnMock invocation) throws Throwable {
                 SettableFuture<CheckpointSegments> futureSailor = SettableFuture.create();
                 CheckpointReplication rep = invocation.getArgumentAt(0, CheckpointReplication.class);
-                futureSailor.set(CheckpointSegments.newBuilder()
-                                                   .addAllSegments(state.fetchSegments(Consortium.intBffFrom(rep.getCheckpointSegments()),
-                                                                                       100, entropy))
-                                                   .build());
+                List<Slice> fetched = state.fetchSegments(BloomFilter.from(rep.getCheckpointSegments()), 10, entropy);
+                System.out.println("Fetched: " + fetched.size());
+                futureSailor.set(CheckpointSegments.newBuilder().addAllSegments(fetched).build());
                 return futureSailor;
             }
         });
@@ -129,12 +140,19 @@ public class BootstrapperTest {
         CommonCommunications<ConsortiumClientCommunications, Service> comm = mock(CommonCommunications.class);
         when(comm.apply(any(), any())).thenReturn(client);
 
-        Bootstrapper boot = new Bootstrapper(checkpoint, bootstrapping, store, comm, context, 0.125);
+        Store store2 = new Store(new MVStore.Builder().open());
+        Bootstrapper boot = new Bootstrapper(checkpoint, bootstrapping, store2, comm, context, 0.125);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-        // Assemble a checkpoint via bootstrap gossiping
-        CompletableFuture<CheckpointState> assembled = boot.assemble(scheduler, Duration.ofMillis(100), entropy);
-        CheckpointState assembledCs = assembled.get(1, TimeUnit.SECONDS);
+        assembled = boot.assemble(scheduler, Duration.ofMillis(10), entropy);
+        CheckpointState assembledCs;
+        try {
+            assembledCs = assembled.get(10, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            assembled.completeExceptionally(e);
+            fail("Timeout waiting for assembly");
+            return;
+        }
 
         assertNotNull(assembledCs);
 

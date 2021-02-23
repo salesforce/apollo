@@ -95,7 +95,7 @@ public class MemberOrderTest {
 
     private static Map<HashKey, CertificateWithPrivateKey> certs;
     private static final Parameters                        parameters = Parameters.newBuilder()
-                                                                                  .setFalsePositiveRate(0.01)
+                                                                                  .setFalsePositiveRate(0.25)
                                                                                   .setBufferSize(500)
                                                                                   .build();
 

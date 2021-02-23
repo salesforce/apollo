@@ -12,8 +12,9 @@ import java.util.BitSet;
  * @author hal.hildebrand
  *
  */
-public class HashFunction {
-    public static class Hasher {
+abstract public class Hash<T> {
+
+    abstract public static class Hasher<T> {
 
         public static final int HASH_KEY_SIZE = 32;
 
@@ -43,14 +44,32 @@ public class HashFunction {
             return k2;
         }
 
-        private long h1;
-        private long h2;
+        long h1;
+        long h2;
 
-        public Hasher(HashKey key, int seed) {
+        public Hasher(T key, int seed) {
             this.h1 = seed;
             this.h2 = seed;
-            process(key);
+            processIt(key);
         }
+
+        protected void process(HashKey key) {
+            bmix64(key.itself[0], key.itself[1]);
+            bmix64(key.itself[2], key.itself[3]);
+            makeHash();
+        }
+
+        protected void process(Integer i) {
+            h1 ^= mixK1(0);
+            h2 ^= mixK2(i.longValue());
+        }
+
+        protected void process(Long l) {
+            h1 ^= mixK1(l.longValue());
+            h2 ^= mixK2(0);
+        }
+
+        abstract void processIt(T it);
 
         private void bmix64(long k1, long k2) {
             h1 ^= mixK1(k1);
@@ -66,7 +85,7 @@ public class HashFunction {
             h2 = h2 * 5 + 0x38495ab5;
         }
 
-        private Hasher makeHash() {
+        private Hasher<T> makeHash() {
             h1 ^= HASH_KEY_SIZE;
             h2 ^= HASH_KEY_SIZE;
 
@@ -81,10 +100,43 @@ public class HashFunction {
             return this;
         }
 
-        private void process(HashKey key) {
-            bmix64(key.itself[0], key.itself[1]);
-            bmix64(key.itself[2], key.itself[3]);
-            makeHash();
+    }
+
+    public static class HkHasher extends Hasher<HashKey> {
+
+        public HkHasher(HashKey key, int seed) {
+            super(key, seed);
+        }
+
+        @Override
+        protected void processIt(HashKey key) {
+            process(key);
+        }
+
+    }
+
+    public static class IntHasher extends Hasher<Integer> {
+
+        public IntHasher(Integer key, int seed) {
+            super(key, seed);
+        }
+
+        @Override
+        protected void processIt(Integer key) {
+            process(key);
+        }
+
+    }
+
+    public static class LongHasher extends Hasher<Long> {
+
+        public LongHasher(Long key, int seed) {
+            super(key, seed);
+        }
+
+        @Override
+        protected void processIt(Long key) {
+            process(key);
         }
 
     }
@@ -100,7 +152,7 @@ public class HashFunction {
      * @param n expected insertions (must be positive)
      * @param m total number of bits in Bloom filter (must be positive)
      */
-    private static int optimalK(long n, long m) {
+    protected static int optimalK(long n, long m) {
         // (m / n) * log(2), but avoid truncation due to division!
         return Math.max(1, (int) Math.round(((double) m) / ((double) n) * Math.log(2)));
     }
@@ -115,24 +167,24 @@ public class HashFunction {
      * @param n expected insertions (must be positive)
      * @param p false positive rate (must be 0 < p < 1)
      */
-    private static int optimalM(long n, double p) {
+    protected static int optimalM(long n, double p) {
         if (p == 0) {
             p = Double.MIN_VALUE;
         }
         return (int) (-n * Math.log(p) / (Math.log(2) * Math.log(2)));
     }
 
-    private final int k;
-    private final int m;
-    private final int seed;
+    protected final int k;
+    protected final int m;
+    protected final int seed;
 
-    public HashFunction(int seed, int m, int k) {
+    public Hash(int seed, int m, int k) {
         this.m = m;
         this.k = k;
         this.seed = seed;
     }
 
-    public HashFunction(int seed, long n, double p) {
+    public Hash(int seed, long n, double p) {
         m = optimalM(n, p);
         k = optimalK(n, m);
         this.seed = seed;
@@ -150,8 +202,8 @@ public class HashFunction {
         return seed;
     }
 
-    public boolean mightContain(HashKey key, BitSet bits) {
-        Hasher hasher = new Hasher(key, seed);
+    public boolean mightContain(T key, BitSet bits) {
+        Hasher<T> hasher = newHasher(key);
 
         long combinedHash = hasher.h1;
         for (int i = 0; i < k; i++) {
@@ -163,16 +215,20 @@ public class HashFunction {
         return true;
     }
 
-    public boolean put(HashKey key, BitSet bits) {
-        Hasher hasher = new Hasher(key, seed);
+    public boolean put(T key, BitSet bits) {
+        Hasher<T> hasher = newHasher(key);
 
         boolean bitsChanged = false;
         long combinedHash = hasher.h1;
         for (int i = 0; i < k; i++) {
-            bits.set(((int) (combinedHash & Integer.MAX_VALUE)) % m);
+            int index = ((int) (combinedHash & Integer.MAX_VALUE)) % m;
+            bitsChanged |= bits.get(index);
+            bits.set(index);
             combinedHash += hasher.h2;
         }
         return bitsChanged;
     }
+
+    abstract Hasher<T> newHasher(T key);
 
 }

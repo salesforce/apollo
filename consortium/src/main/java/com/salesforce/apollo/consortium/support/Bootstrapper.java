@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.consortium.support;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,10 +22,7 @@ import org.h2.mvstore.MVMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.hash.BloomFilter;
-import com.google.common.hash.Funnels;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
@@ -37,8 +32,10 @@ import com.salesforce.apollo.consortium.Store;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * @author hal.hildebrand
@@ -77,35 +74,21 @@ public class Bootstrapper {
     }
 
     private CheckpointReplication buildRequest() {
-        BloomFilter<Integer> segmentsBff = BloomFilter.create(Funnels.integerFunnel(), checkpoint.getSegmentsCount(),
-                                                              fpr);
-        IntStream.range(0, checkpoint.getSegmentsCount())
-                 .filter(i -> !state.containsKey(i))
-                 .forEach(i -> segmentsBff.put(i));
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try {
-            segmentsBff.writeTo(baos);
-        } catch (IOException e) {
-            log.error("Error serializing BFF", e);
-            return null;
-        }
+        int seed = Utils.bitStreamEntropy().nextInt();
+        BloomFilter<Integer> segmentsBff = new BloomFilter.IntBloomFilter(seed, checkpoint.getSegmentsCount(), fpr);
+        IntStream.range(0, checkpoint.getSegmentsCount()).filter(i -> state.containsKey(i)).forEach(i -> {
+            segmentsBff.add(i);
+        });
         CheckpointReplication.Builder request = CheckpointReplication.newBuilder()
                                                                      .setContext(context.getId().toByteString())
                                                                      .setCheckpoint(checkpoint.getCheckpoint());
-        request.setCheckpointSegments(ByteString.copyFrom(baos.toByteArray()));
+        request.setCheckpointSegments(segmentsBff.toBff().toByteString());
 
-        BloomFilter<Long> blocksBff = BloomFilter.create(Funnels.longFunnel(), checkpoint.getSegmentsCount(), fpr);
+        BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, checkpoint.getSegmentsCount(), fpr);
         LongStream.range(checkpoint.getCheckpoint() + 1, checkpoint.getSegmentsCount())
-                  .filter(l -> !store.containsBlock(l))
-                  .forEach(l -> blocksBff.put(l));
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try {
-            blocksBff.writeTo(bytes);
-        } catch (IOException e) {
-            log.error("Error serializing BFF", e);
-            return null;
-        }
-        request.setBlocks(ByteString.copyFrom(bytes.toByteArray()));
+                  .filter(l -> store.containsBlock(l))
+                  .forEach(l -> blocksBff.add(l));
+        request.setBlocks(blocksBff.toBff().toByteString());
         return request.build();
     }
 
@@ -163,11 +146,10 @@ public class Bootstrapper {
         segments.getSegmentsList().forEach(segment -> {
             HashKey hash = new HashKey(Conversion.hashOf(segment.getBlock()));
             int index = segment.getIndex();
-            if (index <= 0 || index >= hashes.size()) {
-
-            }
-            if (hash.equals(hashes.get(index))) {
-                state.computeIfAbsent(index, i -> segment.getBlock().toByteArray());
+            if (index >= 0 && index < hashes.size()) {
+                if (hash.equals(hashes.get(index))) {
+                    state.computeIfAbsent(index, i -> segment.getBlock().toByteArray());
+                }
             }
         });
         return state.size() == hashes.size();

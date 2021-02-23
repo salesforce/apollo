@@ -164,7 +164,7 @@ public class RingTest {
     @Test
     public void noRing() {
         context = new Context<>(HashKey.ORIGIN);
-        assertEquals(0, context.getRingCount());
+        assertEquals(1, context.getRingCount());
         members.forEach(m -> context.activate(m));
         assertEquals(MEMBER_COUNT, context.getActive().size());
     }

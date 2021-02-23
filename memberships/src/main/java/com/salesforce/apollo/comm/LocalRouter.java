@@ -40,6 +40,7 @@ import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
+import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.util.MutableHandlerRegistry;
@@ -146,7 +147,12 @@ public class LocalRouter extends Router {
                                                }
                                                Member member = serverMembers.get(new HashKey(id));
                                                if (member == null) {
-                                                   throw new IllegalStateException("Invalid member ID in call: " + id);
+                                                   call.close(Status.INTERNAL.withCause(new NullPointerException(
+                                                           "Member is null"))
+                                                                             .withDescription("Uncaught exception from grpc service"),
+                                                              null);
+                                                   return new ServerCall.Listener<ReqT>() {
+                                                   };
                                                }
                                                callCertificate.set(member.getCertificate());
                                                return next.startCall(new ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(
