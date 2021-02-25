@@ -84,7 +84,7 @@ public class AvaTest {
 
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-    private final static int testCardinality = 5;
+    private final static int testCardinality = 25;
 
     @BeforeAll
     public static void beforeClass() {
@@ -139,8 +139,7 @@ public class AvaTest {
         assertEquals(testCardinality, members.size());
 
         ForkJoinPool executor = new ForkJoinPool();
-        members.forEach(node -> communications.put(node.getId(),
-                                                   new LocalRouter(node, builder, executor)));
+        members.forEach(node -> communications.put(node.getId(), new LocalRouter(node, builder, executor)));
 
     }
 
@@ -148,7 +147,7 @@ public class AvaTest {
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
+        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 5);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)

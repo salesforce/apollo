@@ -19,6 +19,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,6 +52,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -80,7 +82,7 @@ public class ConsortiumTest {
     private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
             Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
-    private final static int                               testCardinality = 5;
+    private final static int                               testCardinality = 25;
 
     @BeforeAll
     public static void beforeClass() {
@@ -141,7 +143,7 @@ public class ConsortiumTest {
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
+        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 5);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
@@ -235,51 +237,18 @@ public class ConsortiumTest {
                 throw new IllegalStateException(e1);
             }
             try {
-                String[] statements1 = { "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005" };
+                List<List<Object>> batch = new ArrayList<>();
+                for (int rep = 0; rep < 10; rep++) {
+                    for (int id = 1; id < 6; id++) {
+                        batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
+                    }
+                }
+                BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
                 HashKey key = client.submit((h, t) -> {
                     outstanding.release();
                     submitted.remove(h);
                     submittedBunch.countDown();
-                }, Helper.batch(Helper.batch(statements1)));
+                }, Helper.batch(update));
                 submitted.add(key);
             } catch (TimeoutException e) {
                 fail();

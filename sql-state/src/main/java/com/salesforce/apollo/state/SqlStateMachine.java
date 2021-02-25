@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -36,6 +37,11 @@ import org.h2.value.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -156,12 +162,14 @@ public class SqlStateMachine {
         }
     }
 
-    private final File           checkpointDirectory;
-    private final JdbcConnection connection;
-    private final TxnExec        executor = new TxnExec();
-    private final ForkJoinPool   fjPool;
-    private final Properties     info;
-    private final String         url;
+    private final LoadingCache<String, CallableStatement> callCache;
+    private final File                                    checkpointDirectory;
+    private final JdbcConnection                          connection;
+    private final TxnExec                                 executor = new TxnExec();
+    private final ForkJoinPool                            fjPool;
+    private final Properties                              info;
+    private final LoadingCache<String, PreparedStatement> psCache;
+    private final String                                  url;
 
     public SqlStateMachine(String url, Properties info, File checkpointDirectory) {
         this(url, info, checkpointDirectory, ForkJoinPool.commonPool());
@@ -187,9 +195,13 @@ public class SqlStateMachine {
         } catch (SQLException e) {
             throw new IllegalStateException("Unable to create connection using " + url, e);
         }
+        callCache = constructCallCache();
+        psCache = constructPsCache();
     }
 
     public void close() {
+        psCache.invalidateAll();
+        callCache.invalidateAll();
         try {
             connection.rollback();
         } catch (SQLException e1) {
@@ -283,33 +295,40 @@ public class SqlStateMachine {
     private CallResult acceptCall(HashKey hash, long blockHeight, Call call) throws SQLException {
         List<ResultSet> results = new ArrayList<>();
         AtomicInteger i = new AtomicInteger();
-        try (CallableStatement exec = connection.prepareCall(call.getSql())) {
-            for (ByteString argument : call.getArguments().getArgsList()) {
-                Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
-                setArgument(exec, i.getAndIncrement(), data.readValue());
-                exec.addBatch();
+        CallableStatement exec;
+        try {
+            exec = callCache.get(call.getSql());
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof SQLException) {
+                throw (SQLException) e.getCause();
             }
-            for (int p = 0; p < call.getOutParametersCount(); p++) {
-                exec.registerOutParameter(p, call.getOutParameters(p));
-            }
-            List<Object> out = new ArrayList<>();
-            if (exec.execute()) {
-                CachedRowSet rowset = factory.createCachedRowSet();
+            throw new IllegalStateException("Unable to get callable statement: " + call.getSql(), e);
+        }
+        for (ByteString argument : call.getArguments().getArgsList()) {
+            Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
+            setArgument(exec, i.getAndIncrement(), data.readValue());
+            exec.addBatch();
+        }
+        for (int p = 0; p < call.getOutParametersCount(); p++) {
+            exec.registerOutParameter(p, call.getOutParameters(p));
+        }
+        List<Object> out = new ArrayList<>();
+        if (exec.execute()) {
+            CachedRowSet rowset = factory.createCachedRowSet();
 
+            rowset.populate(exec.getResultSet());
+            results.add(rowset);
+
+            while (exec.getMoreResults()) {
+                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
-
-                while (exec.getMoreResults()) {
-                    rowset = factory.createCachedRowSet();
-                    rowset.populate(exec.getResultSet());
-                    results.add(rowset);
-                }
             }
-            for (int j = 0; j < call.getOutParametersCount(); j++) {
-                out.add(exec.getObject(j));
-            }
-            return new CallResult(out, results);
         }
+        for (int j = 0; j < call.getOutParametersCount(); j++) {
+            out.add(exec.getObject(j));
+        }
+        return new CallResult(out, results);
     }
 
     private List<ResultSet> acceptPreparedStatement(HashKey hash, long blockHeight,
@@ -318,22 +337,29 @@ public class SqlStateMachine {
         connection.setAutoCommit(false);
         getSession().setBlockHeight(blockHeight);
         AtomicInteger i = new AtomicInteger();
-        try (PreparedStatement exec = connection.prepareStatement(statement.getSql())) {
-            for (ByteString argument : statement.getArguments().getArgsList()) {
-                Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
-                setArgument(exec, i.getAndIncrement(), data.readValue());
+        PreparedStatement exec;
+        try {
+            exec = psCache.get(statement.getSql());
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof SQLException) {
+                throw (SQLException) e.getCause();
             }
-            if (exec.execute()) {
-                CachedRowSet rowset = factory.createCachedRowSet();
+            throw new IllegalStateException("Unable to create prepared statement: " + statement.getSql(), e);
+        }
+        for (ByteString argument : statement.getArguments().getArgsList()) {
+            Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
+            setArgument(exec, i.getAndIncrement(), data.readValue());
+        }
+        if (exec.execute()) {
+            CachedRowSet rowset = factory.createCachedRowSet();
 
+            rowset.populate(exec.getResultSet());
+            results.add(rowset);
+
+            while (exec.getMoreResults()) {
+                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
-
-                while (exec.getMoreResults()) {
-                    rowset = factory.createCachedRowSet();
-                    rowset.populate(exec.getResultSet());
-                    results.add(rowset);
-                }
             }
         }
         return results;
@@ -344,6 +370,44 @@ public class SqlStateMachine {
             return;
         }
         fjPool.execute(() -> completion.accept(results, null));
+    }
+
+    private LoadingCache<String, CallableStatement> constructCallCache() {
+        return CacheBuilder.newBuilder().removalListener(new RemovalListener<String, CallableStatement>() {
+            @Override
+            public void onRemoval(RemovalNotification<String, CallableStatement> notification) {
+                try {
+                    notification.getValue().close();
+                } catch (SQLException e) {
+                    log.error("Error closing cached statment: {}", notification.getKey(), e);
+                }
+            }
+        }).build(new CacheLoader<String, CallableStatement>() {
+            @Override
+            public CallableStatement load(String sql) throws Exception {
+                return connection.prepareCall(sql);
+            }
+        });
+    }
+
+    private LoadingCache<String, PreparedStatement> constructPsCache() {
+        return CacheBuilder.newBuilder().removalListener(new RemovalListener<String, PreparedStatement>() {
+            @Override
+            public void onRemoval(RemovalNotification<String, PreparedStatement> notification) {
+                try {
+                    notification.getValue().close();
+                } catch (SQLException e) {
+                    log.error("Error closing cached statment: {}", notification.getKey(), e);
+                }
+            }
+        }).build(new CacheLoader<String, PreparedStatement>() {
+
+            @Override
+            public PreparedStatement load(String sql) throws Exception {
+                return connection.prepareStatement(sql);
+            }
+
+        });
     }
 
     private void exception(BiConsumer<Object, Throwable> completion, Throwable e) {
@@ -489,7 +553,7 @@ public class SqlStateMachine {
 
     private void setArgument(PreparedStatement exec, int i, Value value) {
         try {
-            exec.setObject(i, value);
+            value.set(exec, i);
         } catch (SQLException e) {
             throw new IllegalArgumentException("Illegal argument value: " + value);
         }
