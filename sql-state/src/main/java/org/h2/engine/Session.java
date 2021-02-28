@@ -149,7 +149,7 @@ public class Session extends SessionWithState implements TransactionStore.Rollba
     private boolean forceJoinOrder;
     private boolean lazyQueryExecution;
     private ColumnNamerConfiguration columnNamerConfiguration;
-    private long blockHeight = -1;
+    private volatile long blockHeight = -1;
     /**
      * Tables marked for ANALYZE after the current transaction is committed.
      * Prevents us calling ANALYZE repeatedly in large transactions.
@@ -2100,7 +2100,9 @@ public class Session extends SessionWithState implements TransactionStore.Rollba
     }
 
     public long getBlockHeight() {
-        return blockHeight;
+        long current = blockHeight;
+//        System.out.println("* get block height: " + blockHeight);
+        return current;
     }
 
     public void setBlockHeight(long blockHeight) {

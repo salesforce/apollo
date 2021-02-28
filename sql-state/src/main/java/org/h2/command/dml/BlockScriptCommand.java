@@ -174,6 +174,7 @@ public class BlockScriptCommand extends ScriptBase {
                 }
             }
             if (out != null) {
+                add(String.format("-- current block height: %s max block height: %s", session.getBlockHeight(), maxBlockHeight), true);
                 add("", true);
             }
             for (User user : db.getAllUsers()) {

@@ -102,12 +102,12 @@ public class ConsortiumTest {
 
     @AfterEach
     public void after() {
+        updaters.values().forEach(up -> up.close());
+        updaters.clear();
         consortium.values().forEach(e -> e.stop());
         consortium.clear();
         communications.values().forEach(e -> e.close());
         communications.clear();
-        updaters.values().forEach(up -> up.close());
-        updaters.clear();
     }
 
     @BeforeEach

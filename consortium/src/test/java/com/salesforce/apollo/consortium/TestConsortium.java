@@ -161,7 +161,7 @@ public class TestConsortium {
             }
             return hash;
         };
-        TransactionExecutor executor = (h, bh, et, c) -> {
+        TransactionExecutor executor = (h, et, c) -> {
             if (c != null) {
                 c.accept(new HashKey(et.getHash()), null);
             }

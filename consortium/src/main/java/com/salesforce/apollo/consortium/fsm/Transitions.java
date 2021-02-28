@@ -159,6 +159,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         throw fsm().invalidTransitionOn();
     }
 
+    default void missingInitialView() {
+        throw fsm().invalidTransitionOn();
+    }
+
     default Transitions receive(ReplicateTransactions txns, Member from) {
         context().receive(txns, from);
         return null;

@@ -33,12 +33,13 @@ public class Parameters {
         private Router                                         communications;
         private BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
         private Context<Member>                                context;
-        private int                                             deltaCheckpointBlocks = 500;
-        private TransactionExecutor                            executor              = (bh, hght, et, c) -> {
+        private int                                            deltaCheckpointBlocks = 500;
+        private TransactionExecutor                            executor              = (bh, et, c) -> {
                                                                                      };
         private Message                                        genesisData;
         private HashKey                                        genesisViewId;
         private Duration                                       gossipDuration;
+        private Duration                                       initialViewTimeout    = Duration.ofSeconds(60);
         private Duration                                       joinTimeout           = Duration.ofMillis(500);
         private int                                            maxBatchByteSize      = 4 * 1024;
         private Duration                                       maxBatchDelay         = Duration.ofMillis(200);
@@ -58,7 +59,7 @@ public class Parameters {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, maxCheckpointSegments,
                     viewTimeout, submitTimeout, processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks,
-                    executor, checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize);
+                    executor, checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, initialViewTimeout);
         }
 
         public int getCheckpointBlockSize() {
@@ -99,6 +100,10 @@ public class Parameters {
 
         public Duration getGossipDuration() {
             return gossipDuration;
+        }
+
+        public Duration getInitialViewTimeout() {
+            return initialViewTimeout;
         }
 
         public Duration getJoinTimeout() {
@@ -212,6 +217,11 @@ public class Parameters {
             return this;
         }
 
+        public Builder setInitialViewTimeout(Duration initialViewTimeout) {
+            this.initialViewTimeout = initialViewTimeout;
+            return this;
+        }
+
         public Builder setJoinTimeout(Duration joinTimeout) {
             this.joinTimeout = joinTimeout;
             return this;
@@ -305,6 +315,7 @@ public class Parameters {
     public final Message                                        genesisData;
     public final HashKey                                        genesisViewId;
     public final Duration                                       gossipDuration;
+    public final Duration                                       initialViewTimeout;
     public final Duration                                       joinTimeout;
     public final int                                            maxBatchByteSize;
     public final Duration                                       maxBatchDelay;
@@ -326,7 +337,7 @@ public class Parameters {
             Duration maxBatchDelay, Duration joinTimeout, int maxCheckpointSegments, Duration viewTimeout,
             Duration submitTimeout, int processedBufferSize, Message genesisData, HashKey genesisViewId,
             int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
-            int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize) {
+            int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Duration initialViewTimeout) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -351,5 +362,6 @@ public class Parameters {
         this.maxCheckpointSegments = maxCheckpointSegments;
         this.checkpointBlockSize = checkpointBlockSize;
         this.deltaCheckpointBlocks = deltaCheckpointBlocks;
+        this.initialViewTimeout = initialViewTimeout;
     }
 }

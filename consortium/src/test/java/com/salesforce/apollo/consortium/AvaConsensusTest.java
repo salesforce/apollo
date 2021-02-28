@@ -275,7 +275,7 @@ public class AvaConsensusTest {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
             AvaAdapter adapter = new AvaAdapter(processed);
-            TransactionExecutor executor = (h, hgt, t, c) -> {
+            TransactionExecutor executor = (h, t, c) -> {
                 if (c != null) {
                     ForkJoinPool.commonPool().execute(() -> c.accept(new HashKey(t.getHash()), null));
                 }

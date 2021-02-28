@@ -44,7 +44,7 @@ public class UpdaterTest {
         Transaction transaction = builder.build();
 
         updater.getExecutor()
-               .execute(null, 0, ExecutedTransaction.newBuilder().setTransaction(transaction).build(), null);
+               .execute(null, ExecutedTransaction.newBuilder().setTransaction(transaction).build(), null);
 
         ResultSet books = statement.executeQuery("select * from books");
         assertTrue(books.first());

@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -167,6 +168,12 @@ public class CollaboratorContext {
             Thread t = new Thread(r, "CollaboratorContext[" + getMember().getId() + "] - " + seq.incrementAndGet());
             return t;
         });
+    }
+
+    public void aquireInitialView() {
+        schedule(Timers.AWAIT_INITIAL_VIEW, () -> {
+            consortium.getTransitions().missingInitialView();
+        }, consortium.getParams().initialViewTimeout);
     }
 
     public void awaitGenesis() {
@@ -551,7 +558,7 @@ public class CollaboratorContext {
         AtomicInteger pending = new AtomicInteger(group.size());
         AtomicInteger success = new AtomicInteger();
         AtomicBoolean completed = new AtomicBoolean();
-        List<Result> votes = new ArrayList<>();
+        List<Result> votes = new CopyOnWriteArrayList<>();
         group.forEach(c -> {
             if (getMember().equals(c)) {
                 return;
@@ -731,17 +738,14 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
-        HashKey hash = next.hash;
-        CheckpointState checkpointState = checkpoint(body);
-        if (checkpointState == null) {
-            log.error("Cannot checkpoint: {} on: {}", hash, getMember());
-            consortium.getTransitions().fail();
+        long current = consortium.getCurrent().height();
+        if (body.getCheckpoint() > current) {
+            log.error("checkpoint: {} higher than current block height: {}", body.getCheckpoint(), current);
             return;
         }
         accept(next);
         consortium.setLastCheckpoint(next);
-        consortium.checkpoint(next.height(), checkpointState);
-        log.info("Processed checkpoint block: {} height: {} on: {}", hash, next.height(), consortium.getMember());
+        log.info("Processed checkpoint block: {} height: {} on: {}", next.hash, next.height(), consortium.getMember());
     }
 
     void processGenesis(HashedBlock next) {
@@ -776,12 +780,14 @@ public class CollaboratorContext {
             return;
         }
         long height = next.height();
+        TransactionExecutor exec = consortium.getParams().executor;
+        exec.setBlockHeight(height);
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
             SubmittedTransaction submitted = consortium.getSubmitted().remove(hash);
             BiConsumer<Object, Throwable> completion = submitted == null ? null : submitted.onCompletion;
-            consortium.getParams().executor.execute(next.hash, height, txn, completion);
+            exec.execute(next.hash, txn, completion);
         });
         accept(next);
         log.info("Processed user block: {} height: {} on: {}", next.hash, next.height(), consortium.getMember());

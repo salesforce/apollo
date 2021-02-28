@@ -177,6 +177,7 @@ import org.h2.engine.User;
 import org.h2.engine.UserAggregate;
 import org.h2.expression.Alias;
 import org.h2.expression.BinaryOperation;
+import org.h2.expression.BlockHeight;
 import org.h2.expression.BinaryOperation.OpType;
 import org.h2.expression.ConcatenationOperation;
 import org.h2.expression.Expression;
@@ -1285,11 +1286,6 @@ public class Parser {
         command.setTableFilter(filter);
         parseUpdateSetClause(command, filter, start, limit == null);
 
-        Column bh = filter.getTable().getColumn(BLOCK_HEIGHT, true);
-        if (bh != null) {
-            command.setAssignment(bh, // Apollo
-                                  ValueExpression.get(ValueLong.get(session.getBlockHeight())));
-        }
         return command;
     }
 
@@ -1302,6 +1298,7 @@ public class Parser {
                     Column column = readTableColumn(filter);
                     columns.add(column);
                 } while (readIfMore());
+
                 read(EQUAL);
                 Expression expression = readExpression();
                 int columnCount = columns.size();
@@ -1329,6 +1326,12 @@ public class Parser {
                 command.setAssignment(column, readExpressionOrDefault());
             }
         } while (readIf(COMMA));
+
+        Column bh = filter.getTable().getColumn(BLOCK_HEIGHT, true);
+        if (bh != null) {
+            command.setAssignment(bh, // Apollo
+                                  BlockHeight.INSTANCE);
+        }
         if (readIf(WHERE)) {
             Expression condition = readExpression();
             command.setCondition(condition);
@@ -1614,7 +1617,7 @@ public class Parser {
                 transformed[columns.length] = bh;
                 columns = transformed;
             }
-            
+
             command.setColumns(columns);
         }
         if (readIf("KEY")) {
@@ -1808,7 +1811,7 @@ public class Parser {
                 transformed[columns.length] = bh;
                 columns = transformed;
             }
-            
+
             command.setColumns(columns);
         }
         if (readIf("DIRECT")) {
@@ -1887,10 +1890,10 @@ public class Parser {
                 }
             } else {
                 values.add(readIf("DEFAULT") ? null : readExpression());
-            } 
-            values.add(ValueExpression.get(ValueLong.get(session.getBlockHeight())));
+            }
+            values.add(BlockHeight.INSTANCE);
             command.addRow(values.toArray(new Expression[0]));
-        } while (readIf(COMMA)); 
+        } while (readIf(COMMA));
     }
 
     private TableFilter readTableFilter() {
@@ -8760,7 +8763,7 @@ public class Parser {
             long blockHeight = readLong();
             command.setMaxBlockHeight(blockHeight);
         }
-        
+
         if (readIf("NODATA")) {
             data = false;
         } else {
