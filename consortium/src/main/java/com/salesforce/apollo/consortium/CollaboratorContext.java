@@ -457,12 +457,15 @@ public class CollaboratorContext {
         }
     }
 
-    public void generateCheckpointBlock() {
-        HashedBlock current = consortium.getCurrent();
-        final long currentHeight = current.height();
+    public void scheduleCheckpointBlock() {
+        final long currentHeight = lastBlock();
+        consortium.performAfter(() -> generateCheckpointBlock(currentHeight), currentHeight);
+    }
+
+    private void generateCheckpointBlock(long currentHeight) {
         final long thisHeight = lastBlock() + 1;
 
-        log.debug("Generating checkpoint block on: {} height: {} ", consortium.getMember(), currentHeight);
+        log.info("Generating checkpoint block on: {} height: {} ", consortium.getMember(), currentHeight);
         consortium.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
 
         schedule(Timers.CHECKPOINTING, () -> {
@@ -738,14 +741,17 @@ public class CollaboratorContext {
         if (body == null) {
             return;
         }
-        long current = consortium.getCurrent().height();
-        if (body.getCheckpoint() > current) {
-            log.error("checkpoint: {} higher than current block height: {}", body.getCheckpoint(), current);
+        HashKey hash = next.hash;
+        CheckpointState checkpointState = checkpoint(body);
+        if (checkpointState == null) {
+            log.error("Cannot checkpoint: {} on: {}", hash, getMember());
+            consortium.getTransitions().fail();
             return;
         }
         accept(next);
         consortium.setLastCheckpoint(next);
-        log.info("Processed checkpoint block: {} height: {} on: {}", next.hash, next.height(), consortium.getMember());
+        consortium.checkpoint(next.height(), checkpointState);
+        log.info("Processed checkpoint block: {} height: {} on: {}", hash, next.height(), consortium.getMember());
     }
 
     void processGenesis(HashedBlock next) {
@@ -935,9 +941,15 @@ public class CollaboratorContext {
             return;
         }
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        Checkpoint body = checkpointBody(block);
+        if (body == null) {
+            log.debug("Ignoring checkpoint invalid checkpoint body of block from: {} on: {}", from, regent,
+                      getMember());
+            return;
+        }
         workingBlocks.computeIfAbsent(hash, k -> {
             log.debug("Delivering checkpoint block: {} from: {} on: {}", hash, from, getMember());
-            executor.execute(() -> validateCheckpoint(hash, block, from));
+            consortium.performAfter(() -> validateCheckpoint(hash, block, from), body.getCheckpoint());
             Builder builder = CertifiedBlock.newBuilder().setBlock(block);
             return builder;
         });

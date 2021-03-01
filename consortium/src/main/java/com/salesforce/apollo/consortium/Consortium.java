@@ -26,11 +26,12 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -42,7 +43,7 @@ import org.h2.mvstore.MVStore.Builder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.chiralbehaviors.tron.Fsm; 
+import com.chiralbehaviors.tron.Fsm;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
@@ -203,8 +204,8 @@ public class Consortium {
     }
 
     public enum Timers {
-        ASSEMBLE_CHECKPOINT, AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, CHECKPOINT_TIMEOUT,
-        CHECKPOINTING, FLUSH_BATCH, PROCLAIM, TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2, AWAIT_INITIAL_VIEW;
+        ASSEMBLE_CHECKPOINT, AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_INITIAL_VIEW, AWAIT_VIEW_MEMBERS,
+        CHECKPOINT_TIMEOUT, CHECKPOINTING, FLUSH_BATCH, PROCLAIM, TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
     }
 
     public static class TransactionSubmitFailure extends Exception {
@@ -240,6 +241,16 @@ public class Consortium {
         }
     }
 
+    private static class PendingAction {
+        private final Runnable action;
+        private final long     targetBlock;
+
+        public PendingAction(long targetBlock, Runnable action) {
+            this.targetBlock = targetBlock;
+            this.action = action;
+        }
+    }
+
     private static final Logger log = LoggerFactory.getLogger(Consortium.class);
 
     public static ByteString compress(ByteString input) {
@@ -262,7 +273,6 @@ public class Consortium {
 
         return new HashKey(Conversion.hashOf(BbBackedInputStream.aggregate(buffers)));
     }
-  
 
     public static Block manifestBlock(byte[] data) {
         if (data.length == 0) {
@@ -303,9 +313,9 @@ public class Consortium {
     private final AtomicReference<KeyPair>                                                         nextViewConsensusKeyPair = new AtomicReference<>();
     private final AtomicReference<MemberOrder>                                                     order                    = new AtomicReference<>();
     private final Parameters                                                                       params;
+    private final AtomicReference<PendingAction>                                                   pending                  = new AtomicReference<>();
     private final TickScheduler                                                                    scheduler                = new TickScheduler();
-    private final Semaphore                                                                        sequencer                = new Semaphore(
-            1);
+    private final Lock                                                                             sequencer                = new ReentrantLock();
     private final AtomicBoolean                                                                    started                  = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>                                               submitted                = new ConcurrentHashMap<>();
 
@@ -376,12 +386,10 @@ public class Consortium {
             return;
         }
         try {
-            sequencer.acquire();
+            sequencer.lock();
             synchronizedProcess(certifiedBlock);
-        } catch (InterruptedException e) {
-            throw new IllegalStateException(e);
         } finally {
-            sequencer.release();
+            sequencer.unlock();
         }
     }
 
@@ -521,6 +529,33 @@ public class Consortium {
         if (currentMessenger != null) {
             currentMessenger.stop();
         }
+    }
+
+    void performAfter(Runnable action, long blockHeight) {
+        long current = getCurrent().height();
+        if (blockHeight < current) {
+            log.info("Pending action scheduled in the past: {} current: {} on: ", blockHeight, current, getMember());
+            return;
+        }
+        PendingAction pendingAction = new PendingAction(blockHeight, action);
+        if (!pending.compareAndSet(null, pendingAction)) {
+            throw new IllegalStateException("Previous pending action uncleared on: " + getMember());
+        }
+        log.info("Pending action scheduled at: {} on: {}", blockHeight, getMember());
+        if (current == blockHeight) {
+            sequencer.lock();
+            try {
+                runPending(pendingAction);
+            } finally {
+                sequencer.unlock();
+            }
+        }
+    }
+
+    private void runPending(PendingAction action) {
+        log.info("Running action scheduled at: {} on: {}", action.targetBlock, getMember());
+        pending.set(null);
+        action.action.run();
     }
 
     void publish(Message message) {
@@ -935,9 +970,9 @@ public class Consortium {
         log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
                   block.getHeader().getHeight(), getMember());
         final HashedBlock previousBlock = getCurrent();
+        long height = height(block);
         if (previousBlock != null) {
             HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
-            long height = height(block);
             long prevHeight = previousBlock.height();
             if (height <= prevHeight) {
                 log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
@@ -980,6 +1015,10 @@ public class Consortium {
             }
         }
         if (next(new HashedBlock(hash, block))) {
+            PendingAction pendingAction = pending.get();
+            if (pendingAction != null && pendingAction.targetBlock == height) {
+                runPending(pendingAction);
+            }
             processDeferred();
         }
     }

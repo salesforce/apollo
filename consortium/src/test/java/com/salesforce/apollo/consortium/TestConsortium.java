@@ -225,7 +225,7 @@ public class TestConsortium {
         System.out.println();
 
         Semaphore outstanding = new Semaphore(100); // outstanding, unfinalized txns
-        int bunchCount = 1_000;
+        int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
@@ -298,7 +298,7 @@ public class TestConsortium {
                                                   .setExecutor(executor)
                                                   .setGenesisData(GENESIS_DATA)
                                                   .setGenesisViewId(GENESIS_VIEW_ID)
-                                                  .setDeltaCheckpointBlocks(10)
+                                                  .setDeltaCheckpointBlocks(5)
                                                   .setCheckpointer(l -> {
                                                       File temp;
                                                       try {

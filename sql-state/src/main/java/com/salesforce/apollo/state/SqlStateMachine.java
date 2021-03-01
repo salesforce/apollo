@@ -278,8 +278,9 @@ public class SqlStateMachine {
                     log.error("unable to checkpoint: {}", height, e);
                 } finally {
                     try (FileInputStream fis = new FileInputStream(temp)) {
-                        System.out.println("*******************************************\nCheckpoint: " + height + "\n"
-                                + Utils.getDocument(fis) + "\n*******************************************");
+                        Utils.getDocument(fis);
+//                        System.out.println("*******************************************\nCheckpoint: " + height + "\n"
+//                                + Utils.getDocument(fis) + "\n*******************************************");
                     } catch (IOException e) {
                     }
                     temp.delete();

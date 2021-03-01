@@ -135,6 +135,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Override
         public Transitions generateCheckpoint() {
+            context().cancel(Timers.FLUSH_BATCH);
             return Checkpointing.LEADER;
         }
 

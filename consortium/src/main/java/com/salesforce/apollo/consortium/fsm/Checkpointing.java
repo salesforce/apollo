@@ -66,7 +66,7 @@ public enum Checkpointing implements Transitions {
 
         @Entry
         public void generateCheckpointBlock() {
-            context().generateCheckpointBlock();
+            context().scheduleCheckpointBlock();
         }
     };
 
