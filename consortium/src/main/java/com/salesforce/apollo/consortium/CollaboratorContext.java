@@ -449,11 +449,19 @@ public class CollaboratorContext {
     }
 
     public void generateBlock() {
-        if (needCheckpoint()) {
-            consortium.getTransitions().generateCheckpoint();
+        generateNextBlock(needCheckpoint());
+    }
+
+    private void generateNextBlock(boolean needCheckpoint) {
+        if (needCheckpoint) {
+            consortium.getTransitions().generateCheckpoint(); 
         } else {
-            generateNextBlock();
-            scheduleFlush();
+            while (generateNextBlock()) {
+                if (needCheckpoint()) {
+                    
+                }
+            }
+            scheduleFlush(); 
         }
     }
 

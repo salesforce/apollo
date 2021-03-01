@@ -223,7 +223,7 @@ public class ConsortiumTest {
         System.out.println();
 
         long then = System.currentTimeMillis();
-        Semaphore outstanding = new Semaphore(1500); // outstanding, unfinalized txns
+        Semaphore outstanding = new Semaphore(1000); // outstanding, unfinalized txns
         int bunchCount = 50_000;
         System.out.println("Submitting batches: " + bunchCount);
         Set<HashKey> submitted = new HashSet<>();

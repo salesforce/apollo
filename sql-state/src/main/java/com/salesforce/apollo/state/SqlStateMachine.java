@@ -56,7 +56,6 @@ import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
 
 /**
  * This is ye Jesus Nut of sql state via distribute linear logs. We use H2 as a
@@ -277,12 +276,6 @@ public class SqlStateMachine {
                 } catch (IOException e) {
                     log.error("unable to checkpoint: {}", height, e);
                 } finally {
-                    try (FileInputStream fis = new FileInputStream(temp)) {
-                        Utils.getDocument(fis);
-//                        System.out.println("*******************************************\nCheckpoint: " + height + "\n"
-//                                + Utils.getDocument(fis) + "\n*******************************************");
-                    } catch (IOException e) {
-                    }
                     temp.delete();
                 }
                 assert checkpoint.exists() : "Written file does not exist: " + checkpoint.getAbsolutePath();
