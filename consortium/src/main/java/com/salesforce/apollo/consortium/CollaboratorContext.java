@@ -454,14 +454,14 @@ public class CollaboratorContext {
 
     private void generateNextBlock(boolean needCheckpoint) {
         if (needCheckpoint) {
-            consortium.getTransitions().generateCheckpoint(); 
+            consortium.getTransitions().generateCheckpoint();
         } else {
             while (generateNextBlock()) {
                 if (needCheckpoint()) {
-                    
+
                 }
             }
-            scheduleFlush(); 
+            scheduleFlush();
         }
     }
 
@@ -716,9 +716,12 @@ public class CollaboratorContext {
                          }
                      });
         published.forEach(h -> {
-            Block block = workingBlocks.remove(h).getBlock();
-            if (block.getBody().getType() == BodyType.CHECKPOINT) {
-                consortium.getTransitions().checkpointGenerated();
+            Builder removed = workingBlocks.remove(h);
+            if (removed != null) {
+                Block block = removed.getBlock();
+                if (block.getBody().getType() == BodyType.CHECKPOINT) {
+                    consortium.getTransitions().checkpointGenerated();
+                }
             }
         });
     }
