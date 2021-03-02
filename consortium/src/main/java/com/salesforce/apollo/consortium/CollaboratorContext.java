@@ -456,12 +456,12 @@ public class CollaboratorContext {
         if (needCheckpoint) {
             consortium.getTransitions().generateCheckpoint();
         } else {
-            while (generateNextBlock()) {
-                if (needCheckpoint()) {
-
-                }
+            generateNextBlock();
+            if (needCheckpoint()) {
+                consortium.getTransitions().generateCheckpoint();
+            } else {
+                scheduleFlush();
             }
-            scheduleFlush();
         }
     }
 

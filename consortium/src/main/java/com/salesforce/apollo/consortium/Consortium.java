@@ -592,6 +592,7 @@ public class Consortium {
     void setLastViewChange(HashedBlock block, Reconfigure view) {
         lastViewChange.set(block);
         deltaCheckpointBlocks.set(view.getCheckpointBlocks());
+        log.info("Checkpoint in: {} blocks on: {}", view.getCheckpointBlocks(), getMember());
     }
 
     void setMessenger(Messenger messenger) {

@@ -289,7 +289,7 @@ public class TestConsortium {
                                                   .setMaxBatchByteSize(1024 * 1024)
                                                   .setMaxBatchSize(1000)
                                                   .setCommunications(communications.get(m.getId()))
-                                                  .setMaxBatchDelay(Duration.ofMillis(100))
+                                                  .setMaxBatchDelay(Duration.ofMillis(1000))
                                                   .setGossipDuration(gossipDuration)
                                                   .setViewTimeout(Duration.ofMillis(1500))
                                                   .setJoinTimeout(Duration.ofSeconds(5))
