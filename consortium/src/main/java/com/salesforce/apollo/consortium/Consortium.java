@@ -413,8 +413,9 @@ public class Consortium {
         transitions.shutdown();
     }
 
-    public HashKey submit(BiConsumer<Object, Throwable> onCompletion, Message transaction) throws TimeoutException {
-        return submit(false, onCompletion, transaction);
+    public HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, BiConsumer<Object, Throwable> onCompletion,
+                          Message transaction) throws TimeoutException {
+        return submit(onSubmit, false, onCompletion, transaction);
     }
 
     void checkpoint(long height, CheckpointState checkpoint) {
@@ -615,13 +616,14 @@ public class Consortium {
         this.viewContext.set(viewContext);
     }
 
-    HashKey submit(boolean join, BiConsumer<Object, Throwable> onCompletion, Message txn) throws TimeoutException {
+    HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,
+                   Message txn) throws TimeoutException {
         if (viewContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
         }
         EnqueuedTransaction transaction = build(join, txn);
-        submit(transaction, onCompletion);
+        submit(transaction, onSubmit, onCompletion);
         return transaction.hash;
     }
 
@@ -844,19 +846,22 @@ public class Consortium {
         }
     }
 
-    private void processSubmit(EnqueuedTransaction transaction, BiConsumer<Object, Throwable> onCompletion,
+    private void processSubmit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,
                                AtomicInteger pending, AtomicBoolean completed, int succeeded) {
         int remaining = pending.decrementAndGet();
+        if (completed.get()) {
+            return;
+        }
         int majority = viewContext().majority();
         if (succeeded >= majority) {
-            if (onCompletion != null && completed.compareAndSet(false, true)) {
-                onCompletion.accept(true, null);
+            if (onSubmit != null && completed.compareAndSet(false, true)) {
+                onSubmit.accept(true, null);
             }
         } else {
             if (remaining + succeeded < majority) {
-                if (onCompletion != null && completed.compareAndSet(false, true)) {
-                    onCompletion.accept(null, new TransactionSubmitFailure("Failed to achieve majority",
-                            transaction.hash, succeeded));
+                if (onSubmit != null && completed.compareAndSet(false, true)) {
+                    onSubmit.accept(null, new TransactionSubmitFailure("Failed to achieve majority", transaction.hash,
+                            succeeded));
                 }
             }
         }
@@ -915,7 +920,7 @@ public class Consortium {
         }
     }
 
-    private void submit(EnqueuedTransaction transaction,
+    private void submit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,
                         BiConsumer<Object, Throwable> onCompletion) throws TimeoutException {
         assert transaction.hash.equals(hashOf(transaction.transaction)) : "Hash does not match!";
 
@@ -934,7 +939,7 @@ public class Consortium {
                 log.trace("submit: {} to self: {}", transaction.hash, c.getId());
                 transitions.receive(transaction.transaction, getMember());
                 pending.decrementAndGet();
-                processSubmit(transaction, onCompletion, pending, completed, success.incrementAndGet());
+                processSubmit(transaction, onSubmit, pending, completed, success.incrementAndGet());
             } else {
                 ConsortiumClientCommunications link = linkFor(c);
                 if (link == null) {
@@ -959,7 +964,7 @@ public class Consortium {
                         log.debug("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(),
                                   e.getCause());
                     }
-                    processSubmit(transaction, onCompletion, pending, completed, succeeded);
+                    processSubmit(transaction, onSubmit, pending, completed, succeeded);
                 }, ForkJoinPool.commonPool()); // TODO, put in passed executor
             }
         });

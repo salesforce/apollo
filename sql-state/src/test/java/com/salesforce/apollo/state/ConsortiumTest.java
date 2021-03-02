@@ -203,7 +203,7 @@ public class ConsortiumTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit((h, t) -> txnProcessed.set(true),
+            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                  Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
                                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
@@ -244,12 +244,13 @@ public class ConsortiumTest {
                     }
                 }
                 BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
-                HashKey key = client.submit((h, t) -> {
+                AtomicReference<HashKey> key = new AtomicReference<>();
+                key.set(client.submit((h, t) -> {
                     outstanding.release();
-                    submitted.remove(h);
+                    submitted.remove(key.get());
                     submittedBunch.countDown();
-                }, Helper.batch(update));
-                submitted.add(key);
+                }, null, Helper.batch(update)));
+                submitted.add(key.get());
             } catch (TimeoutException e) {
                 fail();
                 return;
@@ -303,7 +304,7 @@ public class ConsortiumTest {
                               .setContext(view)
                               .setMsgParameters(msgParameters)
                               .setMaxBatchByteSize(1024 * 1024 * 32)
-                              .setMaxBatchSize(2000)
+                              .setMaxBatchSize(4000)
                               .setCommunications(communications.get(m.getId()))
                               .setMaxBatchDelay(Duration.ofMillis(500))
                               .setGossipDuration(gossipDuration)

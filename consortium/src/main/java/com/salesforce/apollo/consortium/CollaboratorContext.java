@@ -29,7 +29,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
@@ -803,8 +802,7 @@ public class CollaboratorContext {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
             SubmittedTransaction submitted = consortium.getSubmitted().remove(hash);
-            BiConsumer<Object, Throwable> completion = submitted == null ? null : submitted.onCompletion;
-            exec.execute(next.hash, txn, completion);
+            exec.execute(next.hash, txn, submitted == null ? null : submitted.onCompletion);
         });
         accept(next);
         log.info("Processed user block: {} height: {} on: {}", next.hash, next.height(), consortium.getMember());
@@ -1128,6 +1126,12 @@ public class CollaboratorContext {
         }
     }
 
+    /**
+     * generate ye next block.
+     * 
+     * @return true if another block "should" be generated (i.e. enough backed up
+     *         txns, etc), false if we should schedule the next flush
+     */
     private boolean generateNextBlock() {
         final long currentHeight = lastBlock();
         final long thisHeight = currentHeight + 1;
@@ -1285,7 +1289,7 @@ public class CollaboratorContext {
 
                 HashKey txnHash;
                 try {
-                    txnHash = consortium.submit(true, null, joinTxn);
+                    txnHash = consortium.submit(null, true, null, joinTxn);
                 } catch (TimeoutException e) {
                     return;
                 }
