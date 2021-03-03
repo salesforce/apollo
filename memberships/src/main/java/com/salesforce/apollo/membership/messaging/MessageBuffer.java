@@ -88,6 +88,7 @@ public class MessageBuffer {
         return new HashKey(Conversion.hashOf(buffers));
     }
 
+    @SuppressWarnings("unused")
     private static HashKey idOf(Message message) {
         return idOf(message.getSequenceNumber(), new HashKey(message.getSource()), message.getContent());
     }

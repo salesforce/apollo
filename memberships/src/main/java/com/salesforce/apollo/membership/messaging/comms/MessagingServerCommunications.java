@@ -15,6 +15,7 @@ import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 import com.salesforce.apollo.membership.messaging.Messenger.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.stub.StreamObserver;
 
@@ -26,7 +27,12 @@ public class MessagingServerCommunications extends MessagingImplBase {
     @Override
     public void gossip(MessageBff request, StreamObserver<Messages> responseObserver) {
         routing.evaluate(responseObserver, request.getContext(), s -> {
-            Messages response = s.gossip(request, identity.getFrom());
+            HashKey from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
+            }
+            Messages response = s.gossip(request, from);
             responseObserver.onNext(response);
             responseObserver.onCompleted();
             if (metrics != null) {
@@ -42,7 +48,12 @@ public class MessagingServerCommunications extends MessagingImplBase {
     @Override
     public void update(Push request, StreamObserver<Null> responseObserver) {
         routing.evaluate(responseObserver, request.getContext(), s -> {
-            s.update(request, identity.getFrom());
+            HashKey from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
+            }
+            s.update(request, from);
             responseObserver.onNext(Null.getDefaultInstance());
             responseObserver.onCompleted();
             if (metrics != null) {
