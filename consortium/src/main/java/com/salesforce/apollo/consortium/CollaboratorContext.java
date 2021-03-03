@@ -451,81 +451,6 @@ public class CollaboratorContext {
         generateNextBlock(needCheckpoint());
     }
 
-    private void generateNextBlock(boolean needCheckpoint) {
-        if (needCheckpoint) {
-            consortium.getTransitions().generateCheckpoint();
-        } else {
-            generateNextBlock();
-            if (needCheckpoint()) {
-                consortium.getTransitions().generateCheckpoint();
-            } else {
-                scheduleFlush();
-            }
-        }
-    }
-
-    public void scheduleCheckpointBlock() {
-        final long currentHeight = lastBlock();
-        consortium.performAfter(() -> generateCheckpointBlock(currentHeight), currentHeight);
-    }
-
-    private void generateCheckpointBlock(long currentHeight) {
-        final long thisHeight = lastBlock() + 1;
-
-        log.info("Generating checkpoint block on: {} height: {} ", consortium.getMember(), currentHeight);
-        consortium.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
-
-        schedule(Timers.CHECKPOINTING, () -> {
-            consortium.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
-        }, consortium.getParams().submitTimeout.dividedBy(2));
-
-        File state = consortium.getParams().checkpointer.apply(currentHeight);
-        if (state == null) {
-            log.error("Cannot create checkpoint");
-            consortium.getTransitions().fail();
-            return;
-        }
-        Checkpoint checkpoint = checkpoint(currentHeight, state, consortium.getParams().checkpointBlockSize);
-        if (checkpoint == null) {
-            consortium.getTransitions().fail();
-        }
-
-        HashedBlock lb = lastBlock.get();
-        byte[] previous = lb == null ? null : lb.hash.bytes();
-        if (previous == null) {
-            log.error("Cannot generate checkpoint block on: {} height: {} no previous block: {}",
-                      consortium.getMember(), currentHeight, lastBlock());
-            consortium.getTransitions().fail();
-            return;
-        }
-        Block block = generate(previous, thisHeight, body(BodyType.CHECKPOINT, checkpoint));
-
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-
-        CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
-                                                                                                .setBlock(block));
-
-        Validate validation = consortium.viewContext().generateValidation(hash, block);
-        if (validation == null) {
-            log.debug("Cannot generate validation for block: {} hash: {} segements: {} on: {}", hash,
-                      new HashKey(checkpoint.getStateHash()), checkpoint.getSegmentsCount(), consortium.getMember());
-            consortium.getTransitions().fail();
-            cancel(Timers.CHECKPOINTING);
-            return;
-        }
-        builder.addCertifications(Certification.newBuilder()
-                                               .setId(validation.getId())
-                                               .setSignature(validation.getSignature()));
-        store().put(hash, block);
-        lastBlock(new HashedBlock(hash, block));
-        consortium.publish(block);
-        consortium.publish(validation);
-        consortium.setLastCheckpoint(new HashedBlock(hash, block));
-        cancel(Timers.CHECKPOINTING);
-
-        log.info("Generated next checkpoint block: {} height: {} on: {} ", hash, thisHeight, consortium.getMember());
-    }
-
     public void generateView() {
         if (consortium.getCurrent() == null) {
             log.trace("Generating genesis view on: {}", consortium.getMember());
@@ -675,6 +600,11 @@ public class CollaboratorContext {
         }
     }
 
+    public void scheduleCheckpointBlock() {
+        final long currentHeight = lastBlock();
+        consortium.performAfter(() -> generateCheckpointBlock(currentHeight), currentHeight);
+    }
+
     public void shutdown() {
         consortium.stop();
     }
@@ -758,9 +688,9 @@ public class CollaboratorContext {
             consortium.getTransitions().fail();
             return;
         }
+        consortium.checkpoint(next.height(), checkpointState);
         accept(next);
         consortium.setLastCheckpoint(next);
-        consortium.checkpoint(next.height(), checkpointState);
         log.info("Processed checkpoint block: {} height: {} on: {}", hash, next.height(), consortium.getMember());
     }
 
@@ -979,27 +909,29 @@ public class CollaboratorContext {
                       block.getBody().getType());
             return;
         }
-        workingBlocks.computeIfAbsent(hash, k -> {
+        Builder existing = workingBlocks.get(hash);
+        if (existing == null) {
             final Genesis genesis = genesisBody(block);
             if (genesis == null) {
-                return null;
+                return;
             }
             cancelToTimers();
             toOrder.clear();
             Validate validation = consortium.viewContext().generateValidation(hash, block);
             if (validation == null) {
                 log.error("Cannot validate generated genesis: {} on: {}", hash, consortium.getMember());
-                return null;
+                return;
             }
             lastBlock(new HashedBlock(block));
             consortium.setViewContext(consortium.viewContext().cloneWith(genesis.getInitialView().getViewList()));
             consortium.publish(validation);
-            return CertifiedBlock.newBuilder()
-                                 .setBlock(block)
-                                 .addCertifications(Certification.newBuilder()
-                                                                 .setId(validation.getId())
-                                                                 .setSignature(validation.getSignature()));
-        });
+            workingBlocks.put(hash,
+                              CertifiedBlock.newBuilder()
+                                            .setBlock(block)
+                                            .addCertifications(Certification.newBuilder()
+                                                                            .setId(validation.getId())
+                                                                            .setSignature(validation.getSignature())));
+        }
     }
 
     private void finalized(HashKey hash) {
@@ -1053,6 +985,63 @@ public class CollaboratorContext {
                            .setBody(body)
                            .build();
         return block;
+    }
+
+    private void generateCheckpointBlock(long currentHeight) {
+        final long thisHeight = lastBlock() + 1;
+
+        log.info("Generating checkpoint block on: {} height: {} ", consortium.getMember(), currentHeight);
+        consortium.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
+
+        schedule(Timers.CHECKPOINTING, () -> {
+            consortium.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
+        }, consortium.getParams().submitTimeout.dividedBy(2));
+
+        File state = consortium.getParams().checkpointer.apply(currentHeight);
+        if (state == null) {
+            log.error("Cannot create checkpoint");
+            consortium.getTransitions().fail();
+            return;
+        }
+        Checkpoint checkpoint = checkpoint(currentHeight, state, consortium.getParams().checkpointBlockSize);
+        if (checkpoint == null) {
+            consortium.getTransitions().fail();
+        }
+
+        HashedBlock lb = lastBlock.get();
+        byte[] previous = lb == null ? null : lb.hash.bytes();
+        if (previous == null) {
+            log.error("Cannot generate checkpoint block on: {} height: {} no previous block: {}",
+                      consortium.getMember(), currentHeight, lastBlock());
+            consortium.getTransitions().fail();
+            return;
+        }
+        Block block = generate(previous, thisHeight, body(BodyType.CHECKPOINT, checkpoint));
+
+        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+
+        CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
+                                                                                                .setBlock(block));
+
+        Validate validation = consortium.viewContext().generateValidation(hash, block);
+        if (validation == null) {
+            log.debug("Cannot generate validation for block: {} hash: {} segements: {} on: {}", hash,
+                      new HashKey(checkpoint.getStateHash()), checkpoint.getSegmentsCount(), consortium.getMember());
+            consortium.getTransitions().fail();
+            cancel(Timers.CHECKPOINTING);
+            return;
+        }
+        builder.addCertifications(Certification.newBuilder()
+                                               .setId(validation.getId())
+                                               .setSignature(validation.getSignature()));
+        store().put(hash, block);
+        lastBlock(new HashedBlock(hash, block));
+        consortium.publish(block);
+        consortium.publish(validation);
+        consortium.setLastCheckpoint(new HashedBlock(hash, block));
+        cancel(Timers.CHECKPOINTING);
+
+        log.info("Generated next checkpoint block: {} height: {} on: {} ", hash, thisHeight, consortium.getMember());
     }
 
     private void generateGenesisBlock() {
@@ -1185,6 +1174,19 @@ public class CollaboratorContext {
         log.info("Generated next block: {} height: {} on: {} txns: {}", hash, thisHeight, consortium.getMember(),
                  user.getTransactionsCount());
         return true;
+    }
+
+    private void generateNextBlock(boolean needCheckpoint) {
+        if (needCheckpoint) {
+            consortium.getTransitions().generateCheckpoint();
+        } else {
+            generateNextBlock();
+            if (needCheckpoint()) {
+                consortium.getTransitions().generateCheckpoint();
+            } else {
+                scheduleFlush();
+            }
+        }
     }
 
     private void generateNextView() {

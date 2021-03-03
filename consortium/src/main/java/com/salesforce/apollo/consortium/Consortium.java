@@ -533,7 +533,11 @@ public class Consortium {
     }
 
     void performAfter(Runnable action, long blockHeight) {
-        long current = getCurrent().height();
+        HashedBlock cb = getCurrent();
+        if (cb == null) {
+            return;
+        }
+        long current = cb.height();
         if (blockHeight < current) {
             log.info("Pending action scheduled in the past: {} current: {} on: ", blockHeight, current, getMember());
             return;
@@ -692,6 +696,7 @@ public class Consortium {
 
     private void clear() {
         pause();
+        pending.set(null);
         comm.set(null);
         order.set(null);
         current.set(null);
