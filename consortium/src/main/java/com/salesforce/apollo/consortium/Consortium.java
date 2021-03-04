@@ -7,16 +7,13 @@
 package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.consortium.CollaboratorContext.height;
-import static com.salesforce.apollo.consortium.support.SigningUtils.generateKeyPair;
 import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
 import static com.salesforce.apollo.consortium.support.SigningUtils.validateGenesis;
 import static com.salesforce.apollo.consortium.support.SigningUtils.verify;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.KeyPair;
 import java.security.PublicKey;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +22,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,7 +29,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.zip.DeflaterInputStream;
 import java.util.zip.InflaterInputStream;
@@ -72,9 +67,7 @@ import com.salesfoce.apollo.consortium.proto.TransactionOrBuilder;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
-import com.salesforce.apollo.consortium.comms.ConsortiumServerCommunications;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.CheckpointState;
@@ -85,8 +78,6 @@ import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.MemberOrder;
-import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.protocols.BbBackedInputStream;
 import com.salesforce.apollo.protocols.BloomFilter;
@@ -127,7 +118,7 @@ public class Consortium {
             EnqueuedTransaction enqueuedTransaction = new EnqueuedTransaction(hashOf(request.getTransaction()),
                     request.getTransaction());
             if (enqueuedTransaction.transaction.getJoin()) {
-                if (viewContext().getMember(from) == null) {
+                if (view.getContext().getMember(from) == null) {
                     log.warn("Received join from non consortium member: {} on: {}", from, getMember());
                     return TransactionResult.getDefaultInstance();
                 }
@@ -155,14 +146,14 @@ public class Consortium {
         }
 
         public JoinResult join(Join request, HashKey fromID) {
-            Member from = viewContext().getActiveMember(fromID);
+            Member from = view.getContext().getActiveMember(fromID);
             if (from == null) {
                 log.debug("Member not part of current view: {} on: {}", fromID, getMember());
                 return JoinResult.getDefaultInstance();
             }
             try {
                 return fsm.synchonizeOnState(() -> {
-                    if (getNextView() == null) {
+                    if (view.getNextView() == null) {
                         log.debug("Cannot vote for: {} next view undefined on: {}", fromID, getMember());
                         return JoinResult.getDefaultInstance();
                     }
@@ -183,7 +174,7 @@ public class Consortium {
                     }
                     return JoinResult.newBuilder()
                                      .setSignature(ByteString.copyFrom(signed))
-                                     .setNextView(getNextView())
+                                     .setNextView(view.getNextView())
                                      .build();
                 });
             } catch (Exception e) {
@@ -193,7 +184,7 @@ public class Consortium {
         }
 
         public void stopData(StopData stopData, HashKey from) {
-            Member member = viewContext().getMember(from);
+            Member member = view.getContext().getMember(from);
             if (member == null) {
                 log.warn("Received StopData from non consortium member: {} on: {}", from, getMember());
                 return;
@@ -294,34 +285,26 @@ public class Consortium {
         return builder;
     }
 
-    final Store                                                                                    store;
-    private final Map<Long, CheckpointState>                                                       cachedCheckpoints        = new ConcurrentHashMap<>();
-    private final AtomicReference<CommonCommunications<ConsortiumClientCommunications, Service>>   comm                     = new AtomicReference<>();
-    private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
-    private final AtomicReference<HashedBlock>                                                     current                  = new AtomicReference<>();
-    private final PriorityBlockingQueue<HashedBlock>                                               deferedBlocks            = new PriorityBlockingQueue<>(
-            1024, (a, b) -> Long.compare(height(a.block), height(b.block)));
-    private final List<DelayedMessage>                                                             delayed                  = new CopyOnWriteArrayList<>();
-    private final AtomicInteger                                                                    deltaCheckpointBlocks    = new AtomicInteger(
-            Integer.MAX_VALUE);
-    private final Fsm<CollaboratorContext, Transitions>                                            fsm;
-    private final AtomicReference<HashedBlock>                                                     genesis                  = new AtomicReference<>();
-    private final AtomicReference<HashedBlock>                                                     lastCheckpoint           = new AtomicReference<>();
-    private final AtomicReference<HashedBlock>                                                     lastViewChange           = new AtomicReference<>();
-    private final AtomicReference<Messenger>                                                       messenger                = new AtomicReference<>();
-    private final AtomicReference<ViewMember>                                                      nextView                 = new AtomicReference<>();
-    private final AtomicReference<KeyPair>                                                         nextViewConsensusKeyPair = new AtomicReference<>();
-    private final AtomicReference<MemberOrder>                                                     order                    = new AtomicReference<>();
-    private final Parameters                                                                       params;
-    private final AtomicReference<PendingAction>                                                   pending                  = new AtomicReference<>();
-    private final TickScheduler                                                                    scheduler                = new TickScheduler();
-    private final Lock                                                                             sequencer                = new ReentrantLock();
-    private final AtomicBoolean                                                                    started                  = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>                                               submitted                = new ConcurrentHashMap<>();
-
-    private final Transitions transitions;
-
-    private final AtomicReference<ViewContext> viewContext = new AtomicReference<>();
+    final Store                                         store;
+    private final Map<Long, CheckpointState>            cachedCheckpoints     = new ConcurrentHashMap<>();
+    private final AtomicReference<HashedBlock>          current               = new AtomicReference<>();
+    private final PriorityBlockingQueue<HashedBlock>    deferedBlocks         = new PriorityBlockingQueue<>(1024,
+            (a, b) -> Long.compare(height(a.block), height(b.block)));
+    private final List<DelayedMessage>                  delayed               = new CopyOnWriteArrayList<>();
+    private final AtomicInteger                         deltaCheckpointBlocks = new AtomicInteger(Integer.MAX_VALUE);
+    private final Fsm<CollaboratorContext, Transitions> fsm;
+    private final AtomicReference<HashedBlock>          genesis               = new AtomicReference<>();
+    private final AtomicReference<HashedBlock>          lastCheckpoint        = new AtomicReference<>();
+    private final AtomicReference<HashedBlock>          lastViewChange        = new AtomicReference<>();
+    private final Parameters                            params;
+    private final AtomicReference<PendingAction>        pending               = new AtomicReference<>();
+    private final TickScheduler                         scheduler             = new TickScheduler();
+    private final Lock                                  sequencer             = new ReentrantLock();
+    private final AtomicBoolean                         started               = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>    submitted             = new ConcurrentHashMap<>();
+    private final Transitions                           transitions;
+    private final View                                  view;
+    final Service                                       service               = new Service();
 
     public Consortium(Parameters parameters) {
         this(parameters, defaultBuilder(parameters));
@@ -330,15 +313,11 @@ public class Consortium {
     public Consortium(Parameters parameters, MVStore.Builder builder) {
         this.params = parameters;
         store = new Store(builder.open());
-        this.createClientComms = k -> parameters.communications.create(parameters.member, k, new Service(),
-                                                                       r -> new ConsortiumServerCommunications(
-                                                                               parameters.communications.getClientIdentityProvider(),
-                                                                               null, r),
-                                                                       ConsortiumClientCommunications.getCreate(null));
+        view = new View(new Service(), parameters, (id, messages) -> process(id, messages));
         fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
         fsm.setName(getMember().getId().b64Encoded());
         transitions = fsm.getTransitions();
-        nextViewConsensusKey();
+        view.nextViewConsensusKey();
     }
 
     public Fsm<CollaboratorContext, Transitions> fsm() {
@@ -399,7 +378,7 @@ public class Consortium {
         }
         log.info("Starting consortium on {}", getMember());
         transitions.start();
-        resume();
+        view.resume(service);
     }
 
     public void stop() {
@@ -435,27 +414,8 @@ public class Consortium {
         return cachedCheckpoints.get(checkpoint);
     }
 
-    CommonCommunications<ConsortiumClientCommunications, Service> getComm() {
-        return comm.get();
-    }
-
     HashedBlock getCurrent() {
         return current.get();
-    }
-
-    Messenger getMessenger() {
-        final Messenger currentMsgr = messenger.get();
-        return currentMsgr;
-    }
-
-    ViewMember getNextView() {
-        final ViewMember c = nextView.get();
-        return c;
-    }
-
-    KeyPair getNextViewConsensusKeyPair() {
-        final KeyPair c = nextViewConsensusKeyPair.get();
-        return c;
     }
 
     Parameters getParams() {
@@ -474,62 +434,18 @@ public class Consortium {
         return transitions;
     }
 
-    ViewContext getViewContext() {
-        return viewContext.get();
-    }
-
     void joinMessageGroup(ViewContext newView) {
-        log.debug("Joining message group: {} on: {}", newView.getId(), getMember());
-        Messenger nextMsgr = newView.createMessenger(getParams());
-        setMessenger(nextMsgr);
-        nextMsgr.register(round -> getScheduler().tick());
-        setOrder(new MemberOrder((id, messages) -> process(id, messages), nextMsgr));
+        view.joinMessageGroup(newView, scheduler, process());
     }
 
     ConsortiumClientCommunications linkFor(Member m) {
         try {
-            return getComm().apply(m, getParams().member);
+            return view.getComm().apply(m, getParams().member);
         } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", m.getId(),
                       (e.getCause() != null ? e.getCause() : e).toString());
         }
         return null;
-    }
-
-    KeyPair nextViewConsensusKey() {
-        KeyPair current = getNextViewConsensusKeyPair();
-
-        KeyPair keyPair = generateKeyPair(2048, "RSA");
-        setNextViewConsensusKeyPair(keyPair);
-        byte[] encoded = keyPair.getPublic().getEncoded();
-        byte[] signed = sign(getParams().signature.get(), encoded);
-        if (signed == null) {
-            log.error("Unable to generate and sign consensus key on: {}", getMember());
-            transitions.fail();
-        }
-        setNextView(ViewMember.newBuilder()
-                              .setId(getMember().getId().toByteString())
-                              .setConsensusKey(ByteString.copyFrom(encoded))
-                              .setSignature(ByteString.copyFrom(signed))
-                              .build());
-        return current;
-    }
-
-    void pause() {
-        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
-        if (currentComm != null) {
-            ViewContext current = viewContext.get();
-            assert current != null : "No current view, but comm exists!";
-            currentComm.deregister(current.getId());
-        }
-        MemberOrder currentTotalOrder = getOrder();
-        if (currentTotalOrder != null) {
-            currentTotalOrder.stop();
-        }
-        Messenger currentMessenger = getMessenger();
-        if (currentMessenger != null) {
-            currentMessenger.stop();
-        }
     }
 
     void performAfter(Runnable action, long blockHeight) {
@@ -557,29 +473,6 @@ public class Consortium {
         }
     }
 
-    private void runPending(PendingAction action) {
-        log.info("Running action scheduled at: {} on: {}", action.targetBlock, getMember());
-        pending.set(null);
-        action.action.run();
-    }
-
-    void publish(Message message) {
-        final Messenger currentMsgr = getMessenger();
-        if (currentMsgr == null) {
-            log.error("skipping message publish as no messenger");
-            return;
-        }
-        currentMsgr.publish(message);
-    }
-
-    void resume() {
-        resume(new Service(), getParams().gossipDuration, getParams().scheduler);
-    }
-
-    void setComm(CommonCommunications<ConsortiumClientCommunications, Service> comm) {
-        this.comm.set(comm);
-    }
-
     void setCurrent(HashedBlock current) {
         this.current.set(current);
     }
@@ -600,29 +493,13 @@ public class Consortium {
         log.info("Checkpoint in: {} blocks on: {}", view.getCheckpointBlocks(), getMember());
     }
 
-    void setMessenger(Messenger messenger) {
-        this.messenger.set(messenger);
-    }
-
-    void setNextView(ViewMember nextView) {
-        this.nextView.set(null);
-    }
-
-    void setNextViewConsensusKeyPair(KeyPair nextViewConsensusKeyPair) {
-        this.nextViewConsensusKeyPair.set(nextViewConsensusKeyPair);
-    }
-
-    void setOrder(MemberOrder order) {
-        this.order.set(order);
-    }
-
-    void setViewContext(ViewContext viewContext) {
-        this.viewContext.set(viewContext);
+    View getView() {
+        return view;
     }
 
     HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,
                    Message txn) throws TimeoutException {
-        if (viewContext() == null) {
+        if (view.getContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
         }
@@ -635,34 +512,6 @@ public class Consortium {
         final long delta = deltaCheckpointBlocks.get();
         final HashedBlock cp = lastCheckpoint.get();
         return cp == null ? delta : cp.height() + delta;
-    }
-
-    /**
-     * Ye Jesus Nut
-     *
-     * @param list
-     */
-    void viewChange(ViewContext newView) {
-        pause();
-
-        log.info("Installing new view: {} rings: {} ttl: {} on: {} regent: {} member: {} view member: {}",
-                 newView.getId(), newView.getRingCount(), newView.timeToLive(), getMember(),
-                 getState().currentRegent() >= 0 ? newView.getRegent(getState().currentRegent()) : "None",
-                 newView.isMember(), newView.isViewMember());
-
-        setComm(createClientComms.apply(newView.getId()));
-        setMessenger(null);
-        setOrder(null);
-        setViewContext(newView);
-        if (newView.isViewMember()) {
-            joinMessageGroup(newView);
-        }
-
-        resume();
-    }
-
-    ViewContext viewContext() {
-        return getViewContext();
     }
 
     private EnqueuedTransaction build(boolean join, Message transaction) {
@@ -695,14 +544,9 @@ public class Consortium {
     }
 
     private void clear() {
-        pause();
+        view.clear();
         pending.set(null);
-        comm.set(null);
-        order.set(null);
         current.set(null);
-        messenger.set(null);
-        nextView.set(null);
-        nextViewConsensusKeyPair.set(null);
     }
 
     private CheckpointSegments fetch(CheckpointReplication request) {
@@ -719,10 +563,6 @@ public class Consortium {
         return replication.addAllSegments(state.fetchSegments(BloomFilter.from(request.getCheckpointSegments()),
                                                               params.maxCheckpointSegments, Utils.bitStreamEntropy()))
                           .build();
-    }
-
-    private MemberOrder getOrder() {
-        return order.get();
     }
 
     private boolean next(HashedBlock next) {
@@ -744,6 +584,10 @@ public class Consortium {
             log.error("Unrecognized block type: {} : {}", next.hashCode(), next.block);
         }
         return getCurrent() == next;
+    }
+
+    private BiConsumer<HashKey, List<Msg>> process() {
+        return (id, messages) -> process(id, messages);
     }
 
     private void process(HashKey contextId, List<Msg> messages) {
@@ -857,7 +701,7 @@ public class Consortium {
         if (completed.get()) {
             return;
         }
-        int majority = viewContext().majority();
+        int majority = view.getContext().majority();
         if (succeeded >= majority) {
             if (onSubmit != null && completed.compareAndSet(false, true)) {
                 onSubmit.accept(true, null);
@@ -908,21 +752,10 @@ public class Consortium {
         return false;
     }
 
-    private void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
-        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
-        if (currentComm != null) {
-            ViewContext current = viewContext.get();
-            assert current != null : "No current view, but comm exists!";
-            currentComm.register(current.getId(), service);
-        }
-        MemberOrder currentTO = getOrder();
-        if (currentTO != null) {
-            currentTO.start();
-        }
-        Messenger currentMsg = getMessenger();
-        if (currentMsg != null) {
-            currentMsg.start(gossipDuration, scheduler);
-        }
+    private void runPending(PendingAction action) {
+        log.info("Running action scheduled at: {} on: {}", action.targetBlock, getMember());
+        pending.set(null);
+        action.action.run();
     }
 
     private void submit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,
@@ -931,11 +764,11 @@ public class Consortium {
 
         getSubmitted().put(transaction.hash, new SubmittedTransaction(transaction.transaction, onCompletion));
         SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
-                                                          .setContext(viewContext().getId().toByteString())
+                                                          .setContext(view.getContext().getId().toByteString())
                                                           .setTransaction(transaction.transaction)
                                                           .build();
         log.debug("Submitting txn: {} from: {}", transaction.hash, getMember());
-        List<Member> group = viewContext().streamRandomRing().collect(Collectors.toList());
+        List<Member> group = view.getContext().streamRandomRing().collect(Collectors.toList());
         AtomicInteger pending = new AtomicInteger(group.size());
         AtomicInteger success = new AtomicInteger();
         AtomicBoolean completed = new AtomicBoolean();
@@ -1001,7 +834,7 @@ public class Consortium {
                           getMember(), previousBlock.hash, prev, prevHeight, height);
                 return;
             }
-            if (!viewContext().validate(certifiedBlock)) {
+            if (!view.getContext().validate(certifiedBlock)) {
                 log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
                 return;
             }

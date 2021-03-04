@@ -88,8 +88,9 @@ public class ViewContext implements MembershipListener<Member> {
                 byte[] encoded = vm.getConsensusKey().toByteArray();
                 PublicKey consensusKey = SigningUtils.publicKeyOf(encoded);
                 if (!consensusKeyPair.getPublic().equals(consensusKey)) {
-                    log.warn("Consensus key for view {} does not match current consensus key on: {}", context.getId(),
-                             member);
+                    log.warn("Consensus key: {} for view {} does not match current consensus key: {} on: {}",
+                             new HashKey(Conversion.hashOf(consensusKeyPair.getPublic().getEncoded())), context.getId(),
+                             new HashKey(Conversion.hashOf(consensusKey.getEncoded())), member);
                 } else {
                     log.trace("Consensus key for view {} matches current consensus key on: {}", context.getId(),
                               member);
@@ -103,7 +104,10 @@ public class ViewContext implements MembershipListener<Member> {
                         log.debug("invalid view member, cannot deserialize consensus key for: {} on: {}", mID, member);
                         return null;
                     }
-                    log.debug("Adding consensus key for: {} on: {}", mID, member);
+                    if (log.isTraceEnabled()) {
+                        log.trace("Adding consensus key: {} for: {} on: {}",
+                                  new HashKey(Conversion.hashOf(consensusKey.getEncoded())), mID, member);
+                    }
                     return consensusKey;
                 });
             }
@@ -155,6 +159,10 @@ public class ViewContext implements MembershipListener<Member> {
     public Validate generateValidation(HashKey hash, Block block) {
         byte[] signature = sign(consensusKeyPair.getPrivate(), Utils.entropy(),
                                 Conversion.hashOf(block.getHeader().toByteString()));
+        if (log.isTraceEnabled()) {
+            log.trace("generating validation of: {} key: {} on: {}", hash,
+                      new HashKey(Conversion.hashOf(consensusKeyPair.getPublic().getEncoded())), member);
+        }
         return generateValidation(hash, signature);
     }
 
@@ -181,6 +189,10 @@ public class ViewContext implements MembershipListener<Member> {
 
     public HashKey getId() {
         return context.getId();
+    }
+
+    public Member getMember() {
+        return member;
     }
 
     public Member getMember(HashKey from) {
@@ -245,8 +257,11 @@ public class ViewContext implements MembershipListener<Member> {
     public boolean validate(Block block, Validate v) {
         HashKey hash = new HashKey(v.getHash());
         final HashKey memberID = new HashKey(v.getId());
-        log.trace("Validation: {} from: {}", hash, memberID);
         final PublicKey key = validators.get(memberID);
+        if (log.isTraceEnabled()) {
+            log.trace("validating: {} from: {} key: {} on: {}", hash, memberID,
+                      new HashKey(Conversion.hashOf(key.getEncoded())), member);
+        }
         if (key == null) {
             log.debug("No validator key to validate: {} for: {} on: {}", hash, memberID, member);
             return false;
