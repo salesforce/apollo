@@ -30,9 +30,9 @@ public enum ChangeRegency implements Transitions {
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
             CollaboratorContext context = context();
-            if (stop.getNextRegent() > context.currentRegent() + 1) {
+            if (stop.getNextRegent() > context.getCurrentRegent() + 1) {
                 log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
-                          context.currentRegent() + 1, from, context.getMember(), this);
+                          context.getCurrentRegent() + 1, from, context.getMember(), this);
                 context.delay(stop, from);
             } else {
                 log.debug("Discarding stale Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
@@ -97,11 +97,11 @@ public enum ChangeRegency implements Transitions {
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
             CollaboratorContext context = context();
-            if (stop.getNextRegent() > context.currentRegent() + 1) {
+            if (stop.getNextRegent() > context.getCurrentRegent() + 1) {
                 log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
-                          context.currentRegent() + 1, from, context.getMember(), this);
+                          context.getCurrentRegent() + 1, from, context.getMember(), this);
                 context.delay(stop, from);
-            } else if (stop.getNextRegent() == context.currentRegent() + 1) {
+            } else if (stop.getNextRegent() == context.getCurrentRegent() + 1) {
                 context.deliverStop(stop, from);
             } else {
                 log.debug("Discarding stale Stop: {} from: {} on: {} at {}", stop.getNextRegent(), from,
@@ -167,9 +167,9 @@ public enum ChangeRegency implements Transitions {
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
             CollaboratorContext context = context();
-            if (stop.getNextRegent() > context.currentRegent() + 1) {
+            if (stop.getNextRegent() > context.getCurrentRegent() + 1) {
                 log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
-                          context.currentRegent() + 1, from, context.getMember(), this);
+                          context.getCurrentRegent() + 1, from, context.getMember(), this);
                 context.delay(stop, from);
             } else {
                 log.debug("Discarding stale Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
@@ -188,7 +188,7 @@ public enum ChangeRegency implements Transitions {
                 return null;
             } else if (stopData.getCurrentRegent() < context.nextRegent()) {
                 log.debug("Discarding stale StopData: {} < {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
-                          context.currentRegent(), from, context.getMember(), this);
+                          context.getCurrentRegent(), from, context.getMember(), this);
                 return null;
             }
             context.deliverStopData(stopData, from);
