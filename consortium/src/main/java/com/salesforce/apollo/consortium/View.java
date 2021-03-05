@@ -138,7 +138,7 @@ public class View {
     public void publish(Message message) {
         final Messenger currentMsgr = messenger.get();
         if (currentMsgr == null) {
-            log.error("skipping message publish as no messenger");
+            log.trace("skipping message publish as no messenger");
             return;
         }
         currentMsgr.publish(message);

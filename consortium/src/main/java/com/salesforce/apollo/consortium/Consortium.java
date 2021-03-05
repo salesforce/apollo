@@ -122,10 +122,10 @@ public class Consortium {
                     log.warn("Received join from non consortium member: {} on: {}", from, getMember());
                     return TransactionResult.getDefaultInstance();
                 }
-                log.debug("Join transaction: {} on: {} from consortium member : {}", enqueuedTransaction.hash,
+                log.trace("Join transaction: {} on: {} from consortium member : {}", enqueuedTransaction.hash,
                           getMember(), from);
             } else {
-                log.debug("Client transaction: {} on: {} from: {}", enqueuedTransaction.hash, getMember(), from);
+                log.trace("Client transaction: {} on: {} from: {}", enqueuedTransaction.hash, getMember(), from);
             }
             transitions.receive(enqueuedTransaction.transaction, member);
             return TransactionResult.getDefaultInstance();
@@ -767,7 +767,7 @@ public class Consortium {
                                                           .setContext(view.getContext().getId().toByteString())
                                                           .setTransaction(transaction.transaction)
                                                           .build();
-        log.debug("Submitting txn: {} from: {}", transaction.hash, getMember());
+        log.trace("Submitting txn: {} from: {}", transaction.hash, getMember());
         List<Member> group = view.getContext().streamRandomRing().collect(Collectors.toList());
         AtomicInteger pending = new AtomicInteger(group.size());
         AtomicInteger success = new AtomicInteger();
@@ -795,11 +795,11 @@ public class Consortium {
                         futureSailor.get();
                         succeeded = success.incrementAndGet();
                     } catch (InterruptedException e) {
-                        log.debug("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(), e);
+                        log.trace("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(), e);
                         succeeded = success.get();
                     } catch (ExecutionException e) {
                         succeeded = success.get();
-                        log.debug("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(),
+                        log.trace("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(),
                                   e.getCause());
                     }
                     processSubmit(transaction, onSubmit, pending, completed, succeeded);

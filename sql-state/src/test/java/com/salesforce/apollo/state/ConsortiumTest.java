@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
-import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -203,7 +202,7 @@ public class ConsortiumTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
+            hash = client.submit((h, t) -> txnProcessed.set(true),null,
                                  Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
                                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
@@ -258,7 +257,7 @@ public class ConsortiumTest {
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");
-        boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
+        boolean completed = submittedBunch.await(240, TimeUnit.SECONDS);
         long now = System.currentTimeMillis() - then;
         assertTrue(completed, "Did not process transaction batches: " + submittedBunch.getCount());
         System.out.println("Completed additional " + bunchCount + " transactions");
@@ -286,7 +285,7 @@ public class ConsortiumTest {
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters) {
         AtomicBoolean frist = new AtomicBoolean(true);
-        Random entropy = new Random(0x1638);
+        Random entropy = new Random(0x1638); 
         members.stream().map(m -> {
             ForkJoinPool fj = new ForkJoinPool(2);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
@@ -300,7 +299,7 @@ public class ConsortiumTest {
                               .setConsensus(consensus)
                               .setMember(m)
                               .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
-                                                                          new SecureRandom()))
+                                                                          Utils.entropy()))
                               .setContext(view)
                               .setMsgParameters(msgParameters)
                               .setMaxBatchByteSize(1024 * 1024 * 32)

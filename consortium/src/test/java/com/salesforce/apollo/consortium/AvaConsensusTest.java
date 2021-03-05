@@ -179,7 +179,7 @@ public class AvaConsensusTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
+            hash = client.submit((h, t) -> txnProcessed.set(true), null,
                                  ByteTransaction.newBuilder()
                                                 .setContent(ByteString.copyFromUtf8("Hello world"))
                                                 .build());

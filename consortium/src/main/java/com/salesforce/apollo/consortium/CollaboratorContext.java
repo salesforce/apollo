@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
+import java.util.stream.Stream;
 
 import org.h2.mvstore.MVMap;
 import org.slf4j.Logger;
@@ -112,6 +113,16 @@ public class CollaboratorContext {
         return builder.build();
     }
 
+    public static <T> Stream<List<T>> chunked(Stream<T> stream, int chunkSize) {
+        AtomicInteger index = new AtomicInteger(0);
+
+        return stream.collect(Collectors.groupingBy(x -> index.getAndIncrement() / chunkSize))
+                     .entrySet()
+                     .stream()
+                     .sorted(Map.Entry.comparingByKey())
+                     .map(Map.Entry::getValue);
+    }
+
     public static long height(Block block) {
         return block.getHeader().getHeight();
     }
@@ -142,16 +153,17 @@ public class CollaboratorContext {
                          .collect(Collectors.toList());
     }
 
-    final Consortium                                   consortium;
-    private final AtomicLong                           currentConsensus = new AtomicLong(-1);
-    private final Executor                             executor;
-    private final AtomicReference<HashedBlock>         lastBlock        = new AtomicReference<>();
-    private final ProcessedBuffer                      processed;
-    private final Regency                              regency          = new Regency();
-    private final Map<Timers, Timer>                   timers           = new ConcurrentHashMap<>();
-    private final Map<HashKey, EnqueuedTransaction>    toOrder          = new ConcurrentHashMap<>();
-    private final View                                 view;
-    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks    = new ConcurrentHashMap<>();
+    final Consortium                                consortium;
+    private final AtomicLong                        currentConsensus = new AtomicLong(-1);
+    private final Executor                          executor;
+    private final AtomicReference<HashedBlock>      lastBlock        = new AtomicReference<>();
+    private final ProcessedBuffer                   processed;
+    private final Regency                           regency          = new Regency();
+    private final Map<Timers, Timer>                timers           = new ConcurrentHashMap<>();
+    private final Map<HashKey, EnqueuedTransaction> toOrder          = new ConcurrentHashMap<>();
+    private final View                              view;
+
+    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks = new ConcurrentHashMap<>();
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
@@ -220,9 +232,10 @@ public class CollaboratorContext {
             return;
         }
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-        workingBlocks.computeIfAbsent(hash, k -> {
+        Builder cb = workingBlocks.get(hash);
+        if (cb == null) {
             log.debug("Delivering block: {} from: {} on: {}", hash, from, getMember());
-            Builder builder = CertifiedBlock.newBuilder().setBlock(block);
+            workingBlocks.put(hash, CertifiedBlock.newBuilder().setBlock(block));
             processToOrder(block);
             executor.execute(() -> {
                 Validate validation = view.getContext().generateValidation(hash, block);
@@ -235,8 +248,7 @@ public class CollaboratorContext {
                 view.publish(validation);
                 deliverValidate(validation);
             });
-            return builder;
-        });
+        }
     }
 
     public void deliverCheckpointing(CheckpointProcessing checkpointProcessing, Member from) {
@@ -353,6 +365,10 @@ public class CollaboratorContext {
         }
     }
 
+    public int getCurrentRegent() {
+        return regency.currentRegent();
+    }
+
     public Member getMember() {
         return consortium.getMember();
     }
@@ -405,11 +421,11 @@ public class CollaboratorContext {
                     votes.add(new Consortium.Result(c, futureSailor.get()));
                     succeeded = success.incrementAndGet();
                 } catch (InterruptedException e) {
-                    log.debug("error submitting join txn to {} on: {}", c, getMember(), e);
+                    log.trace("error submitting join txn to {} on: {}", c, getMember(), e);
                     succeeded = success.get();
                 } catch (ExecutionException e) {
                     succeeded = success.get();
-                    log.debug("error submitting join txn to {} on: {}", c, getMember(), e.getCause());
+                    log.trace("error submitting join txn to {} on: {}", c, getMember(), e.getCause());
                 }
                 processSubmit(voteForMe, votes, pending, completed, succeeded);
             }, ForkJoinPool.commonPool()); // TODO, put in passed executor
@@ -418,6 +434,10 @@ public class CollaboratorContext {
 
     public void joinView() {
         joinView(0);
+    }
+
+    public int nextRegent() {
+        return regency.nextRegent();
     }
 
     public void receive(ReplicateTransactions transactions, Member from) {
@@ -786,12 +806,12 @@ public class CollaboratorContext {
                       getMember());
             return;
         }
-        workingBlocks.computeIfAbsent(hash, k -> {
+        Builder cb = workingBlocks.get(hash);
+        if (cb == null) {
             log.debug("Delivering checkpoint block: {} from: {} on: {}", hash, from, getMember());
+            workingBlocks.put(hash, CertifiedBlock.newBuilder().setBlock(block));
             consortium.performAfter(() -> validateCheckpoint(hash, block, from), body.getCheckpoint());
-            Builder builder = CertifiedBlock.newBuilder().setBlock(block);
-            return builder;
-        });
+        }
     }
 
     private void deliverGenesisBlock(final Block block, Member from) {
@@ -845,27 +865,21 @@ public class CollaboratorContext {
     private void firstTimeout(EnqueuedTransaction transaction) {
         assert !transaction.isTimedOut() : "this should be unpossible";
         transaction.setTimedOut(true);
-        ReplicateTransactions.Builder builder = ReplicateTransactions.newBuilder()
-                                                                     .addTransactions(transaction.transaction);
 
         Parameters params = consortium.getParams();
         long span = transaction.transaction.getJoin() ? params.joinTimeout.toMillis() : params.submitTimeout.toMillis();
-        toOrder.values()
-               .stream()
-               .filter(eqt -> eqt.getDelay() <= span)
-               .limit(99)
-               .peek(eqt -> eqt.cancel())
-               .peek(eqt -> eqt.setTimedOut(true))
-               .map(eqt -> eqt.transaction)
-               .forEach(txn -> builder.addTransactions(txn));
-        log.debug("Replicating from: {} count: {} first timeout on: {}", transaction.hash,
-                  builder.getTransactionsCount(), consortium.getMember());
-        ReplicateTransactions transactions = builder.build();
-        transaction.setTimer(consortium.getScheduler()
-                                       .schedule(Timers.TRANSACTION_TIMEOUT_2, () -> secondTimeout(transaction),
-                                                 transaction.transaction.getJoin() ? params.joinTimeout
-                                                         : params.submitTimeout));
-        view.publish(transactions);
+
+        chunked(toOrder.values().stream().filter(eqt -> eqt.getDelay() <= span).peek(eqt -> {
+            eqt.cancel();
+            eqt.setTimedOut(true);
+            eqt.setTimer(consortium.getScheduler()
+                                   .schedule(Timers.TRANSACTION_TIMEOUT_2, () -> secondTimeout(eqt),
+                                             eqt.transaction.getJoin() ? params.joinTimeout : params.submitTimeout));
+        }).map(eqt -> eqt.transaction), 100).forEach(txns -> {
+            log.debug("Replicating from: {} count: {} first timeout on: {}", transaction.hash, txns.size(),
+                      consortium.getMember());
+            view.publish(ReplicateTransactions.newBuilder().addAllTransactions(txns).build());
+        });
     }
 
     private Block generate(byte[] previous, final long height, Body body) {
@@ -994,7 +1008,8 @@ public class CollaboratorContext {
                                            .build()));
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
         log.info("Genesis block: {} generated on {}", hash, consortium.getMember());
-        workingBlocks.computeIfAbsent(hash, k -> {
+        Builder cb = workingBlocks.get(hash);
+        if (cb == null) {
             lastBlock(new HashedBlock(hash, block));
             Validate validation = view.getContext().generateValidation(hash, block);
             if (validation == null) {
@@ -1004,12 +1019,11 @@ public class CollaboratorContext {
             builder.addCertifications(Certification.newBuilder()
                                                    .setId(validation.getId())
                                                    .setSignature(validation.getSignature()));
-
+            workingBlocks.put(hash, builder);
             view.setContext(view.getContext().cloneWith(genesisView.getViewList()));
             view.publish(block);
             view.publish(validation);
-            return builder;
-        });
+        }
     }
 
     private void generateGenesisView() {
@@ -1435,13 +1449,5 @@ public class CollaboratorContext {
             schedule(Timers.CHECKPOINTING, () -> validateCheckpoint(hash, block, from),
                      consortium.getParams().submitTimeout.dividedBy(4));
         }
-    }
-
-    public int nextRegent() {
-        return regency.nextRegent();
-    }
-
-    public int getCurrentRegent() {
-        return regency.currentRegent();
     }
 }

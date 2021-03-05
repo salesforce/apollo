@@ -200,7 +200,7 @@ public class AvaTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
+            hash = client.submit((h, t) -> txnProcessed.set(true), null,
                                  Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
                                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
