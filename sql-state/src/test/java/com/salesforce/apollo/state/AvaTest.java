@@ -220,7 +220,7 @@ public class AvaTest {
 
         long then = System.currentTimeMillis();
         Semaphore outstanding = new Semaphore(500); // outstanding, unfinalized txns
-        int bunchCount = 10_000;
+        int bunchCount = 50_000;
         System.out.println("Submitting bunch: " + bunchCount);
         Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
