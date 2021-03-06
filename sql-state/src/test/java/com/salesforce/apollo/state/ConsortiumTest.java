@@ -244,7 +244,7 @@ public class ConsortiumTest {
 
         long then = System.currentTimeMillis();
         Semaphore outstanding = new Semaphore(2000); // outstanding, unfinalized txns
-        int bunchCount = 50_000;
+        int bunchCount = 10_000;
         System.out.println("Submitting batches: " + bunchCount);
         Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
