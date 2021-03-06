@@ -39,6 +39,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -129,7 +130,7 @@ public class ConsortiumTest {
 
         assertEquals(testCardinality, members.size());
 
-        ExecutorService serverThreads = new ForkJoinPool();
+        ExecutorService serverThreads = ForkJoinPool.commonPool();
         members.forEach(node -> {
             communications.put(node.getId(), new LocalRouter(node, builder, serverThreads));
         });
@@ -140,7 +141,12 @@ public class ConsortiumTest {
 
     @Test
     public void smoke() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
+        AtomicInteger label = new AtomicInteger();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, r -> {
+            Thread t = new Thread(r, "Scheduler [" + label.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
 
         Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 5);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
@@ -148,17 +154,32 @@ public class ConsortiumTest {
                                                                  .setBufferSize(1000)
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
+ 
+        AtomicInteger cLabel = new AtomicInteger();
+        Executor blockPool = Executors.newFixedThreadPool(10, r -> {
+            Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         BiFunction<CertifiedBlock, Future<?>, HashKey> consensus = (c, f) -> {
             HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
             if (decided.add(hash)) {
                 cPipeline.execute(() -> {
-                    Map<Member, Consortium> copy = new HashMap<>(consortium);
-                    copy.values().parallelStream().forEach(m -> {
-                        m.process(c);
-                        processed.get().countDown();
+                    CountDownLatch executed = new CountDownLatch(testCardinality);
+                    consortium.values().forEach(m -> {
+                        blockPool.execute(() -> {
+                            m.process(c);
+                            executed.countDown();
+                            processed.get().countDown();
+                        });
                     });
+                    try {
+                        executed.await();
+                    } catch (InterruptedException e) {
+                        fail("Interrupted consensus", e);
+                    }
                 });
             }
             return hash;
@@ -202,7 +223,7 @@ public class ConsortiumTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit((h, t) -> txnProcessed.set(true),null,
+            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                  Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
                                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
@@ -222,14 +243,20 @@ public class ConsortiumTest {
         System.out.println();
 
         long then = System.currentTimeMillis();
-        Semaphore outstanding = new Semaphore(1000); // outstanding, unfinalized txns
+        Semaphore outstanding = new Semaphore(2000); // outstanding, unfinalized txns
         int bunchCount = 50_000;
         System.out.println("Submitting batches: " + bunchCount);
         Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
-        Executor exec = Executors.newFixedThreadPool(4);
+ 
+        AtomicInteger txnr = new AtomicInteger();
+        Executor exec = Executors.newFixedThreadPool(5, r -> {
+            Thread t = new Thread(r, "Transactioneer [" + txnr.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
         Random entropy = new Random(0x1638);
-        IntStream.range(0, bunchCount).parallel().forEach(i -> exec.execute(() -> {
+        IntStream.range(0, bunchCount).forEach(i -> exec.execute(() -> {
             try {
                 outstanding.acquire();
             } catch (InterruptedException e1) {
@@ -244,11 +271,11 @@ public class ConsortiumTest {
                 }
                 BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
                 AtomicReference<HashKey> key = new AtomicReference<>();
-                key.set(client.submit((h, t) -> {
+                key.set(client.submit(null, (h, t) -> {
                     outstanding.release();
                     submitted.remove(key.get());
                     submittedBunch.countDown();
-                }, null, Helper.batch(update)));
+                }, Helper.batch(update)));
                 submitted.add(key.get());
             } catch (TimeoutException e) {
                 fail();
@@ -285,9 +312,9 @@ public class ConsortiumTest {
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters) {
         AtomicBoolean frist = new AtomicBoolean(true);
-        Random entropy = new Random(0x1638); 
+        Random entropy = new Random(0x1638);
         members.stream().map(m -> {
-            ForkJoinPool fj = new ForkJoinPool(2);
+            ForkJoinPool fj = ForkJoinPool.commonPool();
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             frist.set(false);
             System.out.println("DB URL: " + url);
@@ -299,7 +326,7 @@ public class ConsortiumTest {
                               .setConsensus(consensus)
                               .setMember(m)
                               .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
-                                                                          Utils.entropy()))
+                                                                          Utils.secureEntropy()))
                               .setContext(view)
                               .setMsgParameters(msgParameters)
                               .setMaxBatchByteSize(1024 * 1024 * 32)

@@ -41,6 +41,7 @@ import java.net.SocketException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.channels.ClosedChannelException;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
@@ -85,7 +86,11 @@ public class Utils {
     private static ThreadLocal<SecureRandom> ENTROPY = new ThreadLocal<>() {
         @Override
         protected SecureRandom initialValue() {
-            return new SecureRandom();
+            try {
+                return SecureRandom.getInstance("SHA1PRNG");
+            } catch (NoSuchAlgorithmException e) {
+                throw new IllegalStateException("Cannot create secure entropy", e);
+            }
         }
     };
 
@@ -368,10 +373,6 @@ public class Utils {
         }
         zos.finish();
         zos.flush();
-    }
-
-    public static SecureRandom entropy() {
-        return ENTROPY.get();
     }
 
     /**
@@ -993,6 +994,10 @@ public class Utils {
             return configFile.toURI().toURL();
         }
         return base.getResource(resource);
+    }
+
+    public static SecureRandom secureEntropy() {
+        return ENTROPY.get();
     }
 
     /**

@@ -36,7 +36,7 @@ import com.salesforce.apollo.protocols.HashKey;
 public class ApolloConfiguration {
     public interface CommunicationsFactory {
 
-        Router getComms(MetricRegistry metrics, Node node);
+        Router getComms(MetricRegistry metrics, Node node, ForkJoinPool executor);
 
     }
 
@@ -65,11 +65,11 @@ public class ApolloConfiguration {
         public int target = 30;
 
         @Override
-        public Router getComms(MetricRegistry metrics, Node n) {
+        public Router getComms(MetricRegistry metrics, Node n, ForkJoinPool executor) {
             EndpointProvider ep = null;
             return new MtlsRouter(
                     ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
-                    ep, new ForkJoinPool());
+                    ep, executor);
         }
 
     }
@@ -93,10 +93,9 @@ public class ApolloConfiguration {
     public static class SimCommunicationsFactory implements CommunicationsFactory {
 
         public int target = 30;
-        ForkJoinPool executor = new ForkJoinPool();
 
         @Override
-        public Router getComms(MetricRegistry metrics, Node node) {
+        public Router getComms(MetricRegistry metrics, Node node, ForkJoinPool executor) {
             return new LocalRouter(node,
                     ServerConnectionCache.newBuilder().setTarget(target).setMetrics(new FireflyMetricsImpl(metrics)),
                     executor);

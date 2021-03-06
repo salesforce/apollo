@@ -271,7 +271,7 @@ public class View {
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
             }
-            int seed = Utils.entropy().nextInt();
+            int seed = Utils.secureEntropy().nextInt();
             return Gossip.newBuilder()
                          .setRedirect(false)
                          .setCertificates(processCertificateDigests(from, BloomFilter.from(digests.getCertificateBff()),
@@ -298,7 +298,7 @@ public class View {
                  .forEach(m -> addSeed(m));
 
             long interval = d.toMillis();
-            int initialDelay = Utils.entropy().nextInt((int) interval * 2);
+            int initialDelay = Utils.secureEntropy().nextInt((int) interval * 2);
             futureGossip = scheduler.schedule(() -> fjPool.execute(() -> {
                 try {
                     oneRound(d, scheduler);
@@ -761,7 +761,7 @@ public class View {
      * @param seed
      */
     void addSeed(Participant seed) {
-        seed.setNote(new Note(seed.getId(), -1, Node.createInitialMask(getParameters().toleranceLevel, Utils.entropy()),
+        seed.setNote(new Note(seed.getId(), -1, Node.createInitialMask(getParameters().toleranceLevel, Utils.secureEntropy()),
                 node.forSigning()));
         context.add(seed);
         context.activate(seed);
@@ -826,7 +826,7 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     Digests commonDigests() {
-        int seed = Utils.entropy().nextInt();
+        int seed = Utils.secureEntropy().nextInt();
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
                       .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())

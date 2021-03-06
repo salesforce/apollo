@@ -9,6 +9,8 @@ package com.salesforce.apollo.consortium;
 import java.io.File;
 import java.security.Signature;
 import java.time.Duration;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiFunction;
@@ -34,6 +36,7 @@ public class Parameters {
         private BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
         private Context<Member>                                context;
         private int                                            deltaCheckpointBlocks = 500;
+        private Executor                                       dispatcher            = ForkJoinPool.commonPool();
         private TransactionExecutor                            executor              = (bh, et, c) -> {
                                                                                      };
         private Message                                        genesisData;
@@ -59,7 +62,8 @@ public class Parameters {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, maxCheckpointSegments,
                     viewTimeout, submitTimeout, processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks,
-                    executor, checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, initialViewTimeout);
+                    executor, checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, initialViewTimeout,
+                    dispatcher);
         }
 
         public int getCheckpointBlockSize() {
@@ -84,6 +88,10 @@ public class Parameters {
 
         public int getDeltaCheckpointBlocks() {
             return deltaCheckpointBlocks;
+        }
+
+        public Executor getDispatcher() {
+            return dispatcher;
         }
 
         public TransactionExecutor getExecutor() {
@@ -194,6 +202,11 @@ public class Parameters {
 
         public Builder setDeltaCheckpointBlocks(int deltaCheckpointBlocks) {
             this.deltaCheckpointBlocks = deltaCheckpointBlocks;
+            return this;
+        }
+
+        public Builder setDispatcher(Executor dispatcher) {
+            this.dispatcher = dispatcher;
             return this;
         }
 
@@ -311,6 +324,7 @@ public class Parameters {
     public final BiFunction<CertifiedBlock, Future<?>, HashKey> consensus;
     public final Context<Member>                                context;
     public final int                                            deltaCheckpointBlocks;
+    public final Executor                                       dispatcher;
     public final TransactionExecutor                            executor;
     public final Message                                        genesisData;
     public final HashKey                                        genesisViewId;
@@ -337,7 +351,8 @@ public class Parameters {
             Duration maxBatchDelay, Duration joinTimeout, int maxCheckpointSegments, Duration viewTimeout,
             Duration submitTimeout, int processedBufferSize, Message genesisData, HashKey genesisViewId,
             int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
-            int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Duration initialViewTimeout) {
+            int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Duration initialViewTimeout,
+            Executor dispatcher) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -363,5 +378,6 @@ public class Parameters {
         this.checkpointBlockSize = checkpointBlockSize;
         this.deltaCheckpointBlocks = deltaCheckpointBlocks;
         this.initialViewTimeout = initialViewTimeout;
+        this.dispatcher = dispatcher;
     }
 }

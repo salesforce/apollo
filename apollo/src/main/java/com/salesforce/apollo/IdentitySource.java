@@ -190,8 +190,9 @@ public interface IdentitySource {
         }
 
         @Override
-        public View createView(Node node, HashKey context, Router communications, FireflyMetrics metrics) {
-            return new View(context, node, communications, metrics, new ForkJoinPool());
+        public View createView(Node node, HashKey context, Router communications, FireflyMetrics metrics,
+                               ForkJoinPool executor) {
+            return new View(context, node, communications, metrics, executor);
         }
     }
 
@@ -199,9 +200,9 @@ public interface IdentitySource {
     public static final String DEFAULT_IDENTITY_ALIAS = "identity";
     public static final String SEED_PREFIX            = "seed.";
 
-    default <T extends Node> View createView(Node node, HashKey context, Router communications,
-                                             FireflyMetrics metrics) {
-        return new View(context, node, communications, metrics, new ForkJoinPool());
+    default <T extends Node> View createView(Node node, HashKey context, Router communications, FireflyMetrics metrics,
+                                             ForkJoinPool executor) {
+        return new View(context, node, communications, metrics, executor);
     }
 
     default Node getNode() {

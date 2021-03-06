@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -147,8 +148,9 @@ public class ViewContext implements MembershipListener<Member> {
         return new ViewContext(context, member, consensusKeyPair, members);
     }
 
-    public Messenger createMessenger(Parameters params) {
-        return new Messenger(params.member, params.signature, context, params.communications, params.msgParameters);
+    public Messenger createMessenger(Parameters params, Executor executor) {
+        return new Messenger(params.member, params.signature, context, params.communications, params.msgParameters,
+                executor);
     }
 
     @Override
@@ -157,7 +159,7 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public Validate generateValidation(HashKey hash, Block block) {
-        byte[] signature = sign(consensusKeyPair.getPrivate(), Utils.entropy(),
+        byte[] signature = sign(consensusKeyPair.getPrivate(), Utils.secureEntropy(),
                                 Conversion.hashOf(block.getHeader().toByteString()));
         if (log.isTraceEnabled()) {
             log.trace("generating validation of: {} key: {} on: {}", hash,
@@ -243,7 +245,7 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public Stream<Member> streamRandomRing() {
-        return context.ring(Utils.entropy().nextInt(context.getRingCount())).stream();
+        return context.ring(Utils.bitStreamEntropy().nextInt(context.getRingCount())).stream();
     }
 
     public int timeToLive() {

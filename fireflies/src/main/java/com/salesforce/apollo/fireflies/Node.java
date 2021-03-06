@@ -80,7 +80,7 @@ public class Node extends Participant {
             throw new IllegalStateException("no such algorithm: " + parameters.signatureAlgorithm, e);
         }
         try {
-            signature.initSign(privateKey, Utils.entropy());
+            signature.initSign(privateKey, Utils.secureEntropy());
         } catch (InvalidKeyException e) {
             throw new IllegalStateException("invalid private key", e);
         }
@@ -117,7 +117,7 @@ public class Node extends Participant {
     BitSet nextMask() {
         Note current = note;
         if (current == null) {
-            BitSet mask = createInitialMask(parameters.toleranceLevel, Utils.entropy());
+            BitSet mask = createInitialMask(parameters.toleranceLevel, Utils.secureEntropy());
             assert View.isValidMask(mask, parameters) : "Invalid initial mask: " + mask + "for node: " + getId();
             return mask;
         }
@@ -145,7 +145,7 @@ public class Node extends Participant {
         } else {
             // Fill the rest of the mask with randomly set index
             while (mask.cardinality() > parameters.toleranceLevel + 1) {
-                int index = Utils.entropy().nextInt(parameters.rings);
+                int index = Utils.secureEntropy().nextInt(parameters.rings);
                 if (mask.get(index)) {
                     mask.set(index, false);
                 }

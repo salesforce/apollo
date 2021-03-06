@@ -312,7 +312,7 @@ public class Consortium {
 
     public Consortium(Parameters parameters, MVStore.Builder builder) {
         this.params = parameters;
-        store = new Store(builder.open());
+        store = new Store(builder.recoveryMode().open());
         view = new View(new Service(), parameters, (id, messages) -> process(id, messages));
         fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
         fsm.setName(getMember().getId().b64Encoded());
@@ -464,12 +464,14 @@ public class Consortium {
         }
         log.info("Pending action scheduled at: {} on: {}", blockHeight, getMember());
         if (current == blockHeight) {
-            sequencer.lock();
-            try {
-                runPending(pendingAction);
-            } finally {
-                sequencer.unlock();
-            }
+            params.dispatcher.execute(() -> {
+                sequencer.lock();
+                try {
+                    runPending(pendingAction);
+                } finally {
+                    sequencer.unlock();
+                }
+            });
         }
     }
 
@@ -516,7 +518,7 @@ public class Consortium {
 
     private EnqueuedTransaction build(boolean join, Message transaction) {
         byte[] nonce = new byte[32];
-        Utils.entropy().nextBytes(nonce);
+        Utils.secureEntropy().nextBytes(nonce);
 
         Transaction.Builder builder = Transaction.newBuilder()
                                                  .setJoin(join)

@@ -64,6 +64,7 @@ public class Apollo {
     private final AtomicBoolean         running   = new AtomicBoolean();
     private final List<X509Certificate> seeds;
     private final View                  view;
+    private final ForkJoinPool          executor;
 
     public Apollo(ApolloConfiguration config) throws SocketException, KeyStoreException {
         this(config, new MetricRegistry());
@@ -71,16 +72,17 @@ public class Apollo {
 
     public Apollo(ApolloConfiguration c, MetricRegistry metrics) throws SocketException, KeyStoreException {
         configuration = c;
-        scheduler = Executors.newScheduledThreadPool(30);
+        scheduler = Executors.newScheduledThreadPool(2);
         IdentitySource identitySource = c.source.getIdentitySource(ApolloConfiguration.DEFAULT_CA_ALIAS,
                                                                    ApolloConfiguration.DEFAULT_IDENTITY_ALIAS);
         Node node = identitySource.getNode();
-        communications = c.communications.getComms(metrics, node);
+        communications = c.communications.getComms(metrics, node, ForkJoinPool.commonPool());
+        executor = ForkJoinPool.commonPool();
         view = identitySource.createView(node, new HashKey(c.contextBase), communications,
-                                         new FireflyMetricsImpl(metrics));
+                                         new FireflyMetricsImpl(metrics), executor);
         seeds = identitySource.seeds();
         avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics),
-                processor, new MVStore.Builder().open(), new ForkJoinPool());
+                processor, new MVStore.Builder().open(), executor);
         processor.setAvalanche(avalanche);
     }
 

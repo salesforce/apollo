@@ -133,7 +133,7 @@ public class AvaConsensusTest {
 
         assertEquals(testCardinality, members.size());
 
-        ForkJoinPool executor = new ForkJoinPool();
+        ForkJoinPool executor = ForkJoinPool.commonPool();
         members.forEach(node -> communications.put(node.getId(), new LocalRouter(node, builder, executor)));
 
         System.out.println("Test cardinality: " + testCardinality);
@@ -179,7 +179,7 @@ public class AvaConsensusTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit((h, t) -> txnProcessed.set(true), null,
+            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                  ByteTransaction.newBuilder()
                                                 .setContent(ByteString.copyFromUtf8("Hello world"))
                                                 .build());
@@ -205,13 +205,11 @@ public class AvaConsensusTest {
             outstanding.acquire();
             try {
                 AtomicReference<HashKey> pending = new AtomicReference<>();
-                pending.set(client.submit((h, t) -> {
+                pending.set(client.submit(null, (h, t) -> {
                     outstanding.release();
                     submitted.remove(pending.get());
                     submittedBunch.countDown();
-                }, null, Any.pack(ByteTransaction.newBuilder()
-                                                 .setContent(ByteString.copyFromUtf8("Hello world"))
-                                                 .build())));
+                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
                 submitted.add(pending.get());
             } catch (TimeoutException e) {
                 fail();

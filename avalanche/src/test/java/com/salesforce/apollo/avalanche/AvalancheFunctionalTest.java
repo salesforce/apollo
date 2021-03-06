@@ -111,7 +111,7 @@ abstract public class AvalancheFunctionalTest {
 
         System.out.println("Test cardinality: " + testCardinality);
         boolean first = true;
-        Executor serverThreads = new ForkJoinPool();
+        Executor serverThreads = ForkJoinPool.commonPool();
         for (Node node : members) {
             communications.put(node.getId(), getCommunications(node, first, serverThreads));
             first = false;

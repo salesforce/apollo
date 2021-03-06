@@ -20,8 +20,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -155,7 +153,6 @@ public class CollaboratorContext {
 
     final Consortium                                consortium;
     private final AtomicLong                        currentConsensus = new AtomicLong(-1);
-    private final Executor                          executor;
     private final AtomicReference<HashedBlock>      lastBlock        = new AtomicReference<>();
     private final ProcessedBuffer                   processed;
     private final Regency                           regency          = new Regency();
@@ -169,11 +166,6 @@ public class CollaboratorContext {
         this.consortium = consortium;
         Parameters params = consortium.getParams();
         processed = new ProcessedBuffer(params.processedBufferSize);
-        AtomicInteger seq = new AtomicInteger();
-        this.executor = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "CollaboratorContext[" + getMember().getId() + "] - " + seq.incrementAndGet());
-            return t;
-        });
         view = consortium.getView();
     }
 
@@ -237,7 +229,7 @@ public class CollaboratorContext {
             log.debug("Delivering block: {} from: {} on: {}", hash, from, getMember());
             workingBlocks.put(hash, CertifiedBlock.newBuilder().setBlock(block));
             processToOrder(block);
-            executor.execute(() -> {
+            consortium.getParams().dispatcher.execute(() -> {
                 Validate validation = view.getContext().generateValidation(hash, block);
                 if (validation == null) {
                     log.debug("Rejecting block proposal: {}, cannot validate from: {} on: {}", hash, from,
@@ -963,7 +955,7 @@ public class CollaboratorContext {
         assert toOrder.size() >= view.getContext().majority() : "Whoops";
         log.debug("Generating genesis on {} join transactions: {}", consortium.getMember(), toOrder.size());
         byte[] nextView = new byte[32];
-        Utils.entropy().nextBytes(nextView);
+        Utils.secureEntropy().nextBytes(nextView);
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
                                                      .setCheckpointBlocks(consortium.getParams().deltaCheckpointBlocks)
                                                      .setId(ByteString.copyFrom(nextView))

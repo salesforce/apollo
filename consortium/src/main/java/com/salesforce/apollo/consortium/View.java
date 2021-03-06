@@ -88,7 +88,7 @@ public class View {
 
     public void joinMessageGroup(ViewContext newView, TickScheduler scheduler, BiConsumer<HashKey, List<Msg>> process) {
         log.debug("Joining message group: {} on: {}", newView.getId(), newView.getMember());
-        Messenger nextMsgr = newView.createMessenger(params);
+        Messenger nextMsgr = newView.createMessenger(params, params.dispatcher);
         messenger.set(nextMsgr);
         nextMsgr.register(round -> scheduler.tick());
         order.set(new MemberOrder(process, nextMsgr));
@@ -154,11 +154,6 @@ public class View {
 
     /**
      * Ye Jesus Nut
-     * 
-     * @param scheduler
-     * @param service
-     *
-     * @param list
      */
     public void viewChange(ViewContext newView, TickScheduler scheduler, int currentRegent, Service service) {
         pause();

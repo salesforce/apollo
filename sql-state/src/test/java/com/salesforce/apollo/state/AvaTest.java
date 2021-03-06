@@ -33,6 +33,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -141,7 +142,7 @@ public class AvaTest {
 
         assertEquals(testCardinality, members.size());
 
-        ForkJoinPool executor = new ForkJoinPool();
+        ForkJoinPool executor = ForkJoinPool.commonPool();
         members.forEach(node -> communications.put(node.getId(), new LocalRouter(node, builder, executor)));
 
     }
@@ -157,7 +158,6 @@ public class AvaTest {
                                                                  .build();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Map<Member, AvaAdapter> adapters = gatherConsortium(view, processed, gossipDuration, scheduler, msgParameters);
-        gatherAvalanche(view, adapters);
         gatherAvalanche(view, adapters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
@@ -200,7 +200,7 @@ public class AvaTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit((h, t) -> txnProcessed.set(true), null,
+            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                  Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
                                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
@@ -225,7 +225,12 @@ public class AvaTest {
         Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
 
-        Executor exec = Executors.newFixedThreadPool(4);
+        AtomicInteger txnr = new AtomicInteger();
+        Executor exec = Executors.newFixedThreadPool(5, r -> {
+            Thread t = new Thread(r, "Transactioneer [" + txnr.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
         IntStream.range(0, bunchCount).parallel().forEach(i -> exec.execute(() -> {
             try {
                 outstanding.acquire();
@@ -241,11 +246,11 @@ public class AvaTest {
                 }
                 BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
                 AtomicReference<HashKey> key = new AtomicReference<>();
-                key.set(client.submit((h, t) -> {
+                key.set(client.submit(null, (h, t) -> {
                     outstanding.release();
                     submitted.remove(key.get());
                     submittedBunch.countDown();
-                }, null, Helper.batch(update)));
+                }, Helper.batch(update)));
                 submitted.add(key.get());
             } catch (TimeoutException e) {
                 fail();
@@ -314,7 +319,7 @@ public class AvaTest {
                                                      Messenger.Parameters msgParameters) {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
-            ForkJoinPool fj = new ForkJoinPool();
+            ForkJoinPool fj = ForkJoinPool.commonPool();
             AvaAdapter adapter = new AvaAdapter(processed);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);

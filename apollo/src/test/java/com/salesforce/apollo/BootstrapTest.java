@@ -91,12 +91,12 @@ public class BootstrapTest {
             config.gossipInterval = Duration.ofMillis(50);
             config.communications = new CommunicationsFactory() {
                 @Override
-                public Router getComms(MetricRegistry metrics, Node node) {
+                public Router getComms(MetricRegistry metrics, Node node, ForkJoinPool executor) {
                     return new LocalRouter(node,
                             ServerConnectionCache.newBuilder()
                                                  .setTarget(30)
                                                  .setMetrics(new FireflyMetricsImpl(metrics)),
-                            new ForkJoinPool());
+                            ForkJoinPool.commonPool());
                 }
             };
             BootstrapIdSource ks = new BootstrapIdSource();
