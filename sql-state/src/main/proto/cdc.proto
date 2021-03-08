@@ -19,13 +19,20 @@ message Arguments {
 
 message Statement {
     string sql = 1;
-    Arguments arguments = 2;
+    repeated bytes args = 2;
 }
 
 message Call {
     string sql = 1;
-    Arguments arguments = 2;
+    repeated bytes args = 2;
     repeated int32 outParameters = 3; // value is enum of java.sql.SQLType
+}
+
+message Script {
+    string source = 1;
+    string className = 2;
+    string method = 3;
+    repeated bytes args = 4;
 }
 
 message BatchedTransaction {
@@ -43,5 +50,6 @@ message Txn {
         Call call = 2;
         Batch batch = 3;
         BatchUpdate batchUpdate = 4;
+        Script script = 5;
     }
 }

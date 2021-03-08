@@ -10,6 +10,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Array;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -29,12 +32,18 @@ import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
 
+import org.h2.Driver;
+import org.h2.api.ErrorCode;
 import org.h2.engine.Session;
 import org.h2.jdbc.JdbcConnection;
 import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
 import org.h2.jdbc.JdbcSQLNonTransientException;
+import org.h2.message.DbException;
 import org.h2.store.Data;
+import org.h2.value.DataType;
 import org.h2.value.Value;
+import org.h2.value.ValueArray;
+import org.h2.value.ValueNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +61,7 @@ import com.salesfoce.apollo.state.proto.Batch;
 import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesfoce.apollo.state.proto.BatchedTransaction;
 import com.salesfoce.apollo.state.proto.Call;
+import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
@@ -60,12 +70,12 @@ import com.salesforce.apollo.protocols.HashKey;
 /**
  * This is ye Jesus Nut of sql state via distribute linear logs. We use H2 as a
  * the local materialized view that is constructed by SQL DML and DDL embedded
- * in the log as SQL statements. Checkpointing is accomplished by a *new* H2
- * BLOCKSCRIPT command that will output SQL to recreate the state of the DB at a
- * given block height (i.e. the checkpoint). Mutation is interactive with the
- * submitter of the transaction statements - i.e. result sets n' multiple result
- * sets n' out params (in calls). This provides a "reasonable" asynchronous
- * interaction with this log based mutation (through consensus).
+ * in the log as SQL statements. Checkpointing is accomplished by SCRIPT command
+ * that will output SQL to recreate the state of the DB at the block height
+ * (i.e. the checkpoint). Mutation is interactive with the submitter of the
+ * transaction statements - i.e. result sets n' multiple result sets n' out
+ * params (in calls). This provides a "reasonable" asynchronous interaction with
+ * this log based mutation (through consensus).
  * <p>
  * Batch oriented, but low enough latency to make it worth the wait (with the
  * right system wide consensus/distribution, 'natch).
@@ -87,6 +97,151 @@ public class SqlStateMachine {
             @SuppressWarnings("unchecked")
             ValueType v = (ValueType) outValues.get(index);
             return v;
+        }
+    }
+
+    /**
+     * There may be multiple Java methods that match a function name. Each method
+     * must have a different number of parameters however. This helper class
+     * represents one such method.
+     */
+    public static class JavaMethod {
+        private final int    dataType;
+        private boolean      hasConnectionParam;
+        private final Method method;
+        private int          paramCount;
+        private Class<?>     varArgClass;
+        private boolean      varArgs;
+
+        JavaMethod(Method method) {
+            this.method = method;
+            Class<?>[] paramClasses = method.getParameterTypes();
+            paramCount = paramClasses.length;
+            if (paramCount > 0) {
+                Class<?> paramClass = paramClasses[0];
+                if (Connection.class.isAssignableFrom(paramClass)) {
+                    hasConnectionParam = true;
+                    paramCount--;
+                }
+            }
+            if (paramCount > 0) {
+                Class<?> lastArg = paramClasses[paramClasses.length - 1];
+                if (lastArg.isArray() && method.isVarArgs()) {
+                    varArgs = true;
+                    varArgClass = lastArg.getComponentType();
+                }
+            }
+            Class<?> returnClass = method.getReturnType();
+            dataType = DataType.getTypeFromClass(returnClass);
+        }
+
+        /**
+         * Call the user-defined function and return the value.
+         *
+         * @param session the session
+         * @param args    the argument list
+         * @return the value
+         */
+        public Object getValue(Object instance, Session session, Value[] args) {
+            Class<?>[] paramClasses = method.getParameterTypes();
+            Object[] params = new Object[paramClasses.length];
+            int p = 0;
+            if (hasConnectionParam && params.length > 0) {
+                params[p++] = session.createConnection(false);
+            }
+
+            // allocate array for varArgs parameters
+            Object varArg = null;
+            if (varArgs) {
+                int len = args.length - params.length + 1 + (hasConnectionParam ? 1 : 0);
+                varArg = Array.newInstance(varArgClass, len);
+                params[params.length - 1] = varArg;
+            }
+
+            for (int a = 0, len = args.length; a < len; a++, p++) {
+                boolean currentIsVarArg = varArgs && p >= paramClasses.length - 1;
+                Class<?> paramClass;
+                if (currentIsVarArg) {
+                    paramClass = varArgClass;
+                } else {
+                    paramClass = paramClasses[p];
+                }
+                int type = DataType.getTypeFromClass(paramClass);
+                Value v = args[a];
+                Object o;
+                if (Value.class.isAssignableFrom(paramClass)) {
+                    o = v;
+                } else if (v.getValueType() == Value.ARRAY && paramClass.isArray()
+                        && paramClass.getComponentType() != Object.class) {
+                    Value[] array = ((ValueArray) v).getList();
+                    Object[] objArray = (Object[]) Array.newInstance(paramClass.getComponentType(), array.length);
+                    int componentType = DataType.getTypeFromClass(paramClass.getComponentType());
+                    for (int i = 0; i < objArray.length; i++) {
+                        objArray[i] = array[i].convertTo(componentType, session, false).getObject();
+                    }
+                    o = objArray;
+                } else {
+                    v = v.convertTo(type, session, false);
+                    o = v.getObject();
+                }
+                if (o == null) {
+                    if (paramClass.isPrimitive()) {
+                        // NULL for a java primitive: return NULL
+                        return ValueNull.INSTANCE;
+                    }
+                } else {
+                    if (!paramClass.isAssignableFrom(o.getClass()) && !paramClass.isPrimitive()) {
+                        o = DataType.convertTo(session.createConnection(false), v, paramClass);
+                    }
+                }
+                if (currentIsVarArg) {
+                    Array.set(varArg, p - params.length + 1, o);
+                } else {
+                    params[p] = o;
+                }
+            }
+            Value identity = session.getLastScopeIdentity();
+            boolean defaultConnection = session.getDatabase().getSettings().defaultConnection;
+            try {
+                session.setAutoCommit(false); 
+                try {
+                    if (defaultConnection) {
+                        Driver.setDefaultConnection(session.createConnection(false));
+                    }
+                    return method.invoke(instance, params); 
+                } catch (InvocationTargetException e) {
+                    StringBuilder builder = new StringBuilder(method.getName()).append('(');
+                    for (int i = 0, length = params.length; i < length; i++) {
+                        if (i > 0) {
+                            builder.append(", ");
+                        }
+                        builder.append(params[i]);
+                    }
+                    builder.append(')');
+                    throw DbException.convertInvocation(e, builder.toString());
+                } catch (Exception e) {
+                    throw DbException.convert(e);
+                } 
+            } finally {
+                session.setLastScopeIdentity(identity);
+                if (defaultConnection) {
+                    Driver.setDefaultConnection(null);
+                }
+            }
+        }
+
+        /**
+         * Check if this function requires a database connection.
+         *
+         * @return if the function requires a connection
+         */
+        public boolean hasConnectionParam() {
+            return this.hasConnectionParam;
+        }
+
+        @Override
+        public String toString() {
+            return method.toString();
         }
     }
 
@@ -115,6 +270,8 @@ public class SqlStateMachine {
                     results = executeBatchUpdate(blockHash, tx, txnHash);
                 } else if (tx.is(Statement.class)) {
                     results = executeStatement(blockHash, tx, txnHash);
+                } else if (tx.is(Script.class)) {
+                    results = executeScript(blockHash, tx, txnHash);
                 } else {
                     throw new IllegalStateException("unknown statement type");
                 }
@@ -179,7 +336,6 @@ public class SqlStateMachine {
     private static final RowSetFactory factory;
 
     private static final Logger log = LoggerFactory.getLogger(SqlStateMachine.class);
-
     static {
         try {
             factory = RowSetProvider.newFactory();
@@ -187,16 +343,18 @@ public class SqlStateMachine {
             throw new IllegalStateException("Cannot create row set factory", e);
         }
     }
+
     private final LoadingCache<String, CallableStatement> callCache;
 
-    private final File checkpointDirectory;
-
+    private final File                                    checkpointDirectory;
+    private final ScriptCompiler                          compiler = new ScriptCompiler();
     private final JdbcConnection                          connection;
     private final TxnExec                                 executor = new TxnExec();
     private final ForkJoinPool                            fjPool;
     private final Properties                              info;
     private final LoadingCache<String, PreparedStatement> psCache;
-    private final String                                  url;
+
+    private final String url;
 
     public SqlStateMachine(String url, Properties info, File checkpointDirectory) {
         this(url, info, checkpointDirectory, ForkJoinPool.commonPool());
@@ -351,7 +509,7 @@ public class SqlStateMachine {
         }
         try {
             int i = 0;
-            for (ByteString argument : call.getArguments().getArgsList()) {
+            for (ByteString argument : call.getArgsList()) {
                 Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
                 setArgument(exec, i++, data.readValue());
             }
@@ -398,7 +556,7 @@ public class SqlStateMachine {
         }
         try {
             int i = 0;
-            for (ByteString argument : statement.getArguments().getArgsList()) {
+            for (ByteString argument : statement.getArgsList()) {
                 Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
                 setArgument(exec, i++, data.readValue());
             }
@@ -423,6 +581,63 @@ public class SqlStateMachine {
                 // ignore
             }
         }
+    }
+
+    @SuppressWarnings("unused")
+    private Object acceptScript(HashKey hash, Script script) throws SQLException {
+        List<ResultSet> results = new ArrayList<>();
+        String className;
+        String source;
+        ClassLoader parent;
+
+        Object instance;
+
+        Value[] args = new Value[script.getArgsCount()];
+        int i = 1;
+        for (ByteString argument : script.getArgsList()) {
+            Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
+            args[i++] = data.readValue();
+        }
+
+        try {
+            if (ScriptCompiler.isJavaxScriptSource(script.getSource())) {
+                instance = compiler.getCompiledScript(script.getSource()).eval();
+            } else {
+
+                Class<?> clazz = compiler.getClass(script.getClassName(), script.getSource(),
+                                                   getClass().getClassLoader());
+                instance = clazz.getConstructor().newInstance();
+            }
+        } catch (DbException e) {
+            throw e;
+        } catch (Exception e) {
+            throw DbException.get(ErrorCode.SYNTAX_ERROR_1, e, script.getSource());
+        }
+
+        Method call = null;
+        String callName = script.getMethod();
+        for (Method m : instance.getClass().getDeclaredMethods()) {
+            if (callName.equals(m.getName())) {
+                call = m;
+                break;
+            }
+        }
+
+        if (call == null) {
+            throw DbException.get(ErrorCode.SYNTAX_ERROR_1,
+                                  new IllegalArgumentException(
+                                          "Must contain invocation method named: " + callName + "(...)"),
+                                  script.getSource());
+        }
+
+        Object returnValue = new JavaMethod(call).getValue(instance, getSession(), args);
+        if (returnValue instanceof ResultSet) { 
+            CachedRowSet rowset = factory.createCachedRowSet();
+
+            rowset.populate((ResultSet) returnValue);
+            return rowset;
+        }
+        return returnValue;
     }
 
     private void commit() {
@@ -542,6 +757,17 @@ public class SqlStateMachine {
             throw e;
         }
         return acceptBatchUpdate(txnHash, batch);
+    }
+
+    private Object executeScript(HashKey blockHash, Any tx, HashKey txnHash) throws Exception {
+        Script script;
+        try {
+            script = tx.unpack(Script.class);
+        } catch (InvalidProtocolBufferException e) {
+            log.warn("Cannot deserialize Script {} of block: {}", txnHash, blockHash);
+            throw e;
+        }
+        return acceptScript(txnHash, script);
     }
 
     private List<ResultSet> executeStatement(HashKey blockHash, Any tx, HashKey txnHash) throws Exception {

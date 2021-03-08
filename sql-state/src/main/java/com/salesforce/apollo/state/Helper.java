@@ -16,6 +16,7 @@ import java.sql.SQLException;
 import java.sql.SQLType;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -55,6 +56,7 @@ import com.salesfoce.apollo.state.proto.Batch;
 import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesfoce.apollo.state.proto.BatchedTransaction;
 import com.salesfoce.apollo.state.proto.Call;
+import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 
@@ -107,12 +109,7 @@ public final class Helper {
         for (List<Value> arguments : batch) {
             Arguments.Builder args = Arguments.newBuilder();
             for (Value argument : arguments) {
-                int valueLen = Data.getValueLen(argument, false);
-                data.checkCapacity(valueLen);
-                data.writeValue(argument);
-                byte[] serialized = data.getBytes();
-                args.addArgs(ByteString.copyFrom(serialized, 0, valueLen));
-                data.reset();
+                args.addArgs(serialized(data, argument));
             }
             builder.addBatch(args);
         }
@@ -136,19 +133,26 @@ public final class Helper {
     }
 
     public static Call call(String sql, List<SQLType> outParameters, Value... arguments) {
-        Arguments.Builder args = Arguments.newBuilder();
-        Call.Builder builder = Call.newBuilder().setSql(sql).setArguments(args);
+        Call.Builder builder = Call.newBuilder().setSql(sql);
         Data data = Data.create(NULL_HANDLER, 1024, false);
         for (Value argument : arguments) {
-            int valueLen = Data.getValueLen(argument, false);
-            data.checkCapacity(valueLen);
-            data.writeValue(argument);
-            byte[] serialized = data.getBytes();
-            args.addArgs(ByteString.copyFrom(serialized, 0, valueLen));
-            data.reset();
+            builder.addArgs(serialized(data, argument));
         }
 
         return builder.build();
+    }
+
+    public static Script callScript(String className, String method, String source, Value... args) {
+        Data data = Data.create(NULL_HANDLER, 1024, false);
+        return Script.newBuilder()
+                     .setClassName(className)
+                     .setMethod(method)
+                     .setSource(source)
+                     .addAllArgs(Arrays.asList(args)
+                                       .stream()
+                                       .map(v -> serialized(data, v))
+                                       .collect(Collectors.toList()))
+                     .build();
     }
 
     public static Value convert(Object x) {
@@ -239,29 +243,33 @@ public final class Helper {
 
     }
 
-    public static Statement statement(String sql, Object... parameters) {
-        Value[] paramValues = new Value[parameters.length];
-        for (int i = 0; i < parameters.length; i++) {
-            paramValues[i] = convert(parameters[i]);
+    public static Statement statement(String sql, Object... args) {
+        Value[] paramValues = new Value[args.length];
+        for (int i = 0; i < args.length; i++) {
+            paramValues[i] = convert(args[i]);
         }
 
         return statement(sql, paramValues);
     }
 
-    public static Statement statement(String sql, Value... parameters) {
-        Arguments.Builder args = Arguments.newBuilder();
-        Statement.Builder builder = Statement.newBuilder().setSql(sql).setArguments(args);
+    public static Statement statement(String sql, Value... args) {
+        Statement.Builder builder = Statement.newBuilder().setSql(sql);
         Data data = Data.create(NULL_HANDLER, 1024, false);
-        for (Value parameter : parameters) {
-            int valueLen = Data.getValueLen(parameter, false);
-            data.checkCapacity(valueLen);
-            data.writeValue(parameter);
-            byte[] serialized = data.getBytes();
-            args.addArgs(ByteString.copyFrom(serialized, 0, valueLen));
-            data.reset();
+        for (Value arg : args) {
+            builder.addArgs(serialized(data, arg));
         }
 
         return builder.build();
+    }
+
+    private static ByteString serialized(Data data, Value arg) {
+        int valueLen = Data.getValueLen(arg, false);
+        data.checkCapacity(valueLen);
+        data.writeValue(arg);
+        byte[] serialized = data.getBytes();
+        ByteString bs = ByteString.copyFrom(serialized, 0, valueLen);
+        data.reset();
+        return bs;
     }
 
     private Helper() {

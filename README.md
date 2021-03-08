@@ -2,7 +2,7 @@
 The Apollo project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication layer.  The consensus layer is supplied by Avalanche.  An IPFS-esque DAG based DHT is provided in addition to DAG ledger state.
 
 ## Requirements
-Apollo requires the JDK 11+.
+Apollo requires the JDK 15+.
 
 Apollo also requires [Maven](https://maven.apache.org/) 3.6.1 and above.  
 

@@ -37,12 +37,16 @@
 		<asm.version>8.0.1</asm.version>
 		<antlr.version>4.8-1</antlr.version>
 		<grpc.version>1.32.1</grpc.version>
+		<liquibase.version>4.3.1</liquibase.version>
+		<graalvm.version>20.3.0</graalvm.version>
 
 		<graalvm.version>20.1.0</graalvm.version>
 		<compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
-		<java.version>11</java.version>
+		<maven.compiler.source>15</maven.compiler.source>
+		<maven.compiler.target>15</maven.compiler.target>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
 	</properties>
 
 
@@ -225,7 +229,7 @@
 			<dependency>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-core</artifactId>
-				<version>4.1.0</version>
+				<version>${liquibase.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>com.zaxxer</groupId>
@@ -252,6 +256,11 @@
 						<artifactId>commons-logging</artifactId>
 					</exclusion>
 				</exclusions>
+			</dependency>
+			<dependency>
+				<groupId>com.github.javaparser</groupId>
+				<artifactId>javaparser-symbol-solver-core</artifactId>
+				<version>3.19.0</version>
 			</dependency>
 
 			<!-- Test dependencies only below this line! -->
@@ -333,7 +342,7 @@
 				<configuration>
 					<forkCount>1</forkCount>
 					<reuseForks>false</reuseForks>
-					<argLine>-Xmx10G</argLine>
+					<argLine>-Xmx10G -Xms10G</argLine>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -344,14 +353,7 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
-					<release>11</release>
-					<dependencies>
-						<dependency>
-							<groupId>org.ow2.asm</groupId>
-							<artifactId>asm</artifactId>
-							<version>6.2</version>
-						</dependency>
-					</dependencies>
+					<release>15</release>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -418,7 +420,7 @@
 				<plugin>
 					<groupId>org.liquibase</groupId>
 					<artifactId>liquibase-maven-plugin</artifactId>
-					<version>4.1.0</version>
+					<version>${liquibase.version}</version>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
@@ -443,7 +445,7 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-compiler-plugin</artifactId>
-					<version>3.7.0</version>
+					<version>3.8.0</version>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
