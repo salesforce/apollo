@@ -25,6 +25,7 @@
 		<module>consortium</module>
 		<module>test-population</module>
 		<module>tron</module>
+		<module>vm</module>
 	</modules>
 
 	<properties>
@@ -71,6 +72,11 @@
 				<groupId>io.grpc</groupId>
 				<artifactId>grpc-netty-shaded</artifactId>
 				<version>${grpc.version}</version>
+			</dependency> 
+			<dependency>
+				<groupId>com.google.protobuf</groupId>
+				<artifactId>protobuf-java</artifactId>
+				<version>3.15.5</version>
 			</dependency>
 			<dependency>
 				<groupId>io.grpc</groupId>

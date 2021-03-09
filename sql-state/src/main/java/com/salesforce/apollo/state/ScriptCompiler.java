@@ -52,11 +52,6 @@ import org.h2.util.StringUtils;
 import org.h2.util.Task;
 import org.h2.util.Utils;
 
-import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-
 /**
  * @author hal.hildebrand
  *
@@ -532,18 +527,6 @@ public class ScriptCompiler {
             classObject = new JavaClassObject(className, kind);
             return classObject;
         }
-    }
-
-    public void validate(String script) {
-        CompilationUnit cu = StaticJavaParser.parse(script);
-
-        new VoidVisitorAdapter<Object>() {
-            @Override
-            public void visit(ClassOrInterfaceDeclaration n, Object arg) {
-                super.visit(n, arg);
-                System.out.println(" * " + n.getName());
-            }
-        }.visit(cu, null);
     }
 
 }

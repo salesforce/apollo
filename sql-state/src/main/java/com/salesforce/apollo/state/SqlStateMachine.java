@@ -106,7 +106,6 @@ public class SqlStateMachine {
      * represents one such method.
      */
     public static class JavaMethod {
-        private final int    dataType;
         private boolean      hasConnectionParam;
         private final Method method;
         private int          paramCount;
@@ -131,8 +130,6 @@ public class SqlStateMachine {
                     varArgClass = lastArg.getComponentType();
                 }
             }
-            Class<?> returnClass = method.getReturnType();
-            dataType = DataType.getTypeFromClass(returnClass);
         }
 
         /**
@@ -203,12 +200,12 @@ public class SqlStateMachine {
             Value identity = session.getLastScopeIdentity();
             boolean defaultConnection = session.getDatabase().getSettings().defaultConnection;
             try {
-                session.setAutoCommit(false); 
+                session.setAutoCommit(false);
                 try {
                     if (defaultConnection) {
                         Driver.setDefaultConnection(session.createConnection(false));
                     }
-                    return method.invoke(instance, params); 
+                    return method.invoke(instance, params);
                 } catch (InvocationTargetException e) {
                     StringBuilder builder = new StringBuilder(method.getName()).append('(');
                     for (int i = 0, length = params.length; i < length; i++) {
@@ -221,7 +218,7 @@ public class SqlStateMachine {
                     throw DbException.convertInvocation(e, builder.toString());
                 } catch (Exception e) {
                     throw DbException.convert(e);
-                } 
+                }
             } finally {
                 session.setLastScopeIdentity(identity);
                 if (defaultConnection) {
@@ -631,7 +628,7 @@ public class SqlStateMachine {
         }
 
         Object returnValue = new JavaMethod(call).getValue(instance, getSession(), args);
-        if (returnValue instanceof ResultSet) { 
+        if (returnValue instanceof ResultSet) {
             CachedRowSet rowset = factory.createCachedRowSet();
 
             rowset.populate((ResultSet) returnValue);
