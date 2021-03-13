@@ -45,6 +45,8 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.apache.commons.math3.random.BitsStreamGenerator;
+import org.apache.commons.math3.random.MersenneTwister;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +66,7 @@ import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -142,7 +145,7 @@ public class ConsortiumTest {
     @Test
     public void smoke() throws Exception {
         AtomicInteger label = new AtomicInteger();
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, r -> {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2, r -> {
             Thread t = new Thread(r, "Scheduler [" + label.getAndIncrement() + "]");
             t.setDaemon(true);
             return t;
@@ -154,9 +157,9 @@ public class ConsortiumTest {
                                                                  .setBufferSize(1000)
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
- 
+
         AtomicInteger cLabel = new AtomicInteger();
-        Executor blockPool = Executors.newFixedThreadPool(10, r -> {
+        Executor blockPool = Executors.newFixedThreadPool(15, r -> {
             Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
             t.setDaemon(true);
             return t;
@@ -217,12 +220,16 @@ public class ConsortiumTest {
         System.out.println("genesis processing complete");
 
         processed.set(new CountDownLatch(testCardinality));
-        Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
+        BitsStreamGenerator entropy = new MersenneTwister();
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
+            Consortium client = consortium.values()
+                                          .stream()
+                                          .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                          .get(0);
             hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                  Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
@@ -248,14 +255,13 @@ public class ConsortiumTest {
         System.out.println("Submitting batches: " + bunchCount);
         Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
- 
+
         AtomicInteger txnr = new AtomicInteger();
         Executor exec = Executors.newFixedThreadPool(5, r -> {
             Thread t = new Thread(r, "Transactioneer [" + txnr.getAndIncrement() + "]");
             t.setDaemon(true);
             return t;
         });
-        Random entropy = new Random(0x1638);
         IntStream.range(0, bunchCount).forEach(i -> exec.execute(() -> {
             try {
                 outstanding.acquire();
@@ -271,6 +277,10 @@ public class ConsortiumTest {
                 }
                 BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
                 AtomicReference<HashKey> key = new AtomicReference<>();
+                Consortium client = consortium.values()
+                                              .stream()
+                                              .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                              .get(0);
                 key.set(client.submit(null, (h, t) -> {
                     outstanding.release();
                     submitted.remove(key.get());
