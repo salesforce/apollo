@@ -26,7 +26,6 @@
 		<module>test-population</module>
 		<module>tron</module>
 		<module>vm</module>
-		<module>quantum-db</module>
 	</modules>
 
 	<properties>
@@ -38,7 +37,7 @@
 		<logback.version>1.2.3</logback.version>
 		<asm.version>8.0.1</asm.version>
 		<antlr.version>4.8-1</antlr.version>
-		<grpc.version>1.36.0</grpc.version>
+		<grpc.version>1.32.1</grpc.version>
 		<liquibase.version>4.3.1</liquibase.version>
 		<graalvm.version>20.3.0</graalvm.version>
 
@@ -73,7 +72,7 @@
 				<groupId>io.grpc</groupId>
 				<artifactId>grpc-netty-shaded</artifactId>
 				<version>${grpc.version}</version>
-			</dependency>
+			</dependency> 
 			<dependency>
 				<groupId>com.google.protobuf</groupId>
 				<artifactId>protobuf-java</artifactId>
@@ -107,11 +106,6 @@
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>protocols</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>trampoline</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
@@ -273,11 +267,6 @@
 				<groupId>com.github.javaparser</groupId>
 				<artifactId>javaparser-symbol-solver-core</artifactId>
 				<version>3.19.0</version>
-			</dependency>
-			<dependency>
-				<groupId>com.google.code.gson</groupId>
-				<artifactId>gson</artifactId>
-				<version>2.3</version>
 			</dependency>
 
 			<!-- Test dependencies only below this line! -->
