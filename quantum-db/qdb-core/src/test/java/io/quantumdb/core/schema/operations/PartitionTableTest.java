@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Maps;
 
+@SuppressWarnings("deprecation")
 public class PartitionTableTest {
 
     @Test
@@ -26,25 +27,9 @@ public class PartitionTableTest {
     }
 
     @Test
-    public void testThatTableNameCannotBeNull() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.partitionTable(null));
-    }
-
-    @Test
-    public void testThatTableNameCannotBeEmptyString() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.partitionTable(""));
-    }
-
-    @Test
-    public void testThatDecompositionTableNameCannotBeNull() {
+    public void testThatDecompositionExpressionCannotBeEmptyString() {
         assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.partitionTable("users").into(null, "credit < 0"));
-    }
-
-    @Test
-    public void testThatDecompositionTableNameCannotBeEmptyString() {
-        assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.partitionTable("users").into("", "credit < 0"));
+                     () -> SchemaOperations.partitionTable("users").into("creditors", ""));
     }
 
     @Test
@@ -54,9 +39,25 @@ public class PartitionTableTest {
     }
 
     @Test
-    public void testThatDecompositionExpressionCannotBeEmptyString() {
+    public void testThatDecompositionTableNameCannotBeEmptyString() {
         assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.partitionTable("users").into("creditors", ""));
+                     () -> SchemaOperations.partitionTable("users").into("", "credit < 0"));
+    }
+
+    @Test
+    public void testThatDecompositionTableNameCannotBeNull() {
+        assertThrows(IllegalArgumentException.class,
+                     () -> SchemaOperations.partitionTable("users").into(null, "credit < 0"));
+    }
+
+    @Test
+    public void testThatTableNameCannotBeEmptyString() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.partitionTable(""));
+    }
+
+    @Test
+    public void testThatTableNameCannotBeNull() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.partitionTable(null));
     }
 
     @Test

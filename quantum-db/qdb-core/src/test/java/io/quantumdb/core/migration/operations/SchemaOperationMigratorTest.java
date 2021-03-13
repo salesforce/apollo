@@ -20,10 +20,10 @@ import io.quantumdb.core.versioning.Version;
 
 public class SchemaOperationMigratorTest {
 
-    private RefLog                   refLog;
     private Catalog                  catalog;
     private Changelog                changelog;
     private SchemaOperationsMigrator migrator;
+    private RefLog                   refLog;
 
     @BeforeEach
     public void setUp() {

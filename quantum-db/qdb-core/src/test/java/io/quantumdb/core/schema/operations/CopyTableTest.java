@@ -16,23 +16,23 @@ public class CopyTableTest {
     }
 
     @Test
-    public void testThatCopyTableOperationThrowsExceptionWhenNullInputForSourceTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.copyTable(null, "players"));
-    }
-
-    @Test
     public void testThatCopyTableOperationThrowsExceptionWhenEmptyStringInputForSourceTableName() {
         assertThrows(IllegalArgumentException.class, () -> SchemaOperations.copyTable("", "players"));
     }
 
     @Test
-    public void testThatCopyTableOperationThrowsExceptionWhenNullInputForTargetTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.copyTable("users", null));
+    public void testThatCopyTableOperationThrowsExceptionWhenEmptyStringInputForTargetTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.copyTable("users", ""));
     }
 
     @Test
-    public void testThatCopyTableOperationThrowsExceptionWhenEmptyStringInputForTargetTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.copyTable("users", ""));
+    public void testThatCopyTableOperationThrowsExceptionWhenNullInputForSourceTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.copyTable(null, "players"));
+    }
+
+    @Test
+    public void testThatCopyTableOperationThrowsExceptionWhenNullInputForTargetTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.copyTable("users", null));
     }
 
 }

@@ -35,20 +35,19 @@ import io.quantumdb.core.versioning.RefLog.TableRef;
 public class SyncFunctionTest {
 
     @Test
-    public void testSimpleDataMapping() {
+    public void testDataMappingWhereColumnIsMadeNonNullable() {
         Table original = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-                                           .addColumn(new Column("name", varchar(255), NOT_NULL));
+                                           .addColumn(new Column("name", varchar(255)));
 
         Table ghost = new Table("users2").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-                                         .addColumn(new Column("name", varchar(255), NOT_NULL))
-                                         .addColumn(new Column("email", varchar(255)));
+                                         .addColumn(new Column("name", varchar(255), NOT_NULL));
 
         Catalog catalog = new Catalog("public");
         catalog.addTable(original);
         catalog.addTable(ghost);
 
         Changelog changelog = new Changelog();
-        changelog.addChangeSet("test", "Michael de Jong", SchemaOperations.addColumn("users", "email", varchar(255)));
+        changelog.addChangeSet("test", "Michael de Jong", alterColumn("users", "name").addHint(NOT_NULL));
         RefLog refLog = new RefLog();
 
         ColumnRef usersId = new ColumnRef("id");
@@ -58,60 +57,18 @@ public class SyncFunctionTest {
 
         ColumnRef users2Id = new ColumnRef("id", Sets.newHashSet(usersId));
         ColumnRef users2Name = new ColumnRef("name", Sets.newHashSet(usersName));
-        TableRef target = refLog.addTable(ghost.getName(), ghost.getName(), changelog.getLastAdded(),
-                                          Lists.newArrayList(users2Id, users2Name));
-
-        refLog.addSync("some-name", "some-function", ImmutableMap.of(usersId, users2Id, usersName, users2Name));
-
-        NullRecords nullRecords = Mockito.mock(NullRecords.class);
-        Map<ColumnRef, ColumnRef> columnMapping = refLog.getColumnMapping(source, target);
-        SyncFunction syncFunction = new SyncFunction(refLog, source, target, columnMapping, catalog, nullRecords);
-        syncFunction.setColumnsToMigrate(list("id", "name", "email"));
-
-        assertThat(syncFunction.getInsertExpressions(),
-                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"name\"", "NEW.\"name\"")));
-        assertThat(syncFunction.getUpdateExpressions(),
-                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"name\"", "NEW.\"name\"")));
-        assertThat(syncFunction.getUpdateIdentities(), is(ImmutableMap.of("\"id\"", "OLD.\"id\"")));
-    }
-
-    @Test
-    public void testDataMappingWithColumnRename() {
-        Table original = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-                                           .addColumn(new Column("name", varchar(255), NOT_NULL));
-
-        Table ghost = new Table("users2").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-                                         .addColumn(new Column("full_name", varchar(255), NOT_NULL));
-
-        Catalog catalog = new Catalog("public");
-        catalog.addTable(original);
-        catalog.addTable(ghost);
-
-        Changelog changelog = new Changelog();
-        changelog.addChangeSet("test", "Michael de Jong", alterColumn("users", "name").rename("full_name"));
-        RefLog refLog = new RefLog();
-
-        ColumnRef usersId = new ColumnRef("id");
-        ColumnRef usersName = new ColumnRef("name");
-        TableRef source = refLog.addTable(original.getName(), original.getName(), changelog.getRoot(),
-                                          Lists.newArrayList(usersId, usersName));
-
-        ColumnRef users2Id = new ColumnRef("id", Sets.newHashSet(usersId));
-        ColumnRef users2Name = new ColumnRef("full_name", Sets.newHashSet(usersName));
         TableRef target = refLog.addTable(original.getName(), ghost.getName(), changelog.getLastAdded(),
                                           Lists.newArrayList(users2Id, users2Name));
 
-        refLog.addSync("some-name", "some-function", ImmutableMap.of(usersId, users2Id, usersName, users2Name));
-
         NullRecords nullRecords = Mockito.mock(NullRecords.class);
         Map<ColumnRef, ColumnRef> columnMapping = refLog.getColumnMapping(source, target);
         SyncFunction syncFunction = new SyncFunction(refLog, source, target, columnMapping, catalog, nullRecords);
-        syncFunction.setColumnsToMigrate(list("id", "full_name"));
+        syncFunction.setColumnsToMigrate(list("id", "name"));
 
         assertThat(syncFunction.getInsertExpressions(),
-                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"full_name\"", "NEW.\"name\"")));
+                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"name\"", "NEW.\"name\"")));
         assertThat(syncFunction.getUpdateExpressions(),
-                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"full_name\"", "NEW.\"name\"")));
+                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"name\"", "NEW.\"name\"")));
         assertThat(syncFunction.getUpdateIdentities(), is(ImmutableMap.of("\"id\"", "OLD.\"id\"")));
     }
 
@@ -156,19 +113,19 @@ public class SyncFunctionTest {
     }
 
     @Test
-    public void testDataMappingWhereColumnIsMadeNonNullable() {
+    public void testDataMappingWithColumnRename() {
         Table original = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-                                           .addColumn(new Column("name", varchar(255)));
+                                           .addColumn(new Column("name", varchar(255), NOT_NULL));
 
         Table ghost = new Table("users2").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-                                         .addColumn(new Column("name", varchar(255), NOT_NULL));
+                                         .addColumn(new Column("full_name", varchar(255), NOT_NULL));
 
         Catalog catalog = new Catalog("public");
         catalog.addTable(original);
         catalog.addTable(ghost);
 
         Changelog changelog = new Changelog();
-        changelog.addChangeSet("test", "Michael de Jong", alterColumn("users", "name").addHint(NOT_NULL));
+        changelog.addChangeSet("test", "Michael de Jong", alterColumn("users", "name").rename("full_name"));
         RefLog refLog = new RefLog();
 
         ColumnRef usersId = new ColumnRef("id");
@@ -177,19 +134,21 @@ public class SyncFunctionTest {
                                           Lists.newArrayList(usersId, usersName));
 
         ColumnRef users2Id = new ColumnRef("id", Sets.newHashSet(usersId));
-        ColumnRef users2Name = new ColumnRef("name", Sets.newHashSet(usersName));
+        ColumnRef users2Name = new ColumnRef("full_name", Sets.newHashSet(usersName));
         TableRef target = refLog.addTable(original.getName(), ghost.getName(), changelog.getLastAdded(),
                                           Lists.newArrayList(users2Id, users2Name));
+
+        refLog.addSync("some-name", "some-function", ImmutableMap.of(usersId, users2Id, usersName, users2Name));
 
         NullRecords nullRecords = Mockito.mock(NullRecords.class);
         Map<ColumnRef, ColumnRef> columnMapping = refLog.getColumnMapping(source, target);
         SyncFunction syncFunction = new SyncFunction(refLog, source, target, columnMapping, catalog, nullRecords);
-        syncFunction.setColumnsToMigrate(list("id", "name"));
+        syncFunction.setColumnsToMigrate(list("id", "full_name"));
 
         assertThat(syncFunction.getInsertExpressions(),
-                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"name\"", "NEW.\"name\"")));
+                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"full_name\"", "NEW.\"name\"")));
         assertThat(syncFunction.getUpdateExpressions(),
-                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"name\"", "NEW.\"name\"")));
+                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"full_name\"", "NEW.\"name\"")));
         assertThat(syncFunction.getUpdateIdentities(), is(ImmutableMap.of("\"id\"", "OLD.\"id\"")));
     }
 
@@ -243,6 +202,47 @@ public class SyncFunctionTest {
                    is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"other_id\"", "0", "\"full_name\"", "NEW.\"name\"")));
         assertThat(syncFunction.getUpdateExpressions(),
                    is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"other_id\"", "0", "\"full_name\"", "NEW.\"name\"")));
+        assertThat(syncFunction.getUpdateIdentities(), is(ImmutableMap.of("\"id\"", "OLD.\"id\"")));
+    }
+
+    @Test
+    public void testSimpleDataMapping() {
+        Table original = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
+                                           .addColumn(new Column("name", varchar(255), NOT_NULL));
+
+        Table ghost = new Table("users2").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
+                                         .addColumn(new Column("name", varchar(255), NOT_NULL))
+                                         .addColumn(new Column("email", varchar(255)));
+
+        Catalog catalog = new Catalog("public");
+        catalog.addTable(original);
+        catalog.addTable(ghost);
+
+        Changelog changelog = new Changelog();
+        changelog.addChangeSet("test", "Michael de Jong", SchemaOperations.addColumn("users", "email", varchar(255)));
+        RefLog refLog = new RefLog();
+
+        ColumnRef usersId = new ColumnRef("id");
+        ColumnRef usersName = new ColumnRef("name");
+        TableRef source = refLog.addTable(original.getName(), original.getName(), changelog.getRoot(),
+                                          Lists.newArrayList(usersId, usersName));
+
+        ColumnRef users2Id = new ColumnRef("id", Sets.newHashSet(usersId));
+        ColumnRef users2Name = new ColumnRef("name", Sets.newHashSet(usersName));
+        TableRef target = refLog.addTable(ghost.getName(), ghost.getName(), changelog.getLastAdded(),
+                                          Lists.newArrayList(users2Id, users2Name));
+
+        refLog.addSync("some-name", "some-function", ImmutableMap.of(usersId, users2Id, usersName, users2Name));
+
+        NullRecords nullRecords = Mockito.mock(NullRecords.class);
+        Map<ColumnRef, ColumnRef> columnMapping = refLog.getColumnMapping(source, target);
+        SyncFunction syncFunction = new SyncFunction(refLog, source, target, columnMapping, catalog, nullRecords);
+        syncFunction.setColumnsToMigrate(list("id", "name", "email"));
+
+        assertThat(syncFunction.getInsertExpressions(),
+                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"name\"", "NEW.\"name\"")));
+        assertThat(syncFunction.getUpdateExpressions(),
+                   is(ImmutableMap.of("\"id\"", "NEW.\"id\"", "\"name\"", "NEW.\"name\"")));
         assertThat(syncFunction.getUpdateIdentities(), is(ImmutableMap.of("\"id\"", "OLD.\"id\"")));
     }
 

@@ -17,25 +17,6 @@ import java.util.List;
 public class MultipleFailureException extends Exception {
     private static final long serialVersionUID = 1L;
 
-    private final List<Throwable> fErrors;
-
-    public MultipleFailureException(List<Throwable> errors) {
-        fErrors = new ArrayList<Throwable>(errors);
-    }
-
-    public List<Throwable> getFailures() {
-        return Collections.unmodifiableList(fErrors);
-    }
-
-    @Override
-    public String getMessage() {
-        StringBuilder sb = new StringBuilder(String.format("There were %d errors:", fErrors.size()));
-        for (Throwable e : fErrors) {
-            sb.append(String.format("\n  %s(%s)", e.getClass().getName(), e.getMessage()));
-        }
-        return sb.toString();
-    }
-
     /**
      * Asserts that a list of throwables is empty. If it isn't empty, will throw
      * {@link MultipleFailureException} (if there are multiple throwables in the
@@ -59,5 +40,24 @@ public class MultipleFailureException extends Exception {
          * tests that catch MultipleFailureException.
          */
         throw new MultipleFailureException(errors);
+    }
+
+    private final List<Throwable> fErrors;
+
+    public MultipleFailureException(List<Throwable> errors) {
+        fErrors = new ArrayList<Throwable>(errors);
+    }
+
+    public List<Throwable> getFailures() {
+        return Collections.unmodifiableList(fErrors);
+    }
+
+    @Override
+    public String getMessage() {
+        StringBuilder sb = new StringBuilder(String.format("There were %d errors:", fErrors.size()));
+        for (Throwable e : fErrors) {
+            sb.append(String.format("\n  %s(%s)", e.getClass().getName(), e.getMessage()));
+        }
+        return sb.toString();
     }
 }

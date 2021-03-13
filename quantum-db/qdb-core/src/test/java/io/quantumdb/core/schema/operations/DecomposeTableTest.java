@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Lists;
 
+@SuppressWarnings("deprecation")
 public class DecomposeTableTest {
 
     @Test
@@ -30,25 +31,25 @@ public class DecomposeTableTest {
     }
 
     @Test
-    public void testDecompositionWithNullForTableNameThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.decomposeTable(null));
-    }
-
-    @Test
     public void testDecompositionWithEmptyStringForTableNameThrowsException() {
         assertThrows(IllegalArgumentException.class, () -> SchemaOperations.decomposeTable(""));
     }
 
     @Test
-    public void testThatDecompositionWithNullForTargetTableNameThrowsException() {
-        assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.decomposeTable("users").into(null, "id", "name"));
+    public void testDecompositionWithNullForTableNameThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.decomposeTable(null));
     }
 
     @Test
     public void testThatDecompositionWithEmptyStringForTargetTableNameThrowsException() {
         assertThrows(IllegalArgumentException.class,
                      () -> SchemaOperations.decomposeTable("users").into("", "id", "name"));
+    }
+
+    @Test
+    public void testThatDecompositionWithNullForTargetTableNameThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+                     () -> SchemaOperations.decomposeTable("users").into(null, "id", "name"));
     }
 
     @Test

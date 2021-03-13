@@ -7,85 +7,91 @@ import io.quantumdb.core.schema.operations.AlterColumn;
 import io.quantumdb.core.schema.operations.SchemaOperations;
 
 public class XmlDropDefaultExpression implements XmlOperation<AlterColumn> {
-	static final String TAG = "dropDefaultExpression";
+    static final String TAG = "dropDefaultExpression";
 
-	static XmlOperation convert(XmlElement element) {
-		checkArgument(element.getTag().equals(TAG));
-		Map<String, String> attributes = element.getAttributes();
-		XmlDropDefaultExpression operation = new XmlDropDefaultExpression();
-		operation.setTableName(attributes.get("tableName"));
-		operation.setColumnName(attributes.get("columnName"));
-		return operation;
-	}
+    static XmlOperation<?> convert(XmlElement element) {
+        checkArgument(element.getTag().equals(TAG));
+        Map<String, String> attributes = element.getAttributes();
+        XmlDropDefaultExpression operation = new XmlDropDefaultExpression();
+        operation.setTableName(attributes.get("tableName"));
+        operation.setColumnName(attributes.get("columnName"));
+        return operation;
+    }
 
-	private String tableName;
-	private String columnName;
+    private String columnName;
+    private String tableName;
 
-	@Override
-	public AlterColumn toOperation() {
-		return SchemaOperations.alterColumn(tableName, columnName).dropDefaultExpression();
-	}
+    @java.lang.SuppressWarnings("all")
+    public XmlDropDefaultExpression() {
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public XmlDropDefaultExpression() {
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public boolean equals(final java.lang.Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof XmlDropDefaultExpression))
+            return false;
+        final XmlDropDefaultExpression other = (XmlDropDefaultExpression) o;
+        if (!other.canEqual(this))
+            return false;
+        final java.lang.Object this$tableName = this.getTableName();
+        final java.lang.Object other$tableName = other.getTableName();
+        if (this$tableName == null ? other$tableName != null : !this$tableName.equals(other$tableName))
+            return false;
+        final java.lang.Object this$columnName = this.getColumnName();
+        final java.lang.Object other$columnName = other.getColumnName();
+        if (this$columnName == null ? other$columnName != null : !this$columnName.equals(other$columnName))
+            return false;
+        return true;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getTableName() {
-		return this.tableName;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getColumnName() {
+        return this.columnName;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getColumnName() {
-		return this.columnName;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getTableName() {
+        return this.tableName;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setTableName(final String tableName) {
-		this.tableName = tableName;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        final java.lang.Object $tableName = this.getTableName();
+        result = result * PRIME + ($tableName == null ? 43 : $tableName.hashCode());
+        final java.lang.Object $columnName = this.getColumnName();
+        result = result * PRIME + ($columnName == null ? 43 : $columnName.hashCode());
+        return result;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setColumnName(final String columnName) {
-		this.columnName = columnName;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setColumnName(final String columnName) {
+        this.columnName = columnName;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public boolean equals(final java.lang.Object o) {
-		if (o == this) return true;
-		if (!(o instanceof XmlDropDefaultExpression)) return false;
-		final XmlDropDefaultExpression other = (XmlDropDefaultExpression) o;
-		if (!other.canEqual((java.lang.Object) this)) return false;
-		final java.lang.Object this$tableName = this.getTableName();
-		final java.lang.Object other$tableName = other.getTableName();
-		if (this$tableName == null ? other$tableName != null : !this$tableName.equals(other$tableName)) return false;
-		final java.lang.Object this$columnName = this.getColumnName();
-		final java.lang.Object other$columnName = other.getColumnName();
-		if (this$columnName == null ? other$columnName != null : !this$columnName.equals(other$columnName)) return false;
-		return true;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setTableName(final String tableName) {
+        this.tableName = tableName;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	protected boolean canEqual(final java.lang.Object other) {
-		return other instanceof XmlDropDefaultExpression;
-	}
+    @Override
+    public AlterColumn toOperation() {
+        return SchemaOperations.alterColumn(tableName, columnName).dropDefaultExpression();
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public int hashCode() {
-		final int PRIME = 59;
-		int result = 1;
-		final java.lang.Object $tableName = this.getTableName();
-		result = result * PRIME + ($tableName == null ? 43 : $tableName.hashCode());
-		final java.lang.Object $columnName = this.getColumnName();
-		result = result * PRIME + ($columnName == null ? 43 : $columnName.hashCode());
-		return result;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public java.lang.String toString() {
+        return "XmlDropDefaultExpression(tableName=" + this.getTableName() + ", columnName=" + this.getColumnName()
+                + ")";
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public java.lang.String toString() {
-		return "XmlDropDefaultExpression(tableName=" + this.getTableName() + ", columnName=" + this.getColumnName() + ")";
-	}
+    @java.lang.SuppressWarnings("all")
+    protected boolean canEqual(final java.lang.Object other) {
+        return other instanceof XmlDropDefaultExpression;
+    }
 }

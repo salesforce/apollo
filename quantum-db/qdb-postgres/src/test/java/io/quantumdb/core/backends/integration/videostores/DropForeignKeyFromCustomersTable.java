@@ -40,17 +40,17 @@ public class DropForeignKeyFromCustomersTable {
 
     public static PostgresqlBaseScenario setup = new PostgresqlBaseScenario();
 
-    private static State   state;
     private static Version origin;
+    private static State   state;
     private static Version target;
 
     @AfterAll
-    public static  void after() throws Exception {
+    public static void after() throws Exception {
         setup.after();
     }
 
     @BeforeAll
-    public static  void before() throws Exception {
+    public static void before() throws Exception {
         setup.before();
     }
 
@@ -70,6 +70,23 @@ public class DropForeignKeyFromCustomersTable {
         setup.getMigrator().migrate(origin.getId(), target.getId());
 
         state = setup.getBackend().loadState();
+    }
+
+    @Test
+    public void verifyTableMappings() {
+        RefLog refLog = state.getRefLog();
+
+        // Unchanged tables
+        assertEquals(FILMS_ID, refLog.getTableRef(target, "films").getRefId());
+        assertEquals(STORES_ID, refLog.getTableRef(target, "stores").getRefId());
+        assertEquals(STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
+        assertEquals(PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
+        assertEquals(INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
+
+        // Ghosted tables
+        assertNotEquals(CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
+        assertNotEquals(RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
+        assertNotEquals(PAYMENTS_ID, refLog.getTableRef(target, "payments").getRefId());
     }
 
     @Test
@@ -223,23 +240,6 @@ public class DropForeignKeyFromCustomersTable {
         tables.forEach(expected::addTable);
 
         assertEquals(expected.getTables(), state.getCatalog().getTables());
-    }
-
-    @Test
-    public void verifyTableMappings() {
-        RefLog refLog = state.getRefLog();
-
-        // Unchanged tables
-        assertEquals(FILMS_ID, refLog.getTableRef(target, "films").getRefId());
-        assertEquals(STORES_ID, refLog.getTableRef(target, "stores").getRefId());
-        assertEquals(STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
-        assertEquals(PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
-        assertEquals(INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
-
-        // Ghosted tables
-        assertNotEquals(CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
-        assertNotEquals(RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
-        assertNotEquals(PAYMENTS_ID, refLog.getTableRef(target, "payments").getRefId());
     }
 
 }

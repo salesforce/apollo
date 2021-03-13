@@ -12,24 +12,25 @@ import io.quantumdb.core.versioning.RefLog;
 import io.quantumdb.core.versioning.State;
 
 public class Status extends Command {
-	@java.lang.SuppressWarnings("all")
-	private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Status.class);
+    @java.lang.SuppressWarnings("all")
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Status.class);
 
-	@Override
-	public Identifier getIdentifier() {
-		return new Identifier("status", "Display currently available versions of the database schema.");
-	}
+    @Override
+    public Identifier getIdentifier() {
+        return new Identifier("status", "Display currently available versions of the database schema.");
+    }
 
-	public void perform(CliWriter writer, List<String> arguments) {
-		try {
-			Config config = Config.load();
-			Backend backend = config.getBackend();
-			State state = loadState(backend);
-			RefLog refLog = state.getRefLog();
-			writeDatabaseState(writer, refLog, state.getChangelog());
-		} catch (IOException | CliException e) {
-			log.error(e.getMessage(), e);
-			writer.write(e.getMessage(), Context.FAILURE);
-		}
-	}
+    @Override
+    public void perform(CliWriter writer, List<String> arguments) {
+        try {
+            Config config = Config.load();
+            Backend backend = config.getBackend();
+            State state = loadState(backend);
+            RefLog refLog = state.getRefLog();
+            writeDatabaseState(writer, refLog, state.getChangelog());
+        } catch (IOException | CliException e) {
+            log.error(e.getMessage(), e);
+            writer.write(e.getMessage(), Context.FAILURE);
+        }
+    }
 }

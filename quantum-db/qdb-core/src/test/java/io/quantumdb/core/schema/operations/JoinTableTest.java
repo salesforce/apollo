@@ -11,7 +11,15 @@ import org.junit.jupiter.api.Test;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 
+@SuppressWarnings("deprecation")
 public class JoinTableTest {
+
+    @Test
+    public void testAliasesMustBeUnique() {
+        assertThrows(IllegalArgumentException.class,
+                     () -> SchemaOperations.joinTable("users", "a", "id", "name")
+                                           .with("addresses", "a", "a.id = a.user_id", "address"));
+    }
 
     @Test
     public void testJoinTable() {
@@ -32,13 +40,6 @@ public class JoinTableTest {
         assertEquals(expectedJoinConditions, operation.getJoinConditions());
         assertEquals(expectedSourceTables, operation.getSourceTables());
         assertEquals(expectedSourceColumns, operation.getSourceColumns());
-    }
-
-    @Test
-    public void testAliasesMustBeUnique() {
-        assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.joinTable("users", "a", "id", "name")
-                                           .with("addresses", "a", "a.id = a.user_id", "address"));
     }
 
     @Test

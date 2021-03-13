@@ -9,162 +9,170 @@ import jline.Terminal;
 
 public class CliWriter {
 
-	public enum Context {
-		INFO, SUCCESS, FAILURE;
-	}
+    public enum Context {
+        FAILURE, INFO, SUCCESS;
+    }
 
-	private final Terminal terminal;
-	private final ConsoleReader reader;
-	private boolean enableBold = true;
-	private int indent = 0;
+    private boolean             enableBold = true;
+    private int                 indent     = 0;
+    private final ConsoleReader reader;
+    private final Terminal      terminal;
 
-	public CliWriter() {
-		try {
-			terminal = Terminal.setupTerminal();
-			reader = new ConsoleReader();
-			terminal.beforeReadLine(reader, "", (char) 0);
-		} catch (Exception e) {
-			e.printStackTrace();
-			throw new RuntimeException(e);
-		}
-	}
+    public CliWriter() {
+        try {
+            terminal = Terminal.setupTerminal();
+            reader = new ConsoleReader();
+            terminal.beforeReadLine(reader, "", (char) 0);
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
 
-	public void close() {
-		Terminal.resetTerminal();
-	}
+    public void close() {
+        Terminal.resetTerminal();
+    }
 
-	public CliWriter enableBold(boolean enableBold) {
-		this.enableBold = enableBold;
-		return this;
-	}
+    public CliWriter enableBold(boolean enableBold) {
+        this.enableBold = enableBold;
+        return this;
+    }
 
-	public CliWriter indent(int delta) {
-		indent += delta;
-		return this;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public boolean equals(final java.lang.Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof CliWriter))
+            return false;
+        final CliWriter other = (CliWriter) o;
+        if (!other.canEqual(this))
+            return false;
+        if (this.isEnableBold() != other.isEnableBold())
+            return false;
+        if (this.getIndent() != other.getIndent())
+            return false;
+        final java.lang.Object this$terminal = this.getTerminal();
+        final java.lang.Object other$terminal = other.getTerminal();
+        if (this$terminal == null ? other$terminal != null : !this$terminal.equals(other$terminal))
+            return false;
+        final java.lang.Object this$reader = this.getReader();
+        final java.lang.Object other$reader = other.getReader();
+        if (this$reader == null ? other$reader != null : !this$reader.equals(other$reader))
+            return false;
+        return true;
+    }
 
-	public CliWriter setIndent(int indent) {
-		this.indent = indent;
-		return this;
-	}
+    @java.lang.SuppressWarnings("all")
+    public int getIndent() {
+        return this.indent;
+    }
 
-	public CliWriter newLine() {
-		try {
-			reader.printNewline();
-			return this;
-		} catch (final IOException $ex) {
-			throw new IllegalStateException($ex);
-		}
-	}
+    @java.lang.SuppressWarnings("all")
+    public ConsoleReader getReader() {
+        return this.reader;
+    }
 
-	public CliWriter write(String message) {
-		return write(message, Context.INFO);
-	}
+    @java.lang.SuppressWarnings("all")
+    public Terminal getTerminal() {
+        return this.terminal;
+    }
 
-	public CliWriter write(String message, Context context) {
-		try {
-			String marker = "";
-			if (indent == 0) {
-				marker = "==> ";
-			}
-			if (indent > 0) {
-				marker = "  > ";
-			}
-			if (indent >= 0) {
-				message = Strings.repeat("  ", indent) + marker + message;
-			}
-			if (indent <= 0) {
-				ANSIBuffer buffer = new ANSIBuffer();
-				if (enableBold) {
-					buffer.bold(message);
-				} else {
-					buffer.append(message);
-				}
-				message = buffer.toString();
-			}
-			switch (context) {
-			case INFO: 
-				reader.printString(new ANSIBuffer().append(message).toString());
-				break;
-			case SUCCESS: 
-				reader.printString(new ANSIBuffer().green(message).toString());
-				break;
-			case FAILURE: 
-				reader.printString(new ANSIBuffer().red(message).toString());
-				break;
-			}
-			reader.printNewline();
-			return this;
-		} catch (final IOException $ex) {
-			throw new IllegalStateException($ex);
-		}
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        result = result * PRIME + (this.isEnableBold() ? 79 : 97);
+        result = result * PRIME + this.getIndent();
+        final java.lang.Object $terminal = this.getTerminal();
+        result = result * PRIME + ($terminal == null ? 43 : $terminal.hashCode());
+        final java.lang.Object $reader = this.getReader();
+        result = result * PRIME + ($reader == null ? 43 : $reader.hashCode());
+        return result;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public Terminal getTerminal() {
-		return this.terminal;
-	}
+    public CliWriter indent(int delta) {
+        indent += delta;
+        return this;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public ConsoleReader getReader() {
-		return this.reader;
-	}
+    @java.lang.SuppressWarnings("all")
+    public boolean isEnableBold() {
+        return this.enableBold;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public boolean isEnableBold() {
-		return this.enableBold;
-	}
+    public CliWriter newLine() {
+        try {
+            reader.printNewline();
+            return this;
+        } catch (final IOException $ex) {
+            throw new IllegalStateException($ex);
+        }
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public int getIndent() {
-		return this.indent;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setEnableBold(final boolean enableBold) {
+        this.enableBold = enableBold;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setEnableBold(final boolean enableBold) {
-		this.enableBold = enableBold;
-	}
+    public CliWriter setIndent(int indent) {
+        this.indent = indent;
+        return this;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public boolean equals(final java.lang.Object o) {
-		if (o == this) return true;
-		if (!(o instanceof CliWriter)) return false;
-		final CliWriter other = (CliWriter) o;
-		if (!other.canEqual((java.lang.Object) this)) return false;
-		if (this.isEnableBold() != other.isEnableBold()) return false;
-		if (this.getIndent() != other.getIndent()) return false;
-		final java.lang.Object this$terminal = this.getTerminal();
-		final java.lang.Object other$terminal = other.getTerminal();
-		if (this$terminal == null ? other$terminal != null : !this$terminal.equals(other$terminal)) return false;
-		final java.lang.Object this$reader = this.getReader();
-		final java.lang.Object other$reader = other.getReader();
-		if (this$reader == null ? other$reader != null : !this$reader.equals(other$reader)) return false;
-		return true;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public java.lang.String toString() {
+        return "CliWriter(terminal=" + this.getTerminal() + ", reader=" + this.getReader() + ", enableBold="
+                + this.isEnableBold() + ", indent=" + this.getIndent() + ")";
+    }
 
-	@java.lang.SuppressWarnings("all")
-	protected boolean canEqual(final java.lang.Object other) {
-		return other instanceof CliWriter;
-	}
+    public CliWriter write(String message) {
+        return write(message, Context.INFO);
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public int hashCode() {
-		final int PRIME = 59;
-		int result = 1;
-		result = result * PRIME + (this.isEnableBold() ? 79 : 97);
-		result = result * PRIME + this.getIndent();
-		final java.lang.Object $terminal = this.getTerminal();
-		result = result * PRIME + ($terminal == null ? 43 : $terminal.hashCode());
-		final java.lang.Object $reader = this.getReader();
-		result = result * PRIME + ($reader == null ? 43 : $reader.hashCode());
-		return result;
-	}
+    public CliWriter write(String message, Context context) {
+        try {
+            String marker = "";
+            if (indent == 0) {
+                marker = "==> ";
+            }
+            if (indent > 0) {
+                marker = "  > ";
+            }
+            if (indent >= 0) {
+                message = Strings.repeat("  ", indent) + marker + message;
+            }
+            if (indent <= 0) {
+                ANSIBuffer buffer = new ANSIBuffer();
+                if (enableBold) {
+                    buffer.bold(message);
+                } else {
+                    buffer.append(message);
+                }
+                message = buffer.toString();
+            }
+            switch (context) {
+            case INFO:
+                reader.printString(new ANSIBuffer().append(message).toString());
+                break;
+            case SUCCESS:
+                reader.printString(new ANSIBuffer().green(message).toString());
+                break;
+            case FAILURE:
+                reader.printString(new ANSIBuffer().red(message).toString());
+                break;
+            }
+            reader.printNewline();
+            return this;
+        } catch (final IOException $ex) {
+            throw new IllegalStateException($ex);
+        }
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public java.lang.String toString() {
-		return "CliWriter(terminal=" + this.getTerminal() + ", reader=" + this.getReader() + ", enableBold=" + this.isEnableBold() + ", indent=" + this.getIndent() + ")";
-	}
+    @java.lang.SuppressWarnings("all")
+    protected boolean canEqual(final java.lang.Object other) {
+        return other instanceof CliWriter;
+    }
 }

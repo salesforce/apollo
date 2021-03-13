@@ -22,10 +22,10 @@ import io.quantumdb.core.versioning.RefLog.TableRef;
 
 public class DropColumnMigratorTest {
 
-    private RefLog             refLog;
     private Catalog            catalog;
     private Changelog          changelog;
     private DropColumnMigrator migrator;
+    private RefLog             refLog;
 
     @BeforeEach
     public void setUp() {
@@ -42,6 +42,15 @@ public class DropColumnMigratorTest {
     }
 
     @Test
+    public void testExpandForDroppingIdentityColumn() {
+        assertThrows(IllegalStateException.class, () -> {
+            DropColumn operation = SchemaOperations.dropColumn("users", "id");
+            changelog.addChangeSet("Michael de Jong", "Dropped 'id' column from 'users' table.", operation);
+            migrator.migrate(catalog, refLog, changelog.getLastAdded(), operation);
+        });
+    }
+
+    @Test
     public void testExpandForDroppingSingleColumn() {
         DropColumn operation = SchemaOperations.dropColumn("users", "name");
         changelog.addChangeSet("Michael de Jong", "Dropped 'name' column from 'users' table.", operation);
@@ -54,15 +63,6 @@ public class DropColumnMigratorTest {
                 NOT_NULL, AUTO_INCREMENT));
 
         assertEquals(expectedGhostTable, ghostTable);
-    }
-
-    @Test
-    public void testExpandForDroppingIdentityColumn() {
-        assertThrows(IllegalStateException.class, () -> {
-            DropColumn operation = SchemaOperations.dropColumn("users", "id");
-            changelog.addChangeSet("Michael de Jong", "Dropped 'id' column from 'users' table.", operation);
-            migrator.migrate(catalog, refLog, changelog.getLastAdded(), operation);
-        });
     }
 
     private Table getGhostTable(Table table) {

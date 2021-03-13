@@ -13,62 +13,58 @@ import io.quantumdb.core.schema.definitions.Table;
 
 public class MigrationState {
 
-	public enum Progress {
-		PENDING,
-		PARTIALLY,
-		DONE
-	}
+    public enum Progress {
+        DONE, PARTIALLY, PENDING
+    }
 
-	private final Catalog catalog;
-	private final Multimap<String, String> migratedColumns;
+    private final Catalog                  catalog;
+    private final Multimap<String, String> migratedColumns;
 
-	public MigrationState(Catalog catalog) {
-		this.catalog = catalog;
-		this.migratedColumns = HashMultimap.create();
-	}
+    public MigrationState(Catalog catalog) {
+        this.catalog = catalog;
+        this.migratedColumns = HashMultimap.create();
+    }
 
-	public Progress getProgress(String tableName) {
-		Collection<String> migrated = migratedColumns.get(tableName);
-		if (migrated.isEmpty()) {
-			return Progress.PENDING;
-		}
+    public Set<String> getMigratedTables() {
+        return migratedColumns.keySet()
+                              .stream()
+                              .filter(tableName -> getProgress(tableName) == Progress.DONE)
+                              .collect(Collectors.toSet());
+    }
 
-		Table table = catalog.getTable(tableName);
-		Set<String> columns = table.getColumns().stream()
-				.map(Column::getName)
-				.collect(Collectors.toSet());
+    public Set<String> getPartiallyMigratedTables() {
+        return migratedColumns.keySet()
+                              .stream()
+                              .filter(tableName -> getProgress(tableName) == Progress.PARTIALLY)
+                              .collect(Collectors.toSet());
+    }
 
-		if (migrated.containsAll(columns)) {
-			return Progress.DONE;
-		}
-		return Progress.PARTIALLY;
-	}
+    public Progress getProgress(String tableName) {
+        Collection<String> migrated = migratedColumns.get(tableName);
+        if (migrated.isEmpty()) {
+            return Progress.PENDING;
+        }
 
-	public void markColumnsAsMigrated(String tableName, Set<String> columns) {
-		migratedColumns.putAll(tableName, columns);
-	}
+        Table table = catalog.getTable(tableName);
+        Set<String> columns = table.getColumns().stream().map(Column::getName).collect(Collectors.toSet());
 
-	public Set<String> getPartiallyMigratedTables() {
-		return migratedColumns.keySet().stream()
-				.filter(tableName -> getProgress(tableName) == Progress.PARTIALLY)
-				.collect(Collectors.toSet());
-	}
+        if (migrated.containsAll(columns)) {
+            return Progress.DONE;
+        }
+        return Progress.PARTIALLY;
+    }
 
-	public Set<String> getMigratedTables() {
-		return migratedColumns.keySet().stream()
-				.filter(tableName -> getProgress(tableName) == Progress.DONE)
-				.collect(Collectors.toSet());
-	}
+    public Set<String> getYetToBeMigratedColumns(String tableName) {
+        Set<String> migrated = Sets.newHashSet(migratedColumns.get(tableName));
+        Table table = catalog.getTable(tableName);
 
-	public Set<String> getYetToBeMigratedColumns(String tableName) {
-		Set<String> migrated = Sets.newHashSet(migratedColumns.get(tableName));
-		Table table = catalog.getTable(tableName);
+        Set<String> columns = table.getColumns().stream().map(Column::getName).collect(Collectors.toSet());
 
-		Set<String> columns = table.getColumns().stream()
-				.map(Column::getName)
-				.collect(Collectors.toSet());
+        return Sets.newHashSet(Sets.difference(columns, migrated));
+    }
 
-		return Sets.newHashSet(Sets.difference(columns, migrated));
-	}
+    public void markColumnsAsMigrated(String tableName, Set<String> columns) {
+        migratedColumns.putAll(tableName, columns);
+    }
 
 }

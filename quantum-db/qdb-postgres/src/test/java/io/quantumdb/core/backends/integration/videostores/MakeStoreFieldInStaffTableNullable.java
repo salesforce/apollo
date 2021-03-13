@@ -29,20 +29,23 @@ import io.quantumdb.core.versioning.RefLog;
 import io.quantumdb.core.versioning.State;
 import io.quantumdb.core.versioning.Version;
 
-@Disabled // TODO: There seems to be something wrong with this test. Must investigate further.
+@Disabled // TODO: There seems to be something wrong with this test. Must investigate
+          // further.
 public class MakeStoreFieldInStaffTableNullable {
- 
+
     public static PostgresqlBaseScenario setup = new PostgresqlBaseScenario();
 
-    private static State   state;
     private static Version origin;
+    private static State   state;
     private static Version target;
+
     @AfterAll
-    public static  void after() throws Exception {
+    public static void after() throws Exception {
         setup.after();
     }
+
     @BeforeAll
-    public static  void before() throws Exception {
+    public static void before() throws Exception {
         setup.before();
     }
 
@@ -64,6 +67,23 @@ public class MakeStoreFieldInStaffTableNullable {
         setup.getMigrator().migrate(origin.getId(), target.getId());
 
         state = setup.getBackend().loadState();
+    }
+
+    @Test
+    public void verifyTableMappings() {
+        RefLog refLog = state.getRefLog();
+
+        // Unchanged tables
+        assertEquals(PostgresqlBaseScenario.FILMS_ID, refLog.getTableRef(target, "films").getRefId());
+
+        // Ghosted tables
+        assertNotEquals(PostgresqlBaseScenario.CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
+        assertNotEquals(PostgresqlBaseScenario.PAYMENTS_ID, refLog.getTableRef(target, "payments").getRefId());
+        assertNotEquals(PostgresqlBaseScenario.RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
+        assertNotEquals(PostgresqlBaseScenario.STORES_ID, refLog.getTableRef(target, "stores").getRefId());
+        assertNotEquals(PostgresqlBaseScenario.STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
+        assertNotEquals(PostgresqlBaseScenario.INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
+        assertNotEquals(PostgresqlBaseScenario.PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
     }
 
     @Test
@@ -258,23 +278,6 @@ public class MakeStoreFieldInStaffTableNullable {
         tables.forEach(expected::addTable);
 
         assertEquals(expected.getTables(), state.getCatalog().getTables());
-    }
-
-    @Test
-    public void verifyTableMappings() {
-        RefLog refLog = state.getRefLog();
-
-        // Unchanged tables
-        assertEquals(PostgresqlBaseScenario.FILMS_ID, refLog.getTableRef(target, "films").getRefId());
-
-        // Ghosted tables
-        assertNotEquals(PostgresqlBaseScenario.CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
-        assertNotEquals(PostgresqlBaseScenario.PAYMENTS_ID, refLog.getTableRef(target, "payments").getRefId());
-        assertNotEquals(PostgresqlBaseScenario.RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
-        assertNotEquals(PostgresqlBaseScenario.STORES_ID, refLog.getTableRef(target, "stores").getRefId());
-        assertNotEquals(PostgresqlBaseScenario.STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
-        assertNotEquals(PostgresqlBaseScenario.INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
-        assertNotEquals(PostgresqlBaseScenario.PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
     }
 
 }

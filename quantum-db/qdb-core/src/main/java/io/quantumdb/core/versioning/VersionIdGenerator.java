@@ -11,39 +11,39 @@ import io.quantumdb.core.utils.RandomHasher;
 
 class VersionIdGenerator {
 
-	private final Version rootVersion;
-	private final Set<String> ids;
+    private final Set<String> ids;
+    private final Version     rootVersion;
 
-	VersionIdGenerator(Version rootVersion) {
-		checkArgument(rootVersion.getParent() == null, "You must specify the 'rootVersion'.");
+    VersionIdGenerator(Version rootVersion) {
+        checkArgument(rootVersion.getParent() == null, "You must specify the 'rootVersion'.");
 
-		this.rootVersion = rootVersion;
-		this.ids = Sets.newHashSet(index());
-	}
+        this.rootVersion = rootVersion;
+        this.ids = Sets.newHashSet(index());
+    }
 
-	private Set<String> index() {
-		Set<String> visited = Sets.newHashSet();
-		Queue<Version> toVisit = Queues.newLinkedBlockingDeque();
-		toVisit.add(rootVersion);
+    String generateId() {
+        while (true) {
+            String newId = RandomHasher.generateHash();
+            if (!ids.contains(newId)) {
+                ids.add(newId);
+                return newId;
+            }
+        }
+    }
 
-		while (!toVisit.isEmpty()) {
-			Version current = toVisit.poll();
-			if (visited.add(current.getId()) && current.getChild() != null) {
-				toVisit.add(current.getChild());
-			}
-		}
+    private Set<String> index() {
+        Set<String> visited = Sets.newHashSet();
+        Queue<Version> toVisit = Queues.newLinkedBlockingDeque();
+        toVisit.add(rootVersion);
 
-		return visited;
-	}
+        while (!toVisit.isEmpty()) {
+            Version current = toVisit.poll();
+            if (visited.add(current.getId()) && current.getChild() != null) {
+                toVisit.add(current.getChild());
+            }
+        }
 
-	String generateId() {
-		while (true) {
-			String newId = RandomHasher.generateHash();
-			if (!ids.contains(newId)) {
-				ids.add(newId);
-				return newId;
-			}
-		}
-	}
+        return visited;
+    }
 
 }

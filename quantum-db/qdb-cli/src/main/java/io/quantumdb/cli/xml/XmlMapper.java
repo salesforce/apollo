@@ -14,72 +14,77 @@ import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
 public class XmlMapper {
-	public XmlChangelog loadChangelog(String file) throws IOException {
-		XmlElement element = load(file);
-		return XmlChangelog.convert(element);
-	}
+    public XmlChangelog loadChangelog(String file) throws IOException {
+        XmlElement element = load(file);
+        return XmlChangelog.convert(element);
+    }
 
-	private XmlElement load(String file) throws IOException {
-		try {
-			SAXParserFactory factory = SAXParserFactory.newInstance();
-			SAXParser saxParser = factory.newSAXParser();
-			AtomicReference<XmlElement> result = new AtomicReference<>();
-			List<XmlElement> stack = Lists.newArrayList();
-			DefaultHandler handler = new DefaultHandler() {
-				public void startElement(String uri, String localName, String qName, Attributes attributes) {
-					try {
-						XmlElement element = new XmlElement(qName, null);
-						for (int i = 0; i < attributes.getLength(); i++) {
-							String key = attributes.getQName(i);
-							String value = attributes.getValue(i);
-							element.getAttributes().put(key, value);
-						}
-						if (stack.size() > 0) {
-							XmlElement parent = stack.get(stack.size() - 1);
-							parent.getChildren().add(element);
-						}
-						stack.add(element);
-					} catch (final java.lang.Throwable $ex) {
-						throw new IllegalStateException($ex);
-					}
-				}
-				public void endElement(String uri, String localName, String qName) {
-					try {
-						XmlElement removed;
-						do {
-							removed = stack.remove(stack.size() - 1);
-						} while (removed.getTag() == null);
-						if (!removed.getTag().equals(qName)) {
-							throw new SAXException("Unexpected closing tag: " + qName);
-						}
-						if (stack.isEmpty()) {
-							result.set(removed);
-						}
-					} catch (final java.lang.Throwable $ex) {
-						throw new IllegalStateException($ex);
-					}
-				}
-				public void characters(char[] ch, int start, int length) {
-					try {
-						String body = new String(ch, start, length);
-						if (body.trim().isEmpty()) {
-							return;
-						}
-						XmlElement element = new XmlElement(null, body);
-						if (stack.size() > 0) {
-							XmlElement parent = stack.get(stack.size() - 1);
-							parent.getChildren().add(element);
-						}
-						stack.add(element);
-					} catch (final java.lang.Throwable $ex) {
-						throw new IllegalStateException($ex);
-					}
-				}
-			};
-			saxParser.parse(new File(file), handler);
-			return result.get();
-		} catch (ParserConfigurationException | SAXException e) {
-			throw new RuntimeException(e);
-		}
-	}
+    private XmlElement load(String file) throws IOException {
+        try {
+            SAXParserFactory factory = SAXParserFactory.newInstance();
+            SAXParser saxParser = factory.newSAXParser();
+            AtomicReference<XmlElement> result = new AtomicReference<>();
+            List<XmlElement> stack = Lists.newArrayList();
+            DefaultHandler handler = new DefaultHandler() {
+                @Override
+                public void characters(char[] ch, int start, int length) {
+                    try {
+                        String body = new String(ch, start, length);
+                        if (body.trim().isEmpty()) {
+                            return;
+                        }
+                        XmlElement element = new XmlElement(null, body);
+                        if (stack.size() > 0) {
+                            XmlElement parent = stack.get(stack.size() - 1);
+                            parent.getChildren().add(element);
+                        }
+                        stack.add(element);
+                    } catch (final java.lang.Throwable $ex) {
+                        throw new IllegalStateException($ex);
+                    }
+                }
+
+                @Override
+                public void endElement(String uri, String localName, String qName) {
+                    try {
+                        XmlElement removed;
+                        do {
+                            removed = stack.remove(stack.size() - 1);
+                        } while (removed.getTag() == null);
+                        if (!removed.getTag().equals(qName)) {
+                            throw new SAXException("Unexpected closing tag: " + qName);
+                        }
+                        if (stack.isEmpty()) {
+                            result.set(removed);
+                        }
+                    } catch (final java.lang.Throwable $ex) {
+                        throw new IllegalStateException($ex);
+                    }
+                }
+
+                @Override
+                public void startElement(String uri, String localName, String qName, Attributes attributes) {
+                    try {
+                        XmlElement element = new XmlElement(qName, null);
+                        for (int i = 0; i < attributes.getLength(); i++) {
+                            String key = attributes.getQName(i);
+                            String value = attributes.getValue(i);
+                            element.getAttributes().put(key, value);
+                        }
+                        if (stack.size() > 0) {
+                            XmlElement parent = stack.get(stack.size() - 1);
+                            parent.getChildren().add(element);
+                        }
+                        stack.add(element);
+                    } catch (final java.lang.Throwable $ex) {
+                        throw new IllegalStateException($ex);
+                    }
+                }
+            };
+            saxParser.parse(new File(file), handler);
+            return result.get();
+        } catch (ParserConfigurationException | SAXException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

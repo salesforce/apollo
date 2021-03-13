@@ -7,83 +7,91 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 class XmlElement {
-	private final String tag;
-	private final Map<String, String> attributes = Maps.newHashMap();
-	private final List<XmlElement> children = Lists.newArrayList();
-	private final String text;
+    private final Map<String, String> attributes = Maps.newHashMap();
+    private final List<XmlElement>    children   = Lists.newArrayList();
+    private final String              tag;
+    private final String              text;
 
-	@java.lang.SuppressWarnings("all")
-	public XmlElement(final String tag, final String text) {
-		this.tag = tag;
-		this.text = text;
-	}
+    @java.lang.SuppressWarnings("all")
+    public XmlElement(final String tag, final String text) {
+        this.tag = tag;
+        this.text = text;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getTag() {
-		return this.tag;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public boolean equals(final java.lang.Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof XmlElement))
+            return false;
+        final XmlElement other = (XmlElement) o;
+        if (!other.canEqual(this))
+            return false;
+        final java.lang.Object this$tag = this.getTag();
+        final java.lang.Object other$tag = other.getTag();
+        if (this$tag == null ? other$tag != null : !this$tag.equals(other$tag))
+            return false;
+        final java.lang.Object this$attributes = this.getAttributes();
+        final java.lang.Object other$attributes = other.getAttributes();
+        if (this$attributes == null ? other$attributes != null : !this$attributes.equals(other$attributes))
+            return false;
+        final java.lang.Object this$children = this.getChildren();
+        final java.lang.Object other$children = other.getChildren();
+        if (this$children == null ? other$children != null : !this$children.equals(other$children))
+            return false;
+        final java.lang.Object this$text = this.getText();
+        final java.lang.Object other$text = other.getText();
+        if (this$text == null ? other$text != null : !this$text.equals(other$text))
+            return false;
+        return true;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public Map<String, String> getAttributes() {
-		return this.attributes;
-	}
+    @java.lang.SuppressWarnings("all")
+    public Map<String, String> getAttributes() {
+        return this.attributes;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public List<XmlElement> getChildren() {
-		return this.children;
-	}
+    @java.lang.SuppressWarnings("all")
+    public List<XmlElement> getChildren() {
+        return this.children;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getText() {
-		return this.text;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getTag() {
+        return this.tag;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public boolean equals(final java.lang.Object o) {
-		if (o == this) return true;
-		if (!(o instanceof XmlElement)) return false;
-		final XmlElement other = (XmlElement) o;
-		if (!other.canEqual((java.lang.Object) this)) return false;
-		final java.lang.Object this$tag = this.getTag();
-		final java.lang.Object other$tag = other.getTag();
-		if (this$tag == null ? other$tag != null : !this$tag.equals(other$tag)) return false;
-		final java.lang.Object this$attributes = this.getAttributes();
-		final java.lang.Object other$attributes = other.getAttributes();
-		if (this$attributes == null ? other$attributes != null : !this$attributes.equals(other$attributes)) return false;
-		final java.lang.Object this$children = this.getChildren();
-		final java.lang.Object other$children = other.getChildren();
-		if (this$children == null ? other$children != null : !this$children.equals(other$children)) return false;
-		final java.lang.Object this$text = this.getText();
-		final java.lang.Object other$text = other.getText();
-		if (this$text == null ? other$text != null : !this$text.equals(other$text)) return false;
-		return true;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getText() {
+        return this.text;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	protected boolean canEqual(final java.lang.Object other) {
-		return other instanceof XmlElement;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        final java.lang.Object $tag = this.getTag();
+        result = result * PRIME + ($tag == null ? 43 : $tag.hashCode());
+        final java.lang.Object $attributes = this.getAttributes();
+        result = result * PRIME + ($attributes == null ? 43 : $attributes.hashCode());
+        final java.lang.Object $children = this.getChildren();
+        result = result * PRIME + ($children == null ? 43 : $children.hashCode());
+        final java.lang.Object $text = this.getText();
+        result = result * PRIME + ($text == null ? 43 : $text.hashCode());
+        return result;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public int hashCode() {
-		final int PRIME = 59;
-		int result = 1;
-		final java.lang.Object $tag = this.getTag();
-		result = result * PRIME + ($tag == null ? 43 : $tag.hashCode());
-		final java.lang.Object $attributes = this.getAttributes();
-		result = result * PRIME + ($attributes == null ? 43 : $attributes.hashCode());
-		final java.lang.Object $children = this.getChildren();
-		result = result * PRIME + ($children == null ? 43 : $children.hashCode());
-		final java.lang.Object $text = this.getText();
-		result = result * PRIME + ($text == null ? 43 : $text.hashCode());
-		return result;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public java.lang.String toString() {
+        return "XmlElement(tag=" + this.getTag() + ", attributes=" + this.getAttributes() + ", children="
+                + this.getChildren() + ", text=" + this.getText() + ")";
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public java.lang.String toString() {
-		return "XmlElement(tag=" + this.getTag() + ", attributes=" + this.getAttributes() + ", children=" + this.getChildren() + ", text=" + this.getText() + ")";
-	}
+    @java.lang.SuppressWarnings("all")
+    protected boolean canEqual(final java.lang.Object other) {
+        return other instanceof XmlElement;
+    }
 }

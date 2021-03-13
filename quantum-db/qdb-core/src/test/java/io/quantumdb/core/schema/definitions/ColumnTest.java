@@ -17,97 +17,6 @@ import com.google.common.base.Strings;
 public class ColumnTest {
 
     @Test
-    public void testCreatingColumn() {
-        Column column = new Column("id", bigint());
-
-        assertEquals("id", column.getName());
-        assertEquals(bigint(), column.getType());
-        assertEquals(null, column.getDefaultValue());
-    }
-
-    @Test
-    public void testCreatingIdentityColumn() {
-        Column column = new Column("id", bigint(), IDENTITY);
-
-        assertTrue(column.isIdentity());
-    }
-
-    @Test
-    public void testCreatingAutoIncrementColumn() {
-        Column column = new Column("id", bigint(), AUTO_INCREMENT);
-
-        assertTrue(column.isAutoIncrement());
-    }
-
-    @Test
-    public void testCreatingNonNullableColumn() {
-        Column column = new Column("id", bigint(), NOT_NULL);
-
-        assertTrue(column.isNotNull());
-    }
-
-    @Test
-    public void testCreatingColumnWithDefaultExpression() {
-        Column column = new Column("id", varchar(255), "'unknown'");
-
-        assertEquals("'unknown'", column.getDefaultValue());
-    }
-
-    @Test
-    public void testCreatingColumnWithNullForColumnName() {
-        assertThrows(IllegalArgumentException.class, () -> new Column(null, bigint()));
-    }
-
-    @Test
-    public void testCreatingColumnWithEmptyStringForColumnName() {
-        assertThrows(IllegalArgumentException.class, () -> new Column("", bigint()));
-    }
-
-    @Test
-    public void testCreatingColumnWithNullForColumnType() {
-        assertThrows(IllegalArgumentException.class, () -> new Column("id", null));
-    }
-
-    @Test
-    public void testCreatingColumnWithNullHintThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> new Column("id", bigint(), null));
-    }
-
-    @Test
-    public void testGetParentReturnsNullWhenColumnDoesNotBelongToTable() {
-        Column column = new Column("id", bigint());
-
-        assertEquals(null, column.getParent());
-    }
-
-    @Test
-    public void testGetParentReturnsParentTableWhenColumnBelongsToTable() {
-        Table table = new Table("users");
-        Column column = new Column("id", bigint());
-        table.addColumn(column);
-
-        assertEquals(table, column.getParent());
-    }
-
-    @Test
-    public void testAddingForeignKeyToSingleColumn() {
-        Table users = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, NOT_NULL, AUTO_INCREMENT))
-                                        .addColumn(new Column("address_id", bigint(), NOT_NULL));
-
-        Table addresses = new Table("addresses").addColumn(new Column("id", bigint(), IDENTITY, NOT_NULL,
-                AUTO_INCREMENT));
-
-        ForeignKey constraint = users.addForeignKey("address_id").referencing(addresses, "id");
-
-        assertTrue(addresses.getForeignKeys().isEmpty());
-        assertEquals(1, users.getForeignKeys().size());
-        assertEquals(constraint, users.getForeignKeys().get(0));
-
-        assertEquals(constraint, addresses.getColumn("id").getIncomingForeignKeys().get(0));
-        assertEquals(constraint, users.getColumn("address_id").getOutgoingForeignKey());
-    }
-
-    @Test
     public void testAddingForeignKeyToMultiColumn() {
         Table items = new Table("items").addColumn(new Column("id", bigint(), IDENTITY, NOT_NULL, AUTO_INCREMENT));
 
@@ -139,20 +48,94 @@ public class ColumnTest {
     }
 
     @Test
-    public void testRemovingColumnWithOutgoingForeignKey() {
+    public void testAddingForeignKeyToSingleColumn() {
         Table users = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, NOT_NULL, AUTO_INCREMENT))
                                         .addColumn(new Column("address_id", bigint(), NOT_NULL));
 
         Table addresses = new Table("addresses").addColumn(new Column("id", bigint(), IDENTITY, NOT_NULL,
                 AUTO_INCREMENT));
 
-        users.addForeignKey("address_id").referencing(addresses, "id");
+        ForeignKey constraint = users.addForeignKey("address_id").referencing(addresses, "id");
 
-        users.removeColumn("address_id");
-
-        assertTrue(addresses.getColumn("id").getIncomingForeignKeys().isEmpty());
         assertTrue(addresses.getForeignKeys().isEmpty());
-        assertTrue(users.getForeignKeys().isEmpty());
+        assertEquals(1, users.getForeignKeys().size());
+        assertEquals(constraint, users.getForeignKeys().get(0));
+
+        assertEquals(constraint, addresses.getColumn("id").getIncomingForeignKeys().get(0));
+        assertEquals(constraint, users.getColumn("address_id").getOutgoingForeignKey());
+    }
+
+    @Test
+    public void testCreatingAutoIncrementColumn() {
+        Column column = new Column("id", bigint(), AUTO_INCREMENT);
+
+        assertTrue(column.isAutoIncrement());
+    }
+
+    @Test
+    public void testCreatingColumn() {
+        Column column = new Column("id", bigint());
+
+        assertEquals("id", column.getName());
+        assertEquals(bigint(), column.getType());
+        assertEquals(null, column.getDefaultValue());
+    }
+
+    @Test
+    public void testCreatingColumnWithDefaultExpression() {
+        Column column = new Column("id", varchar(255), "'unknown'");
+
+        assertEquals("'unknown'", column.getDefaultValue());
+    }
+
+    @Test
+    public void testCreatingColumnWithEmptyStringForColumnName() {
+        assertThrows(IllegalArgumentException.class, () -> new Column("", bigint()));
+    }
+
+    @Test
+    public void testCreatingColumnWithNullForColumnName() {
+        assertThrows(IllegalArgumentException.class, () -> new Column(null, bigint()));
+    }
+
+    @Test
+    public void testCreatingColumnWithNullForColumnType() {
+        assertThrows(IllegalArgumentException.class, () -> new Column("id", null));
+    }
+
+    @Test
+    public void testCreatingColumnWithNullHintThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> new Column("id", bigint(), (Column.Hint[]) null));
+    }
+
+    @Test
+    public void testCreatingIdentityColumn() {
+        Column column = new Column("id", bigint(), IDENTITY);
+
+        assertTrue(column.isIdentity());
+    }
+
+    @Test
+    public void testCreatingNonNullableColumn() {
+        Column column = new Column("id", bigint(), NOT_NULL);
+
+        assertTrue(column.isNotNull());
+    }
+
+    @Test
+    public void testGetParentReturnsNullWhenColumnDoesNotBelongToTable() {
+        Column column = new Column("id", bigint());
+
+        assertEquals(null, column.getParent());
+    }
+
+    @Test
+    public void testGetParentReturnsParentTableWhenColumnBelongsToTable() {
+        Table table = new Table("users");
+        Column column = new Column("id", bigint());
+        table.addColumn(column);
+
+        assertEquals(table, column.getParent());
     }
 
     @Test
@@ -177,6 +160,23 @@ public class ColumnTest {
     }
 
     @Test
+    public void testRemovingColumnWithOutgoingForeignKey() {
+        Table users = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, NOT_NULL, AUTO_INCREMENT))
+                                        .addColumn(new Column("address_id", bigint(), NOT_NULL));
+
+        Table addresses = new Table("addresses").addColumn(new Column("id", bigint(), IDENTITY, NOT_NULL,
+                AUTO_INCREMENT));
+
+        users.addForeignKey("address_id").referencing(addresses, "id");
+
+        users.removeColumn("address_id");
+
+        assertTrue(addresses.getColumn("id").getIncomingForeignKeys().isEmpty());
+        assertTrue(addresses.getForeignKeys().isEmpty());
+        assertTrue(users.getForeignKeys().isEmpty());
+    }
+
+    @Test
     public void testRenamingColumn() {
         Column column = new Column("id", bigint());
         column.rename("uuid");
@@ -195,13 +195,13 @@ public class ColumnTest {
     }
 
     @Test
-    public void testRenamingColumnWithNullForColumnName() {
-        assertThrows(IllegalArgumentException.class, () -> new Column("id", bigint()).rename(null));
+    public void testRenamingColumnWithEmptyStringForColumnName() {
+        assertThrows(IllegalArgumentException.class, () -> new Column("id", bigint()).rename(""));
     }
 
     @Test
-    public void testRenamingColumnWithEmptyStringForColumnName() {
-        assertThrows(IllegalArgumentException.class, () -> new Column("id", bigint()).rename(""));
+    public void testRenamingColumnWithNullForColumnName() {
+        assertThrows(IllegalArgumentException.class, () -> new Column("id", bigint()).rename(null));
     }
 
     @Test

@@ -7,120 +7,135 @@ import io.quantumdb.core.schema.operations.CreateView;
 import io.quantumdb.core.schema.operations.SchemaOperations;
 
 public class XmlCreateView implements XmlOperation<CreateView> {
-	static final String TAG = "createView";
+    static final String TAG = "createView";
 
-	static XmlOperation convert(XmlElement element) {
-		checkArgument(element.getTag().equals(TAG));
-		XmlCreateView operation = new XmlCreateView();
-		operation.setViewName(element.getAttributes().get("viewName"));
-		operation.setRecursive(Boolean.TRUE.toString().equals(element.getAttributes().get("recursive")));
-		operation.setTemporary(Boolean.TRUE.toString().equals(element.getAttributes().get("temporary")));
-		operation.setQuery(Strings.emptyToNull(element.getChildren().stream().filter(child -> child.getTag().equals(XmlQuery.TAG)).map(child -> (XmlQuery) XmlQuery.convert(child)).map(XmlQuery::getQuery).findFirst().orElseThrow(() -> new RuntimeException("No query specified!")).trim()));
-		return operation;
-	}
+    static XmlOperation<?> convert(XmlElement element) {
+        checkArgument(element.getTag().equals(TAG));
+        XmlCreateView operation = new XmlCreateView();
+        operation.setViewName(element.getAttributes().get("viewName"));
+        operation.setRecursive(Boolean.TRUE.toString().equals(element.getAttributes().get("recursive")));
+        operation.setTemporary(Boolean.TRUE.toString().equals(element.getAttributes().get("temporary")));
+        operation.setQuery(Strings.emptyToNull(element.getChildren()
+                                                      .stream()
+                                                      .filter(child -> child.getTag().equals(XmlQuery.TAG))
+                                                      .map(child -> (XmlQuery) XmlQuery.convert(child))
+                                                      .map(XmlQuery::getQuery)
+                                                      .findFirst()
+                                                      .orElseThrow(() -> new RuntimeException("No query specified!"))
+                                                      .trim()));
+        return operation;
+    }
 
-	private String viewName;
-	private boolean recursive;
-	private boolean temporary;
-	private String query;
+    private String  query;
+    private boolean recursive;
+    private boolean temporary;
+    private String  viewName;
 
-	@Override
-	public CreateView toOperation() {
-		CreateView operation = SchemaOperations.createView(viewName);
-		if (recursive) {
-			operation.recursive();
-		}
-		if (temporary) {
-			operation.temporary();
-		}
-		operation.as(query);
-		return operation;
-	}
+    @java.lang.SuppressWarnings("all")
+    public XmlCreateView() {
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public XmlCreateView() {
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public boolean equals(final java.lang.Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof XmlCreateView))
+            return false;
+        final XmlCreateView other = (XmlCreateView) o;
+        if (!other.canEqual(this))
+            return false;
+        if (this.isRecursive() != other.isRecursive())
+            return false;
+        if (this.isTemporary() != other.isTemporary())
+            return false;
+        final java.lang.Object this$viewName = this.getViewName();
+        final java.lang.Object other$viewName = other.getViewName();
+        if (this$viewName == null ? other$viewName != null : !this$viewName.equals(other$viewName))
+            return false;
+        final java.lang.Object this$query = this.getQuery();
+        final java.lang.Object other$query = other.getQuery();
+        if (this$query == null ? other$query != null : !this$query.equals(other$query))
+            return false;
+        return true;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getViewName() {
-		return this.viewName;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getQuery() {
+        return this.query;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public boolean isRecursive() {
-		return this.recursive;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getViewName() {
+        return this.viewName;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public boolean isTemporary() {
-		return this.temporary;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        result = result * PRIME + (this.isRecursive() ? 79 : 97);
+        result = result * PRIME + (this.isTemporary() ? 79 : 97);
+        final java.lang.Object $viewName = this.getViewName();
+        result = result * PRIME + ($viewName == null ? 43 : $viewName.hashCode());
+        final java.lang.Object $query = this.getQuery();
+        result = result * PRIME + ($query == null ? 43 : $query.hashCode());
+        return result;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getQuery() {
-		return this.query;
-	}
+    @java.lang.SuppressWarnings("all")
+    public boolean isRecursive() {
+        return this.recursive;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setViewName(final String viewName) {
-		this.viewName = viewName;
-	}
+    @java.lang.SuppressWarnings("all")
+    public boolean isTemporary() {
+        return this.temporary;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setRecursive(final boolean recursive) {
-		this.recursive = recursive;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setQuery(final String query) {
+        this.query = query;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setTemporary(final boolean temporary) {
-		this.temporary = temporary;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setRecursive(final boolean recursive) {
+        this.recursive = recursive;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setQuery(final String query) {
-		this.query = query;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setTemporary(final boolean temporary) {
+        this.temporary = temporary;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public boolean equals(final java.lang.Object o) {
-		if (o == this) return true;
-		if (!(o instanceof XmlCreateView)) return false;
-		final XmlCreateView other = (XmlCreateView) o;
-		if (!other.canEqual((java.lang.Object) this)) return false;
-		if (this.isRecursive() != other.isRecursive()) return false;
-		if (this.isTemporary() != other.isTemporary()) return false;
-		final java.lang.Object this$viewName = this.getViewName();
-		final java.lang.Object other$viewName = other.getViewName();
-		if (this$viewName == null ? other$viewName != null : !this$viewName.equals(other$viewName)) return false;
-		final java.lang.Object this$query = this.getQuery();
-		final java.lang.Object other$query = other.getQuery();
-		if (this$query == null ? other$query != null : !this$query.equals(other$query)) return false;
-		return true;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setViewName(final String viewName) {
+        this.viewName = viewName;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	protected boolean canEqual(final java.lang.Object other) {
-		return other instanceof XmlCreateView;
-	}
+    @Override
+    public CreateView toOperation() {
+        CreateView operation = SchemaOperations.createView(viewName);
+        if (recursive) {
+            operation.recursive();
+        }
+        if (temporary) {
+            operation.temporary();
+        }
+        operation.as(query);
+        return operation;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public int hashCode() {
-		final int PRIME = 59;
-		int result = 1;
-		result = result * PRIME + (this.isRecursive() ? 79 : 97);
-		result = result * PRIME + (this.isTemporary() ? 79 : 97);
-		final java.lang.Object $viewName = this.getViewName();
-		result = result * PRIME + ($viewName == null ? 43 : $viewName.hashCode());
-		final java.lang.Object $query = this.getQuery();
-		result = result * PRIME + ($query == null ? 43 : $query.hashCode());
-		return result;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public java.lang.String toString() {
+        return "XmlCreateView(viewName=" + this.getViewName() + ", recursive=" + this.isRecursive() + ", temporary="
+                + this.isTemporary() + ", query=" + this.getQuery() + ")";
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public java.lang.String toString() {
-		return "XmlCreateView(viewName=" + this.getViewName() + ", recursive=" + this.isRecursive() + ", temporary=" + this.isTemporary() + ", query=" + this.getQuery() + ")";
-	}
+    @java.lang.SuppressWarnings("all")
+    protected boolean canEqual(final java.lang.Object other) {
+        return other instanceof XmlCreateView;
+    }
 }

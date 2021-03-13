@@ -37,12 +37,14 @@ public class PostgresqlQueryRewriter implements QueryRewriter {
 		this.tableMapping = new HashMap<>();
 	}
 
-	public void setTableMapping(Map<String, String> newTableMapping) {
+	@Override
+    public void setTableMapping(Map<String, String> newTableMapping) {
 		tableMapping.clear();
 		tableMapping.putAll(newTableMapping);
 	}
 
-	public String rewrite(String query) throws SQLException {
+	@Override
+    public String rewrite(String query) throws SQLException {
 		if (query == null) {
 			throw new IllegalArgumentException("You must specify specify a 'query'.");
 		}

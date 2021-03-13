@@ -15,20 +15,35 @@ import io.quantumdb.core.schema.definitions.TestTypes;
 public class AlterColumnTest {
 
     @Test
-    public void testRenamingColumn() {
-        AlterColumn operation = SchemaOperations.alterColumn("users", "name").rename("full_name");
+    public void testAddingHint() {
+        AlterColumn operation = SchemaOperations.alterColumn("users", "name").addHint(Column.Hint.NOT_NULL);
 
-        assertEquals("users", operation.getTableName());
-        assertEquals("name", operation.getColumnName());
-        assertEquals("full_name", operation.getNewColumnName().get());
+        assertEquals(Sets.newHashSet(Column.Hint.NOT_NULL), operation.getHintsToAdd());
     }
 
-    public void testRenamingThrowsExceptionWhenInputIsNull() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.alterColumn("users", "name").rename(null));
+    @Test
+    public void testAddingHintThrowsExceptionWhenInputIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.alterColumn("users", "name").addHint(null));
     }
 
-    public void testRenamingThrowsExceptionWhenInputIsEmptyString() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.alterColumn("users", "name").rename(""));
+    @Test
+    public void testDroppingDefaultExpression() {
+        AlterColumn operation = SchemaOperations.alterColumn("users", "name").dropDefaultExpression();
+
+        assertTrue(isNullOrEmpty(operation.getNewDefaultValueExpression().get()));
+    }
+
+    @Test
+    public void testDroppingHint() {
+        AlterColumn operation = SchemaOperations.alterColumn("users", "name").dropHint(Column.Hint.NOT_NULL);
+
+        assertEquals(Sets.newHashSet(Column.Hint.NOT_NULL), operation.getHintsToDrop());
+    }
+
+    @Test
+    public void testDroppingHintThrowsExceptionWhenInputIsNull() {
+        assertThrows(IllegalArgumentException.class,
+                     () -> SchemaOperations.alterColumn("users", "name").dropHint(null));
     }
 
     @Test
@@ -49,11 +64,6 @@ public class AlterColumnTest {
 
         assertEquals("'unknown'", operation.getNewDefaultValueExpression().get());
     }
-    @Test
-    public void testModifyingDefaultExpressionThrowsExceptionWhenInputIsNull() {
-        assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.alterColumn("users", "name").modifyDefaultExpression(null));
-    }
 
     @Test
     public void testModifyingDefaultExpressionThrowsExceptionWhenInputIsEmptyString() {
@@ -62,35 +72,26 @@ public class AlterColumnTest {
     }
 
     @Test
-    public void testDroppingDefaultExpression() {
-        AlterColumn operation = SchemaOperations.alterColumn("users", "name").dropDefaultExpression();
-
-        assertTrue(isNullOrEmpty(operation.getNewDefaultValueExpression().get()));
-    }
-
-    @Test
-    public void testAddingHint() {
-        AlterColumn operation = SchemaOperations.alterColumn("users", "name").addHint(Column.Hint.NOT_NULL);
-
-        assertEquals(Sets.newHashSet(Column.Hint.NOT_NULL), operation.getHintsToAdd());
-    }
-
-    @Test
-    public void testAddingHintThrowsExceptionWhenInputIsNull() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.alterColumn("users", "name").addHint(null));
-    }
-
-    @Test
-    public void testDroppingHint() {
-        AlterColumn operation = SchemaOperations.alterColumn("users", "name").dropHint(Column.Hint.NOT_NULL);
-
-        assertEquals(Sets.newHashSet(Column.Hint.NOT_NULL), operation.getHintsToDrop());
-    }
-
-    @Test
-    public void testDroppingHintThrowsExceptionWhenInputIsNull() {
+    public void testModifyingDefaultExpressionThrowsExceptionWhenInputIsNull() {
         assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.alterColumn("users", "name").dropHint(null));
+                     () -> SchemaOperations.alterColumn("users", "name").modifyDefaultExpression(null));
+    }
+
+    @Test
+    public void testRenamingColumn() {
+        AlterColumn operation = SchemaOperations.alterColumn("users", "name").rename("full_name");
+
+        assertEquals("users", operation.getTableName());
+        assertEquals("name", operation.getColumnName());
+        assertEquals("full_name", operation.getNewColumnName().get());
+    }
+
+    public void testRenamingThrowsExceptionWhenInputIsEmptyString() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.alterColumn("users", "name").rename(""));
+    }
+
+    public void testRenamingThrowsExceptionWhenInputIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.alterColumn("users", "name").rename(null));
     }
 
 }

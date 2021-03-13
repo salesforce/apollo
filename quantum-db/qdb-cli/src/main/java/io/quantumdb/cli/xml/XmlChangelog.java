@@ -6,57 +6,61 @@ import java.util.List;
 import com.google.common.collect.Lists;
 
 public class XmlChangelog {
-	static XmlChangelog convert(XmlElement element) {
-		checkArgument(element.getTag().equals("changelog"));
-		XmlChangelog changelog = new XmlChangelog();
-		for (XmlElement child : element.getChildren()) {
-			changelog.getChangesets().add(XmlChangeset.convert(child));
-		}
-		return changelog;
-	}
+    static XmlChangelog convert(XmlElement element) {
+        checkArgument(element.getTag().equals("changelog"));
+        XmlChangelog changelog = new XmlChangelog();
+        for (XmlElement child : element.getChildren()) {
+            changelog.getChangesets().add(XmlChangeset.convert(child));
+        }
+        return changelog;
+    }
 
-	private final List<XmlChangeset> changesets = Lists.newArrayList();
+    private final List<XmlChangeset> changesets = Lists.newArrayList();
 
-	@java.lang.SuppressWarnings("all")
-	public XmlChangelog() {
-	}
+    @java.lang.SuppressWarnings("all")
+    public XmlChangelog() {
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public List<XmlChangeset> getChangesets() {
-		return this.changesets;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public boolean equals(final java.lang.Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof XmlChangelog))
+            return false;
+        final XmlChangelog other = (XmlChangelog) o;
+        if (!other.canEqual(this))
+            return false;
+        final java.lang.Object this$changesets = this.getChangesets();
+        final java.lang.Object other$changesets = other.getChangesets();
+        if (this$changesets == null ? other$changesets != null : !this$changesets.equals(other$changesets))
+            return false;
+        return true;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public boolean equals(final java.lang.Object o) {
-		if (o == this) return true;
-		if (!(o instanceof XmlChangelog)) return false;
-		final XmlChangelog other = (XmlChangelog) o;
-		if (!other.canEqual((java.lang.Object) this)) return false;
-		final java.lang.Object this$changesets = this.getChangesets();
-		final java.lang.Object other$changesets = other.getChangesets();
-		if (this$changesets == null ? other$changesets != null : !this$changesets.equals(other$changesets)) return false;
-		return true;
-	}
+    @java.lang.SuppressWarnings("all")
+    public List<XmlChangeset> getChangesets() {
+        return this.changesets;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	protected boolean canEqual(final java.lang.Object other) {
-		return other instanceof XmlChangelog;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        final java.lang.Object $changesets = this.getChangesets();
+        result = result * PRIME + ($changesets == null ? 43 : $changesets.hashCode());
+        return result;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public int hashCode() {
-		final int PRIME = 59;
-		int result = 1;
-		final java.lang.Object $changesets = this.getChangesets();
-		result = result * PRIME + ($changesets == null ? 43 : $changesets.hashCode());
-		return result;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public java.lang.String toString() {
+        return "XmlChangelog(changesets=" + this.getChangesets() + ")";
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public java.lang.String toString() {
-		return "XmlChangelog(changesets=" + this.getChangesets() + ")";
-	}
+    @java.lang.SuppressWarnings("all")
+    protected boolean canEqual(final java.lang.Object other) {
+        return other instanceof XmlChangelog;
+    }
 }

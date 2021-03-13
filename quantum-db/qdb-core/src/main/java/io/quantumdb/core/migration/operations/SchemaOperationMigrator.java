@@ -7,6 +7,6 @@ import io.quantumdb.core.versioning.Version;
 
 interface SchemaOperationMigrator<T extends SchemaOperation> {
 
-	void migrate(Catalog catalog, RefLog refLog, Version version, T operation);
+    void migrate(Catalog catalog, RefLog refLog, Version version, T operation);
 
 }

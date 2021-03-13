@@ -5,89 +5,99 @@ import java.util.List;
 
 public class MigratorFunction {
 
-	public enum Stage {
-		INITIAL, CONSECUTIVE;
-	}
+    public enum Stage {
+        CONSECUTIVE, INITIAL;
+    }
 
-	private final String name;
-	private final List<String> parameters;
-	private final String createStatement;
-	private final String dropStatement;
+    private final String       createStatement;
+    private final String       dropStatement;
+    private final String       name;
+    private final List<String> parameters;
 
-	@java.lang.SuppressWarnings("all")
-	public MigratorFunction(final String name, final List<String> parameters, final String createStatement, final String dropStatement) {
-		this.name = name;
-		this.parameters = parameters;
-		this.createStatement = createStatement;
-		this.dropStatement = dropStatement;
-	}
+    @java.lang.SuppressWarnings("all")
+    public MigratorFunction(final String name, final List<String> parameters, final String createStatement,
+            final String dropStatement) {
+        this.name = name;
+        this.parameters = parameters;
+        this.createStatement = createStatement;
+        this.dropStatement = dropStatement;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getName() {
-		return this.name;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public boolean equals(final java.lang.Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof MigratorFunction))
+            return false;
+        final MigratorFunction other = (MigratorFunction) o;
+        if (!other.canEqual(this))
+            return false;
+        final java.lang.Object this$name = this.getName();
+        final java.lang.Object other$name = other.getName();
+        if (this$name == null ? other$name != null : !this$name.equals(other$name))
+            return false;
+        final java.lang.Object this$parameters = this.getParameters();
+        final java.lang.Object other$parameters = other.getParameters();
+        if (this$parameters == null ? other$parameters != null : !this$parameters.equals(other$parameters))
+            return false;
+        final java.lang.Object this$createStatement = this.getCreateStatement();
+        final java.lang.Object other$createStatement = other.getCreateStatement();
+        if (this$createStatement == null ? other$createStatement != null
+                : !this$createStatement.equals(other$createStatement))
+            return false;
+        final java.lang.Object this$dropStatement = this.getDropStatement();
+        final java.lang.Object other$dropStatement = other.getDropStatement();
+        if (this$dropStatement == null ? other$dropStatement != null : !this$dropStatement.equals(other$dropStatement))
+            return false;
+        return true;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public List<String> getParameters() {
-		return this.parameters;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getCreateStatement() {
+        return this.createStatement;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getCreateStatement() {
-		return this.createStatement;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getDropStatement() {
+        return this.dropStatement;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getDropStatement() {
-		return this.dropStatement;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getName() {
+        return this.name;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public boolean equals(final java.lang.Object o) {
-		if (o == this) return true;
-		if (!(o instanceof MigratorFunction)) return false;
-		final MigratorFunction other = (MigratorFunction) o;
-		if (!other.canEqual((java.lang.Object) this)) return false;
-		final java.lang.Object this$name = this.getName();
-		final java.lang.Object other$name = other.getName();
-		if (this$name == null ? other$name != null : !this$name.equals(other$name)) return false;
-		final java.lang.Object this$parameters = this.getParameters();
-		final java.lang.Object other$parameters = other.getParameters();
-		if (this$parameters == null ? other$parameters != null : !this$parameters.equals(other$parameters)) return false;
-		final java.lang.Object this$createStatement = this.getCreateStatement();
-		final java.lang.Object other$createStatement = other.getCreateStatement();
-		if (this$createStatement == null ? other$createStatement != null : !this$createStatement.equals(other$createStatement)) return false;
-		final java.lang.Object this$dropStatement = this.getDropStatement();
-		final java.lang.Object other$dropStatement = other.getDropStatement();
-		if (this$dropStatement == null ? other$dropStatement != null : !this$dropStatement.equals(other$dropStatement)) return false;
-		return true;
-	}
+    @java.lang.SuppressWarnings("all")
+    public List<String> getParameters() {
+        return this.parameters;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	protected boolean canEqual(final java.lang.Object other) {
-		return other instanceof MigratorFunction;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        final java.lang.Object $name = this.getName();
+        result = result * PRIME + ($name == null ? 43 : $name.hashCode());
+        final java.lang.Object $parameters = this.getParameters();
+        result = result * PRIME + ($parameters == null ? 43 : $parameters.hashCode());
+        final java.lang.Object $createStatement = this.getCreateStatement();
+        result = result * PRIME + ($createStatement == null ? 43 : $createStatement.hashCode());
+        final java.lang.Object $dropStatement = this.getDropStatement();
+        result = result * PRIME + ($dropStatement == null ? 43 : $dropStatement.hashCode());
+        return result;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public int hashCode() {
-		final int PRIME = 59;
-		int result = 1;
-		final java.lang.Object $name = this.getName();
-		result = result * PRIME + ($name == null ? 43 : $name.hashCode());
-		final java.lang.Object $parameters = this.getParameters();
-		result = result * PRIME + ($parameters == null ? 43 : $parameters.hashCode());
-		final java.lang.Object $createStatement = this.getCreateStatement();
-		result = result * PRIME + ($createStatement == null ? 43 : $createStatement.hashCode());
-		final java.lang.Object $dropStatement = this.getDropStatement();
-		result = result * PRIME + ($dropStatement == null ? 43 : $dropStatement.hashCode());
-		return result;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public java.lang.String toString() {
+        return "MigratorFunction(name=" + this.getName() + ", parameters=" + this.getParameters() + ", createStatement="
+                + this.getCreateStatement() + ", dropStatement=" + this.getDropStatement() + ")";
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public java.lang.String toString() {
-		return "MigratorFunction(name=" + this.getName() + ", parameters=" + this.getParameters() + ", createStatement=" + this.getCreateStatement() + ", dropStatement=" + this.getDropStatement() + ")";
-	}
+    @java.lang.SuppressWarnings("all")
+    protected boolean canEqual(final java.lang.Object other) {
+        return other instanceof MigratorFunction;
+    }
 }

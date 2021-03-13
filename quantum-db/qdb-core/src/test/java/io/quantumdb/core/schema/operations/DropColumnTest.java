@@ -16,8 +16,8 @@ public class DropColumnTest {
     }
 
     @Test
-    public void testDropColumnThrowsExceptionWhenNullForTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.dropColumn(null, "age"));
+    public void testDropColumnThrowsExceptionWhenEmptyStringForColumnName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.dropColumn("users", ""));
     }
 
     @Test
@@ -31,8 +31,8 @@ public class DropColumnTest {
     }
 
     @Test
-    public void testDropColumnThrowsExceptionWhenEmptyStringForColumnName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.dropColumn("users", ""));
+    public void testDropColumnThrowsExceptionWhenNullForTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.dropColumn(null, "age"));
     }
 
 }

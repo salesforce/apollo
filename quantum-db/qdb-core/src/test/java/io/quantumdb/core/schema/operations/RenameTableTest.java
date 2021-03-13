@@ -16,8 +16,8 @@ public class RenameTableTest {
     }
 
     @Test
-    public void testRenameTableThrowsExceptionWhenNullForTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.renameTable(null, "players"));
+    public void testRenameTableThrowsExceptionWhenEmptyStringForNewTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.renameTable("users", ""));
     }
 
     @Test
@@ -31,8 +31,8 @@ public class RenameTableTest {
     }
 
     @Test
-    public void testRenameTableThrowsExceptionWhenEmptyStringForNewTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.renameTable("users", ""));
+    public void testRenameTableThrowsExceptionWhenNullForTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.renameTable(null, "players"));
     }
 
 }

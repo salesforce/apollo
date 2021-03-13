@@ -40,17 +40,17 @@ public class CreateCreditCardsTable {
 
     public static PostgresqlBaseScenario setup = new PostgresqlBaseScenario();
 
-    private static State   state;
     private static Version origin;
+    private static State   state;
     private static Version target;
 
     @AfterAll
-    public static  void after() throws Exception {
+    public static void after() throws Exception {
         setup.after();
     }
 
     @BeforeAll
-    public static  void before() throws Exception {
+    public static void before() throws Exception {
         setup.before();
     }
 
@@ -73,6 +73,24 @@ public class CreateCreditCardsTable {
         setup.getMigrator().migrate(origin.getId(), target.getId());
 
         state = setup.getBackend().loadState();
+    }
+
+    @Test
+    public void verifyTableMappings() {
+        RefLog refLog = state.getRefLog();
+
+        // Unchanged tables
+        assertEquals(FILMS_ID, refLog.getTableRef(target, "films").getRefId());
+        assertEquals(CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
+        assertEquals(PAYMENTS_ID, refLog.getTableRef(target, "payments").getRefId());
+        assertEquals(RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
+        assertEquals(STORES_ID, refLog.getTableRef(target, "stores").getRefId());
+        assertEquals(STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
+        assertEquals(INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
+        assertEquals(PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
+
+        // New tables
+        assertNotNull(refLog.getTableRef(target, "credit_cards").getRefId());
     }
 
     @Test
@@ -186,24 +204,6 @@ public class CreateCreditCardsTable {
         tables.forEach(expected::addTable);
 
         assertEquals(expected.getTables(), state.getCatalog().getTables());
-    }
-
-    @Test
-    public void verifyTableMappings() {
-        RefLog refLog = state.getRefLog();
-
-        // Unchanged tables
-        assertEquals(FILMS_ID, refLog.getTableRef(target, "films").getRefId());
-        assertEquals(CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
-        assertEquals(PAYMENTS_ID, refLog.getTableRef(target, "payments").getRefId());
-        assertEquals(RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
-        assertEquals(STORES_ID, refLog.getTableRef(target, "stores").getRefId());
-        assertEquals(STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
-        assertEquals(INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
-        assertEquals(PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
-
-        // New tables
-        assertNotNull(refLog.getTableRef(target, "credit_cards").getRefId());
     }
 
 }

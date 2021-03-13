@@ -8,67 +8,79 @@ import io.quantumdb.core.schema.operations.DataOperation;
 import io.quantumdb.core.schema.operations.SchemaOperations;
 
 public class XmlQuery implements XmlOperation<DataOperation> {
-	static final String TAG = "sql";
+    static final String TAG = "sql";
 
-	static XmlOperation convert(XmlElement element) {
-		checkArgument(element.getTag().equals(TAG));
-		XmlQuery operation = new XmlQuery();
-		operation.setQuery(Optional.ofNullable(element.getText()).orElseGet(() -> element.getChildren().stream().filter(child -> child.getTag() == null).map(XmlElement::getText).filter(Objects::nonNull).findFirst().orElseThrow(() -> new RuntimeException("No query specified!"))));
-		return operation;
-	}
+    static XmlOperation<?> convert(XmlElement element) {
+        checkArgument(element.getTag().equals(TAG));
+        XmlQuery operation = new XmlQuery();
+        operation.setQuery(Optional.ofNullable(element.getText())
+                                   .orElseGet(() -> element.getChildren()
+                                                           .stream()
+                                                           .filter(child -> child.getTag() == null)
+                                                           .map(XmlElement::getText)
+                                                           .filter(Objects::nonNull)
+                                                           .findFirst()
+                                                           .orElseThrow(() -> new RuntimeException(
+                                                                   "No query specified!"))));
+        return operation;
+    }
 
-	private String query;
+    private String query;
 
-	@Override
-	public DataOperation toOperation() {
-		return SchemaOperations.execute(query);
-	}
+    @java.lang.SuppressWarnings("all")
+    public XmlQuery() {
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public XmlQuery() {
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public boolean equals(final java.lang.Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof XmlQuery))
+            return false;
+        final XmlQuery other = (XmlQuery) o;
+        if (!other.canEqual(this))
+            return false;
+        final java.lang.Object this$query = this.getQuery();
+        final java.lang.Object other$query = other.getQuery();
+        if (this$query == null ? other$query != null : !this$query.equals(other$query))
+            return false;
+        return true;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getQuery() {
-		return this.query;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getQuery() {
+        return this.query;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setQuery(final String query) {
-		this.query = query;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        final java.lang.Object $query = this.getQuery();
+        result = result * PRIME + ($query == null ? 43 : $query.hashCode());
+        return result;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public boolean equals(final java.lang.Object o) {
-		if (o == this) return true;
-		if (!(o instanceof XmlQuery)) return false;
-		final XmlQuery other = (XmlQuery) o;
-		if (!other.canEqual((java.lang.Object) this)) return false;
-		final java.lang.Object this$query = this.getQuery();
-		final java.lang.Object other$query = other.getQuery();
-		if (this$query == null ? other$query != null : !this$query.equals(other$query)) return false;
-		return true;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setQuery(final String query) {
+        this.query = query;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	protected boolean canEqual(final java.lang.Object other) {
-		return other instanceof XmlQuery;
-	}
+    @Override
+    public DataOperation toOperation() {
+        return SchemaOperations.execute(query);
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public int hashCode() {
-		final int PRIME = 59;
-		int result = 1;
-		final java.lang.Object $query = this.getQuery();
-		result = result * PRIME + ($query == null ? 43 : $query.hashCode());
-		return result;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public java.lang.String toString() {
+        return "XmlQuery(query=" + this.getQuery() + ")";
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public java.lang.String toString() {
-		return "XmlQuery(query=" + this.getQuery() + ")";
-	}
+    @java.lang.SuppressWarnings("all")
+    protected boolean canEqual(final java.lang.Object other) {
+        return other instanceof XmlQuery;
+    }
 }

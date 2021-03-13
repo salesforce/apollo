@@ -21,38 +21,12 @@ import org.hamcrest.Matcher;
 public class ErrorCollector {
     private List<Throwable> errors = new ArrayList<Throwable>();
 
-    public void verify() throws Throwable {
-        MultipleFailureException.assertEmpty(errors);
-    }
-
     /**
      * Adds a Throwable to the table. Execution continues, but the test will fail at
      * the end.
      */
     public void addError(Throwable error) {
         errors.add(error);
-    }
-
-    /**
-     * Adds a failure to the table if {@code matcher} does not match {@code value}.
-     * Execution continues, but the test will fail at the end if the match fails.
-     */
-    public <T> void checkThat(final T value, final Matcher<T> matcher) {
-        checkThat("", value, matcher);
-    }
-
-    /**
-     * Adds a failure with the given {@code reason} to the table if {@code matcher}
-     * does not match {@code value}. Execution continues, but the test will fail at
-     * the end if the match fails.
-     */
-    public <T> void checkThat(final String reason, final T value, final Matcher<T> matcher) {
-        checkSucceeds(new Callable<Object>() {
-            public Object call() throws Exception {
-                assertThat(reason, value, matcher);
-                return value;
-            }
-        });
     }
 
     /**
@@ -67,5 +41,32 @@ public class ErrorCollector {
             addError(e);
             return null;
         }
+    }
+
+    /**
+     * Adds a failure with the given {@code reason} to the table if {@code matcher}
+     * does not match {@code value}. Execution continues, but the test will fail at
+     * the end if the match fails.
+     */
+    public <T> void checkThat(final String reason, final T value, final Matcher<T> matcher) {
+        checkSucceeds(new Callable<Object>() {
+            @Override
+            public Object call() throws Exception {
+                assertThat(reason, value, matcher);
+                return value;
+            }
+        });
+    }
+
+    /**
+     * Adds a failure to the table if {@code matcher} does not match {@code value}.
+     * Execution continues, but the test will fail at the end if the match fails.
+     */
+    public <T> void checkThat(final T value, final Matcher<T> matcher) {
+        checkThat("", value, matcher);
+    }
+
+    public void verify() throws Throwable {
+        MultipleFailureException.assertEmpty(errors);
     }
 }

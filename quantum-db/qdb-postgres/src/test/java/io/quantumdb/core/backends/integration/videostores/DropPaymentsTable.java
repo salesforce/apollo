@@ -33,129 +33,156 @@ import io.quantumdb.core.schema.definitions.Table;
 import io.quantumdb.core.schema.operations.SchemaOperations;
 import io.quantumdb.core.versioning.RefLog;
 import io.quantumdb.core.versioning.State;
-import io.quantumdb.core.versioning.Version; 
+import io.quantumdb.core.versioning.Version;
 
 public class DropPaymentsTable {
- 
-	public static PostgresqlBaseScenario setup = new PostgresqlBaseScenario();
 
-	private static State state;
-	private static Version origin;
-	private static Version target;
+    public static PostgresqlBaseScenario setup = new PostgresqlBaseScenario();
+
+    private static Version origin;
+    private static State   state;
+    private static Version target;
+
     @AfterAll
-    public static  void after() throws Exception {
+    public static void after() throws Exception {
         setup.after();
     }
+
     @BeforeAll
-    public static  void before() throws Exception {
+    public static void before() throws Exception {
         setup.before();
     }
 
-	@BeforeAll
-	public static void performEvolution() throws SQLException, MigrationException {
-		origin = setup.getChangelog().getLastAdded();
+    @BeforeAll
+    public static void performEvolution() throws SQLException, MigrationException {
+        origin = setup.getChangelog().getLastAdded();
 
-		setup.getChangelog().addChangeSet("test", "Michael de Jong",
-				SchemaOperations.dropTable("payments"));
+        setup.getChangelog().addChangeSet("test", "Michael de Jong", SchemaOperations.dropTable("payments"));
 
-		target = setup.getChangelog().getLastAdded();
-		setup.getBackend().persistState(setup.getState());
+        target = setup.getChangelog().getLastAdded();
+        setup.getBackend().persistState(setup.getState());
 
-		setup.getMigrator().migrate(origin.getId(), target.getId());
+        setup.getMigrator().migrate(origin.getId(), target.getId());
 
-		state = setup.getBackend().loadState();
-	}
+        state = setup.getBackend().loadState();
+    }
 
-	@Test
-	public void verifyTableStructure() {
-		RefLog refLog = state.getRefLog();
+    @Test
+    public void verifyTableMappings() {
+        RefLog refLog = state.getRefLog();
 
-		// Original tables and foreign keys.
+        // Unchanged tables
+        assertEquals(STORES_ID, refLog.getTableRef(target, "stores").getRefId());
+        assertEquals(STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
+        assertEquals(FILMS_ID, refLog.getTableRef(target, "films").getRefId());
+        assertEquals(INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
+        assertEquals(PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
+        assertEquals(CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
+        assertEquals(RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
 
-		Table stores = new Table(refLog.getTableRef(origin, "stores").getRefId())
-				.addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-				.addColumn(new Column("name", varchar(255), NOT_NULL))
-				.addColumn(new Column("manager_id", integer(), NOT_NULL));
+        // Dropped tables
+        assertFalse(refLog.getTableRefs(target).stream().anyMatch(ref -> ref.getName().equals("payments")));
+    }
 
-		Table staff = new Table(refLog.getTableRef(origin, "staff").getRefId())
-				.addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-				.addColumn(new Column("name", varchar(255), NOT_NULL))
-				.addColumn(new Column("store_id", integer(), NOT_NULL));
+    @Test
+    public void verifyTableStructure() {
+        RefLog refLog = state.getRefLog();
 
-		Table customers = new Table(refLog.getTableRef(origin, "customers").getRefId())
-				.addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-				.addColumn(new Column("name", varchar(255), NOT_NULL))
-				.addColumn(new Column("store_id", integer(), NOT_NULL))
-				.addColumn(new Column("referred_by", integer()));
+        // Original tables and foreign keys.
 
-		Table films = new Table(refLog.getTableRef(origin, "films").getRefId())
-				.addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-				.addColumn(new Column("name", varchar(255), NOT_NULL));
+        Table stores = new Table(refLog.getTableRef(origin, "stores").getRefId()).addColumn(new Column("id", integer(),
+                IDENTITY, AUTO_INCREMENT, NOT_NULL))
+                                                                                 .addColumn(new Column("name",
+                                                                                         varchar(255), NOT_NULL))
+                                                                                 .addColumn(new Column("manager_id",
+                                                                                         integer(), NOT_NULL));
 
-		Table inventory = new Table(refLog.getTableRef(origin, "inventory").getRefId())
-				.addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-				.addColumn(new Column("store_id", integer(), NOT_NULL))
-				.addColumn(new Column("film_id", integer(), NOT_NULL));
+        Table staff = new Table(refLog.getTableRef(origin, "staff").getRefId()).addColumn(new Column("id", integer(),
+                IDENTITY, AUTO_INCREMENT, NOT_NULL))
+                                                                               .addColumn(new Column("name",
+                                                                                       varchar(255), NOT_NULL))
+                                                                               .addColumn(new Column("store_id",
+                                                                                       integer(), NOT_NULL));
 
-		Table paychecks = new Table(refLog.getTableRef(origin, "paychecks").getRefId())
-				.addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-				.addColumn(new Column("staff_id", integer(), NOT_NULL))
-				.addColumn(new Column("date", date(), NOT_NULL))
-				.addColumn(new Column("amount", floats(), NOT_NULL));
+        Table customers = new Table(refLog.getTableRef(origin, "customers").getRefId()).addColumn(new Column("id",
+                integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
+                                                                                       .addColumn(new Column("name",
+                                                                                               varchar(255), NOT_NULL))
+                                                                                       .addColumn(new Column("store_id",
+                                                                                               integer(), NOT_NULL))
+                                                                                       .addColumn(new Column(
+                                                                                               "referred_by",
+                                                                                               integer()));
 
-		Table payments = new Table(refLog.getTableRef(origin, "payments").getRefId())
-				.addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-				.addColumn(new Column("staff_id", integer()))
-				.addColumn(new Column("customer_id", integer(), NOT_NULL))
-				.addColumn(new Column("rental_id", integer(), NOT_NULL))
-				.addColumn(new Column("date", date(), NOT_NULL))
-				.addColumn(new Column("amount", floats(), NOT_NULL));
+        Table films = new Table(refLog.getTableRef(origin, "films").getRefId()).addColumn(new Column("id", integer(),
+                IDENTITY, AUTO_INCREMENT, NOT_NULL)).addColumn(new Column("name", varchar(255), NOT_NULL));
 
-		Table rentals = new Table(refLog.getTableRef(origin, "rentals").getRefId())
-				.addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-				.addColumn(new Column("staff_id", integer()))
-				.addColumn(new Column("customer_id", integer(), NOT_NULL))
-				.addColumn(new Column("inventory_id", integer(), NOT_NULL))
-				.addColumn(new Column("date", date(), NOT_NULL));
+        Table inventory = new Table(refLog.getTableRef(origin, "inventory").getRefId()).addColumn(new Column("id",
+                integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
+                                                                                       .addColumn(new Column("store_id",
+                                                                                               integer(), NOT_NULL))
+                                                                                       .addColumn(new Column("film_id",
+                                                                                               integer(), NOT_NULL));
 
-		stores.addForeignKey("manager_id").referencing(staff, "id");
-		staff.addForeignKey("store_id").referencing(stores, "id");
-		customers.addForeignKey("referred_by").referencing(customers, "id");
-		customers.addForeignKey("store_id").referencing(stores, "id");
-		inventory.addForeignKey("store_id").referencing(stores, "id");
-		inventory.addForeignKey("film_id").referencing(films, "id");
-		paychecks.addForeignKey("staff_id").referencing(staff, "id");
-		payments.addForeignKey("staff_id").referencing(staff, "id");
-		payments.addForeignKey("customer_id").referencing(customers, "id");
-		payments.addForeignKey("rental_id").referencing(rentals, "id");
-		rentals.addForeignKey("staff_id").referencing(staff, "id");
-		rentals.addForeignKey("customer_id").referencing(customers, "id");
-		rentals.addForeignKey("inventory_id").referencing(inventory, "id");
+        Table paychecks = new Table(refLog.getTableRef(origin, "paychecks").getRefId()).addColumn(new Column("id",
+                integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
+                                                                                       .addColumn(new Column("staff_id",
+                                                                                               integer(), NOT_NULL))
+                                                                                       .addColumn(new Column("date",
+                                                                                               date(), NOT_NULL))
+                                                                                       .addColumn(new Column("amount",
+                                                                                               floats(), NOT_NULL));
 
-		List<Table> tables = Lists.newArrayList(stores, staff, customers, films, inventory, paychecks, payments, rentals);
+        Table payments = new Table(refLog.getTableRef(origin, "payments").getRefId())
+                                                                                     .addColumn(new Column("id",
+                                                                                             integer(), IDENTITY,
+                                                                                             AUTO_INCREMENT, NOT_NULL))
+                                                                                     .addColumn(new Column("staff_id",
+                                                                                             integer()))
+                                                                                     .addColumn(new Column(
+                                                                                             "customer_id", integer(),
+                                                                                             NOT_NULL))
+                                                                                     .addColumn(new Column("rental_id",
+                                                                                             integer(), NOT_NULL))
+                                                                                     .addColumn(new Column("date",
+                                                                                             date(), NOT_NULL))
+                                                                                     .addColumn(new Column("amount",
+                                                                                             floats(), NOT_NULL));
 
-		Catalog expected = new Catalog(setup.getCatalog().getName());
-		tables.forEach(expected::addTable);
+        Table rentals = new Table(refLog.getTableRef(origin, "rentals").getRefId())
+                                                                                   .addColumn(new Column("id",
+                                                                                           integer(), IDENTITY,
+                                                                                           AUTO_INCREMENT, NOT_NULL))
+                                                                                   .addColumn(new Column("staff_id",
+                                                                                           integer()))
+                                                                                   .addColumn(new Column("customer_id",
+                                                                                           integer(), NOT_NULL))
+                                                                                   .addColumn(new Column("inventory_id",
+                                                                                           integer(), NOT_NULL))
+                                                                                   .addColumn(new Column("date", date(),
+                                                                                           NOT_NULL));
 
-		assertEquals(expected.getTables(), state.getCatalog().getTables());
-	}
+        stores.addForeignKey("manager_id").referencing(staff, "id");
+        staff.addForeignKey("store_id").referencing(stores, "id");
+        customers.addForeignKey("referred_by").referencing(customers, "id");
+        customers.addForeignKey("store_id").referencing(stores, "id");
+        inventory.addForeignKey("store_id").referencing(stores, "id");
+        inventory.addForeignKey("film_id").referencing(films, "id");
+        paychecks.addForeignKey("staff_id").referencing(staff, "id");
+        payments.addForeignKey("staff_id").referencing(staff, "id");
+        payments.addForeignKey("customer_id").referencing(customers, "id");
+        payments.addForeignKey("rental_id").referencing(rentals, "id");
+        rentals.addForeignKey("staff_id").referencing(staff, "id");
+        rentals.addForeignKey("customer_id").referencing(customers, "id");
+        rentals.addForeignKey("inventory_id").referencing(inventory, "id");
 
-	@Test
-	public void verifyTableMappings() {
-		RefLog refLog = state.getRefLog();
+        List<Table> tables = Lists.newArrayList(stores, staff, customers, films, inventory, paychecks, payments,
+                                                rentals);
 
-		// Unchanged tables
-		assertEquals(STORES_ID, refLog.getTableRef(target, "stores").getRefId());
-		assertEquals(STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
-		assertEquals(FILMS_ID, refLog.getTableRef(target, "films").getRefId());
-		assertEquals(INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
-		assertEquals(PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
-		assertEquals(CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
-		assertEquals(RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
+        Catalog expected = new Catalog(setup.getCatalog().getName());
+        tables.forEach(expected::addTable);
 
-		// Dropped tables
-		assertFalse(refLog.getTableRefs(target).stream()
-				.anyMatch(ref -> ref.getName().equals("payments")));
-	}
+        assertEquals(expected.getTables(), state.getCatalog().getTables());
+    }
 
 }

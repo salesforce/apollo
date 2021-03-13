@@ -16,179 +16,183 @@ import io.quantumdb.core.schema.definitions.Table;
 
 public class PlanValidator {
 
-	public static void validate(Plan plan) {
-		verifyThatAddNullStepsDoNotDependOnOtherSteps(plan);
-		verifyThatAllNullRecordsAreBothAddedAndDropped(plan);
-		verifyThatRemoveNullStepIsLastStepIfAddNullStepsArePresent(plan);
-		verifyThatAllColumnsAreMigrated(plan);
-		verifyThatIdentityColumnsAreMigratedFirst(plan);
-		verifyThatNotNullableForeignKeysAreSatisfiedBeforeInitialCopy(plan);
-	}
+    public static void validate(Plan plan) {
+        verifyThatAddNullStepsDoNotDependOnOtherSteps(plan);
+        verifyThatAllNullRecordsAreBothAddedAndDropped(plan);
+        verifyThatRemoveNullStepIsLastStepIfAddNullStepsArePresent(plan);
+        verifyThatAllColumnsAreMigrated(plan);
+        verifyThatIdentityColumnsAreMigratedFirst(plan);
+        verifyThatNotNullableForeignKeysAreSatisfiedBeforeInitialCopy(plan);
+    }
 
-	private static void verifyThatAddNullStepsDoNotDependOnOtherSteps(Plan plan) {
-		List<Step> addNullSteps = plan.getSteps().stream()
-				.filter(step -> step.getOperation().getType() == Type.ADD_NULL)
-				.collect(Collectors.toList());
+    private static void verifyThatAddNullStepsDoNotDependOnOtherSteps(Plan plan) {
+        List<Step> addNullSteps = plan.getSteps()
+                                      .stream()
+                                      .filter(step -> step.getOperation().getType() == Type.ADD_NULL)
+                                      .collect(Collectors.toList());
 
-		addNullSteps.forEach(step -> {
-			String message = "Step: " + step + " has a dependency on another step";
-			checkState(step.getDependencies().isEmpty(), message);
-		});
-	}
+        addNullSteps.forEach(step -> {
+            String message = "Step: " + step + " has a dependency on another step";
+            checkState(step.getDependencies().isEmpty(), message);
+        });
+    }
 
-	private static void verifyThatAllNullRecordsAreBothAddedAndDropped(Plan plan) {
-		Set<Table> addNullRecords = plan.getSteps().stream()
-				.filter(step -> step.getOperation().getType() == Type.ADD_NULL)
-				.map(Step::getOperation)
-				.flatMap(operation -> operation.getTables().stream())
-				.collect(Collectors.toSet());
+    private static void verifyThatAllColumnsAreMigrated(Plan plan) {
+        Multimap<Table, String> columns = HashMultimap.create();
+        plan.getSteps()
+            .stream()
+            .map(Step::getOperation)
+            .filter(op -> op.getType() == Type.COPY)
+            .forEach(op -> op.getTables().forEach(table -> columns.putAll(table, op.getColumns())));
 
-		Set<Table> dropNullRecords = plan.getSteps().stream()
-				.filter(step -> step.getOperation().getType() == Type.DROP_NULL)
-				.map(Step::getOperation)
-				.flatMap(operation -> operation.getTables().stream())
-				.collect(Collectors.toSet());
+        columns.asMap().forEach((k, v) -> {
+            Set<String> columnNames = k.getColumns().stream().map(Column::getName).collect(Collectors.toSet());
 
-		addNullRecords.forEach(table -> {
-			String message = "There is no DROP_NULL operation for table: " + table.getName();
-			checkState(dropNullRecords.contains(table), message);
-			dropNullRecords.remove(table);
-		});
-		dropNullRecords.forEach(table -> {
-			String message = "There is no ADD_NULL operation for table: " + table.getName();
-			checkState(addNullRecords.contains(table), message);
-		});
-	}
+            checkState(columnNames.equals(v));
+        });
+    }
 
-	private static void verifyThatRemoveNullStepIsLastStepIfAddNullStepsArePresent(Plan plan) {
-		boolean containsAddNullSteps = plan.getSteps().stream()
-				.map(Step::getOperation)
-				.anyMatch(op -> op.getType() == Type.ADD_NULL);
+    private static void verifyThatAllNullRecordsAreBothAddedAndDropped(Plan plan) {
+        Set<Table> addNullRecords = plan.getSteps()
+                                        .stream()
+                                        .filter(step -> step.getOperation().getType() == Type.ADD_NULL)
+                                        .map(Step::getOperation)
+                                        .flatMap(operation -> operation.getTables().stream())
+                                        .collect(Collectors.toSet());
 
-		if (!containsAddNullSteps) {
-			return;
-		}
+        Set<Table> dropNullRecords = plan.getSteps()
+                                         .stream()
+                                         .filter(step -> step.getOperation().getType() == Type.DROP_NULL)
+                                         .map(Step::getOperation)
+                                         .flatMap(operation -> operation.getTables().stream())
+                                         .collect(Collectors.toSet());
 
-		List<Step> stepsWithNoDependees = Lists.newArrayList(plan.getSteps());
-		plan.getSteps().forEach(step -> step.getDependencies().forEach(stepsWithNoDependees::remove));
+        addNullRecords.forEach(table -> {
+            String message = "There is no DROP_NULL operation for table: " + table.getName();
+            checkState(dropNullRecords.contains(table), message);
+            dropNullRecords.remove(table);
+        });
+        dropNullRecords.forEach(table -> {
+            String message = "There is no ADD_NULL operation for table: " + table.getName();
+            checkState(addNullRecords.contains(table), message);
+        });
+    }
 
-		checkState(stepsWithNoDependees.size() == 1, "There can only be one last step");
+    private static void verifyThatIdentityColumnsAreMigratedFirst(Plan plan) {
+        for (Step step : plan.getSteps()) {
+            Operation operation = step.getOperation();
+            if (operation.getType() != Type.COPY) {
+                continue;
+            }
 
-		Operation lastOperation = stepsWithNoDependees.get(0).getOperation();
-		checkState(lastOperation.getType() == Type.DROP_NULL, "The last step is not a DROP NULL step");
-	}
+            Table table = operation.getTables().iterator().next();
 
-	private static void verifyThatAllColumnsAreMigrated(Plan plan) {
-		Multimap<Table, String> columns = HashMultimap.create();
-		plan.getSteps().stream()
-				.map(Step::getOperation)
-				.filter(op -> op.getType() == Type.COPY)
-				.forEach(op -> op.getTables().forEach(table -> columns.putAll(table, op.getColumns())));
+            List<Column> identityColumns = table.getIdentityColumns();
+            Set<Column> columns = operation.getColumns().stream().map(table::getColumn).collect(Collectors.toSet());
 
-		columns.asMap().forEach((k, v) -> {
-			Set<String> columnNames = k.getColumns().stream()
-					.map(Column::getName)
-					.collect(Collectors.toSet());
+            if (!columns.containsAll(identityColumns)) {
+                Set<Step> dependencies = step.getTransitiveDependencies();
 
-			checkState(columnNames.equals(v));
-		});
-	}
+                boolean migratesIdentities = false;
+                for (Step dependency : dependencies) {
+                    Operation dependencyOperation = dependency.getOperation();
+                    if (dependencyOperation.getType() != Type.COPY) {
+                        continue;
+                    }
 
-	private static void verifyThatIdentityColumnsAreMigratedFirst(Plan plan) {
-		for (Step step : plan.getSteps()) {
-			Operation operation = step.getOperation();
-			if (operation.getType() != Type.COPY) {
-				continue;
-			}
+                    Table other = dependencyOperation.getTables().iterator().next();
+                    Set<Column> dependencyColumns = dependencyOperation.getColumns()
+                                                                       .stream()
+                                                                       .map(other::getColumn)
+                                                                       .collect(Collectors.toSet());
 
-			Table table = operation.getTables().iterator().next();
+                    if (other.equals(table) && dependencyColumns.containsAll(identityColumns)) {
+                        migratesIdentities = true;
+                        break;
+                    }
+                }
 
-			List<Column> identityColumns = table.getIdentityColumns();
-			Set<Column> columns = operation.getColumns().stream()
-					.map(table::getColumn)
-					.collect(Collectors.toSet());
+                checkState(migratesIdentities, "Identities are not migrated first: " + table.getName());
+            }
+        }
+    }
 
-			if (!columns.containsAll(identityColumns)) {
-				Set<Step> dependencies = step.getTransitiveDependencies();
+    private static void verifyThatNotNullableForeignKeysAreSatisfiedBeforeInitialCopy(Plan plan) {
+        for (Step step : plan.getSteps()) {
+            Operation operation = step.getOperation();
+            if (operation.getType() != Type.COPY) {
+                continue;
+            }
 
-				boolean migratesIdentities = false;
-				for (Step dependency : dependencies) {
-					Operation dependencyOperation = dependency.getOperation();
-					if (dependencyOperation.getType() != Type.COPY) {
-						continue;
-					}
+            Table table = operation.getTables().iterator().next();
 
-					Table other = dependencyOperation.getTables().iterator().next();
-					Set<Column> dependencyColumns = dependencyOperation.getColumns().stream()
-							.map(other::getColumn)
-							.collect(Collectors.toSet());
+            Set<Table> requiresTables = table.getForeignKeys()
+                                             .stream()
+                                             .filter(ForeignKey::isNotNullable)
+                                             .map(ForeignKey::getReferredTable)
+                                             .distinct()
+                                             .collect(Collectors.toSet());
 
-					if (other.equals(table) && dependencyColumns.containsAll(identityColumns)) {
-						migratesIdentities = true;
-						break;
-					}
-				}
+            for (Table requiresTable : requiresTables) {
+                if (!plan.getGhostTables().contains(requiresTable)) {
+                    continue;
+                }
 
-				checkState(migratesIdentities, "Identities are not migrated first: " + table.getName());
-			}
-		}
-	}
+                Set<String> requiredIdentityColumns = table.getForeignKeys()
+                                                           .stream()
+                                                           .filter(ForeignKey::isNotNullable)
+                                                           .filter(fk -> fk.getReferredTable().equals(requiresTable))
+                                                           .flatMap(fk -> fk.getReferredColumns().stream())
+                                                           .collect(Collectors.toSet());
 
-	private static void verifyThatNotNullableForeignKeysAreSatisfiedBeforeInitialCopy(Plan plan) {
-		for (Step step : plan.getSteps()) {
-			Operation operation = step.getOperation();
-			if (operation.getType() != Type.COPY) {
-				continue;
-			}
+                Set<Step> dependencies = step.getTransitiveDependencies();
+                boolean satisfied = false;
+                for (Step dependency : dependencies) {
+                    Operation dependencyOperation = dependency.getOperation();
+                    Set<Table> others = dependencyOperation.getTables();
+                    if (!others.contains(requiresTable)) {
+                        continue;
+                    }
 
-			Table table = operation.getTables().iterator().next();
+                    if (dependencyOperation.getType() == Type.ADD_NULL) {
+                        satisfied = true;
+                        break;
+                    } else if (dependencyOperation.getType() == Type.COPY) {
+                        Set<String> dependencyColumns = dependencyOperation.getColumns()
+                                                                           .stream()
+                                                                           .map(requiresTable::getColumn)
+                                                                           .map(Column::getName)
+                                                                           .collect(Collectors.toSet());
 
-			Set<Table> requiresTables = table.getForeignKeys().stream()
-					.filter(ForeignKey::isNotNullable)
-					.map(ForeignKey::getReferredTable)
-					.distinct()
-					.collect(Collectors.toSet());
+                        if (dependencyColumns.containsAll(requiredIdentityColumns)) {
+                            satisfied = true;
+                            break;
+                        }
+                    }
+                }
 
-			for (Table requiresTable : requiresTables) {
-				if (!plan.getGhostTables().contains(requiresTable)) {
-					continue;
-				}
+                checkState(satisfied, "Identities of parent table: " + requiresTable.getName()
+                        + " should be migrated before copying records of: " + table.getName());
+            }
+        }
+    }
 
-				Set<String> requiredIdentityColumns = table.getForeignKeys().stream()
-						.filter(ForeignKey::isNotNullable)
-						.filter(fk -> fk.getReferredTable().equals(requiresTable))
-						.flatMap(fk -> fk.getReferredColumns().stream())
-						.collect(Collectors.toSet());
+    private static void verifyThatRemoveNullStepIsLastStepIfAddNullStepsArePresent(Plan plan) {
+        boolean containsAddNullSteps = plan.getSteps()
+                                           .stream()
+                                           .map(Step::getOperation)
+                                           .anyMatch(op -> op.getType() == Type.ADD_NULL);
 
-				Set<Step> dependencies = step.getTransitiveDependencies();
-				boolean satisfied = false;
-				for (Step dependency : dependencies) {
-					Operation dependencyOperation = dependency.getOperation();
-					Set<Table> others = dependencyOperation.getTables();
-					if (!others.contains(requiresTable)) {
-						continue;
-					}
+        if (!containsAddNullSteps) {
+            return;
+        }
 
-					if (dependencyOperation.getType() == Type.ADD_NULL) {
-						satisfied = true;
-						break;
-					}
-					else if (dependencyOperation.getType() == Type.COPY) {
-						Set<String> dependencyColumns = dependencyOperation.getColumns().stream()
-								.map(requiresTable::getColumn)
-								.map(Column::getName)
-								.collect(Collectors.toSet());
+        List<Step> stepsWithNoDependees = Lists.newArrayList(plan.getSteps());
+        plan.getSteps().forEach(step -> step.getDependencies().forEach(stepsWithNoDependees::remove));
 
-						if (dependencyColumns.containsAll(requiredIdentityColumns)) {
-							satisfied = true;
-							break;
-						}
-					}
-				}
+        checkState(stepsWithNoDependees.size() == 1, "There can only be one last step");
 
-				checkState(satisfied, "Identities of parent table: " + requiresTable.getName()
-						+ " should be migrated before copying records of: " + table.getName());
-			}
-		}
-	}
+        Operation lastOperation = stepsWithNoDependees.get(0).getOperation();
+        checkState(lastOperation.getType() == Type.DROP_NULL, "The last step is not a DROP NULL step");
+    }
 }

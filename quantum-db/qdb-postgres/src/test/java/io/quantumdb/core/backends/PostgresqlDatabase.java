@@ -13,12 +13,12 @@ import io.quantumdb.core.utils.RandomHasher;
 public class PostgresqlDatabase {
     @java.lang.SuppressWarnings("all")
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PostgresqlDatabase.class);
-    private Connection                    connection;
     private String                        catalogName;
-    private String                        jdbcUrl;
+    private Connection                    connection;
     private String                        jdbcDriver;
-    private String                        jdbcUser;
     private String                        jdbcPass;
+    private String                        jdbcUrl;
+    private String                        jdbcUser;
 
     public void after() throws Exception {
         try {
@@ -57,6 +57,36 @@ public class PostgresqlDatabase {
         return DriverManager.getConnection(jdbcUrl + "/" + catalogName, jdbcUser, jdbcPass);
     }
 
+    @java.lang.SuppressWarnings("all")
+    public String getCatalogName() {
+        return this.catalogName;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public Connection getConnection() {
+        return this.connection;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public String getJdbcDriver() {
+        return this.jdbcDriver;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public String getJdbcPass() {
+        return this.jdbcPass;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public String getJdbcUrl() {
+        return this.jdbcUrl;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public String getJdbcUser() {
+        return this.jdbcUser;
+    }
+
     public Optional<String> getProperty(String... keys) {
         for (String key : keys) {
             String property = System.getProperty(key);
@@ -69,35 +99,5 @@ public class PostgresqlDatabase {
             }
         }
         return Optional.empty();
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public Connection getConnection() {
-        return this.connection;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public String getCatalogName() {
-        return this.catalogName;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public String getJdbcUrl() {
-        return this.jdbcUrl;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public String getJdbcDriver() {
-        return this.jdbcDriver;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public String getJdbcUser() {
-        return this.jdbcUser;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public String getJdbcPass() {
-        return this.jdbcPass;
     }
 }

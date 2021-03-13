@@ -17,83 +17,84 @@ import io.quantumdb.core.versioning.State;
 import io.quantumdb.core.versioning.Version;
 
 public class Changelog extends Command {
-	@java.lang.SuppressWarnings("all")
-	private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Changelog.class);
+    @java.lang.SuppressWarnings("all")
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Changelog.class);
 
-	@Override
-	public Identifier getIdentifier() {
-		return new Identifier("changelog", "Lists changes recorded in the changelog.");
-	}
+    @Override
+    public Identifier getIdentifier() {
+        return new Identifier("changelog", "Lists changes recorded in the changelog.");
+    }
 
-	public void perform(CliWriter writer, List<String> arguments) {
-		try {
-			String from = getArgument(arguments, "from", String.class, null);
-			String until = getArgument(arguments, "until", String.class, null);
-			Integer limit = getArgument(arguments, "limit", Integer.class, () -> Integer.MAX_VALUE);
-			boolean printShort = getArgument(arguments, "short", Boolean.class, () -> false);
-			Config config = Config.load();
-			Backend backend = config.getBackend();
-			State state = loadState(backend);
-			Set<Version> activeVersions = Sets.newHashSet(state.getRefLog().getVersions());
-			io.quantumdb.core.versioning.Changelog changelog = state.getChangelog();
-			ChangeSet changeset = null;
-			List<Version> versions = Lists.newArrayList(changelog.getRoot());
-			boolean print = from == null;
-			while (!versions.isEmpty()) {
-				Version version = versions.remove(0);
-				ChangeSet currentChangeset = version.getChangeSet();
-				if (version.getId().equals(from)) {
-					print = true;
-				}
-				if (!currentChangeset.equals(changeset) && print) {
-					print(writer, currentChangeset, activeVersions, printShort);
-					limit--;
-				}
-				if (version.getId().equals(until) || limit <= 0) {
-					print = false;
-				}
-				changeset = currentChangeset;
-				if (version.getChild() != null) {
-					versions.add(version.getChild());
-				}
-			}
-			persistChanges(backend, state);
-		} catch (IOException | CliException e) {
-			writer.write(e.getMessage(), Context.FAILURE);
-		}
-	}
+    @Override
+    public void perform(CliWriter writer, List<String> arguments) {
+        try {
+            String from = getArgument(arguments, "from", String.class, null);
+            String until = getArgument(arguments, "until", String.class, null);
+            Integer limit = getArgument(arguments, "limit", Integer.class, () -> Integer.MAX_VALUE);
+            boolean printShort = getArgument(arguments, "short", Boolean.class, () -> false);
+            Config config = Config.load();
+            Backend backend = config.getBackend();
+            State state = loadState(backend);
+            Set<Version> activeVersions = Sets.newHashSet(state.getRefLog().getVersions());
+            io.quantumdb.core.versioning.Changelog changelog = state.getChangelog();
+            ChangeSet changeset = null;
+            List<Version> versions = Lists.newArrayList(changelog.getRoot());
+            boolean print = from == null;
+            while (!versions.isEmpty()) {
+                Version version = versions.remove(0);
+                ChangeSet currentChangeset = version.getChangeSet();
+                if (version.getId().equals(from)) {
+                    print = true;
+                }
+                if (!currentChangeset.equals(changeset) && print) {
+                    print(writer, currentChangeset, activeVersions, printShort);
+                    limit--;
+                }
+                if (version.getId().equals(until) || limit <= 0) {
+                    print = false;
+                }
+                changeset = currentChangeset;
+                if (version.getChild() != null) {
+                    versions.add(version.getChild());
+                }
+            }
+            persistChanges(backend, state);
+        } catch (IOException | CliException e) {
+            writer.write(e.getMessage(), Context.FAILURE);
+        }
+    }
 
-	private void print(CliWriter writer, ChangeSet changeSet, Set<Version> activeVersions, boolean printShort) {
-		Version pointer = changeSet.getVersion();
-		Version lastVersion = pointer;
-		boolean active = activeVersions.contains(pointer);
-		int operations = 0;
-		while (pointer != null && changeSet.equals(pointer.getChangeSet())) {
-			if (pointer.getOperation() != null) {
-				operations++;
-			}
-			pointer = pointer.getParent();
-		}
-		String id = lastVersion.getId();
-		if (active) {
-			id += " (active)";
-		}
-		id += " - " + changeSet.getId();
-		writer.setIndent(0);
-		writer.write(id, Context.SUCCESS);
-		if (!printShort) {
-			writer.indent(1);
-			writer.write("Date: " + changeSet.getCreated(), Context.INFO);
-			if (!Strings.isNullOrEmpty(changeSet.getAuthor())) {
-				writer.write("Author: " + changeSet.getAuthor(), Context.INFO);
-			}
-			if (operations > 0) {
-				writer.write("Operations: " + operations, Context.INFO);
-			}
-			if (!Strings.isNullOrEmpty(changeSet.getDescription())) {
-				writer.write("Description: " + changeSet.getDescription(), Context.INFO);
-			}
-			writer.newLine();
-		}
-	}
+    private void print(CliWriter writer, ChangeSet changeSet, Set<Version> activeVersions, boolean printShort) {
+        Version pointer = changeSet.getVersion();
+        Version lastVersion = pointer;
+        boolean active = activeVersions.contains(pointer);
+        int operations = 0;
+        while (pointer != null && changeSet.equals(pointer.getChangeSet())) {
+            if (pointer.getOperation() != null) {
+                operations++;
+            }
+            pointer = pointer.getParent();
+        }
+        String id = lastVersion.getId();
+        if (active) {
+            id += " (active)";
+        }
+        id += " - " + changeSet.getId();
+        writer.setIndent(0);
+        writer.write(id, Context.SUCCESS);
+        if (!printShort) {
+            writer.indent(1);
+            writer.write("Date: " + changeSet.getCreated(), Context.INFO);
+            if (!Strings.isNullOrEmpty(changeSet.getAuthor())) {
+                writer.write("Author: " + changeSet.getAuthor(), Context.INFO);
+            }
+            if (operations > 0) {
+                writer.write("Operations: " + operations, Context.INFO);
+            }
+            if (!Strings.isNullOrEmpty(changeSet.getDescription())) {
+                writer.write("Description: " + changeSet.getDescription(), Context.INFO);
+            }
+            writer.newLine();
+        }
+    }
 }

@@ -28,47 +28,25 @@ import io.quantumdb.core.schema.definitions.Catalog;
 import io.quantumdb.core.schema.definitions.Column;
 import io.quantumdb.core.schema.definitions.Table;
 import io.quantumdb.core.utils.QueryBuilder;
- 
+
 public class TransactionalityTest {
     @java.lang.SuppressWarnings("all")
     private static final org.slf4j.Logger log              = org.slf4j.LoggerFactory.getLogger(TransactionalityTest.class);
-    private static final String           SYNC_FUNCTION    = "sync_function";
-    private static final String           SYNC_TRIGGER     = "sync_trigger";
     private static final String           MIGRATE_FUNCTION = "migrate_function";
-    private static final int              ROWS             = 100;
     private static final String[]         NAMES            = { "Karol Haycock", "Mitsuko Schulz", "Delena Tober",
                                                                "Emerald Blain", "Carlena Sica", "Chance Halliday",
                                                                "Vanna Blea", "Noella Parham", "Lupita Villalvazo",
                                                                "Lekisha Otte" };
+    private static final int              ROWS             = 100;
+    private static final String           SYNC_FUNCTION    = "sync_function";
+    private static final String           SYNC_TRIGGER     = "sync_trigger";
 
     public final PostgresqlDatabase database = new PostgresqlDatabase();
     private final Random            random   = new Random();
-    
-    
 
     @AfterEach
     public void after() throws Exception {
         database.after();
-    }
-    @BeforeEach
-    public void setup() throws Exception {
-        database.before();
-        Catalog catalog = new Catalog(database.getCatalogName());
-        Table source = new Table("source").addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-                                          .addColumn(new Column("name", varchar(255), NOT_NULL));
-        Table target = new Table("target").addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
-                                          .addColumn(new Column("name", varchar(255), NOT_NULL));
-        catalog.addTable(source);
-        catalog.addTable(target);
-        Connection connection = database.getConnection();
-        log.info("Creating source and target table...");
-        new TableCreator().create(connection, catalog.getTables());
-        log.info("Creating functions and triggers...");
-        execute(connection, createSyncFunction(SYNC_FUNCTION, target.getName()));
-        execute(connection, createSyncTrigger(SYNC_TRIGGER, SYNC_FUNCTION, source.getName()));
-        execute(connection, createMigrationFunction(MIGRATE_FUNCTION, source.getName(), target.getName(), 10));
-        log.info("Inserting random test data...");
-        insertRandomData(connection, source.getName(), ROWS);
     }
 
     @Test
@@ -112,17 +90,25 @@ public class TransactionalityTest {
         verifyConsistencyTables(connection);
     }
 
-    private void verifyConsistencyTables(Connection connection) throws SQLException {
-        try (Statement statement = connection.createStatement()) {
-            ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) cnt FROM target WHERE name != \'Michael de Jong\';");
-            if (resultSet.next()) {
-                int count = resultSet.getInt("cnt");
-                assertEquals(0, count);
-                log.info("All records in the target table are consistent with the source table!");
-            } else {
-                throw new IllegalStateException("ResultSet was empty, but expected one records!");
-            }
-        }
+    @BeforeEach
+    public void setup() throws Exception {
+        database.before();
+        Catalog catalog = new Catalog(database.getCatalogName());
+        Table source = new Table("source").addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
+                                          .addColumn(new Column("name", varchar(255), NOT_NULL));
+        Table target = new Table("target").addColumn(new Column("id", integer(), IDENTITY, AUTO_INCREMENT, NOT_NULL))
+                                          .addColumn(new Column("name", varchar(255), NOT_NULL));
+        catalog.addTable(source);
+        catalog.addTable(target);
+        Connection connection = database.getConnection();
+        log.info("Creating source and target table...");
+        new TableCreator().create(connection, catalog.getTables());
+        log.info("Creating functions and triggers...");
+        execute(connection, createSyncFunction(SYNC_FUNCTION, target.getName()));
+        execute(connection, createSyncTrigger(SYNC_TRIGGER, SYNC_FUNCTION, source.getName()));
+        execute(connection, createMigrationFunction(MIGRATE_FUNCTION, source.getName(), target.getName(), 10));
+        log.info("Inserting random test data...");
+        insertRandomData(connection, source.getName(), ROWS);
     }
 
     private String createMigrationFunction(String functionName, String source, String target, int batchSize) {
@@ -142,16 +128,6 @@ public class TransactionalityTest {
                                                      .append("  RETURN r.id;")
                                                      .append("END; $$ LANGUAGE \'plpgsql\';")
                                                      .toString();
-    }
-
-    private String createSyncTrigger(String triggerName, String functionName, String source) {
-        return new QueryBuilder().append("CREATE TRIGGER " + triggerName)
-                                 .append("AFTER INSERT OR UPDATE OR DELETE")
-                                 .append("ON " + source)
-                                 .append("FOR EACH ROW")
-                                 .append("WHEN (pg_trigger_depth() = 0)")
-                                 .append("EXECUTE PROCEDURE " + functionName + "();")
-                                 .toString();
     }
 
     private String createSyncFunction(String functionName, String target) {
@@ -187,6 +163,22 @@ public class TransactionalityTest {
                                  .toString();
     }
 
+    private String createSyncTrigger(String triggerName, String functionName, String source) {
+        return new QueryBuilder().append("CREATE TRIGGER " + triggerName)
+                                 .append("AFTER INSERT OR UPDATE OR DELETE")
+                                 .append("ON " + source)
+                                 .append("FOR EACH ROW")
+                                 .append("WHEN (pg_trigger_depth() = 0)")
+                                 .append("EXECUTE PROCEDURE " + functionName + "();")
+                                 .toString();
+    }
+
+    private void execute(Connection connection, String query) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute(query);
+        }
+    }
+
     private void insertRandomData(Connection connection, String table, int records) throws SQLException {
         String query = "INSERT INTO " + table + " (name) VALUES (?);";
         try {
@@ -211,9 +203,16 @@ public class TransactionalityTest {
         return NAMES[random.nextInt(NAMES.length)];
     }
 
-    private void execute(Connection connection, String query) throws SQLException {
+    private void verifyConsistencyTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            statement.execute(query);
+            ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) cnt FROM target WHERE name != \'Michael de Jong\';");
+            if (resultSet.next()) {
+                int count = resultSet.getInt("cnt");
+                assertEquals(0, count);
+                log.info("All records in the target table are consistent with the source table!");
+            } else {
+                throw new IllegalStateException("ResultSet was empty, but expected one records!");
+            }
         }
     }
 }

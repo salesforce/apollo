@@ -43,17 +43,17 @@ public class RenameCustomersTable {
 
     public static PostgresqlBaseScenario setup = new PostgresqlBaseScenario();
 
-    private static State   state;
     private static Version origin;
+    private static State   state;
     private static Version target;
 
     @AfterAll
-    public  static void after() throws Exception {
+    public static void after() throws Exception {
         setup.after();
     }
 
     @BeforeAll
-    public  static void before() throws Exception {
+    public static void before() throws Exception {
         setup.before();
     }
 
@@ -70,6 +70,44 @@ public class RenameCustomersTable {
         setup.getMigrator().migrate(origin.getId(), target.getId());
 
         state = setup.getBackend().loadState();
+    }
+
+    @Test
+    public void verifyTableMappings() {
+        RefLog refLog = state.getRefLog();
+
+        Map<String, String> originRefIds = refLog.getTableRefs(origin)
+                                                 .stream()
+                                                 .collect(Collectors.toMap(TableRef::getRefId, TableRef::getName));
+
+        Map<String, String> targetRefIds = refLog.getTableRefs(target)
+                                                 .stream()
+                                                 .collect(Collectors.toMap(TableRef::getRefId, TableRef::getName));
+
+        Map<String, String> expectedOriginRefIds = ImmutableMap.<String, String>builder()
+                                                               .put(STORES_ID, "stores")
+                                                               .put(STAFF_ID, "staff")
+                                                               .put(CUSTOMERS_ID, "customers")
+                                                               .put(FILMS_ID, "films")
+                                                               .put(INVENTORY_ID, "inventory")
+                                                               .put(PAYCHECKS_ID, "paychecks")
+                                                               .put(PAYMENTS_ID, "payments")
+                                                               .put(RENTALS_ID, "rentals")
+                                                               .build();
+
+        Map<String, String> expectedTargetRefIds = ImmutableMap.<String, String>builder()
+                                                               .put(STORES_ID, "stores")
+                                                               .put(STAFF_ID, "staff")
+                                                               .put(CUSTOMERS_ID, "clients")
+                                                               .put(FILMS_ID, "films")
+                                                               .put(INVENTORY_ID, "inventory")
+                                                               .put(PAYCHECKS_ID, "paychecks")
+                                                               .put(PAYMENTS_ID, "payments")
+                                                               .put(RENTALS_ID, "rentals")
+                                                               .build();
+
+        assertEquals(expectedOriginRefIds, originRefIds);
+        assertEquals(expectedTargetRefIds, targetRefIds);
     }
 
     @Test
@@ -169,44 +207,6 @@ public class RenameCustomersTable {
         tables.forEach(expected::addTable);
 
         assertEquals(expected.getTables(), state.getCatalog().getTables());
-    }
-
-    @Test
-    public void verifyTableMappings() {
-        RefLog refLog = state.getRefLog();
-
-        Map<String, String> originRefIds = refLog.getTableRefs(origin)
-                                                 .stream()
-                                                 .collect(Collectors.toMap(TableRef::getRefId, TableRef::getName));
-
-        Map<String, String> targetRefIds = refLog.getTableRefs(target)
-                                                 .stream()
-                                                 .collect(Collectors.toMap(TableRef::getRefId, TableRef::getName));
-
-        Map<String, String> expectedOriginRefIds = ImmutableMap.<String, String>builder()
-                                                               .put(STORES_ID, "stores")
-                                                               .put(STAFF_ID, "staff")
-                                                               .put(CUSTOMERS_ID, "customers")
-                                                               .put(FILMS_ID, "films")
-                                                               .put(INVENTORY_ID, "inventory")
-                                                               .put(PAYCHECKS_ID, "paychecks")
-                                                               .put(PAYMENTS_ID, "payments")
-                                                               .put(RENTALS_ID, "rentals")
-                                                               .build();
-
-        Map<String, String> expectedTargetRefIds = ImmutableMap.<String, String>builder()
-                                                               .put(STORES_ID, "stores")
-                                                               .put(STAFF_ID, "staff")
-                                                               .put(CUSTOMERS_ID, "clients")
-                                                               .put(FILMS_ID, "films")
-                                                               .put(INVENTORY_ID, "inventory")
-                                                               .put(PAYCHECKS_ID, "paychecks")
-                                                               .put(PAYMENTS_ID, "payments")
-                                                               .put(RENTALS_ID, "rentals")
-                                                               .build();
-
-        assertEquals(expectedOriginRefIds, originRefIds);
-        assertEquals(expectedTargetRefIds, targetRefIds);
     }
 
 }

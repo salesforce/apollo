@@ -23,9 +23,7 @@ import java.sql.SQLException;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Lists;
@@ -43,13 +41,15 @@ public class AddColumnToPaymentsTable {
 
     public static PostgresqlBaseScenario setup = new PostgresqlBaseScenario();
 
-    private static State   state;
     private static Version origin;
+    private static State   state;
     private static Version target;
+
     @AfterAll
     public static void after() throws Exception {
         setup.after();
     }
+
     @BeforeAll
     public static void before() throws Exception {
         setup.before();
@@ -69,6 +69,23 @@ public class AddColumnToPaymentsTable {
         setup.getMigrator().migrate(origin.getId(), target.getId());
 
         state = setup.getBackend().loadState();
+    }
+
+    @Test
+    public void verifyTableMappings() {
+        RefLog refLog = state.getRefLog();
+
+        // Unchanged tables
+        assertEquals(STORES_ID, refLog.getTableRef(target, "stores").getRefId());
+        assertEquals(STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
+        assertEquals(CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
+        assertEquals(PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
+        assertEquals(FILMS_ID, refLog.getTableRef(target, "films").getRefId());
+        assertEquals(INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
+        assertEquals(RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
+
+        // Ghosted tables
+        assertNotEquals(PAYMENTS_ID, refLog.getTableRef(target, "payments").getRefId());
     }
 
     @Test
@@ -194,23 +211,6 @@ public class AddColumnToPaymentsTable {
         tables.forEach(expected::addTable);
 
         assertEquals(expected.getTables(), state.getCatalog().getTables());
-    }
-
-    @Test
-    public void verifyTableMappings() {
-        RefLog refLog = state.getRefLog();
-
-        // Unchanged tables
-        assertEquals(STORES_ID, refLog.getTableRef(target, "stores").getRefId());
-        assertEquals(STAFF_ID, refLog.getTableRef(target, "staff").getRefId());
-        assertEquals(CUSTOMERS_ID, refLog.getTableRef(target, "customers").getRefId());
-        assertEquals(PAYCHECKS_ID, refLog.getTableRef(target, "paychecks").getRefId());
-        assertEquals(FILMS_ID, refLog.getTableRef(target, "films").getRefId());
-        assertEquals(INVENTORY_ID, refLog.getTableRef(target, "inventory").getRefId());
-        assertEquals(RENTALS_ID, refLog.getTableRef(target, "rentals").getRefId());
-
-        // Ghosted tables
-        assertNotEquals(PAYMENTS_ID, refLog.getTableRef(target, "payments").getRefId());
     }
 
 }

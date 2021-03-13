@@ -7,17 +7,17 @@ import java.sql.SQLException;
 
 public class Cli {
 
-	public static void main(String[] args) throws IOException, SQLException {
-		BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+    public static void main(String[] args) throws IOException, SQLException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
-		String line;
-		while ((line = reader.readLine()) != null) {
-			if (line.equals("\\q")) {
-				return;
-			}
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (line.equals("\\q")) {
+                return;
+            }
 
-			Main.main(line.split(" "));
-		}
-	}
+            Main.main(line.split(" "));
+        }
+    }
 
 }

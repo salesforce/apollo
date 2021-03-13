@@ -16,24 +16,6 @@ import com.google.common.base.Strings;
 public class CatalogTest {
 
     @Test
-    public void testCreatingCatalog() {
-        Catalog catalog = new Catalog("test-db");
-
-        assertEquals("test-db", catalog.getName());
-        assertTrue(catalog.getTables().isEmpty());
-    }
-
-    @Test
-    public void testCreatingCatalogWithNullForCatalogName() {
-        assertThrows(IllegalArgumentException.class, () -> new Catalog(null));
-    }
-
-    @Test
-    public void testCreatingCatalogWithEmptyStringForCatalogName() {
-        assertThrows(IllegalArgumentException.class, () -> new Catalog(""));
-    }
-
-    @Test
     public void testAddingNullTableToCatalog() {
         assertThrows(IllegalArgumentException.class, () -> new Catalog("test-db").addTable(null));
     }
@@ -48,103 +30,21 @@ public class CatalogTest {
     }
 
     @Test
-    public void testThatContainsTableMethodReturnsTrueWhenTableExists() {
-        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
-
-        Catalog catalog = new Catalog("test-db").addTable(table);
-
-        assertTrue(catalog.containsTable("users"));
-    }
-
-    @Test
-    public void testThatContainsTableMethodReturnsFalseWhenTableDoesNotExist() {
+    public void testCreatingCatalog() {
         Catalog catalog = new Catalog("test-db");
 
-        assertFalse(catalog.containsTable("users"));
+        assertEquals("test-db", catalog.getName());
+        assertTrue(catalog.getTables().isEmpty());
     }
 
     @Test
-    public void testThatContainsTableMethodThrowsExceptionOnNullInput() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            Catalog catalog = new Catalog("test-db");
-            catalog.containsTable(null);
-        });
+    public void testCreatingCatalogWithEmptyStringForCatalogName() {
+        assertThrows(IllegalArgumentException.class, () -> new Catalog(""));
     }
 
     @Test
-    public void testThatContainsTableMethodThrowsExceptionOnEmptyStringInput() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            Catalog catalog = new Catalog("test-db");
-            catalog.containsTable("");
-        });
-    }
-
-    @Test
-    public void testThatGetTableMethodReturnsTableWhenItExists() {
-        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
-
-        Catalog catalog = new Catalog("test-db").addTable(table);
-
-        assertEquals(table, catalog.getTable("users"));
-    }
-
-    @Test
-    public void testThatGetTableMethodThrowsExceptionWhenTableDoesNotExist() {
-        assertThrows(IllegalStateException.class, () -> {
-            Catalog catalog = new Catalog("test-db");
-            catalog.getTable("users");
-        });
-    }
-
-    @Test
-    public void testThatGetTableMethodThrowsExceptionOnNullInput() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            Catalog catalog = new Catalog("test-db");
-            catalog.getTable(null);
-        });
-    }
-
-    @Test
-    public void testThatGetTableMethodThrowsExceptionOnEmptyStringInput() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            Catalog catalog = new Catalog("test-db");
-            catalog.getTable("");
-        });
-    }
-
-    @Test
-    public void testThatRemoveTableMethodRemovesTableWhenItExists() {
-        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
-
-        Catalog catalog = new Catalog("test-db").addTable(table);
-
-        Table removedTable = catalog.removeTable("users");
-        assertEquals(table, removedTable);
-        assertFalse(catalog.containsTable("users"));
-    }
-
-    @Test
-    public void testThatRemoveTableMethodThrowsExceptionWhenTableDoesNotExist() {
-        assertThrows(IllegalStateException.class, () -> {
-            Catalog catalog = new Catalog("test-db");
-            catalog.removeTable("users");
-        });
-    }
-
-    @Test
-    public void testThatRemoveTableMethodThrowsExceptionOnNullInput() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            Catalog catalog = new Catalog("test-db");
-            catalog.removeTable(null);
-        });
-    }
-
-    @Test
-    public void testThatRemoveTableMethodThrowsExceptionOnEmptyStringInput() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            Catalog catalog = new Catalog("test-db");
-            catalog.removeTable("");
-        });
+    public void testCreatingCatalogWithNullForCatalogName() {
+        assertThrows(IllegalArgumentException.class, () -> new Catalog(null));
     }
 
     @Test
@@ -187,6 +87,118 @@ public class CatalogTest {
     }
 
     @Test
+    public void testThatContainsTableMethodReturnsFalseWhenTableDoesNotExist() {
+        Catalog catalog = new Catalog("test-db");
+
+        assertFalse(catalog.containsTable("users"));
+    }
+
+    @Test
+    public void testThatContainsTableMethodReturnsTrueWhenTableExists() {
+        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
+
+        Catalog catalog = new Catalog("test-db").addTable(table);
+
+        assertTrue(catalog.containsTable("users"));
+    }
+
+    @Test
+    public void testThatContainsTableMethodThrowsExceptionOnEmptyStringInput() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Catalog catalog = new Catalog("test-db");
+            catalog.containsTable("");
+        });
+    }
+
+    @Test
+    public void testThatContainsTableMethodThrowsExceptionOnNullInput() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Catalog catalog = new Catalog("test-db");
+            catalog.containsTable(null);
+        });
+    }
+
+    @Test
+    public void testThatCopyMethodReturnsCopy() {
+        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
+
+        Catalog catalog = new Catalog("test-db").addTable(table);
+
+        Catalog copy = catalog.copy();
+
+        assertEquals(catalog, copy);
+        assertFalse(catalog == copy);
+    }
+
+    @Test
+    public void testThatGetTableMethodReturnsTableWhenItExists() {
+        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
+
+        Catalog catalog = new Catalog("test-db").addTable(table);
+
+        assertEquals(table, catalog.getTable("users"));
+    }
+
+    @Test
+    public void testThatGetTableMethodThrowsExceptionOnEmptyStringInput() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Catalog catalog = new Catalog("test-db");
+            catalog.getTable("");
+        });
+    }
+
+    @Test
+    public void testThatGetTableMethodThrowsExceptionOnNullInput() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Catalog catalog = new Catalog("test-db");
+            catalog.getTable(null);
+        });
+    }
+
+    @Test
+    public void testThatGetTableMethodThrowsExceptionWhenTableDoesNotExist() {
+        assertThrows(IllegalStateException.class, () -> {
+            Catalog catalog = new Catalog("test-db");
+            catalog.getTable("users");
+        });
+    }
+
+    @Test
+    public void testThatRemoveTableMethodRemovesTableWhenItExists() {
+        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
+
+        Catalog catalog = new Catalog("test-db").addTable(table);
+
+        Table removedTable = catalog.removeTable("users");
+        assertEquals(table, removedTable);
+        assertFalse(catalog.containsTable("users"));
+    }
+
+    @Test
+    public void testThatRemoveTableMethodThrowsExceptionOnEmptyStringInput() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Catalog catalog = new Catalog("test-db");
+            catalog.removeTable("");
+        });
+    }
+
+    @Test
+    public void testThatRemoveTableMethodThrowsExceptionOnNullInput() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Catalog catalog = new Catalog("test-db");
+            catalog.removeTable(null);
+        });
+    }
+
+    @Test
+    public void testThatRemoveTableMethodThrowsExceptionWhenTableDoesNotExist() {
+        assertThrows(IllegalStateException.class, () -> {
+            Catalog catalog = new Catalog("test-db");
+            catalog.removeTable("users");
+        });
+    }
+
+    @Test
     public void testThatRenamingTableIsReflectedInCatalog() {
         Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
 
@@ -210,18 +222,6 @@ public class CatalogTest {
 
             usersTable.rename("players");
         });
-    }
-
-    @Test
-    public void testThatCopyMethodReturnsCopy() {
-        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
-
-        Catalog catalog = new Catalog("test-db").addTable(table);
-
-        Catalog copy = catalog.copy();
-
-        assertEquals(catalog, copy);
-        assertFalse(catalog == copy);
     }
 
     @Test

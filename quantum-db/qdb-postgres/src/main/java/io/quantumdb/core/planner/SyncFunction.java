@@ -25,15 +25,15 @@ import io.quantumdb.core.versioning.RefLog.ColumnRef;
 import io.quantumdb.core.versioning.RefLog.TableRef;
 
 public class SyncFunction {
+    private final Catalog                   catalog;
+    private final Map<ColumnRef, ColumnRef> columnMapping;
+    private final String                    functionName;
+    private ImmutableMap<String, String>    insertExpressions;
+    private final NullRecords               nullRecords;
+    private final RefLog                    refLog;
     private final TableRef                  source;
     private final TableRef                  target;
-    private final String                    functionName;
     private final String                    triggerName;
-    private final RefLog                    refLog;
-    private final Catalog                   catalog;
-    private final NullRecords               nullRecords;
-    private final Map<ColumnRef, ColumnRef> columnMapping;
-    private ImmutableMap<String, String>    insertExpressions;
     private ImmutableMap<String, String>    updateExpressions;
     private ImmutableMap<String, String>    updateIdentities;
     private ImmutableMap<String, String>    updateIdentitiesForInserts;
@@ -54,6 +54,202 @@ public class SyncFunction {
         this.functionName = functionName;
         this.triggerName = triggerName;
         this.columnMapping = columnMapping;
+    }
+
+    public QueryBuilder createFunctionStatement() {
+        return new QueryBuilder().append("CREATE OR REPLACE FUNCTION " + functionName + "()")
+                                 .append("RETURNS TRIGGER AS $$")
+                                 .append("BEGIN")
+                                 .append("  IF TG_OP = \'INSERT\' THEN")
+                                 .append("    INSERT INTO " + target.getRefId())
+                                 .append("      (" + represent(insertExpressions, Entry::getKey, ", ") + ") VALUES")
+                                 .append("      (" + represent(insertExpressions, Entry::getValue, ", ") + ");")
+                                 .append("  ELSIF TG_OP = \'UPDATE\' THEN")
+                                 .append("    LOOP")
+                                 .append("      UPDATE " + target.getRefId())
+                                 .append("        SET " + represent(updateIdentitiesForInserts, " = ", ", "))
+                                 .append("        WHERE " + represent(updateIdentities, " = ", " AND ") + ";")
+                                 .append("      IF found THEN EXIT; END IF;")
+                                 .append("      BEGIN")
+                                 .append("        INSERT INTO " + target.getRefId())
+                                 .append("          (" + represent(insertExpressions, Entry::getKey, ", ") + ") VALUES")
+                                 .append("          (" + represent(insertExpressions, Entry::getValue, ", ") + ");")
+                                 .append("      EXIT;")
+                                 .append("      EXCEPTION WHEN unique_violation THEN END;")
+                                 .append("\tEND LOOP;")
+                                 .append("  ELSIF TG_OP = \'DELETE\' THEN")
+                                 .append("    DELETE FROM " + target.getRefId())
+                                 .append("      WHERE " + represent(updateIdentities, " = ", " AND ") + ";")
+                                 .append("  END IF;")
+                                 .append("  RETURN NEW;")
+                                 .append("END;")
+                                 .append("$$ LANGUAGE \'plpgsql\';");
+    }
+
+    public QueryBuilder createTriggerStatement() {
+        return new QueryBuilder().append("CREATE TRIGGER " + triggerName)
+                                 .append("AFTER INSERT OR UPDATE OR DELETE")
+                                 .append("ON " + source.getRefId())
+                                 .append("FOR EACH ROW")
+                                 .append("WHEN (pg_trigger_depth() = 0)")
+                                 .append("EXECUTE PROCEDURE " + functionName + "();");
+    }
+
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public boolean equals(final java.lang.Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof SyncFunction))
+            return false;
+        final SyncFunction other = (SyncFunction) o;
+        if (!other.canEqual(this))
+            return false;
+        final java.lang.Object this$source = this.getSource();
+        final java.lang.Object other$source = other.getSource();
+        if (this$source == null ? other$source != null : !this$source.equals(other$source))
+            return false;
+        final java.lang.Object this$target = this.getTarget();
+        final java.lang.Object other$target = other.getTarget();
+        if (this$target == null ? other$target != null : !this$target.equals(other$target))
+            return false;
+        final java.lang.Object this$functionName = this.getFunctionName();
+        final java.lang.Object other$functionName = other.getFunctionName();
+        if (this$functionName == null ? other$functionName != null : !this$functionName.equals(other$functionName))
+            return false;
+        final java.lang.Object this$triggerName = this.getTriggerName();
+        final java.lang.Object other$triggerName = other.getTriggerName();
+        if (this$triggerName == null ? other$triggerName != null : !this$triggerName.equals(other$triggerName))
+            return false;
+        final java.lang.Object this$refLog = this.getRefLog();
+        final java.lang.Object other$refLog = other.getRefLog();
+        if (this$refLog == null ? other$refLog != null : !this$refLog.equals(other$refLog))
+            return false;
+        final java.lang.Object this$catalog = this.getCatalog();
+        final java.lang.Object other$catalog = other.getCatalog();
+        if (this$catalog == null ? other$catalog != null : !this$catalog.equals(other$catalog))
+            return false;
+        final java.lang.Object this$nullRecords = this.getNullRecords();
+        final java.lang.Object other$nullRecords = other.getNullRecords();
+        if (this$nullRecords == null ? other$nullRecords != null : !this$nullRecords.equals(other$nullRecords))
+            return false;
+        final java.lang.Object this$columnMapping = this.getColumnMapping();
+        final java.lang.Object other$columnMapping = other.getColumnMapping();
+        if (this$columnMapping == null ? other$columnMapping != null : !this$columnMapping.equals(other$columnMapping))
+            return false;
+        final java.lang.Object this$insertExpressions = this.getInsertExpressions();
+        final java.lang.Object other$insertExpressions = other.getInsertExpressions();
+        if (this$insertExpressions == null ? other$insertExpressions != null
+                : !this$insertExpressions.equals(other$insertExpressions))
+            return false;
+        final java.lang.Object this$updateExpressions = this.getUpdateExpressions();
+        final java.lang.Object other$updateExpressions = other.getUpdateExpressions();
+        if (this$updateExpressions == null ? other$updateExpressions != null
+                : !this$updateExpressions.equals(other$updateExpressions))
+            return false;
+        final java.lang.Object this$updateIdentities = this.getUpdateIdentities();
+        final java.lang.Object other$updateIdentities = other.getUpdateIdentities();
+        if (this$updateIdentities == null ? other$updateIdentities != null
+                : !this$updateIdentities.equals(other$updateIdentities))
+            return false;
+        final java.lang.Object this$updateIdentitiesForInserts = this.getUpdateIdentitiesForInserts();
+        final java.lang.Object other$updateIdentitiesForInserts = other.getUpdateIdentitiesForInserts();
+        if (this$updateIdentitiesForInserts == null ? other$updateIdentitiesForInserts != null
+                : !this$updateIdentitiesForInserts.equals(other$updateIdentitiesForInserts))
+            return false;
+        return true;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public Catalog getCatalog() {
+        return this.catalog;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public Map<ColumnRef, ColumnRef> getColumnMapping() {
+        return this.columnMapping;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public String getFunctionName() {
+        return this.functionName;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public ImmutableMap<String, String> getInsertExpressions() {
+        return this.insertExpressions;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public NullRecords getNullRecords() {
+        return this.nullRecords;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public RefLog getRefLog() {
+        return this.refLog;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public TableRef getSource() {
+        return this.source;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public TableRef getTarget() {
+        return this.target;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public String getTriggerName() {
+        return this.triggerName;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public ImmutableMap<String, String> getUpdateExpressions() {
+        return this.updateExpressions;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public ImmutableMap<String, String> getUpdateIdentities() {
+        return this.updateIdentities;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public ImmutableMap<String, String> getUpdateIdentitiesForInserts() {
+        return this.updateIdentitiesForInserts;
+    }
+
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        final java.lang.Object $source = this.getSource();
+        result = result * PRIME + ($source == null ? 43 : $source.hashCode());
+        final java.lang.Object $target = this.getTarget();
+        result = result * PRIME + ($target == null ? 43 : $target.hashCode());
+        final java.lang.Object $functionName = this.getFunctionName();
+        result = result * PRIME + ($functionName == null ? 43 : $functionName.hashCode());
+        final java.lang.Object $triggerName = this.getTriggerName();
+        result = result * PRIME + ($triggerName == null ? 43 : $triggerName.hashCode());
+        final java.lang.Object $refLog = this.getRefLog();
+        result = result * PRIME + ($refLog == null ? 43 : $refLog.hashCode());
+        final java.lang.Object $catalog = this.getCatalog();
+        result = result * PRIME + ($catalog == null ? 43 : $catalog.hashCode());
+        final java.lang.Object $nullRecords = this.getNullRecords();
+        result = result * PRIME + ($nullRecords == null ? 43 : $nullRecords.hashCode());
+        final java.lang.Object $columnMapping = this.getColumnMapping();
+        result = result * PRIME + ($columnMapping == null ? 43 : $columnMapping.hashCode());
+        final java.lang.Object $insertExpressions = this.getInsertExpressions();
+        result = result * PRIME + ($insertExpressions == null ? 43 : $insertExpressions.hashCode());
+        final java.lang.Object $updateExpressions = this.getUpdateExpressions();
+        result = result * PRIME + ($updateExpressions == null ? 43 : $updateExpressions.hashCode());
+        final java.lang.Object $updateIdentities = this.getUpdateIdentities();
+        result = result * PRIME + ($updateIdentities == null ? 43 : $updateIdentities.hashCode());
+        final java.lang.Object $updateIdentitiesForInserts = this.getUpdateIdentitiesForInserts();
+        result = result * PRIME + ($updateIdentitiesForInserts == null ? 43 : $updateIdentitiesForInserts.hashCode());
+        return result;
     }
 
     public void setColumnsToMigrate(Set<String> columnsToMigrate) {
@@ -119,228 +315,6 @@ public class SyncFunction {
                                                                        }, () -> new LinkedHashMap<String, String>())));
     }
 
-    private String reverseLookup(Map<String, String> mapping, String value) {
-        return mapping.entrySet()
-                      .stream()
-                      .filter(entry -> entry.getValue().equals(value))
-                      .findFirst()
-                      .map(Entry::getKey)
-                      .get();
-    }
-
-    public QueryBuilder createFunctionStatement() {
-        return new QueryBuilder().append("CREATE OR REPLACE FUNCTION " + functionName + "()")
-                                 .append("RETURNS TRIGGER AS $$")
-                                 .append("BEGIN")
-                                 .append("  IF TG_OP = \'INSERT\' THEN")
-                                 .append("    INSERT INTO " + target.getRefId())
-                                 .append("      (" + represent(insertExpressions, Entry::getKey, ", ") + ") VALUES")
-                                 .append("      (" + represent(insertExpressions, Entry::getValue, ", ") + ");")
-                                 .append("  ELSIF TG_OP = \'UPDATE\' THEN")
-                                 .append("    LOOP")
-                                 .append("      UPDATE " + target.getRefId())
-                                 .append("        SET " + represent(updateIdentitiesForInserts, " = ", ", "))
-                                 .append("        WHERE " + represent(updateIdentities, " = ", " AND ") + ";")
-                                 .append("      IF found THEN EXIT; END IF;")
-                                 .append("      BEGIN")
-                                 .append("        INSERT INTO " + target.getRefId())
-                                 .append("          (" + represent(insertExpressions, Entry::getKey, ", ") + ") VALUES")
-                                 .append("          (" + represent(insertExpressions, Entry::getValue, ", ") + ");")
-                                 .append("      EXIT;")
-                                 .append("      EXCEPTION WHEN unique_violation THEN END;")
-                                 .append("\tEND LOOP;")
-                                 .append("  ELSIF TG_OP = \'DELETE\' THEN")
-                                 .append("    DELETE FROM " + target.getRefId())
-                                 .append("      WHERE " + represent(updateIdentities, " = ", " AND ") + ";")
-                                 .append("  END IF;")
-                                 .append("  RETURN NEW;")
-                                 .append("END;")
-                                 .append("$$ LANGUAGE \'plpgsql\';");
-    }
-
-    private String represent(Map<String, String> inputs, String innerJoin, String entryJoin) {
-        return inputs.entrySet()
-                     .stream()
-                     .map(entry -> entry.getKey() + innerJoin + entry.getValue())
-                     .collect(Collectors.joining(entryJoin));
-    }
-
-    private String represent(Map<String, String> inputs, Function<Entry<String, String>, String> selector,
-                             String join) {
-        return inputs.entrySet().stream().map(selector).collect(Collectors.joining(join));
-    }
-
-    public QueryBuilder createTriggerStatement() {
-        return new QueryBuilder().append("CREATE TRIGGER " + triggerName)
-                                 .append("AFTER INSERT OR UPDATE OR DELETE")
-                                 .append("ON " + source.getRefId())
-                                 .append("FOR EACH ROW")
-                                 .append("WHEN (pg_trigger_depth() = 0)")
-                                 .append("EXECUTE PROCEDURE " + functionName + "();");
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public TableRef getSource() {
-        return this.source;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public TableRef getTarget() {
-        return this.target;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public String getFunctionName() {
-        return this.functionName;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public String getTriggerName() {
-        return this.triggerName;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public RefLog getRefLog() {
-        return this.refLog;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public Catalog getCatalog() {
-        return this.catalog;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public NullRecords getNullRecords() {
-        return this.nullRecords;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public Map<ColumnRef, ColumnRef> getColumnMapping() {
-        return this.columnMapping;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public ImmutableMap<String, String> getInsertExpressions() {
-        return this.insertExpressions;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public ImmutableMap<String, String> getUpdateExpressions() {
-        return this.updateExpressions;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public ImmutableMap<String, String> getUpdateIdentities() {
-        return this.updateIdentities;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public ImmutableMap<String, String> getUpdateIdentitiesForInserts() {
-        return this.updateIdentitiesForInserts;
-    }
-
-    @java.lang.Override
-    @java.lang.SuppressWarnings("all")
-    public boolean equals(final java.lang.Object o) {
-        if (o == this)
-            return true;
-        if (!(o instanceof SyncFunction))
-            return false;
-        final SyncFunction other = (SyncFunction) o;
-        if (!other.canEqual((java.lang.Object) this))
-            return false;
-        final java.lang.Object this$source = this.getSource();
-        final java.lang.Object other$source = other.getSource();
-        if (this$source == null ? other$source != null : !this$source.equals(other$source))
-            return false;
-        final java.lang.Object this$target = this.getTarget();
-        final java.lang.Object other$target = other.getTarget();
-        if (this$target == null ? other$target != null : !this$target.equals(other$target))
-            return false;
-        final java.lang.Object this$functionName = this.getFunctionName();
-        final java.lang.Object other$functionName = other.getFunctionName();
-        if (this$functionName == null ? other$functionName != null : !this$functionName.equals(other$functionName))
-            return false;
-        final java.lang.Object this$triggerName = this.getTriggerName();
-        final java.lang.Object other$triggerName = other.getTriggerName();
-        if (this$triggerName == null ? other$triggerName != null : !this$triggerName.equals(other$triggerName))
-            return false;
-        final java.lang.Object this$refLog = this.getRefLog();
-        final java.lang.Object other$refLog = other.getRefLog();
-        if (this$refLog == null ? other$refLog != null : !this$refLog.equals(other$refLog))
-            return false;
-        final java.lang.Object this$catalog = this.getCatalog();
-        final java.lang.Object other$catalog = other.getCatalog();
-        if (this$catalog == null ? other$catalog != null : !this$catalog.equals(other$catalog))
-            return false;
-        final java.lang.Object this$nullRecords = this.getNullRecords();
-        final java.lang.Object other$nullRecords = other.getNullRecords();
-        if (this$nullRecords == null ? other$nullRecords != null : !this$nullRecords.equals(other$nullRecords))
-            return false;
-        final java.lang.Object this$columnMapping = this.getColumnMapping();
-        final java.lang.Object other$columnMapping = other.getColumnMapping();
-        if (this$columnMapping == null ? other$columnMapping != null : !this$columnMapping.equals(other$columnMapping))
-            return false;
-        final java.lang.Object this$insertExpressions = this.getInsertExpressions();
-        final java.lang.Object other$insertExpressions = other.getInsertExpressions();
-        if (this$insertExpressions == null ? other$insertExpressions != null
-                : !this$insertExpressions.equals(other$insertExpressions))
-            return false;
-        final java.lang.Object this$updateExpressions = this.getUpdateExpressions();
-        final java.lang.Object other$updateExpressions = other.getUpdateExpressions();
-        if (this$updateExpressions == null ? other$updateExpressions != null
-                : !this$updateExpressions.equals(other$updateExpressions))
-            return false;
-        final java.lang.Object this$updateIdentities = this.getUpdateIdentities();
-        final java.lang.Object other$updateIdentities = other.getUpdateIdentities();
-        if (this$updateIdentities == null ? other$updateIdentities != null
-                : !this$updateIdentities.equals(other$updateIdentities))
-            return false;
-        final java.lang.Object this$updateIdentitiesForInserts = this.getUpdateIdentitiesForInserts();
-        final java.lang.Object other$updateIdentitiesForInserts = other.getUpdateIdentitiesForInserts();
-        if (this$updateIdentitiesForInserts == null ? other$updateIdentitiesForInserts != null
-                : !this$updateIdentitiesForInserts.equals(other$updateIdentitiesForInserts))
-            return false;
-        return true;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    protected boolean canEqual(final java.lang.Object other) {
-        return other instanceof SyncFunction;
-    }
-
-    @java.lang.Override
-    @java.lang.SuppressWarnings("all")
-    public int hashCode() {
-        final int PRIME = 59;
-        int result = 1;
-        final java.lang.Object $source = this.getSource();
-        result = result * PRIME + ($source == null ? 43 : $source.hashCode());
-        final java.lang.Object $target = this.getTarget();
-        result = result * PRIME + ($target == null ? 43 : $target.hashCode());
-        final java.lang.Object $functionName = this.getFunctionName();
-        result = result * PRIME + ($functionName == null ? 43 : $functionName.hashCode());
-        final java.lang.Object $triggerName = this.getTriggerName();
-        result = result * PRIME + ($triggerName == null ? 43 : $triggerName.hashCode());
-        final java.lang.Object $refLog = this.getRefLog();
-        result = result * PRIME + ($refLog == null ? 43 : $refLog.hashCode());
-        final java.lang.Object $catalog = this.getCatalog();
-        result = result * PRIME + ($catalog == null ? 43 : $catalog.hashCode());
-        final java.lang.Object $nullRecords = this.getNullRecords();
-        result = result * PRIME + ($nullRecords == null ? 43 : $nullRecords.hashCode());
-        final java.lang.Object $columnMapping = this.getColumnMapping();
-        result = result * PRIME + ($columnMapping == null ? 43 : $columnMapping.hashCode());
-        final java.lang.Object $insertExpressions = this.getInsertExpressions();
-        result = result * PRIME + ($insertExpressions == null ? 43 : $insertExpressions.hashCode());
-        final java.lang.Object $updateExpressions = this.getUpdateExpressions();
-        result = result * PRIME + ($updateExpressions == null ? 43 : $updateExpressions.hashCode());
-        final java.lang.Object $updateIdentities = this.getUpdateIdentities();
-        result = result * PRIME + ($updateIdentities == null ? 43 : $updateIdentities.hashCode());
-        final java.lang.Object $updateIdentitiesForInserts = this.getUpdateIdentitiesForInserts();
-        result = result * PRIME + ($updateIdentitiesForInserts == null ? 43 : $updateIdentitiesForInserts.hashCode());
-        return result;
-    }
-
     @java.lang.Override
     @java.lang.SuppressWarnings("all")
     public java.lang.String toString() {
@@ -351,5 +325,31 @@ public class SyncFunction {
                 + ", updateExpressions=" + this.getUpdateExpressions() + ", updateIdentities="
                 + this.getUpdateIdentities() + ", updateIdentitiesForInserts=" + this.getUpdateIdentitiesForInserts()
                 + ")";
+    }
+
+    @java.lang.SuppressWarnings("all")
+    protected boolean canEqual(final java.lang.Object other) {
+        return other instanceof SyncFunction;
+    }
+
+    private String represent(Map<String, String> inputs, Function<Entry<String, String>, String> selector,
+                             String join) {
+        return inputs.entrySet().stream().map(selector).collect(Collectors.joining(join));
+    }
+
+    private String represent(Map<String, String> inputs, String innerJoin, String entryJoin) {
+        return inputs.entrySet()
+                     .stream()
+                     .map(entry -> entry.getKey() + innerJoin + entry.getValue())
+                     .collect(Collectors.joining(entryJoin));
+    }
+
+    private String reverseLookup(Map<String, String> mapping, String value) {
+        return mapping.entrySet()
+                      .stream()
+                      .filter(entry -> entry.getValue().equals(value))
+                      .findFirst()
+                      .map(Entry::getKey)
+                      .get();
     }
 }

@@ -6,84 +6,92 @@ import io.quantumdb.core.schema.operations.CopyTable;
 import io.quantumdb.core.schema.operations.SchemaOperations;
 
 public class XmlCopyTable implements XmlOperation<CopyTable> {
-	static final String TAG = "copyTable";
+    static final String TAG = "copyTable";
 
-	static XmlOperation convert(XmlElement element) {
-		checkArgument(element.getTag().equals(TAG));
-		XmlCopyTable operation = new XmlCopyTable();
-		operation.setSourceTableName(element.getAttributes().get("sourceTableName"));
-		operation.setTargetTableName(element.getAttributes().get("targetTableName"));
-		return operation;
-	}
+    static XmlOperation<?> convert(XmlElement element) {
+        checkArgument(element.getTag().equals(TAG));
+        XmlCopyTable operation = new XmlCopyTable();
+        operation.setSourceTableName(element.getAttributes().get("sourceTableName"));
+        operation.setTargetTableName(element.getAttributes().get("targetTableName"));
+        return operation;
+    }
 
-	private String sourceTableName;
-	private String targetTableName;
+    private String sourceTableName;
+    private String targetTableName;
 
-	@Override
-	public CopyTable toOperation() {
-		return SchemaOperations.copyTable(sourceTableName, targetTableName);
-	}
+    @java.lang.SuppressWarnings("all")
+    public XmlCopyTable() {
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public XmlCopyTable() {
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public boolean equals(final java.lang.Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof XmlCopyTable))
+            return false;
+        final XmlCopyTable other = (XmlCopyTable) o;
+        if (!other.canEqual(this))
+            return false;
+        final java.lang.Object this$sourceTableName = this.getSourceTableName();
+        final java.lang.Object other$sourceTableName = other.getSourceTableName();
+        if (this$sourceTableName == null ? other$sourceTableName != null
+                : !this$sourceTableName.equals(other$sourceTableName))
+            return false;
+        final java.lang.Object this$targetTableName = this.getTargetTableName();
+        final java.lang.Object other$targetTableName = other.getTargetTableName();
+        if (this$targetTableName == null ? other$targetTableName != null
+                : !this$targetTableName.equals(other$targetTableName))
+            return false;
+        return true;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getSourceTableName() {
-		return this.sourceTableName;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getSourceTableName() {
+        return this.sourceTableName;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public String getTargetTableName() {
-		return this.targetTableName;
-	}
+    @java.lang.SuppressWarnings("all")
+    public String getTargetTableName() {
+        return this.targetTableName;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setSourceTableName(final String sourceTableName) {
-		this.sourceTableName = sourceTableName;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        final java.lang.Object $sourceTableName = this.getSourceTableName();
+        result = result * PRIME + ($sourceTableName == null ? 43 : $sourceTableName.hashCode());
+        final java.lang.Object $targetTableName = this.getTargetTableName();
+        result = result * PRIME + ($targetTableName == null ? 43 : $targetTableName.hashCode());
+        return result;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	public void setTargetTableName(final String targetTableName) {
-		this.targetTableName = targetTableName;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setSourceTableName(final String sourceTableName) {
+        this.sourceTableName = sourceTableName;
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public boolean equals(final java.lang.Object o) {
-		if (o == this) return true;
-		if (!(o instanceof XmlCopyTable)) return false;
-		final XmlCopyTable other = (XmlCopyTable) o;
-		if (!other.canEqual((java.lang.Object) this)) return false;
-		final java.lang.Object this$sourceTableName = this.getSourceTableName();
-		final java.lang.Object other$sourceTableName = other.getSourceTableName();
-		if (this$sourceTableName == null ? other$sourceTableName != null : !this$sourceTableName.equals(other$sourceTableName)) return false;
-		final java.lang.Object this$targetTableName = this.getTargetTableName();
-		final java.lang.Object other$targetTableName = other.getTargetTableName();
-		if (this$targetTableName == null ? other$targetTableName != null : !this$targetTableName.equals(other$targetTableName)) return false;
-		return true;
-	}
+    @java.lang.SuppressWarnings("all")
+    public void setTargetTableName(final String targetTableName) {
+        this.targetTableName = targetTableName;
+    }
 
-	@java.lang.SuppressWarnings("all")
-	protected boolean canEqual(final java.lang.Object other) {
-		return other instanceof XmlCopyTable;
-	}
+    @Override
+    public CopyTable toOperation() {
+        return SchemaOperations.copyTable(sourceTableName, targetTableName);
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public int hashCode() {
-		final int PRIME = 59;
-		int result = 1;
-		final java.lang.Object $sourceTableName = this.getSourceTableName();
-		result = result * PRIME + ($sourceTableName == null ? 43 : $sourceTableName.hashCode());
-		final java.lang.Object $targetTableName = this.getTargetTableName();
-		result = result * PRIME + ($targetTableName == null ? 43 : $targetTableName.hashCode());
-		return result;
-	}
+    @java.lang.Override
+    @java.lang.SuppressWarnings("all")
+    public java.lang.String toString() {
+        return "XmlCopyTable(sourceTableName=" + this.getSourceTableName() + ", targetTableName="
+                + this.getTargetTableName() + ")";
+    }
 
-	@java.lang.Override
-	@java.lang.SuppressWarnings("all")
-	public java.lang.String toString() {
-		return "XmlCopyTable(sourceTableName=" + this.getSourceTableName() + ", targetTableName=" + this.getTargetTableName() + ")";
-	}
+    @java.lang.SuppressWarnings("all")
+    protected boolean canEqual(final java.lang.Object other) {
+        return other instanceof XmlCopyTable;
+    }
 }

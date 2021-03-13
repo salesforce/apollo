@@ -19,21 +19,14 @@ import com.google.common.collect.Lists;
 public class TableTest {
 
     @Test
-    public void testCreatingTable() {
-        Table table = new Table("users");
-
-        assertEquals("users", table.getName());
-        assertTrue(table.getColumns().isEmpty());
+    public void testAddingColumnToTable() {
+        new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
     }
 
     @Test
-    public void testCreatingTableWithNullForCatalogName() {
-        assertThrows(IllegalArgumentException.class, () -> new Table(null));
-    }
-
-    @Test
-    public void testCreatingTableWithEmptyStringForCatalogName() {
-        assertThrows(IllegalArgumentException.class, () -> new Table(""));
+    public void testAddingMutipleColumnsToTable() {
+        new Table("users").addColumns(Lists.newArrayList(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT),
+                                                         new Column("name", varchar(255), NOT_NULL)));
     }
 
     @Test
@@ -42,8 +35,32 @@ public class TableTest {
     }
 
     @Test
-    public void testAddingColumnToTable() {
-        new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
+    public void testCreatingTable() {
+        Table table = new Table("users");
+
+        assertEquals("users", table.getName());
+        assertTrue(table.getColumns().isEmpty());
+    }
+
+    @Test
+    public void testCreatingTableWithEmptyStringForCatalogName() {
+        assertThrows(IllegalArgumentException.class, () -> new Table(""));
+    }
+
+    @Test
+    public void testCreatingTableWithNullForCatalogName() {
+        assertThrows(IllegalArgumentException.class, () -> new Table(null));
+    }
+
+    @Test
+    public void testRenamingTable() {
+        Table table = new Table("users");
+        table.rename("other_name");
+    }
+
+    @Test
+    public void testThatAddColumnsMethodThrowsExceptionWhenInputIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> new Table("users").addColumns(null));
     }
 
     @Test
@@ -54,24 +71,6 @@ public class TableTest {
     }
 
     @Test
-    public void testAddingMutipleColumnsToTable() {
-        new Table("users").addColumns(Lists.newArrayList(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT),
-                                                         new Column("name", varchar(255), NOT_NULL)));
-    }
-
-    @Test
-    public void testThatAddColumnsMethodThrowsExceptionWhenInputIsNull() {
-        assertThrows(IllegalArgumentException.class, () -> new Table("users").addColumns(null));
-    }
-
-    @Test
-    public void testThatContainsColumnMethodReturnsTrueWhenColumnExists() {
-        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
-
-        assertTrue(table.containsColumn("id"));
-    }
-
-    @Test
     public void testThatContainsColumnMethodReturnsFalseWhenColumnDoesNotExist() {
         Table table = new Table("users");
 
@@ -79,11 +78,10 @@ public class TableTest {
     }
 
     @Test
-    public void testThatContainsColumnMethodThrowsExceptionOnNullInput() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            Table table = new Table("users");
-            table.containsColumn(null);
-        });
+    public void testThatContainsColumnMethodReturnsTrueWhenColumnExists() {
+        Table table = new Table("users").addColumn(new Column("id", bigint(), IDENTITY, AUTO_INCREMENT));
+
+        assertTrue(table.containsColumn("id"));
     }
 
     @Test
@@ -95,6 +93,25 @@ public class TableTest {
     }
 
     @Test
+    public void testThatContainsColumnMethodThrowsExceptionOnNullInput() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Table table = new Table("users");
+            table.containsColumn(null);
+        });
+    }
+
+    @Test
+    public void testThatCopyMethodReturnsCopy() {
+        Column column = new Column("id", bigint(), IDENTITY, AUTO_INCREMENT);
+        Table table = new Table("users").addColumn(column);
+
+        Table copy = table.copy();
+
+        assertEquals(table, copy);
+        assertFalse(table == copy);
+    }
+
+    @Test
     public void testThatGetColumnMethodReturnsColumnWhenItExists() {
         Column column = new Column("id", bigint(), IDENTITY, AUTO_INCREMENT);
         Table table = new Table("users").addColumn(column);
@@ -103,10 +120,10 @@ public class TableTest {
     }
 
     @Test
-    public void testThatGetTableMethodThrowsExceptionWhenTableDoesNotExist() {
-        assertThrows(IllegalStateException.class, () -> {
+    public void testThatGetColumnMethodThrowsExceptionOnEmptyStringInput() {
+        assertThrows(IllegalArgumentException.class, () -> {
             Table table = new Table("users");
-            table.getColumn("id");
+            table.getColumn("");
         });
     }
 
@@ -119,11 +136,15 @@ public class TableTest {
     }
 
     @Test
-    public void testThatGetColumnMethodThrowsExceptionOnEmptyStringInput() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            Table table = new Table("users");
-            table.getColumn("");
-        });
+    public void testThatGetIdentityColumnMethodReturnsOneColumnForTableWithCompositeKey() {
+        Column id1Column = new Column("left_id", bigint(), IDENTITY, AUTO_INCREMENT);
+        Column id2Column = new Column("right_id", bigint(), IDENTITY, AUTO_INCREMENT);
+
+        Table table = new Table("link_table").addColumn(id1Column)
+                                             .addColumn(id2Column)
+                                             .addColumn(new Column("some_property", bool(), NOT_NULL));
+
+        assertEquals(Lists.newArrayList(id1Column, id2Column), table.getIdentityColumns());
     }
 
     @Test
@@ -143,15 +164,11 @@ public class TableTest {
     }
 
     @Test
-    public void testThatGetIdentityColumnMethodReturnsOneColumnForTableWithCompositeKey() {
-        Column id1Column = new Column("left_id", bigint(), IDENTITY, AUTO_INCREMENT);
-        Column id2Column = new Column("right_id", bigint(), IDENTITY, AUTO_INCREMENT);
-
-        Table table = new Table("link_table").addColumn(id1Column)
-                                             .addColumn(id2Column)
-                                             .addColumn(new Column("some_property", bool(), NOT_NULL));
-
-        assertEquals(Lists.newArrayList(id1Column, id2Column), table.getIdentityColumns());
+    public void testThatGetTableMethodThrowsExceptionWhenTableDoesNotExist() {
+        assertThrows(IllegalStateException.class, () -> {
+            Table table = new Table("users");
+            table.getColumn("id");
+        });
     }
 
     @Test
@@ -166,10 +183,10 @@ public class TableTest {
     }
 
     @Test
-    public void testThatRemoveColumnMethodThrowsExceptionWhenColumnDoesNotExist() {
-        assertThrows(IllegalStateException.class, () -> {
+    public void testThatRemoveColumnMethodThrowsExceptionOnEmptyStringInput() {
+        assertThrows(IllegalArgumentException.class, () -> {
             Table table = new Table("users");
-            table.removeColumn("id");
+            table.removeColumn("");
         });
     }
 
@@ -182,10 +199,10 @@ public class TableTest {
     }
 
     @Test
-    public void testThatRemoveColumnMethodThrowsExceptionOnEmptyStringInput() {
-        assertThrows(IllegalArgumentException.class, () -> {
+    public void testThatRemoveColumnMethodThrowsExceptionWhenColumnDoesNotExist() {
+        assertThrows(IllegalStateException.class, () -> {
             Table table = new Table("users");
-            table.removeColumn("");
+            table.removeColumn("id");
         });
     }
 
@@ -202,21 +219,6 @@ public class TableTest {
     }
 
     @Test
-    public void testRenamingTable() {
-        Table table = new Table("users");
-        table.rename("other_name");
-    }
-
-    @Test
-    public void testThatRenamingTableToNullThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            Column column = new Column("id", bigint(), IDENTITY, AUTO_INCREMENT);
-            Table table = new Table("users").addColumn(column);
-            table.rename(null);
-        });
-    }
-
-    @Test
     public void testThatRenamingColumnToEmptyStringThrowsException() {
         assertThrows(IllegalArgumentException.class, () -> {
             Column column = new Column("id", bigint(), IDENTITY, AUTO_INCREMENT);
@@ -226,14 +228,12 @@ public class TableTest {
     }
 
     @Test
-    public void testThatCopyMethodReturnsCopy() {
-        Column column = new Column("id", bigint(), IDENTITY, AUTO_INCREMENT);
-        Table table = new Table("users").addColumn(column);
-
-        Table copy = table.copy();
-
-        assertEquals(table, copy);
-        assertFalse(table == copy);
+    public void testThatRenamingTableToNullThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            Column column = new Column("id", bigint(), IDENTITY, AUTO_INCREMENT);
+            Table table = new Table("users").addColumn(column);
+            table.rename(null);
+        });
     }
 
     @Test

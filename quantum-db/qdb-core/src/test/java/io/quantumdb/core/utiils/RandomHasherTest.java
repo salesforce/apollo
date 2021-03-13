@@ -15,16 +15,16 @@ import io.quantumdb.core.versioning.Version;
 public class RandomHasherTest {
 
     @Test
-    public void testGeneratingRandomHashReturnsNonEmptyString() {
-        String hash = RandomHasher.generateHash();
-        assertFalse(isNullOrEmpty(hash));
-    }
-
-    @Test
     public void testGeneratingRandomHashReturnsDifferentStringsUponMultipleCalls() {
         String hash1 = RandomHasher.generateHash();
         String hash2 = RandomHasher.generateHash();
         assertNotEquals(hash1, hash2);
+    }
+
+    @Test
+    public void testGeneratingRandomHashReturnsNonEmptyString() {
+        String hash = RandomHasher.generateHash();
+        assertFalse(isNullOrEmpty(hash));
     }
 
     @Test

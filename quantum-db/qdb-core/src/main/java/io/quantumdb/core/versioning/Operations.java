@@ -26,35 +26,35 @@ import io.quantumdb.core.schema.operations.RenameTable;
 
 class Operations {
 
-	private final BiMap<String, Class<? extends Operation>> mapping = HashBiMap.create();
+    private final BiMap<String, Class<? extends Operation>> mapping = HashBiMap.create();
 
-	Operations() {
-		mapping.put("add-column", AddColumn.class);
-		mapping.put("add-foreign-key", AddForeignKey.class);
-		mapping.put("alter-column", AlterColumn.class);
-		mapping.put("copy-table", CopyTable.class);
-		mapping.put("create-index", CreateIndex.class);
-		mapping.put("create-table", CreateTable.class);
-		mapping.put("create-view", CreateView.class);
-		mapping.put("dml-query", DataOperation.class);
-		mapping.put("decompose-table", DecomposeTable.class);
-		mapping.put("drop-column", DropColumn.class);
-		mapping.put("drop-foreign-key", DropForeignKey.class);
-		mapping.put("drop-index", DropIndex.class);
-		mapping.put("drop-table", DropTable.class);
-		mapping.put("drop-view", DropView.class);
-		mapping.put("join-table", JoinTable.class);
-		mapping.put("merge-table", MergeTable.class);
-		mapping.put("partition-table", PartitionTable.class);
-		mapping.put("rename-table", RenameTable.class);
-	}
+    Operations() {
+        mapping.put("add-column", AddColumn.class);
+        mapping.put("add-foreign-key", AddForeignKey.class);
+        mapping.put("alter-column", AlterColumn.class);
+        mapping.put("copy-table", CopyTable.class);
+        mapping.put("create-index", CreateIndex.class);
+        mapping.put("create-table", CreateTable.class);
+        mapping.put("create-view", CreateView.class);
+        mapping.put("dml-query", DataOperation.class);
+        mapping.put("decompose-table", DecomposeTable.class);
+        mapping.put("drop-column", DropColumn.class);
+        mapping.put("drop-foreign-key", DropForeignKey.class);
+        mapping.put("drop-index", DropIndex.class);
+        mapping.put("drop-table", DropTable.class);
+        mapping.put("drop-view", DropView.class);
+        mapping.put("join-table", JoinTable.class);
+        mapping.put("merge-table", MergeTable.class);
+        mapping.put("partition-table", PartitionTable.class);
+        mapping.put("rename-table", RenameTable.class);
+    }
 
-	public Optional<Class<? extends Operation>> getOperationType(String operationType) {
-		return Optional.ofNullable(mapping.get(operationType));
-	}
+    public Optional<String> getOperationType(Class<? extends Operation> operationType) {
+        return Optional.ofNullable(mapping.inverse().get(operationType));
+    }
 
-	public Optional<String> getOperationType(Class<? extends Operation> operationType) {
-		return Optional.ofNullable(mapping.inverse().get(operationType));
-	}
+    public Optional<Class<? extends Operation>> getOperationType(String operationType) {
+        return Optional.ofNullable(mapping.get(operationType));
+    }
 
 }

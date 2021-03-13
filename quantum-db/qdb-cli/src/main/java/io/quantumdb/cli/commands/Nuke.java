@@ -12,24 +12,25 @@ import io.quantumdb.core.backends.Config;
 import io.quantumdb.core.versioning.QuantumTables;
 
 public class Nuke extends Command {
-	@java.lang.SuppressWarnings("all")
-	private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Nuke.class);
+    @java.lang.SuppressWarnings("all")
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Nuke.class);
 
-	@Override
-	public Identifier getIdentifier() {
-		return new Identifier("nuke", "Drops everything in the database.");
-	}
+    @Override
+    public Identifier getIdentifier() {
+        return new Identifier("nuke", "Drops everything in the database.");
+    }
 
-	public void perform(CliWriter writer, List<String> arguments) throws IOException {
-		Config config = Config.load();
-		Backend backend = config.getBackend();
-		try {
-			try (Connection connection = backend.connect()) {
-				QuantumTables.dropEverything(connection, "public");
-			}
-			writer.write("Successfully dropped everything!", Context.SUCCESS);
-		} catch (SQLException e) {
-			writer.write(e.getMessage(), Context.FAILURE);
-		}
-	}
+    @Override
+    public void perform(CliWriter writer, List<String> arguments) throws IOException {
+        Config config = Config.load();
+        Backend backend = config.getBackend();
+        try {
+            try (Connection connection = backend.connect()) {
+                QuantumTables.dropEverything(connection, "public");
+            }
+            writer.write("Successfully dropped everything!", Context.SUCCESS);
+        } catch (SQLException e) {
+            writer.write(e.getMessage(), Context.FAILURE);
+        }
+    }
 }

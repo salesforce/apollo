@@ -35,6 +35,40 @@ public class VersionTraverserTest {
     }
 
     @Test
+    public void testFindingPathInDisconnectedChangelogsFails() {
+        Version vA = new Version("A", null);
+        Version vB = new Version("B", vA);
+        Version vC = new Version("C", vB);
+        @SuppressWarnings("unused")
+        Version vD = new Version("D", vC);
+
+        Optional<List<Version>> path = findPath(v1, vA);
+        assertEquals(Optional.empty(), path);
+    }
+
+    @Test
+    public void testFindingPathWithNullInputForOrigin() {
+        assertThrows(IllegalArgumentException.class, () -> findPath(null, v4));
+    }
+
+    @Test
+    public void testFindingPathWithNullInputForTarget() {
+        assertThrows(IllegalArgumentException.class, () -> findPath(v1, null));
+    }
+
+    @Test
+    public void testFindingReversePath() {
+        List<Version> path = findPath(v4, v1).get();
+        assertEquals(Lists.newArrayList(v4, v3, v2, v1), path);
+    }
+
+    @Test
+    public void testFindPath() {
+        List<Version> path = findPath(v1, v4).get();
+        assertEquals(Lists.newArrayList(v1, v2, v3, v4), path);
+    }
+
+    @Test
     public void testGetDirectionBetweenRootAndV2() {
         Direction direction = getDirection(v1, v2);
         assertEquals(direction, Direction.FORWARDS);
@@ -62,21 +96,15 @@ public class VersionTraverserTest {
     }
 
     @Test
-    public void testGetFirstIncludingRoot() {
-        Version first = getFirst(Sets.newHashSet(v1, v2));
-        assertEquals(v1, first);
-    }
-
-    @Test
     public void testGetFirstExcludingRoot() {
         Version first = getFirst(Sets.newHashSet(v2, v3));
         assertEquals(v2, first);
     }
 
     @Test
-    public void testGetFirstOnGap() {
-        Version first = getFirst(Sets.newHashSet(v2, v4));
-        assertEquals(v2, first);
+    public void testGetFirstIncludingRoot() {
+        Version first = getFirst(Sets.newHashSet(v1, v2));
+        assertEquals(v1, first);
     }
 
     @Test
@@ -85,41 +113,14 @@ public class VersionTraverserTest {
         assertNull(first);
     }
 
+    @Test
+    public void testGetFirstOnGap() {
+        Version first = getFirst(Sets.newHashSet(v2, v4));
+        assertEquals(v2, first);
+    }
+
     public void testGetFirstOnNullInput() {
         assertThrows(IllegalArgumentException.class, () -> getFirst(null));
-    }
-
-    @Test
-    public void testFindPath() {
-        List<Version> path = findPath(v1, v4).get();
-        assertEquals(Lists.newArrayList(v1, v2, v3, v4), path);
-    }
-
-    @Test
-    public void testFindingReversePath() {
-        List<Version> path = findPath(v4, v1).get();
-        assertEquals(Lists.newArrayList(v4, v3, v2, v1), path);
-    }
-
-    @Test
-    public void testFindingPathInDisconnectedChangelogsFails() {
-        Version vA = new Version("A", null);
-        Version vB = new Version("B", vA);
-        Version vC = new Version("C", vB);
-        Version vD = new Version("D", vC);
-
-        Optional<List<Version>> path = findPath(v1, vA);
-        assertEquals(Optional.empty(), path);
-    }
-
-    @Test
-    public void testFindingPathWithNullInputForOrigin() {
-        assertThrows(IllegalArgumentException.class, () -> findPath(null, v4));
-    }
-
-    @Test
-    public void testFindingPathWithNullInputForTarget() {
-        assertThrows(IllegalArgumentException.class, () -> findPath(v1, null));
     }
 
 }

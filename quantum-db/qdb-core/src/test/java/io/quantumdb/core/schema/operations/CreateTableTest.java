@@ -29,6 +29,18 @@ public class CreateTableTest {
     }
 
     @Test
+    public void testCreatingTableWithEmptyStringForColumnName() {
+        assertThrows(IllegalArgumentException.class,
+                     () -> SchemaOperations.createTable("addresses")
+                                           .with("", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL));
+    }
+
+    @Test
+    public void testCreatingTableWithEmptyStringForTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.createTable(""));
+    }
+
+    @Test
     public void testCreatingTableWithMultipleColumns() {
         CreateTable operation = SchemaOperations.createTable("addresses")
                                                 .with("id", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL)
@@ -54,16 +66,6 @@ public class CreateTableTest {
     }
 
     @Test
-    public void testCreatingTableWithNullForTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.createTable(null));
-    }
-
-    @Test
-    public void testCreatingTableWithEmptyStringForTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.createTable(""));
-    }
-
-    @Test
     public void testCreatingTableWithNullForColumnName() {
         assertThrows(IllegalArgumentException.class,
                      () -> SchemaOperations.createTable("addresses")
@@ -71,17 +73,15 @@ public class CreateTableTest {
     }
 
     @Test
-    public void testCreatingTableWithEmptyStringForColumnName() {
-        assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.createTable("addresses")
-                                           .with("", bigint(), IDENTITY, AUTO_INCREMENT, NOT_NULL));
-    }
-
-    @Test
     public void testCreatingTableWithNullForColumnType() {
         assertThrows(IllegalArgumentException.class,
                      () -> SchemaOperations.createTable("addresses")
                                            .with("id", null, IDENTITY, AUTO_INCREMENT, NOT_NULL));
+    }
+
+    @Test
+    public void testCreatingTableWithNullForTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.createTable(null));
     }
 
 }

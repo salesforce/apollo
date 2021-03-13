@@ -10,14 +10,6 @@ import org.junit.jupiter.api.Test;
 public class AddColumnTest {
 
     @Test
-    public void testAddingColumnWithoutHints() {
-        AddColumn operation = SchemaOperations.addColumn("users", "name", varchar(255), NOT_NULL);
-
-        assertEquals("users", operation.getTableName());
-        assertEquals(new ColumnDefinition("name", varchar(255), NOT_NULL), operation.getColumnDefinition());
-    }
-
-    @Test
     public void testAddingColumnWithDefaultExpression() {
         AddColumn operation = SchemaOperations.addColumn("users", "name", varchar(255), "'unknown'");
 
@@ -26,9 +18,9 @@ public class AddColumnTest {
     }
 
     @Test
-    public void testAddingColumnWithNullForTableName() {
+    public void testAddingColumnWithEmptyStringForColumnName() {
         assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.addColumn(null, "name", varchar(255), NOT_NULL));
+                     () -> SchemaOperations.addColumn("users", "", varchar(255), NOT_NULL));
     }
 
     @Test
@@ -44,14 +36,22 @@ public class AddColumnTest {
     }
 
     @Test
-    public void testAddingColumnWithEmptyStringForColumnName() {
-        assertThrows(IllegalArgumentException.class,
-                     () -> SchemaOperations.addColumn("users", "", varchar(255), NOT_NULL));
+    public void testAddingColumnWithNullForColumnType() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.addColumn("users", "name", null, NOT_NULL));
     }
 
     @Test
-    public void testAddingColumnWithNullForColumnType() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.addColumn("users", "name", null, NOT_NULL));
+    public void testAddingColumnWithNullForTableName() {
+        assertThrows(IllegalArgumentException.class,
+                     () -> SchemaOperations.addColumn(null, "name", varchar(255), NOT_NULL));
+    }
+
+    @Test
+    public void testAddingColumnWithoutHints() {
+        AddColumn operation = SchemaOperations.addColumn("users", "name", varchar(255), NOT_NULL);
+
+        assertEquals("users", operation.getTableName());
+        assertEquals(new ColumnDefinition("name", varchar(255), NOT_NULL), operation.getColumnDefinition());
     }
 
 }

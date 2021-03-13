@@ -15,13 +15,13 @@ public class DropTableTest {
     }
 
     @Test
-    public void testDropTableThrowsExceptionWhenNullForTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.dropTable(null));
+    public void testDropTableThrowsExceptionWhenEmptyStringForTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.dropTable(""));
     }
 
     @Test
-    public void testDropTableThrowsExceptionWhenEmptyStringForTableName() {
-        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.dropTable(""));
+    public void testDropTableThrowsExceptionWhenNullForTableName() {
+        assertThrows(IllegalArgumentException.class, () -> SchemaOperations.dropTable(null));
     }
 
 }

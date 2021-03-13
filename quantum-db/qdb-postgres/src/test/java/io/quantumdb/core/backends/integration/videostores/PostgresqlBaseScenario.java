@@ -34,18 +34,18 @@ import io.quantumdb.core.versioning.RefLog.ColumnRef;
 import io.quantumdb.core.versioning.State;
 
 public class PostgresqlBaseScenario extends PostgresqlDatabase {
-    public static final String STORES_ID    = "table_8e7f3e2bff";
-    public static final String STAFF_ID     = "table_0bc1cb405a";
     public static final String CUSTOMERS_ID = "table_c5d814a492";
     public static final String FILMS_ID     = "table_9fc422e0a8";
     public static final String INVENTORY_ID = "table_61a6a2518f";
     public static final String PAYCHECKS_ID = "table_08f08c873f";
     public static final String PAYMENTS_ID  = "table_9859d9b73f";
     public static final String RENTALS_ID   = "table_d9cabab994";
+    public static final String STAFF_ID     = "table_0bc1cb405a";
+    public static final String STORES_ID    = "table_8e7f3e2bff";
     private Backend            backend;
     private Catalog            catalog;
-    private Migrator           migrator;
     private Changelog          changelog;
+    private Migrator           migrator;
     private RefLog             refLog;
     private State              state;
 
@@ -144,6 +144,36 @@ public class PostgresqlBaseScenario extends PostgresqlDatabase {
 
     }
 
+    @java.lang.SuppressWarnings("all")
+    public Backend getBackend() {
+        return this.backend;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public Catalog getCatalog() {
+        return this.catalog;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public Changelog getChangelog() {
+        return this.changelog;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public Migrator getMigrator() {
+        return this.migrator;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public RefLog getRefLog() {
+        return this.refLog;
+    }
+
+    @java.lang.SuppressWarnings("all")
+    public State getState() {
+        return this.state;
+    }
+
     void insertTestData() throws SQLException {
         getConnection().setAutoCommit(false);
         getConnection().createStatement().execute("SET CONSTRAINTS ALL DEFERRED");
@@ -197,35 +227,5 @@ public class PostgresqlBaseScenario extends PostgresqlDatabase {
                      .values(null, 4, 4, new Date(System.currentTimeMillis()), 5.0F)
                      .insert();
         getConnection().setAutoCommit(true);
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public Backend getBackend() {
-        return this.backend;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public Catalog getCatalog() {
-        return this.catalog;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public Migrator getMigrator() {
-        return this.migrator;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public Changelog getChangelog() {
-        return this.changelog;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public RefLog getRefLog() {
-        return this.refLog;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    public State getState() {
-        return this.state;
     }
 }
