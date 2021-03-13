@@ -16,5 +16,6 @@
 		<module>qdb-driver</module>
 		<module>qdb-query-rewriter</module>
 		<module>qdb-postgres</module>
+		<module>qdb-cli</module>
 	</modules>
 </project>

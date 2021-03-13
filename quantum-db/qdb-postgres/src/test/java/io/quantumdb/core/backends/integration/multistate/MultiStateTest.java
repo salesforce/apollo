@@ -10,6 +10,8 @@ import static io.quantumdb.core.schema.operations.SchemaOperations.addColumn;
 import static io.quantumdb.core.schema.operations.SchemaOperations.createTable;
 import static io.quantumdb.core.schema.operations.SchemaOperations.execute;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.quantumdb.core.backends.Backend;
@@ -29,6 +31,13 @@ public class MultiStateTest extends PostgresqlDatabase {
     private Version step4;
 
     @Override
+    @AfterEach
+    public void after() throws Exception {
+        super.after();
+    }
+
+    @Override
+    @BeforeEach
     public void before() throws Exception {
         super.before();
 

@@ -44,11 +44,11 @@ public class AddColumnToCustomersTable {
 	private static Version origin;
 	private static Version target;
     @AfterAll
-    public void after() throws Exception {
+    public  static void after() throws Exception {
         setup.after();
     }
     @BeforeAll
-    public void before() throws Exception {
+    public static  void before() throws Exception {
         setup.before();
     }
 

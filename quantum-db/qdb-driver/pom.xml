@@ -13,7 +13,6 @@
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>qdb-query-rewriter</artifactId>
-			<version>${project.version}</version>
 		</dependency>
 	</dependencies>
 </project>
