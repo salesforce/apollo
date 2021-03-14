@@ -6,11 +6,17 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 
 public class Catalog implements Copyable<Catalog> {
+    private static final Logger log = LoggerFactory.getLogger(Catalog.class);
+    
     private final String               name;
     private final Collection<Sequence> sequences;
     private final Collection<Table>    tables;
@@ -41,6 +47,7 @@ public class Catalog implements Copyable<Catalog> {
                       "Table: \'" + table.getName() + "\' doesn\'t contain any columns.");
         checkArgument(!table.getIdentityColumns().isEmpty(),
                       "Table: \'" + table.getName() + "\' has no identity columns.");
+        log.info("Adding table: {} to: {}", table.getName(), name);
         tables.add(table);
         table.setParent(this);
         return this;
@@ -92,7 +99,7 @@ public class Catalog implements Copyable<Catalog> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -132,20 +139,20 @@ public class Catalog implements Copyable<Catalog> {
                                          .collect(Collectors.toSet()));
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getName() {
         return this.name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Collection<Sequence> getSequences() {
         return this.sequences;
     }
 
-    public Table getTable(String tableName) {
+    public Table getTable(String tableName) { 
         checkArgument(!Strings.isNullOrEmpty(tableName), "You must specify a \'tableName\'");
         return tables.stream()
-                     .filter(t -> t.getName().equals(tableName))
+                     .filter(t -> t.getName().equalsIgnoreCase(tableName))
                      .findFirst()
                      .orElseThrow(() -> new IllegalStateException(
                              "Catalog: " + name + " does not contain a table: " + tableName));
@@ -165,7 +172,7 @@ public class Catalog implements Copyable<Catalog> {
     public View getView(String viewName) {
         checkArgument(!Strings.isNullOrEmpty(viewName), "You must specify a \'viewName\'");
         return views.stream()
-                    .filter(v -> v.getName().equals(viewName))
+                    .filter(v -> v.getName().equalsIgnoreCase(viewName))
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException(
                             "Catalog: " + name + " does not contain a view: " + viewName));
@@ -176,7 +183,7 @@ public class Catalog implements Copyable<Catalog> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -224,7 +231,7 @@ public class Catalog implements Copyable<Catalog> {
         return PrettyPrinter.prettyPrint(this);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof Catalog;
     }

@@ -23,7 +23,7 @@ import io.quantumdb.core.schema.definitions.Table;
 import io.quantumdb.core.utils.QueryBuilder;
 
 public class NullRecords {
-    @java.lang.SuppressWarnings("all")
+
     private static final org.slf4j.Logger log        = org.slf4j.LoggerFactory.getLogger(NullRecords.class);
     private final Map<Table, Identity>    identities = Maps.newHashMap();
 
@@ -96,7 +96,7 @@ public class NullRecords {
     private void ensureDeferredConstraints(Connection connection) throws SQLException {
         connection.setAutoCommit(false);
         try (Statement statement = connection.createStatement()) {
-            statement.execute("SET CONSTRAINTS ALL DEFERRED;");
+            statement.execute("SET REFERENTIAL_INTEGRITY FALSE");
         }
     }
 

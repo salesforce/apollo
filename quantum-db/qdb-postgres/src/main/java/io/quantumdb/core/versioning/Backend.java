@@ -50,7 +50,7 @@ public class Backend {
         private final String parentVersionId;
         private final String versionId;
 
-        @java.lang.SuppressWarnings("all")
+        
         public RawChangelogEntry(final String versionId, final String operationType, final String operation,
                 final String parentVersionId) {
             this.versionId = versionId;
@@ -60,7 +60,7 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -90,28 +90,28 @@ public class Backend {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getOperation() {
             return this.operation;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getOperationType() {
             return this.operationType;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getParentVersionId() {
             return this.parentVersionId;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getVersionId() {
             return this.versionId;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -127,14 +127,14 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Backend.RawChangelogEntry(versionId=" + this.getVersionId() + ", operationType="
                     + this.getOperationType() + ", operation=" + this.getOperation() + ", parentVersionId="
                     + this.getParentVersionId() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Backend.RawChangelogEntry;
         }
@@ -147,7 +147,7 @@ public class Backend {
         private final String id;
         private final String versionId;
 
-        @java.lang.SuppressWarnings("all")
+        
         public RawChangeSet(final String id, final String versionId, final String description, final String author,
                 final Date created) {
             this.id = id;
@@ -158,7 +158,7 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -190,33 +190,33 @@ public class Backend {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getAuthor() {
             return this.author;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public Date getCreated() {
             return this.created;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getDescription() {
             return this.description;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getId() {
             return this.id;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getVersionId() {
             return this.versionId;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -234,13 +234,13 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Backend.RawChangeSet(id=" + this.getId() + ", versionId=" + this.getVersionId() + ", description="
                     + this.getDescription() + ", author=" + this.getAuthor() + ", created=" + this.getCreated() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Backend.RawChangeSet;
         }
@@ -250,14 +250,14 @@ public class Backend {
         private final String column;
         private final String table;
 
-        @java.lang.SuppressWarnings("all")
+        
         public RawColumn(final String table, final String column) {
             this.table = table;
             this.column = column;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -277,18 +277,18 @@ public class Backend {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getColumn() {
             return this.column;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getTable() {
             return this.table;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -300,12 +300,12 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Backend.RawColumn(table=" + this.getTable() + ", column=" + this.getColumn() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Backend.RawColumn;
         }
@@ -316,7 +316,7 @@ public class Backend {
         private final RawColumn source;
         private final RawColumn target;
 
-        @java.lang.SuppressWarnings("all")
+        
         public RawColumnMapping(final long id, final RawColumn source, final RawColumn target) {
             this.id = id;
             this.source = source;
@@ -324,7 +324,7 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -346,23 +346,23 @@ public class Backend {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public long getId() {
             return this.id;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public RawColumn getSource() {
             return this.source;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public RawColumn getTarget() {
             return this.target;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -376,13 +376,13 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Backend.RawColumnMapping(id=" + this.getId() + ", source=" + this.getSource() + ", target="
                     + this.getTarget() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Backend.RawColumnMapping;
         }
@@ -393,7 +393,7 @@ public class Backend {
         private final long   id;
         private final String table;
 
-        @java.lang.SuppressWarnings("all")
+        
         public RawTableColumn(final long id, final String table, final String column) {
             this.id = id;
             this.table = table;
@@ -401,7 +401,7 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -423,23 +423,23 @@ public class Backend {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getColumn() {
             return this.column;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public long getId() {
             return this.id;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getTable() {
             return this.table;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -453,13 +453,13 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Backend.RawTableColumn(id=" + this.getId() + ", table=" + this.getTable() + ", column="
                     + this.getColumn() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Backend.RawTableColumn;
         }
@@ -468,13 +468,13 @@ public class Backend {
     private static class RefId {
         private final String refId;
 
-        @java.lang.SuppressWarnings("all")
+        
         public RefId(final String refId) {
             this.refId = refId;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -490,13 +490,13 @@ public class Backend {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getRefId() {
             return this.refId;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -506,12 +506,12 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Backend.RefId(refId=" + this.getRefId() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Backend.RefId;
         }
@@ -522,7 +522,7 @@ public class Backend {
         private final long   id;
         private final RefId  refId;
 
-        @java.lang.SuppressWarnings("all")
+        
         public TableColumn(final long id, final RefId refId, final String column) {
             this.id = id;
             this.refId = refId;
@@ -530,7 +530,7 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -552,23 +552,23 @@ public class Backend {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getColumn() {
             return this.column;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public long getId() {
             return this.id;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public RefId getRefId() {
             return this.refId;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -582,13 +582,13 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Backend.TableColumn(id=" + this.getId() + ", refId=" + this.getRefId() + ", column="
                     + this.getColumn() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Backend.TableColumn;
         }
@@ -599,7 +599,7 @@ public class Backend {
         private final TableColumn source;
         private final TableColumn target;
 
-        @java.lang.SuppressWarnings("all")
+        
         public TableColumnMapping(final long id, final TableColumn source, final TableColumn target) {
             this.id = id;
             this.source = source;
@@ -607,7 +607,7 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -629,23 +629,23 @@ public class Backend {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public long getId() {
             return this.id;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public TableColumn getSource() {
             return this.source;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public TableColumn getTarget() {
             return this.target;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -659,19 +659,19 @@ public class Backend {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Backend.TableColumnMapping(id=" + this.getId() + ", source=" + this.getSource() + ", target="
                     + this.getTarget() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Backend.TableColumnMapping;
         }
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Backend.class);
 
     private final Gson gson;
@@ -1423,7 +1423,7 @@ public class Backend {
         try (Statement statement = connection.createStatement()) {
             String query = "SELECT * FROM quantumdb.table_columns ORDER BY id ASC;";
             String deleteQuery = "DELETE FROM quantumdb.table_columns WHERE id = ?;";
-            String insertQuery = "INSERT INTO quantumdb.table_columns (ref_id, column_name) VALUES (?, ?) RETURNING id;";
+            String insertQuery = "INSERT INTO quantumdb.table_columns (ref_id, column_name) VALUES (?, ?);";
             ResultSet resultSet = statement.executeQuery(query);
             while (resultSet.next()) {
                 Long id = resultSet.getLong("id");
@@ -1450,15 +1450,16 @@ public class Backend {
                 }
             }
             if (!columnMapping.isEmpty()) {
-                try (PreparedStatement insert = connection.prepareStatement(insertQuery)) {
+                try (PreparedStatement insert = connection.prepareStatement(insertQuery, new String[]{"ID"})) {
                     for (Entry<String, String> entry : columnMapping.entries()) {
                         String refId = entry.getKey();
                         String columnName = entry.getValue();
                         insert.setString(1, refId);
                         insert.setString(2, columnName);
-                        ResultSet generatedKeys = insert.executeQuery();
+                        insert.executeUpdate();
+                        ResultSet generatedKeys = insert.getGeneratedKeys();
                         generatedKeys.next();
-                        long id = generatedKeys.getLong("id");
+                        long id = generatedKeys.getLong(1);
                         columns.add(new RawTableColumn(id, refId, columnName));
                         log.debug("Inserted new entry for table_columns id: {} - {} / {}", id, refId, columnName);
                     }

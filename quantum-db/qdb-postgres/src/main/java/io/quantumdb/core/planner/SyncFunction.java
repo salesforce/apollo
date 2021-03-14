@@ -96,7 +96,7 @@ public class SyncFunction {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -160,68 +160,68 @@ public class SyncFunction {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Catalog getCatalog() {
         return this.catalog;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Map<ColumnRef, ColumnRef> getColumnMapping() {
         return this.columnMapping;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getFunctionName() {
         return this.functionName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ImmutableMap<String, String> getInsertExpressions() {
         return this.insertExpressions;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public NullRecords getNullRecords() {
         return this.nullRecords;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public RefLog getRefLog() {
         return this.refLog;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public TableRef getSource() {
         return this.source;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public TableRef getTarget() {
         return this.target;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTriggerName() {
         return this.triggerName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ImmutableMap<String, String> getUpdateExpressions() {
         return this.updateExpressions;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ImmutableMap<String, String> getUpdateIdentities() {
         return this.updateIdentities;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ImmutableMap<String, String> getUpdateIdentitiesForInserts() {
         return this.updateIdentitiesForInserts;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -316,7 +316,7 @@ public class SyncFunction {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "SyncFunction(source=" + this.getSource() + ", target=" + this.getTarget() + ", functionName="
                 + this.getFunctionName() + ", triggerName=" + this.getTriggerName() + ", refLog=" + this.getRefLog()
@@ -327,7 +327,7 @@ public class SyncFunction {
                 + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof SyncFunction;
     }

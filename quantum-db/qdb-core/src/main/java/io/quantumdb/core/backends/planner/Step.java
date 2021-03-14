@@ -63,7 +63,7 @@ public class Step {
         return Sets.newHashSet(dependsOn);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Operation getOperation() {
         return this.operation;
     }

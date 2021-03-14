@@ -14,7 +14,7 @@ import io.quantumdb.core.versioning.Version;
 import io.quantumdb.query.rewriter.PostgresqlQueryRewriter;
 
 public class ViewCreator {
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ViewCreator.class);
 
     public void create(Connection connection, Collection<View> views, RefLog refLog,

@@ -21,7 +21,7 @@ public abstract class Command {
         private final String command;
         private final String description;
 
-        @java.lang.SuppressWarnings("all")
+        
         public Identifier(final String command, final String description) {
             this.command = command;
             this.description = description;
@@ -33,7 +33,7 @@ public abstract class Command {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -53,18 +53,18 @@ public abstract class Command {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getCommand() {
             return this.command;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getDescription() {
             return this.description;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -76,18 +76,18 @@ public abstract class Command {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Command.Identifier(command=" + this.getCommand() + ", description=" + this.getDescription() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Command.Identifier;
         }
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Command.class);
 
     public abstract Identifier getIdentifier();

@@ -19,12 +19,12 @@ public class XmlRenameTable implements XmlOperation<RenameTable> {
     private String newTableName;
     private String oldTableName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlRenameTable() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -44,18 +44,18 @@ public class XmlRenameTable implements XmlOperation<RenameTable> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getNewTableName() {
         return this.newTableName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getOldTableName() {
         return this.oldTableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -66,12 +66,12 @@ public class XmlRenameTable implements XmlOperation<RenameTable> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setNewTableName(final String newTableName) {
         this.newTableName = newTableName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setOldTableName(final String oldTableName) {
         this.oldTableName = oldTableName;
     }
@@ -82,13 +82,13 @@ public class XmlRenameTable implements XmlOperation<RenameTable> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlRenameTable(oldTableName=" + this.getOldTableName() + ", newTableName=" + this.getNewTableName()
                 + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlRenameTable;
     }

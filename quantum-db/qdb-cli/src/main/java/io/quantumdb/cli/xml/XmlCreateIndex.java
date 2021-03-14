@@ -24,12 +24,12 @@ public class XmlCreateIndex implements XmlOperation<CreateIndex> {
     private String   tableName;
     private boolean  unique;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlCreateIndex() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -49,18 +49,18 @@ public class XmlCreateIndex implements XmlOperation<CreateIndex> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String[] getColumnNames() {
         return this.columnNames;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -71,22 +71,22 @@ public class XmlCreateIndex implements XmlOperation<CreateIndex> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isUnique() {
         return this.unique;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setColumnNames(final String[] columnNames) {
         this.columnNames = columnNames;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTableName(final String tableName) {
         this.tableName = tableName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setUnique(final boolean unique) {
         this.unique = unique;
     }
@@ -97,13 +97,13 @@ public class XmlCreateIndex implements XmlOperation<CreateIndex> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlCreateIndex(tableName=" + this.getTableName() + ", columnNames="
                 + java.util.Arrays.deepToString(this.getColumnNames()) + ", unique=" + this.isUnique() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlCreateIndex;
     }

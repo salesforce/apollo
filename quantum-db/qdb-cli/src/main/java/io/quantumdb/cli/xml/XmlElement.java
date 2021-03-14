@@ -12,14 +12,14 @@ class XmlElement {
     private final String              tag;
     private final String              text;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlElement(final String tag, final String text) {
         this.tag = tag;
         this.text = text;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -47,28 +47,28 @@ class XmlElement {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Map<String, String> getAttributes() {
         return this.attributes;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public List<XmlElement> getChildren() {
         return this.children;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTag() {
         return this.tag;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getText() {
         return this.text;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -84,13 +84,13 @@ class XmlElement {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlElement(tag=" + this.getTag() + ", attributes=" + this.getAttributes() + ", children="
                 + this.getChildren() + ", text=" + this.getText() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlElement;
     }

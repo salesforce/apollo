@@ -70,7 +70,7 @@ public class Column implements Copyable<Column> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -98,43 +98,43 @@ public class Column implements Copyable<Column> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getDefaultValue() {
         return this.defaultValue;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Set<Hint> getHints() {
         return this.hints;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getName() {
         return this.name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ForeignKey getOutgoingForeignKey() {
         return this.outgoingForeignKey;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Table getParent() {
         return this.parent;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Sequence getSequence() {
         return this.sequence;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ColumnType getType() {
         return this.type;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -192,22 +192,22 @@ public class Column implements Copyable<Column> {
         return PrettyPrinter.prettyPrint(this);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof Column;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected List<ForeignKey> getIncomingForeignKeys() {
         return this.incomingForeignKeys;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected void setOutgoingForeignKey(final ForeignKey outgoingForeignKey) {
         this.outgoingForeignKey = outgoingForeignKey;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected void setSequence(final Sequence sequence) {
         this.sequence = sequence;
     }

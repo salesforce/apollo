@@ -97,7 +97,7 @@ public class Changelog {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -117,12 +117,12 @@ public class Changelog {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Version getLastAdded() {
         return this.lastAdded;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Version getRoot() {
         return this.root;
     }
@@ -148,7 +148,7 @@ public class Changelog {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -160,13 +160,13 @@ public class Changelog {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "Changelog(root=" + this.getRoot() + ", idGenerator=" + this.idGenerator + ", lastAdded="
                 + this.getLastAdded() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof Changelog;
     }

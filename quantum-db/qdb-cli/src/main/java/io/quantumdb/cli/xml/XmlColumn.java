@@ -23,12 +23,12 @@ public class XmlColumn {
     private boolean primaryKey;
     private String  type;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlColumn() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -59,23 +59,23 @@ public class XmlColumn {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getDefaultExpression() {
         return this.defaultExpression;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getName() {
         return this.name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getType() {
         return this.type;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -91,60 +91,60 @@ public class XmlColumn {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isAutoIncrement() {
         return this.autoIncrement;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isNullable() {
         return this.nullable;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isPrimaryKey() {
         return this.primaryKey;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setAutoIncrement(final boolean autoIncrement) {
         this.autoIncrement = autoIncrement;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setDefaultExpression(final String defaultExpression) {
         this.defaultExpression = defaultExpression;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setName(final String name) {
         this.name = name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setNullable(final boolean nullable) {
         this.nullable = nullable;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setPrimaryKey(final boolean primaryKey) {
         this.primaryKey = primaryKey;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setType(final String type) {
         this.type = type;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlColumn(name=" + this.getName() + ", type=" + this.getType() + ", defaultExpression="
                 + this.getDefaultExpression() + ", primaryKey=" + this.isPrimaryKey() + ", autoIncrement="
                 + this.isAutoIncrement() + ", nullable=" + this.isNullable() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlColumn;
     }

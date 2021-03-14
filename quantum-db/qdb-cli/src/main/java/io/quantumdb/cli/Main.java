@@ -23,7 +23,7 @@ import io.quantumdb.cli.commands.Status;
 import io.quantumdb.cli.utils.CliWriter;
 
 public class Main {
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Main.class);
 
     public static LinkedHashMap<String, Command> listCommands() {

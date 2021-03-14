@@ -150,7 +150,7 @@ public class VersionTraverser {
         return generation;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private VersionTraverser() {
     }
 }

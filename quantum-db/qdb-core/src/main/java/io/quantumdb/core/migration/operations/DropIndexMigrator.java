@@ -9,7 +9,7 @@ import io.quantumdb.core.versioning.RefLog.TableRef;
 import io.quantumdb.core.versioning.Version;
 
 class DropIndexMigrator implements SchemaOperationMigrator<DropIndex> {
-    @java.lang.SuppressWarnings("all")
+    
     DropIndexMigrator() {
     }
 

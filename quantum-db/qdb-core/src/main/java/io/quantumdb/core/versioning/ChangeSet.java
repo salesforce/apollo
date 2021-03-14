@@ -63,7 +63,7 @@ public class ChangeSet implements Comparable<ChangeSet> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -95,33 +95,33 @@ public class ChangeSet implements Comparable<ChangeSet> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getAuthor() {
         return this.author;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Date getCreated() {
         return this.created;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getDescription() {
         return this.description;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getId() {
         return this.id;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Version getVersion() {
         return this.version;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -139,18 +139,18 @@ public class ChangeSet implements Comparable<ChangeSet> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "ChangeSet(id=" + this.getId() + ", author=" + this.getAuthor() + ", created=" + this.getCreated()
                 + ", description=" + this.getDescription() + ", version=" + this.getVersion() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof ChangeSet;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     void setVersion(final Version version) {
         this.version = version;
     }

@@ -7,7 +7,7 @@ import io.quantumdb.core.versioning.RefLog;
 import io.quantumdb.core.versioning.Version;
 
 public class DropTableMigrator implements SchemaOperationMigrator<DropTable> {
-    @java.lang.SuppressWarnings("all")
+    
     DropTableMigrator() {
     }
 

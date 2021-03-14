@@ -9,7 +9,7 @@ import io.quantumdb.core.versioning.RefLog.TableRef;
 import io.quantumdb.core.versioning.Version;
 
 class AddForeignKeyMigrator implements SchemaOperationMigrator<AddForeignKey> {
-    @java.lang.SuppressWarnings("all")
+    
     AddForeignKeyMigrator() {
     }
 

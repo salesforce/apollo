@@ -14,7 +14,7 @@ public class MigratorFunction {
     private final String       name;
     private final List<String> parameters;
 
-    @java.lang.SuppressWarnings("all")
+    
     public MigratorFunction(final String name, final List<String> parameters, final String createStatement,
             final String dropStatement) {
         this.name = name;
@@ -24,7 +24,7 @@ public class MigratorFunction {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -53,28 +53,28 @@ public class MigratorFunction {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getCreateStatement() {
         return this.createStatement;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getDropStatement() {
         return this.dropStatement;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getName() {
         return this.name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public List<String> getParameters() {
         return this.parameters;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -90,13 +90,13 @@ public class MigratorFunction {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "MigratorFunction(name=" + this.getName() + ", parameters=" + this.getParameters() + ", createStatement="
                 + this.getCreateStatement() + ", dropStatement=" + this.getDropStatement() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof MigratorFunction;
     }

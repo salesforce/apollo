@@ -11,14 +11,12 @@ public class TableNode {
     private final List<ForeignKey> foreignKeys;
     private final String           tableName;
 
-    @java.lang.SuppressWarnings("all")
     public TableNode(final String tableName, final List<ForeignKey> foreignKeys) {
         this.tableName = tableName;
         this.foreignKeys = foreignKeys;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -34,18 +32,16 @@ public class TableNode {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
     public List<ForeignKey> getForeignKeys() {
         return this.foreignKeys;
     }
 
-    @java.lang.SuppressWarnings("all")
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -65,7 +61,6 @@ public class TableNode {
         return tableName + ": [ " + Joiner.on(", ").join(referencedTables) + " ]";
     }
 
-    @java.lang.SuppressWarnings("all")
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof TableNode;
     }

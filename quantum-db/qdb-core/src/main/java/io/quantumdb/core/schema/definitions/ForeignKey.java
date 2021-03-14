@@ -65,7 +65,7 @@ public class ForeignKey {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -129,17 +129,17 @@ public class ForeignKey {
         return columns;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getForeignKeyName() {
         return this.foreignKeyName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Action getOnDelete() {
         return this.onDelete;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Action getOnUpdate() {
         return this.onUpdate;
     }
@@ -148,7 +148,7 @@ public class ForeignKey {
         return referencingColumns;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Table getReferencingTable() {
         return this.referencingTable;
     }
@@ -161,7 +161,7 @@ public class ForeignKey {
         return referredColumns;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Table getReferredTable() {
         return this.referredTable;
     }
@@ -171,7 +171,7 @@ public class ForeignKey {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -208,12 +208,12 @@ public class ForeignKey {
         return referencingTable.equals(referredTable);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setOnDelete(final Action onDelete) {
         this.onDelete = onDelete;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setOnUpdate(final Action onUpdate) {
         this.onUpdate = onUpdate;
     }
@@ -223,7 +223,7 @@ public class ForeignKey {
         return PrettyPrinter.prettyPrint(this);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof ForeignKey;
     }

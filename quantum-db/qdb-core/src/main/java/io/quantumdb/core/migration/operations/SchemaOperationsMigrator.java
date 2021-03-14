@@ -46,7 +46,7 @@ public class SchemaOperationsMigrator {
                                      .build();
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public RefLog getRefLog() {
         return this.refLog;
     }

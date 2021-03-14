@@ -9,7 +9,7 @@ import io.quantumdb.core.versioning.Changelog;
 import io.quantumdb.core.versioning.Version;
 
 public class ChangelogLoader {
-    @java.lang.SuppressWarnings("all")
+    
     public ChangelogLoader() {
     }
 

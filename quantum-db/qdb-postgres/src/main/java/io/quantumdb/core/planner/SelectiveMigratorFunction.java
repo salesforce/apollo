@@ -257,7 +257,7 @@ public class SelectiveMigratorFunction {
                 dropStatement.toString());
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private SelectiveMigratorFunction() {
     }
 }

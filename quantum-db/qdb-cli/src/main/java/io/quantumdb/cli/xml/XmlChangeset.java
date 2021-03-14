@@ -35,12 +35,12 @@ public class XmlChangeset {
     private String                      id;
     private final List<XmlOperation<?>> operations = Lists.newArrayList();
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlChangeset() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -68,28 +68,28 @@ public class XmlChangeset {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getAuthor() {
         return this.author;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getDescription() {
         return this.description;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getId() {
         return this.id;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public List<XmlOperation<?>> getOperations() {
         return this.operations;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -104,29 +104,29 @@ public class XmlChangeset {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setAuthor(final String author) {
         this.author = author;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setDescription(final String description) {
         this.description = description;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setId(final String id) {
         this.id = id;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlChangeset(id=" + this.getId() + ", author=" + this.getAuthor() + ", description="
                 + this.getDescription() + ", operations=" + this.getOperations() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlChangeset;
     }

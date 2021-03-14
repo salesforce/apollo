@@ -460,7 +460,7 @@ public class PostgresqlMigrationPlanner implements MigrationPlanner {
         private static final long serialVersionUID = 1L;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PostgresqlMigrationPlanner.class);
 
     @Override

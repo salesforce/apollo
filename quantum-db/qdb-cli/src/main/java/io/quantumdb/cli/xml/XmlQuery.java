@@ -27,12 +27,12 @@ public class XmlQuery implements XmlOperation<DataOperation> {
 
     private String query;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlQuery() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -48,13 +48,13 @@ public class XmlQuery implements XmlOperation<DataOperation> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getQuery() {
         return this.query;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -63,7 +63,7 @@ public class XmlQuery implements XmlOperation<DataOperation> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setQuery(final String query) {
         this.query = query;
     }
@@ -74,12 +74,12 @@ public class XmlQuery implements XmlOperation<DataOperation> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlQuery(query=" + this.getQuery() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlQuery;
     }

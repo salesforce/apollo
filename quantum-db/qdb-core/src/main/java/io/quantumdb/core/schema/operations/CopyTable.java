@@ -20,7 +20,7 @@ public class CopyTable implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -42,18 +42,18 @@ public class CopyTable implements SchemaOperation {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getSourceTableName() {
         return this.sourceTableName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTargetTableName() {
         return this.targetTableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -65,13 +65,13 @@ public class CopyTable implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "CopyTable(sourceTableName=" + this.getSourceTableName() + ", targetTableName="
                 + this.getTargetTableName() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof CopyTable;
     }

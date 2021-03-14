@@ -251,7 +251,7 @@ class PostgresqlMigrator implements DatabaseMigrator {
         }
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PostgresqlMigrator.class);
 
     private static void execute(Connection connection, QueryBuilder queryBuilder) throws SQLException {

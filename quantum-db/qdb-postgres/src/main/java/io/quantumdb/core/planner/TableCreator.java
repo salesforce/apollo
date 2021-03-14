@@ -19,8 +19,7 @@ import io.quantumdb.core.schema.definitions.Sequence;
 import io.quantumdb.core.schema.definitions.Table;
 import io.quantumdb.core.utils.QueryBuilder;
 
-public class TableCreator {
-    @java.lang.SuppressWarnings("all")
+public class TableCreator { 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TableCreator.class);
 
     public void create(Connection connection, Collection<Table> tables) throws SQLException {
@@ -122,7 +121,7 @@ public class TableCreator {
             for (Map.Entry<String, String> sequence : sequences.entrySet()) {
                 execute(connection,
                         new QueryBuilder().append("ALTER SEQUENCE " + sequence.getKey())
-                                          .append("OWNED BY " + table.getName() + "." + sequence.getValue()));
+                                          /*.append("OWNED BY " + table.getName() + "." + sequence.getValue())*/);
             }
         }
     }

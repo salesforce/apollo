@@ -30,12 +30,12 @@ public class XmlCreateTable implements XmlOperation<CreateTable> {
     private final List<XmlColumn> columns = Lists.newArrayList();
     private String                tableName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlCreateTable() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -55,18 +55,18 @@ public class XmlCreateTable implements XmlOperation<CreateTable> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public List<XmlColumn> getColumns() {
         return this.columns;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -77,7 +77,7 @@ public class XmlCreateTable implements XmlOperation<CreateTable> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTableName(final String tableName) {
         this.tableName = tableName;
     }
@@ -105,12 +105,12 @@ public class XmlCreateTable implements XmlOperation<CreateTable> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlCreateTable(tableName=" + this.getTableName() + ", columns=" + this.getColumns() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlCreateTable;
     }

@@ -13,7 +13,7 @@ public class DataOperation implements Operation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -29,7 +29,7 @@ public class DataOperation implements Operation {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getQuery() {
         return this.query;
     }
@@ -40,7 +40,7 @@ public class DataOperation implements Operation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -50,12 +50,12 @@ public class DataOperation implements Operation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "DataOperation(query=" + this.getQuery() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof DataOperation;
     }

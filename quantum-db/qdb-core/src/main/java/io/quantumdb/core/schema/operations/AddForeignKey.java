@@ -26,7 +26,7 @@ public class AddForeignKey implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -64,43 +64,43 @@ public class AddForeignKey implements SchemaOperation {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getName() {
         return this.name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Action getOnDelete() {
         return this.onDelete;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Action getOnUpdate() {
         return this.onUpdate;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String[] getReferencedColumnNames() {
         return this.referencedColumnNames;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getReferencedTableName() {
         return this.referencedTableName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String[] getReferringColumnNames() {
         return this.referringColumnNames;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getReferringTableName() {
         return this.referringTableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -144,7 +144,7 @@ public class AddForeignKey implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "AddForeignKey(referringTableName=" + this.getReferringTableName() + ", referringColumnNames="
                 + java.util.Arrays.deepToString(this.getReferringColumnNames()) + ", name=" + this.getName()
@@ -153,7 +153,7 @@ public class AddForeignKey implements SchemaOperation {
                 + java.util.Arrays.deepToString(this.getReferencedColumnNames()) + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof AddForeignKey;
     }

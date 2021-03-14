@@ -50,7 +50,6 @@ import io.quantumdb.core.versioning.Changelog;
 import io.quantumdb.core.versioning.RefLog;
 import io.quantumdb.core.versioning.State;
 
-@SuppressWarnings("unused")
 public class GreedyMigrationPlannerTest {
     static class Params implements ArgumentsProvider {
 
@@ -61,7 +60,7 @@ public class GreedyMigrationPlannerTest {
 
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GreedyMigrationPlannerTest.class);
 
     private static Stream<Arguments> data() {

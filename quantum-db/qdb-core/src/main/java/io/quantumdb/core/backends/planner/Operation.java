@@ -53,7 +53,7 @@ public class Operation {
         return false;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public LinkedHashSet<String> getColumns() {
         return this.columns;
     }
@@ -62,7 +62,7 @@ public class Operation {
         return ImmutableSet.copyOf(tables);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Type getType() {
         return this.type;
     }

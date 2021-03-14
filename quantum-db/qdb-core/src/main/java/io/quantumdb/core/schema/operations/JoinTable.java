@@ -26,7 +26,7 @@ public class JoinTable implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -68,13 +68,13 @@ public class JoinTable implements SchemaOperation {
         return ImmutableMap.copyOf(sourceTables);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTargetTableName() {
         return this.targetTableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -98,7 +98,7 @@ public class JoinTable implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "JoinTable(sourceTables=" + this.getSourceTables() + ", sourceColumns=" + this.getSourceColumns()
                 + ", joinConditions=" + this.getJoinConditions() + ", targetTableName=" + this.getTargetTableName()
@@ -116,7 +116,7 @@ public class JoinTable implements SchemaOperation {
         return this;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof JoinTable;
     }

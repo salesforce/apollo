@@ -33,7 +33,7 @@ public class View implements Copyable<View>, Comparable<View> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -57,23 +57,23 @@ public class View implements Copyable<View>, Comparable<View> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getName() {
         return this.name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Catalog getParent() {
         return this.parent;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getQuery() {
         return this.query;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -86,12 +86,12 @@ public class View implements Copyable<View>, Comparable<View> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isRecursive() {
         return this.recursive;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isTemporary() {
         return this.temporary;
     }
@@ -111,7 +111,7 @@ public class View implements Copyable<View>, Comparable<View> {
         return PrettyPrinter.prettyPrint(this);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof View;
     }

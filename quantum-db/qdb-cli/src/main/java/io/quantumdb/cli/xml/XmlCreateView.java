@@ -31,12 +31,12 @@ public class XmlCreateView implements XmlOperation<CreateView> {
     private boolean temporary;
     private String  viewName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlCreateView() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -60,18 +60,18 @@ public class XmlCreateView implements XmlOperation<CreateView> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getQuery() {
         return this.query;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getViewName() {
         return this.viewName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -84,32 +84,32 @@ public class XmlCreateView implements XmlOperation<CreateView> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isRecursive() {
         return this.recursive;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isTemporary() {
         return this.temporary;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setQuery(final String query) {
         this.query = query;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setRecursive(final boolean recursive) {
         this.recursive = recursive;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTemporary(final boolean temporary) {
         this.temporary = temporary;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setViewName(final String viewName) {
         this.viewName = viewName;
     }
@@ -128,13 +128,13 @@ public class XmlCreateView implements XmlOperation<CreateView> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlCreateView(viewName=" + this.getViewName() + ", recursive=" + this.isRecursive() + ", temporary="
                 + this.isTemporary() + ", query=" + this.getQuery() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlCreateView;
     }

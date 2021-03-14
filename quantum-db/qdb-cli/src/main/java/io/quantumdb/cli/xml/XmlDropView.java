@@ -17,12 +17,12 @@ public class XmlDropView implements XmlOperation<DropView> {
 
     private String viewName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlDropView() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -38,13 +38,13 @@ public class XmlDropView implements XmlOperation<DropView> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getViewName() {
         return this.viewName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -53,7 +53,7 @@ public class XmlDropView implements XmlOperation<DropView> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setViewName(final String viewName) {
         this.viewName = viewName;
     }
@@ -64,12 +64,12 @@ public class XmlDropView implements XmlOperation<DropView> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlDropView(viewName=" + this.getViewName() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlDropView;
     }

@@ -9,7 +9,7 @@ import io.quantumdb.core.versioning.RefLog;
 import io.quantumdb.core.versioning.Version;
 
 class CreateViewMigrator implements SchemaOperationMigrator<CreateView> {
-    @java.lang.SuppressWarnings("all")
+    
     CreateViewMigrator() {
     }
 

@@ -19,12 +19,12 @@ public class XmlDropColumn implements XmlOperation<DropColumn> {
     private String columnName;
     private String tableName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlDropColumn() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -44,18 +44,18 @@ public class XmlDropColumn implements XmlOperation<DropColumn> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getColumnName() {
         return this.columnName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -66,12 +66,12 @@ public class XmlDropColumn implements XmlOperation<DropColumn> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setColumnName(final String columnName) {
         this.columnName = columnName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTableName(final String tableName) {
         this.tableName = tableName;
     }
@@ -82,12 +82,12 @@ public class XmlDropColumn implements XmlOperation<DropColumn> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlDropColumn(tableName=" + this.getTableName() + ", columnName=" + this.getColumnName() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlDropColumn;
     }

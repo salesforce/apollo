@@ -55,7 +55,7 @@ public class AlterColumn implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -96,7 +96,7 @@ public class AlterColumn implements SchemaOperation {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getColumnName() {
         return this.columnName;
     }
@@ -109,28 +109,28 @@ public class AlterColumn implements SchemaOperation {
         return ImmutableSet.copyOf(hintsToDrop);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Optional<String> getNewColumnName() {
         return this.newColumnName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Optional<ColumnType> getNewColumnType() {
         return this.newColumnType;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Optional<String> getNewDefaultValueExpression() {
         return this.newDefaultValueExpression;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -170,7 +170,7 @@ public class AlterColumn implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "AlterColumn(tableName=" + this.getTableName() + ", columnName=" + this.getColumnName()
                 + ", hintsToDrop=" + this.getHintsToDrop() + ", hintsToAdd=" + this.getHintsToAdd() + ", newColumnName="
@@ -178,7 +178,7 @@ public class AlterColumn implements SchemaOperation {
                 + ", newDefaultValueExpression=" + this.getNewDefaultValueExpression() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof AlterColumn;
     }

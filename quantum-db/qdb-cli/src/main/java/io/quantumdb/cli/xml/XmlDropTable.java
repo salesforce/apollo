@@ -17,12 +17,12 @@ public class XmlDropTable implements XmlOperation<DropTable> {
 
     private String tableName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlDropTable() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -38,13 +38,13 @@ public class XmlDropTable implements XmlOperation<DropTable> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -53,7 +53,7 @@ public class XmlDropTable implements XmlOperation<DropTable> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTableName(final String tableName) {
         this.tableName = tableName;
     }
@@ -64,12 +64,12 @@ public class XmlDropTable implements XmlOperation<DropTable> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlDropTable(tableName=" + this.getTableName() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlDropTable;
     }

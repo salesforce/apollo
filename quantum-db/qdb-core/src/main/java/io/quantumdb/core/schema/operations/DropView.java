@@ -17,7 +17,7 @@ public class DropView implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -33,13 +33,13 @@ public class DropView implements SchemaOperation {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getViewName() {
         return this.viewName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -49,12 +49,12 @@ public class DropView implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "DropView(viewName=" + this.getViewName() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof DropView;
     }

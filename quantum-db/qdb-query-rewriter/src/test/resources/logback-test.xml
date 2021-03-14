@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Stop output INFO at start -->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+
+    <appender name="STDOUT"
+        class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <Pattern>
+                %d{mm:ss.SSS} [%thread] %-5level %logger{0} -
+  %msg%n
+            </Pattern>
+        </encoder>
+    </appender>  
+
+    <logger name="io.quantumdb" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+    </root>
+
+</configuration>

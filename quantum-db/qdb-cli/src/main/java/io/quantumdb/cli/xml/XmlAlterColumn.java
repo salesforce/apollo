@@ -32,12 +32,12 @@ public class XmlAlterColumn implements XmlOperation<AlterColumn> {
     private Boolean nullable;
     private String  tableName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlAlterColumn() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -69,33 +69,33 @@ public class XmlAlterColumn implements XmlOperation<AlterColumn> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getColumnName() {
         return this.columnName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getNewColumnName() {
         return this.newColumnName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getNewType() {
         return this.newType;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Boolean getNullable() {
         return this.nullable;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -112,27 +112,27 @@ public class XmlAlterColumn implements XmlOperation<AlterColumn> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setColumnName(final String columnName) {
         this.columnName = columnName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setNewColumnName(final String newColumnName) {
         this.newColumnName = newColumnName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setNewType(final String newType) {
         this.newType = newType;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setNullable(final Boolean nullable) {
         this.nullable = nullable;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTableName(final String tableName) {
         this.tableName = tableName;
     }
@@ -154,14 +154,14 @@ public class XmlAlterColumn implements XmlOperation<AlterColumn> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlAlterColumn(tableName=" + this.getTableName() + ", columnName=" + this.getColumnName()
                 + ", newColumnName=" + this.getNewColumnName() + ", newType=" + this.getNewType() + ", nullable="
                 + this.getNullable() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlAlterColumn;
     }

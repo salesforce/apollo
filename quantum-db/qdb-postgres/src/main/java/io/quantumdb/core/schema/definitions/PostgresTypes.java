@@ -51,6 +51,8 @@ public class PostgresTypes {
     }
 
     public static ColumnType from(String type, Integer length) {
+        int index = type.indexOf(' ');
+        type = index <= 0 ? type : type.substring(0, index);
         switch (type.toLowerCase()) {
         case "oid":
             return PostgresTypes.oid();
@@ -81,8 +83,8 @@ public class PostgresTypes {
             return PostgresTypes.date();
         case "double precision":
             return PostgresTypes.floats();
-        case "real":
-            return PostgresTypes.doubles();
+        case "double":
+            return PostgresTypes.doubles(); 
         default:
             String error = "Unsupported type: " + type;
             if (length != null) {
@@ -128,7 +130,7 @@ public class PostgresTypes {
                 (statement, position, value) -> statement.setString(position, value.toString()));
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private PostgresTypes() {
     }
 }

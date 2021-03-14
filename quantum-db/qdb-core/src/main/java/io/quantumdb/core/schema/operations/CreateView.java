@@ -24,7 +24,7 @@ public class CreateView implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -48,18 +48,18 @@ public class CreateView implements SchemaOperation {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getQuery() {
         return this.query;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getViewName() {
         return this.viewName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -72,12 +72,12 @@ public class CreateView implements SchemaOperation {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isRecursive() {
         return this.recursive;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isTemporary() {
         return this.temporary;
     }
@@ -93,13 +93,13 @@ public class CreateView implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "CreateView(viewName=" + this.getViewName() + ", temporary=" + this.isTemporary() + ", recursive="
                 + this.isRecursive() + ", query=" + this.getQuery() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof CreateView;
     }

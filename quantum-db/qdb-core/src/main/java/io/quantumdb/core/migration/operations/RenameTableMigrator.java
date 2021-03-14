@@ -8,7 +8,7 @@ import io.quantumdb.core.versioning.RefLog.TableRef;
 import io.quantumdb.core.versioning.Version;
 
 public class RenameTableMigrator implements SchemaOperationMigrator<RenameTable> {
-    @java.lang.SuppressWarnings("all")
+    
     RenameTableMigrator() {
     }
 

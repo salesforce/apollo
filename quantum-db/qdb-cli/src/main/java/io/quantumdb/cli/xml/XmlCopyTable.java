@@ -19,12 +19,12 @@ public class XmlCopyTable implements XmlOperation<CopyTable> {
     private String sourceTableName;
     private String targetTableName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlCopyTable() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -46,18 +46,18 @@ public class XmlCopyTable implements XmlOperation<CopyTable> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getSourceTableName() {
         return this.sourceTableName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTargetTableName() {
         return this.targetTableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -68,12 +68,12 @@ public class XmlCopyTable implements XmlOperation<CopyTable> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setSourceTableName(final String sourceTableName) {
         this.sourceTableName = sourceTableName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTargetTableName(final String targetTableName) {
         this.targetTableName = targetTableName;
     }
@@ -84,13 +84,13 @@ public class XmlCopyTable implements XmlOperation<CopyTable> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlCopyTable(sourceTableName=" + this.getSourceTableName() + ", targetTableName="
                 + this.getTargetTableName() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlCopyTable;
     }

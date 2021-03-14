@@ -12,9 +12,7 @@ import io.quantumdb.core.backends.Config;
 import io.quantumdb.core.versioning.QuantumTables;
 
 public class Nuke extends Command {
-    @java.lang.SuppressWarnings("all")
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Nuke.class);
-
+    
     @Override
     public Identifier getIdentifier() {
         return new Identifier("nuke", "Drops everything in the database.");

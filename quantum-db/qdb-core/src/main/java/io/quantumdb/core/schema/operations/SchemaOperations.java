@@ -86,7 +86,7 @@ public class SchemaOperations {
         return new RenameTable(tableName, newTableName);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private SchemaOperations() {
     }
 }

@@ -30,7 +30,7 @@ import io.quantumdb.core.schema.definitions.Table;
 import io.quantumdb.core.utils.QueryBuilder;
 
 public class TransactionalityTest {
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log              = org.slf4j.LoggerFactory.getLogger(TransactionalityTest.class);
     private static final String           MIGRATE_FUNCTION = "migrate_function";
     private static final String[]         NAMES            = { "Karol Haycock", "Mitsuko Schulz", "Delena Tober",

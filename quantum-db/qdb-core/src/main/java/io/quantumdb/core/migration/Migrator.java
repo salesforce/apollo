@@ -21,7 +21,7 @@ public class Migrator {
         private final Type          type;
         private final List<Version> versions;
 
-        @java.lang.SuppressWarnings("all")
+        
         public Stage(final Type type, final List<Version> versions, final Version parent) {
             this.type = type;
             this.versions = versions;
@@ -29,7 +29,7 @@ public class Migrator {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -67,7 +67,7 @@ public class Migrator {
             return parent;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public Type getType() {
             return this.type;
         }
@@ -77,7 +77,7 @@ public class Migrator {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -91,13 +91,13 @@ public class Migrator {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Migrator.Stage(type=" + this.getType() + ", versions=" + this.getVersions() + ", parent="
                     + this.getParent() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Migrator.Stage;
         }
@@ -109,7 +109,7 @@ public class Migrator {
         }
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Migrator.class);
 
     private final Backend backend;

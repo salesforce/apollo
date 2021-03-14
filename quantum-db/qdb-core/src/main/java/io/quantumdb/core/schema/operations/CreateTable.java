@@ -23,7 +23,7 @@ public class CreateTable implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -47,13 +47,13 @@ public class CreateTable implements SchemaOperation {
         return ImmutableList.copyOf(columns);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -65,7 +65,7 @@ public class CreateTable implements SchemaOperation {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "CreateTable(tableName=" + this.getTableName() + ", columns=" + this.getColumns() + ")";
     }
@@ -81,7 +81,7 @@ public class CreateTable implements SchemaOperation {
         return this;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof CreateTable;
     }

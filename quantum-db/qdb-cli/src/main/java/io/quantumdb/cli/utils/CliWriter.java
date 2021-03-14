@@ -39,7 +39,7 @@ public class CliWriter {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -63,23 +63,23 @@ public class CliWriter {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public int getIndent() {
         return this.indent;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ConsoleReader getReader() {
         return this.reader;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Terminal getTerminal() {
         return this.terminal;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -97,7 +97,7 @@ public class CliWriter {
         return this;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isEnableBold() {
         return this.enableBold;
     }
@@ -111,7 +111,7 @@ public class CliWriter {
         }
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setEnableBold(final boolean enableBold) {
         this.enableBold = enableBold;
     }
@@ -122,7 +122,7 @@ public class CliWriter {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "CliWriter(terminal=" + this.getTerminal() + ", reader=" + this.getReader() + ", enableBold="
                 + this.isEnableBold() + ", indent=" + this.getIndent() + ")";
@@ -171,7 +171,7 @@ public class CliWriter {
         }
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof CliWriter;
     }

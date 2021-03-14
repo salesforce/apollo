@@ -103,7 +103,7 @@ public class Plan {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -131,12 +131,12 @@ public class Plan {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ImmutableSet<Table> getGhostTables() {
         return this.ghostTables;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public RefLog getRefLog() {
         return this.refLog;
     }
@@ -145,13 +145,13 @@ public class Plan {
         return steps;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ImmutableSet<View> getViews() {
         return this.views;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -195,7 +195,7 @@ public class Plan {
         return builder.toString();
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof Plan;
     }

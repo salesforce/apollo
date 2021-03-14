@@ -26,7 +26,7 @@ import io.quantumdb.core.versioning.Version;
 
 class TableDataMigrator {
     private static final long             BATCH_SIZE = 2000;
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log        = org.slf4j.LoggerFactory.getLogger(TableDataMigrator.class);
     private static final long             WAIT_TIME  = 50;
     private final Backend                 backend;

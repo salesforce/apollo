@@ -31,12 +31,12 @@ public class XmlAddColumn implements XmlOperation<AddColumn> {
     private XmlColumn column;
     private String    tableName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlAddColumn() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -56,18 +56,18 @@ public class XmlAddColumn implements XmlOperation<AddColumn> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlColumn getColumn() {
         return this.column;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -78,12 +78,12 @@ public class XmlAddColumn implements XmlOperation<AddColumn> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setColumn(final XmlColumn column) {
         this.column = column;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTableName(final String tableName) {
         this.tableName = tableName;
     }
@@ -108,12 +108,12 @@ public class XmlAddColumn implements XmlOperation<AddColumn> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlAddColumn(tableName=" + this.getTableName() + ", column=" + this.getColumn() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlAddColumn;
     }

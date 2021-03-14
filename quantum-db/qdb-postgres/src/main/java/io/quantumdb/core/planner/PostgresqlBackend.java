@@ -15,7 +15,7 @@ import io.quantumdb.core.versioning.State;
 import io.quantumdb.core.versioning.Version;
 
 public class PostgresqlBackend implements io.quantumdb.core.backends.Backend {
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PostgresqlBackend.class);
     private final Backend                 backend;
     private final String                  driver;
@@ -37,9 +37,9 @@ public class PostgresqlBackend implements io.quantumdb.core.backends.Backend {
     public Connection connect() throws SQLException {
         try {
             Class.forName(driver);
-            Connection connection = DriverManager.getConnection(jdbcUrl + "/" + jdbcCatalog, jdbcUser, jdbcPass);
+            Connection connection = DriverManager.getConnection(jdbcUrl, jdbcUser, jdbcPass);
             try (Statement statement = connection.createStatement()) {
-                statement.execute("SET SCHEMA \'public\';");
+                statement.execute("SET SCHEMA \'PUBLIC\';");
             }
             return connection;
         } catch (final ClassNotFoundException ex) {
@@ -68,7 +68,7 @@ public class PostgresqlBackend implements io.quantumdb.core.backends.Backend {
 
     @Override
     public boolean isJdbcUrlSupported(String jdbcUrl) {
-        return jdbcUrl.startsWith("jdbc:postgresql:");
+        return jdbcUrl.startsWith("jdbc:h2:");
     }
 
     @Override
@@ -76,7 +76,7 @@ public class PostgresqlBackend implements io.quantumdb.core.backends.Backend {
         log.trace("Loading state from database...");
         try (Connection connection = connect()) {
             QuantumTables.prepare(connection);
-            Catalog catalog = CatalogLoader.load(connection, jdbcCatalog);
+            Catalog catalog = CatalogLoader.load(connection, jdbcCatalog, "PUBLIC");
             return backend.load(connection, catalog);
         }
     }

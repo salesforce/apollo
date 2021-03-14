@@ -10,7 +10,7 @@ import io.quantumdb.core.versioning.RefLog.TableRef;
 import io.quantumdb.core.versioning.Version;
 
 class AddColumnMigrator implements SchemaOperationMigrator<AddColumn> {
-    @java.lang.SuppressWarnings("all")
+    
     AddColumnMigrator() {
     }
 

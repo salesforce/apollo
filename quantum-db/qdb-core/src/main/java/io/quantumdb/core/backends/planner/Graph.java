@@ -19,14 +19,14 @@ public class Graph {
         private final long        count;
         private final Set<String> tableNames;
 
-        @java.lang.SuppressWarnings("all")
+        
         public GraphResult(final long count, final Set<String> tableNames) {
             this.count = count;
             this.tableNames = tableNames;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -44,18 +44,18 @@ public class Graph {
             return true;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public long getCount() {
             return this.count;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public Set<String> getTableNames() {
             return this.tableNames;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int PRIME = 59;
             int result = 1;
@@ -67,12 +67,12 @@ public class Graph {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "Graph.GraphResult(count=" + this.getCount() + ", tableNames=" + this.getTableNames() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof Graph.GraphResult;
         }

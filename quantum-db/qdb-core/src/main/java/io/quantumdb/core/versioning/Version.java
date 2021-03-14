@@ -70,7 +70,7 @@ public class Version implements Comparable<Version> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -86,33 +86,33 @@ public class Version implements Comparable<Version> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ChangeSet getChangeSet() {
         return this.changeSet;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Version getChild() {
         return this.child;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getId() {
         return this.id;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Operation getOperation() {
         return this.operation;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Version getParent() {
         return this.parent;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -126,33 +126,13 @@ public class Version implements Comparable<Version> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "Version(id=" + this.getId() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof Version;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    private void setChangeSet(final ChangeSet changeSet) {
-        this.changeSet = changeSet;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    private void setChild(final Version child) {
-        this.child = child;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    private void setOperation(final Operation operation) {
-        this.operation = operation;
-    }
-
-    @java.lang.SuppressWarnings("all")
-    private void setParent(final Version parent) {
-        this.parent = parent;
     }
 }

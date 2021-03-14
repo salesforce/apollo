@@ -35,12 +35,12 @@ public class XmlAddForeignKey implements XmlOperation<AddForeignKey> {
     private String   referencedTableName;
     private String   tableName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlAddForeignKey() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -77,43 +77,43 @@ public class XmlAddForeignKey implements XmlOperation<AddForeignKey> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String[] getColumnNames() {
         return this.columnNames;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getName() {
         return this.name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Action getOnDelete() {
         return this.onDelete;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Action getOnUpdate() {
         return this.onUpdate;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String[] getReferencedColumnNames() {
         return this.referencedColumnNames;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getReferencedTableName() {
         return this.referencedTableName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -132,37 +132,37 @@ public class XmlAddForeignKey implements XmlOperation<AddForeignKey> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setColumnNames(final String[] columnNames) {
         this.columnNames = columnNames;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setName(final String name) {
         this.name = name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setOnDelete(final Action onDelete) {
         this.onDelete = onDelete;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setOnUpdate(final Action onUpdate) {
         this.onUpdate = onUpdate;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setReferencedColumnNames(final String[] referencedColumnNames) {
         this.referencedColumnNames = referencedColumnNames;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setReferencedTableName(final String referencedTableName) {
         this.referencedTableName = referencedTableName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTableName(final String tableName) {
         this.tableName = tableName;
     }
@@ -178,7 +178,7 @@ public class XmlAddForeignKey implements XmlOperation<AddForeignKey> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlAddForeignKey(tableName=" + this.getTableName() + ", columnNames="
                 + java.util.Arrays.deepToString(this.getColumnNames()) + ", referencedTableName="
@@ -187,7 +187,7 @@ public class XmlAddForeignKey implements XmlOperation<AddForeignKey> {
                 + ", onDelete=" + this.getOnDelete() + ", onUpdate=" + this.getOnUpdate() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlAddForeignKey;
     }

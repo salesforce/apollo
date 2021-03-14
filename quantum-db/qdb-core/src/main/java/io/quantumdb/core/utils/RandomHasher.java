@@ -33,7 +33,7 @@ public class RandomHasher {
         return hash;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private RandomHasher() {
     }
 }

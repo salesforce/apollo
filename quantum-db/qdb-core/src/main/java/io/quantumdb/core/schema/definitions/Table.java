@@ -135,7 +135,7 @@ public class Table implements Copyable<Table>, Comparable<Table> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -168,7 +168,7 @@ public class Table implements Copyable<Table>, Comparable<Table> {
         return ImmutableList.copyOf(columns);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public List<ForeignKey> getForeignKeys() {
         return this.foreignKeys;
     }
@@ -193,18 +193,18 @@ public class Table implements Copyable<Table>, Comparable<Table> {
         return ImmutableList.copyOf(indexes);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getName() {
         return this.name;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Catalog getParent() {
         return this.parent;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -266,7 +266,7 @@ public class Table implements Copyable<Table>, Comparable<Table> {
         return PrettyPrinter.prettyPrint(this);
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof Table;
     }

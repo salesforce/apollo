@@ -71,12 +71,12 @@ public class RefLog {
             return ImmutableSet.copyOf(basisFor);
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getName() {
             return this.name;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public TableRef getTable() {
             return this.table;
         }
@@ -94,18 +94,18 @@ public class RefLog {
             return builder.toHashCode();
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public void setName(final String name) {
             this.name = name;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public void setTable(final TableRef table) {
             this.table = table;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "RefLog.ColumnRef(name=" + this.getName() + ")";
         }
@@ -147,22 +147,22 @@ public class RefLog {
             return false;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getName() {
             return this.name;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getRefId() {
             return this.refId;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public RefLog getRefLog() {
             return this.refLog;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public Set<Version> getVersions() {
             return this.versions;
         }
@@ -177,18 +177,18 @@ public class RefLog {
             return this;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public void setName(final String name) {
             this.name = name;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public void setRefId(final String refId) {
             this.refId = refId;
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "RefLog.DataRef(name=" + this.getName() + ", refId=" + this.getRefId() + ", versions="
                     + this.getVersions() + ")";
@@ -287,22 +287,22 @@ public class RefLog {
             return VersionTraverser.getDirection(origin, destination);
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getFunctionName() {
             return this.functionName;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public String getName() {
             return this.name;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public TableRef getSource() {
             return this.source;
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         public TableRef getTarget() {
             return this.target;
         }
@@ -320,7 +320,7 @@ public class RefLog {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "RefLog.SyncRef(name=" + this.getName() + ", functionName=" + this.getFunctionName()
                     + ", columnMapping=" + this.getColumnMapping() + ", source=" + this.getSource() + ", target="
@@ -429,7 +429,7 @@ public class RefLog {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "RefLog.TableRef(super=" + super.toString() + ", columns=" + this.getColumns() + ")";
         }
@@ -451,7 +451,7 @@ public class RefLog {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public boolean equals(final java.lang.Object o) {
             if (o == this)
                 return true;
@@ -469,7 +469,7 @@ public class RefLog {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public int hashCode() {
             final int result = 1;
             return result;
@@ -482,18 +482,18 @@ public class RefLog {
         }
 
         @java.lang.Override
-        @java.lang.SuppressWarnings("all")
+        
         public java.lang.String toString() {
             return "RefLog.ViewRef(super=" + super.toString() + ")";
         }
 
-        @java.lang.SuppressWarnings("all")
+        
         protected boolean canEqual(final java.lang.Object other) {
             return other instanceof RefLog.ViewRef;
         }
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RefLog.class);
 
     public static RefLog init(Catalog catalog, Version version) {
@@ -691,7 +691,7 @@ public class RefLog {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -952,7 +952,7 @@ public class RefLog {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -1025,12 +1025,12 @@ public class RefLog {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "RefLog(refMapping=" + this.refMapping + ", activeVersions=" + this.activeVersions + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof RefLog;
     }

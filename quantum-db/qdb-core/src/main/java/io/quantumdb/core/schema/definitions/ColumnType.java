@@ -7,7 +7,7 @@ import java.sql.SQLException;
 public class ColumnType {
 
     public static enum Type {
-        BIGINT, BOOLEAN, CHAR, DATE, DOUBLE, FLOAT, INTEGER, OID, SMALLINT, TEXT, TIMESTAMP, UUID, VARCHAR;
+        BIGINT, BOOLEAN, CHAR, DATE, DOUBLE, FLOAT, INTEGER, OID, SMALLINT, TEXT, TIMESTAMP, UUID, VARCHAR, SERIAL, BIG_SERIAL;
     }
 
     @FunctionalInterface
@@ -26,7 +26,7 @@ public class ColumnType {
     private final ValueGenerator valueGenerator;
     private final ValueSetter    valueSetter;
 
-    @java.lang.SuppressWarnings("all")
+    
     public ColumnType(final Type type, final boolean requireQuotes, final String notation,
             final ValueGenerator valueGenerator, final ValueSetter valueSetter) {
         this.type = type;
@@ -37,7 +37,7 @@ public class ColumnType {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -68,28 +68,28 @@ public class ColumnType {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getNotation() {
         return this.notation;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Type getType() {
         return this.type;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ValueGenerator getValueGenerator() {
         return this.valueGenerator;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public ValueSetter getValueSetter() {
         return this.valueSetter;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -105,7 +105,7 @@ public class ColumnType {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public boolean isRequireQuotes() {
         return this.requireQuotes;
     }
@@ -115,7 +115,7 @@ public class ColumnType {
         return notation;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof ColumnType;
     }

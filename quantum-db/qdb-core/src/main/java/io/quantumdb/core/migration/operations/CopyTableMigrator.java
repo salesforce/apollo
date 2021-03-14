@@ -14,7 +14,7 @@ import io.quantumdb.core.versioning.RefLog.TableRef;
 import io.quantumdb.core.versioning.Version;
 
 class CopyTableMigrator implements SchemaOperationMigrator<CopyTable> {
-    @java.lang.SuppressWarnings("all")
+    
     CopyTableMigrator() {
     }
 

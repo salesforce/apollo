@@ -16,7 +16,7 @@ import io.quantumdb.core.versioning.State;
 import io.quantumdb.core.versioning.Version;
 
 public class Fork extends Command {
-    @java.lang.SuppressWarnings("all")
+    
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Fork.class);
 
     @Override

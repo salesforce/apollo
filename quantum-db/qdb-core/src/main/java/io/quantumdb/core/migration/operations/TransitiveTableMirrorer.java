@@ -61,7 +61,7 @@ class TransitiveTableMirrorer {
         return mirrored;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     private TransitiveTableMirrorer() {
     }
 }

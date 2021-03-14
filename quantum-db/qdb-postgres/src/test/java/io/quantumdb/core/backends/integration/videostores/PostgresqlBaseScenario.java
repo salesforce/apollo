@@ -110,8 +110,8 @@ public class PostgresqlBaseScenario extends PostgresqlDatabase {
         tableCreator.create(getConnection(), tables);
         Config config = new Config();
         config.setUrl(getJdbcUrl());
-        config.setUser(getJdbcUser());
-        config.setPassword(getJdbcPass());
+//        config.setUser(getJdbcUser());
+//        config.setPassword(getJdbcPass());
         config.setCatalog(getCatalogName());
         config.setDriver(getJdbcDriver());
         backend = config.getBackend();
@@ -144,39 +144,39 @@ public class PostgresqlBaseScenario extends PostgresqlDatabase {
 
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Backend getBackend() {
         return this.backend;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Catalog getCatalog() {
         return this.catalog;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Changelog getChangelog() {
         return this.changelog;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Migrator getMigrator() {
         return this.migrator;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public RefLog getRefLog() {
         return this.refLog;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public State getState() {
         return this.state;
     }
 
     void insertTestData() throws SQLException {
         getConnection().setAutoCommit(false);
-        getConnection().createStatement().execute("SET CONSTRAINTS ALL DEFERRED");
+        getConnection().createStatement().execute("SET REFERENTIAL_INTEGRITY FALSE");  
         BatchInserter.insertInto(getConnection(), STORES_ID, "name", "manager_id")
                      .values("Delft", 1)
                      .values("Amsterdam", 2)

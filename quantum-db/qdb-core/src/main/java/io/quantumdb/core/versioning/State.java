@@ -8,7 +8,7 @@ public class State {
     private final Changelog changelog;
     private final RefLog    refLog;
 
-    @java.lang.SuppressWarnings("all")
+    
     public State(final Catalog catalog, final RefLog refLog, final Changelog changelog) {
         this.catalog = catalog;
         this.refLog = refLog;
@@ -16,7 +16,7 @@ public class State {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -40,23 +40,23 @@ public class State {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Catalog getCatalog() {
         return this.catalog;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public Changelog getChangelog() {
         return this.changelog;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public RefLog getRefLog() {
         return this.refLog;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -70,13 +70,13 @@ public class State {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "State(catalog=" + this.getCatalog() + ", refLog=" + this.getRefLog() + ", changelog="
                 + this.getChangelog() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof State;
     }

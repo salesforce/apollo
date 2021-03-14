@@ -14,12 +14,12 @@
         </encoder>
     </appender>  
 
-    <logger name="io.quantumdb" level="info"
+    <logger name="io.quantumdb" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
 
-    <root level="INFO">
+    <root level="trace">
         <appender-ref ref="STDOUT" />
     </root>
 

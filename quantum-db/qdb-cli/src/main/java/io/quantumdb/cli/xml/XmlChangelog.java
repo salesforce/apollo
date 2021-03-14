@@ -17,12 +17,12 @@ public class XmlChangelog {
 
     private final List<XmlChangeset> changesets = Lists.newArrayList();
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlChangelog() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -38,13 +38,13 @@ public class XmlChangelog {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public List<XmlChangeset> getChangesets() {
         return this.changesets;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -54,12 +54,12 @@ public class XmlChangelog {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlChangelog(changesets=" + this.getChangesets() + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlChangelog;
     }

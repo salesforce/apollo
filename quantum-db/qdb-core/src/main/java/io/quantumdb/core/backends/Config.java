@@ -7,18 +7,18 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
+
 import com.google.common.collect.Lists;
 
 public class Config {
-    private static final String           CATALOG            = "catalog";
-    private static final String           DRIVER             = "driver";
-    private static final String           FILE               = ".quantumdb";
-    @java.lang.SuppressWarnings("all")
-    private static final org.slf4j.Logger log                = org.slf4j.LoggerFactory.getLogger(Config.class);
-    private static final String           PASSWORD           = "password";
-    private static final List<String>     SUPPORTED_BACKENDS = Lists.newArrayList("io.quantumdb.core.planner.PostgresqlBackend");
-    private static final String           URL                = "url";
-    private static final String           USER               = "user";
+    private static final String CATALOG = "catalog";
+    private static final String DRIVER  = "driver";
+    private static final String FILE    = ".quantumdb";
+
+    private static final String       PASSWORD           = "password";
+    private static final List<String> SUPPORTED_BACKENDS = Lists.newArrayList("io.quantumdb.core.planner.PostgresqlBackend");
+    private static final String       URL                = "url";
+    private static final String       USER               = "user";
 
     public static Config load() throws IOException {
         Properties properties = new Properties();

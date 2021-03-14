@@ -19,12 +19,12 @@ public class XmlDropForeignKey implements XmlOperation<DropForeignKey> {
     private String foreignKeyName;
     private String tableName;
 
-    @java.lang.SuppressWarnings("all")
+    
     public XmlDropForeignKey() {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public boolean equals(final java.lang.Object o) {
         if (o == this)
             return true;
@@ -45,18 +45,18 @@ public class XmlDropForeignKey implements XmlOperation<DropForeignKey> {
         return true;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getForeignKeyName() {
         return this.foreignKeyName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public String getTableName() {
         return this.tableName;
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
@@ -67,12 +67,12 @@ public class XmlDropForeignKey implements XmlOperation<DropForeignKey> {
         return result;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setForeignKeyName(final String foreignKeyName) {
         this.foreignKeyName = foreignKeyName;
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     public void setTableName(final String tableName) {
         this.tableName = tableName;
     }
@@ -83,13 +83,13 @@ public class XmlDropForeignKey implements XmlOperation<DropForeignKey> {
     }
 
     @java.lang.Override
-    @java.lang.SuppressWarnings("all")
+    
     public java.lang.String toString() {
         return "XmlDropForeignKey(tableName=" + this.getTableName() + ", foreignKeyName=" + this.getForeignKeyName()
                 + ")";
     }
 
-    @java.lang.SuppressWarnings("all")
+    
     protected boolean canEqual(final java.lang.Object other) {
         return other instanceof XmlDropForeignKey;
     }
