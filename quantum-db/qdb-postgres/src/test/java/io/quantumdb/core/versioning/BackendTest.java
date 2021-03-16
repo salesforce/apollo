@@ -13,6 +13,7 @@ import java.sql.SQLException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableMap;
@@ -26,6 +27,7 @@ import io.quantumdb.core.utils.RandomHasher;
 import io.quantumdb.core.versioning.RefLog.ColumnRef;
 import io.quantumdb.core.versioning.RefLog.TableRef;
 
+@Disabled
 public class BackendTest {
 
     public final PostgresqlDatabase database = new PostgresqlDatabase();

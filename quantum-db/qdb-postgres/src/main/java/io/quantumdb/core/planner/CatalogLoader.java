@@ -4,7 +4,6 @@ package io.quantumdb.core.planner;
 import static com.salesforce.apollo.qdb.informationSchema.Tables.COLUMNS;
 import static com.salesforce.apollo.qdb.informationSchema.Tables.INDEXES;
 import static com.salesforce.apollo.qdb.informationSchema.Tables.TABLES;
-import static com.salesforce.apollo.qdb.informationSchema.Tables.TYPE_INFO;
 import static io.quantumdb.core.schema.definitions.ForeignKey.Action.CASCADE;
 import static io.quantumdb.core.schema.definitions.ForeignKey.Action.NO_ACTION;
 import static io.quantumdb.core.schema.definitions.ForeignKey.Action.RESTRICT;
@@ -24,8 +23,6 @@ import org.jooq.impl.DSL;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.qdb.informationSchema.tables.Columns;
-import com.salesforce.apollo.qdb.informationSchema.tables.TypeInfo;
 
 import io.quantumdb.core.schema.definitions.Catalog;
 import io.quantumdb.core.schema.definitions.Column;

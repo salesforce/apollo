@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableMap;
@@ -39,6 +40,7 @@ import io.quantumdb.core.versioning.RefLog.TableRef;
 import io.quantumdb.core.versioning.State;
 import io.quantumdb.core.versioning.Version;
 
+@Disabled
 public class RenameCustomersTable {
 
     public static PostgresqlBaseScenario setup = new PostgresqlBaseScenario();

@@ -23,6 +23,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.Lists;
@@ -36,6 +37,7 @@ import io.quantumdb.core.versioning.RefLog;
 import io.quantumdb.core.versioning.State;
 import io.quantumdb.core.versioning.Version;
 
+@Disabled
 public class AddColumnToCustomersTable {
 
     public static PostgresqlBaseScenario setup = new PostgresqlBaseScenario();

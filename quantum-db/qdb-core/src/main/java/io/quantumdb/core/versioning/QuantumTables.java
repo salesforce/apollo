@@ -141,7 +141,8 @@ public class QuantumTables {
         try (Statement statement = connection.createStatement()) {
             statement.executeUpdate("CREATE SCHEMA IF NOT EXISTS quantumdb;");
         }
-        String query = "SELECT * FROM information_schema.tables WHERE table_name = \'config\' AND table_schema = \'quantumdb\';";
+//        String query = "SELECT * FROM information_schema.tables WHERE table_name = \'config\' AND table_schema = \'quantumdb\';";
+        String query = "SELECT * FROM information_schema.tables WHERE table_name = \'config\';".toUpperCase();
         try (Statement statement = connection.createStatement()) {
             ResultSet resultSet = statement.executeQuery(query);
             if (!resultSet.next()) {

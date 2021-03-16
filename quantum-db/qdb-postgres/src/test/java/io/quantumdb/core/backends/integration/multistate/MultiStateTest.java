@@ -12,6 +12,7 @@ import static io.quantumdb.core.schema.operations.SchemaOperations.execute;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.quantumdb.core.backends.Backend;
@@ -23,6 +24,7 @@ import io.quantumdb.core.versioning.Changelog;
 import io.quantumdb.core.versioning.State;
 import io.quantumdb.core.versioning.Version;
 
+@Disabled
 public class MultiStateTest extends PostgresqlDatabase {
 
     private Backend backend;

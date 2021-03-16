@@ -38,7 +38,7 @@ public class PostgresqlDatabase {
 
     public void before() throws Exception {
         this.jdbcDriver = getProperty("jdbc.driver").orElse("org.h2.Driver");
-        this.jdbcUrl = getProperty("jdbc.url").orElse(String.format("jdbc:h2:mem:%s;TRACE_LEVEL_SYSTEM_OUT=2", UUID.randomUUID()));
+        this.jdbcUrl = getProperty("jdbc.url").orElse(String.format("jdbc:h2:mem:%s;DB_CLOSE_DELAY=-1;TRACE_LEVEL_SYSTEM_OUT=2", UUID.randomUUID()));
         this.jdbcUser = getProperty("jdbc.user", "PG_USER").orElse(null);
         this.jdbcPass = getProperty("jdbc.pass", "PG_PASSWORD").orElse(null);
 //        assumeTrue(jdbcUser != null, "No \'jdbc.user\' or \'PG_USER\' specified");

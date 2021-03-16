@@ -309,6 +309,11 @@
 				<artifactId>gson</artifactId>
 				<version>2.3</version>
 			</dependency>
+			<dependency>
+				<groupId>net.corda</groupId>
+				<artifactId>corda-djvm</artifactId>
+				<version>4.0</version>
+			</dependency>
 
 			<!-- Test dependencies only below this line! -->
 

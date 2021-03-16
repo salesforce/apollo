@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.quantumdb.core.planner.TableCreator;
@@ -30,7 +31,7 @@ import io.quantumdb.core.schema.definitions.Table;
 import io.quantumdb.core.utils.QueryBuilder;
 
 public class TransactionalityTest {
-    
+
     private static final org.slf4j.Logger log              = org.slf4j.LoggerFactory.getLogger(TransactionalityTest.class);
     private static final String           MIGRATE_FUNCTION = "migrate_function";
     private static final String[]         NAMES            = { "Karol Haycock", "Mitsuko Schulz", "Delena Tober",
@@ -49,6 +50,7 @@ public class TransactionalityTest {
         database.after();
     }
 
+    @Disabled
     @Test
     public void crossTest() throws ExecutionException, InterruptedException, SQLException {
         log.info("Starting cross test...");

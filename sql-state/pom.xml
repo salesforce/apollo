@@ -33,6 +33,10 @@
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>net.corda</groupId>
+			<artifactId>corda-djvm</artifactId>
+		</dependency>
 
 
 		<!-- Test only deps below this line -->
