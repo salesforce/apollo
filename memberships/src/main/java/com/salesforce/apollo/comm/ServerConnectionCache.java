@@ -16,6 +16,8 @@ import java.util.PriorityQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -55,6 +57,63 @@ import io.grpc.ManagedChannel;
  *
  */
 public class ServerConnectionCache {
+
+    public static class Builder {
+        private Clock                        clock   = Clock.systemUTC();
+        private ServerConnectionFactory      factory = null;
+        private ServerConnectionCacheMetrics metrics;
+        private Duration                     minIdle = Duration.ofMillis(100);
+        private int                          target  = 0;
+
+        public ServerConnectionCache build() {
+            return new ServerConnectionCache(factory, target, minIdle, clock, metrics);
+        }
+
+        public Clock getClock() {
+            return clock;
+        }
+
+        public ServerConnectionFactory getFactory() {
+            return factory;
+        }
+
+        public ServerConnectionCacheMetrics getMetrics() {
+            return metrics;
+        }
+
+        public Duration getMinIdle() {
+            return minIdle;
+        }
+
+        public int getTarget() {
+            return target;
+        }
+
+        public Builder setClock(Clock clock) {
+            this.clock = clock;
+            return this;
+        }
+
+        public Builder setFactory(ServerConnectionFactory factory) {
+            this.factory = factory;
+            return this;
+        }
+
+        public Builder setMetrics(ServerConnectionCacheMetrics metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
+        public Builder setMinIdle(Duration minIdle) {
+            this.minIdle = minIdle;
+            return this;
+        }
+
+        public Builder setTarget(int target) {
+            this.target = target;
+            return this;
+        }
+    }
 
     @FunctionalInterface
     public static interface CreateClientCommunications<T> {
@@ -120,63 +179,6 @@ public class ServerConnectionCache {
         }
     }
 
-    public static class Builder {
-        private Clock                        clock   = Clock.systemUTC();
-        private ServerConnectionFactory      factory = null;
-        private ServerConnectionCacheMetrics metrics;
-        private Duration                     minIdle = Duration.ofMillis(100);
-        private int                          target  = 0;
-
-        public ServerConnectionCache build() {
-            return new ServerConnectionCache(factory, target, minIdle, clock, metrics);
-        }
-
-        public Clock getClock() {
-            return clock;
-        }
-
-        public ServerConnectionFactory getFactory() {
-            return factory;
-        }
-
-        public ServerConnectionCacheMetrics getMetrics() {
-            return metrics;
-        }
-
-        public Duration getMinIdle() {
-            return minIdle;
-        }
-
-        public int getTarget() {
-            return target;
-        }
-
-        public Builder setClock(Clock clock) {
-            this.clock = clock;
-            return this;
-        }
-
-        public Builder setFactory(ServerConnectionFactory factory) {
-            this.factory = factory;
-            return this;
-        }
-
-        public Builder setMetrics(ServerConnectionCacheMetrics metrics) {
-            this.metrics = metrics;
-            return this;
-        }
-
-        public Builder setMinIdle(Duration minIdle) {
-            this.minIdle = minIdle;
-            return this;
-        }
-
-        public Builder setTarget(int target) {
-            this.target = target;
-            return this;
-        }
-    }
-
     public static interface ServerConnectionCacheMetrics {
 
         Meter borrowRate();
@@ -225,6 +227,33 @@ public class ServerConnectionCache {
         this.minIdle = minIdle;
         this.clock = clock;
         this.metrics = metrics;
+    }
+
+    public <T> void apply(Member to, Member from, Consumer<T> action, CreateClientCommunications<T> createFunction) {
+        T client = borrow(to, from, createFunction);
+        if (client == null) {
+            return;
+        }
+        try {
+            action.accept(client);
+        } catch (Throwable e) {
+            log.debug("Cannot apply action from: {} to {}", target, from.getId(), to.getId(), e);
+        } finally {
+        }
+    }
+
+    public <T, R> R apply(Member to, Member from, Function<T, R> action, CreateClientCommunications<T> createFunction) {
+        T client = borrow(to, from, createFunction);
+        if (client == null) {
+            return null;
+        }
+        try {
+            return action.apply(client);
+        } catch (Throwable e) {
+            log.debug("Cannot apply action from: {} to {}", target, from.getId(), to.getId(), e);
+            return null;
+        } finally {
+        }
     }
 
     public <T> T borrow(Member to, Member from, CreateClientCommunications<T> createFunction) {

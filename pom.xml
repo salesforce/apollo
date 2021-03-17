@@ -26,14 +26,13 @@
 		<module>test-population</module>
 		<module>tron</module>
 		<module>vm</module>
-		<module>quantum-db</module>
 	</modules>
 
 	<properties>
 		<dropwizard.version>2.0.10</dropwizard.version>
 		<avro.version>1.10.0</avro.version>
 		<h2.version>1.4.200</h2.version>
-		<jooq.version>3.13.2</jooq.version>
+		<jooq.version>3.14.8</jooq.version>
 		<bc.version>1.65.01</bc.version>
 		<logback.version>1.2.3</logback.version>
 		<asm.version>8.0.1</asm.version>
@@ -167,36 +166,6 @@
 				<artifactId>tron</artifactId>
 				<version>${project.version}</version>
 			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>qdb-core</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>qdb-query-rewriter</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>qdb-driver</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>qdb-cli</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>qdb-postgres</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>jline</groupId>
-				<artifactId>jline</artifactId>
-				<version>0.9.94</version>
-			</dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
@@ -303,11 +272,6 @@
 				<groupId>com.github.javaparser</groupId>
 				<artifactId>javaparser-symbol-solver-core</artifactId>
 				<version>3.19.0</version>
-			</dependency>
-			<dependency>
-				<groupId>com.google.code.gson</groupId>
-				<artifactId>gson</artifactId>
-				<version>2.3</version>
 			</dependency>
 			<dependency>
 				<groupId>net.corda</groupId>
