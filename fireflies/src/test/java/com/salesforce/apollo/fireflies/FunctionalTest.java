@@ -107,7 +107,7 @@ public class FunctionalTest {
                        .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds, scheduler))
                        .collect(Collectors.toList());
 
-        for (int j = 0; j < 20; j++) {
+        for (int j = 0; j < 40; j++) {
             for (int i = 0; i < parameters.rings + 2; i++) {
                 views.forEach(view -> view.getService().gossip(() -> {
                 }));
