@@ -304,7 +304,7 @@ public class ConsortiumTest {
 
         Connection connection = updaters.get(members.get(0)).newConnection();
         Statement statement = connection.createStatement();
-        ResultSet results = statement.executeQuery("select ID, __BLOCK_HEIGHT__ from books");
+        ResultSet results = statement.executeQuery("select ID, from books");
         ResultSetMetaData rsmd = results.getMetaData();
         int columnsNumber = rsmd.getColumnCount();
         while (results.next()) {

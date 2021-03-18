@@ -15,7 +15,6 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.zip.DeflaterOutputStream;
 
-import org.h2.engine.Session;
 import org.h2.jdbc.JdbcConnection;
 import org.junit.jupiter.api.Test;
 
@@ -33,11 +32,9 @@ public class SmokeTest {
         JdbcConnection db1 = new JdbcConnection("jdbc:h2:mem:chkpt1", new Properties());
         JdbcConnection db2 = new JdbcConnection("jdbc:h2:mem:chkpt2", new Properties());
 
-        ((Session) db1.getSession()).setBlockHeight(0);
         createAndInsert(db1).close();
         db1.commit();
 
-        ((Session) db2.getSession()).setBlockHeight(0);
         createAndInsert(db2).close();
         db2.commit();
 
@@ -45,29 +42,25 @@ public class SmokeTest {
         chkpnt2File.delete();
 
         Statement s1 = db1.createStatement();
-        s1.execute("blockscript blockheight 1 to 'target/chkpnt1.sql'");
+        s1.execute("script to 'target/chkpnt1.sql'");
         Statement s2 = db2.createStatement();
-        s2.execute("blockscript blockheight 1 to 'target/chkpnt2.sql'");
+        s2.execute("script to 'target/chkpnt2.sql'");
 
         List<String> odds = Arrays.asList("1001", "1003", "1005");
         List<Integer> oddValues = Arrays.asList(entropy.nextInt(), entropy.nextInt(), entropy.nextInt());
 
-        ((Session) db1.getSession()).setBlockHeight(1);
         update(db1, odds, oddValues).close();
         db1.commit();
 
-        ((Session) db2.getSession()).setBlockHeight(1);
         update(db2, odds, oddValues).close();
         db2.commit();
 
         List<String> evens = Arrays.asList("1002", "1004");
         List<Integer> evenValues = Arrays.asList(entropy.nextInt(), entropy.nextInt());
 
-        ((Session) db1.getSession()).setBlockHeight(2);
         update(db1, evens, evenValues).close();
         db1.commit();
 
-        ((Session) db2.getSession()).setBlockHeight(2);
         update(db2, evens, evenValues).close();
         db2.commit();
 
@@ -75,9 +68,9 @@ public class SmokeTest {
         chkpnt2File.delete();
 
         s1 = db1.createStatement();
-        s1.execute("blockscript blockheight 1 to 'target/chkpnt1.sql'");
+        s1.execute("script to 'target/chkpnt1.sql'");
         s2 = db2.createStatement();
-        s2.execute("blockscript blockheight 1 to 'target/chkpnt2.sql'");
+        s2.execute("script to 'target/chkpnt2.sql'");
 
         assertEquals(chkpnt1File.length(), chkpnt2File.length());
 

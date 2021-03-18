@@ -321,13 +321,6 @@ public class SqlStateMachine {
             commit();
         }
 
-        @Override
-        public void setBlockHeight(long height) {
-            Session session = getSession();
-            if (session != null) {
-                session.setBlockHeight(height);
-            }
-        }
     }
 
     private static final RowSetFactory factory;
@@ -405,8 +398,7 @@ public class SqlStateMachine {
             try (java.sql.Statement statement = connection.createStatement()) {
                 File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
                 try {
-                    statement.execute(String.format("BLOCKSCRIPT BLOCKHEIGHT %s DROP TO '%s'", height,
-                                                    temp.getAbsolutePath()));
+                    statement.execute(String.format("SCRIPT DROP TO '%s'", temp.getAbsolutePath()));
                     statement.close();
                 } catch (SQLException e) {
                     log.error("unable to checkpoint: {}", height, e);
