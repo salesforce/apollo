@@ -20,8 +20,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.BiConsumer;
@@ -84,6 +86,7 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class SqlStateMachine {
+
     public static class CallResult {
         public final List<Object>    outValues;
         public final List<ResultSet> results;
@@ -97,6 +100,15 @@ public class SqlStateMachine {
             @SuppressWarnings("unchecked")
             ValueType v = (ValueType) outValues.get(index);
             return v;
+        }
+    }
+    
+    public static class Event {
+        public final Any body;
+        public final String discriminator;
+        public Event(String discriminator, Any body) {
+            this.discriminator = discriminator;
+            this.body = body;
         }
     }
 
@@ -241,6 +253,11 @@ public class SqlStateMachine {
             return method.toString();
         }
     }
+    public interface Registry {
+        void deregister(String discriminator);
+
+        void register(String discriminator, BiConsumer<String, Any> handler);
+    }
 
     public class TxnExec implements TransactionExecutor {
 
@@ -323,6 +340,32 @@ public class SqlStateMachine {
 
     }
 
+    private static class EventTrampoline { 
+        private List<Event> pending = new CopyOnWriteArrayList<>();
+
+        public void publish(Event event) {
+            pending.add(event);
+        }
+
+        @SuppressWarnings("unused")
+        private void evaluate(Map<String, BiConsumer<String, Any>> handlers) {
+            try {
+                for (Event event : pending) {
+                    BiConsumer<String, Any> handler = handlers.get(event.discriminator);
+                    if (handler != null) {
+                        try {
+                            handler.accept(event.discriminator, event.body);
+                        } catch (Throwable e) {
+                            log.trace("handler failed for {}", e);
+                        }
+                    }
+                }
+            } finally {
+                pending.clear();
+            }
+        }
+    }
+
     private static final RowSetFactory factory;
 
     private static final Logger log = LoggerFactory.getLogger(SqlStateMachine.class);
@@ -343,7 +386,6 @@ public class SqlStateMachine {
     private final ForkJoinPool                            fjPool;
     private final Properties                              info;
     private final LoadingCache<String, PreparedStatement> psCache;
-
     private final String url;
 
     public SqlStateMachine(String url, Properties info, File checkpointDirectory) {

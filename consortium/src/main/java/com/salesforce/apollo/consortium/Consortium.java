@@ -307,12 +307,12 @@ public class Consortium {
     final Service                                       service               = new Service();
 
     public Consortium(Parameters parameters) {
-        this(parameters, defaultBuilder(parameters));
+        this(parameters, defaultBuilder(parameters).open());
     }
 
-    public Consortium(Parameters parameters, MVStore.Builder builder) {
+    public Consortium(Parameters parameters, MVStore store) {
         this.params = parameters;
-        store = new Store(builder.recoveryMode().open());
+        this.store = new Store(store);
         view = new View(new Service(), parameters, (id, messages) -> process(id, messages));
         fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
         fsm.setName(getMember().getId().b64Encoded());
