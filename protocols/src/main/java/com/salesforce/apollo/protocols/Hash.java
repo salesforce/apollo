@@ -53,6 +53,20 @@ abstract public class Hash<T> {
             processIt(key);
         }
 
+        public Hasher(T key, long seed) {
+            this.h1 = seed;
+            this.h2 = seed;
+            processIt(key);
+        }
+
+        public long getH1() {
+            return h1;
+        }
+
+        public long getH2() {
+            return h2;
+        }
+
         protected void process(HashKey key) {
             bmix64(key.itself[0], key.itself[1]);
             bmix64(key.itself[2], key.itself[3]);
@@ -108,6 +122,10 @@ abstract public class Hash<T> {
             super(key, seed);
         }
 
+        public HkHasher(HashKey key, long seed) {
+            super(key, seed);
+        }
+
         @Override
         protected void processIt(HashKey key) {
             process(key);
@@ -121,6 +139,10 @@ abstract public class Hash<T> {
             super(key, seed);
         }
 
+        public IntHasher(Integer key, long seed) {
+            super(key, seed);
+        }
+
         @Override
         protected void processIt(Integer key) {
             process(key);
@@ -131,6 +153,10 @@ abstract public class Hash<T> {
     public static class LongHasher extends Hasher<Long> {
 
         public LongHasher(Long key, int seed) {
+            super(key, seed);
+        }
+
+        public LongHasher(Long key, long seed) {
             super(key, seed);
         }
 

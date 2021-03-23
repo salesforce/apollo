@@ -6,9 +6,11 @@
  */
 package com.salesforce.apollo.state;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -28,7 +30,8 @@ public class UpdaterTest {
 
     @Test
     public void smoke() throws Exception {
-        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(), new File("target/chkpoints"));
+        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
+                new File("target/chkpoints"));
 
         Connection connection = updater.newConnection();
 
@@ -43,8 +46,7 @@ public class UpdaterTest {
                                                           "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))));
         Transaction transaction = builder.build();
 
-        updater.getExecutor()
-               .execute(null, ExecutedTransaction.newBuilder().setTransaction(transaction).build(), null);
+        updater.getExecutor().execute(null, ExecutedTransaction.newBuilder().setTransaction(transaction).build(), null);
 
         ResultSet books = statement.executeQuery("select * from books");
         assertTrue(books.first());
@@ -53,4 +55,32 @@ public class UpdaterTest {
         }
     }
 
+    @Test
+    public void eventPublishing() throws Exception {
+        String json = "{\"customer_name\": \"John\", \"items\": { \"description\": \"milk\", \"quantity\": 4 } }";
+
+        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_publish", new Properties(),
+                new File("target/chkpoints"));
+
+        Connection connection = updater.newConnection();
+        SqlStateMachine.publish(connection, "test", json);
+        connection.commit();
+        Statement statement = connection.createStatement();
+        ResultSet events = statement.executeQuery("select * from __APOLLO_INTERNAL__.TRAMPOLINE");
+
+        assertTrue(events.next());
+//        System.out.println(events.getInt(1) + " : " + events.getString(2) + " : " + events.getString(3));
+        assertFalse(events.next());
+
+        CallableStatement call = connection.prepareCall("call __APOLLO_INTERNAL__.PUBLISH(?1, ?2)");
+        call.setString(1, "test");
+        call.setString(2, json);
+        call.execute();
+        events = statement.executeQuery("select * from __APOLLO_INTERNAL__.TRAMPOLINE");
+        assertTrue(events.next());
+//        System.out.println(events.getInt(1) + " : " + events.getString(2) + " : " + events.getString(3));
+        assertTrue(events.next());
+//        System.out.println(events.getInt(1) + " : " + events.getString(2) + " : " + events.getString(3));
+        assertFalse(events.next());
+    }
 }

@@ -13,6 +13,8 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -26,6 +28,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
@@ -49,6 +52,9 @@ import org.h2.value.ValueNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -67,6 +73,7 @@ import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
+import com.salesforce.apollo.protocols.Hash.HkHasher;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -86,7 +93,6 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class SqlStateMachine {
-
     public static class CallResult {
         public final List<Object>    outValues;
         public final List<ResultSet> results;
@@ -102,11 +108,12 @@ public class SqlStateMachine {
             return v;
         }
     }
-    
+
     public static class Event {
-        public final Any body;
-        public final String discriminator;
-        public Event(String discriminator, Any body) {
+        public final JsonNode body;
+        public final String   discriminator;
+
+        public Event(String discriminator, JsonNode body) {
             this.discriminator = discriminator;
             this.body = body;
         }
@@ -253,6 +260,7 @@ public class SqlStateMachine {
             return method.toString();
         }
     }
+
     public interface Registry {
         void deregister(String discriminator);
 
@@ -260,6 +268,11 @@ public class SqlStateMachine {
     }
 
     public class TxnExec implements TransactionExecutor {
+
+        @Override
+        public void beginBlock(long height, byte[] nonce) {
+            SqlStateMachine.this.beginBlock(height, nonce);
+        }
 
         @Override
         public void execute(HashKey blockHash, ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
@@ -274,6 +287,8 @@ public class SqlStateMachine {
             }
             Any tx = t.getTransaction().getTxn();
             HashKey txnHash = new HashKey(t.getHash());
+            SecureRandom prev = secureRandom.get();
+            secureRandom.set(entropy.get());
             try {
                 Object results;
                 if (tx.is(BatchedTransaction.class)) {
@@ -296,6 +311,7 @@ public class SqlStateMachine {
                 rollback();
                 exception(completion, e);
             } finally {
+                secureRandom.set(prev);
                 commit();
             }
 
@@ -303,6 +319,7 @@ public class SqlStateMachine {
 
         @Override
         public void processGenesis(Any genesisData) {
+            initializeEvents();
             if (!genesisData.is(BatchedTransaction.class)) {
                 log.info("Unknown genesis data type: {}", genesisData.getTypeUrl());
                 return;
@@ -340,7 +357,7 @@ public class SqlStateMachine {
 
     }
 
-    private static class EventTrampoline { 
+    private static class EventTrampoline {
         private List<Event> pending = new CopyOnWriteArrayList<>();
 
         public void publish(Event event) {
@@ -348,10 +365,10 @@ public class SqlStateMachine {
         }
 
         @SuppressWarnings("unused")
-        private void evaluate(Map<String, BiConsumer<String, Any>> handlers) {
+        private void evaluate(Map<String, BiConsumer<String, JsonNode>> handlers) {
             try {
                 for (Event event : pending) {
-                    BiConsumer<String, Any> handler = handlers.get(event.discriminator);
+                    BiConsumer<String, JsonNode> handler = handlers.get(event.discriminator);
                     if (handler != null) {
                         try {
                             handler.accept(event.discriminator, event.body);
@@ -366,9 +383,18 @@ public class SqlStateMachine {
         }
     }
 
-    private static final RowSetFactory factory;
+    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH    = String.format("CREATE ALIAS __APOLLO_INTERNAL__.PUBLISH FOR \"%s.publish\"",
+                                                                                                           SqlStateMachine.class.getCanonicalName());
+    private static final String                    CREATE_SCHEMA_APOLLO_INTERNAL           = "CREATE SCHEMA __APOLLO_INTERNAL__";
+    private static final String                    CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE = "CREATE TABLE __APOLLO_INTERNAL__.TRAMPOLINE(ID INT AUTO_INCREMENT, CHANNEL VARCHAR(255), BODY JSON)";
+    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE  = "DELETE FROM __APOLLO_INTERNAL__.TRAMPOLINE";
+    private static final RowSetFactory             factory;
+    private static final Logger                    log                                     = LoggerFactory.getLogger(SqlStateMachine.class);
+    private static final ObjectMapper              MAPPER                                  = new ObjectMapper();
+    private static final String                    PUBLISH_INSERT                          = "INSERT INTO __APOLLO_INTERNAL__.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2)";
+    private static final ThreadLocal<SecureRandom> secureRandom                            = new ThreadLocal<>();
+    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE  = "select * from __APOLLO_INTERNAL__.TRAMPOLINE";
 
-    private static final Logger log = LoggerFactory.getLogger(SqlStateMachine.class);
     static {
         try {
             factory = RowSetProvider.newFactory();
@@ -377,16 +403,36 @@ public class SqlStateMachine {
         }
     }
 
-    private final LoadingCache<String, CallableStatement> callCache;
+    public static SecureRandom getSecureRandom() {
+        return secureRandom.get();
+    }
 
+    public static boolean publish(Connection connection, String channel, String jsonBody) {
+        try (PreparedStatement statement = connection.prepareStatement(PUBLISH_INSERT)) {
+            statement.setString(1, channel);
+            statement.setString(2, jsonBody);
+            statement.execute();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Unable to publish: " + channel, e);
+        }
+        return true;
+    }
+
+    public static void setSecureRandom(SecureRandom random) {
+        secureRandom.set(random);
+    }
+
+    private final LoadingCache<String, CallableStatement> callCache;
     private final File                                    checkpointDirectory;
-    private final ScriptCompiler                          compiler = new ScriptCompiler();
+    private final ScriptCompiler                          compiler   = new ScriptCompiler();
     private final JdbcConnection                          connection;
-    private final TxnExec                                 executor = new TxnExec();
+    private final AtomicReference<SecureRandom>           entropy    = new AtomicReference<>();
+    private final TxnExec                                 executor   = new TxnExec();
     private final ForkJoinPool                            fjPool;
     private final Properties                              info;
     private final LoadingCache<String, PreparedStatement> psCache;
-    private final String url;
+    private final EventTrampoline                         trampoline = new EventTrampoline();
+    private final String                                  url;
 
     public SqlStateMachine(String url, Properties info, File checkpointDirectory) {
         this(url, info, checkpointDirectory, ForkJoinPool.commonPool());
@@ -671,8 +717,22 @@ public class SqlStateMachine {
         return returnValue;
     }
 
+    private void beginBlock(long height, byte[] nonce) {
+        HashKey hkNonce = new HashKey(nonce);
+        HkHasher hasher = new HkHasher(hkNonce, height);
+        getSession().getRandom().setSeed(hasher.getH1());
+        try {
+            SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
+            secureEntropy.setSeed(nonce);
+            entropy.set(secureEntropy);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("No SHA1PRNG available", e);
+        }
+    }
+
     private void commit() {
         try {
+            publishEvents();
             connection.commit();
         } catch (SQLException e) {
             log.trace("unable to commit connection", e);
@@ -814,6 +874,69 @@ public class SqlStateMachine {
 
     private Session getSession() {
         return (Session) connection.getSession();
+    }
+
+    private void initializeEvents() {
+        java.sql.Statement statement = null;
+
+        SecureRandom prev = secureRandom.get();
+        secureRandom.set(entropy.get());
+        try {
+            statement = connection.createStatement();
+            statement.execute(CREATE_SCHEMA_APOLLO_INTERNAL);
+            statement.execute(CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE);
+            statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
+        } catch (SQLException e) {
+            throw new IllegalStateException("unable to create event publish function", e);
+        } finally {
+            secureRandom.set(prev);
+            if (statement != null) {
+                try {
+                    statement.close();
+                } catch (SQLException e) {
+                }
+            }
+        }
+    }
+
+    private void publishEvents() {
+        PreparedStatement exec;
+        try {
+            exec = psCache.get(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
+        } catch (ExecutionException e) {
+            log.error("Error publishing events", e.getCause());
+            throw new IllegalStateException("Cannot publish events", e.getCause());
+        }
+        try (ResultSet events = exec.executeQuery()) {
+            while (events.next()) {
+                String channel = events.getString(2);
+                JsonNode body;
+                try {
+                    body = MAPPER.readTree(events.getString(3));
+                } catch (JsonProcessingException e) {
+                    log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
+                    continue;
+                }
+                trampoline.publish(new Event(channel, body));
+            }
+        } catch (SQLException e) {
+            log.error("Error retrieving published events", e.getCause());
+            throw new IllegalStateException("Cannot retrieve published events", e.getCause());
+        }
+
+        try {
+            exec = psCache.get(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE);
+        } catch (ExecutionException e) {
+            log.error("Error publishing events", e.getCause());
+            throw new IllegalStateException("Cannot publish events", e.getCause());
+        }
+        try {
+            exec.execute();
+        } catch (SQLException e) {
+            log.error("Error cleaning published events", e);
+            throw new IllegalStateException("Cannot clean published events", e);
+        }
+
     }
 
     private void rollback() {

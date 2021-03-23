@@ -17,11 +17,11 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public interface TransactionExecutor {
+    default void beginBlock(long height, byte[] nonce) {
+    }
+
     void execute(HashKey blockHash, ExecutedTransaction txn, BiConsumer<Object, Throwable> completion);
 
     default void processGenesis(Any genesisData) {
-    }
-
-    default void setBlockHeight(long height) {
     }
 }

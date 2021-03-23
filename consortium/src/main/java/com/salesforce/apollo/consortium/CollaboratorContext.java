@@ -605,7 +605,9 @@ public class CollaboratorContext {
         consortium.setGenesis(next);
         consortium.getTransitions().genesisAccepted();
         reconfigure(next, body.getInitialView(), true);
-        consortium.getParams().executor.processGenesis(body.getGenesisData());
+        TransactionExecutor exec = consortium.getParams().executor;
+        exec.beginBlock(0, next.block.getHeader().getNonce().toByteArray());
+        exec.processGenesis(body.getGenesisData());
         log.info("Processed genesis block: {} on: {}", next.hash, consortium.getMember());
     }
 
@@ -626,7 +628,7 @@ public class CollaboratorContext {
         }
         long height = next.height();
         TransactionExecutor exec = consortium.getParams().executor;
-        exec.setBlockHeight(height);
+        exec.beginBlock(height, next.block.getHeader().getNonce().toByteArray());
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
@@ -879,9 +881,12 @@ public class CollaboratorContext {
         Timestamp timestamp = Timestamp.newBuilder().setSeconds(time.getEpochSecond()).setNanos(time.getNano()).build();
         HashedBlock cp = consortium.getLastCheckpointBlock();
         HashedBlock vc = consortium.getLastViewChangeBlock();
+        byte[] nonce = new byte[32];
+        Utils.secureEntropy().nextBytes(nonce);
         Block block = Block.newBuilder()
                            .setHeader(Header.newBuilder()
                                             .setTimestamp(timestamp)
+                                            .setNonce(ByteString.copyFrom(nonce))
                                             .setLastCheckpoint((cp == null ? HashKey.ORIGIN : cp.hash).toByteString())
                                             .setLastReconfig((vc == null ? HashKey.ORIGIN : vc.hash).toByteString())
                                             .setPrevious(ByteString.copyFrom(previous))

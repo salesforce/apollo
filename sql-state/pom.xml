@@ -93,31 +93,6 @@
 					<liquibaseSchemaName>public</liquibaseSchemaName>
 					<verbose>true</verbose>
 				</configuration>
-				<executions>
-					<execution>
-						<phase>generate-sources</phase>
-						<id>create-schema</id>
-						<goals>
-							<goal>update</goal>
-						</goals>
-						<configuration>
-							<changelogSchemaName>public</changelogSchemaName>
-							<changeLogFile>src/main/resources/create-schema.yaml</changeLogFile>
-						</configuration>
-					</execution>
-					<execution>
-						<phase>generate-sources</phase>
-						<id>update</id>
-						<goals>
-							<goal>update</goal>
-						</goals>
-						<configuration>
-							<changelogSchemaName>public</changelogSchemaName>
-							<defaultSchemaName>kernel</defaultSchemaName>
-							<changeLogFile>src/main/resources/kernel.yaml</changeLogFile>
-						</configuration>
-					</execution>
-				</executions>
 				<dependencies>
 					<dependency>
 						<groupId>com.h2database</groupId>
