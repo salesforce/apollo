@@ -1146,6 +1146,9 @@ public class WorkingSet {
         if (existing != null && !existing.isUnknown()) {
             return true;
         }
+        if (existing == null && finalized.containsKey(key)) {
+            return true;
+        }
 
         HashKey derived = new HashKey(Conversion.hashOf(entry.toByteString()));
         if (!key.equals(derived)) {
@@ -1255,7 +1258,6 @@ public class WorkingSet {
         }
     }
 
-    @SuppressWarnings("unused")
     private <T> T write(Callable<T> call) {
         final Lock l = rwLock.writeLock();
         l.lock();

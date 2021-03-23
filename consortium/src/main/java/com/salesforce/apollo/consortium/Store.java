@@ -17,20 +17,26 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.StreamSupport;
 
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.Certifications;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
+import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesforce.apollo.consortium.support.HashedBlock;
+import com.salesforce.apollo.membership.ReservoirSampler;
+import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2
@@ -93,6 +99,16 @@ public class Store {
         return blocks.store.openMap(String.format(CHECKPOINT_TEMPLATE, blockHeight));
     }
 
+    public void fetchBlocks(BloomFilter<Long> blocksBff, CheckpointSegments.Builder replication,
+                            int maxCheckpointBlocks, long checkpoint) throws IllegalStateException {
+        StreamSupport.stream(((Iterable<Long>) () -> blocksFrom(checkpoint)).spliterator(), false)
+                     .collect(new ReservoirSampler<Long>(-1, maxCheckpointBlocks, Utils.bitStreamGenerator()))
+                     .stream()
+                     .filter(s -> !blocksBff.contains(s))
+                     .map(height -> getBlockBits(height))
+                     .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
+    }
+
     public HashedBlock getBlock(long height) {
         byte[] block = block(height);
         try {
@@ -146,16 +162,9 @@ public class Store {
 
         byte[] buffer = new byte[checkpoint.getSegmentSize()];
         try (FileInputStream fis = new FileInputStream(state)) {
-            for (int i = 0; i < checkpoint.getSegmentsCount(); i++) {
-                int read = fis.read(buffer);
-                if (read != buffer.length) {
-                    if (fis.available() != 0) {
-                        throw new IllegalStateException("Should have been able to read a full buffer");
-                    }
-                    cp.put(i, Arrays.copyOf(buffer, read));
-                } else {
-                    cp.put(i, buffer);
-                }
+            int i = 0;
+            for (int read = fis.read(buffer); read > 0; read = fis.read(buffer)) {
+                cp.put(i++, Arrays.copyOf(buffer, read));
             }
         } catch (IOException e) {
             throw new IllegalStateException("Error storing checkpoint " + blockHeight, e);

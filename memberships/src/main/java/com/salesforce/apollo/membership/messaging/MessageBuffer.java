@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.proto.ID;
 import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.Messages.Builder;
@@ -34,7 +35,6 @@ import com.salesfoce.apollo.proto.Push;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashFunction;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -88,6 +88,7 @@ public class MessageBuffer {
         return new HashKey(Conversion.hashOf(buffers));
     }
 
+    @SuppressWarnings("unused")
     private static HashKey idOf(Message message) {
         return idOf(message.getSequenceNumber(), new HashKey(message.getSource()), message.getContent());
     }
@@ -113,8 +114,8 @@ public class MessageBuffer {
         log.trace("Buffer free after compact: " + (bufferSize - state.size()));
     }
 
-    public BloomFilter getBff(int seed, double p) {
-        BloomFilter bff = new BloomFilter(new HashFunction(seed, bufferSize, p));
+    public BloomFilter<HashKey> getBff(int seed, double p) {
+        BloomFilter<HashKey> bff = new BloomFilter.HkBloomFilter(seed, bufferSize, p);
         state.keySet().forEach(h -> bff.add(h));
         return bff;
     }
@@ -128,18 +129,14 @@ public class MessageBuffer {
      */
     public List<Message> merge(List<Message> updates, BiPredicate<HashKey, Message> validator) {
         List<Message> merged = updates.parallelStream().filter(message -> {
-            HashKey hash = idOf(message);
-            if (!validator.test(hash, message)) {
-                log.error("Cannot validate message: {}", hash);
-                return false;
-            }
-            return merge(hash, message);
+            HashKey hash = new HashKey(message.getKey());
+            return merge(hash, message, validator);
         }).collect(Collectors.toList());
         gc();
         return merged;
     }
 
-    public Messages process(BloomFilter bff, int seed, double p) {
+    public Messages process(BloomFilter<HashKey> bff, int seed, double p) {
         Builder builder = Messages.newBuilder();
         state.entrySet().forEach(entry -> {
             if (!bff.contains(entry.getKey())) {
@@ -165,13 +162,13 @@ public class MessageBuffer {
         int sequenceNumber = lastSequenceNumber.getAndIncrement();
         HashKey id = idOf(sequenceNumber, from.getId(), msg);
         Message update = state.computeIfAbsent(id, k -> createUpdate(msg, sequenceNumber, from.getId(),
-                                                                     sign(k, signature)));
+                                                                     sign(k, signature), id.toID()));
         gc();
         log.trace("broadcasting: {}:{} on: {}", id, sequenceNumber, from);
         return update;
     }
 
-    public void updatesFor(BloomFilter bff, Push.Builder builder) {
+    public void updatesFor(BloomFilter<HashKey> bff, Push.Builder builder) {
         state.entrySet()
              .stream()
              .peek(entry -> entry.setValue(Message.newBuilder(entry.getValue())
@@ -183,34 +180,38 @@ public class MessageBuffer {
         purgeTheAged();
     }
 
-    private Message createUpdate(Any msg, int sequenceNumber, HashKey from, byte[] signature) {
+    private Message createUpdate(Any msg, int sequenceNumber, HashKey from, byte[] signature, ID key) {
         return Message.newBuilder()
                       .setSource(from.toID())
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
+                      .setKey(key)
                       .setSignature(ByteString.copyFrom(signature))
                       .setContent(msg)
                       .build();
     }
 
-    private boolean merge(HashKey hash, Message update) {
+    private boolean merge(HashKey hash, Message update, BiPredicate<HashKey, Message> validator) {
         if (update.getAge() > tooOld + 1) {
             log.trace("dropped as too old: {}:{}", hash, update.getSequenceNumber());
             return false;
         }
         AtomicBoolean updated = new AtomicBoolean(false);
         state.compute(hash, (k, v) -> {
+            if (!validator.test(k, update)) {
+                return v;
+            }
+
             if (v == null) {
                 updated.set(true);
-                log.trace("added: {}:{}", hash, update.getSequenceNumber());
+                log.trace("added: {}:{}", k, update.getSequenceNumber());
                 return update;
             }
-            if (v.getAge() == update.getAge()) {
-                return update;
+            if (v.getAge() >= update.getAge()) {
+                return v;
             }
-            int age = Math.max(v.getAge(), update.getAge());
-            log.trace("merged: {} age: {} prev: {}", hash, age, v.getAge());
-            return Message.newBuilder(v).setAge(age).build();
+            log.trace("merged: {} age: {} prev: {}", k, update.getAge(), v.getAge());
+            return Message.newBuilder(v).setAge(update.getAge()).build();
         });
         return updated.get();
     }

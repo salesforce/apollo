@@ -64,7 +64,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.CaValidator;
-import com.salesforce.apollo.protocols.HashFunction;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -272,14 +271,14 @@ public class View {
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
             }
-            int seed = Utils.entropy().nextInt();
+            int seed = Utils.secureEntropy().nextInt();
             return Gossip.newBuilder()
                          .setRedirect(false)
-                         .setCertificates(processCertificateDigests(from, new BloomFilter(digests.getCertificateBff()),
+                         .setCertificates(processCertificateDigests(from, BloomFilter.from(digests.getCertificateBff()),
                                                                     seed, getParameters().falsePositiveRate))
-                         .setNotes(processNoteDigests(from, new BloomFilter(digests.getNoteBff()), seed,
+                         .setNotes(processNoteDigests(from, BloomFilter.from(digests.getNoteBff()), seed,
                                                       getParameters().falsePositiveRate))
-                         .setAccusations(processAccusationDigests(new BloomFilter(digests.getAccusationBff()), seed,
+                         .setAccusations(processAccusationDigests(BloomFilter.from(digests.getAccusationBff()), seed,
                                                                   getParameters().falsePositiveRate))
                          .build();
         }
@@ -299,7 +298,7 @@ public class View {
                  .forEach(m -> addSeed(m));
 
             long interval = d.toMillis();
-            int initialDelay = Utils.entropy().nextInt((int) interval * 2);
+            int initialDelay = Utils.secureEntropy().nextInt((int) interval * 2);
             futureGossip = scheduler.schedule(() -> fjPool.execute(() -> {
                 try {
                     oneRound(d, scheduler);
@@ -307,7 +306,8 @@ public class View {
                     log.error("unexpected error during gossip round", e);
                 }
             }), initialDelay, TimeUnit.MILLISECONDS);
-            log.info("{} started, initial delay: {} ms", node.getId(), initialDelay);
+            log.info("{} started, initial delay: {} ms seeds: {}", node.getId(), initialDelay,
+                     seedList.stream().map(e -> e.b64Encoded()).collect(Collectors.toList()));
         }
 
         /**
@@ -419,7 +419,6 @@ public class View {
 
     private final ForkJoinPool fjPool;
 
-    @SuppressWarnings("unused")
     private final FireflyMetrics metrics;
 
     /**
@@ -762,7 +761,7 @@ public class View {
      * @param seed
      */
     void addSeed(Participant seed) {
-        seed.setNote(new Note(seed.getId(), -1, Node.createInitialMask(getParameters().toleranceLevel, Utils.entropy()),
+        seed.setNote(new Note(seed.getId(), -1, Node.createInitialMask(getParameters().toleranceLevel, Utils.secureEntropy()),
                 node.forSigning()));
         context.add(seed);
         context.activate(seed);
@@ -827,7 +826,7 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     Digests commonDigests() {
-        int seed = Utils.entropy().nextInt();
+        int seed = Utils.secureEntropy().nextInt();
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
                       .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
@@ -840,9 +839,9 @@ public class View {
         member.setFailed(true);
     }
 
-    BloomFilter getAccusationsBff(int seed, double p) {
-        BloomFilter bff = new BloomFilter(
-                new HashFunction(seed, getParameters().cardinality * getParameters().rings, p));
+    BloomFilter<HashKey> getAccusationsBff(int seed, double p) {
+        BloomFilter<HashKey> bff = new BloomFilter.HkBloomFilter(seed,
+                getParameters().cardinality * getParameters().rings, p);
         context.getActive()
                .stream()
                .flatMap(m -> m.getAccusations())
@@ -851,8 +850,8 @@ public class View {
         return bff;
     }
 
-    BloomFilter getCertificatesBff(int seed, double p) {
-        BloomFilter bff = new BloomFilter(new HashFunction(seed, getParameters().cardinality, p));
+    BloomFilter<HashKey> getCertificatesBff(int seed, double p) {
+        BloomFilter<HashKey> bff = new BloomFilter.HkBloomFilter(seed, getParameters().cardinality, p);
         view.values()
             .stream()
             .map(m -> m.getCertificateHash())
@@ -861,8 +860,8 @@ public class View {
         return bff;
     }
 
-    BloomFilter getNotesBff(int seed, double p) {
-        BloomFilter bff = new BloomFilter(new HashFunction(seed, getParameters().cardinality, p));
+    BloomFilter<HashKey> getNotesBff(int seed, double p) {
+        BloomFilter<HashKey> bff = new BloomFilter.HkBloomFilter(seed, getParameters().cardinality, p);
         view.values()
             .stream()
             .map(m -> m.getNote())
@@ -1122,7 +1121,7 @@ public class View {
      * @param seed
      * @return
      */
-    AccusationGossip processAccusationDigests(BloomFilter bff, int seed, double p) {
+    AccusationGossip processAccusationDigests(BloomFilter<HashKey> bff, int seed, double p) {
         Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
@@ -1137,7 +1136,7 @@ public class View {
         return gossip;
     }
 
-    CertificateGossip processCertificateDigests(HashKey from, BloomFilter bff, int seed, double p) {
+    CertificateGossip processCertificateDigests(HashKey from, BloomFilter<HashKey> bff, int seed, double p) {
         log.trace("process cert digests");
         com.salesfoce.apollo.proto.CertificateGossip.Builder builder = CertificateGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
@@ -1166,7 +1165,7 @@ public class View {
      * @param p
      * @param seed
      */
-    NoteGossip processNoteDigests(HashKey from, BloomFilter bff, int seed, double p) {
+    NoteGossip processNoteDigests(HashKey from, BloomFilter<HashKey> bff, int seed, double p) {
         com.salesfoce.apollo.proto.NoteGossip.Builder builder = NoteGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound
@@ -1323,7 +1322,7 @@ public class View {
         com.salesfoce.apollo.proto.Update.Builder builder = Update.newBuilder();
 
         // certificates
-        BloomFilter certBff = new BloomFilter(gossip.getCertificates().getBff());
+        BloomFilter<HashKey> certBff = BloomFilter.from(gossip.getCertificates().getBff());
         view.values()
             .stream()
             .filter(m -> !certBff.contains(new HashKey(m.getCertificateHash())))
@@ -1332,7 +1331,7 @@ public class View {
             .forEach(cert -> builder.addCertificates(cert));
 
         // notes
-        BloomFilter notesBff = new BloomFilter(gossip.getNotes().getBff());
+        BloomFilter<HashKey> notesBff = BloomFilter.from(gossip.getNotes().getBff());
         view.values()
             .stream()
             .filter(m -> m.getNote() != null)
@@ -1340,7 +1339,7 @@ public class View {
             .map(m -> m.getSignedNote())
             .forEach(n -> builder.addNotes(n));
 
-        BloomFilter accBff = new BloomFilter(gossip.getAccusations().getBff());
+        BloomFilter<HashKey> accBff = BloomFilter.from(gossip.getAccusations().getBff());
         context.getActive()
                .stream()
                .flatMap(m -> m.getAccusations())

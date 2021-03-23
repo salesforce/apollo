@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -143,19 +144,20 @@ public class MessageTest {
         members.forEach(m -> context.activate(m));
 
         while (seeds.size() < 7) {
-            CertificateWithPrivateKey cert = certs.get(members.get(Utils.entropy().nextInt(members.size())).getId());
+            CertificateWithPrivateKey cert = certs.get(members.get(Utils.bitStreamEntropy().nextInt(members.size())).getId());
             if (!seeds.contains(cert.getX509Certificate())) {
                 seeds.add(cert.getX509Certificate());
             }
         }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
+        ForkJoinPool executor = ForkJoinPool.commonPool();
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30),
-                    Executors.newFixedThreadPool(3));
+                    executor);
             communications.add(comms);
             comms.start();
-            return new Messenger(node, () -> forSigning(node), context, comms, parameters);
+            return new Messenger(node, () -> forSigning(node), context, comms, parameters, executor);
         }).collect(Collectors.toList());
 
         messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
@@ -174,7 +176,7 @@ public class MessageTest {
                 receiver.setRound(round);
             }
             byte[] rand = new byte[32];
-            Utils.entropy().nextBytes(rand);
+            Utils.secureEntropy().nextBytes(rand);
             ByteBuffer buf = ByteBuffer.wrap(new byte[36]);
             buf.putInt(r);
             buf.put(rand);
@@ -205,7 +207,7 @@ public class MessageTest {
             throw new IllegalStateException("no such algorithm: " + DEFAULT_SIGNATURE_ALGORITHM, e);
         }
         try {
-            signature.initSign(certs.get(member.getId()).getPrivateKey(), Utils.entropy());
+            signature.initSign(certs.get(member.getId()).getPrivateKey(), Utils.secureEntropy());
         } catch (InvalidKeyException e) {
             throw new IllegalStateException("invalid private key", e);
         }

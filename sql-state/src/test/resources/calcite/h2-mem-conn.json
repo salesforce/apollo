@@ -1,6 +1,0 @@
-{
-  "jdbcDriver": "org.h2.Driver",
-  "jdbcUrl": "jdbc:h2:mem:test_mem",
-  "jdbcUser": "god",
-  "jdbcPassword": "almighty"
-}

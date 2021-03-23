@@ -34,7 +34,8 @@ message Message {
     int32 age = 3;
     int32 channel = 4;
     bytes signature = 5;
-    google.protobuf.Any content = 6;
+    ID key = 6;
+    google.protobuf.Any content = 7;
 }
 
 message ByteMessage {
@@ -168,6 +169,7 @@ message Biff {
         int32 k = 2;
         int32 seed = 3;
         bytes bits = 4;
+        int32 type = 5;
 } 
 
 message NoteGossip {

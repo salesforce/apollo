@@ -37,6 +37,17 @@ import org.slf4j.LoggerFactory;
  * @param <Context>     the fsm context interface
  */
 public final class Fsm<Context, Transitions> {
+    private static class State<Context, Transitions> {
+        private final Context     context;
+        private final Transitions transitions;
+
+        public State(Context context, Transitions transitions) {
+            this.context = context;
+            this.transitions = transitions;
+        }
+
+    }
+
     private static class PendingTransition implements InvocationHandler {
         private volatile Object[] args;
         private volatile Method   method;
@@ -115,23 +126,23 @@ public final class Fsm<Context, Transitions> {
         return fsm;
     }
 
-    private final Context              context;
-    private volatile Transitions       current;
-    private volatile Logger            log;
-    private volatile String            name       = "";
-    private volatile boolean           pendingPop = false;
-    private volatile Transitions       pendingPush;
-    private volatile PendingTransition popTransition;
-    private volatile Transitions       previous;
-    private final Transitions          proxy;
-    private final Deque<Transitions>   stack      = new ArrayDeque<>();
-    private final Lock                 sync;
-    private volatile String            transition;
-    private final Class<Transitions>   transitionsType;
-    private volatile PendingTransition pushTransition;
+    private Context                                  context;
+    private Transitions                              current;
+    private Logger                                   log;
+    private String                                   name       = "";
+    private boolean                                  pendingPop = false;
+    private State<Context, Transitions>              pendingPush;
+    private PendingTransition                        popTransition;
+    private Transitions                              previous;
+    private final Transitions                        proxy;
+    private PendingTransition                        pushTransition;
+    private final Deque<State<Context, Transitions>> stack      = new ArrayDeque<>();
+    private final Lock                               sync;
+    private String                                   transition;
+    private final Class<Transitions>                 transitionsType;
 
     Fsm(Context context, boolean sync, Class<Transitions> transitionsType, ClassLoader transitionsCL) {
-        this.context = context;
+        this.setContext(context);
         this.sync = sync ? new ReentrantLock() : null;
         this.transitionsType = transitionsType;
         this.log = DEFAULT_LOG;
@@ -198,20 +209,12 @@ public final class Fsm<Context, Transitions> {
     }
 
     /**
-     * @return the invalid transition excepiton based current transition attempt
-     */
-    public InvalidTransition invalidTransitionOn() {
-        return new InvalidTransition(String.format("[%s] %s.%s", name, prettyPrint(current), transition));
-    }
-
-    /**
      * 
      * @return the String representation of the current transition
      */
     public String getTransition() {
         return locked(() -> {
-            final String c = transition;
-            return c;
+            return transition;
         });
     }
 
@@ -221,6 +224,13 @@ public final class Fsm<Context, Transitions> {
      */
     public Transitions getTransitions() {
         return proxy;
+    }
+
+    /**
+     * @return the invalid transition excepiton based current transition attempt
+     */
+    public InvalidTransition invalidTransitionOn() {
+        return new InvalidTransition(String.format("[%s] %s.%s", name, prettyPrint(current), transition));
     }
 
     /**
@@ -244,7 +254,7 @@ public final class Fsm<Context, Transitions> {
         pendingPop = true;
         popTransition = new PendingTransition();
         @SuppressWarnings("unchecked")
-        Transitions pendingTransition = (Transitions) Proxy.newProxyInstance(context.getClass().getClassLoader(),
+        Transitions pendingTransition = (Transitions) Proxy.newProxyInstance(getContext().getClass().getClassLoader(),
                                                                              new Class<?>[] { transitionsType },
                                                                              popTransition);
         return pendingTransition;
@@ -266,6 +276,17 @@ public final class Fsm<Context, Transitions> {
      * @param state - the new current state of the Fsm.
      */
     public Transitions push(Transitions state) {
+        return push(state, context);
+    }
+
+    /**
+     * Push the current state of the Fsm on the state stack. The supplied state
+     * becomes the current state of the Fsm
+     * 
+     * @param state   - the new current state of the Fsm.
+     * @param context - the new current context of the FSM
+     */
+    public Transitions push(Transitions state, Context context) {
         if (state == null) {
             throw new IllegalStateException(String.format("[%s] Cannot push a null state", name));
         }
@@ -276,12 +297,19 @@ public final class Fsm<Context, Transitions> {
             throw new IllegalStateException(String.format("[%s] Cannot push after pop", name));
         }
         pushTransition = new PendingTransition();
-        pendingPush = state;
+        pendingPush = new State<>(context, state);
         @SuppressWarnings("unchecked")
-        Transitions pendingTransition = (Transitions) Proxy.newProxyInstance(context.getClass().getClassLoader(),
+        Transitions pendingTransition = (Transitions) Proxy.newProxyInstance(getContext().getClass().getClassLoader(),
                                                                              new Class<?>[] { transitionsType },
                                                                              pushTransition);
         return pendingTransition;
+    }
+
+    /**
+     * Set the Context of the FSM
+     */
+    public void setContext(Context context) {
+        this.context = context;
     }
 
     /**
@@ -325,7 +353,7 @@ public final class Fsm<Context, Transitions> {
                 try {
                     // For entry actions with parameters, inject the context
                     if (action.getParameterTypes().length > 0)
-                        action.invoke(current, context);
+                        action.invoke(current, getContext());
                     else
                         action.invoke(current, new Object[] {});
                     return;
@@ -353,7 +381,7 @@ public final class Fsm<Context, Transitions> {
                 try {
                     // For exit action with parameters, inject the context
                     if (action.getParameterTypes().length > 0)
-                        action.invoke(current, context);
+                        action.invoke(current, getContext());
                     else
                         action.invoke(current, new Object[] {});
                     return;
@@ -387,25 +415,23 @@ public final class Fsm<Context, Transitions> {
         }
 
         try {
-            return locked(() -> {
-                transition = prettyPrint(t);
-                Transitions nextState;
-                Transitions pinned = current;
-                try {
-                    nextState = fireTransition(lookupTransition(t), arguments);
-                } catch (InvalidTransition e) {
-                    nextState = fireTransition(lookupDefaultTransition(e, t), arguments);
+            transition = prettyPrint(t);
+            Transitions nextState;
+            Transitions pinned = current;
+            try {
+                nextState = fireTransition(lookupTransition(t), arguments);
+            } catch (InvalidTransition e) {
+                nextState = fireTransition(lookupDefaultTransition(e, t), arguments);
+            }
+            if (pinned == current) {
+                transitionTo(nextState);
+            } else {
+                if (nextState != null && log.isTraceEnabled()) {
+                    log.trace(String.format("[%s] Eliding Transition %s -> %s, pinned state: %s", name,
+                                            prettyPrint(current), prettyPrint(nextState), prettyPrint(pinned)));
                 }
-                if (pinned == current) {
-                    transitionTo(nextState);
-                } else {
-                    if (nextState != null && log.isTraceEnabled()) {
-                        log.trace(String.format("[%s] Eliding Transition %s -> %s, pinned state: %s", name,
-                                                prettyPrint(current), prettyPrint(nextState), prettyPrint(pinned)));
-                    }
-                }
-                return null;
-            });
+            }
+            return null;
         } finally {
             thisFsm.set(previousFsm);
         }
@@ -548,16 +574,19 @@ public final class Fsm<Context, Transitions> {
     private void popTransition() {
         pendingPop = false;
         previous = current;
-        Transitions pop = stack.pop();
+        State<Context, Transitions> pop = stack.pop();
         PendingTransition pendingTransition = popTransition;
         popTransition = null;
 
         executeExitAction();
         if (log.isTraceEnabled()) {
-            log.trace(String.format("[%s] State transition:  %s -> %s - Popping(%s)", name,  prettyPrint(previous),
+            log.trace(String.format("[%s] State transition:  %s -> %s - Popping(%s)", name, prettyPrint(previous),
                                     prettyPrint(pop), stack.size() + 1));
         }
-        current = pop;
+        current = pop.transitions;
+        if (pop.context != null) {
+            setContext(pop.context);
+        }
         if (pendingTransition != null) {
             if (log.isTraceEnabled()) {
                 log.trace(String.format("[%s] Pop transition: %s.%s", name, prettyPrint(current),
@@ -565,6 +594,11 @@ public final class Fsm<Context, Transitions> {
             }
             fire(pendingTransition.method, pendingTransition.args);
         }
+    }
+
+    private String prettyPrint(State<Context, Transitions> state) {
+        return prettyPrint(state.transitions) + " [" + state.context == null ? "<>: " + getContext()
+                : state.context + "]";
     }
 
     private String prettyPrint(Method transition) {
@@ -587,23 +621,26 @@ public final class Fsm<Context, Transitions> {
     }
 
     /**
-     * Push the current state of the Fsm to the stack. If non null, transition the
-     * Fsm to the nextState, execute the entry action of that state. Set the current
-     * state of the Fsm to the pending push state, executing the entry action on
-     * that state
+     * Push the current state of the Fsm to the stack, with the supplied context as
+     * the new current context of the FSM, if non null. Transition the Fsm to the
+     * nextState, execute the entry action of that state. Set the current state of
+     * the Fsm to the pending push state, executing the entry action on that state
      * 
      * @param nextState
      */
     private void pushTransition(Transitions nextState) {
-        Transitions pushed = pendingPush;
+        State<Context, Transitions> pushed = pendingPush;
         pendingPush = null;
         normalTransition(nextState);
-        stack.push(current);
+        stack.push(new State<>(context, current));
         if (log.isTraceEnabled()) {
             log.trace(String.format("[%s] State transition: %s -> %s - Pushing(%s)", name, prettyPrint(current),
                                     prettyPrint(pushed), stack.size()));
         }
-        current = pushed;
+        current = pushed.transitions;
+        if (pushed.context != null) {
+            setContext(pushed.context);
+        }
         Transitions pinned = current;
         PendingTransition pushTrns = pushTransition;
         pushTransition = null;
@@ -626,7 +663,7 @@ public final class Fsm<Context, Transitions> {
         return new InvocationHandler() {
             @Override
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                return fire(method, args);
+                return locked(() -> fire(method, args));
             }
         };
     }

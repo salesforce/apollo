@@ -21,6 +21,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import org.apache.commons.math3.random.MersenneTwister;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -73,6 +74,16 @@ public class TestApollo {
                 + node.getDag().getUnfinalized().values().stream().filter(n -> n instanceof NoOpNode).count());
     }
 
+    private List<Apollo> oracles;
+
+    @AfterEach
+    public void after() {
+        if (oracles != null) {
+            oracles.forEach(o -> o.stop());
+            oracles.clear();
+        }
+    }
+
     @Test
     public void configuration() throws Exception {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -84,7 +95,7 @@ public class TestApollo {
         File baseDir = new File(System.getProperty("user.dir"), "target/cluster");
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        List<Apollo> oracles = new ArrayList<>();
+        oracles = new ArrayList<>();
 
         for (int i = 1; i < PregenPopulation.getCardinality() + 1; i++) {
             ApolloConfiguration config = new ApolloConfiguration();

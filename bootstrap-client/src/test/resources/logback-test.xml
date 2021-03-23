@@ -12,28 +12,13 @@
   %msg%n
             </Pattern>
         </encoder>
-    </appender>
-
-    <logger name="com.salesforce.conduit" level="WARN"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-    
-    <logger name="com.salesforce.conduit.consensual" level="WARN"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-    
-    <logger name="com.salesforce.conduit.consensual.managed" level="WARN"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
+    </appender> 
 
     <logger name="com.salesforce.apollo" level="WARN"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>  
-    <logger name="com.salesforce.apollo.whisp" level="WARN"
+    <logger name="com.salesforce.apollo.fireflies" level="TRACE"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>   

@@ -11,20 +11,15 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -40,6 +35,7 @@ import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
+import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.util.MutableHandlerRegistry;
@@ -77,22 +73,13 @@ public class LocalRouter extends Router {
     }
 
     private static final class ThreadIdentity implements ClientIdentity {
-
-        private final LoadingCache<X509Certificate, HashKey> cachedMembership = CacheBuilder.newBuilder()
-                                                                                            .build(new CacheLoader<X509Certificate, HashKey>() {
-
-                                                                                                @Override
-                                                                                                public HashKey load(X509Certificate key) throws Exception {
-                                                                                                    return Utils.getMemberId(key);
-                                                                                                }
-                                                                                            });
-
         @Override
         public X509Certificate getCert() {
-            X509Certificate x509Certificate = callCertificate.get();
-            if (x509Certificate == null) {
-                throw new IllegalStateException("Thread local call certificate is NULL");
+            Member member = CALLER.get();
+            if (member == null) {
+                return null;
             }
+            X509Certificate x509Certificate = member.getCertificate();
             return x509Certificate;
         }
 
@@ -103,23 +90,18 @@ public class LocalRouter extends Router {
 
         @Override
         public HashKey getFrom() {
-            try {
-                return cachedMembership.get(getCert());
-            } catch (ExecutionException e) {
-                throw new IllegalStateException("Unable to get member id from cert", e.getCause());
-            }
+            Member member = CALLER.get();
+            return member == null ? null : member.getId();
         }
 
     }
 
-    public static ThreadLocal<X509Certificate> callCertificate = new ThreadLocal<>();
-
-    public static final ThreadIdentity       LOCAL_IDENTITY = new ThreadIdentity();
-    public static final Metadata.Key<String> MEMBER_ID_KEY  = Metadata.Key.of("from.id",
-                                                                              Metadata.ASCII_STRING_MARSHALLER);
-
-    private static final Logger               log           = LoggerFactory.getLogger(LocalRouter.class);
-    private static final Map<HashKey, Member> serverMembers = new ConcurrentHashMap<>();
+    public static ThreadLocal<Member>         CALLER         = new ThreadLocal<>();
+    public static final ThreadIdentity        LOCAL_IDENTITY = new ThreadIdentity();
+    public static final Metadata.Key<String>  MEMBER_ID_KEY  = Metadata.Key.of("from.id",
+                                                                               Metadata.ASCII_STRING_MARSHALLER);
+    private static final Logger               log            = LoggerFactory.getLogger(LocalRouter.class);
+    private static final Map<HashKey, Member> serverMembers  = new ConcurrentHashMap<>();
 
     private final Member member;
     private final Server server;
@@ -132,6 +114,7 @@ public class LocalRouter extends Router {
             Executor executor) {
         super(builder.setFactory(new LocalServerConnectionFactory()).build(), registry);
         this.member = member;
+        serverMembers.put(member.getId(), member);
 
         server = InProcessServerBuilder.forName(member.getId().b64Encoded())
                                        .executor(executor)
@@ -147,9 +130,14 @@ public class LocalRouter extends Router {
                                                }
                                                Member member = serverMembers.get(new HashKey(id));
                                                if (member == null) {
-                                                   throw new IllegalStateException("Invalid member ID in call: " + id);
+                                                   call.close(Status.INTERNAL.withCause(new NullPointerException(
+                                                           "Member is null"))
+                                                                             .withDescription("Uncaught exception from grpc service"),
+                                                              null);
+                                                   return new ServerCall.Listener<ReqT>() {
+                                                   };
                                                }
-                                               callCertificate.set(member.getCertificate());
+                                               CALLER.set(member);
                                                return next.startCall(new ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(
                                                        call) {
                                                }, requestHeaders);
@@ -162,9 +150,9 @@ public class LocalRouter extends Router {
 
     @Override
     public void close() {
-        serverMembers.remove(member.getId());
         server.shutdownNow();
         super.close();
+        serverMembers.remove(member.getId());
     }
 
     @Override

@@ -19,6 +19,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -95,7 +96,7 @@ public class FunctionalTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
-        ExecutorService serverThreads = Executors.newFixedThreadPool(3);
+        ExecutorService serverThreads = new ForkJoinPool();
         views = members.parallelStream().map(node -> {
             Router comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics),
                     serverThreads);
@@ -106,7 +107,7 @@ public class FunctionalTest {
                        .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds, scheduler))
                        .collect(Collectors.toList());
 
-        for (int j = 0; j < 20; j++) {
+        for (int j = 0; j < 40; j++) {
             for (int i = 0; i < parameters.rings + 2; i++) {
                 views.forEach(view -> view.getService().gossip(() -> {
                 }));

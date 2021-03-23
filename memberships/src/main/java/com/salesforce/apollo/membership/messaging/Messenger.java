@@ -10,17 +10,16 @@ import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCo
 
 import java.security.Signature;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -145,7 +144,7 @@ public class Messenger {
                           context.getId(), member, from, inbound.getRing(), predecessor);
                 return Messages.getDefaultInstance();
             }
-            return buffer.process(new BloomFilter(inbound.getDigests()), Utils.entropy().nextInt(),
+            return buffer.process(BloomFilter.from(inbound.getDigests()), Utils.bitStreamEntropy().nextInt(),
                                   parameters.falsePositiveRate);
         }
 
@@ -177,7 +176,7 @@ public class Messenger {
 
     @SuppressWarnings("unchecked")
     public Messenger(Member member, Supplier<Signature> signature, Context<? extends Member> context,
-            Router communications, Parameters parameters) {
+            Router communications, Parameters parameters, Executor executor) {
         this.member = member;
         this.signature = signature;
         this.parameters = parameters;
@@ -187,11 +186,7 @@ public class Messenger {
                                           r -> new MessagingServerCommunications(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
                                           getCreate(parameters.metrics));
-        AtomicInteger seq = new AtomicInteger();
-        this.executor = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "Messenger[" + member.getId() + "] - " + seq.incrementAndGet());
-            return t;
-        });
+        this.executor = executor;
     }
 
     public Context<? extends Member> getContext() {
@@ -229,7 +224,7 @@ public class Messenger {
                 futureSailor = link.gossip(MessageBff.newBuilder()
                                                      .setContext(context.getId().toID())
                                                      .setRing(ring)
-                                                     .setDigests(buffer.getBff(Utils.entropy().nextInt(),
+                                                     .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextInt(),
                                                                                parameters.falsePositiveRate)
                                                                        .toBff())
                                                      .build());
@@ -251,7 +246,7 @@ public class Messenger {
                     }
                     process(gossip.getUpdatesList());
                     Builder pushBuilder = Push.newBuilder().setContext(context.getId().toID()).setRing(ring);
-                    buffer.updatesFor(new BloomFilter(gossip.getBff()), pushBuilder);
+                    buffer.updatesFor(BloomFilter.from(gossip.getBff()), pushBuilder);
                     try {
                         link.update(pushBuilder.build());
                     } catch (Throwable e) {
@@ -294,7 +289,7 @@ public class Messenger {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        Duration initialDelay = duration.plusMillis(Utils.entropy().nextInt((int) (duration.toMillis() / 2)));
+        Duration initialDelay = duration.plusMillis(Utils.bitStreamEntropy().nextInt((int) (duration.toMillis() / 2)));
         log.info("Starting Messenger[{}] for {}", context.getId(), member);
         comm.register(context.getId(), new Service());
         scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
@@ -346,8 +341,7 @@ public class Messenger {
         if (updates.size() == 0) {
             return;
         }
-        List<Msg> newMessages = new ArrayList<>();
-        buffer.merge(updates, (hash, message) -> validate(hash, message)).stream().map(m -> {
+        List<Msg> newMessages = buffer.merge(updates, (hash, message) -> validate(hash, message)).stream().map(m -> {
             HashKey id = new HashKey(m.getSource());
             if (member.getId().equals(id)) {
                 log.trace("Ignoriing message from self");
@@ -360,9 +354,8 @@ public class Messenger {
             } else {
                 return new Msg(from, m.getSequenceNumber(), m.getContent());
             }
-        }).filter(m -> m != null).filter(m -> !m.from.equals(member)).forEach(msg -> {
-            newMessages.add(msg);
-        });
+        }).filter(m -> m != null).collect(Collectors.toList());
+
         if (newMessages.isEmpty()) {
             log.trace("No updates processed out of: {}", updates.size());
             return;

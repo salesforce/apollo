@@ -12,13 +12,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
-import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,11 +39,14 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.apache.commons.math3.random.BitsStreamGenerator;
+import org.apache.commons.math3.random.MersenneTwister;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +54,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -62,6 +66,7 @@ import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -80,7 +85,7 @@ public class ConsortiumTest {
     private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
             Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
-    private final static int                               testCardinality = 5;
+    private final static int                               testCardinality = 25;
 
     @BeforeAll
     public static void beforeClass() {
@@ -100,12 +105,12 @@ public class ConsortiumTest {
 
     @AfterEach
     public void after() {
+        updaters.values().forEach(up -> up.close());
+        updaters.clear();
         consortium.values().forEach(e -> e.stop());
         consortium.clear();
         communications.values().forEach(e -> e.close());
         communications.clear();
-        updaters.values().forEach(up -> up.close());
-        updaters.clear();
     }
 
     @BeforeEach
@@ -128,7 +133,7 @@ public class ConsortiumTest {
 
         assertEquals(testCardinality, members.size());
 
-        ExecutorService serverThreads = Executors.newFixedThreadPool(members.size());
+        ExecutorService serverThreads = ForkJoinPool.commonPool();
         members.forEach(node -> {
             communications.put(node.getId(), new LocalRouter(node, builder, serverThreads));
         });
@@ -139,25 +144,45 @@ public class ConsortiumTest {
 
     @Test
     public void smoke() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
+        AtomicInteger label = new AtomicInteger();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2, r -> {
+            Thread t = new Thread(r, "Scheduler [" + label.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
+        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 5);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
+
+        AtomicInteger cLabel = new AtomicInteger();
+        Executor blockPool = Executors.newFixedThreadPool(15, r -> {
+            Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         BiFunction<CertifiedBlock, Future<?>, HashKey> consensus = (c, f) -> {
             HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
             if (decided.add(hash)) {
                 cPipeline.execute(() -> {
-                    Map<Member, Consortium> copy = new HashMap<>(consortium);
-                    copy.values().parallelStream().forEach(m -> {
-                        m.process(c);
-                        processed.get().countDown();
+                    CountDownLatch executed = new CountDownLatch(testCardinality);
+                    consortium.values().forEach(m -> {
+                        blockPool.execute(() -> {
+                            m.process(c);
+                            executed.countDown();
+                            processed.get().countDown();
+                        });
                     });
+                    try {
+                        executed.await();
+                    } catch (InterruptedException e) {
+                        fail("Interrupted consensus", e);
+                    }
                 });
             }
             return hash;
@@ -195,13 +220,17 @@ public class ConsortiumTest {
         System.out.println("genesis processing complete");
 
         processed.set(new CountDownLatch(testCardinality));
-        Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
+        BitsStreamGenerator entropy = new MersenneTwister();
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit((h, t) -> txnProcessed.set(true),
+            Consortium client = consortium.values()
+                                          .stream()
+                                          .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                          .get(0);
+            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                  Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
                                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
@@ -221,66 +250,43 @@ public class ConsortiumTest {
         System.out.println();
 
         long then = System.currentTimeMillis();
-        Semaphore outstanding = new Semaphore(1500); // outstanding, unfinalized txns
-        int bunchCount = 50_000;
+        Semaphore outstanding = new Semaphore(2000); // outstanding, unfinalized txns
+        int bunchCount = 100_000;
         System.out.println("Submitting batches: " + bunchCount);
         Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
-        Executor exec = Executors.newFixedThreadPool(4);
-        Random entropy = new Random(0x1638);
-        IntStream.range(0, bunchCount).parallel().forEach(i -> exec.execute(() -> {
+
+        AtomicInteger txnr = new AtomicInteger();
+        Executor exec = Executors.newFixedThreadPool(5, r -> {
+            Thread t = new Thread(r, "Transactioneer [" + txnr.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
+        IntStream.range(0, bunchCount).forEach(i -> exec.execute(() -> {
             try {
                 outstanding.acquire();
             } catch (InterruptedException e1) {
                 throw new IllegalStateException(e1);
             }
             try {
-                String[] statements1 = { "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005" };
-                HashKey key = client.submit((h, t) -> {
+                List<List<Object>> batch = new ArrayList<>();
+                for (int rep = 0; rep < 10; rep++) {
+                    for (int id = 1; id < 6; id++) {
+                        batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
+                    }
+                }
+                BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
+                AtomicReference<HashKey> key = new AtomicReference<>();
+                Consortium client = consortium.values()
+                                              .stream()
+                                              .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                              .get(0);
+                key.set(client.submit(null, (h, t) -> {
                     outstanding.release();
-                    submitted.remove(h);
+                    submitted.remove(key.get());
                     submittedBunch.countDown();
-                }, Helper.batch(Helper.batch(statements1)));
-                submitted.add(key);
+                }, Helper.batch(update)));
+                submitted.add(key.get());
             } catch (TimeoutException e) {
                 fail();
                 return;
@@ -288,7 +294,7 @@ public class ConsortiumTest {
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");
-        boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
+        boolean completed = submittedBunch.await(240, TimeUnit.SECONDS);
         long now = System.currentTimeMillis() - then;
         assertTrue(completed, "Did not process transaction batches: " + submittedBunch.getCount());
         System.out.println("Completed additional " + bunchCount + " transactions");
@@ -298,7 +304,7 @@ public class ConsortiumTest {
 
         Connection connection = updaters.get(members.get(0)).newConnection();
         Statement statement = connection.createStatement();
-        ResultSet results = statement.executeQuery("select ID, __BLOCK_HEIGHT__ from books");
+        ResultSet results = statement.executeQuery("select ID, from books");
         ResultSetMetaData rsmd = results.getMetaData();
         int columnsNumber = rsmd.getColumnCount();
         while (results.next()) {
@@ -318,7 +324,7 @@ public class ConsortiumTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         Random entropy = new Random(0x1638);
         members.stream().map(m -> {
-            ForkJoinPool fj = new ForkJoinPool(2);
+            ForkJoinPool fj = ForkJoinPool.commonPool();
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             frist.set(false);
             System.out.println("DB URL: " + url);
@@ -330,11 +336,11 @@ public class ConsortiumTest {
                               .setConsensus(consensus)
                               .setMember(m)
                               .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
-                                                                          new SecureRandom()))
+                                                                          Utils.secureEntropy()))
                               .setContext(view)
                               .setMsgParameters(msgParameters)
                               .setMaxBatchByteSize(1024 * 1024 * 32)
-                              .setMaxBatchSize(2000)
+                              .setMaxBatchSize(4000)
                               .setCommunications(communications.get(m.getId()))
                               .setMaxBatchDelay(Duration.ofMillis(500))
                               .setGossipDuration(gossipDuration)

@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
@@ -131,8 +132,10 @@ public class TestConsortium {
 
         assertEquals(testCardinality, members.size());
 
-        members.forEach(node -> communications.put(node.getId(),
-                                                   new LocalRouter(node, builder, Executors.newFixedThreadPool(3))));
+        ForkJoinPool executor = ForkJoinPool.commonPool();
+        members.forEach(node -> {
+            communications.put(node.getId(), new LocalRouter(node, builder, executor));
+        });
 
     }
 
@@ -158,7 +161,7 @@ public class TestConsortium {
             }
             return hash;
         };
-        TransactionExecutor executor = (h, bh, et, c) -> {
+        TransactionExecutor executor = (h, et, c) -> {
             if (c != null) {
                 c.accept(new HashKey(et.getHash()), null);
             }
@@ -204,7 +207,7 @@ public class TestConsortium {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit((h, t) -> txnProcessed.set(true),
+            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                  ByteTransaction.newBuilder()
                                                 .setContent(ByteString.copyFromUtf8("Hello world"))
                                                 .build());
@@ -221,20 +224,21 @@ public class TestConsortium {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        Semaphore outstanding = new Semaphore(100); // outstanding, unfinalized txns
-        int bunchCount = 1_000;
+        Semaphore outstanding = new Semaphore(1000); // outstanding, unfinalized txns
+        int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
             try {
-                HashKey pending = client.submit((h, t) -> {
+                AtomicReference<HashKey> pending = new AtomicReference<>();
+                pending.set(client.submit(null, (h, t) -> {
                     outstanding.release();
-                    submitted.remove(h);
+                    submitted.remove(pending.get());
                     submittedBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build()));
-                submitted.add(pending);
+                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+                submitted.add(pending.get());
             } catch (TimeoutException e) {
                 fail();
                 return;
@@ -286,7 +290,7 @@ public class TestConsortium {
                                                   .setMaxBatchByteSize(1024 * 1024)
                                                   .setMaxBatchSize(1000)
                                                   .setCommunications(communications.get(m.getId()))
-                                                  .setMaxBatchDelay(Duration.ofMillis(100))
+                                                  .setMaxBatchDelay(Duration.ofMillis(1000))
                                                   .setGossipDuration(gossipDuration)
                                                   .setViewTimeout(Duration.ofMillis(1500))
                                                   .setJoinTimeout(Duration.ofSeconds(5))
@@ -295,7 +299,7 @@ public class TestConsortium {
                                                   .setExecutor(executor)
                                                   .setGenesisData(GENESIS_DATA)
                                                   .setGenesisViewId(GENESIS_VIEW_ID)
-                                                  .setDeltaCheckpointBlocks(10)
+                                                  .setDeltaCheckpointBlocks(5)
                                                   .setCheckpointer(l -> {
                                                       File temp;
                                                       try {

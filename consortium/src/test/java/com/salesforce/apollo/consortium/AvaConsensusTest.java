@@ -133,8 +133,8 @@ public class AvaConsensusTest {
 
         assertEquals(testCardinality, members.size());
 
-        members.forEach(node -> communications.put(node.getId(),
-                                                   new LocalRouter(node, builder, Executors.newFixedThreadPool(3))));
+        ForkJoinPool executor = ForkJoinPool.commonPool();
+        members.forEach(node -> communications.put(node.getId(), new LocalRouter(node, builder, executor)));
 
         System.out.println("Test cardinality: " + testCardinality);
 
@@ -179,7 +179,7 @@ public class AvaConsensusTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit((h, t) -> txnProcessed.set(true),
+            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                  ByteTransaction.newBuilder()
                                                 .setContent(ByteString.copyFromUtf8("Hello world"))
                                                 .build());
@@ -196,7 +196,7 @@ public class AvaConsensusTest {
         System.out.println("transaction completed: " + hash);
         System.out.println();
 
-        Semaphore outstanding = new Semaphore(100, true); // outstanding, unfinalized txns
+        Semaphore outstanding = new Semaphore(1000, true); // outstanding, unfinalized txns
         int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
         ArrayList<HashKey> submitted = new ArrayList<>();
@@ -204,12 +204,13 @@ public class AvaConsensusTest {
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
             try {
-                HashKey pending = client.submit((h, t) -> {
+                AtomicReference<HashKey> pending = new AtomicReference<>();
+                pending.set(client.submit(null, (h, t) -> {
                     outstanding.release();
-                    submitted.remove(h);
+                    submitted.remove(pending.get());
                     submittedBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build()));
-                submitted.add(pending);
+                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+                submitted.add(pending.get());
             } catch (TimeoutException e) {
                 fail();
                 return;
@@ -275,7 +276,7 @@ public class AvaConsensusTest {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
             AvaAdapter adapter = new AvaAdapter(processed);
-            TransactionExecutor executor = (h, hgt, t, c) -> {
+            TransactionExecutor executor = (h, t, c) -> {
                 if (c != null) {
                     ForkJoinPool.commonPool().execute(() -> c.accept(new HashKey(t.getHash()), null));
                 }

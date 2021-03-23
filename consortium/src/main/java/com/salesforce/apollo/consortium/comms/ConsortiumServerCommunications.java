@@ -56,7 +56,12 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     public void checkpointSync(CheckpointSync request, StreamObserver<CertifiedBlock> responseObserver) {
         router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                         s -> {
-                            responseObserver.onNext(s.checkpointSync(request, identity.getFrom()));
+                            HashKey from = identity.getFrom();
+                            if (from == null) {
+                                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                                return;
+                            }
+                            responseObserver.onNext(s.checkpointSync(request, from));
                             responseObserver.onCompleted();
                         });
     }
@@ -65,7 +70,12 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     public void fetch(CheckpointReplication request, StreamObserver<CheckpointSegments> responseObserver) {
         router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                         s -> {
-                            responseObserver.onNext(s.fetch(request, identity.getFrom()));
+                            HashKey from = identity.getFrom();
+                            if (from == null) {
+                                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                                return;
+                            }
+                            responseObserver.onNext(s.fetch(request, from));
                             responseObserver.onCompleted();
                         });
     }
@@ -74,7 +84,12 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     public void join(Join request, StreamObserver<JoinResult> responseObserver) {
         router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                         s -> {
-                            responseObserver.onNext(s.join(request, identity.getFrom()));
+                            HashKey from = identity.getFrom();
+                            if (from == null) {
+                                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                                return;
+                            }
+                            responseObserver.onNext(s.join(request, from));
                             responseObserver.onCompleted();
                         });
     }
@@ -83,9 +98,14 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     public void stopData(StopData request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                         s -> {
+                            HashKey from = identity.getFrom();
+                            if (from == null) {
+                                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                                return;
+                            }
                             responseObserver.onNext(Empty.getDefaultInstance());
                             responseObserver.onCompleted();
-                            s.stopData(request, identity.getFrom());
+                            s.stopData(request, from);
                         });
     }
 
@@ -93,7 +113,12 @@ public class ConsortiumServerCommunications extends OrderingServiceImplBase {
     public void submit(SubmitTransaction request, StreamObserver<TransactionResult> responseObserver) {
         router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
                         s -> {
-                            responseObserver.onNext(s.clientSubmit(request, identity.getFrom()));
+                            HashKey from = identity.getFrom();
+                            if (from == null) {
+                                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                                return;
+                            }
+                            responseObserver.onNext(s.clientSubmit(request, from));
                             responseObserver.onCompleted();
                         });
     }

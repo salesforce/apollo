@@ -72,11 +72,11 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
 
     default Transitions deliverStop(Stop stop, Member from) {
         CollaboratorContext context = context();
-        if (stop.getNextRegent() > context.currentRegent() + 1) {
+        if (stop.getNextRegent() > context.getCurrentRegent() + 1) {
             log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
-                      context.currentRegent() + 1, from, context.getMember(), this);
+                      context.getCurrentRegent() + 1, from, context.getMember(), this);
             context.delay(stop, from);
-        } else if (stop.getNextRegent() == context.currentRegent() + 1) {
+        } else if (stop.getNextRegent() == context.getCurrentRegent() + 1) {
             context.deliverStop(stop, from);
         } else {
             log.debug("Discarding stale Stop: {} from: {} on: {} at: {}", stop.getNextRegent(), from,
@@ -156,6 +156,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions missingGenesis() {
+        throw fsm().invalidTransitionOn();
+    }
+
+    default void missingInitialView() {
         throw fsm().invalidTransitionOn();
     }
 

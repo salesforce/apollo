@@ -17,6 +17,7 @@ import java.io.File;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -31,6 +33,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -44,6 +47,7 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
 import com.salesforce.apollo.avalanche.DagDao;
@@ -84,7 +88,7 @@ public class AvaTest {
 
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
-    private final static int testCardinality = 5;
+    private final static int testCardinality = 25;
 
     @BeforeAll
     public static void beforeClass() {
@@ -138,8 +142,8 @@ public class AvaTest {
 
         assertEquals(testCardinality, members.size());
 
-        members.forEach(node -> communications.put(node.getId(),
-                                                   new LocalRouter(node, builder, Executors.newFixedThreadPool(3))));
+        ForkJoinPool executor = ForkJoinPool.commonPool();
+        members.forEach(node -> communications.put(node.getId(), new LocalRouter(node, builder, executor)));
 
     }
 
@@ -147,14 +151,13 @@ public class AvaTest {
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
+        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 5);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
                                                                  .build();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Map<Member, AvaAdapter> adapters = gatherConsortium(view, processed, gossipDuration, scheduler, msgParameters);
-        gatherAvalanche(view, adapters);
         gatherAvalanche(view, adapters);
 
         Set<Consortium> blueRibbon = new HashSet<>();
@@ -197,7 +200,7 @@ public class AvaTest {
         System.out.println("Submitting transaction");
         HashKey hash;
         try {
-            hash = client.submit((h, t) -> txnProcessed.set(true),
+            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                  Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
                                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
@@ -221,64 +224,39 @@ public class AvaTest {
         System.out.println("Submitting bunch: " + bunchCount);
         Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
-        IntStream.range(0, bunchCount).forEach(i -> {
+
+        AtomicInteger txnr = new AtomicInteger();
+        Executor exec = Executors.newFixedThreadPool(5, r -> {
+            Thread t = new Thread(r, "Transactioneer [" + txnr.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
+        IntStream.range(0, bunchCount).parallel().forEach(i -> exec.execute(() -> {
             try {
                 outstanding.acquire();
             } catch (InterruptedException e1) {
                 throw new IllegalStateException(e1);
             }
             try {
-                String[] statements1 = { "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1001",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1002",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1003",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1004",
-                                         "update books set qty = " + entropy.nextInt() + " where id = 1005" };
-                HashKey key = client.submit((h, t) -> {
+                List<List<Object>> batch = new ArrayList<>();
+                for (int rep = 0; rep < 10; rep++) {
+                    for (int id = 1; id < 6; id++) {
+                        batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
+                    }
+                }
+                BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
+                AtomicReference<HashKey> key = new AtomicReference<>();
+                key.set(client.submit(null, (h, t) -> {
                     outstanding.release();
-                    submitted.remove(h);
+                    submitted.remove(key.get());
                     submittedBunch.countDown();
-                }, Helper.batch(Helper.batch(statements1)));
-                submitted.add(key);
+                }, Helper.batch(update)));
+                submitted.add(key.get());
             } catch (TimeoutException e) {
                 fail();
                 return;
             }
-        });
+        }));
 
         System.out.println("Awaiting " + bunchCount + " batches");
         boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
@@ -341,7 +319,7 @@ public class AvaTest {
                                                      Messenger.Parameters msgParameters) {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
-            ForkJoinPool fj = new ForkJoinPool();
+            ForkJoinPool fj = ForkJoinPool.commonPool();
             AvaAdapter adapter = new AvaAdapter(processed);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);

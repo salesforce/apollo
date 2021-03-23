@@ -16,6 +16,7 @@ import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.stub.StreamObserver;
 
@@ -43,7 +44,12 @@ public class FfServerCommunications extends FirefliesImplBase {
                 timer = metrics.inboundGossipTimer().time();
             }
             try {
-                Gossip gossip = s.rumors(request.getRing(), request.getGossip(), identity.getFrom(), identity.getCert(),
+                HashKey from = identity.getFrom();
+                if (from == null) {
+                    responseObserver.onError(new IllegalStateException("Member has been removed"));
+                    return;
+                }
+                Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, identity.getCert(),
                                          request.getNote());
                 responseObserver.onNext(gossip);
                 responseObserver.onCompleted();
@@ -81,7 +87,12 @@ public class FfServerCommunications extends FirefliesImplBase {
                 timer = metrics.inboundUpdateTimer().time();
             }
             try {
-                s.update(request.getRing(), request.getUpdate(), identity.getFrom());
+                HashKey from = identity.getFrom();
+                if (from == null) {
+                    responseObserver.onError(new IllegalStateException("Member has been removed"));
+                    return;
+                }
+                s.update(request.getRing(), request.getUpdate(), from);
                 responseObserver.onNext(Null.getDefaultInstance());
                 responseObserver.onCompleted();
                 if (metrics != null) {

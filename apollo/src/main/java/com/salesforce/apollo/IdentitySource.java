@@ -23,6 +23,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.concurrent.ForkJoinPool;
 
 import com.salesforce.apollo.bootstrap.client.Bootstrap;
 import com.salesforce.apollo.comm.Router;
@@ -189,8 +190,9 @@ public interface IdentitySource {
         }
 
         @Override
-        public View createView(Node node, HashKey context, Router communications, FireflyMetrics metrics) {
-            return new View(context, node, communications, metrics);
+        public View createView(Node node, HashKey context, Router communications, FireflyMetrics metrics,
+                               ForkJoinPool executor) {
+            return new View(context, node, communications, metrics, executor);
         }
     }
 
@@ -198,9 +200,9 @@ public interface IdentitySource {
     public static final String DEFAULT_IDENTITY_ALIAS = "identity";
     public static final String SEED_PREFIX            = "seed.";
 
-    default <T extends Node> View createView(Node node, HashKey context, Router communications,
-                                             FireflyMetrics metrics) {
-        return new View(context, node, communications, metrics);
+    default <T extends Node> View createView(Node node, HashKey context, Router communications, FireflyMetrics metrics,
+                                             ForkJoinPool executor) {
+        return new View(context, node, communications, metrics, executor);
     }
 
     default Node getNode() {

@@ -16,12 +16,12 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  *
  */
-@FunctionalInterface
 public interface TransactionExecutor {
-    void execute(HashKey blockHash, long blockHeight, ExecutedTransaction txn,
-                 BiConsumer<Object, Throwable> completion);
+    default void beginBlock(long height, byte[] nonce) {
+    }
+
+    void execute(HashKey blockHash, ExecutedTransaction txn, BiConsumer<Object, Throwable> completion);
 
     default void processGenesis(Any genesisData) {
-        // default for functional interface
     }
 }

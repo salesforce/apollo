@@ -7,16 +7,13 @@
 package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.consortium.CollaboratorContext.height;
-import static com.salesforce.apollo.consortium.support.SigningUtils.generateKeyPair;
 import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
 import static com.salesforce.apollo.consortium.support.SigningUtils.validateGenesis;
 import static com.salesforce.apollo.consortium.support.SigningUtils.verify;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.KeyPair;
 import java.security.PublicKey;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,16 +22,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import java.util.zip.DeflaterInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -44,8 +39,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
-import com.google.common.hash.BloomFilter;
-import com.google.common.hash.Funnels;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
@@ -74,9 +67,7 @@ import com.salesfoce.apollo.consortium.proto.TransactionOrBuilder;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
-import com.salesforce.apollo.consortium.comms.ConsortiumServerCommunications;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.CheckpointState;
@@ -87,11 +78,9 @@ import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.ReservoirSampler;
-import com.salesforce.apollo.membership.messaging.MemberOrder;
-import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.protocols.BbBackedInputStream;
+import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
@@ -129,14 +118,14 @@ public class Consortium {
             EnqueuedTransaction enqueuedTransaction = new EnqueuedTransaction(hashOf(request.getTransaction()),
                     request.getTransaction());
             if (enqueuedTransaction.transaction.getJoin()) {
-                if (viewContext().getMember(from) == null) {
+                if (view.getContext().getMember(from) == null) {
                     log.warn("Received join from non consortium member: {} on: {}", from, getMember());
                     return TransactionResult.getDefaultInstance();
                 }
-                log.debug("Join transaction: {} on: {} from consortium member : {}", enqueuedTransaction.hash,
+                log.trace("Join transaction: {} on: {} from consortium member : {}", enqueuedTransaction.hash,
                           getMember(), from);
             } else {
-                log.debug("Client transaction: {} on: {} from: {}", enqueuedTransaction.hash, getMember(), from);
+                log.trace("Client transaction: {} on: {} from: {}", enqueuedTransaction.hash, getMember(), from);
             }
             transitions.receive(enqueuedTransaction.transaction, member);
             return TransactionResult.getDefaultInstance();
@@ -157,14 +146,14 @@ public class Consortium {
         }
 
         public JoinResult join(Join request, HashKey fromID) {
-            Member from = viewContext().getActiveMember(fromID);
+            Member from = view.getContext().getActiveMember(fromID);
             if (from == null) {
                 log.debug("Member not part of current view: {} on: {}", fromID, getMember());
                 return JoinResult.getDefaultInstance();
             }
             try {
                 return fsm.synchonizeOnState(() -> {
-                    if (getNextView() == null) {
+                    if (view.getNextView() == null) {
                         log.debug("Cannot vote for: {} next view undefined on: {}", fromID, getMember());
                         return JoinResult.getDefaultInstance();
                     }
@@ -185,7 +174,7 @@ public class Consortium {
                     }
                     return JoinResult.newBuilder()
                                      .setSignature(ByteString.copyFrom(signed))
-                                     .setNextView(getNextView())
+                                     .setNextView(view.getNextView())
                                      .build();
                 });
             } catch (Exception e) {
@@ -195,7 +184,7 @@ public class Consortium {
         }
 
         public void stopData(StopData stopData, HashKey from) {
-            Member member = viewContext().getMember(from);
+            Member member = view.getContext().getMember(from);
             if (member == null) {
                 log.warn("Received StopData from non consortium member: {} on: {}", from, getMember());
                 return;
@@ -206,8 +195,8 @@ public class Consortium {
     }
 
     public enum Timers {
-        ASSEMBLE_CHECKPOINT, AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_VIEW_MEMBERS, CHECKPOINT_TIMEOUT,
-        CHECKPOINTING, FLUSH_BATCH, PROCLAIM, TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
+        ASSEMBLE_CHECKPOINT, AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_INITIAL_VIEW, AWAIT_VIEW_MEMBERS,
+        CHECKPOINT_TIMEOUT, CHECKPOINTING, FLUSH_BATCH, PROCLAIM, TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
     }
 
     public static class TransactionSubmitFailure extends Exception {
@@ -240,6 +229,16 @@ public class Consortium {
         private DelayedMessage(Member from, Message message) {
             this.from = from;
             this.msg = Any.pack(message);
+        }
+    }
+
+    private static class PendingAction {
+        private final Runnable action;
+        private final long     targetBlock;
+
+        public PendingAction(long targetBlock, Runnable action) {
+            this.targetBlock = targetBlock;
+            this.action = action;
         }
     }
 
@@ -286,50 +285,39 @@ public class Consortium {
         return builder;
     }
 
-    final Store store;
-
-    private final Map<Long, CheckpointState>                                                       cachedCheckpoints        = new ConcurrentHashMap<>();
-    private final AtomicReference<CommonCommunications<ConsortiumClientCommunications, Service>>   comm                     = new AtomicReference<>();
-    private final Function<HashKey, CommonCommunications<ConsortiumClientCommunications, Service>> createClientComms;
-    private final AtomicReference<HashedBlock>                                                     current                  = new AtomicReference<>();
-    private final PriorityBlockingQueue<HashedBlock>                                               deferedBlocks            = new PriorityBlockingQueue<>(
-            1024, (a, b) -> Long.compare(height(a.block), height(b.block)));
-    private final List<DelayedMessage>                                                             delayed                  = new CopyOnWriteArrayList<>();
-    private final AtomicInteger                                                                    deltaCheckpointBlocks    = new AtomicInteger(
-            Integer.MAX_VALUE);
-    private final Fsm<CollaboratorContext, Transitions>                                            fsm;
-    private final AtomicReference<HashedBlock>                                                     genesis                  = new AtomicReference<>();
-    private final AtomicReference<HashedBlock>                                                     lastCheckpoint           = new AtomicReference<>();
-    private final AtomicReference<HashedBlock>                                                     lastViewChange           = new AtomicReference<>();
-    private final AtomicReference<Messenger>                                                       messenger                = new AtomicReference<>();
-    private final AtomicReference<ViewMember>                                                      nextView                 = new AtomicReference<>();
-    private final AtomicReference<KeyPair>                                                         nextViewConsensusKeyPair = new AtomicReference<>();
-    private final AtomicReference<MemberOrder>                                                     order                    = new AtomicReference<>();
-    private final Parameters                                                                       params;
-    private final TickScheduler                                                                    scheduler                = new TickScheduler();
-    private final Semaphore                                                                        sequencer                = new Semaphore(
-            1);
-    private final AtomicBoolean                                                                    started                  = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>                                               submitted                = new ConcurrentHashMap<>();
-    private final Transitions                                                                      transitions;
-    private final AtomicReference<ViewContext>                                                     viewContext              = new AtomicReference<>();
+    final Store                                         store;
+    private final Map<Long, CheckpointState>            cachedCheckpoints     = new ConcurrentHashMap<>();
+    private final AtomicReference<HashedBlock>          current               = new AtomicReference<>();
+    private final PriorityBlockingQueue<HashedBlock>    deferedBlocks         = new PriorityBlockingQueue<>(1024,
+            (a, b) -> Long.compare(height(a.block), height(b.block)));
+    private final List<DelayedMessage>                  delayed               = new CopyOnWriteArrayList<>();
+    private final AtomicInteger                         deltaCheckpointBlocks = new AtomicInteger(Integer.MAX_VALUE);
+    private final Fsm<CollaboratorContext, Transitions> fsm;
+    private final AtomicReference<HashedBlock>          genesis               = new AtomicReference<>();
+    private final AtomicReference<HashedBlock>          lastCheckpoint        = new AtomicReference<>();
+    private final AtomicReference<HashedBlock>          lastViewChange        = new AtomicReference<>();
+    private final Parameters                            params;
+    private final AtomicReference<PendingAction>        pending               = new AtomicReference<>();
+    private final TickScheduler                         scheduler             = new TickScheduler();
+    private final Lock                                  sequencer             = new ReentrantLock();
+    private final AtomicBoolean                         started               = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>    submitted             = new ConcurrentHashMap<>();
+    private final Transitions                           transitions;
+    private final View                                  view;
+    final Service                                       service               = new Service();
 
     public Consortium(Parameters parameters) {
-        this(parameters, defaultBuilder(parameters));
+        this(parameters, defaultBuilder(parameters).open());
     }
 
-    public Consortium(Parameters parameters, MVStore.Builder builder) {
+    public Consortium(Parameters parameters, MVStore store) {
         this.params = parameters;
-        store = new Store(builder.open());
-        this.createClientComms = k -> parameters.communications.create(parameters.member, k, new Service(),
-                                                                       r -> new ConsortiumServerCommunications(
-                                                                               parameters.communications.getClientIdentityProvider(),
-                                                                               null, r),
-                                                                       ConsortiumClientCommunications.getCreate(null));
+        this.store = new Store(store);
+        view = new View(new Service(), parameters, (id, messages) -> process(id, messages));
         fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
         fsm.setName(getMember().getId().b64Encoded());
         transitions = fsm.getTransitions();
-        nextViewConsensusKey();
+        view.nextViewConsensusKey();
     }
 
     public Fsm<CollaboratorContext, Transitions> fsm() {
@@ -377,12 +365,10 @@ public class Consortium {
             return;
         }
         try {
-            sequencer.acquire();
+            sequencer.lock();
             synchronizedProcess(certifiedBlock);
-        } catch (InterruptedException e) {
-            throw new IllegalStateException(e);
         } finally {
-            sequencer.release();
+            sequencer.unlock();
         }
     }
 
@@ -392,7 +378,7 @@ public class Consortium {
         }
         log.info("Starting consortium on {}", getMember());
         transitions.start();
-        resume();
+        view.resume(service);
     }
 
     public void stop() {
@@ -406,8 +392,9 @@ public class Consortium {
         transitions.shutdown();
     }
 
-    public HashKey submit(BiConsumer<Object, Throwable> onCompletion, Message transaction) throws TimeoutException {
-        return submit(false, onCompletion, transaction);
+    public HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, BiConsumer<Object, Throwable> onCompletion,
+                          Message transaction) throws TimeoutException {
+        return submit(onSubmit, false, onCompletion, transaction);
     }
 
     void checkpoint(long height, CheckpointState checkpoint) {
@@ -427,27 +414,8 @@ public class Consortium {
         return cachedCheckpoints.get(checkpoint);
     }
 
-    CommonCommunications<ConsortiumClientCommunications, Service> getComm() {
-        return comm.get();
-    }
-
     HashedBlock getCurrent() {
         return current.get();
-    }
-
-    Messenger getMessenger() {
-        final Messenger currentMsgr = messenger.get();
-        return currentMsgr;
-    }
-
-    ViewMember getNextView() {
-        final ViewMember c = nextView.get();
-        return c;
-    }
-
-    KeyPair getNextViewConsensusKeyPair() {
-        final KeyPair c = nextViewConsensusKeyPair.get();
-        return c;
     }
 
     Parameters getParams() {
@@ -466,21 +434,13 @@ public class Consortium {
         return transitions;
     }
 
-    ViewContext getViewContext() {
-        return viewContext.get();
-    }
-
     void joinMessageGroup(ViewContext newView) {
-        log.debug("Joining message group: {} on: {}", newView.getId(), getMember());
-        Messenger nextMsgr = newView.createMessenger(getParams());
-        setMessenger(nextMsgr);
-        nextMsgr.register(round -> getScheduler().tick());
-        setOrder(new MemberOrder((id, messages) -> process(id, messages), nextMsgr));
+        view.joinMessageGroup(newView, scheduler, process());
     }
 
     ConsortiumClientCommunications linkFor(Member m) {
         try {
-            return getComm().apply(m, getParams().member);
+            return view.getComm().apply(m, getParams().member);
         } catch (Throwable e) {
             log.debug("error opening connection to {}: {}", m.getId(),
                       (e.getCause() != null ? e.getCause() : e).toString());
@@ -488,57 +448,31 @@ public class Consortium {
         return null;
     }
 
-    KeyPair nextViewConsensusKey() {
-        KeyPair current = getNextViewConsensusKeyPair();
-
-        KeyPair keyPair = generateKeyPair(2048, "RSA");
-        setNextViewConsensusKeyPair(keyPair);
-        byte[] encoded = keyPair.getPublic().getEncoded();
-        byte[] signed = sign(getParams().signature.get(), encoded);
-        if (signed == null) {
-            log.error("Unable to generate and sign consensus key on: {}", getMember());
-            transitions.fail();
-        }
-        setNextView(ViewMember.newBuilder()
-                              .setId(getMember().getId().toByteString())
-                              .setConsensusKey(ByteString.copyFrom(encoded))
-                              .setSignature(ByteString.copyFrom(signed))
-                              .build());
-        return current;
-    }
-
-    void pause() {
-        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
-        if (currentComm != null) {
-            ViewContext current = viewContext.get();
-            assert current != null : "No current view, but comm exists!";
-            currentComm.deregister(current.getId());
-        }
-        MemberOrder currentTotalOrder = getOrder();
-        if (currentTotalOrder != null) {
-            currentTotalOrder.stop();
-        }
-        Messenger currentMessenger = getMessenger();
-        if (currentMessenger != null) {
-            currentMessenger.stop();
-        }
-    }
-
-    void publish(Message message) {
-        final Messenger currentMsgr = getMessenger();
-        if (currentMsgr == null) {
-            log.error("skipping message publish as no messenger");
+    void performAfter(Runnable action, long blockHeight) {
+        HashedBlock cb = getCurrent();
+        if (cb == null) {
             return;
         }
-        currentMsgr.publish(message);
-    }
-
-    void resume() {
-        resume(new Service(), getParams().gossipDuration, getParams().scheduler);
-    }
-
-    void setComm(CommonCommunications<ConsortiumClientCommunications, Service> comm) {
-        this.comm.set(comm);
+        long current = cb.height();
+        if (blockHeight < current) {
+            log.info("Pending action scheduled in the past: {} current: {} on: ", blockHeight, current, getMember());
+            return;
+        }
+        PendingAction pendingAction = new PendingAction(blockHeight, action);
+        if (!pending.compareAndSet(null, pendingAction)) {
+            throw new IllegalStateException("Previous pending action uncleared on: " + getMember());
+        }
+        log.info("Pending action scheduled at: {} on: {}", blockHeight, getMember());
+        if (current == blockHeight) {
+            params.dispatcher.execute(() -> {
+                sequencer.lock();
+                try {
+                    runPending(pendingAction);
+                } finally {
+                    sequencer.unlock();
+                }
+            });
+        }
     }
 
     void setCurrent(HashedBlock current) {
@@ -558,35 +492,21 @@ public class Consortium {
     void setLastViewChange(HashedBlock block, Reconfigure view) {
         lastViewChange.set(block);
         deltaCheckpointBlocks.set(view.getCheckpointBlocks());
+        log.info("Checkpoint in: {} blocks on: {}", view.getCheckpointBlocks(), getMember());
     }
 
-    void setMessenger(Messenger messenger) {
-        this.messenger.set(messenger);
+    View getView() {
+        return view;
     }
 
-    void setNextView(ViewMember nextView) {
-        this.nextView.set(null);
-    }
-
-    void setNextViewConsensusKeyPair(KeyPair nextViewConsensusKeyPair) {
-        this.nextViewConsensusKeyPair.set(nextViewConsensusKeyPair);
-    }
-
-    void setOrder(MemberOrder order) {
-        this.order.set(order);
-    }
-
-    void setViewContext(ViewContext viewContext) {
-        this.viewContext.set(viewContext);
-    }
-
-    HashKey submit(boolean join, BiConsumer<Object, Throwable> onCompletion, Message txn) throws TimeoutException {
-        if (viewContext() == null) {
+    HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,
+                   Message txn) throws TimeoutException {
+        if (view.getContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
         }
         EnqueuedTransaction transaction = build(join, txn);
-        submit(transaction, onCompletion);
+        submit(transaction, onSubmit, onCompletion);
         return transaction.hash;
     }
 
@@ -596,37 +516,9 @@ public class Consortium {
         return cp == null ? delta : cp.height() + delta;
     }
 
-    /**
-     * Ye Jesus Nut
-     *
-     * @param list
-     */
-    void viewChange(ViewContext newView) {
-        pause();
-
-        log.info("Installing new view: {} rings: {} ttl: {} on: {} regent: {} member: {} view member: {}",
-                 newView.getId(), newView.getRingCount(), newView.timeToLive(), getMember(),
-                 getState().currentRegent() >= 0 ? newView.getRegent(getState().currentRegent()) : "None",
-                 newView.isMember(), newView.isViewMember());
-
-        setComm(createClientComms.apply(newView.getId()));
-        setMessenger(null);
-        setOrder(null);
-        setViewContext(newView);
-        if (newView.isViewMember()) {
-            joinMessageGroup(newView);
-        }
-
-        resume();
-    }
-
-    ViewContext viewContext() {
-        return getViewContext();
-    }
-
     private EnqueuedTransaction build(boolean join, Message transaction) {
         byte[] nonce = new byte[32];
-        Utils.entropy().nextBytes(nonce);
+        Utils.secureEntropy().nextBytes(nonce);
 
         Transaction.Builder builder = Transaction.newBuilder()
                                                  .setJoin(join)
@@ -654,13 +546,9 @@ public class Consortium {
     }
 
     private void clear() {
-        pause();
-        comm.set(null);
-        order.set(null);
+        view.clear();
+        pending.set(null);
         current.set(null);
-        messenger.set(null);
-        nextView.set(null);
-        nextViewConsensusKeyPair.set(null);
     }
 
     private CheckpointSegments fetch(CheckpointReplication request) {
@@ -669,35 +557,14 @@ public class Consortium {
             log.debug("No cached checkpoint for {} on: {}", request.getCheckpoint(), getMember());
             return CheckpointSegments.getDefaultInstance();
         }
-        BloomFilter<Integer> segmentsBff;
-        try {
-            segmentsBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(request.getCheckpointSegments()),
-                                               Funnels.integerFunnel());
-        } catch (IOException e) {
-            throw new IllegalStateException("unable to read Bloomfilter", e);
-        }
-        BloomFilter<Long> blocksBff;
-        try {
-            blocksBff = BloomFilter.readFrom(BbBackedInputStream.aggregate(request.getCheckpointSegments()),
-                                             Funnels.longFunnel());
-        } catch (IOException e) {
-            throw new IllegalStateException("unable to read Bloomfilter", e);
-        }
         CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
-        StreamSupport.stream(((Iterable<Long>) () -> store.blocksFrom(state.checkpoint.getCheckpoint())).spliterator(),
-                             false)
-                     .collect(new ReservoirSampler<Long>(-1, params.maxCheckpointBlocks, Utils.bitStreamGenerator()))
-                     .stream()
-                     .filter(s -> !blocksBff.mightContain(s))
-                     .map(height -> store.getBlockBits(height))
-                     .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
-        return replication.addAllSegments(state.fetchSegments(segmentsBff, params.maxCheckpointSegments,
-                                                              Utils.bitStreamEntropy()))
-                          .build();
-    }
 
-    private MemberOrder getOrder() {
-        return order.get();
+        store.fetchBlocks(BloomFilter.from(request.getCheckpointSegments()), replication, params.maxCheckpointBlocks,
+                          state.checkpoint.getCheckpoint());
+
+        return replication.addAllSegments(state.fetchSegments(BloomFilter.from(request.getCheckpointSegments()),
+                                                              params.maxCheckpointSegments, Utils.bitStreamEntropy()))
+                          .build();
     }
 
     private boolean next(HashedBlock next) {
@@ -719,6 +586,10 @@ public class Consortium {
             log.error("Unrecognized block type: {} : {}", next.hashCode(), next.block);
         }
         return getCurrent() == next;
+    }
+
+    private BiConsumer<HashKey, List<Msg>> process() {
+        return (id, messages) -> process(id, messages);
     }
 
     private void process(HashKey contextId, List<Msg> messages) {
@@ -826,19 +697,22 @@ public class Consortium {
         }
     }
 
-    private void processSubmit(EnqueuedTransaction transaction, BiConsumer<Object, Throwable> onCompletion,
+    private void processSubmit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,
                                AtomicInteger pending, AtomicBoolean completed, int succeeded) {
         int remaining = pending.decrementAndGet();
-        int majority = viewContext().majority();
+        if (completed.get()) {
+            return;
+        }
+        int majority = view.getContext().majority();
         if (succeeded >= majority) {
-            if (onCompletion != null && completed.compareAndSet(false, true)) {
-                onCompletion.accept(true, null);
+            if (onSubmit != null && completed.compareAndSet(false, true)) {
+                onSubmit.accept(true, null);
             }
         } else {
             if (remaining + succeeded < majority) {
-                if (onCompletion != null && completed.compareAndSet(false, true)) {
-                    onCompletion.accept(null, new TransactionSubmitFailure("Failed to achieve majority",
-                            transaction.hash, succeeded));
+                if (onSubmit != null && completed.compareAndSet(false, true)) {
+                    onSubmit.accept(null, new TransactionSubmitFailure("Failed to achieve majority", transaction.hash,
+                            succeeded));
                 }
             }
         }
@@ -880,34 +754,23 @@ public class Consortium {
         return false;
     }
 
-    private void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
-        CommonCommunications<ConsortiumClientCommunications, Service> currentComm = getComm();
-        if (currentComm != null) {
-            ViewContext current = viewContext.get();
-            assert current != null : "No current view, but comm exists!";
-            currentComm.register(current.getId(), service);
-        }
-        MemberOrder currentTO = getOrder();
-        if (currentTO != null) {
-            currentTO.start();
-        }
-        Messenger currentMsg = getMessenger();
-        if (currentMsg != null) {
-            currentMsg.start(gossipDuration, scheduler);
-        }
+    private void runPending(PendingAction action) {
+        log.info("Running action scheduled at: {} on: {}", action.targetBlock, getMember());
+        pending.set(null);
+        action.action.run();
     }
 
-    private void submit(EnqueuedTransaction transaction,
+    private void submit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,
                         BiConsumer<Object, Throwable> onCompletion) throws TimeoutException {
         assert transaction.hash.equals(hashOf(transaction.transaction)) : "Hash does not match!";
 
         getSubmitted().put(transaction.hash, new SubmittedTransaction(transaction.transaction, onCompletion));
         SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
-                                                          .setContext(viewContext().getId().toByteString())
+                                                          .setContext(view.getContext().getId().toByteString())
                                                           .setTransaction(transaction.transaction)
                                                           .build();
-        log.debug("Submitting txn: {} from: {}", transaction.hash, getMember());
-        List<Member> group = viewContext().streamRandomRing().collect(Collectors.toList());
+        log.trace("Submitting txn: {} from: {}", transaction.hash, getMember());
+        List<Member> group = view.getContext().streamRandomRing().collect(Collectors.toList());
         AtomicInteger pending = new AtomicInteger(group.size());
         AtomicInteger success = new AtomicInteger();
         AtomicBoolean completed = new AtomicBoolean();
@@ -916,7 +779,7 @@ public class Consortium {
                 log.trace("submit: {} to self: {}", transaction.hash, c.getId());
                 transitions.receive(transaction.transaction, getMember());
                 pending.decrementAndGet();
-                processSubmit(transaction, onCompletion, pending, completed, success.incrementAndGet());
+                processSubmit(transaction, onSubmit, pending, completed, success.incrementAndGet());
             } else {
                 ConsortiumClientCommunications link = linkFor(c);
                 if (link == null) {
@@ -934,14 +797,14 @@ public class Consortium {
                         futureSailor.get();
                         succeeded = success.incrementAndGet();
                     } catch (InterruptedException e) {
-                        log.debug("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(), e);
+                        log.trace("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(), e);
                         succeeded = success.get();
                     } catch (ExecutionException e) {
                         succeeded = success.get();
-                        log.debug("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(),
+                        log.trace("error submitting txn: {} to {} on: {}", transaction.hash, c, getMember(),
                                   e.getCause());
                     }
-                    processSubmit(transaction, onCompletion, pending, completed, succeeded);
+                    processSubmit(transaction, onSubmit, pending, completed, succeeded);
                 }, ForkJoinPool.commonPool()); // TODO, put in passed executor
             }
         });
@@ -953,9 +816,9 @@ public class Consortium {
         log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
                   block.getHeader().getHeight(), getMember());
         final HashedBlock previousBlock = getCurrent();
+        long height = height(block);
         if (previousBlock != null) {
             HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
-            long height = height(block);
             long prevHeight = previousBlock.height();
             if (height <= prevHeight) {
                 log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
@@ -973,7 +836,7 @@ public class Consortium {
                           getMember(), previousBlock.hash, prev, prevHeight, height);
                 return;
             }
-            if (!viewContext().validate(certifiedBlock)) {
+            if (!view.getContext().validate(certifiedBlock)) {
                 log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
                 return;
             }
@@ -998,6 +861,10 @@ public class Consortium {
             }
         }
         if (next(new HashedBlock(hash, block))) {
+            PendingAction pendingAction = pending.get();
+            if (pendingAction != null && pendingAction.targetBlock == height) {
+                runPending(pendingAction);
+            }
             processDeferred();
         }
     }

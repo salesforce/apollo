@@ -6,11 +6,19 @@
  */
 package com.salesforce.apollo.consortium.fsm;
 
+import com.chiralbehaviors.tron.Entry;
+
 /**
  * @author hal.hildebrand
  *
  */
-public enum Recovery {
+public enum Recovery implements Transitions {
 
-    INITIAL, ACQUIRE_GENESIS;
+    ACQUIRE_VIEW {
+        @Entry
+        public void aquireView() {
+            context().aquireInitialView();
+        }
+    },
+    ASSEMBLE_CHECKPOINT, BOOTSTRAP;
 }
