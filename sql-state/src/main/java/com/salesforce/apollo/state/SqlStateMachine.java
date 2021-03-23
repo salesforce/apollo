@@ -534,6 +534,30 @@ public class SqlStateMachine {
         }
     }
 
+    // Test accessible
+    void initializeEvents() {
+        java.sql.Statement statement = null;
+
+        SecureRandom prev = secureRandom.get();
+        secureRandom.set(entropy.get());
+        try {
+            statement = connection.createStatement();
+            statement.execute(CREATE_SCHEMA_APOLLO_INTERNAL);
+            statement.execute(CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE);
+            statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
+        } catch (SQLException e) {
+            throw new IllegalStateException("unable to create event publish function", e);
+        } finally {
+            secureRandom.set(prev);
+            if (statement != null) {
+                try {
+                    statement.close();
+                } catch (SQLException e) {
+                }
+            }
+        }
+    }
+
     private int[] acceptBatch(HashKey hash, Batch batch) throws SQLException {
         try (java.sql.Statement exec = connection.createStatement()) {
             for (String sql : batch.getStatementsList()) {
@@ -874,29 +898,6 @@ public class SqlStateMachine {
 
     private Session getSession() {
         return (Session) connection.getSession();
-    }
-
-    private void initializeEvents() {
-        java.sql.Statement statement = null;
-
-        SecureRandom prev = secureRandom.get();
-        secureRandom.set(entropy.get());
-        try {
-            statement = connection.createStatement();
-            statement.execute(CREATE_SCHEMA_APOLLO_INTERNAL);
-            statement.execute(CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE);
-            statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
-        } catch (SQLException e) {
-            throw new IllegalStateException("unable to create event publish function", e);
-        } finally {
-            secureRandom.set(prev);
-            if (statement != null) {
-                try {
-                    statement.close();
-                } catch (SQLException e) {
-                }
-            }
-        }
     }
 
     private void publishEvents() {

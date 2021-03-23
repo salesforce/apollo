@@ -32,6 +32,8 @@ public class UpdaterTest {
     public void smoke() throws Exception {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
                 new File("target/chkpoints"));
+        updater.getExecutor().beginBlock(0, new byte[] {6, 6, 6});
+        updater.initializeEvents();
 
         Connection connection = updater.newConnection();
 
@@ -61,6 +63,8 @@ public class UpdaterTest {
 
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_publish", new Properties(),
                 new File("target/chkpoints"));
+        updater.getExecutor().beginBlock(0, new byte[] {6, 6, 6});
+        updater.initializeEvents();
 
         Connection connection = updater.newConnection();
         SqlStateMachine.publish(connection, "test", json);

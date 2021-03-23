@@ -37,6 +37,8 @@ public class ScriptTest {
     public void smoke() throws Exception {
         SqlStateMachine machine = new SqlStateMachine("jdbc:h2:mem:test_script", new Properties(),
                 new File("target/chkpoints"));
+        machine.getExecutor().beginBlock(0, new byte[] {6, 6, 6});
+        machine.initializeEvents();
         Connection connection = machine.newConnection();
         createAndInsert(connection);
         connection.commit();
