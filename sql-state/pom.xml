@@ -33,7 +33,10 @@
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 		</dependency>
-
+		<dependency>
+			<groupId>net.corda.djvm</groupId>
+			<artifactId>corda-djvm</artifactId>
+		</dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>
@@ -82,6 +85,31 @@
 			</extension>
 		</extensions>
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>copy</id>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>copy</goal>
+						</goals>
+						<configuration>
+							<artifactItems>
+								<artifactItem>
+									<groupId>net.corda</groupId>
+									<artifactId>deterministic-rt</artifactId>
+									<destFileName>deterministic-rt.jar</destFileName>
+								</artifactItem>
+							</artifactItems>
+							<stripVersion>true</stripVersion>
+							<overWrite>true</overWrite>
+							<outputDirectory>${project.build.directory}</outputDirectory>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-maven-plugin</artifactId>

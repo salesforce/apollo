@@ -269,8 +269,13 @@
 			</dependency>
 			<dependency>
 				<groupId>net.corda</groupId>
+				<artifactId>deterministic-rt</artifactId>
+				<version>1.0-RC02</version>
+			</dependency>
+			<dependency>
+				<groupId>net.corda.djvm</groupId>
 				<artifactId>corda-djvm</artifactId>
-				<version>4.0</version>
+				<version>1.1.1</version>
 			</dependency>
 
 			<!-- Test dependencies only below this line! -->
@@ -328,8 +333,8 @@
 			</snapshots>
 		</repository>
 		<repository>
-			<id>wasm</id>
-			<url>https://plugins.gradle.org/m2/</url>
+			<id>corda-djvm</id>
+			<url>https://software.r3.com/artifactory/corda-dependencies/</url>
 		</repository>
 	</repositories>
 

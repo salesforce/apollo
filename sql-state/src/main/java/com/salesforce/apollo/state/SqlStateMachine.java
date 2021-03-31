@@ -21,6 +21,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -270,8 +271,8 @@ public class SqlStateMachine {
     public class TxnExec implements TransactionExecutor {
 
         @Override
-        public void beginBlock(long height, byte[] nonce) {
-            SqlStateMachine.this.beginBlock(height, nonce);
+        public void beginBlock(long height, HashKey hash) {
+            SqlStateMachine.this.beginBlock(height, hash);
         }
 
         @Override
@@ -591,7 +592,7 @@ public class SqlStateMachine {
             try {
                 exec.clearBatch();
                 exec.clearParameters();
-            } catch (JdbcSQLNonTransientException e) {
+            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                 // ignore
             }
         }
@@ -618,17 +619,30 @@ public class SqlStateMachine {
                 exec.registerOutParameter(p, call.getOutParameters(p));
             }
             List<Object> out = new ArrayList<>();
-            if (exec.execute()) {
-                CachedRowSet rowset = factory.createCachedRowSet();
 
+            switch (call.getExecution()) {
+            case EXECUTE:
+                exec.execute();
+                break;
+            case QUERY:
+                exec.executeQuery();
+                break;
+            case UPDATE:
+                exec.executeUpdate();
+                break;
+            default:
+                log.debug("Invalid statement execution enum: {}", call.getExecution());
+                return new CallResult(out, results);
+            }
+            CachedRowSet rowset = factory.createCachedRowSet();
+
+            rowset.populate(exec.getResultSet());
+            results.add(rowset);
+
+            while (exec.getMoreResults()) {
+                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
-
-                while (exec.getMoreResults()) {
-                    rowset = factory.createCachedRowSet();
-                    rowset.populate(exec.getResultSet());
-                    results.add(rowset);
-                }
             }
             for (int j = 0; j < call.getOutParametersCount(); j++) {
                 out.add(exec.getObject(j));
@@ -638,7 +652,7 @@ public class SqlStateMachine {
             try {
                 exec.clearBatch();
                 exec.clearParameters();
-            } catch (JdbcSQLNonTransientException e) {
+            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                 // ignore
             }
         }
@@ -656,29 +670,36 @@ public class SqlStateMachine {
             throw new IllegalStateException("Unable to create prepared statement: " + statement.getSql(), e);
         }
         try {
-            int i = 0;
-            for (ByteString argument : statement.getArgsList()) {
-                Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
-                setArgument(exec, i++, data.readValue());
+            switch (statement.getExecution()) {
+            case EXECUTE:
+                exec.execute();
+                break;
+            case QUERY:
+                exec.executeQuery();
+                break;
+            case UPDATE:
+                exec.executeUpdate();
+                break;
+            default:
+                log.debug("Invalid statement execution enum: {}", statement.getExecution());
+                return Collections.emptyList();
             }
-            if (exec.execute()) {
-                CachedRowSet rowset = factory.createCachedRowSet();
+            CachedRowSet rowset = factory.createCachedRowSet();
 
+            rowset.populate(exec.getResultSet());
+            results.add(rowset);
+
+            while (exec.getMoreResults()) {
+                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
-
-                while (exec.getMoreResults()) {
-                    rowset = factory.createCachedRowSet();
-                    rowset.populate(exec.getResultSet());
-                    results.add(rowset);
-                }
             }
             return results;
         } finally {
             try {
                 exec.clearBatch();
                 exec.clearParameters();
-            } catch (JdbcSQLNonTransientException e) {
+            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                 // ignore
             }
         }
@@ -701,14 +722,8 @@ public class SqlStateMachine {
         }
 
         try {
-            if (ScriptCompiler.isJavaxScriptSource(script.getSource())) {
-                instance = compiler.getCompiledScript(script.getSource()).eval();
-            } else {
-
-                Class<?> clazz = compiler.getClass(script.getClassName(), script.getSource(),
-                                                   getClass().getClassLoader());
-                instance = clazz.getConstructor().newInstance();
-            }
+            Class<?> clazz = compiler.getClass(script.getClassName(), script.getSource(), getClass().getClassLoader());
+            instance = clazz.getConstructor().newInstance();
         } catch (DbException e) {
             throw e;
         } catch (Exception e) {
@@ -741,13 +756,12 @@ public class SqlStateMachine {
         return returnValue;
     }
 
-    private void beginBlock(long height, byte[] nonce) {
-        HashKey hkNonce = new HashKey(nonce);
-        HkHasher hasher = new HkHasher(hkNonce, height);
+    private void beginBlock(long height, HashKey hash) {
+        HkHasher hasher = new HkHasher(hash, height);
         getSession().getRandom().setSeed(hasher.getH1());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
-            secureEntropy.setSeed(nonce);
+            secureEntropy.setSeed(hash.bytes());
             entropy.set(secureEntropy);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("No SHA1PRNG available", e);
@@ -776,7 +790,7 @@ public class SqlStateMachine {
             public void onRemoval(RemovalNotification<String, CallableStatement> notification) {
                 try {
                     notification.getValue().close();
-                } catch (JdbcSQLNonTransientException e) {
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                     // ignore
                 } catch (SQLException e) {
                     log.error("Error closing cached statment: {}", notification.getKey(), e);
@@ -796,7 +810,7 @@ public class SqlStateMachine {
             public void onRemoval(RemovalNotification<String, PreparedStatement> notification) {
                 try {
                     notification.getValue().close();
-                } catch (JdbcSQLNonTransientException e) {
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                     // ignore
                 } catch (SQLException e) {
                     log.error("Error closing cached statment: {}", notification.getKey(), e);
@@ -905,6 +919,10 @@ public class SqlStateMachine {
         try {
             exec = psCache.get(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof JdbcSQLNonTransientException
+                    || e.getCause() instanceof JdbcSQLNonTransientConnectionException) {
+                return;
+            }
             log.error("Error publishing events", e.getCause());
             throw new IllegalStateException("Cannot publish events", e.getCause());
         }
@@ -920,6 +938,8 @@ public class SqlStateMachine {
                 }
                 trampoline.publish(new Event(channel, body));
             }
+        } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+            return;
         } catch (SQLException e) {
             log.error("Error retrieving published events", e.getCause());
             throw new IllegalStateException("Cannot retrieve published events", e.getCause());
@@ -933,6 +953,8 @@ public class SqlStateMachine {
         }
         try {
             exec.execute();
+        } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+            return;
         } catch (SQLException e) {
             log.error("Error cleaning published events", e);
             throw new IllegalStateException("Cannot clean published events", e);

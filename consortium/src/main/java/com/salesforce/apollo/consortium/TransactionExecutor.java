@@ -17,7 +17,7 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public interface TransactionExecutor {
-    default void beginBlock(long height, byte[] nonce) {
+    default void beginBlock(long height, HashKey hash) {
     }
 
     void execute(HashKey blockHash, ExecutedTransaction txn, BiConsumer<Object, Throwable> completion);

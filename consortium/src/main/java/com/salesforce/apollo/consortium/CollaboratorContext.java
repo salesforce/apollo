@@ -606,7 +606,7 @@ public class CollaboratorContext {
         consortium.getTransitions().genesisAccepted();
         reconfigure(next, body.getInitialView(), true);
         TransactionExecutor exec = consortium.getParams().executor;
-        exec.beginBlock(0, next.block.getHeader().getNonce().toByteArray());
+        exec.beginBlock(0, next.hash);
         exec.processGenesis(body.getGenesisData());
         log.info("Processed genesis block: {} on: {}", next.hash, consortium.getMember());
     }
@@ -628,7 +628,7 @@ public class CollaboratorContext {
         }
         long height = next.height();
         TransactionExecutor exec = consortium.getParams().executor;
-        exec.beginBlock(height, next.block.getHeader().getNonce().toByteArray());
+        exec.beginBlock(height, next.hash);
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);

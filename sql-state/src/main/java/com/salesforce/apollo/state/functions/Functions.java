@@ -1,33 +1,36 @@
 /*
- * Copyright 2004-2019 H2 Group. Multiple-Licensed under the MPL 2.0,
- * and the EPL 1.0 (https://h2database.com/html/license.html).
- * Initial Developer: H2 Group
  * Copyright (c) 2021, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.state;
+package com.salesforce.apollo.state.functions;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLStreamHandler;
 import java.security.SecureClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Enumeration;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.tools.FileObject;
 import javax.tools.ForwardingJavaFileManager;
 import javax.tools.JavaCompiler;
-import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
 import javax.tools.JavaFileObject.Kind;
 import javax.tools.SimpleJavaFileObject;
@@ -39,11 +42,16 @@ import org.h2.message.DbException;
 import org.h2.util.StringUtils;
 import org.h2.util.Utils;
 
+import net.corda.djvm.source.UserSource;
+
 /**
+ * Represents a class loading catolog of deterministic Java implemented
+ * functions for SQL stored procedures, functions, triggers n' such.
+ * 
  * @author hal.hildebrand
  *
  */
-public class ScriptCompiler {
+public class Functions implements UserSource {
     /**
      * An in-memory class file manager.
      */
@@ -127,11 +135,68 @@ public class ScriptCompiler {
     }
 
     /**
+     * A URLConnection for use with URLs returned by MemoryClassLoader.getResource.
+     */
+    private static class MemoryURLConnection extends URLConnection {
+        private byte[]      bytes;
+        private InputStream in;
+
+        MemoryURLConnection(URL u, byte[] bytes) {
+            super(u);
+            this.bytes = bytes;
+        }
+
+        @Override
+        public void connect() throws IOException {
+            if (!connected) {
+                if (bytes == null) {
+                    throw new FileNotFoundException(getURL().getPath());
+                }
+                in = new ByteArrayInputStream(bytes);
+                connected = true;
+            }
+        }
+
+        @Override
+        public long getContentLengthLong() {
+            return bytes.length;
+        }
+
+        @Override
+        public String getContentType() {
+            return "application/octet-stream";
+        }
+
+        @Override
+        public InputStream getInputStream() throws IOException {
+            connect();
+            return in;
+        }
+    }
+
+    /**
+     * A URLStreamHandler for use with URLs returned by
+     * MemoryClassLoader.getResource.
+     */
+    private class MemoryURLStreamHandler extends URLStreamHandler {
+        @Override
+        public URLConnection openConnection(URL u) {
+            if (!u.getProtocol().equalsIgnoreCase(PROTOCOL)) {
+                throw new IllegalArgumentException(u.toString());
+            }
+            return new MemoryURLConnection(u, compiledClasses.get(toBinaryName(u.getPath())));
+        }
+
+    }
+
+    /**
      * The "com.sun.tools.javac.Main" (if available).
      */
     static final JavaCompiler JAVA_COMPILER;
 
     private static final String COMPILE_DIR = Utils.getProperty("java.io.tmpdir", ".");
+
+    private static final int DOT_CLASS_LENGTH = ".class".length();
 
     static {
         JavaCompiler c;
@@ -144,15 +209,7 @@ public class ScriptCompiler {
         JAVA_COMPILER = c;
     }
 
-    /**
-     * Get the complete source code (including package name, imports, and so on).
-     *
-     * @param packageName the package name
-     * @param className   the class name
-     * @param source      the (possibly shortened) source code
-     * @return the full source code
-     */
-    static String getCompleteSourceCode(String packageName, String className, String source) {
+    private static String getCompleteSourceCode(String packageName, String className, String source) {
         if (source.startsWith("package ")) {
             return source;
         }
@@ -202,16 +259,17 @@ public class ScriptCompiler {
         }
     }
 
-    /**
-     * Get the class object for the given source.
-     * 
-     * @param packageAndClassName
-     * @param source              - the source of the class
-     *
-     * @return the class
-     */
-    public Class<?> getClass(String packageAndClassName, String source,
-                             ClassLoader parent) throws ClassNotFoundException {
+    private final Map<String, byte[]> compiledClasses = new ConcurrentHashMap<>();
+    private final URLStreamHandler    handler         = new MemoryURLStreamHandler();
+    private final String              PROTOCOL        = "sourcelauncher-" + getClass().getSimpleName() + hashCode();
+
+    @Override
+    public void close() throws Exception {
+        compiledClasses.clear();
+    }
+
+    public Class<?> compile(String packageAndClassName, String source,
+                            ClassLoader parent) throws ClassNotFoundException {
 
         ClassLoader classLoader = new ClassLoader(parent) {
 
@@ -228,45 +286,59 @@ public class ScriptCompiler {
                 }
                 String s = getCompleteSourceCode(packageName, className, source);
                 s = source;
-                return javaxToolsJavac(packageName, className, s);
+                byte[] classBytes = javaxToolsJavac(packageName, className, s);
+                String binaryName = toBinaryName(packageAndClassName);
+                compiledClasses.put(binaryName, classBytes);
+                return defineClass(binaryName, classBytes, 0, classBytes.length);
             }
         };
         return classLoader.loadClass(packageAndClassName);
     }
 
-    /**
-     * Get the first public static method of the given class.
-     *
-     * @param className the class name
-     * @return the method name
-     */
-    public Method getMethod(String className, String source, ClassLoader parent) throws ClassNotFoundException {
-        Class<?> clazz = getClass(className, source, parent);
-        Method[] methods = clazz.getDeclaredMethods();
-        for (Method m : methods) {
-            int modifiers = m.getModifiers();
-            if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers)) {
-                String name = m.getName();
-                if (!name.startsWith("_") && !m.getName().equals("main")) {
-                    return m;
-                }
-            }
+    @Override
+    public URL findResource(String name) {
+        String binaryName = toBinaryName(name);
+        if (binaryName == null || compiledClasses.get(binaryName) == null) {
+            return null;
         }
-        return null;
+        try {
+            return new URL(PROTOCOL, null, -1, name, handler);
+        } catch (MalformedURLException e) {
+            return null;
+        }
     }
 
-    /**
-     * Compile using the standard java compiler.
-     *
-     * @param packageName the package name
-     * @param className   the class name
-     * @param source      the source code
-     * @return the class
-     */
-    Class<?> javaxToolsJavac(String packageName, String className, String source) {
+    @Override
+    public Enumeration<URL> findResources(String name) {
+        return new Enumeration<URL>() {
+            private URL next = findResource(name);
+
+            @Override
+            public boolean hasMoreElements() {
+                return (next != null);
+            }
+
+            @Override
+            public URL nextElement() {
+                if (next == null) {
+                    throw new NoSuchElementException();
+                }
+                URL u = next;
+                next = null;
+                return u;
+            }
+        };
+    }
+
+    @Override
+    public URL[] getURLs() {
+        return new URL[0];
+    }
+
+    private byte[] javaxToolsJavac(String packageName, String className, String source) {
         String fullClassName = packageName == null ? className : packageName + "." + className;
         StringWriter writer = new StringWriter();
-        try (JavaFileManager fileManager = new ClassFileManager(
+        try (ClassFileManager fileManager = new ClassFileManager(
                 JAVA_COMPILER.getStandardFileManager(null, null, null))) {
             ArrayList<JavaFileObject> compilationUnits = new ArrayList<>();
             compilationUnits.add(new StringJavaFileObject(fullClassName, source));
@@ -279,10 +351,24 @@ public class ScriptCompiler {
             }
             String output = writer.toString();
             handleSyntaxError(output, (ok ? 0 : 1));
-            return fileManager.getClassLoader(null).loadClass(fullClassName);
-        } catch (ClassNotFoundException | IOException e) {
-            throw DbException.convert(e);
+            return fileManager.classObject.getBytes();
+        } catch (IOException e) {
+            // ignored
+            return null;
         }
     }
 
+    /**
+     * Converts a "resource name" (as used in the getResource* methods) to a binary
+     * name if the name identifies a class
+     * 
+     * @param name the resource name
+     * @return the binary name
+     */
+    private String toBinaryName(String name) {
+        if (!name.endsWith(".class")) {
+            return name;
+        }
+        return name.substring(0, name.length() - DOT_CLASS_LENGTH).replace('/', '.');
+    }
 }

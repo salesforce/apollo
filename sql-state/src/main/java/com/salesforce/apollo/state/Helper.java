@@ -56,6 +56,7 @@ import com.salesfoce.apollo.state.proto.Batch;
 import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesfoce.apollo.state.proto.BatchedTransaction;
 import com.salesfoce.apollo.state.proto.Call;
+import com.salesfoce.apollo.state.proto.EXECUTION;
 import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
@@ -124,15 +125,15 @@ public final class Helper {
                           .collect(Collectors.toList()));
     }
 
-    public static Call call(String sql, List<SQLType> outParameters, Object... arguments) {
+    public static Call call(EXECUTION execution, String sql, List<SQLType> outParameters, Object... arguments) {
         Value[] argValues = new Value[arguments.length];
         for (int i = 0; i < arguments.length; i++) {
             argValues[i] = convert(arguments[i]);
         }
-        return call(sql, outParameters, argValues);
+        return call(execution, sql, outParameters, argValues);
     }
 
-    public static Call call(String sql, List<SQLType> outParameters, Value... arguments) {
+    public static Call call(EXECUTION execution, String sql, List<SQLType> outParameters, Value... arguments) {
         Call.Builder builder = Call.newBuilder().setSql(sql);
         Data data = Data.create(NULL_HANDLER, 1024, false);
         for (Value argument : arguments) {
@@ -140,6 +141,10 @@ public final class Helper {
         }
 
         return builder.build();
+    }
+
+    public static Call call(String sql, List<SQLType> outParameters, Object... arguments) {
+        return call(EXECUTION.EXECUTE, sql, outParameters, arguments);
     }
 
     public static Script callScript(String className, String method, String source, Value... args) {
@@ -243,16 +248,16 @@ public final class Helper {
 
     }
 
-    public static Statement statement(String sql, Object... args) {
+    public static Statement statement(EXECUTION execution, String sql, Object... args) {
         Value[] paramValues = new Value[args.length];
         for (int i = 0; i < args.length; i++) {
             paramValues[i] = convert(args[i]);
         }
 
-        return statement(sql, paramValues);
+        return statement(execution, sql, paramValues);
     }
 
-    public static Statement statement(String sql, Value... args) {
+    public static Statement statement(EXECUTION execution, String sql, Value... args) {
         Statement.Builder builder = Statement.newBuilder().setSql(sql);
         Data data = Data.create(NULL_HANDLER, 1024, false);
         for (Value arg : args) {
@@ -260,6 +265,10 @@ public final class Helper {
         }
 
         return builder.build();
+    }
+
+    public static Statement statement(String sql, Object... args) {
+        return statement(EXECUTION.EXECUTE, sql, args);
     }
 
     private static ByteString serialized(Data data, Value arg) {
