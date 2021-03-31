@@ -7,19 +7,16 @@
 package com.salesforce.apollo.state.functions;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
-import java.net.URLConnection;
-import java.net.URLStreamHandler;
 import java.security.SecureClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,8 +36,8 @@ import javax.tools.ToolProvider;
 
 import org.h2.api.ErrorCode;
 import org.h2.message.DbException;
-import org.h2.util.StringUtils;
-import org.h2.util.Utils;
+
+import com.salesforce.apollo.protocols.Utils;
 
 import net.corda.djvm.source.UserSource;
 
@@ -135,66 +132,9 @@ public class Functions implements UserSource {
     }
 
     /**
-     * A URLConnection for use with URLs returned by MemoryClassLoader.getResource.
-     */
-    private static class MemoryURLConnection extends URLConnection {
-        private byte[]      bytes;
-        private InputStream in;
-
-        MemoryURLConnection(URL u, byte[] bytes) {
-            super(u);
-            this.bytes = bytes;
-        }
-
-        @Override
-        public void connect() throws IOException {
-            if (!connected) {
-                if (bytes == null) {
-                    throw new FileNotFoundException(getURL().getPath());
-                }
-                in = new ByteArrayInputStream(bytes);
-                connected = true;
-            }
-        }
-
-        @Override
-        public long getContentLengthLong() {
-            return bytes.length;
-        }
-
-        @Override
-        public String getContentType() {
-            return "application/octet-stream";
-        }
-
-        @Override
-        public InputStream getInputStream() throws IOException {
-            connect();
-            return in;
-        }
-    }
-
-    /**
-     * A URLStreamHandler for use with URLs returned by
-     * MemoryClassLoader.getResource.
-     */
-    private class MemoryURLStreamHandler extends URLStreamHandler {
-        @Override
-        public URLConnection openConnection(URL u) {
-            if (!u.getProtocol().equalsIgnoreCase(PROTOCOL)) {
-                throw new IllegalArgumentException(u.toString());
-            }
-            return new MemoryURLConnection(u, compiledClasses.get(toBinaryName(u.getPath())));
-        }
-
-    }
-
-    /**
      * The "com.sun.tools.javac.Main" (if available).
      */
     static final JavaCompiler JAVA_COMPILER;
-
-    private static final String COMPILE_DIR = Utils.getProperty("java.io.tmpdir", ".");
 
     private static final int DOT_CLASS_LENGTH = ".class".length();
 
@@ -254,14 +194,34 @@ public class Functions implements UserSource {
         }
 
         if (syntaxError) {
-            output = StringUtils.replaceAll(output, COMPILE_DIR, "");
             throw DbException.get(ErrorCode.SYNTAX_ERROR_1, output);
         }
     }
 
-    private final Map<String, byte[]> compiledClasses = new ConcurrentHashMap<>();
-    private final URLStreamHandler    handler         = new MemoryURLStreamHandler();
-    private final String              PROTOCOL        = "sourcelauncher-" + getClass().getSimpleName() + hashCode();
+    private final File              cacheDir;
+    private final Map<String, File> compiledClasses = new ConcurrentHashMap<>();
+
+    public Functions() {
+        File tempDir;
+        try {
+            tempDir = File.createTempFile("functions-" + System.identityHashCode(this), "dir");
+        } catch (IOException e) {
+            throw new IllegalStateException("unable to create temp directory for cached classes");
+        }
+        tempDir.delete();
+        tempDir.mkdirs();
+        tempDir.deleteOnExit();
+        this.cacheDir = tempDir;
+    }
+
+    public Functions(File cacheDir) {
+        Utils.clean(cacheDir);
+        cacheDir.mkdirs();
+        if (!cacheDir.isDirectory()) {
+            throw new IllegalArgumentException(cacheDir.getAbsolutePath() + " must be directory");
+        }
+        this.cacheDir = cacheDir;
+    }
 
     @Override
     public void close() throws Exception {
@@ -288,7 +248,20 @@ public class Functions implements UserSource {
                 s = source;
                 byte[] classBytes = javaxToolsJavac(packageName, className, s);
                 String binaryName = toBinaryName(packageAndClassName);
-                compiledClasses.put(binaryName, classBytes);
+                File clazzFile;
+                try {
+                    clazzFile = File.createTempFile(binaryName, "class", cacheDir);
+                } catch (IOException e) {
+                    throw new ClassNotFoundException("unable to store: " + packageAndClassName, e);
+                }
+
+                try (OutputStream os = new FileOutputStream(clazzFile)) {
+                    os.write(classBytes);
+                } catch (IOException e) {
+                    throw new ClassNotFoundException("unable to store: " + packageAndClassName, e);
+                }
+
+                compiledClasses.put(binaryName, clazzFile);
                 return defineClass(binaryName, classBytes, 0, classBytes.length);
             }
         };
@@ -301,10 +274,11 @@ public class Functions implements UserSource {
         if (binaryName == null || compiledClasses.get(binaryName) == null) {
             return null;
         }
+        File file = compiledClasses.get(binaryName);
         try {
-            return new URL(PROTOCOL, null, -1, name, handler);
+            return file == null ? null : file.toURI().toURL();
         } catch (MalformedURLException e) {
-            return null;
+            throw new IllegalStateException("unable to construct url for: " + file.getAbsolutePath(), e);
         }
     }
 
