@@ -91,7 +91,7 @@
 				<executions>
 					<execution>
 						<id>copy</id>
-						<phase>generate-sources</phase>
+						<phase>process-resources</phase>
 						<goals>
 							<goal>copy</goal>
 						</goals>
@@ -105,7 +105,7 @@
 							</artifactItems>
 							<stripVersion>true</stripVersion>
 							<overWrite>true</overWrite>
-							<outputDirectory>${project.build.directory}</outputDirectory>
+							<outputDirectory>src/main/resources</outputDirectory>
 						</configuration>
 					</execution>
 				</executions>

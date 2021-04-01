@@ -11,6 +11,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -20,10 +21,13 @@ import java.net.URL;
 import java.security.SecureClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import javax.tools.FileObject;
 import javax.tools.ForwardingJavaFileManager;
@@ -39,6 +43,16 @@ import org.h2.message.DbException;
 
 import com.salesforce.apollo.protocols.Utils;
 
+import net.corda.djvm.SandboxConfiguration;
+import net.corda.djvm.SandboxRuntimeContext;
+import net.corda.djvm.TypedTaskFactory;
+import net.corda.djvm.analysis.AnalysisConfiguration;
+import net.corda.djvm.analysis.AnalysisConfiguration.Builder;
+import net.corda.djvm.execution.ExecutionProfile;
+import net.corda.djvm.messages.Severity;
+import net.corda.djvm.rewiring.SandboxClassLoader;
+import net.corda.djvm.source.ApiSource;
+import net.corda.djvm.source.BootstrapClassLoader;
 import net.corda.djvm.source.UserSource;
 
 /**
@@ -49,14 +63,8 @@ import net.corda.djvm.source.UserSource;
  *
  */
 public class Functions implements UserSource {
-    /**
-     * An in-memory class file manager.
-     */
-    static class ClassFileManager extends ForwardingJavaFileManager<StandardJavaFileManager> {
+    private static class ClassFileManager extends ForwardingJavaFileManager<StandardJavaFileManager> {
 
-        /**
-         * The class (only one class is kept).
-         */
         JavaClassObject classObject;
 
         public ClassFileManager(StandardJavaFileManager standardManager) {
@@ -91,10 +99,7 @@ public class Functions implements UserSource {
         }
     }
 
-    /**
-     * An in-memory java class object.
-     */
-    static class JavaClassObject extends SimpleJavaFileObject {
+    private static class JavaClassObject extends SimpleJavaFileObject {
 
         private final ByteArrayOutputStream out = new ByteArrayOutputStream();
 
@@ -112,10 +117,7 @@ public class Functions implements UserSource {
         }
     }
 
-    /**
-     * An in-memory java source file object.
-     */
-    static class StringJavaFileObject extends SimpleJavaFileObject {
+    private static class StringJavaFileObject extends SimpleJavaFileObject {
 
         private final String sourceCode;
 
@@ -131,22 +133,64 @@ public class Functions implements UserSource {
 
     }
 
-    /**
-     * The "com.sun.tools.javac.Main" (if available).
-     */
-    static final JavaCompiler JAVA_COMPILER;
+    public static final ApiSource BOOTSTRAP;
 
-    private static final int DOT_CLASS_LENGTH = ".class".length();
+    private static final String     BOOTSTRAP_JAR    = "/deterministic-rt.jar";
+    private static final int        DOT_CLASS_LENGTH = ".class".length();
+    private static JavaCompiler     javaCompiler;
+    private static final UserSource NULL_SOURCE      = new UserSource() {
+
+                                                         @Override
+                                                         public void close() throws Exception {
+                                                         }
+
+                                                         @Override
+                                                         public URL findResource(String arg0) {
+                                                             return null;
+                                                         }
+
+                                                         @Override
+                                                         public Enumeration<URL> findResources(String arg0) {
+                                                             return new Enumeration<URL>() {
+                                                                                                                  @Override
+                                                                                                                  public boolean hasMoreElements() {
+                                                                                                                      return false;
+                                                                                                                  }
+
+                                                                                                                  @Override
+                                                                                                                  public URL nextElement() {
+                                                                                                                      return null;
+                                                                                                                  }
+                                                                                                              };
+                                                         }
+
+                                                         @Override
+                                                         public URL[] getURLs() {
+                                                             return new URL[] {};
+                                                         }
+                                                     };
 
     static {
-        JavaCompiler c;
         try {
-            c = ToolProvider.getSystemJavaCompiler();
-        } catch (Exception e) {
-            // ignore
-            c = null;
+            File tempFile = File.createTempFile("bootstrap", ".jar");
+            tempFile.delete();
+            tempFile.deleteOnExit();
+            try (InputStream is = Functions.class.getResourceAsStream(BOOTSTRAP_JAR);
+                    FileOutputStream os = new FileOutputStream(tempFile);) {
+                Utils.copy(is, os);
+                os.flush();
+            }
+            BOOTSTRAP = new BootstrapClassLoader(tempFile.toPath());
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to cache boxotstrap jar", e);
         }
-        JAVA_COMPILER = c;
+        ;
+    }
+
+    public static AnalysisConfiguration defaultConfig() {
+        AnalysisConfiguration config = AnalysisConfiguration.createRoot(NULL_SOURCE, Collections.emptySet(),
+                                                                        Severity.TRACE, BOOTSTRAP);
+        return config;
     }
 
     private static String getCompleteSourceCode(String packageName, String className, String source) {
@@ -198,29 +242,50 @@ public class Functions implements UserSource {
         }
     }
 
-    private final File              cacheDir;
-    private final Map<String, File> compiledClasses = new ConcurrentHashMap<>();
-
-    public Functions() {
+    private static File tempDir() throws IllegalStateException {
         File tempDir;
         try {
-            tempDir = File.createTempFile("functions-" + System.identityHashCode(this), "dir");
+            tempDir = File.createTempFile("functions-" + UUID.randomUUID(), "dir");
         } catch (IOException e) {
             throw new IllegalStateException("unable to create temp directory for cached classes");
         }
         tempDir.delete();
         tempDir.mkdirs();
         tempDir.deleteOnExit();
-        this.cacheDir = tempDir;
+        return tempDir;
     }
 
-    public Functions(File cacheDir) {
+    private final File                  cacheDir;
+    private final Map<String, File>     compiledClasses = new ConcurrentHashMap<>();
+    private final SandboxRuntimeContext context;
+
+    {
+        JavaCompiler c;
+        try {
+            c = ToolProvider.getSystemJavaCompiler();
+        } catch (Exception e) {
+            throw new IllegalStateException("Java compiler required", e);
+        }
+        javaCompiler = c;
+    }
+
+    public Functions() throws IOException, ClassNotFoundException, IllegalStateException {
+        this(defaultConfig(), ExecutionProfile.DEFAULT, tempDir());
+    }
+
+    public Functions(AnalysisConfiguration config, ExecutionProfile execution, File cacheDir)
+            throws ClassNotFoundException, IOException {
         Utils.clean(cacheDir);
         cacheDir.mkdirs();
         if (!cacheDir.isDirectory()) {
             throw new IllegalArgumentException(cacheDir.getAbsolutePath() + " must be directory");
         }
         this.cacheDir = cacheDir;
+        Builder childConfig = config.createChild(this);
+
+        SandboxConfiguration cfg = SandboxConfiguration.createFor(childConfig.build(), execution);
+        cfg.preload();
+        context = new SandboxRuntimeContext(cfg);
     }
 
     @Override
@@ -228,10 +293,9 @@ public class Functions implements UserSource {
         compiledClasses.clear();
     }
 
-    public Class<?> compile(String packageAndClassName, String source,
-                            ClassLoader parent) throws ClassNotFoundException {
+    public Class<?> compile(String packageAndClassName, String source) throws ClassNotFoundException {
 
-        ClassLoader classLoader = new ClassLoader(parent) {
+        ClassLoader classLoader = new ClassLoader(null) {
 
             @Override
             public Class<?> findClass(String name) throws ClassNotFoundException {
@@ -266,6 +330,28 @@ public class Functions implements UserSource {
             }
         };
         return classLoader.loadClass(packageAndClassName);
+    }
+
+    public void execute(@SuppressWarnings("rawtypes") Class clazz) {
+        context.use(ctx -> {
+            SandboxClassLoader cl = ctx.getClassLoader();
+
+            // Create a reusable task factory.
+            TypedTaskFactory taskFactory;
+            try {
+                taskFactory = cl.createTypedTaskFactory();
+            } catch (ClassNotFoundException | NoSuchMethodException e) {
+                throw new IllegalStateException();
+            }
+
+            // Wrap SimpleTask inside an instance of sandbox.Task.
+            @SuppressWarnings("unchecked")
+            Function<long[], Long> simpleTask = taskFactory.create(clazz);
+
+            // Execute SimpleTask inside the sandbox.
+            @SuppressWarnings("unused")
+            Long result = simpleTask.apply(new long[] { 1000, 200, 30, 4 });
+        });
     }
 
     @Override
@@ -313,15 +399,15 @@ public class Functions implements UserSource {
         String fullClassName = packageName == null ? className : packageName + "." + className;
         StringWriter writer = new StringWriter();
         try (ClassFileManager fileManager = new ClassFileManager(
-                JAVA_COMPILER.getStandardFileManager(null, null, null))) {
+                javaCompiler.getStandardFileManager(null, null, null))) {
             ArrayList<JavaFileObject> compilationUnits = new ArrayList<>();
             compilationUnits.add(new StringJavaFileObject(fullClassName, source));
             // cannot concurrently compile
             final boolean ok;
-            synchronized (JAVA_COMPILER) {
-                ok = JAVA_COMPILER.getTask(writer, fileManager, null, Arrays.asList("-target", "1.8", "-source", "1.8"),
-                                           null, compilationUnits)
-                                  .call();
+            synchronized (javaCompiler) {
+                ok = javaCompiler.getTask(writer, fileManager, null, Arrays.asList("-target", "1.8", "-source", "1.8"),
+                                          null, compilationUnits)
+                                 .call();
             }
             String output = writer.toString();
             handleSyntaxError(output, (ok ? 0 : 1));
