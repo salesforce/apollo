@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.state.functions;
+package com.salesforce.apollo.state;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -23,10 +23,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import javax.tools.FileObject;
@@ -39,6 +42,7 @@ import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
 import org.h2.api.ErrorCode;
+import org.h2.api.Trigger;
 import org.h2.message.DbException;
 
 import com.salesforce.apollo.protocols.Utils;
@@ -53,6 +57,7 @@ import net.corda.djvm.messages.Severity;
 import net.corda.djvm.rewiring.SandboxClassLoader;
 import net.corda.djvm.source.ApiSource;
 import net.corda.djvm.source.BootstrapClassLoader;
+import net.corda.djvm.source.ClassSource;
 import net.corda.djvm.source.UserSource;
 
 /**
@@ -63,6 +68,7 @@ import net.corda.djvm.source.UserSource;
  *
  */
 public class Functions implements UserSource {
+
     private static class ClassFileManager extends ForwardingJavaFileManager<StandardJavaFileManager> {
 
         JavaClassObject classObject;
@@ -133,7 +139,8 @@ public class Functions implements UserSource {
 
     }
 
-    public static final ApiSource BOOTSTRAP;
+    public static final ApiSource   BOOTSTRAP;
+    public static final Set<String> OVERRIDE_CLASSES = overrideClasses();
 
     private static final String     BOOTSTRAP_JAR    = "/deterministic-rt.jar";
     private static final int        DOT_CLASS_LENGTH = ".class".length();
@@ -146,22 +153,16 @@ public class Functions implements UserSource {
 
                                                          @Override
                                                          public URL findResource(String arg0) {
-                                                             return null;
+                                                             return getClass().getClassLoader().getResource(arg0);
                                                          }
 
                                                          @Override
                                                          public Enumeration<URL> findResources(String arg0) {
-                                                             return new Enumeration<URL>() {
-                                                                                                                  @Override
-                                                                                                                  public boolean hasMoreElements() {
-                                                                                                                      return false;
-                                                                                                                  }
-
-                                                                                                                  @Override
-                                                                                                                  public URL nextElement() {
-                                                                                                                      return null;
-                                                                                                                  }
-                                                                                                              };
+                                                             try {
+                                                                 return getClass().getClassLoader().getResources(arg0);
+                                                             } catch (IOException e) {
+                                                                 throw new IllegalStateException(e);
+                                                             }
                                                          }
 
                                                          @Override
@@ -184,16 +185,15 @@ public class Functions implements UserSource {
         } catch (IOException e) {
             throw new IllegalStateException("Unable to cache boxotstrap jar", e);
         }
-        ;
     }
 
     public static AnalysisConfiguration defaultConfig() {
         AnalysisConfiguration config = AnalysisConfiguration.createRoot(NULL_SOURCE, Collections.emptySet(),
-                                                                        Severity.TRACE, BOOTSTRAP);
+                                                                        Severity.TRACE, BOOTSTRAP, OVERRIDE_CLASSES);
         return config;
     }
 
-    private static String getCompleteSourceCode(String packageName, String className, String source) {
+    public static String getCompleteSourceCode(String packageName, String className, String source) {
         if (source.startsWith("package ")) {
             return source;
         }
@@ -202,17 +202,18 @@ public class Functions implements UserSource {
             buff.append("package ").append(packageName).append(";\n");
         }
         int endImport = source.indexOf("@CODE");
-        String importCode = "import java.util.*;\n" + "import java.math.*;\n" + "import java.sql.*;\n";
+        String importCode = """
+                import java.util.*;
+                import java.math.*;
+                import java.sql.*;
+
+                """;
         if (endImport >= 0) {
             importCode = source.substring(0, endImport);
             source = source.substring("@CODE".length() + endImport);
         }
         buff.append(importCode);
-        buff.append("public class ")
-            .append(className)
-            .append(" {\n" + "    public static ")
-            .append(source)
-            .append("\n" + "}\n");
+        buff.append("public class ").append(className).append(" {\n    public static ").append(source).append("\n}\n");
         return buff.toString();
     }
 
@@ -240,6 +241,31 @@ public class Functions implements UserSource {
         if (syntaxError) {
             throw DbException.get(ErrorCode.SYNTAX_ERROR_1, output);
         }
+    }
+
+    private static Set<String> overrideClasses() {
+        return new HashSet<>(
+                Arrays.asList("org.h2.api.Trigger", "java.sql.Array", "java.sql.BatchUpdateException", "java.sql.Blob",
+                              "java.sql.CallableStatement", "java.sql.ClientInfoStatus", "java.sql.Clob",
+                              "java.sql.Connection", "java.sql.ConnectionBuilder", "java.sql.DatabaseMetaData",
+                              "java.sql.DataTruncation", "java.sql.Date", "java.sql.Driver", "java.sql.DriverAction",
+                              "java.sql.DriverInfo", "java.sql.DriverManager", "java.sql.DriverPropertyInfo",
+                              "java.sql.JDBCType", "java.sql.NClob", "java.sql.ParameterMetaData",
+                              "java.sql.PreparedStatement", "java.sql.PseudoColumnUsage", "java.sql.Ref",
+                              "java.sql.ResultSet", "java.sql.ResultSetMetaData", "java.sql.RowId",
+                              "java.sql.RowIdLifetime", "java.sql.Savepoint", "java.sql.ShardingKey",
+                              "java.sql.ShardingKeyBuilder", "java.sql.SQLClientInfoException", "java.sql.SQLData",
+                              "java.sql.SQLDataException", "java.sql.SQLException",
+                              "java.sql.SQLFeatureNotSupportedException", "java.sql.SQLInput",
+                              "java.sql.SQLIntegrityConstraintViolationException",
+                              "java.sql.SQLInvalidAuthorizationSpecException",
+                              "java.sql.SQLNonTransientConnectionException", "java.sql.SQLNonTransientException",
+                              "java.sql.SQLOutput", "java.sql.SQLPermission", "java.sql.SQLRecoverableException",
+                              "java.sql.SQLSyntaxErrorException", "java.sql.SQLTimeoutException",
+                              "java.sql.SQLTransactionRollbackException", "java.sql.SQLTransientConnectionException",
+                              "java.sql.SQLTransientException", "java.sql.SQLType", "java.sql.SQLWarning",
+                              "java.sql.SQLXML", "java.sql.Statement", "java.sql.Struct", "java.sql.Time",
+                              "java.sql.Timestamp", "java.sql.Types", "java.sql.Wrapper"));
     }
 
     private static File tempDir() throws IllegalStateException {
@@ -293,9 +319,9 @@ public class Functions implements UserSource {
         compiledClasses.clear();
     }
 
-    public Class<?> compile(String packageAndClassName, String source) throws ClassNotFoundException {
+    public <T> Class<T> compile(String packageAndClassName, String source) throws ClassNotFoundException {
 
-        ClassLoader classLoader = new ClassLoader(null) {
+        ClassLoader classLoader = new ClassLoader(getClass().getClassLoader()) {
 
             @Override
             public Class<?> findClass(String name) throws ClassNotFoundException {
@@ -329,10 +355,29 @@ public class Functions implements UserSource {
                 return defineClass(binaryName, classBytes, 0, classBytes.length);
             }
         };
-        return classLoader.loadClass(packageAndClassName);
+        @SuppressWarnings("unchecked")
+        Class<T> clazz = (Class<T>) classLoader.loadClass(packageAndClassName);
+        return clazz;
     }
 
-    public void execute(@SuppressWarnings("rawtypes") Class clazz) {
+    public Trigger compileTrigger(String packageAndClassName, String source) throws ClassNotFoundException {
+        compile(packageAndClassName, source);
+        AtomicReference<Trigger> holder = new AtomicReference<>();
+
+        context.use(ctx -> {
+            SandboxClassLoader cl = ctx.getClassLoader();
+            Class<?> triggerClass;
+            try {
+                triggerClass = cl.loadClassForSandbox(ClassSource.fromClassName(packageAndClassName, null));
+                holder.set(new SandboxTrigger(context, triggerClass.getDeclaredConstructor().newInstance()));
+            } catch (Exception e) {
+                throw new IllegalStateException("cannot create trigger", e);
+            }
+        });
+        return holder.get();
+    }
+
+    public void execute(Class<? extends Function<long[], Long>> clazz) {
         context.use(ctx -> {
             SandboxClassLoader cl = ctx.getClassLoader();
 
@@ -345,7 +390,6 @@ public class Functions implements UserSource {
             }
 
             // Wrap SimpleTask inside an instance of sandbox.Task.
-            @SuppressWarnings("unchecked")
             Function<long[], Long> simpleTask = taskFactory.create(clazz);
 
             // Execute SimpleTask inside the sandbox.

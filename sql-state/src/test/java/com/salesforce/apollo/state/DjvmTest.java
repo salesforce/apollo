@@ -12,7 +12,6 @@ import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.protocols.Utils;
-import com.salesforce.apollo.state.functions.Functions;
 
 import net.corda.djvm.TypedTaskFactory;
 import net.corda.djvm.execution.ExecutionProfile;
@@ -43,11 +42,14 @@ public class DjvmTest {
         File dir = File.createTempFile("foo", "bar");
         dir.delete();
         dir.deleteOnExit();
-        try (Functions funcs = new Functions(Functions.defaultConfig(), ExecutionProfile.DEFAULT,
-                dir)) {
-            Class<?> clazz = funcs.compile("SimpleTask",
-                                           Utils.getDocument(getClass().getResourceAsStream("/SimpleTask.java")));
-          funcs.execute(clazz);
+        try (Functions funcs = new Functions(Functions.defaultConfig(), ExecutionProfile.DEFAULT, dir)) {
+            @SuppressWarnings("unchecked")
+            Class<? extends Function<long[], Long>> clazz = (Class<? extends Function<long[], Long>>) funcs.compile("SimpleTask",
+                                                                                                                    Utils.getDocument(getClass().getResourceAsStream("/SimpleTask.java")));
+            funcs.execute(clazz);
+            
+//            Trigger trigger = funcs.compileTrigger("TestTrigger", Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
+//            assertNotNull(trigger);
         }
     }
 }
