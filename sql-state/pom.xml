@@ -16,6 +16,10 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>consortium</artifactId> 
 		</dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>dsql-api</artifactId> 
+        </dependency>
 		<dependency>
 			<groupId>org.jooq</groupId>
 			<artifactId>jooq</artifactId>

@@ -143,9 +143,34 @@ public class Functions implements UserSource {
     public static final ApiSource   BOOTSTRAP;
     public static final Set<String> OVERRIDE_CLASSES = overrideClasses();
 
-    private static final String BOOTSTRAP_JAR    = "/deterministic-rt.jar";
-    private static final int    DOT_CLASS_LENGTH = ".class".length();
-    private static JavaCompiler javaCompiler;
+    private static final String     BOOTSTRAP_JAR    = "/deterministic-rt.jar";
+    private static final int        DOT_CLASS_LENGTH = ".class".length();
+    private static JavaCompiler     javaCompiler;
+    private static final UserSource NULL_SOURCE      = new UserSource() {
+
+                                                         @Override
+                                                         public void close() throws Exception {
+                                                         }
+
+                                                         @Override
+                                                         public URL findResource(String arg0) {
+                                                             return getClass().getClassLoader().getResource(arg0);
+                                                         }
+
+                                                         @Override
+                                                         public Enumeration<URL> findResources(String arg0) {
+                                                             try {
+                                                                 return getClass().getClassLoader().getResources(arg0);
+                                                             } catch (IOException e) {
+                                                                 throw new IllegalStateException(e);
+                                                             }
+                                                         }
+
+                                                         @Override
+                                                         public URL[] getURLs() {
+                                                             return new URL[] {};
+                                                         }
+                                                     };
 
     static {
         try {
@@ -165,12 +190,13 @@ public class Functions implements UserSource {
 
     private static UserSource dsqlApi() {
         URL url = Functions.class.getResource("/dsql-api.jar");
-        return new UserPathSource(new URL[] { url });
+        return new UserPathSource(new URL[] {url});
     }
 
     public static AnalysisConfiguration defaultConfig() {
-        AnalysisConfiguration config = AnalysisConfiguration.createRoot(dsqlApi(), Collections.emptySet(),
-                                                                        Severity.TRACE, BOOTSTRAP, OVERRIDE_CLASSES);
+        AnalysisConfiguration config = AnalysisConfiguration.createRoot(dsqlApi(),
+                                                                        Collections.emptySet(), Severity.TRACE,
+                                                                        BOOTSTRAP, OVERRIDE_CLASSES);
         return config;
     }
 
@@ -226,27 +252,35 @@ public class Functions implements UserSource {
 
     private static Set<String> overrideClasses() {
         return new HashSet<>(
-                Arrays.asList("sandbox/org/h2/api/Trigger", "sandbox/java/sql/Array", "sandbox/java/sql/BatchUpdateException", "sandbox/java/sql/Blob",
-                              "sandbox/java/sql/CallableStatement", "sandbox/java/sql/ClientInfoStatus", "sandbox/java/sql/Clob",
-                              "sandbox/java/sql/Connection", "sandbox/java/sql/ConnectionBuilder", "sandbox/java/sql/DatabaseMetaData",
-                              "sandbox/java/sql/DataTruncation", "sandbox/java/sql/Date", "sandbox/java/sql/Driver", "sandbox/java/sql/DriverAction",
-                              "sandbox/java/sql/DriverInfo", "sandbox/java/sql/DriverManager", "sandbox/java/sql/DriverPropertyInfo",
-                              "sandbox/java/sql/JDBCType", "sandbox/java/sql/NClob", "sandbox/java/sql/ParameterMetaData",
-                              "sandbox/java/sql/PreparedStatement", "sandbox/java/sql/PseudoColumnUsage", "sandbox/java/sql/Ref",
-                              "sandbox/java/sql/ResultSet", "sandbox/java/sql/ResultSetMetaData", "sandbox/java/sql/RowId",
-                              "sandbox/java/sql/RowIdLifetime", "sandbox/java/sql/Savepoint", "sandbox/java/sql/ShardingKey",
-                              "sandbox/java/sql/ShardingKeyBuilder", "sandbox/java/sql/SQLClientInfoException", "sandbox/java/sql/SQLData",
+                Arrays.asList("sandbox/org/h2/api/Trigger", "sandbox/java/sql/Array",
+                              "sandbox/java/sql/BatchUpdateException", "sandbox/java/sql/Blob",
+                              "sandbox/java/sql/CallableStatement", "sandbox/java/sql/ClientInfoStatus",
+                              "sandbox/java/sql/Clob", "sandbox/java/sql/Connection",
+                              "sandbox/java/sql/ConnectionBuilder", "sandbox/java/sql/DatabaseMetaData",
+                              "sandbox/java/sql/DataTruncation", "sandbox/java/sql/Date", "sandbox/java/sql/Driver",
+                              "sandbox/java/sql/DriverAction", "sandbox/java/sql/DriverInfo",
+                              "sandbox/java/sql/DriverManager", "sandbox/java/sql/DriverPropertyInfo",
+                              "sandbox/java/sql/JDBCType", "sandbox/java/sql/NClob",
+                              "sandbox/java/sql/ParameterMetaData", "sandbox/java/sql/PreparedStatement",
+                              "sandbox/java/sql/PseudoColumnUsage", "sandbox/java/sql/Ref",
+                              "sandbox/java/sql/ResultSet", "sandbox/java/sql/ResultSetMetaData",
+                              "sandbox/java/sql/RowId", "sandbox/java/sql/RowIdLifetime", "sandbox/java/sql/Savepoint",
+                              "sandbox/java/sql/ShardingKey", "sandbox/java/sql/ShardingKeyBuilder",
+                              "sandbox/java/sql/SQLClientInfoException", "sandbox/java/sql/SQLData",
                               "sandbox/java/sql/SQLDataException", "sandbox/java/sql/SQLException",
                               "sandbox/java/sql/SQLFeatureNotSupportedException", "sandbox/java/sql/SQLInput",
                               "sandbox/java/sql/SQLIntegrityConstraintViolationException",
                               "sandbox/java/sql/SQLInvalidAuthorizationSpecException",
-                              "sandbox/java/sql/SQLNonTransientConnectionException", "sandbox/java/sql/SQLNonTransientException",
-                              "sandbox/java/sql/SQLOutput", "sandbox/java/sql/SQLPermission", "sandbox/java/sql/SQLRecoverableException",
+                              "sandbox/java/sql/SQLNonTransientConnectionException",
+                              "sandbox/java/sql/SQLNonTransientException", "sandbox/java/sql/SQLOutput",
+                              "sandbox/java/sql/SQLPermission", "sandbox/java/sql/SQLRecoverableException",
                               "sandbox/java/sql/SQLSyntaxErrorException", "sandbox/java/sql/SQLTimeoutException",
-                              "sandbox/java/sql/SQLTransactionRollbackException", "sandbox/java/sql/SQLTransientConnectionException",
-                              "sandbox/java/sql/SQLTransientException", "sandbox/java/sql/SQLType", "sandbox/java/sql/SQLWarning",
-                              "sandbox/java/sql/SQLXML", "sandbox/java/sql/Statement", "sandbox/java/sql/Struct", "sandbox/java/sql/Time",
-                              "sandbox/java/sql/Timestamp", "sandbox/java/sql/Types", "sandbox/java/sql/Wrapper"));
+                              "sandbox/java/sql/SQLTransactionRollbackException",
+                              "sandbox/java/sql/SQLTransientConnectionException",
+                              "sandbox/java/sql/SQLTransientException", "sandbox/java/sql/SQLType",
+                              "sandbox/java/sql/SQLWarning", "sandbox/java/sql/SQLXML", "sandbox/java/sql/Statement",
+                              "sandbox/java/sql/Struct", "sandbox/java/sql/Time", "sandbox/java/sql/Timestamp",
+                              "sandbox/java/sql/Types", "sandbox/java/sql/Wrapper"));
     }
 
     private static File tempDir() throws IllegalStateException {
@@ -348,8 +382,8 @@ public class Functions implements UserSource {
         context.use(ctx -> {
             SandboxClassLoader cl = ctx.getClassLoader();
             Class<?> triggerClass;
-            try {
-                triggerClass = cl.loadClassForSandbox(ClassSource.fromClassName(packageAndClassName, null));
+            try { 
+                triggerClass = cl.loadClass("sandbox." +packageAndClassName);
                 holder.set(new SandboxTrigger(context, triggerClass.getDeclaredConstructor().newInstance()));
             } catch (Exception e) {
                 throw new IllegalStateException("cannot create trigger", e);

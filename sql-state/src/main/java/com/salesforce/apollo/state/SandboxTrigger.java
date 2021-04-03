@@ -35,7 +35,7 @@ public class SandboxTrigger implements Trigger {
         this.trigger = trigger;
         Class<? extends Object[]> objectArrayClass = new Object[0].getClass();
         Class<? extends Object> triggerClass = trigger.getClass();
-        for (Method m: triggerClass.getDeclaredMethods()) {
+        for (Method m : triggerClass.getDeclaredMethods()) {
             System.out.println(m);
         }
         close = MethodHandles.lookup().findVirtual(triggerClass, "close", MethodType.methodType(void.class));
