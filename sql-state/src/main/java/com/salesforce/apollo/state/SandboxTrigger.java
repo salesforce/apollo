@@ -9,6 +9,7 @@ package com.salesforce.apollo.state;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -33,7 +34,10 @@ public class SandboxTrigger implements Trigger {
         this.context = context;
         this.trigger = trigger;
         Class<? extends Object[]> objectArrayClass = new Object[0].getClass();
-        Class<? extends Object> triggerClass = trigger.getClass(); 
+        Class<? extends Object> triggerClass = trigger.getClass();
+        for (Method m: triggerClass.getDeclaredMethods()) {
+            System.out.println(m);
+        }
         close = MethodHandles.lookup().findVirtual(triggerClass, "close", MethodType.methodType(void.class));
         fire = MethodHandles.lookup()
                             .findVirtual(triggerClass, "fire",

@@ -58,6 +58,7 @@ import net.corda.djvm.rewiring.SandboxClassLoader;
 import net.corda.djvm.source.ApiSource;
 import net.corda.djvm.source.BootstrapClassLoader;
 import net.corda.djvm.source.ClassSource;
+import net.corda.djvm.source.UserPathSource;
 import net.corda.djvm.source.UserSource;
 
 /**
@@ -142,34 +143,9 @@ public class Functions implements UserSource {
     public static final ApiSource   BOOTSTRAP;
     public static final Set<String> OVERRIDE_CLASSES = overrideClasses();
 
-    private static final String     BOOTSTRAP_JAR    = "/deterministic-rt.jar";
-    private static final int        DOT_CLASS_LENGTH = ".class".length();
-    private static JavaCompiler     javaCompiler;
-    private static final UserSource NULL_SOURCE      = new UserSource() {
-
-                                                         @Override
-                                                         public void close() throws Exception {
-                                                         }
-
-                                                         @Override
-                                                         public URL findResource(String arg0) {
-                                                             return getClass().getClassLoader().getResource(arg0);
-                                                         }
-
-                                                         @Override
-                                                         public Enumeration<URL> findResources(String arg0) {
-                                                             try {
-                                                                 return getClass().getClassLoader().getResources(arg0);
-                                                             } catch (IOException e) {
-                                                                 throw new IllegalStateException(e);
-                                                             }
-                                                         }
-
-                                                         @Override
-                                                         public URL[] getURLs() {
-                                                             return new URL[] {};
-                                                         }
-                                                     };
+    private static final String BOOTSTRAP_JAR    = "/deterministic-rt.jar";
+    private static final int    DOT_CLASS_LENGTH = ".class".length();
+    private static JavaCompiler javaCompiler;
 
     static {
         try {
@@ -187,8 +163,13 @@ public class Functions implements UserSource {
         }
     }
 
+    private static UserSource dsqlApi() {
+        URL url = Functions.class.getResource("/dsql-api.jar");
+        return new UserPathSource(new URL[] { url });
+    }
+
     public static AnalysisConfiguration defaultConfig() {
-        AnalysisConfiguration config = AnalysisConfiguration.createRoot(NULL_SOURCE, Collections.emptySet(),
+        AnalysisConfiguration config = AnalysisConfiguration.createRoot(dsqlApi(), Collections.emptySet(),
                                                                         Severity.TRACE, BOOTSTRAP, OVERRIDE_CLASSES);
         return config;
     }
@@ -205,7 +186,7 @@ public class Functions implements UserSource {
         String importCode = """
                 import java.util.*;
                 import java.math.*;
-                import java.sql.*;
+                import sandbox.java.sql.*;
 
                 """;
         if (endImport >= 0) {
@@ -245,27 +226,27 @@ public class Functions implements UserSource {
 
     private static Set<String> overrideClasses() {
         return new HashSet<>(
-                Arrays.asList("org.h2.api.Trigger", "java.sql.Array", "java.sql.BatchUpdateException", "java.sql.Blob",
-                              "java.sql.CallableStatement", "java.sql.ClientInfoStatus", "java.sql.Clob",
-                              "java.sql.Connection", "java.sql.ConnectionBuilder", "java.sql.DatabaseMetaData",
-                              "java.sql.DataTruncation", "java.sql.Date", "java.sql.Driver", "java.sql.DriverAction",
-                              "java.sql.DriverInfo", "java.sql.DriverManager", "java.sql.DriverPropertyInfo",
-                              "java.sql.JDBCType", "java.sql.NClob", "java.sql.ParameterMetaData",
-                              "java.sql.PreparedStatement", "java.sql.PseudoColumnUsage", "java.sql.Ref",
-                              "java.sql.ResultSet", "java.sql.ResultSetMetaData", "java.sql.RowId",
-                              "java.sql.RowIdLifetime", "java.sql.Savepoint", "java.sql.ShardingKey",
-                              "java.sql.ShardingKeyBuilder", "java.sql.SQLClientInfoException", "java.sql.SQLData",
-                              "java.sql.SQLDataException", "java.sql.SQLException",
-                              "java.sql.SQLFeatureNotSupportedException", "java.sql.SQLInput",
-                              "java.sql.SQLIntegrityConstraintViolationException",
-                              "java.sql.SQLInvalidAuthorizationSpecException",
-                              "java.sql.SQLNonTransientConnectionException", "java.sql.SQLNonTransientException",
-                              "java.sql.SQLOutput", "java.sql.SQLPermission", "java.sql.SQLRecoverableException",
-                              "java.sql.SQLSyntaxErrorException", "java.sql.SQLTimeoutException",
-                              "java.sql.SQLTransactionRollbackException", "java.sql.SQLTransientConnectionException",
-                              "java.sql.SQLTransientException", "java.sql.SQLType", "java.sql.SQLWarning",
-                              "java.sql.SQLXML", "java.sql.Statement", "java.sql.Struct", "java.sql.Time",
-                              "java.sql.Timestamp", "java.sql.Types", "java.sql.Wrapper"));
+                Arrays.asList("sandbox/org/h2/api/Trigger", "sandbox/java/sql/Array", "sandbox/java/sql/BatchUpdateException", "sandbox/java/sql/Blob",
+                              "sandbox/java/sql/CallableStatement", "sandbox/java/sql/ClientInfoStatus", "sandbox/java/sql/Clob",
+                              "sandbox/java/sql/Connection", "sandbox/java/sql/ConnectionBuilder", "sandbox/java/sql/DatabaseMetaData",
+                              "sandbox/java/sql/DataTruncation", "sandbox/java/sql/Date", "sandbox/java/sql/Driver", "sandbox/java/sql/DriverAction",
+                              "sandbox/java/sql/DriverInfo", "sandbox/java/sql/DriverManager", "sandbox/java/sql/DriverPropertyInfo",
+                              "sandbox/java/sql/JDBCType", "sandbox/java/sql/NClob", "sandbox/java/sql/ParameterMetaData",
+                              "sandbox/java/sql/PreparedStatement", "sandbox/java/sql/PseudoColumnUsage", "sandbox/java/sql/Ref",
+                              "sandbox/java/sql/ResultSet", "sandbox/java/sql/ResultSetMetaData", "sandbox/java/sql/RowId",
+                              "sandbox/java/sql/RowIdLifetime", "sandbox/java/sql/Savepoint", "sandbox/java/sql/ShardingKey",
+                              "sandbox/java/sql/ShardingKeyBuilder", "sandbox/java/sql/SQLClientInfoException", "sandbox/java/sql/SQLData",
+                              "sandbox/java/sql/SQLDataException", "sandbox/java/sql/SQLException",
+                              "sandbox/java/sql/SQLFeatureNotSupportedException", "sandbox/java/sql/SQLInput",
+                              "sandbox/java/sql/SQLIntegrityConstraintViolationException",
+                              "sandbox/java/sql/SQLInvalidAuthorizationSpecException",
+                              "sandbox/java/sql/SQLNonTransientConnectionException", "sandbox/java/sql/SQLNonTransientException",
+                              "sandbox/java/sql/SQLOutput", "sandbox/java/sql/SQLPermission", "sandbox/java/sql/SQLRecoverableException",
+                              "sandbox/java/sql/SQLSyntaxErrorException", "sandbox/java/sql/SQLTimeoutException",
+                              "sandbox/java/sql/SQLTransactionRollbackException", "sandbox/java/sql/SQLTransientConnectionException",
+                              "sandbox/java/sql/SQLTransientException", "sandbox/java/sql/SQLType", "sandbox/java/sql/SQLWarning",
+                              "sandbox/java/sql/SQLXML", "sandbox/java/sql/Statement", "sandbox/java/sql/Struct", "sandbox/java/sql/Time",
+                              "sandbox/java/sql/Timestamp", "sandbox/java/sql/Types", "sandbox/java/sql/Wrapper"));
     }
 
     private static File tempDir() throws IllegalStateException {
@@ -401,12 +382,12 @@ public class Functions implements UserSource {
     @Override
     public URL findResource(String name) {
         String binaryName = toBinaryName(name);
-        if (binaryName == null || compiledClasses.get(binaryName) == null) {
+        File file = compiledClasses.get(binaryName);
+        if (file == null) {
             return null;
         }
-        File file = compiledClasses.get(binaryName);
         try {
-            return file == null ? null : file.toURI().toURL();
+            return file.toURI().toURL();
         } catch (MalformedURLException e) {
             throw new IllegalStateException("unable to construct url for: " + file.getAbsolutePath(), e);
         }

@@ -14,8 +14,7 @@
 	<dependencies>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>consortium</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
+			<artifactId>consortium</artifactId> 
 		</dependency>
 		<dependency>
 			<groupId>org.jooq</groupId>
@@ -91,7 +90,7 @@
 				<executions>
 					<execution>
 						<id>copy</id>
-						<phase>process-resources</phase>
+						<phase>generate-sources</phase>
 						<goals>
 							<goal>copy</goal>
 						</goals>
@@ -101,6 +100,11 @@
 									<groupId>net.corda</groupId>
 									<artifactId>deterministic-rt</artifactId>
 									<destFileName>deterministic-rt.jar</destFileName>
+								</artifactItem>
+								<artifactItem>
+									<groupId>com.salesforce.apollo</groupId>
+									<artifactId>dsql-api</artifactId>
+									<destFileName>dsql-api.jar</destFileName>
 								</artifactItem>
 							</artifactItems>
 							<stripVersion>true</stripVersion>

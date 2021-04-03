@@ -6,9 +6,12 @@
  */
 package com.salesforce.apollo.state;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import java.io.File;
 import java.util.function.Function;
 
+import org.h2.api.Trigger;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.protocols.Utils;
@@ -48,8 +51,8 @@ public class DjvmTest {
                                                                                                                     Utils.getDocument(getClass().getResourceAsStream("/SimpleTask.java")));
             funcs.execute(clazz);
             
-//            Trigger trigger = funcs.compileTrigger("TestTrigger", Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
-//            assertNotNull(trigger);
+            Trigger trigger = funcs.compileTrigger("TestTrigger", Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
+            assertNotNull(trigger);
         }
     }
 }

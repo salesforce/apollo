@@ -25,6 +25,7 @@
 		<module>consortium</module>
 		<module>test-population</module>
 		<module>tron</module>
+		<module>dsql-api</module>
 	</modules>
 
 	<properties>
@@ -160,6 +161,16 @@
 				<artifactId>tron</artifactId>
 				<version>${project.version}</version>
 			</dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>dsql-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>consortium</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
