@@ -193,7 +193,7 @@ public class Functions implements UserSource {
     }
 
     public static AnalysisConfiguration defaultConfig() {
-        AnalysisConfiguration config = AnalysisConfiguration.createRoot(dsqlApi(), Collections.emptySet(),
+        AnalysisConfiguration config = AnalysisConfiguration.createRoot(NULL_SOURCE, Collections.emptySet(),
                                                                         Severity.TRACE, BOOTSTRAP, OVERRIDE_CLASSES);
         return config;
     }
