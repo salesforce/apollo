@@ -13,6 +13,8 @@ import java.sql.SQLException;
 import org.h2.api.Trigger;
 
 import net.corda.djvm.SandboxRuntimeContext;
+import net.corda.djvm.rewiring.SandboxClassLoader;
+import sandbox.java.lang.DJVM;
 
 /**
  * @author hal.hildebrand
@@ -65,8 +67,14 @@ public class SandboxTrigger implements Trigger {
     @Override
     public void fire(Connection conn, Object[] oldRow, Object[] newRow) throws SQLException {
         context.use(ctx -> {
-            try {
-                fire.invoke(trigger, conn, oldRow, newRow);
+            SandboxClassLoader cl = ctx.getClassLoader();
+            try { 
+                Class<?> wrapperClass = cl.loadClass("sandbox.com.salesforce.apollo.dsql.ConnectionWrapper");
+                Object wrappedConnection = wrapperClass.getDeclaredConstructor(java.sql.Connection.class)
+                                                       .newInstance(new Object[] {conn});
+                System.out.println(wrappedConnection);
+                DJVM.sandbox(newRow);
+                fire.invoke(trigger, wrappedConnection, null, null);
             } catch (Throwable e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();

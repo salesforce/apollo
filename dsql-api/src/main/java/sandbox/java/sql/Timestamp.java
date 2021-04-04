@@ -191,7 +191,7 @@ public class Timestamp extends java.util.Date {
         // Split the string into date and time components
         s = s.trim();
         dividingSpace = s.indexOf(' ');
-        if (dividingSpace < 0) { 
+        if (dividingSpace < 0) {
             throw new java.lang.IllegalArgumentException();
         }
 
@@ -213,8 +213,8 @@ public class Timestamp extends java.util.Date {
                 String m = s.substring(firstDash + 1, secondDash);
                 String d = s.substring(secondDash + 1, dividingSpace);
                 year = Integer.parseInt(y, 10);
-                month = Integer.parseInt(s, 10);
-                day = Integer.parseInt(s, 10);
+                month = Integer.parseInt(m, 10);
+                day = Integer.parseInt(d, 10);
 
                 if ((month >= 1 && month <= MAX_MONTH) && (day >= 1 && day <= MAX_DAY)) {
                     parsedDate = true;
@@ -251,7 +251,7 @@ public class Timestamp extends java.util.Date {
                 throw new java.lang.IllegalArgumentException(formatError);
             } else {
                 String seco = s.substring(secondColon + 1, len);
-                second = Integer.parseInt(s, 10);
+                second = Integer.parseInt(seco, 10);
             }
         } else {
             throw new java.lang.IllegalArgumentException(formatError);

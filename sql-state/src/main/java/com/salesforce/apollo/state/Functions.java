@@ -142,34 +142,11 @@ public class Functions implements UserSource {
     public static final ApiSource   BOOTSTRAP;
     public static final Set<String> OVERRIDE_CLASSES = overrideClasses();
 
-    private static final String     BOOTSTRAP_JAR    = "/deterministic-rt.jar";
-    private static final int        DOT_CLASS_LENGTH = ".class".length();
-    private static JavaCompiler     javaCompiler;
-    private static final UserSource NULL_SOURCE      = new UserSource() {
+    private static final String       BOOTSTRAP_JAR    = "/deterministic-rt.jar";
+    private static final int          DOT_CLASS_LENGTH = ".class".length();
+    private static final JavaCompiler JAVA_COMPILER;
 
-                                                         @Override
-                                                         public void close() throws Exception {
-                                                         }
-
-                                                         @Override
-                                                         public URL findResource(String arg0) {
-                                                             return getClass().getClassLoader().getResource(arg0);
-                                                         }
-
-                                                         @Override
-                                                         public Enumeration<URL> findResources(String arg0) {
-                                                             try {
-                                                                 return getClass().getClassLoader().getResources(arg0);
-                                                             } catch (IOException e) {
-                                                                 throw new IllegalStateException(e);
-                                                             }
-                                                         }
-
-                                                         @Override
-                                                         public URL[] getURLs() {
-                                                             return new URL[] {};
-                                                         }
-                                                     };
+    private static final UserSource NULL_SOURCE = new UserPathSource(new URL[0]);
 
     static {
         try {
@@ -185,11 +162,13 @@ public class Functions implements UserSource {
         } catch (IOException e) {
             throw new IllegalStateException("Unable to cache boxotstrap jar", e);
         }
-    }
-
-    private static UserSource dsqlApi() {
-        URL url = Functions.class.getResource("/dsql-api.jar");
-        return new UserPathSource(new URL[] { url });
+        JavaCompiler c;
+        try {
+            c = ToolProvider.getSystemJavaCompiler();
+        } catch (Exception e) {
+            throw new IllegalStateException("Java compiler required", e);
+        }
+        JAVA_COMPILER = c;
     }
 
     public static AnalysisConfiguration defaultConfig() {
@@ -220,7 +199,7 @@ public class Functions implements UserSource {
         buff.append(importCode);
         buff.append("public class ").append(className).append(" {\n    public static ").append(source).append("\n}\n");
         return buff.toString();
-    }
+    } 
 
     private static void handleSyntaxError(String output, int exitStatus) {
         if (0 == exitStatus) {
@@ -295,19 +274,10 @@ public class Functions implements UserSource {
         return tempDir;
     }
 
-    private final File                  cacheDir;
-    private final Map<String, File>     compiledClasses = new ConcurrentHashMap<>();
-    private final SandboxRuntimeContext context;
+    private final File              cacheDir;
+    private final Map<String, File> compiledClasses = new ConcurrentHashMap<>();
 
-    {
-        JavaCompiler c;
-        try {
-            c = ToolProvider.getSystemJavaCompiler();
-        } catch (Exception e) {
-            throw new IllegalStateException("Java compiler required", e);
-        }
-        javaCompiler = c;
-    }
+    private final SandboxRuntimeContext context;
 
     public Functions() throws IOException, ClassNotFoundException, IllegalStateException {
         this(defaultConfig(), ExecutionProfile.DEFAULT, tempDir());
@@ -383,11 +353,8 @@ public class Functions implements UserSource {
             Class<?> triggerClass;
             try {
                 triggerClass = cl.loadClass("sandbox." + packageAndClassName);
-                holder.set(new SandboxTrigger(context, triggerClass.getDeclaredConstructor().newInstance()));
-                Class<?> wrapperClass = cl.loadClass("sandbox.com.salesforce.apollo.dsql.ConnectionWrapper");
-                Object wrappedConnection = wrapperClass.getDeclaredConstructor(java.sql.Connection.class)
-                                                       .newInstance(new Object[] {null});
-                System.out.println(wrappedConnection);
+                Object trigger = triggerClass.getDeclaredConstructor().newInstance();
+                holder.set(new SandboxTrigger(context, trigger));
             } catch (Exception e) {
                 throw new IllegalStateException("cannot create trigger", e);
             }
@@ -461,15 +428,15 @@ public class Functions implements UserSource {
         String fullClassName = packageName == null ? className : packageName + "." + className;
         StringWriter writer = new StringWriter();
         try (ClassFileManager fileManager = new ClassFileManager(
-                javaCompiler.getStandardFileManager(null, null, null))) {
+                JAVA_COMPILER.getStandardFileManager(null, null, null))) {
             ArrayList<JavaFileObject> compilationUnits = new ArrayList<>();
             compilationUnits.add(new StringJavaFileObject(fullClassName, source));
             // cannot concurrently compile
             final boolean ok;
-            synchronized (javaCompiler) {
-                ok = javaCompiler.getTask(writer, fileManager, null, Arrays.asList("-target", "1.8", "-source", "1.8"),
-                                          null, compilationUnits)
-                                 .call();
+            synchronized (JAVA_COMPILER) {
+                ok = JAVA_COMPILER.getTask(writer, fileManager, null, Arrays.asList("-target", "1.8", "-source", "1.8"),
+                                           null, compilationUnits)
+                                  .call();
             }
             String output = writer.toString();
             handleSyntaxError(output, (ok ? 0 : 1));

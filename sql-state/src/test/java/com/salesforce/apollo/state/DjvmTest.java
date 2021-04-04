@@ -9,9 +9,11 @@ package com.salesforce.apollo.state;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.File;
+import java.util.Properties;
 import java.util.function.Function;
 
 import org.h2.api.Trigger;
+import org.h2.jdbc.JdbcConnection;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.protocols.Utils;
@@ -50,9 +52,14 @@ public class DjvmTest {
             Class<? extends Function<long[], Long>> clazz = (Class<? extends Function<long[], Long>>) funcs.compile("SimpleTask",
                                                                                                                     Utils.getDocument(getClass().getResourceAsStream("/SimpleTask.java")));
             funcs.execute(clazz);
-            
-            Trigger trigger = funcs.compileTrigger("TestTrigger", Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
+
+            Trigger trigger = funcs.compileTrigger("TestTrigger",
+                                                   Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
             assertNotNull(trigger);
+
+            try (java.sql.Connection db1 = new JdbcConnection("jdbc:h2:mem:djvm", new Properties())) {
+                trigger.fire(db1, new Object[0], new Object[0]);
+            }
         }
     }
 }

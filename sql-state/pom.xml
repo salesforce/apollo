@@ -103,12 +103,6 @@
 								<artifactItem>
 									<groupId>net.corda</groupId>
 									<artifactId>deterministic-rt</artifactId>
-									<destFileName>deterministic-rt.jar</destFileName>
-								</artifactItem>
-								<artifactItem>
-									<groupId>com.salesforce.apollo</groupId>
-									<artifactId>dsql-api</artifactId>
-									<destFileName>dsql-api.jar</destFileName>
 								</artifactItem>
 							</artifactItems>
 							<stripVersion>true</stripVersion>

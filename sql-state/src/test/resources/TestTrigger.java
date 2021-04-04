@@ -12,10 +12,12 @@ public class TestTrigger implements Trigger {
     @Override
     public void init(Connection conn, String schemaName, String triggerName, String tableName, boolean before,
                      int type) throws SQLException {
+        throw new SQLException(conn.toString());
     }
 
     @Override
     public void fire(Connection conn, Object[] oldRow, Object[] newRow) throws SQLException {
+        throw new SQLException(conn.toString());
     }
 
     @Override
@@ -25,5 +27,6 @@ public class TestTrigger implements Trigger {
 
     @Override
     public void remove() throws SQLException {
+        throw new SQLException();
     }
 }
