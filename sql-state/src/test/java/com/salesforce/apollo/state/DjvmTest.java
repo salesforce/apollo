@@ -53,7 +53,6 @@ public class DjvmTest {
             
             Trigger trigger = funcs.compileTrigger("TestTrigger", Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
             assertNotNull(trigger);
-            trigger.close();
         }
     }
 }

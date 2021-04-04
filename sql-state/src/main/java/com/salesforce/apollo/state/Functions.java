@@ -250,19 +250,20 @@ public class Functions implements UserSource {
 
     private static Set<String> overrideClasses() {
         return new HashSet<>(
-                Arrays.asList("sandbox/org/h2/api/Trigger", "sandbox/java/sql/Array",
-                              "sandbox/java/sql/BatchUpdateException", "sandbox/java/sql/Blob",
-                              "sandbox/java/sql/CallableStatement", "sandbox/java/sql/ClientInfoStatus",
-                              "sandbox/java/sql/Clob", "sandbox/java/sql/Connection",
-                              "sandbox/java/sql/ConnectionBuilder", "sandbox/java/sql/DatabaseMetaData",
-                              "sandbox/java/sql/DataTruncation", "sandbox/java/sql/Date", "sandbox/java/sql/Driver",
-                              "sandbox/java/sql/DriverAction", "sandbox/java/sql/DriverInfo",
-                              "sandbox/java/sql/DriverManager", "sandbox/java/sql/DriverPropertyInfo",
-                              "sandbox/java/sql/JDBCType", "sandbox/java/sql/NClob",
-                              "sandbox/java/sql/ParameterMetaData", "sandbox/java/sql/PreparedStatement",
-                              "sandbox/java/sql/PseudoColumnUsage", "sandbox/java/sql/Ref",
-                              "sandbox/java/sql/ResultSet", "sandbox/java/sql/ResultSetMetaData",
-                              "sandbox/java/sql/RowId", "sandbox/java/sql/RowIdLifetime", "sandbox/java/sql/Savepoint",
+                Arrays.asList("sandbox/com/salesforce/apollo/dsql/ConnectionWrapper", "sandbox/org/h2/api/Trigger",
+                              "sandbox/java/sql/Array", "sandbox/java/sql/BatchUpdateException",
+                              "sandbox/java/sql/Blob", "sandbox/java/sql/CallableStatement",
+                              "sandbox/java/sql/ClientInfoStatus", "sandbox/java/sql/Clob",
+                              "sandbox/java/sql/Connection", "sandbox/java/sql/ConnectionBuilder",
+                              "sandbox/java/sql/DatabaseMetaData", "sandbox/java/sql/DataTruncation",
+                              "sandbox/java/sql/Date", "sandbox/java/sql/Driver", "sandbox/java/sql/DriverAction",
+                              "sandbox/java/sql/DriverInfo", "sandbox/java/sql/DriverManager",
+                              "sandbox/java/sql/DriverPropertyInfo", "sandbox/java/sql/JDBCType",
+                              "sandbox/java/sql/NClob", "sandbox/java/sql/ParameterMetaData",
+                              "sandbox/java/sql/PreparedStatement", "sandbox/java/sql/PseudoColumnUsage",
+                              "sandbox/java/sql/Ref", "sandbox/java/sql/ResultSet",
+                              "sandbox/java/sql/ResultSetMetaData", "sandbox/java/sql/RowId",
+                              "sandbox/java/sql/RowIdLifetime", "sandbox/java/sql/Savepoint",
                               "sandbox/java/sql/ShardingKey", "sandbox/java/sql/ShardingKeyBuilder",
                               "sandbox/java/sql/SQLClientInfoException", "sandbox/java/sql/SQLData",
                               "sandbox/java/sql/SQLDataException", "sandbox/java/sql/SQLException",
@@ -382,8 +383,11 @@ public class Functions implements UserSource {
             Class<?> triggerClass;
             try {
                 triggerClass = cl.loadClass("sandbox." + packageAndClassName);
-                holder.set(new SandboxTrigger(context,
-                         triggerClass.getDeclaredConstructor().newInstance()));
+                holder.set(new SandboxTrigger(context, triggerClass.getDeclaredConstructor().newInstance()));
+                Class<?> wrapperClass = cl.loadClass("sandbox.com.salesforce.apollo.dsql.ConnectionWrapper");
+                Object wrappedConnection = wrapperClass.getDeclaredConstructor(java.sql.Connection.class)
+                                                       .newInstance(new Object[] {null});
+                System.out.println(wrappedConnection);
             } catch (Exception e) {
                 throw new IllegalStateException("cannot create trigger", e);
             }
