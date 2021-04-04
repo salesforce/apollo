@@ -25,6 +25,9 @@
 
 package sandbox.java.sql;
 
+import sandbox.java.lang.Object;
+import sandbox.java.lang.String;
+
 /**
  * The output stream for writing the attributes of a user-defined
  * type back to the database.  This interface, used

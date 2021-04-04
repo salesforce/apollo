@@ -25,6 +25,8 @@
 
 package sandbox.java.sql;
 
+import sandbox.java.lang.Object;
+
 /**
  *
  * The representation (mapping) in the Java programming language of an SQL ROWID
@@ -108,7 +110,7 @@ public interface RowId {
       *     connection, representing the value of the <code>ROWID</code> designated
       *     by this <code>sandbox.java.sql.RowId</code>  object.
       */
-     String toString();
+     java.lang.String toString();
 
      /**
       * Returns a hash code value of this <code>RowId</code> object.

@@ -51,8 +51,8 @@ public class DjvmTest {
                                                                                                                     Utils.getDocument(getClass().getResourceAsStream("/SimpleTask.java")));
             funcs.execute(clazz);
             
-            Trigger trigger = funcs.compileTrigger("TestTrigger", Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
-            assertNotNull(trigger);
+//            Trigger trigger = funcs.compileTrigger("TestTrigger", Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
+//            assertNotNull(trigger);
         }
     }
 }

@@ -25,6 +25,9 @@
 
 package sandbox.java.sql;
 
+import sandbox.java.lang.Object;
+import sandbox.java.lang.String;
+
 /**
  * An input stream that contains a stream of values representing an
  * instance of an SQL structured type or an SQL distinct type.

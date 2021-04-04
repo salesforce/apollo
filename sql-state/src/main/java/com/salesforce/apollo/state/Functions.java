@@ -57,7 +57,6 @@ import net.corda.djvm.messages.Severity;
 import net.corda.djvm.rewiring.SandboxClassLoader;
 import net.corda.djvm.source.ApiSource;
 import net.corda.djvm.source.BootstrapClassLoader;
-import net.corda.djvm.source.ClassSource;
 import net.corda.djvm.source.UserPathSource;
 import net.corda.djvm.source.UserSource;
 
@@ -190,13 +189,12 @@ public class Functions implements UserSource {
 
     private static UserSource dsqlApi() {
         URL url = Functions.class.getResource("/dsql-api.jar");
-        return new UserPathSource(new URL[] {url});
+        return new UserPathSource(new URL[] { url });
     }
 
     public static AnalysisConfiguration defaultConfig() {
-        AnalysisConfiguration config = AnalysisConfiguration.createRoot(dsqlApi(),
-                                                                        Collections.emptySet(), Severity.TRACE,
-                                                                        BOOTSTRAP, OVERRIDE_CLASSES);
+        AnalysisConfiguration config = AnalysisConfiguration.createRoot(dsqlApi(), Collections.emptySet(),
+                                                                        Severity.TRACE, BOOTSTRAP, OVERRIDE_CLASSES);
         return config;
     }
 
@@ -382,9 +380,10 @@ public class Functions implements UserSource {
         context.use(ctx -> {
             SandboxClassLoader cl = ctx.getClassLoader();
             Class<?> triggerClass;
-            try { 
-                triggerClass = cl.loadClass("sandbox." +packageAndClassName);
-                holder.set(new SandboxTrigger(context, triggerClass.getDeclaredConstructor().newInstance()));
+            try {
+                triggerClass = cl.loadClass("sandbox." + packageAndClassName);
+                holder.set(new SandboxTrigger(context,
+                         triggerClass.getDeclaredConstructor().newInstance()));
             } catch (Exception e) {
                 throw new IllegalStateException("cannot create trigger", e);
             }

@@ -20,6 +20,7 @@ public class TestTrigger implements Trigger {
 
     @Override
     public void close() throws SQLException {
+        throw new SQLException();
     }
 
     @Override

@@ -24,7 +24,8 @@
  */
 
 package sandbox.java.sql;
-
+import sandbox.java.lang.String;
+import sandbox.java.lang.Throwable;
 /**
  * The subclass of {@link SQLException} thrown when an instance where a retry
  * of the same operation would fail unless the cause of the <code>SQLException</code>

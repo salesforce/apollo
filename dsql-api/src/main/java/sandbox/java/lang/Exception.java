@@ -8,17 +8,18 @@ package sandbox.java.lang;
 @SuppressWarnings("serial")
 public class Exception extends Throwable {
     public Exception(String message, Throwable t) {
-        super(message, t);
+        super();
     }
 
     public Exception(String message) {
-        super(message);
+        super();
     }
 
     public Exception(Throwable t) {
-        super(t);
+        super();
     }
 
     public Exception() {
+        super();
     }
 }

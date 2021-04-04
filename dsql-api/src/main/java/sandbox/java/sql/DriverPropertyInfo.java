@@ -25,6 +25,7 @@
 
 package sandbox.java.sql;
 
+import sandbox.java.lang.String;
 /**
  * <p>Driver properties for making a connection. The
  * <code>DriverPropertyInfo</code> class is of interest only to advanced programmers

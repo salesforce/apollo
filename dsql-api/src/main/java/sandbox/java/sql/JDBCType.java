@@ -23,7 +23,8 @@
  * questions.
  */
 package sandbox.java.sql;
-
+import sandbox.java.lang.Integer;
+import sandbox.java.lang.String;
 /**
  * <P>Defines the constants that are used to identify generic
  * SQL types, called JDBC types.
@@ -206,14 +207,9 @@ public enum JDBCType implements SQLType {
      * The Integer value for the JDBCType.  It maps to a value in
      * {@code Types.java}
      */
-    private Integer type;
-
-    /**
-     * Constructor to specify the data type value from {@code Types) for
-     * this data type.
-     * @param type The value from {@code Types) for this data type
-     */
-    JDBCType(final Integer type) {
+    private int type;
+ 
+    JDBCType(final int type) {
         this.type = type;
     }
 
@@ -222,7 +218,7 @@ public enum JDBCType implements SQLType {
      * @return The name of this {@code SQLType}.
      */
     public String getName() {
-        return name();
+        return String.toDJVM(name());
     }
     /**
      * Returns the name of the vendor that supports this data type.
@@ -230,7 +226,7 @@ public enum JDBCType implements SQLType {
      * {@literal sandbox.java.sql} for JDBCType.
      */
     public String getVendor() {
-        return "sandbox.java.sql";
+        return String.toDJVM("sandbox.java.sql");
     }
 
     /**
@@ -239,7 +235,7 @@ public enum JDBCType implements SQLType {
      * the value will be the same value as in {@code Types} for the data type.
      */
     public Integer getVendorTypeNumber() {
-        return type;
+        return Integer.valueOf(type);
     }
     /**
      * Returns the {@code JDBCType} that corresponds to the specified

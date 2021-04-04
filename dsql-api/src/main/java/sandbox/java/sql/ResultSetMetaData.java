@@ -25,6 +25,7 @@
 
 package sandbox.java.sql;
 
+import sandbox.java.lang.String;
 /**
  * An object that can be used to get information about the types
  * and properties of the columns in a <code>ResultSet</code> object.

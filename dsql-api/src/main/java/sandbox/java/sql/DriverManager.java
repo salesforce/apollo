@@ -29,6 +29,9 @@ import java.util.Enumeration;
 import java.util.ServiceLoader;
 import java.util.stream.Stream;
 
+import sandbox.java.lang.Object;
+import sandbox.java.lang.String;
+
 /**
  * The basic service for managing a set of JDBC drivers.
  * <p>
@@ -79,22 +82,6 @@ public class DriverManager {
     private DriverManager() {
     }
 
-    /**
-     * The <code>SQLPermission</code> constant that allows the setting of the
-     * logging stream.
-     * 
-     * @since 1.3
-     */
-    final static SQLPermission SET_LOG_PERMISSION = new SQLPermission("setLog");
-
-    /**
-     * The {@code SQLPermission} constant that allows the un-register a registered
-     * JDBC driver.
-     * 
-     * @since 1.8
-     */
-    final static SQLPermission DEREGISTER_DRIVER_PERMISSION = new SQLPermission("deregisterDriver");
-
     // --------------------------JDBC 2.0-----------------------------
 
     /**
@@ -130,11 +117,6 @@ public class DriverManager {
      * @since 1.2
      */
     public static void setLogWriter(java.io.PrintWriter out) {
-
-        SecurityManager sec = System.getSecurityManager();
-        if (sec != null) {
-            sec.checkPermission(SET_LOG_PERMISSION);
-        }
         logStream = null;
         logWriter = out;
     }
@@ -362,17 +344,6 @@ public class DriverManager {
      */
     @Deprecated(since = "1.2")
     public static void setLogStream(java.io.PrintStream out) {
-
-        SecurityManager sec = System.getSecurityManager();
-        if (sec != null) {
-            sec.checkPermission(SET_LOG_PERMISSION);
-        }
-
-        logStream = out;
-        if (out != null)
-            logWriter = new java.io.PrintWriter(out);
-        else
-            logWriter = null;
     }
 
     /**

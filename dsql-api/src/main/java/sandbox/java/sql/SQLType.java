@@ -24,6 +24,9 @@
  */
 package sandbox.java.sql;
 
+import sandbox.java.lang.Integer;
+import sandbox.java.lang.String;
+
 /**
  * An object that is used to identify a generic SQL type, called a JDBC type or
  * a vendor specific data type.

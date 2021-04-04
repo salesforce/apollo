@@ -24,6 +24,7 @@
  */
 
 package sandbox.java.sql;
+import sandbox.java.lang.String;
 
 /**
  * The representation of a savepoint, which is a point within

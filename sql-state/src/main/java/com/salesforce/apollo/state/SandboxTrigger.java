@@ -30,23 +30,29 @@ public class SandboxTrigger implements Trigger {
     private final MethodHandle          remove;
     private final Object                trigger;
 
-    public SandboxTrigger(SandboxRuntimeContext context, Object trigger) throws Exception {
+    public SandboxTrigger(SandboxRuntimeContext context, Object object) throws Exception {
         this.context = context;
-        this.trigger = trigger;
+        this.trigger = object;
         Class<? extends Object[]> objectArrayClass = new Object[0].getClass();
-        Class<? extends Object> triggerClass = trigger.getClass();
+        Class<? extends Object> triggerClass = object.getClass();
         for (Method m : triggerClass.getDeclaredMethods()) {
             System.out.println(m);
         }
         close = MethodHandles.lookup().findVirtual(triggerClass, "close", MethodType.methodType(void.class));
-        fire = MethodHandles.lookup()
-                            .findVirtual(triggerClass, "fire",
-                                         MethodType.methodType(void.class, Connection.class, objectArrayClass,
-                                                               objectArrayClass));
+        try {
+            close.invoke(object);
+        } catch (Throwable e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
         init = MethodHandles.lookup()
                             .findVirtual(triggerClass, "init",
                                          MethodType.methodType(void.class, Connection.class, String.class, String.class,
                                                                String.class, boolean.class, int.class));
+        fire = MethodHandles.lookup()
+                            .findVirtual(triggerClass, "fire",
+                                         MethodType.methodType(void.class, Connection.class, objectArrayClass,
+                                                               objectArrayClass));
         remove = MethodHandles.lookup().findVirtual(triggerClass, "remove", MethodType.methodType(void.class));
     }
 

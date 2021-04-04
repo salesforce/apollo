@@ -25,6 +25,8 @@
 
 package sandbox.java.sql;
 
+import sandbox.java.lang.String;
+import sandbox.java.lang.Throwable;
 /**
  * <P>The subclass of {@link SQLException} thrown when the timeout specified by
  * {@code Statement.setQueryTimeout}, {@code DriverManager.setLoginTimeout},

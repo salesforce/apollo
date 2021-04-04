@@ -25,6 +25,8 @@
 
 package sandbox.java.sql;
 
+import sandbox.java.lang.String;
+import sandbox.java.lang.Throwable;
 /**
  * The subclass of {@link SQLException} thrown when the SQLState class value is '<i>0A</i>'
  * ( the value is 'zero' A).

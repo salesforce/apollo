@@ -24,7 +24,6 @@
  */
 
 package sandbox.java.sql;
-
 import java.io.InputStream;
 
 /**

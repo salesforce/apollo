@@ -44,6 +44,7 @@
 						<configuration>
 							<excludes>
 								<exclude>sandbox/java/lang/</exclude>
+                                <exclude>sandbox/java/util/</exclude>
 							</excludes>
 						</configuration>
 					</execution>

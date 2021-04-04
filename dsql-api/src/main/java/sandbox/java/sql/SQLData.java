@@ -25,6 +25,8 @@
 
 package sandbox.java.sql;
 
+import sandbox.java.lang.String;
+
 /**
  * The interface used for the custom mapping of an SQL user-defined type (UDT) to
  * a class in the Java programming language. The class object for a class

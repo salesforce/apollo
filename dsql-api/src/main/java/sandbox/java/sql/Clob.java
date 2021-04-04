@@ -24,8 +24,9 @@
  */
 
 package sandbox.java.sql;
-
 import java.io.Reader;
+
+import sandbox.java.lang.String;
 
 /**
  * The mapping in the Java programming language

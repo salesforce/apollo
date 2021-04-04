@@ -25,6 +25,8 @@
 
 package sandbox.java.sql;
 
+import sandbox.java.lang.String;
+import sandbox.java.lang.Throwable;
 /**
  * The subclass of {@link SQLException} for the SQLState class
  * value '<i>08</i>', or under vendor-specified conditions.  This indicates
