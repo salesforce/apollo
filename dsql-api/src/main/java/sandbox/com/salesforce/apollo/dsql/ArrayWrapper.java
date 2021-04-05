@@ -6,8 +6,11 @@
  */
 package sandbox.com.salesforce.apollo.dsql;
 
+import static sandbox.com.salesforce.apollo.dsql.ConnectionWrapper.convertClassMap;
+
 import java.util.Map;
 
+import sandbox.java.lang.DJVM;
 import sandbox.java.lang.Object;
 import sandbox.java.lang.String;
 import sandbox.java.sql.Array;
@@ -25,11 +28,51 @@ public class ArrayWrapper implements Array {
         this.wrapped = wrapped;
     }
 
-    public String getBaseTypeName() throws SQLException {
+    public void free() throws SQLException {
         try {
-            return wrapped.getBaseTypeName();
+            wrapped.free();
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
+        }
+    }
+
+    public Object getArray() throws SQLException {
+        try {
+            return (Object) DJVM.sandbox(wrapped.getArray());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        } catch (ClassNotFoundException e) {
+            throw DJVM.toRuntimeException(e);
+        }
+    }
+
+    public Object getArray(long index, int count) throws SQLException {
+        try {
+            return (Object) DJVM.sandbox(wrapped.getArray(index, count));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        } catch (ClassNotFoundException e) {
+            throw DJVM.toRuntimeException(e);
+        }
+    }
+
+    public Object getArray(long index, int count, Map<String, Class<?>> map) throws SQLException {
+        try {
+            return (Object) DJVM.sandbox(wrapped.getArray(index, count, convertClassMap(map)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        } catch (ClassNotFoundException e) {
+            throw DJVM.toRuntimeException(e);
+        }
+    }
+
+    public Object getArray(Map<String, Class<?>> map) throws SQLException {
+        try {
+            return (Object) DJVM.sandbox(wrapped.getArray(convertClassMap(map)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        } catch (ClassNotFoundException e) {
+            throw DJVM.toRuntimeException(e);
         }
     }
 
@@ -41,33 +84,9 @@ public class ArrayWrapper implements Array {
         }
     }
 
-    public Object getArray() throws SQLException {
+    public String getBaseTypeName() throws SQLException {
         try {
-            return wrapped.getArray();
-        } catch (java.sql.SQLException e) {
-            throw new SQLException(e);
-        }
-    }
-
-    public Object getArray(Map<String, Class<?>> map) throws SQLException {
-        try {
-            return wrapped.getArray(map);
-        } catch (java.sql.SQLException e) {
-            throw new SQLException(e);
-        }
-    }
-
-    public Object getArray(long index, int count) throws SQLException {
-        try {
-            return wrapped.getArray(index, count);
-        } catch (java.sql.SQLException e) {
-            throw new SQLException(e);
-        }
-    }
-
-    public Object getArray(long index, int count, Map<String, Class<?>> map) throws SQLException {
-        try {
-            return wrapped.getArray(index, count, map);
+            return String.toDJVM(wrapped.getBaseTypeName());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -75,15 +94,7 @@ public class ArrayWrapper implements Array {
 
     public ResultSet getResultSet() throws SQLException {
         try {
-            return wrapped.getResultSet();
-        } catch (java.sql.SQLException e) {
-            throw new SQLException(e);
-        }
-    }
-
-    public ResultSet getResultSet(Map<String, Class<?>> map) throws SQLException {
-        try {
-            return wrapped.getResultSet(map);
+            return new ResultSetWrapper(wrapped.getResultSet());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -91,7 +102,7 @@ public class ArrayWrapper implements Array {
 
     public ResultSet getResultSet(long index, int count) throws SQLException {
         try {
-            return wrapped.getResultSet(index, count);
+            return new ResultSetWrapper(wrapped.getResultSet(index, count));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -99,17 +110,22 @@ public class ArrayWrapper implements Array {
 
     public ResultSet getResultSet(long index, int count, Map<String, Class<?>> map) throws SQLException {
         try {
-            return wrapped.getResultSet(index, count, map);
+            return new ResultSetWrapper(wrapped.getResultSet(index, count, convertClassMap(map)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
     }
 
-    public void free() throws SQLException {
+    public ResultSet getResultSet(Map<String, Class<?>> map) throws SQLException {
         try {
-            wrapped.free();
+            return new ResultSetWrapper(wrapped.getResultSet(convertClassMap(map)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
+    }
+
+    @Override
+    public java.sql.Array toJsArray() {
+        return wrapped;
     }
 }

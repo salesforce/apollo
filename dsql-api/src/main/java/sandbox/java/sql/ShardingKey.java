@@ -73,4 +73,6 @@ package sandbox.java.sql;
  */
 public interface ShardingKey {
 
+    java.sql.ShardingKey toJsShardingKey();
+
 }

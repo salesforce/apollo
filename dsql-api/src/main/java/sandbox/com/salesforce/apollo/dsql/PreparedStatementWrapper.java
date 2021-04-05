@@ -167,7 +167,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public void setBlob(int parameterIndex, Blob x) throws SQLException {
         try {
-            wrapped.setBlob(parameterIndex, x);
+            wrapped.setBlob(parameterIndex, x.toJsBlob());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -239,7 +239,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public void setClob(int parameterIndex, Clob x) throws SQLException {
         try {
-            wrapped.setClob(parameterIndex, x);
+            wrapped.setClob(parameterIndex, x.toJsClob());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -335,7 +335,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public void setNClob(int parameterIndex, NClob value) throws SQLException {
         try {
-            wrapped.setNClob(parameterIndex, value);
+            wrapped.setNClob(parameterIndex, value.toJsNClob());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -407,7 +407,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public void setRef(int parameterIndex, Ref x) throws SQLException {
         try {
-            wrapped.setRef(parameterIndex, x);
+            wrapped.setRef(parameterIndex, x.toJsRef());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }

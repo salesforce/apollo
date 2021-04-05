@@ -6,7 +6,9 @@
  */
 package sandbox.com.salesforce.apollo.dsql;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.Executor;
 
@@ -35,6 +37,26 @@ import sandbox.java.sql.Struct;
  *
  */
 public class ConnectionWrapper implements Connection {
+
+    public static Map<java.lang.Object, java.lang.String> convert(Map<Object, String> map) {
+        HashMap<java.lang.Object, java.lang.String> converted = new HashMap<>();
+        for (Entry<Object, String> e : map.entrySet()) {
+            converted.put(DJVM.unsandbox(e.getKey()), String.fromDJVM(e.getValue()));
+        }
+        return converted;
+    }
+
+    public static Map<java.lang.String, Class<?>> convertClassMap(Map<String, Class<?>> map) {
+        HashMap<java.lang.String, Class<?>> converted = new HashMap<>();
+        for (Entry<String, Class<?>> e : map.entrySet()) {
+            try {
+                converted.put(String.fromDJVM(e.getKey()), DJVM.fromDJVMType(e.getValue()));
+            } catch (ClassNotFoundException ex) {
+                throw new IllegalStateException(ex);
+            }
+        }
+        return converted;
+    }
 
     private final java.sql.Connection wrapped;
 
@@ -355,7 +377,8 @@ public class ConnectionWrapper implements Connection {
 
     public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
         try {
-            return wrapped.createStruct(String.fromDJVM(typeName), DJVM.unsandbox(attributes));
+            return new StructWrapper(
+                    wrapped.createStruct(String.fromDJVM(typeName), (java.lang.Object[]) DJVM.unsandbox(attributes)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -405,7 +428,8 @@ public class ConnectionWrapper implements Connection {
     public boolean setShardingKeyIfValid(ShardingKey shardingKey, ShardingKey superShardingKey,
                                          int timeout) throws SQLException {
         try {
-            return wrapped.setShardingKeyIfValid(shardingKey, superShardingKey, timeout);
+            return wrapped.setShardingKeyIfValid(shardingKey.toJsShardingKey(), superShardingKey.toJsShardingKey(),
+                                                 timeout);
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -413,7 +437,7 @@ public class ConnectionWrapper implements Connection {
 
     public boolean setShardingKeyIfValid(ShardingKey shardingKey, int timeout) throws SQLException {
         try {
-            return wrapped.setShardingKeyIfValid(shardingKey, timeout);
+            return wrapped.setShardingKeyIfValid(shardingKey.toJsShardingKey(), timeout);
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -421,7 +445,7 @@ public class ConnectionWrapper implements Connection {
 
     public void setShardingKey(ShardingKey shardingKey, ShardingKey superShardingKey) throws SQLException {
         try {
-            wrapped.setShardingKey(shardingKey, superShardingKey);
+            wrapped.setShardingKey(shardingKey.toJsShardingKey(), superShardingKey.toJsShardingKey());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -429,7 +453,7 @@ public class ConnectionWrapper implements Connection {
 
     public void setShardingKey(ShardingKey shardingKey) throws SQLException {
         try {
-            wrapped.setShardingKey(shardingKey);
+            wrapped.setShardingKey(shardingKey.toJsShardingKey());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }

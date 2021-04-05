@@ -302,4 +302,6 @@ public interface Blob {
      * @since 1.6
      */
     InputStream getBinaryStream(long pos, long length) throws SQLException;
+
+    java.sql.Blob toJsBlob();
 }

@@ -6,6 +6,8 @@
  */
 package sandbox.com.salesforce.apollo.dsql;
 
+import static sandbox.com.salesforce.apollo.dsql.ConnectionWrapper.convertClassMap;
+
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -46,7 +48,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Array getArray(int parameterIndex) throws SQLException {
         try {
-            return new ArrayWrapper( wrapped.getArray(parameterIndex));
+            return new ArrayWrapper(wrapped.getArray(parameterIndex));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -86,7 +88,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Blob getBlob(int parameterIndex) throws SQLException {
         try {
-            return wrapped.getBlob(parameterIndex);
+            return new BlobWrapper(wrapped.getBlob(parameterIndex));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -94,7 +96,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Blob getBlob(String parameterName) throws SQLException {
         try {
-            return wrapped.getBlob(String.fromDJVM(String.fromDJVM(parameterName)));
+            return new BlobWrapper(wrapped.getBlob(String.fromDJVM(parameterName)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -166,7 +168,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Clob getClob(int parameterIndex) throws SQLException {
         try {
-            return wrapped.getClob(parameterIndex);
+            return new ClobWrapper(wrapped.getClob(parameterIndex));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -174,7 +176,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Clob getClob(String parameterName) throws SQLException {
         try {
-            return wrapped.getClob(String.fromDJVM(parameterName));
+            return new ClobWrapper(wrapped.getClob(String.fromDJVM(parameterName)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -294,7 +296,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public NClob getNClob(int parameterIndex) throws SQLException {
         try {
-            return wrapped.getNClob(parameterIndex);
+            return new NClobWrapper(wrapped.getNClob(parameterIndex));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -302,7 +304,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public NClob getNClob(String parameterName) throws SQLException {
         try {
-            return wrapped.getNClob(String.fromDJVM(parameterName));
+            return new NClobWrapper(wrapped.getNClob(String.fromDJVM(parameterName)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -344,7 +346,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Object getObject(int parameterIndex, Map<String, Class<?>> map) throws SQLException {
         try {
-            return DJVM.sandbox(wrapped.getObject(parameterIndex, map));
+            return (Object) DJVM.sandbox(wrapped.getObject(parameterIndex, convertClassMap(map)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         } catch (ClassNotFoundException e) {
@@ -358,7 +360,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         } catch (ClassNotFoundException e) {
-            throw new IllegalStateException(e);
+            throw DJVM.toRuntimeException(e);
         }
     }
 
@@ -375,15 +377,17 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Object getObject(String parameterName, Map<String, Class<?>> map) throws SQLException {
         try {
-            return DJVM.sandbox(wrapped.getObject(String.fromDJVM(parameterName), map));
+            return (Object) DJVM.sandbox(wrapped.getObject(String.fromDJVM(parameterName), convertClassMap(map)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
+        } catch (ClassNotFoundException e) {
+            throw DJVM.toRuntimeException(e);
         }
     }
 
     public Ref getRef(int parameterIndex) throws SQLException {
         try {
-            return wrapped.getRef(parameterIndex);
+            return new RefWrapper(wrapped.getRef(parameterIndex));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -391,7 +395,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Ref getRef(String parameterName) throws SQLException {
         try {
-            return wrapped.getRef(String.fromDJVM(parameterName));
+            return new RefWrapper(wrapped.getRef(String.fromDJVM(parameterName)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -399,7 +403,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public RowId getRowId(int parameterIndex) throws SQLException {
         try {
-            return wrapped.getRowId(parameterIndex);
+            return new RowIdWrapper(wrapped.getRowId(parameterIndex));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -407,7 +411,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public RowId getRowId(String parameterName) throws SQLException {
         try {
-            return wrapped.getRowId(String.fromDJVM(parameterName));
+            return new RowIdWrapper(wrapped.getRowId(String.fromDJVM(parameterName)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -647,7 +651,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setBlob(String parameterName, Blob x) throws SQLException {
         try {
-            wrapped.setBlob(String.fromDJVM(parameterName), x);
+            wrapped.setBlob(String.fromDJVM(parameterName), x.toJsBlob());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -719,7 +723,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setClob(String parameterName, Clob x) throws SQLException {
         try {
-            wrapped.setClob(String.fromDJVM(parameterName), x);
+            wrapped.setClob(String.fromDJVM(parameterName), x.toJsClob());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -807,7 +811,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setNClob(String parameterName, NClob value) throws SQLException {
         try {
-            wrapped.setNClob(String.fromDJVM(parameterName), String.fromDJVM(value));
+            wrapped.setNClob(String.fromDJVM(parameterName), value.toJsNClob());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -879,7 +883,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setRowId(String parameterName, RowId x) throws SQLException {
         try {
-            wrapped.setRowId(String.fromDJVM(parameterName), x);
+            wrapped.setRowId(String.fromDJVM(parameterName), x.toJsRowId());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }

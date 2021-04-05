@@ -50,4 +50,6 @@ package sandbox.java.sql;
  * @since 1.6
  */
 
-public interface NClob extends Clob { }
+public interface NClob extends Clob {
+
+    java.sql.NClob toJsNClob(); }
