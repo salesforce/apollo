@@ -26,7 +26,6 @@
 package sandbox.java.sql;
 
 import sandbox.java.lang.Object;
-
 /**
  *
  * The representation (mapping) in the Java programming language of an SQL ROWID
@@ -118,5 +117,7 @@ public interface RowId {
       * @return a hash code for the <code>RowId</code>
       */
      int hashCode();
+
+    java.sql.RowId toJsRowId();
 
 }

@@ -103,7 +103,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public void setArray(int parameterIndex, Array x) throws SQLException {
         try {
-            wrapped.setArray(parameterIndex, x);
+            wrapped.setArray(parameterIndex, x.toJsArray());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -415,7 +415,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public void setRowId(int parameterIndex, RowId x) throws SQLException {
         try {
-            wrapped.setRowId(parameterIndex, x);
+            wrapped.setRowId(parameterIndex, x.toJsRowId());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }

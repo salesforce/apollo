@@ -46,7 +46,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Array getArray(int parameterIndex) throws SQLException {
         try {
-            return wrapped.getArray(parameterIndex);
+            return new ArrayWrapper( wrapped.getArray(parameterIndex));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -54,7 +54,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Array getArray(String parameterName) throws SQLException {
         try {
-            return wrapped.getArray(String.fromDJVM(parameterName));
+            return new ArrayWrapper(wrapped.getArray(String.fromDJVM(parameterName)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -78,7 +78,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public BigDecimal getBigDecimal(String parameterName) throws SQLException {
         try {
-            return wrapped.getBigDecimal(String.fromDJVM(String.fromDJVM(parameterName)));
+            return wrapped.getBigDecimal(String.fromDJVM(parameterName));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -182,7 +182,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Date getDate(int parameterIndex) throws SQLException {
         try {
-            return wrapped.getDate(parameterIndex);
+            return new Date(wrapped.getDate(parameterIndex).getTime());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -190,7 +190,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Date getDate(int parameterIndex, Calendar cal) throws SQLException {
         try {
-            return wrapped.getDate(parameterIndex, cal);
+            return new Date(wrapped.getDate(parameterIndex, cal).getTime());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -198,7 +198,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Date getDate(String parameterName) throws SQLException {
         try {
-            return wrapped.getDate(String.fromDJVM(parameterName));
+            return new Date(wrapped.getDate(String.fromDJVM(parameterName)).getTime());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -206,7 +206,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Date getDate(String parameterName, Calendar cal) throws SQLException {
         try {
-            return wrapped.getDate(String.fromDJVM(parameterName), cal);
+            return new Date(wrapped.getDate(String.fromDJVM(parameterName), cal).getTime());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -344,7 +344,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Object getObject(int parameterIndex, Map<String, Class<?>> map) throws SQLException {
         try {
-            return DJVM.sandbox( wrapped.getObject(parameterIndex, map));
+            return DJVM.sandbox(wrapped.getObject(parameterIndex, map));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         } catch (ClassNotFoundException e) {
@@ -375,7 +375,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public Object getObject(String parameterName, Map<String, Class<?>> map) throws SQLException {
         try {
-            return DJVM.sandbox( wrapped.getObject(String.fromDJVM(parameterName), map));
+            return DJVM.sandbox(wrapped.getObject(String.fromDJVM(parameterName), map));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -807,7 +807,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setNClob(String parameterName, NClob value) throws SQLException {
         try {
-            wrapped.setNClob(String.fromDJVM(parameterName), value);
+            wrapped.setNClob(String.fromDJVM(parameterName), String.fromDJVM(value));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -831,7 +831,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setNString(String parameterName, String value) throws SQLException {
         try {
-            wrapped.setNString(String.fromDJVM(parameterName), value);
+            wrapped.setNString(String.fromDJVM(parameterName), String.fromDJVM(value));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -895,7 +895,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setSQLXML(String parameterName, SQLXML xmlObject) throws SQLException {
         try {
-            wrapped.setSQLXML(String.fromDJVM(parameterName), xmlObject);
+            wrapped.setSQLXML(String.fromDJVM(parameterName), xmlObject.toJsSQLXML());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -903,7 +903,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setString(String parameterName, String x) throws SQLException {
         try {
-            wrapped.setString(String.fromDJVM(parameterName), String.fromDJVM(x)));
+            wrapped.setString(String.fromDJVM(parameterName), String.fromDJVM(x));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -927,7 +927,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setTimestamp(String parameterName, Timestamp x) throws SQLException {
         try {
-            wrapped.setTimestamp(String.fromDJVM(parameterName), x);
+            wrapped.setTimestamp(String.fromDJVM(parameterName), x.toJsTimestamp());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -935,7 +935,7 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
 
     public void setTimestamp(String parameterName, Timestamp x, Calendar cal) throws SQLException {
         try {
-            wrapped.setTimestamp(String.fromDJVM(parameterName), x, cal);
+            wrapped.setTimestamp(String.fromDJVM(parameterName), x.toJsTimestamp(), cal);
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }

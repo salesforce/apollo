@@ -337,4 +337,6 @@ public interface Array {
      */
     void free() throws SQLException;
 
+    java.sql.Array toJsArray();
+
 }

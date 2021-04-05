@@ -346,7 +346,8 @@ public class ConnectionWrapper implements Connection {
 
     public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
         try {
-            return wrapped.createArrayOf(typeName, elements);
+            return new ArrayWrapper(
+                    wrapped.createArrayOf(String.fromDJVM(typeName), (java.lang.Object[]) DJVM.unsandbox(elements)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -354,7 +355,7 @@ public class ConnectionWrapper implements Connection {
 
     public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
         try {
-            return wrapped.createStruct(String.fromDJVM(typeName), attributes);
+            return wrapped.createStruct(String.fromDJVM(typeName), DJVM.unsandbox(attributes));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
