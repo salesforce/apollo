@@ -95,7 +95,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public ParameterMetaData getParameterMetaData() throws SQLException {
         try {
-            return wrapped.getParameterMetaData();
+            return new ParameterMetaDataWrapper(wrapped.getParameterMetaData());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }

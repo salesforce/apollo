@@ -566,7 +566,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public RowIdLifetime getRowIdLifetime() throws SQLException {
         try {
-            return wrapped.getRowIdLifetime();
+            return RowIdLifetime.valueOf(wrapped.getRowIdLifetime().name());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
