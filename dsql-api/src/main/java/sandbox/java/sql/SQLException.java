@@ -58,6 +58,10 @@ import sandbox.java.lang.Throwable;
  */
 public class SQLException extends sandbox.java.lang.Exception implements Iterable<Throwable> {
 
+    public SQLException(java.sql.SQLException e) {
+        this(String.toDJVM(e.getMessage()), String.toDJVM(e.getSQLState()), e.getErrorCode());
+    }
+
     /**
      * Constructs a <code>SQLException</code> object with a given
      * <code>reason</code>, <code>SQLState</code> and <code>vendorCode</code>.

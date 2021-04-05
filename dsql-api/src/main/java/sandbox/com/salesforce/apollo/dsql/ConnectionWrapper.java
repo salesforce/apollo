@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
 
+import sandbox.java.lang.DJVM;
 import sandbox.java.lang.Object;
 import sandbox.java.lang.String;
 import sandbox.java.sql.Array;
@@ -35,255 +36,402 @@ import sandbox.java.sql.Struct;
  */
 public class ConnectionWrapper implements Connection {
 
-    private final Connection wrapped;
+    private final java.sql.Connection wrapped;
 
     public ConnectionWrapper(java.sql.Connection o) {
         wrapped = null;
     }
 
     public <T> T unwrap(Class<T> iface) throws SQLException {
-        return wrapped.unwrap(iface);
+        throw new UnsupportedOperationException();
     }
 
     public boolean isWrapperFor(Class<?> iface) throws SQLException {
-        return wrapped.isWrapperFor(iface);
+        throw new UnsupportedOperationException();
     }
 
     public Statement createStatement() throws SQLException {
-        return wrapped.createStatement();
+        try {
+            return new StatementWrapper(this, wrapped.createStatement());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public PreparedStatement prepareStatement(String sql) throws SQLException {
-        return wrapped.prepareStatement(sql);
+        try {
+            return new PreparedStatementWrapper(this, wrapped.prepareStatement(String.fromDJVM(sql)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public CallableStatement prepareCall(String sql) throws SQLException {
-        return wrapped.prepareCall(sql);
+        try {
+            return new CallableStatementWrapper(this, wrapped.prepareCall(String.fromDJVM(sql)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String nativeSQL(String sql) throws SQLException {
-        return wrapped.nativeSQL(sql);
+        try {
+            return String.toDJVM(wrapped.nativeSQL(String.fromDJVM(sql)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setAutoCommit(boolean autoCommit) throws SQLException {
-        wrapped.setAutoCommit(autoCommit);
     }
 
     public boolean getAutoCommit() throws SQLException {
-        return wrapped.getAutoCommit();
+        return false;
     }
 
     public void commit() throws SQLException {
-        wrapped.commit();
+        throw new UnsupportedOperationException();
     }
 
     public void rollback() throws SQLException {
-        wrapped.rollback();
+        try {
+            wrapped.rollback();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void close() throws SQLException {
-        wrapped.close();
     }
 
     public boolean isClosed() throws SQLException {
-        return wrapped.isClosed();
+        return false;
     }
 
     public DatabaseMetaData getMetaData() throws SQLException {
-        return wrapped.getMetaData();
+        try {
+            return wrapped.getMetaData();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setReadOnly(boolean readOnly) throws SQLException {
-        wrapped.setReadOnly(readOnly);
+        throw new UnsupportedOperationException();
     }
 
     public boolean isReadOnly() throws SQLException {
-        return wrapped.isReadOnly();
+        try {
+            return wrapped.isReadOnly();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setCatalog(String catalog) throws SQLException {
-        wrapped.setCatalog(catalog);
+        try {
+            wrapped.setCatalog(String.fromDJVM(catalog));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getCatalog() throws SQLException {
-        return wrapped.getCatalog();
+        try {
+            return String.toDJVM(wrapped.getCatalog());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setTransactionIsolation(int level) throws SQLException {
-        wrapped.setTransactionIsolation(level);
+        throw new UnsupportedOperationException();
     }
 
     public int getTransactionIsolation() throws SQLException {
-        return wrapped.getTransactionIsolation();
+        try {
+            return wrapped.getTransactionIsolation();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public SQLWarning getWarnings() throws SQLException {
-        return wrapped.getWarnings();
+        try {
+            return new SQLWarning(wrapped.getWarnings());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void clearWarnings() throws SQLException {
-        wrapped.clearWarnings();
+        try {
+            wrapped.clearWarnings();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Statement createStatement(int resultSetType, int resultSetConcurrency) throws SQLException {
-        return wrapped.createStatement(resultSetType, resultSetConcurrency);
+        try {
+            return new StatementWrapper(this, wrapped.createStatement(resultSetType, resultSetConcurrency));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public PreparedStatement prepareStatement(String sql, int resultSetType,
                                               int resultSetConcurrency) throws SQLException {
-        return wrapped.prepareStatement(sql, resultSetType, resultSetConcurrency);
+        try {
+            return new PreparedStatementWrapper(this,
+                    wrapped.prepareStatement(String.fromDJVM(sql), resultSetType, resultSetConcurrency));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency) throws SQLException {
-        return wrapped.prepareCall(sql, resultSetType, resultSetConcurrency);
+        try {
+            return new CallableStatementWrapper(this,
+                    wrapped.prepareCall(String.fromDJVM(sql), resultSetType, resultSetConcurrency));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Map<String, Class<?>> getTypeMap() throws SQLException {
-        return wrapped.getTypeMap();
+        throw new UnsupportedOperationException();
     }
 
     public void setTypeMap(Map<String, Class<?>> map) throws SQLException {
-        wrapped.setTypeMap(map);
+        throw new UnsupportedOperationException();
     }
 
     public void setHoldability(int holdability) throws SQLException {
-        wrapped.setHoldability(holdability);
+        throw new UnsupportedOperationException();
     }
 
     public int getHoldability() throws SQLException {
-        return wrapped.getHoldability();
+        try {
+            return wrapped.getHoldability();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Savepoint setSavepoint() throws SQLException {
-        return wrapped.setSavepoint();
+        try {
+            return wrapped.setSavepoint();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Savepoint setSavepoint(String name) throws SQLException {
-        return wrapped.setSavepoint(name);
+        try {
+            return wrapped.setSavepoint(name);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void rollback(Savepoint savepoint) throws SQLException {
-        wrapped.rollback(savepoint);
+        try {
+            wrapped.rollback(savepoint);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void releaseSavepoint(Savepoint savepoint) throws SQLException {
-        wrapped.releaseSavepoint(savepoint);
+        try {
+            wrapped.releaseSavepoint(savepoint);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Statement createStatement(int resultSetType, int resultSetConcurrency,
                                      int resultSetHoldability) throws SQLException {
-        return wrapped.createStatement(resultSetType, resultSetConcurrency, resultSetHoldability);
+        try {
+            return new StatementWrapper(this,
+                    wrapped.createStatement(resultSetType, resultSetConcurrency, resultSetHoldability));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency,
                                               int resultSetHoldability) throws SQLException {
-        return wrapped.prepareStatement(sql, resultSetType, resultSetConcurrency, resultSetHoldability);
+        try {
+            return new PreparedStatementWrapper(this,
+                    wrapped.prepareStatement(String.fromDJVM(sql), resultSetType, resultSetConcurrency,
+                                             resultSetHoldability));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency,
                                          int resultSetHoldability) throws SQLException {
-        return wrapped.prepareCall(sql, resultSetType, resultSetConcurrency, resultSetHoldability);
+        try {
+            return new CallableStatementWrapper(this, wrapped.prepareCall(String.fromDJVM(sql), resultSetType,
+                                                                          resultSetConcurrency, resultSetHoldability));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public PreparedStatement prepareStatement(String sql, int autoGeneratedKeys) throws SQLException {
-        return wrapped.prepareStatement(sql, autoGeneratedKeys);
+        try {
+            return new PreparedStatementWrapper(this,
+                    wrapped.prepareStatement(String.fromDJVM(sql), autoGeneratedKeys));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public PreparedStatement prepareStatement(String sql, int[] columnIndexes) throws SQLException {
-        return wrapped.prepareStatement(sql, columnIndexes);
+        try {
+            return new PreparedStatementWrapper(this, wrapped.prepareStatement(String.fromDJVM(sql), columnIndexes));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public PreparedStatement prepareStatement(String sql, String[] columnNames) throws SQLException {
-        return wrapped.prepareStatement(sql, columnNames);
+        try {
+            return new PreparedStatementWrapper(this,
+                    wrapped.prepareStatement(String.fromDJVM(sql), (java.lang.String[]) DJVM.unsandbox(columnNames)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Clob createClob() throws SQLException {
-        return wrapped.createClob();
+        throw new UnsupportedOperationException();
     }
 
     public Blob createBlob() throws SQLException {
-        return wrapped.createBlob();
+        throw new UnsupportedOperationException();
     }
 
     public NClob createNClob() throws SQLException {
-        return wrapped.createNClob();
+        throw new UnsupportedOperationException();
     }
 
     public SQLXML createSQLXML() throws SQLException {
-        return wrapped.createSQLXML();
+        throw new UnsupportedOperationException();
     }
 
     public boolean isValid(int timeout) throws SQLException {
-        return wrapped.isValid(timeout);
+        return true;
     }
 
     public void setClientInfo(String name, String value) throws SQLClientInfoException {
-        wrapped.setClientInfo(name, value);
+        throw new UnsupportedOperationException();
     }
 
     public void setClientInfo(Properties properties) throws SQLClientInfoException {
-        wrapped.setClientInfo(properties);
+        throw new UnsupportedOperationException();
     }
 
     public String getClientInfo(String name) throws SQLException {
-        return wrapped.getClientInfo(name);
+        throw new UnsupportedOperationException();
     }
 
     public Properties getClientInfo() throws SQLException {
-        return wrapped.getClientInfo();
+        throw new UnsupportedOperationException();
     }
 
     public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
-        return wrapped.createArrayOf(typeName, elements);
+        try {
+            return wrapped.createArrayOf(typeName, elements);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
-        return wrapped.createStruct(typeName, attributes);
+        try {
+            return wrapped.createStruct(String.fromDJVM(typeName), attributes);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setSchema(String schema) throws SQLException {
-        wrapped.setSchema(schema);
+        try {
+            wrapped.setSchema(String.fromDJVM(schema));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getSchema() throws SQLException {
-        return wrapped.getSchema();
+        try {
+            return String.toDJVM(wrapped.getSchema());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void abort(Executor executor) throws SQLException {
-        wrapped.abort(executor);
+        try {
+            wrapped.abort(executor);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setNetworkTimeout(Executor executor, int milliseconds) throws SQLException {
-        wrapped.setNetworkTimeout(executor, milliseconds);
     }
 
     public int getNetworkTimeout() throws SQLException {
-        return wrapped.getNetworkTimeout();
+        try {
+            return wrapped.getNetworkTimeout();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void beginRequest() throws SQLException {
-        wrapped.beginRequest();
     }
 
     public void endRequest() throws SQLException {
-        wrapped.endRequest();
     }
 
     public boolean setShardingKeyIfValid(ShardingKey shardingKey, ShardingKey superShardingKey,
                                          int timeout) throws SQLException {
-        return wrapped.setShardingKeyIfValid(shardingKey, superShardingKey, timeout);
+        try {
+            return wrapped.setShardingKeyIfValid(shardingKey, superShardingKey, timeout);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean setShardingKeyIfValid(ShardingKey shardingKey, int timeout) throws SQLException {
-        return wrapped.setShardingKeyIfValid(shardingKey, timeout);
+        try {
+            return wrapped.setShardingKeyIfValid(shardingKey, timeout);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setShardingKey(ShardingKey shardingKey, ShardingKey superShardingKey) throws SQLException {
-        wrapped.setShardingKey(shardingKey, superShardingKey);
+        try {
+            wrapped.setShardingKey(shardingKey, superShardingKey);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setShardingKey(ShardingKey shardingKey) throws SQLException {
-        wrapped.setShardingKey(shardingKey);
+        try {
+            wrapped.setShardingKey(shardingKey);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
 }

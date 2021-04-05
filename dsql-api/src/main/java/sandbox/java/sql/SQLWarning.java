@@ -183,6 +183,13 @@ public class SQLWarning extends SQLException {
     }
 
     /**
+     * @param warnings
+     */
+    public SQLWarning(java.sql.SQLWarning warnings) {
+        // TODO Auto-generated constructor stub
+    }
+
+    /**
      * Retrieves the warning chained to this <code>SQLWarning</code> object by
      * <code>setNextWarning</code>.
      *
