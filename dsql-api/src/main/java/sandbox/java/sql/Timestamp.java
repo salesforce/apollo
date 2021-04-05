@@ -25,7 +25,7 @@
 
 package sandbox.java.sql;
 
-import java.time.Instant;
+import sandbox.java.time.Instant;
 import java.time.LocalDateTime;
 
 import sandbox.java.lang.Character;
@@ -71,7 +71,7 @@ import sandbox.java.lang.String;
  *
  * @since 1.1
  */
-public class Timestamp extends java.util.Date {
+public class Timestamp extends sandbox.java.util.Date {
 
     /**
      * Constructs a {@code Timestamp} object initialized with the given values.
@@ -268,7 +268,6 @@ public class Timestamp extends java.util.Date {
      * @return a {@code String} object in {@code yyyy-mm-dd hh:mm:ss.fffffffff}
      *         format
      */
-    @SuppressWarnings("deprecation")
     public java.lang.String toString() {
         int year = super.getYear() + 1900;
         int month = super.getMonth() + 1;
@@ -448,7 +447,7 @@ public class Timestamp extends java.util.Date {
      *
      * @since 1.5
      */
-    public int compareTo(java.util.Date o) {
+    public int compareTo(sandbox.java.util.Date o) {
         if (o instanceof Timestamp) {
             // When Timestamp instance compare it with a Timestamp
             // Hence it is basically calling this.compareTo((Timestamp))o);
@@ -506,7 +505,6 @@ public class Timestamp extends java.util.Date {
      * @return a {@code LocalDateTime} object representing the same date-time value
      * @since 1.8
      */
-    @SuppressWarnings("deprecation")
     public LocalDateTime toLocalDateTime() {
         return LocalDateTime.of(getYear() + 1900, getMonth() + 1, getDate(), getHours(), getMinutes(), getSeconds(),
                                 getNanos());
@@ -546,7 +544,6 @@ public class Timestamp extends java.util.Date {
      * @return an instant representing the same point on the time-line
      * @since 1.8
      */
-    @Override
     public Instant toInstant() {
         return Instant.ofEpochSecond(super.getTime() / MILLIS_PER_SECOND, nanos);
     }

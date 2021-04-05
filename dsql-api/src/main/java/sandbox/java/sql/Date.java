@@ -25,11 +25,11 @@
 
 package sandbox.java.sql;
 
-import java.time.Instant;
 import java.time.LocalDate;
 
 import sandbox.java.lang.Integer;
 import sandbox.java.lang.String;
+import sandbox.java.time.Instant;
 
 /**
  * <P>
@@ -44,7 +44,7 @@ import sandbox.java.lang.String;
  *
  * @since 1.1
  */
-public class Date extends java.util.Date {
+public class Date extends sandbox.java.util.Date {
 
     /**
      * Constructs a <code>Date</code> object initialized with the given year, month,
@@ -152,8 +152,7 @@ public class Date extends java.util.Date {
      * Formats a date in the date escape format yyyy-mm-dd.
      *
      * @return a String in yyyy-mm-dd format
-     */
-    @SuppressWarnings("deprecation")
+     */ 
     public java.lang.String toString() {
         int year = super.getYear() + 1900;
         int month = super.getMonth() + 1;
@@ -298,8 +297,7 @@ public class Date extends java.util.Date {
      * @return a {@code LocalDate} object representing the same date value
      *
      * @since 1.8
-     */
-    @SuppressWarnings("deprecation")
+     */ 
     public LocalDate toLocalDate() {
         return LocalDate.of(getYear() + 1900, getMonth() + 1, getDate());
     }
@@ -310,7 +308,6 @@ public class Date extends java.util.Date {
      *
      * @exception java.lang.UnsupportedOperationException if this method is invoked
      */
-    @Override
     public Instant toInstant() {
         throw new java.lang.UnsupportedOperationException();
     }
