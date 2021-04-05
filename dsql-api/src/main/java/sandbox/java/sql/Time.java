@@ -274,4 +274,8 @@ public class Time extends java.util.Date {
     public Instant toInstant() {
         throw new java.lang.UnsupportedOperationException();
     }
+    
+    public java.sql.Time toJsTime() {
+        return new java.sql.Time(getTime());
+    }
 }

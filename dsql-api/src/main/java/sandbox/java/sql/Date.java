@@ -311,4 +311,8 @@ public class Date extends sandbox.java.util.Date {
     public Instant toInstant() {
         throw new java.lang.UnsupportedOperationException();
     }
+    
+    public java.sql.Date toJsDate() {
+        return new java.sql.Date(getTime());
+    }
 }

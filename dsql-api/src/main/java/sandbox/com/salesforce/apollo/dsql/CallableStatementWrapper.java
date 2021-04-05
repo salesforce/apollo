@@ -22,14 +22,9 @@ import sandbox.java.sql.Clob;
 import sandbox.java.sql.Connection;
 import sandbox.java.sql.Date;
 import sandbox.java.sql.NClob;
-import sandbox.java.sql.ParameterMetaData;
 import sandbox.java.sql.Ref;
-import sandbox.java.sql.ResultSet;
-import sandbox.java.sql.ResultSetMetaData;
 import sandbox.java.sql.RowId;
 import sandbox.java.sql.SQLException;
-import sandbox.java.sql.SQLType;
-import sandbox.java.sql.SQLWarning;
 import sandbox.java.sql.SQLXML;
 import sandbox.java.sql.Time;
 import sandbox.java.sql.Timestamp;
@@ -38,6 +33,7 @@ import sandbox.java.sql.Timestamp;
  * @author hal.hildebrand
  *
  */
+@SuppressWarnings("deprecation")
 public class CallableStatementWrapper extends PreparedStatementWrapper implements CallableStatement {
 
     private final java.sql.CallableStatement wrapped;
@@ -48,455 +44,907 @@ public class CallableStatementWrapper extends PreparedStatementWrapper implement
     }
 
     public Array getArray(int parameterIndex) throws SQLException {
-        return wrapped.getArray(parameterIndex);
+        try {
+            return wrapped.getArray(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Array getArray(String parameterName) throws SQLException {
-        return wrapped.getArray(parameterName);
+        try {
+            return wrapped.getArray(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public BigDecimal getBigDecimal(int parameterIndex) throws SQLException {
-        return wrapped.getBigDecimal(parameterIndex);
+        try {
+            return wrapped.getBigDecimal(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public BigDecimal getBigDecimal(int parameterIndex, int scale) throws SQLException {
-        return wrapped.getBigDecimal(parameterIndex, scale);
+        try {
+            return wrapped.getBigDecimal(parameterIndex, scale);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public BigDecimal getBigDecimal(String parameterName) throws SQLException {
-        return wrapped.getBigDecimal(parameterName);
+        try {
+            return wrapped.getBigDecimal(String.fromDJVM(String.fromDJVM(parameterName)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Blob getBlob(int parameterIndex) throws SQLException {
-        return wrapped.getBlob(parameterIndex);
+        try {
+            return wrapped.getBlob(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Blob getBlob(String parameterName) throws SQLException {
-        return wrapped.getBlob(parameterName);
+        try {
+            return wrapped.getBlob(String.fromDJVM(String.fromDJVM(parameterName)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean getBoolean(int parameterIndex) throws SQLException {
-        return wrapped.getBoolean(parameterIndex);
+        try {
+            return wrapped.getBoolean(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean getBoolean(String parameterName) throws SQLException {
-        return wrapped.getBoolean(parameterName);
+        try {
+            return wrapped.getBoolean(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public byte getByte(int parameterIndex) throws SQLException {
-        return wrapped.getByte(parameterIndex);
+        try {
+            return wrapped.getByte(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public byte getByte(String parameterName) throws SQLException {
-        return wrapped.getByte(parameterName);
+        try {
+            return wrapped.getByte(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public byte[] getBytes(int parameterIndex) throws SQLException {
-        return wrapped.getBytes(parameterIndex);
+        try {
+            return wrapped.getBytes(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public byte[] getBytes(String parameterName) throws SQLException {
-        return wrapped.getBytes(parameterName);
+        try {
+            return wrapped.getBytes(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Reader getCharacterStream(int parameterIndex) throws SQLException {
-        return wrapped.getCharacterStream(parameterIndex);
+        try {
+            return wrapped.getCharacterStream(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Reader getCharacterStream(String parameterName) throws SQLException {
-        return wrapped.getCharacterStream(parameterName);
+        try {
+            return wrapped.getCharacterStream(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Clob getClob(int parameterIndex) throws SQLException {
-        return wrapped.getClob(parameterIndex);
+        try {
+            return wrapped.getClob(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Clob getClob(String parameterName) throws SQLException {
-        return wrapped.getClob(parameterName);
+        try {
+            return wrapped.getClob(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Date getDate(int parameterIndex) throws SQLException {
-        return wrapped.getDate(parameterIndex);
+        try {
+            return wrapped.getDate(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Date getDate(int parameterIndex, Calendar cal) throws SQLException {
-        return wrapped.getDate(parameterIndex, cal);
+        try {
+            return wrapped.getDate(parameterIndex, cal);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Date getDate(String parameterName) throws SQLException {
-        return wrapped.getDate(parameterName);
+        try {
+            return wrapped.getDate(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Date getDate(String parameterName, Calendar cal) throws SQLException {
-        return wrapped.getDate(parameterName, cal);
+        try {
+            return wrapped.getDate(String.fromDJVM(parameterName), cal);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public double getDouble(int parameterIndex) throws SQLException {
-        return wrapped.getDouble(parameterIndex);
+        try {
+            return wrapped.getDouble(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public double getDouble(String parameterName) throws SQLException {
-        return wrapped.getDouble(parameterName);
+        try {
+            return wrapped.getDouble(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public float getFloat(int parameterIndex) throws SQLException {
-        return wrapped.getFloat(parameterIndex);
+        try {
+            return wrapped.getFloat(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public float getFloat(String parameterName) throws SQLException {
-        return wrapped.getFloat(parameterName);
+        try {
+            return wrapped.getFloat(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getInt(int parameterIndex) throws SQLException {
-        return wrapped.getInt(parameterIndex);
+        try {
+            return wrapped.getInt(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getInt(String parameterName) throws SQLException {
-        return wrapped.getInt(parameterName);
+        try {
+            return wrapped.getInt(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public long getLong(int parameterIndex) throws SQLException {
-        return wrapped.getLong(parameterIndex);
+        try {
+            return wrapped.getLong(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public long getLong(String parameterName) throws SQLException {
-        return wrapped.getLong(parameterName);
+        try {
+            return wrapped.getLong(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Reader getNCharacterStream(int parameterIndex) throws SQLException {
-        return wrapped.getNCharacterStream(parameterIndex);
+        try {
+            return wrapped.getNCharacterStream(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Reader getNCharacterStream(String parameterName) throws SQLException {
-        return wrapped.getNCharacterStream(parameterName);
+        try {
+            return wrapped.getNCharacterStream(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public NClob getNClob(int parameterIndex) throws SQLException {
-        return wrapped.getNClob(parameterIndex);
+        try {
+            return wrapped.getNClob(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public NClob getNClob(String parameterName) throws SQLException {
-        return wrapped.getNClob(parameterName);
+        try {
+            return wrapped.getNClob(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getNString(int parameterIndex) throws SQLException {
-        return wrapped.getNString(parameterIndex);
+        try {
+            return String.toDJVM(wrapped.getNString(parameterIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getNString(String parameterName) throws SQLException {
-        return wrapped.getNString(parameterName);
+        try {
+            return String.toDJVM(wrapped.getNString(String.fromDJVM(parameterName)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Object getObject(int parameterIndex) throws SQLException {
-        return wrapped.getObject(parameterIndex);
+        try {
+            return wrapped.getObject(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public <T> T getObject(int parameterIndex, Class<T> type) throws SQLException {
-        return wrapped.getObject(parameterIndex, type);
+        try {
+            return wrapped.getObject(parameterIndex, type);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Object getObject(int parameterIndex, Map<String, Class<?>> map) throws SQLException {
-        return wrapped.getObject(parameterIndex, map);
+        try {
+            return wrapped.getObject(parameterIndex, map);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Object getObject(String parameterName) throws SQLException {
-        return wrapped.getObject(parameterName);
+        try {
+            return wrapped.getObject(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public <T> T getObject(String parameterName, Class<T> type) throws SQLException {
-        return wrapped.getObject(parameterName, type);
+        try {
+            return wrapped.getObject(String.fromDJVM(parameterName), type);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Object getObject(String parameterName, Map<String, Class<?>> map) throws SQLException {
-        return wrapped.getObject(parameterName, map);
+        try {
+            return wrapped.getObject(String.fromDJVM(parameterName), map);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Ref getRef(int parameterIndex) throws SQLException {
-        return wrapped.getRef(parameterIndex);
+        try {
+            return wrapped.getRef(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Ref getRef(String parameterName) throws SQLException {
-        return wrapped.getRef(parameterName);
+        try {
+            return wrapped.getRef(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public RowId getRowId(int parameterIndex) throws SQLException {
-        return wrapped.getRowId(parameterIndex);
+        try {
+            return wrapped.getRowId(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public RowId getRowId(String parameterName) throws SQLException {
-        return wrapped.getRowId(parameterName);
+        try {
+            return wrapped.getRowId(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public short getShort(int parameterIndex) throws SQLException {
-        return wrapped.getShort(parameterIndex);
+        try {
+            return wrapped.getShort(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public short getShort(String parameterName) throws SQLException {
-        return wrapped.getShort(parameterName);
+        try {
+            return wrapped.getShort(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public SQLXML getSQLXML(int parameterIndex) throws SQLException {
-        return wrapped.getSQLXML(parameterIndex);
+        try {
+            return wrapped.getSQLXML(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public SQLXML getSQLXML(String parameterName) throws SQLException {
-        return wrapped.getSQLXML(parameterName);
+        try {
+            return wrapped.getSQLXML(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getString(int parameterIndex) throws SQLException {
-        return wrapped.getString(parameterIndex);
+        try {
+            return wrapped.getString(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getString(String parameterName) throws SQLException {
-        return wrapped.getString(parameterName);
+        try {
+            return String.toDJVM(wrapped.getString(String.fromDJVM(parameterName)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Time getTime(int parameterIndex) throws SQLException {
-        return wrapped.getTime(parameterIndex);
+        try {
+            return wrapped.getTime(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Time getTime(int parameterIndex, Calendar cal) throws SQLException {
-        return wrapped.getTime(parameterIndex, cal);
+        try {
+            return wrapped.getTime(parameterIndex, cal);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Time getTime(String parameterName) throws SQLException {
-        return wrapped.getTime(parameterName);
+        try {
+            return wrapped.getTime(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Time getTime(String parameterName, Calendar cal) throws SQLException {
-        return wrapped.getTime(parameterName, cal);
+        try {
+            return wrapped.getTime(String.fromDJVM(parameterName), cal);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Timestamp getTimestamp(int parameterIndex) throws SQLException {
-        return wrapped.getTimestamp(parameterIndex);
+        try {
+            return wrapped.getTimestamp(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Timestamp getTimestamp(int parameterIndex, Calendar cal) throws SQLException {
-        return wrapped.getTimestamp(parameterIndex, cal);
+        try {
+            return wrapped.getTimestamp(parameterIndex, cal);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Timestamp getTimestamp(String parameterName) throws SQLException {
-        return wrapped.getTimestamp(parameterName);
+        try {
+            return wrapped.getTimestamp(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Timestamp getTimestamp(String parameterName, Calendar cal) throws SQLException {
-        return wrapped.getTimestamp(parameterName, cal);
+        try {
+            return wrapped.getTimestamp(String.fromDJVM(parameterName), cal);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public URL getURL(int parameterIndex) throws SQLException {
-        return wrapped.getURL(parameterIndex);
+        try {
+            return wrapped.getURL(parameterIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public URL getURL(String parameterName) throws SQLException {
-        return wrapped.getURL(parameterName);
+        try {
+            return wrapped.getURL(String.fromDJVM(parameterName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void registerOutParameter(int parameterIndex, int sqlType) throws SQLException {
-        wrapped.registerOutParameter(parameterIndex, sqlType);
+        try {
+            wrapped.registerOutParameter(parameterIndex, sqlType);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void registerOutParameter(int parameterIndex, int sqlType, int scale) throws SQLException {
-        wrapped.registerOutParameter(parameterIndex, sqlType, scale);
+        try {
+            wrapped.registerOutParameter(parameterIndex, sqlType, scale);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void registerOutParameter(int parameterIndex, int sqlType, String typeName) throws SQLException {
-        wrapped.registerOutParameter(parameterIndex, sqlType, typeName);
+        try {
+            wrapped.registerOutParameter(parameterIndex, sqlType, String.fromDJVM(typeName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void registerOutParameter(String parameterName, int sqlType) throws SQLException {
-        wrapped.registerOutParameter(parameterName, sqlType);
+        try {
+            wrapped.registerOutParameter(String.fromDJVM(parameterName), sqlType);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void registerOutParameter(String parameterName, int sqlType, int scale) throws SQLException {
-        wrapped.registerOutParameter(parameterName, sqlType, scale);
+        try {
+            wrapped.registerOutParameter(String.fromDJVM(parameterName), sqlType, scale);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void registerOutParameter(String parameterName, int sqlType, String typeName) throws SQLException {
-        wrapped.registerOutParameter(parameterName, sqlType, typeName);
+        try {
+            wrapped.registerOutParameter(String.fromDJVM(parameterName), sqlType, String.fromDJVM(typeName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setAsciiStream(String parameterName, InputStream x) throws SQLException {
-        wrapped.setAsciiStream(parameterName, x);
+        try {
+            wrapped.setAsciiStream(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setAsciiStream(String parameterName, InputStream x, int length) throws SQLException {
-        wrapped.setAsciiStream(parameterName, x, length);
+        try {
+            wrapped.setAsciiStream(String.fromDJVM(parameterName), x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setAsciiStream(String parameterName, InputStream x, long length) throws SQLException {
-        wrapped.setAsciiStream(parameterName, x, length);
+        try {
+            wrapped.setAsciiStream(String.fromDJVM(parameterName), x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setBigDecimal(String parameterName, BigDecimal x) throws SQLException {
-        wrapped.setBigDecimal(parameterName, x);
+        try {
+            wrapped.setBigDecimal(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setBinaryStream(String parameterName, InputStream x) throws SQLException {
-        wrapped.setBinaryStream(parameterName, x);
+        try {
+            wrapped.setBinaryStream(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setBinaryStream(String parameterName, InputStream x, int length) throws SQLException {
-        wrapped.setBinaryStream(parameterName, x, length);
+        try {
+            wrapped.setBinaryStream(String.fromDJVM(parameterName), x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setBinaryStream(String parameterName, InputStream x, long length) throws SQLException {
-        wrapped.setBinaryStream(parameterName, x, length);
+        try {
+            wrapped.setBinaryStream(String.fromDJVM(parameterName), x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setBlob(String parameterName, Blob x) throws SQLException {
-        wrapped.setBlob(parameterName, x);
+        try {
+            wrapped.setBlob(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setBlob(String parameterName, InputStream inputStream) throws SQLException {
-        wrapped.setBlob(parameterName, inputStream);
+        try {
+            wrapped.setBlob(String.fromDJVM(parameterName), inputStream);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setBlob(String parameterName, InputStream inputStream, long length) throws SQLException {
-        wrapped.setBlob(parameterName, inputStream, length);
+        try {
+            wrapped.setBlob(String.fromDJVM(parameterName), inputStream, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setBoolean(String parameterName, boolean x) throws SQLException {
-        wrapped.setBoolean(parameterName, x);
+        try {
+            wrapped.setBoolean(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setByte(String parameterName, byte x) throws SQLException {
-        wrapped.setByte(parameterName, x);
+        try {
+            wrapped.setByte(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setBytes(String parameterName, byte[] x) throws SQLException {
-        wrapped.setBytes(parameterName, x);
+        try {
+            wrapped.setBytes(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setCharacterStream(String parameterName, Reader reader) throws SQLException {
-        wrapped.setCharacterStream(parameterName, reader);
+        try {
+            wrapped.setCharacterStream(String.fromDJVM(parameterName), reader);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setCharacterStream(String parameterName, Reader reader, int length) throws SQLException {
-        wrapped.setCharacterStream(parameterName, reader, length);
+        try {
+            wrapped.setCharacterStream(String.fromDJVM(parameterName), reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setCharacterStream(String parameterName, Reader reader, long length) throws SQLException {
-        wrapped.setCharacterStream(parameterName, reader, length);
+        try {
+            wrapped.setCharacterStream(String.fromDJVM(parameterName), reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setClob(String parameterName, Clob x) throws SQLException {
-        wrapped.setClob(parameterName, x);
+        try {
+            wrapped.setClob(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setClob(String parameterName, Reader reader) throws SQLException {
-        wrapped.setClob(parameterName, reader);
+        try {
+            wrapped.setClob(String.fromDJVM(parameterName), reader);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setClob(String parameterName, Reader reader, long length) throws SQLException {
-        wrapped.setClob(parameterName, reader, length);
+        try {
+            wrapped.setClob(String.fromDJVM(parameterName), reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setDate(String parameterName, Date x) throws SQLException {
-        wrapped.setDate(parameterName, x);
+        try {
+            wrapped.setDate(String.fromDJVM(parameterName), x.toJsDate());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setDate(String parameterName, Date x, Calendar cal) throws SQLException {
-        wrapped.setDate(parameterName, x, cal);
+        try {
+            wrapped.setDate(String.fromDJVM(parameterName), x.toJsDate(), cal);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setDouble(String parameterName, double x) throws SQLException {
-        wrapped.setDouble(parameterName, x);
+        try {
+            wrapped.setDouble(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setFloat(String parameterName, float x) throws SQLException {
-        wrapped.setFloat(parameterName, x);
+        try {
+            wrapped.setFloat(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setInt(String parameterName, int x) throws SQLException {
-        wrapped.setInt(parameterName, x);
+        try {
+            wrapped.setInt(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setLong(String parameterName, long x) throws SQLException {
-        wrapped.setLong(parameterName, x);
+        try {
+            wrapped.setLong(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setNCharacterStream(String parameterName, Reader value) throws SQLException {
-        wrapped.setNCharacterStream(parameterName, value);
+        try {
+            wrapped.setNCharacterStream(String.fromDJVM(parameterName), value);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setNCharacterStream(String parameterName, Reader value, long length) throws SQLException {
-        wrapped.setNCharacterStream(parameterName, value, length);
+        try {
+            wrapped.setNCharacterStream(String.fromDJVM(parameterName), value, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setNClob(String parameterName, NClob value) throws SQLException {
-        wrapped.setNClob(parameterName, value);
+        try {
+            wrapped.setNClob(String.fromDJVM(parameterName), value);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setNClob(String parameterName, Reader reader) throws SQLException {
-        wrapped.setNClob(parameterName, reader);
+        try {
+            wrapped.setNClob(String.fromDJVM(parameterName), reader);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setNClob(String parameterName, Reader reader, long length) throws SQLException {
-        wrapped.setNClob(parameterName, reader, length);
+        try {
+            wrapped.setNClob(String.fromDJVM(parameterName), reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setNString(String parameterName, String value) throws SQLException {
-        wrapped.setNString(parameterName, value);
+        try {
+            wrapped.setNString(String.fromDJVM(parameterName), value);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setNull(String parameterName, int sqlType) throws SQLException {
-        wrapped.setNull(parameterName, sqlType);
+        try {
+            wrapped.setNull(String.fromDJVM(parameterName), sqlType);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setNull(String parameterName, int sqlType, String typeName) throws SQLException {
-        wrapped.setNull(parameterName, sqlType, typeName);
+        try {
+            wrapped.setNull(String.fromDJVM(parameterName), sqlType, String.fromDJVM(typeName));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setObject(String parameterName, Object x) throws SQLException {
-        wrapped.setObject(parameterName, x);
+        try {
+            wrapped.setObject(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setObject(String parameterName, Object x, int targetSqlType) throws SQLException {
-        wrapped.setObject(parameterName, x, targetSqlType);
+        try {
+            wrapped.setObject(String.fromDJVM(parameterName), x, targetSqlType);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setObject(String parameterName, Object x, int targetSqlType, int scale) throws SQLException {
-        wrapped.setObject(parameterName, x, targetSqlType, scale);
+        try {
+            wrapped.setObject(String.fromDJVM(parameterName), x, targetSqlType, scale);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setRowId(String parameterName, RowId x) throws SQLException {
-        wrapped.setRowId(parameterName, x);
+        try {
+            wrapped.setRowId(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setShort(String parameterName, short x) throws SQLException {
-        wrapped.setShort(parameterName, x);
+        try {
+            wrapped.setShort(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setSQLXML(String parameterName, SQLXML xmlObject) throws SQLException {
-        wrapped.setSQLXML(parameterName, xmlObject);
+        try {
+            wrapped.setSQLXML(String.fromDJVM(parameterName), xmlObject);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setString(String parameterName, String x) throws SQLException {
-        wrapped.setString(parameterName, x);
+        try {
+            wrapped.setString(String.fromDJVM(parameterName), String.fromDJVM(x)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setTime(String parameterName, Time x) throws SQLException {
-        wrapped.setTime(parameterName, x);
+        try {
+            wrapped.setTime(String.fromDJVM(parameterName), x.toJsTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setTime(String parameterName, Time x, Calendar cal) throws SQLException {
-        wrapped.setTime(parameterName, x, cal);
+        try {
+            wrapped.setTime(String.fromDJVM(parameterName), x.toJsTime(), cal);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setTimestamp(String parameterName, Timestamp x) throws SQLException {
-        wrapped.setTimestamp(parameterName, x);
+        try {
+            wrapped.setTimestamp(String.fromDJVM(parameterName), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setTimestamp(String parameterName, Timestamp x, Calendar cal) throws SQLException {
-        wrapped.setTimestamp(parameterName, x, cal);
+        try {
+            wrapped.setTimestamp(String.fromDJVM(parameterName), x, cal);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setURL(String parameterName, URL val) throws SQLException {
-        wrapped.setURL(parameterName, val);
+        try {
+            wrapped.setURL(String.fromDJVM(parameterName), val);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean wasNull() throws SQLException {
-        return wrapped.wasNull();
+        try {
+            return wrapped.wasNull();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
 }
