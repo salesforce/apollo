@@ -431,7 +431,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public void setSQLXML(int parameterIndex, SQLXML xmlObject) throws SQLException {
         try {
-            wrapped.setSQLXML(parameterIndex, xmlObject);
+            wrapped.setSQLXML(parameterIndex, xmlObject.toJsSQLXML());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -463,7 +463,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
         try {
-            wrapped.setTimestamp(parameterIndex, x);
+            wrapped.setTimestamp(parameterIndex, x.toJsTimestamp());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -471,7 +471,7 @@ public class PreparedStatementWrapper extends StatementWrapper implements Prepar
 
     public void setTimestamp(int parameterIndex, Timestamp x, Calendar cal) throws SQLException {
         try {
-            wrapped.setTimestamp(parameterIndex, x, cal);
+            wrapped.setTimestamp(parameterIndex, x.toJsTimestamp(), cal);
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }

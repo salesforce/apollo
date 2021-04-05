@@ -547,4 +547,8 @@ public class Timestamp extends sandbox.java.util.Date {
     public Instant toInstant() {
         return Instant.ofEpochSecond(super.getTime() / MILLIS_PER_SECOND, nanos);
     }
+    
+    public java.sql.Timestamp toJsTimestamp() {
+        return new java.sql.Timestamp(getTime());
+    }
 }

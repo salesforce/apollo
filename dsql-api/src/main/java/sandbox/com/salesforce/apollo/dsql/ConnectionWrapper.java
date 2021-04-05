@@ -110,7 +110,7 @@ public class ConnectionWrapper implements Connection {
 
     public DatabaseMetaData getMetaData() throws SQLException {
         try {
-            return new DatabaseMetadataWrapper(wrapped.getMetaData());
+            return new DatabaseMetadataWrapper(this, wrapped.getMetaData());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }

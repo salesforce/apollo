@@ -469,4 +469,6 @@ public interface SQLXML {
      */
     <T extends Result> T setResult(Class<T> resultClass) throws SQLException;
 
+    java.sql.SQLXML toJsSQLXML();
+
 }
