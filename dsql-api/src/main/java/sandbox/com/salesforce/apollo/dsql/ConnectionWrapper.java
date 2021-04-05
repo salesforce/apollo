@@ -221,7 +221,7 @@ public class ConnectionWrapper implements Connection {
 
     public Savepoint setSavepoint() throws SQLException {
         try {
-            return wrapped.setSavepoint();
+            return new SavepointWrapper(wrapped.setSavepoint());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -229,7 +229,7 @@ public class ConnectionWrapper implements Connection {
 
     public Savepoint setSavepoint(String name) throws SQLException {
         try {
-            return wrapped.setSavepoint(name);
+            return new SavepointWrapper(wrapped.setSavepoint(String.fromDJVM(name)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -237,7 +237,7 @@ public class ConnectionWrapper implements Connection {
 
     public void rollback(Savepoint savepoint) throws SQLException {
         try {
-            wrapped.rollback(savepoint);
+            wrapped.rollback(((SavepointWrapper) savepoint).getWrapped());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -245,7 +245,7 @@ public class ConnectionWrapper implements Connection {
 
     public void releaseSavepoint(Savepoint savepoint) throws SQLException {
         try {
-            wrapped.releaseSavepoint(savepoint);
+            wrapped.releaseSavepoint(((SavepointWrapper) savepoint).getWrapped());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }

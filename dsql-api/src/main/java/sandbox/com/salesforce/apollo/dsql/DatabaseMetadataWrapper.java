@@ -6,6 +6,7 @@
  */
 package sandbox.com.salesforce.apollo.dsql;
 
+import sandbox.java.lang.DJVM;
 import sandbox.java.lang.String;
 import sandbox.java.sql.Connection;
 import sandbox.java.sql.DatabaseMetaData;
@@ -19,9 +20,11 @@ import sandbox.java.sql.SQLException;
  */
 public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
+    private final Connection                connection;
     private final java.sql.DatabaseMetaData wrapped;
 
-    public DatabaseMetadataWrapper(java.sql.DatabaseMetaData wrapped) {
+    public DatabaseMetadataWrapper(Connection connection, java.sql.DatabaseMetaData wrapped) {
+        this.connection = connection;
         this.wrapped = wrapped;
     }
 
@@ -93,7 +96,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
                                    String attributeNamePattern) throws SQLException {
         try {
             return new ResultSetWrapper(
-                    wrapped.getAttributes(catalog, schemaPattern, typeNamePattern, attributeNamePattern));
+                    wrapped.getAttributes(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                          String.fromDJVM(typeNamePattern), String.fromDJVM(attributeNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -102,7 +106,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getBestRowIdentifier(String catalog, String schema, String table, int scope,
                                           boolean nullable) throws SQLException {
         try {
-            return wrapped.getBestRowIdentifier(catalog, schema, table, scope, nullable);
+            return new ResultSetWrapper(wrapped.getBestRowIdentifier(String.fromDJVM(catalog), String.fromDJVM(schema),
+                                                                     String.fromDJVM(table), scope, nullable));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -110,7 +115,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getCatalogs() throws SQLException {
         try {
-            return wrapped.getCatalogs();
+            return new ResultSetWrapper(wrapped.getCatalogs());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -118,7 +123,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getCatalogSeparator() throws SQLException {
         try {
-            return wrapped.getCatalogSeparator();
+            return String.toDJVM(wrapped.getCatalogSeparator());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -126,7 +131,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getCatalogTerm() throws SQLException {
         try {
-            return wrapped.getCatalogTerm();
+            return String.toDJVM(wrapped.getCatalogTerm());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -134,7 +139,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getClientInfoProperties() throws SQLException {
         try {
-            return wrapped.getClientInfoProperties();
+            return new ResultSetWrapper(wrapped.getClientInfoProperties());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -143,7 +148,9 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getColumnPrivileges(String catalog, String schema, String table,
                                          String columnNamePattern) throws SQLException {
         try {
-            return wrapped.getColumnPrivileges(catalog, schema, table, columnNamePattern);
+            return new ResultSetWrapper(
+                    wrapped.getColumnPrivileges(String.fromDJVM(catalog), String.fromDJVM(schema),
+                                                String.fromDJVM(table), String.fromDJVM(columnNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -152,26 +159,26 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern,
                                 String columnNamePattern) throws SQLException {
         try {
-            return wrapped.getColumns(catalog, schemaPattern, tableNamePattern, columnNamePattern);
+            return new ResultSetWrapper(
+                    wrapped.getColumns(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                       String.fromDJVM(tableNamePattern), String.fromDJVM(columnNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
     }
 
     public Connection getConnection() throws SQLException {
-        try {
-            return wrapped.getConnection();
-        } catch (java.sql.SQLException e) {
-            throw new SQLException(e);
-        }
+        return connection;
     }
 
     public ResultSet getCrossReference(String parentCatalog, String parentSchema, String parentTable,
                                        String foreignCatalog, String foreignSchema,
                                        String foreignTable) throws SQLException {
         try {
-            return wrapped.getCrossReference(parentCatalog, parentSchema, parentTable, foreignCatalog, foreignSchema,
-                                             foreignTable);
+            return new ResultSetWrapper(
+                    wrapped.getCrossReference(String.fromDJVM(parentCatalog), String.fromDJVM(parentSchema),
+                                              String.fromDJVM(parentTable), String.fromDJVM(foreignCatalog),
+                                              String.fromDJVM(foreignSchema), String.fromDJVM(foreignTable)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -195,7 +202,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getDatabaseProductName() throws SQLException {
         try {
-            return wrapped.getDatabaseProductName();
+            return String.toDJVM(wrapped.getDatabaseProductName());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -203,7 +210,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getDatabaseProductVersion() throws SQLException {
         try {
-            return wrapped.getDatabaseProductVersion();
+            return String.toDJVM(wrapped.getDatabaseProductVersion());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -218,24 +225,16 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     }
 
     public int getDriverMajorVersion() {
-        try {
-            return wrapped.getDriverMajorVersion();
-        } catch (java.sql.SQLException e) {
-            throw new SQLException(e);
-        }
+        return wrapped.getDriverMajorVersion();
     }
 
     public int getDriverMinorVersion() {
-        try {
-            return wrapped.getDriverMinorVersion();
-        } catch (java.sql.SQLException e) {
-            throw new SQLException(e);
-        }
+        return wrapped.getDriverMinorVersion();
     }
 
     public String getDriverName() throws SQLException {
         try {
-            return wrapped.getDriverName();
+            return String.toDJVM(wrapped.getDriverName());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -243,7 +242,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getDriverVersion() throws SQLException {
         try {
-            return wrapped.getDriverVersion();
+            return String.toDJVM(wrapped.getDriverVersion());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -251,7 +250,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getExportedKeys(String catalog, String schema, String table) throws SQLException {
         try {
-            return wrapped.getExportedKeys(catalog, schema, table);
+            return new ResultSetWrapper(
+                    wrapped.getExportedKeys(String.fromDJVM(catalog), String.fromDJVM(schema), String.fromDJVM(table)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -259,7 +259,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getExtraNameCharacters() throws SQLException {
         try {
-            return wrapped.getExtraNameCharacters();
+            return String.toDJVM(wrapped.getExtraNameCharacters());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -268,7 +268,10 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getFunctionColumns(String catalog, String schemaPattern, String functionNamePattern,
                                         String columnNamePattern) throws SQLException {
         try {
-            return wrapped.getFunctionColumns(catalog, schemaPattern, functionNamePattern, columnNamePattern);
+            return new ResultSetWrapper(
+                    wrapped.getFunctionColumns(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                               String.fromDJVM(functionNamePattern),
+                                               String.fromDJVM(columnNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -277,7 +280,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getFunctions(String catalog, String schemaPattern,
                                   String functionNamePattern) throws SQLException {
         try {
-            return wrapped.getFunctions(catalog, schemaPattern, functionNamePattern);
+            return new ResultSetWrapper(wrapped.getFunctions(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                                             String.fromDJVM(functionNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -285,7 +289,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getIdentifierQuoteString() throws SQLException {
         try {
-            return wrapped.getIdentifierQuoteString();
+            return String.toDJVM(wrapped.getIdentifierQuoteString());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -293,7 +297,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getImportedKeys(String catalog, String schema, String table) throws SQLException {
         try {
-            return wrapped.getImportedKeys(catalog, schema, table);
+            return new ResultSetWrapper(
+                    wrapped.getImportedKeys(String.fromDJVM(catalog), String.fromDJVM(schema), String.fromDJVM(table)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -302,7 +307,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique,
                                   boolean approximate) throws SQLException {
         try {
-            return wrapped.getIndexInfo(catalog, schema, table, unique, approximate);
+            return new ResultSetWrapper(wrapped.getIndexInfo(String.fromDJVM(catalog), String.fromDJVM(schema),
+                                                             String.fromDJVM(table), unique, approximate));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -494,7 +500,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getNumericFunctions() throws SQLException {
         try {
-            return wrapped.getNumericFunctions();
+            return String.toDJVM(wrapped.getNumericFunctions());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -502,7 +508,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getPrimaryKeys(String catalog, String schema, String table) throws SQLException {
         try {
-            return wrapped.getPrimaryKeys(catalog, schema, table);
+            return new ResultSetWrapper(
+                    wrapped.getPrimaryKeys(String.fromDJVM(catalog), String.fromDJVM(schema), String.fromDJVM(table)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -511,7 +518,10 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getProcedureColumns(String catalog, String schemaPattern, String procedureNamePattern,
                                          String columnNamePattern) throws SQLException {
         try {
-            return wrapped.getProcedureColumns(catalog, schemaPattern, procedureNamePattern, columnNamePattern);
+            return new ResultSetWrapper(
+                    wrapped.getProcedureColumns(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                                String.fromDJVM(procedureNamePattern),
+                                                String.fromDJVM(columnNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -520,7 +530,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getProcedures(String catalog, String schemaPattern,
                                    String procedureNamePattern) throws SQLException {
         try {
-            return wrapped.getProcedures(catalog, schemaPattern, procedureNamePattern);
+            return new ResultSetWrapper(wrapped.getProcedures(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                                              String.fromDJVM(procedureNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -528,7 +539,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getProcedureTerm() throws SQLException {
         try {
-            return wrapped.getProcedureTerm();
+            return String.toDJVM(wrapped.getProcedureTerm());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -537,7 +548,9 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getPseudoColumns(String catalog, String schemaPattern, String tableNamePattern,
                                       String columnNamePattern) throws SQLException {
         try {
-            return wrapped.getPseudoColumns(catalog, schemaPattern, tableNamePattern, columnNamePattern);
+            return new ResultSetWrapper(
+                    wrapped.getPseudoColumns(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                             String.fromDJVM(tableNamePattern), String.fromDJVM(columnNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -561,7 +574,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getSchemas() throws SQLException {
         try {
-            return wrapped.getSchemas();
+            return new ResultSetWrapper(wrapped.getSchemas());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -569,7 +582,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
         try {
-            return wrapped.getSchemas(catalog, schemaPattern);
+            return new ResultSetWrapper(wrapped.getSchemas(String.fromDJVM(catalog), String.fromDJVM(schemaPattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -577,7 +590,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getSchemaTerm() throws SQLException {
         try {
-            return wrapped.getSchemaTerm();
+            return String.toDJVM(wrapped.getSchemaTerm());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -585,7 +598,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getSearchStringEscape() throws SQLException {
         try {
-            return wrapped.getSearchStringEscape();
+            return String.toDJVM(wrapped.getSearchStringEscape());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -593,7 +606,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getSQLKeywords() throws SQLException {
         try {
-            return wrapped.getSQLKeywords();
+            return String.toDJVM(wrapped.getSQLKeywords());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -609,7 +622,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getStringFunctions() throws SQLException {
         try {
-            return wrapped.getStringFunctions();
+            return String.toDJVM(wrapped.getStringFunctions());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -617,7 +630,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getSuperTables(String catalog, String schemaPattern, String tableNamePattern) throws SQLException {
         try {
-            return wrapped.getSuperTables(catalog, schemaPattern, tableNamePattern);
+            return new ResultSetWrapper(wrapped.getSuperTables(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                                               String.fromDJVM(tableNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -625,7 +639,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getSuperTypes(String catalog, String schemaPattern, String typeNamePattern) throws SQLException {
         try {
-            return wrapped.getSuperTypes(catalog, schemaPattern, typeNamePattern);
+            return new ResultSetWrapper(wrapped.getSuperTypes(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                                              String.fromDJVM(typeNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -633,7 +648,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getSystemFunctions() throws SQLException {
         try {
-            return wrapped.getSystemFunctions();
+            return String.toDJVM(wrapped.getSystemFunctions());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -642,7 +657,9 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getTablePrivileges(String catalog, String schemaPattern,
                                         String tableNamePattern) throws SQLException {
         try {
-            return wrapped.getTablePrivileges(catalog, schemaPattern, tableNamePattern);
+            return new ResultSetWrapper(
+                    wrapped.getTablePrivileges(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                               String.fromDJVM(tableNamePattern)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -651,7 +668,9 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern,
                                String[] types) throws SQLException {
         try {
-            return wrapped.getTables(catalog, schemaPattern, tableNamePattern, types);
+            return new ResultSetWrapper(
+                    wrapped.getTables(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                      String.fromDJVM(tableNamePattern), (java.lang.String[]) DJVM.unsandbox(types)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -659,7 +678,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getTableTypes() throws SQLException {
         try {
-            return wrapped.getTableTypes();
+            return new ResultSetWrapper(wrapped.getTableTypes());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -667,7 +686,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getTimeDateFunctions() throws SQLException {
         try {
-            return wrapped.getTimeDateFunctions();
+            return String.toDJVM(wrapped.getTimeDateFunctions());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -675,7 +694,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getTypeInfo() throws SQLException {
         try {
-            return wrapped.getTypeInfo();
+            return new ResultSetWrapper(wrapped.getTypeInfo());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -684,7 +703,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
     public ResultSet getUDTs(String catalog, String schemaPattern, String typeNamePattern,
                              int[] types) throws SQLException {
         try {
-            return wrapped.getUDTs(catalog, schemaPattern, typeNamePattern, types);
+            return new ResultSetWrapper(wrapped.getUDTs(String.fromDJVM(catalog), String.fromDJVM(schemaPattern),
+                                                        String.fromDJVM(typeNamePattern), types));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -692,7 +712,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getURL() throws SQLException {
         try {
-            return wrapped.getURL();
+            return String.toDJVM(wrapped.getURL());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -700,7 +720,7 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public String getUserName() throws SQLException {
         try {
-            return wrapped.getUserName();
+            return String.toDJVM(wrapped.getUserName());
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -708,7 +728,8 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public ResultSet getVersionColumns(String catalog, String schema, String table) throws SQLException {
         try {
-            return wrapped.getVersionColumns(catalog, schema, table);
+            return new ResultSetWrapper(wrapped.getVersionColumns(String.fromDJVM(catalog), String.fromDJVM(schema),
+                                                                  String.fromDJVM(table)));
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
@@ -1048,10 +1069,11 @@ public class DatabaseMetadataWrapper implements DatabaseMetaData {
 
     public boolean supportsExtendedSQLGrammar() throws SQLException {
         try {
+            return wrapped.supportsExtendedSQLGrammar();
         } catch (java.sql.SQLException e) {
             throw new SQLException(e);
         }
-        return wrapped.supportsExtendedSQLGrammar();
+
     }
 
     public boolean supportsFullOuterJoins() throws SQLException {
