@@ -15,8 +15,13 @@ represent a kind of anonymous stored procedure executed at the "server" - in thi
 
 ### Transaction Execution
 Transaction exeution is performed via the single JDBC connection to the underlying H2 database.  This implies that the contents of the transactions are representable
-with H2 SQL.  Sadly, "generic" SQL is not really a thing, but a convention, and so this is not a generic SQL execution.  Further, the transaction execution model
+with H2 SQL.  Sadly, "generic" SQL is not really a thing, but a convention, and so this is not a _generic_ SQL execution.  Further, the transaction execution model
 is JDBC, which constrains the styles of interaction as well as the argument value and return types.
+
+When a transaction is submitted, the client submitting the transaction can provide a function to execute when the transaction is finalized.  This function takes
+the value returned - possibly null - and the error raised - if any.  This means that calls, scripts, prepared statements, etc, and return values in addition to
+the normal SQL execution, providing a very powerful mechanism for transactions against a SQL store that we normally take for granted.
+
 ### Transaction Types
 Transactions are one of the following types, and are represented as Protobuffs defined in the _cdc.proto_ file.
 * Statement
@@ -26,6 +31,31 @@ Transactions are one of the following types, and are represented as Protobuffs d
 * Script
 
 #### Statement
-The _Statement_ is the equivalent of the JDBC SQL statement with or without arguments.  Return value
+The _Statement_  is the equivalent of the JDBC SQL prepared statement with or without arguments.
 #### Call
-The _Call_ is the transaction to execute SQL stored procedures.
+The _Call_  is the transaction to execute SQL stored procedures.
+### Batch
+A batch of SQL statements with no arguments, executed in order
+### BatchUpdate
+A single prepared statement that is executed in batch with a list of arguments, one argument set per batch entry
+### Script
+A Java function that accepts a SQL connection and may return results - basically an anonymous function
+
+## Stored Procedures, Functions and Triggers
+The model provides the definition and execution of user defined SQL stored procedures, functions and triggers.  These are currently limited to Java implementations, although more languages and WASM support is
+straightforward to add.  Java was chosen as the first implementation because - frankly - it's a shit load more mature than all the others.  Not simply from
+a "been around longer" but from a "has standard interfaces for things like SQL".  Seriously, it's hard to come up with these things and a "bring your own SQL connection library" does not
+lend itself well to the issues of SQL state machine replication.
+
+## Deterministic Implementation
+Due to the model used for SQL state, it's essential that every node executes the transactions with identical results.  That's how we achieve replicated state across the system.
+However, things like TIME and RANDOM make that impossible.  So, the underlying H2 database used by this module has been modified to provide for deterministic SQL execution.  Even though
+we provide the RANDOM function, we guarantee that the results of these RANDOM function invocations will be identical across all nodes.  Likewise with TIME and some other functions.  This
+is accomplished by slight modifications of the underlying H2 database, and the use of block hashes for seeding these functions.  This results in deterministic SQL execution across the system.
+
+Likewise, it's important in the Java stored procedures, functions and triggers to likewise deterministically execute.  This is done by using the [Derministic Java VM](https://github.com/corda/djvm).
+All Java executed as part of a transaction - functions, triggers, etc - are executed by the DJVM in a sandbox.  This execution sandbox forces Java to be deterministic by performing some serious
+black magic with byte code rewriting and a determistic rewrite of the underlying class system.  Seriously impressive work.  The issue, of course, is how running in this sandbox, one is to effect mutable
+changes - i.e. SQL transactions - on the embedding SQL store.  This SQL JDBC bridge is provided by the DSQL module of Apollo.  This provides a fully functional wrapped access to the JDBC connection
+and allows the deterministic code to execute transactions against the DB and read/write as expected.  Combined with the Deterministic SQL of the underlying DB, we get an air tight system that
+can reliably replicate SQL state across the network.
