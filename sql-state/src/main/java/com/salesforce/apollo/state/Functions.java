@@ -59,6 +59,7 @@ import net.corda.djvm.source.ApiSource;
 import net.corda.djvm.source.BootstrapClassLoader;
 import net.corda.djvm.source.UserPathSource;
 import net.corda.djvm.source.UserSource;
+import sandbox.com.salesforce.apollo.dsql.TriggerWrapper;
 
 /**
  * Represents a class loading catolog of deterministic Java implemented
@@ -139,14 +140,13 @@ public class Functions implements UserSource {
 
     }
 
-    public static final ApiSource   BOOTSTRAP;
-    public static final Set<String> OVERRIDE_CLASSES = overrideClasses();
+    public static final ApiSource             BOOTSTRAP;
+    public final static AnalysisConfiguration DEFAULT_CONFIG;
+    public static final Set<String>           OVERRIDE_CLASSES = overrideClasses();
 
     private static final String       BOOTSTRAP_JAR    = "/deterministic-rt.jar";
     private static final int          DOT_CLASS_LENGTH = ".class".length();
     private static final JavaCompiler JAVA_COMPILER;
-
-    private static final UserSource NULL_SOURCE = new UserPathSource(new URL[0]);
 
     static {
         try {
@@ -169,12 +169,8 @@ public class Functions implements UserSource {
             throw new IllegalStateException("Java compiler required", e);
         }
         JAVA_COMPILER = c;
-    }
-
-    public static AnalysisConfiguration defaultConfig() {
-        AnalysisConfiguration config = AnalysisConfiguration.createRoot(NULL_SOURCE, Collections.emptySet(),
-                                                                        Severity.TRACE, BOOTSTRAP, OVERRIDE_CLASSES);
-        return config;
+        DEFAULT_CONFIG = AnalysisConfiguration.createRoot(new UserPathSource(new URL[0]), Collections.emptySet(),
+                                                          Severity.TRACE, BOOTSTRAP, OVERRIDE_CLASSES);
     }
 
     public static String getCompleteSourceCode(String packageName, String className, String source) {
@@ -199,7 +195,7 @@ public class Functions implements UserSource {
         buff.append(importCode);
         buff.append("public class ").append(className).append(" {\n    public static ").append(source).append("\n}\n");
         return buff.toString();
-    } 
+    }
 
     private static void handleSyntaxError(String output, int exitStatus) {
         if (0 == exitStatus) {
@@ -258,7 +254,26 @@ public class Functions implements UserSource {
                               "sandbox/java/sql/SQLTransientException", "sandbox/java/sql/SQLType",
                               "sandbox/java/sql/SQLWarning", "sandbox/java/sql/SQLXML", "sandbox/java/sql/Statement",
                               "sandbox/java/sql/Struct", "sandbox/java/sql/Time", "sandbox/java/sql/Timestamp",
-                              "sandbox/java/sql/Types", "sandbox/java/sql/Wrapper"));
+                              "sandbox/java/sql/Types", "sandbox/java/sql/Wrapper",
+                              "sandbox/com/salesforce/apollo/dsql/ArrayWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/BlobWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/CallableStatementWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/ClobWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/ConnectionWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/DatabaseMetadataWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/NClobWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/ParameterMetaDataWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/PreparedStatementWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/RefWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/ResultSetMetaDataWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/ResultSetWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/RowIdWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/SavepointWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/ShardingKeyWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/SQLXMLWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/StatementWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/StructWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/TriggerWrapper"));
     }
 
     private static File tempDir() throws IllegalStateException {
@@ -280,7 +295,7 @@ public class Functions implements UserSource {
     private final SandboxRuntimeContext context;
 
     public Functions() throws IOException, ClassNotFoundException, IllegalStateException {
-        this(defaultConfig(), ExecutionProfile.DEFAULT, tempDir());
+        this(DEFAULT_CONFIG, ExecutionProfile.DEFAULT, tempDir());
     }
 
     public Functions(AnalysisConfiguration config, ExecutionProfile execution, File cacheDir)
@@ -350,11 +365,14 @@ public class Functions implements UserSource {
 
         context.use(ctx -> {
             SandboxClassLoader cl = ctx.getClassLoader();
-            Class<?> triggerClass;
+
             try {
-                triggerClass = cl.loadClass("sandbox." + packageAndClassName);
-                Object trigger = triggerClass.getDeclaredConstructor().newInstance();
-                holder.set(new SandboxTrigger(context, trigger));
+                holder.set(new SandboxTrigger(context,
+                        cl.loadClass(TriggerWrapper.class.getCanonicalName())
+                          .getDeclaredConstructor(Object.class)
+                          .newInstance(cl.loadClass("sandbox." + packageAndClassName)
+                                         .getDeclaredConstructor()
+                                         .newInstance())));
             } catch (Exception e) {
                 throw new IllegalStateException("cannot create trigger", e);
             }

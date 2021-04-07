@@ -6,15 +6,15 @@
  */
 package com.salesforce.apollo.state;
 
-import java.lang.reflect.Method;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.sql.Connection;
 import java.sql.SQLException;
 
 import org.h2.api.Trigger;
 
 import net.corda.djvm.SandboxRuntimeContext;
-import net.corda.djvm.rewiring.SandboxClassLoader;
-import sandbox.java.lang.DJVM;
 
 /**
  * @author hal.hildebrand
@@ -22,41 +22,35 @@ import sandbox.java.lang.DJVM;
  */
 public class SandboxTrigger implements Trigger {
 
-    private Method                      close;
+    private final MethodHandle          close;
     private final SandboxRuntimeContext context;
-    private Method                      fire;
-    private Method                      init;
-    private Method                      remove;
-    private final Object                trigger;
+    private final MethodHandle          fire;
+    private final MethodHandle          init;
+    private final MethodHandle          remove;
+    private final Object                wrapper;
 
-    public SandboxTrigger(SandboxRuntimeContext context, Object object) throws Exception {
+    public SandboxTrigger(SandboxRuntimeContext context, Object wrapper) throws Exception {
         this.context = context;
-        this.trigger = object;
-        Class<? extends Object> triggerClass = object.getClass();
-        for (Method m : triggerClass.getDeclaredMethods()) {
-            switch (m.getName()) {
-            case "close": {
-                close = m;
-            }
-            case "init": {
-                init = m;
-            }
-            case "fire": {
-                fire = m;
-            }
-            case "remove": {
-                remove = m;
-            }
-            default:
-            }
-        }
+        this.wrapper = wrapper;
+        Class<? extends Object[]> objectArrayClass = new Object[0].getClass();
+        Class<? extends Object> wrapperClass = wrapper.getClass();
+        close = MethodHandles.lookup().findVirtual(wrapperClass, "close", MethodType.methodType(void.class));
+        init = MethodHandles.lookup()
+                            .findVirtual(wrapperClass, "init",
+                                         MethodType.methodType(void.class, Connection.class, String.class, String.class,
+                                                               String.class, boolean.class, int.class));
+        fire = MethodHandles.lookup()
+                            .findVirtual(wrapperClass, "fire",
+                                         MethodType.methodType(void.class, Connection.class, objectArrayClass,
+                                                               objectArrayClass));
+        remove = MethodHandles.lookup().findVirtual(wrapperClass, "remove", MethodType.methodType(void.class));
     }
 
     @Override
     public void close() throws SQLException {
         context.use(ctx -> {
             try {
-                close.invoke(trigger);
+                close.invokeExact(wrapper);
             } catch (Throwable e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -67,14 +61,8 @@ public class SandboxTrigger implements Trigger {
     @Override
     public void fire(Connection conn, Object[] oldRow, Object[] newRow) throws SQLException {
         context.use(ctx -> {
-            SandboxClassLoader cl = ctx.getClassLoader();
-            try { 
-                Class<?> wrapperClass = cl.loadClass("sandbox.com.salesforce.apollo.dsql.ConnectionWrapper");
-                Object wrappedConnection = wrapperClass.getDeclaredConstructor(java.sql.Connection.class)
-                                                       .newInstance(new Object[] {conn});
-                System.out.println(wrappedConnection);
-                DJVM.sandbox(newRow);
-                fire.invoke(trigger, wrappedConnection, null, null);
+            try {
+                fire.invoke(wrapper, conn, oldRow, newRow);
             } catch (Throwable e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -87,7 +75,7 @@ public class SandboxTrigger implements Trigger {
                      int type) throws SQLException {
         context.use(ctx -> {
             try {
-                init.invoke(trigger, conn, schemaName, triggerName, tableName, before);
+                init.invokeExact(wrapper, conn, schemaName, triggerName, tableName, before);
             } catch (Throwable e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -99,7 +87,7 @@ public class SandboxTrigger implements Trigger {
     public void remove() throws SQLException {
         context.use(ctx -> {
             try {
-                remove.invoke(trigger);
+                remove.invokeExact(wrapper);
             } catch (Throwable e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();

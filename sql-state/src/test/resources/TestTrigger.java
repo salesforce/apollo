@@ -1,7 +1,8 @@
-import java.sql.Connection;
-import java.sql.SQLException;
+import java.sql.*;
 
 import org.h2.api.Trigger;
+
+import sandbox.java.lang.DJVM;
 
 /**
  * @author hal.hildebrand
@@ -12,6 +13,9 @@ public class TestTrigger implements Trigger {
     @Override
     public void init(Connection conn, String schemaName, String triggerName, String tableName, boolean before,
                      int type) throws SQLException {
+        
+        PreparedStatement s = conn.prepareStatement("select * from foo");
+        s.execute();
         throw new SQLException(conn.toString());
     }
 

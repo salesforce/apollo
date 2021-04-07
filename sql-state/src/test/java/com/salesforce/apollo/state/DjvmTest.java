@@ -47,7 +47,7 @@ public class DjvmTest {
         File dir = File.createTempFile("foo", "bar");
         dir.delete();
         dir.deleteOnExit();
-        try (Functions funcs = new Functions(Functions.defaultConfig(), ExecutionProfile.DEFAULT, dir)) {
+        try (Functions funcs = new Functions(Functions.DEFAULT_CONFIG, ExecutionProfile.DEFAULT, dir)) {
             @SuppressWarnings("unchecked")
             Class<? extends Function<long[], Long>> clazz = (Class<? extends Function<long[], Long>>) funcs.compile("SimpleTask",
                                                                                                                     Utils.getDocument(getClass().getResourceAsStream("/SimpleTask.java")));
@@ -58,7 +58,7 @@ public class DjvmTest {
             assertNotNull(trigger);
 
             try (java.sql.Connection db1 = new JdbcConnection("jdbc:h2:mem:djvm", new Properties())) {
-                trigger.fire(db1, new Object[0], new Object[0]);
+                trigger.fire(db1, new Object[] {"foo"}, new Object[] {"bar"});
             }
         }
     }

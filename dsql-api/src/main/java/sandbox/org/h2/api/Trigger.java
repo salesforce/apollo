@@ -6,6 +6,7 @@
  */
 package sandbox.org.h2.api;
 
+import sandbox.java.lang.String;
 import sandbox.java.sql.Connection;
 import sandbox.java.sql.SQLException;
 
