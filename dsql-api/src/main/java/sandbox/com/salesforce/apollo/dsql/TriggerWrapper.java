@@ -40,6 +40,8 @@ final public class TriggerWrapper {
         try {
             java.lang.Object sandboxed = DJVM.sandbox(oldRow);
             trigger.fire(wrapped, (Object[]) sandboxed, (Object[]) DJVM.sandbox(newRow));
+        } catch (SQLException e) {
+            e.printStackTrace();
         } catch (ClassNotFoundException e) {
             throw DJVM.toRuntimeException(e);
         }

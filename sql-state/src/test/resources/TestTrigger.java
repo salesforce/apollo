@@ -1,4 +1,8 @@
+import static org.junit.jupiter.api.Assertions.fail;
+
 import java.sql.*;
+import java.util.Arrays;
+import java.util.List;
 
 import org.h2.api.Trigger;
 
@@ -13,15 +17,17 @@ public class TestTrigger implements Trigger {
     @Override
     public void init(Connection conn, String schemaName, String triggerName, String tableName, boolean before,
                      int type) throws SQLException {
-        
-        PreparedStatement s = conn.prepareStatement("select * from foo");
-        s.execute();
-        throw new SQLException(conn.toString());
     }
 
     @Override
     public void fire(Connection conn, Object[] oldRow, Object[] newRow) throws SQLException {
-        throw new SQLException(conn.toString());
+        conn.setAutoCommit(false);
+        Statement s = conn.createStatement();
+        List<String> ids = Arrays.asList("1002", "1004");
+        for (int i = 0; i < ids.size(); i++) {
+            String id = ids.get(i);
+            s.execute("update s.books set qty = " + 666 + " where id = " + id);
+        }
     }
 
     @Override

@@ -60,8 +60,8 @@ public class ConnectionWrapper implements Connection {
 
     private final java.sql.Connection wrapped;
 
-    public ConnectionWrapper(java.sql.Connection o) {
-        wrapped = null;
+    public ConnectionWrapper(java.sql.Connection o) { 
+        wrapped = o;
     }
 
     public <T> T unwrap(Class<T> iface) throws SQLException {

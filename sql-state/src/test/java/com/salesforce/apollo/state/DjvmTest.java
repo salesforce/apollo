@@ -6,9 +6,13 @@
  */
 package com.salesforce.apollo.state;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.Properties;
 import java.util.function.Function;
 
@@ -58,7 +62,24 @@ public class DjvmTest {
             assertNotNull(trigger);
 
             try (java.sql.Connection db1 = new JdbcConnection("jdbc:h2:mem:djvm", new Properties())) {
+                db1.setAutoCommit(false);
+                Statement s = db1.createStatement();
+
+                s.execute("create schema s");
+                s.execute("create table s.books (id int, title varchar(50), author varchar(50), price float, qty int)");
+
+                s.execute("insert into s.books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)");
+                s.execute("insert into s.books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)");
+                s.execute("insert into s.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)");
+                s.execute("insert into s.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)");
+                s.execute("insert into s.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)");
+                db1.commit();
+                s.close();
                 trigger.fire(db1, new Object[] {"foo"}, new Object[] {"bar"});
+                s = db1.createStatement();
+                ResultSet result = s.executeQuery("select b.qty from s.books b where b.id = 1004");
+                assertTrue(result.next());
+                assertEquals(666, result.getInt(1));
             }
         }
     }
