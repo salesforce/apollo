@@ -25,7 +25,6 @@
 
 package sandbox.java.sql;
 
-import sandbox.java.lang.Object;
 import sandbox.java.lang.String;
 
 /**
@@ -75,7 +74,7 @@ public interface Struct {
      *                                            support this method
      * @since 1.2
      */
-    Object[] getAttributes() throws SQLException;
+    java.lang.Object[] getAttributes() throws SQLException;
 
     /**
      * Produces the ordered values of the attributes of the SQL structured type that
@@ -96,5 +95,5 @@ public interface Struct {
      *                                            support this method
      * @since 1.2
      */
-    Object[] getAttributes(java.util.Map<String, Class<?>> map) throws SQLException;
+    java.lang.Object[] getAttributes(java.util.Map<String, Class<?>> map) throws SQLException;
 }

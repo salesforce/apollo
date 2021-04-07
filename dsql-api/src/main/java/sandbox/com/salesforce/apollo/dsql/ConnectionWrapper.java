@@ -366,7 +366,7 @@ public class ConnectionWrapper implements Connection {
         throw new UnsupportedOperationException();
     }
 
-    public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
+    public Array createArrayOf(String typeName, java.lang.Object[] elements) throws SQLException {
         try {
             return new ArrayWrapper(
                     wrapped.createArrayOf(String.fromDJVM(typeName), (java.lang.Object[]) DJVM.unsandbox(elements)));
@@ -375,7 +375,7 @@ public class ConnectionWrapper implements Connection {
         }
     }
 
-    public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
+    public Struct createStruct(String typeName, java.lang.Object[] attributes) throws SQLException {
         try {
             return new StructWrapper(
                     wrapped.createStruct(String.fromDJVM(typeName), (java.lang.Object[]) DJVM.unsandbox(attributes)));

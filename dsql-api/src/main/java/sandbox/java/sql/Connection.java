@@ -28,7 +28,6 @@ package sandbox.java.sql;
 import java.util.Properties;
 import java.util.concurrent.Executor;
 
-import sandbox.java.lang.Object;
 import sandbox.java.lang.String;
 
 /**
@@ -1294,7 +1293,7 @@ public interface Connection extends Wrapper, AutoCloseable {
      *                                         this data type
      * @since 1.6
      */
-    Array createArrayOf(String typeName, Object[] elements) throws SQLException;
+    Array createArrayOf(String typeName, java.lang.Object[] elements) throws SQLException;
 
     /**
      * Factory method for creating Struct objects.
@@ -1315,7 +1314,7 @@ public interface Connection extends Wrapper, AutoCloseable {
      *                                         this data type
      * @since 1.6
      */
-    Struct createStruct(String typeName, Object[] attributes) throws SQLException;
+    Struct createStruct(String typeName, java.lang.Object[] attributes) throws SQLException;
 
     // --------------------------JDBC 4.1 -----------------------------
 
