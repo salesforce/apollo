@@ -25,15 +25,16 @@ import net.corda.djvm.SandboxRuntimeContext;
  */
 public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
     private final SandboxRuntimeContext context;
-    private final MethodHandle          getColumnClasses; 
+    private final MethodHandle          getColumnClasses;
+    private final MethodHandle          getDataType;
     private final MethodHandle          getParameterCount;
     private final MethodHandle          getValue;
     private final MethodHandle          hasConnectionParam;
+    private final int                   id;
     private final MethodHandle          invoke;
     private final MethodHandle          isVarArgs;
     private final MethodHandle          toString;
     private final Object                wrapped;
-    private final int id;
 
     public SandboxJavaMethod(SandboxRuntimeContext context, Object wrapped, int id) throws Exception {
         this.context = context;
@@ -54,10 +55,11 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         getParameterCount = MethodHandles.lookup()
                                          .findVirtual(wrapperClass, "getParameterCount",
                                                       MethodType.methodType(int.class));
+        getDataType = MethodHandles.lookup().findVirtual(wrapperClass, "getDataType", MethodType.methodType(int.class));
         isVarArgs = MethodHandles.lookup().findVirtual(wrapperClass, "isVarArgs", MethodType.methodType(boolean.class));
         hasConnectionParam = MethodHandles.lookup()
                                           .findVirtual(wrapperClass, "hasConnectionParam",
-                                                       MethodType.methodType(boolean.class)); 
+                                                       MethodType.methodType(boolean.class));
         toString = MethodHandles.lookup().findVirtual(wrapperClass, "toString", MethodType.methodType(String.class));
     }
 
@@ -84,6 +86,18 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         context.use(ctx -> {
             try {
                 returned.set((Class<?>[]) getColumnClasses.invokeWithArguments(new Object[] { wrapped }));
+            } catch (Throwable e) {
+                throw new IllegalStateException("Unable to invoke method ", e);
+            }
+        });
+        return returned.get();
+    }
+
+    public int getDataType() {
+        AtomicInteger returned = new AtomicInteger();
+        context.use(ctx -> {
+            try {
+                returned.set((Integer) getDataType.invokeWithArguments(new Object[] { wrapped }));
             } catch (Throwable e) {
                 throw new IllegalStateException("Unable to invoke method ", e);
             }

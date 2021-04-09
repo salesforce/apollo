@@ -28,7 +28,6 @@ import org.h2.engine.Database;
 import org.h2.engine.DbObject;
 import org.h2.engine.Domain;
 import org.h2.engine.FunctionAlias;
-import org.h2.engine.FunctionAlias.JavaMethod;
 import org.h2.engine.QueryStatisticsData;
 import org.h2.engine.Right;
 import org.h2.engine.Role;
@@ -71,6 +70,8 @@ import org.h2.value.ValueNull;
 import org.h2.value.ValueShort;
 import org.h2.value.ValueString;
 import org.h2.value.ValueStringIgnoreCase;
+
+import com.salesforce.apollo.state.SandboxJavaMethod;
 
 /**
  * This class is responsible to build the database meta data pseudo tables.
@@ -1338,13 +1339,13 @@ public class MetaTable extends Table {
             for (SchemaObject aliasAsSchemaObject :
                     database.getAllSchemaObjects(DbObject.FUNCTION_ALIAS)) {
                 FunctionAlias alias = (FunctionAlias) aliasAsSchemaObject;
-                JavaMethod[] methods;
+                SandboxJavaMethod[] methods;
                 try {
                     methods = alias.getJavaMethods();
                 } catch (DbException e) {
-                    methods = new JavaMethod[0];
+                    methods = new SandboxJavaMethod[0];
                 }
-                for (FunctionAlias.JavaMethod method : methods) {
+                for (SandboxJavaMethod method : methods) {
                     add(rows,
                             // ALIAS_CATALOG
                             catalog,
@@ -1411,13 +1412,13 @@ public class MetaTable extends Table {
             for (SchemaObject aliasAsSchemaObject :
                     database.getAllSchemaObjects(DbObject.FUNCTION_ALIAS)) {
                 FunctionAlias alias = (FunctionAlias) aliasAsSchemaObject;
-                JavaMethod[] methods;
+                SandboxJavaMethod[] methods;
                 try {
                     methods = alias.getJavaMethods();
                 } catch (DbException e) {
-                    methods = new JavaMethod[0];
+                    methods = new SandboxJavaMethod[0];
                 }
-                for (FunctionAlias.JavaMethod method : methods) {
+                for (SandboxJavaMethod method : methods) {
                     // Add return column index 0
                     if (method.getDataType() != Value.NULL) {
                         DataType dt = DataType.getDataType(method.getDataType());

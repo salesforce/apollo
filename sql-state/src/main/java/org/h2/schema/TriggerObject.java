@@ -5,7 +5,6 @@
  */
 package org.h2.schema;
 
-import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -21,10 +20,11 @@ import org.h2.message.Trace;
 import org.h2.result.Row;
 import org.h2.table.Table;
 import org.h2.util.JdbcUtils;
-import org.h2.util.SourceCompiler;
 import org.h2.util.StringUtils;
 import org.h2.value.DataType;
 import org.h2.value.Value;
+
+import com.salesforce.apollo.state.DeterministicCompiler;
 
 /**
  *A trigger is created using the statement
@@ -93,20 +93,11 @@ public class TriggerObject extends SchemaObjectBase {
     }
 
     private Trigger loadFromSource() {
-        SourceCompiler compiler = database.getCompiler();
+        DeterministicCompiler compiler = database.getCompiler();
         synchronized (compiler) {
             String fullClassName = Constants.USER_PACKAGE + ".trigger." + getName();
-            compiler.setSource(fullClassName, triggerSource);
             try {
-                if (SourceCompiler.isJavaxScriptSource(triggerSource)) {
-                    return (Trigger) compiler.getCompiledScript(fullClassName).eval();
-                } else {
-                    final Method m = compiler.getMethod(fullClassName);
-                    if (m.getParameterTypes().length > 0) {
-                        throw new IllegalStateException("No parameters are allowed for a trigger");
-                    }
-                    return (Trigger) m.invoke(null);
-                }
+                return compiler.loadTriggerFromSource(fullClassName, triggerSource);
             } catch (DbException e) {
                 throw e;
             } catch (Exception e) {

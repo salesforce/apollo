@@ -11,15 +11,6 @@
  */
 package org.h2.engine;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.sql.Connection;
-import java.util.ArrayList;
-import java.util.Arrays;
-
-import org.h2.Driver;
 import org.h2.api.ErrorCode;
 import org.h2.command.Parser;
 import org.h2.expression.Expression;
@@ -28,13 +19,10 @@ import org.h2.message.Trace;
 import org.h2.schema.Schema;
 import org.h2.schema.SchemaObjectBase;
 import org.h2.table.Table;
-import org.h2.util.JdbcUtils;
-import org.h2.util.SourceCompiler;
 import org.h2.util.StringUtils;
-import org.h2.value.DataType;
-import org.h2.value.Value;
-import org.h2.value.ValueArray;
-import org.h2.value.ValueNull;
+
+import com.salesforce.apollo.state.DeterministicCompiler;
+import com.salesforce.apollo.state.SandboxJavaMethod;
 
 /**
  * Represents a user-defined function, or alias.
@@ -48,7 +36,7 @@ public class FunctionAlias extends SchemaObjectBase {
     private String className;
     private String methodName;
     private String source;
-    private JavaMethod[] javaMethods;
+    private SandboxJavaMethod[] javaMethods;
     private boolean deterministic;
 
     private FunctionAlias(Schema schema, int id, String name) {
@@ -123,15 +111,15 @@ public class FunctionAlias extends SchemaObjectBase {
     }
 
     private void loadFromSource() {
-        SourceCompiler compiler = database.getCompiler();
+        DeterministicCompiler compiler = database.getCompiler();
+        compiler.loadFunctionFromSource(getName(), source);
         synchronized (compiler) {
             String fullClassName = Constants.USER_PACKAGE + "." + getName();
-            compiler.setSource(fullClassName, source);
+            compiler.loadFunctionFromSource(fullClassName, fullClassName);
             try {
-                Method m = compiler.getMethod(fullClassName);
-                JavaMethod method = new JavaMethod(m, 0);
-                javaMethods = new JavaMethod[] {
-                        method
+                SandboxJavaMethod m = compiler.getMethod(fullClassName); 
+                javaMethods = new SandboxJavaMethod[] {
+                        m
                 };
             } catch (DbException e) {
                 throw e;
@@ -142,58 +130,8 @@ public class FunctionAlias extends SchemaObjectBase {
     }
 
     private void loadClass() {
-        Class<?> javaClass = JdbcUtils.loadUserClass(className);
-        Method[] methods = javaClass.getMethods();
-        ArrayList<JavaMethod> list = new ArrayList<>(1);
-        for (int i = 0, len = methods.length; i < len; i++) {
-            Method m = methods[i];
-            if (!Modifier.isStatic(m.getModifiers())) {
-                continue;
-            }
-            if (m.getName().equals(methodName) ||
-                    getMethodSignature(m).equals(methodName)) {
-                JavaMethod javaMethod = new JavaMethod(m, i);
-                for (JavaMethod old : list) {
-                    if (old.getParameterCount() == javaMethod.getParameterCount()) {
-                        throw DbException.get(ErrorCode.
-                                METHODS_MUST_HAVE_DIFFERENT_PARAMETER_COUNTS_2,
-                                old.toString(), javaMethod.toString());
-                    }
-                }
-                list.add(javaMethod);
-            }
-        }
-        if (list.isEmpty()) {
-            throw DbException.get(
-                    ErrorCode.PUBLIC_STATIC_JAVA_METHOD_NOT_FOUND_1,
-                    methodName + " (" + className + ")");
-        }
-        javaMethods = list.toArray(new JavaMethod[0]);
-        // Sort elements. Methods with a variable number of arguments must be at
-        // the end. Reason: there could be one method without parameters and one
-        // with a variable number. The one without parameters needs to be used
-        // if no parameters are given.
-        Arrays.sort(javaMethods);
-    }
-
-    private static String getMethodSignature(Method m) {
-        StringBuilder buff = new StringBuilder(m.getName());
-        buff.append('(');
-        Class<?>[] parameterTypes = m.getParameterTypes();
-        for (int i = 0, length = parameterTypes.length; i < length; i++) {
-            if (i > 0) {
-                // do not use a space here, because spaces are removed
-                // in CreateFunctionAlias.setJavaClassMethod()
-                buff.append(',');
-            }
-            Class<?> p = parameterTypes[i];
-            if (p.isArray()) {
-                buff.append(p.getComponentType().getName()).append("[]");
-            } else {
-                buff.append(p.getName());
-            }
-        }
-        return buff.append(')').toString();
+        DeterministicCompiler compiler = database.getCompiler();
+        javaMethods = compiler.loadFunction(className, methodName);
     }
 
     @Override
@@ -258,10 +196,10 @@ public class FunctionAlias extends SchemaObjectBase {
      * @return the Java method
      * @throws DbException if no matching method could be found
      */
-    public JavaMethod findJavaMethod(Expression[] args) {
+    public SandboxJavaMethod findJavaMethod(Expression[] args) {
         load();
         int parameterCount = args.length;
-        for (JavaMethod m : javaMethods) {
+        for (SandboxJavaMethod m : javaMethods) {
             int count = m.getParameterCount();
             if (count == parameterCount || (m.isVarArgs() &&
                     count <= parameterCount + 1)) {
@@ -285,7 +223,7 @@ public class FunctionAlias extends SchemaObjectBase {
      *
      * @return the Java methods.
      */
-    public JavaMethod[] getJavaMethods() {
+    public SandboxJavaMethod[] getJavaMethods() {
         load();
         return javaMethods;
     }
@@ -301,211 +239,4 @@ public class FunctionAlias extends SchemaObjectBase {
     public String getSource() {
         return source;
     }
-
-    /**
-     * There may be multiple Java methods that match a function name.
-     * Each method must have a different number of parameters however.
-     * This helper class represents one such method.
-     */
-    public static class JavaMethod implements Comparable<JavaMethod> {
-        private final int id;
-        private final Method method;
-        private final int dataType;
-        private boolean hasConnectionParam;
-        private boolean varArgs;
-        private Class<?> varArgClass;
-        private int paramCount;
-
-        JavaMethod(Method method, int id) {
-            this.method = method;
-            this.id = id;
-            Class<?>[] paramClasses = method.getParameterTypes();
-            paramCount = paramClasses.length;
-            if (paramCount > 0) {
-                Class<?> paramClass = paramClasses[0];
-                if (Connection.class.isAssignableFrom(paramClass)) {
-                    hasConnectionParam = true;
-                    paramCount--;
-                }
-            }
-            if (paramCount > 0) {
-                Class<?> lastArg = paramClasses[paramClasses.length - 1];
-                if (lastArg.isArray() && method.isVarArgs()) {
-                    varArgs = true;
-                    varArgClass = lastArg.getComponentType();
-                }
-            }
-            Class<?> returnClass = method.getReturnType();
-            dataType = DataType.getTypeFromClass(returnClass);
-        }
-
-        @Override
-        public String toString() {
-            return method.toString();
-        }
-
-        /**
-         * Check if this function requires a database connection.
-         *
-         * @return if the function requires a connection
-         */
-        public boolean hasConnectionParam() {
-            return this.hasConnectionParam;
-        }
-
-        /**
-         * Call the user-defined function and return the value.
-         *
-         * @param session the session
-         * @param args the argument list
-         * @param columnList true if the function should only return the column
-         *            list
-         * @return the value
-         */
-        public Value getValue(Session session, Expression[] args,
-                boolean columnList) {
-            Class<?>[] paramClasses = method.getParameterTypes();
-            Object[] params = new Object[paramClasses.length];
-            int p = 0;
-            if (hasConnectionParam && params.length > 0) {
-                params[p++] = session.createConnection(columnList);
-            }
-
-            // allocate array for varArgs parameters
-            Object varArg = null;
-            if (varArgs) {
-                int len = args.length - params.length + 1 +
-                        (hasConnectionParam ? 1 : 0);
-                varArg = Array.newInstance(varArgClass, len);
-                params[params.length - 1] = varArg;
-            }
-
-            for (int a = 0, len = args.length; a < len; a++, p++) {
-                boolean currentIsVarArg = varArgs &&
-                        p >= paramClasses.length - 1;
-                Class<?> paramClass;
-                if (currentIsVarArg) {
-                    paramClass = varArgClass;
-                } else {
-                    paramClass = paramClasses[p];
-                }
-                int type = DataType.getTypeFromClass(paramClass);
-                Value v = args[a].getValue(session);
-                Object o;
-                if (Value.class.isAssignableFrom(paramClass)) {
-                    o = v;
-                } else if (v.getValueType() == Value.ARRAY &&
-                        paramClass.isArray() &&
-                        paramClass.getComponentType() != Object.class) {
-                    Value[] array = ((ValueArray) v).getList();
-                    Object[] objArray = (Object[]) Array.newInstance(
-                            paramClass.getComponentType(), array.length);
-                    int componentType = DataType.getTypeFromClass(
-                            paramClass.getComponentType());
-                    for (int i = 0; i < objArray.length; i++) {
-                        objArray[i] = array[i].convertTo(componentType, session, false).getObject();
-                    }
-                    o = objArray;
-                } else {
-                    v = v.convertTo(type, session, false);
-                    o = v.getObject();
-                }
-                if (o == null) {
-                    if (paramClass.isPrimitive()) {
-                        if (columnList) {
-                            // If the column list is requested, the parameters
-                            // may be null. Need to set to default value,
-                            // otherwise the function can't be called at all.
-                            o = DataType.getDefaultForPrimitiveType(paramClass);
-                        } else {
-                            // NULL for a java primitive: return NULL
-                            return ValueNull.INSTANCE;
-                        }
-                    }
-                } else {
-                    if (!paramClass.isAssignableFrom(o.getClass()) && !paramClass.isPrimitive()) {
-                        o = DataType.convertTo(session.createConnection(false), v, paramClass);
-                    }
-                }
-                if (currentIsVarArg) {
-                    Array.set(varArg, p - params.length + 1, o);
-                } else {
-                    params[p] = o;
-                }
-            }
-            boolean old = session.getAutoCommit();
-            Value identity = session.getLastScopeIdentity();
-            boolean defaultConnection = session.getDatabase().
-                    getSettings().defaultConnection;
-            try {
-                session.setAutoCommit(false);
-                Object returnValue;
-                try {
-                    if (defaultConnection) {
-                        Driver.setDefaultConnection(
-                                session.createConnection(columnList));
-                    }
-                    returnValue = method.invoke(null, params);
-                    if (returnValue == null) {
-                        return ValueNull.INSTANCE;
-                    }
-                } catch (InvocationTargetException e) {
-                    StringBuilder builder = new StringBuilder(method.getName()).append('(');
-                    for (int i = 0, length = params.length; i < length; i++) {
-                        if (i > 0) {
-                            builder.append(", ");
-                        }
-                        builder.append(params[i]);
-                    }
-                    builder.append(')');
-                    throw DbException.convertInvocation(e, builder.toString());
-                } catch (Exception e) {
-                    throw DbException.convert(e);
-                }
-                if (Value.class.isAssignableFrom(method.getReturnType())) {
-                    return (Value) returnValue;
-                }
-                Value ret = DataType.convertToValue(session, returnValue, dataType);
-                return ret.convertTo(dataType, session, false);
-            } finally {
-                session.setLastScopeIdentity(identity);
-                session.setAutoCommit(old);
-                if (defaultConnection) {
-                    Driver.setDefaultConnection(null);
-                }
-            }
-        }
-
-        public Class<?>[] getColumnClasses() {
-            return method.getParameterTypes();
-        }
-
-        public int getDataType() {
-            return dataType;
-        }
-
-        public int getParameterCount() {
-            return paramCount;
-        }
-
-        public boolean isVarArgs() {
-            return varArgs;
-        }
-
-        @Override
-        public int compareTo(JavaMethod m) {
-            if (varArgs != m.varArgs) {
-                return varArgs ? 1 : -1;
-            }
-            if (paramCount != m.paramCount) {
-                return paramCount - m.paramCount;
-            }
-            if (hasConnectionParam != m.hasConnectionParam) {
-                return hasConnectionParam ? 1 : -1;
-            }
-            return id - m.id;
-        }
-
-    }
-
 }

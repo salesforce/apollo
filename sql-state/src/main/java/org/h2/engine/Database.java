@@ -79,7 +79,6 @@ import org.h2.util.MathUtils;
 import org.h2.util.NetUtils;
 import org.h2.util.NetworkConnectionInfo;
 import org.h2.util.SmallLRUCache;
-import org.h2.util.SourceCompiler;
 import org.h2.util.StringUtils;
 import org.h2.util.TempFileDeleter;
 import org.h2.util.Utils;
@@ -89,6 +88,8 @@ import org.h2.value.CompareMode;
 import org.h2.value.Value;
 import org.h2.value.ValueInt;
 import org.h2.value.ValueTimestampTimeZone;
+
+import com.salesforce.apollo.state.DeterministicCompiler;
 
 /**
  * There is one database object per open database.
@@ -208,7 +209,7 @@ public class Database implements DataHandler, CastDataProvider {
     private PageStore pageStore;
     private int cacheSize;
     private int compactMode;
-    private SourceCompiler compiler;
+    private DeterministicCompiler compiler;
     private volatile boolean metaTablesInitialized;
     private boolean flushOnEachCommit;
     private LobStorageInterface lobStorage;
@@ -2731,9 +2732,13 @@ public class Database implements DataHandler, CastDataProvider {
         this.compactMode = compactMode;
     }
 
-    public SourceCompiler getCompiler() {
+    public DeterministicCompiler getCompiler() {
         if (compiler == null) {
-            compiler = new SourceCompiler();
+            try {
+                compiler = new DeterministicCompiler();
+            } catch (ClassNotFoundException | IllegalStateException | IOException e) {
+                throw new IllegalStateException("Unable to create deterministic compiler", e);
+            }
         }
         return compiler;
     }

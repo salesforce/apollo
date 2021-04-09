@@ -20,13 +20,15 @@ import org.h2.value.ValueCollectionBase;
 import org.h2.value.ValueNull;
 import org.h2.value.ValueResultSet;
 
+import com.salesforce.apollo.state.SandboxJavaMethod;
+
 /**
  * This class wraps a user-defined function.
  */
 public class JavaFunction extends Expression implements FunctionCall {
 
     private final FunctionAlias functionAlias;
-    private final FunctionAlias.JavaMethod javaMethod;
+    private final SandboxJavaMethod javaMethod;
     private final Expression[] args;
 
     public JavaFunction(FunctionAlias functionAlias, Expression[] args) {

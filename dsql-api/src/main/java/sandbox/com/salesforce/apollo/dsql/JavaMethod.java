@@ -65,7 +65,8 @@ public class JavaMethod {
         }
         Class<?> returnClass = method.getReturnType();
         try {
-            dataType = DataType.getTypeFromClass(DJVM.fromDJVMType(returnClass));
+            dataType = returnClass.isPrimitive() ? DataType.getTypeFromClass(returnClass)
+                    : DataType.getTypeFromClass(DJVM.fromDJVMType(returnClass));
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException("missing non sandbox equivalent class", e);
         }
@@ -76,7 +77,7 @@ public class JavaMethod {
         int i = 0;
         for (Class<?> clazz : method.getParameterTypes()) {
             try {
-                nonSandboxed[i++] = DJVM.fromDJVMType(clazz);
+                nonSandboxed[i++] = clazz.isPrimitive() ? clazz : DJVM.fromDJVMType(clazz);
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException("missing non sandbox equivalent class", e);
             }

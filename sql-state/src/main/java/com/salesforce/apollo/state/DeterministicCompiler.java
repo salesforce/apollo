@@ -46,7 +46,6 @@ import javax.tools.ToolProvider;
 
 import org.h2.api.ErrorCode;
 import org.h2.api.Trigger;
-import org.h2.engine.Constants;
 import org.h2.engine.Session;
 import org.h2.message.DbException;
 import org.h2.value.Value;
@@ -492,7 +491,35 @@ public class DeterministicCompiler implements UserSource {
      * @param className the class name
      * @return the method name
      */
-    public Method getMethod(String className) throws ClassNotFoundException {
+    public SandboxJavaMethod getMethod(String className) throws ClassNotFoundException {
+        AtomicReference<SandboxJavaMethod> method = new AtomicReference<>();
+        context.use(ctx -> {
+            Class<?> clazz = getClass(SANDBOX_PREFIX + className);
+            Method[] methods = clazz.getDeclaredMethods();
+            for (Method m : methods) {
+                int modifiers = m.getModifiers();
+                if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers)) {
+                    String name = m.getName();
+                    if (!name.startsWith("_") && !m.getName().equals("main")) {
+                        try {
+                            method.set(wrap(m, 0, ctx.getClassLoader()));
+                        } catch (Exception e) {
+                            log.error("Cannot wrap method: {}", m, e);
+                        }
+                    }
+                }
+            }
+        });
+        return method.get();
+    }
+
+    /**
+     * Get the first public static method of the given class.
+     *
+     * @param className the class name
+     * @return the method name
+     */
+    private Method getRawMethod(String className) throws ClassNotFoundException {
         Class<?> clazz = getClass(SANDBOX_PREFIX + className);
         Method[] methods = clazz.getDeclaredMethods();
         for (Method m : methods) {
@@ -595,10 +622,9 @@ public class DeterministicCompiler implements UserSource {
     public SandboxJavaMethod[] loadFunctionFromSource(String name, String source) {
         AtomicReference<SandboxJavaMethod[]> returned = new AtomicReference<>();
         context.use(ctx -> {
-            String fullClassName = Constants.USER_PACKAGE + "." + name;
             try {
-                compileClass(fullClassName, source);
-                Method m = getMethod(fullClassName);
+                compileClass(name, source);
+                Method m = getRawMethod(name);
                 SandboxJavaMethod method = wrap(m, 0, ctx.getClassLoader());
                 returned.set(new SandboxJavaMethod[] { method });
             } catch (DbException e) {
@@ -634,11 +660,19 @@ public class DeterministicCompiler implements UserSource {
     public Trigger loadTriggerFromSource(String name, String triggerSource) {
         AtomicReference<Trigger> trigger = new AtomicReference<>();
         context.use(ctx -> {
-            String fullClassName = Constants.USER_PACKAGE + ".trigger." + name;
             try {
-                String source = getCompleteSourceCode(Constants.USER_PACKAGE, name, triggerSource);
-                compileClass(fullClassName, source);
-                final Method m = getMethod(fullClassName);
+                String packageName = null;
+                int idx = name.lastIndexOf('.');
+                String className;
+                if (idx >= 0) {
+                    packageName = name.substring(0, idx);
+                    className = name.substring(idx + 1);
+                } else {
+                    className = name;
+                }
+                String source = getCompleteSourceCode(packageName, className, triggerSource);
+                compileClass(name, source);
+                final Method m = getRawMethod(name);
                 if (m.getParameterTypes().length > 0) {
                     throw new IllegalStateException("No parameters are allowed for a trigger");
                 }
