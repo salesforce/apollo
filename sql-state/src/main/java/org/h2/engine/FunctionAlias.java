@@ -3,6 +3,12 @@
  * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
+/*
+ * Copyright (c) 2021, salesforce.com, inc.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
 package org.h2.engine;
 
 import java.lang.reflect.Array;
@@ -35,6 +41,7 @@ import org.h2.value.ValueNull;
  *
  * @author Thomas Mueller
  * @author Gary Tong
+ * @author hal.hildebrand - modified for DJVM integration
  */
 public class FunctionAlias extends SchemaObjectBase {
 

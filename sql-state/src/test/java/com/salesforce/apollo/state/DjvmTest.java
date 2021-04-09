@@ -51,14 +51,14 @@ public class DjvmTest {
         File dir = File.createTempFile("foo", "bar");
         dir.delete();
         dir.deleteOnExit();
-        try (Functions funcs = new Functions(Functions.DEFAULT_CONFIG, ExecutionProfile.DEFAULT, dir)) {
+        try (DeterministicCompiler funcs = new DeterministicCompiler(DeterministicCompiler.DEFAULT_CONFIG,
+                ExecutionProfile.DEFAULT, dir)) {
             @SuppressWarnings("unchecked")
             Class<? extends Function<long[], Long>> clazz = (Class<? extends Function<long[], Long>>) funcs.compile("SimpleTask",
                                                                                                                     Utils.getDocument(getClass().getResourceAsStream("/SimpleTask.java")));
             funcs.execute(clazz);
-
-            Trigger trigger = funcs.compileTrigger("TestTrigger",
-                                                   Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
+            funcs.compileClass("TestTrigger", Utils.getDocument(getClass().getResourceAsStream("/TestTrigger.java")));
+            Trigger trigger = funcs.loadTrigger("TestTrigger");
             assertNotNull(trigger);
 
             try (java.sql.Connection db1 = new JdbcConnection("jdbc:h2:mem:djvm", new Properties())) {
@@ -75,7 +75,7 @@ public class DjvmTest {
                 s.execute("insert into s.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)");
                 db1.commit();
                 s.close();
-                trigger.fire(db1, new Object[] {"foo"}, new Object[] {"bar"});
+                trigger.fire(db1, new Object[] { "foo" }, new Object[] { "bar" });
                 s = db1.createStatement();
                 ResultSet result = s.executeQuery("select b.qty from s.books b where b.id = 1004");
                 assertTrue(result.next());

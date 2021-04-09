@@ -15,6 +15,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -30,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import javax.tools.FileObject;
@@ -43,7 +46,11 @@ import javax.tools.ToolProvider;
 
 import org.h2.api.ErrorCode;
 import org.h2.api.Trigger;
+import org.h2.engine.Constants;
+import org.h2.engine.Session;
 import org.h2.message.DbException;
+import org.h2.value.Value;
+import org.slf4j.Logger;
 
 import com.salesforce.apollo.protocols.Utils;
 
@@ -59,6 +66,7 @@ import net.corda.djvm.source.ApiSource;
 import net.corda.djvm.source.BootstrapClassLoader;
 import net.corda.djvm.source.UserPathSource;
 import net.corda.djvm.source.UserSource;
+import sandbox.com.salesforce.apollo.dsql.JavaMethod;
 import sandbox.com.salesforce.apollo.dsql.TriggerWrapper;
 
 /**
@@ -68,7 +76,7 @@ import sandbox.com.salesforce.apollo.dsql.TriggerWrapper;
  * @author hal.hildebrand
  *
  */
-public class Functions implements UserSource {
+public class DeterministicCompiler implements UserSource {
 
     private static class ClassFileManager extends ForwardingJavaFileManager<StandardJavaFileManager> {
 
@@ -147,13 +155,15 @@ public class Functions implements UserSource {
     private static final String       BOOTSTRAP_JAR    = "/deterministic-rt.jar";
     private static final int          DOT_CLASS_LENGTH = ".class".length();
     private static final JavaCompiler JAVA_COMPILER;
+    private final static Logger       log              = org.slf4j.LoggerFactory.getLogger(DeterministicCompiler.class);
+    private static final String       SANDBOX_PREFIX   = "sandbox.";
 
     static {
         try {
             File tempFile = File.createTempFile("bootstrap", ".jar");
             tempFile.delete();
             tempFile.deleteOnExit();
-            try (InputStream is = Functions.class.getResourceAsStream(BOOTSTRAP_JAR);
+            try (InputStream is = DeterministicCompiler.class.getResourceAsStream(BOOTSTRAP_JAR);
                     FileOutputStream os = new FileOutputStream(tempFile);) {
                 Utils.copy(is, os);
                 os.flush();
@@ -182,19 +192,45 @@ public class Functions implements UserSource {
             buff.append("package ").append(packageName).append(";\n");
         }
         int endImport = source.indexOf("@CODE");
-        String importCode = """
-                import java.util.*;
-                import java.math.*;
-                import sandbox.java.sql.*;
-
-                """;
         if (endImport >= 0) {
-            importCode = source.substring(0, endImport);
             source = source.substring("@CODE".length() + endImport);
+            String importCode = """
+                    import java.util.*;
+                    import java.math.*;
+                    import sandbox.java.sql.*;
+
+                    """;
+            importCode = source.substring(0, endImport);
+            buff.append(importCode);
+            buff.append("public class ")
+                .append(className)
+                .append(" {\n    public static ")
+                .append(source)
+                .append("\n}\n");
+        } else {
+            buff.append(source);
         }
-        buff.append(importCode);
-        buff.append("public class ").append(className).append(" {\n    public static ").append(source).append("\n}\n");
         return buff.toString();
+    }
+
+    private static String getMethodSignature(Method m) {
+        StringBuilder buff = new StringBuilder(m.getName());
+        buff.append('(');
+        Class<?>[] parameterTypes = m.getParameterTypes();
+        for (int i = 0, length = parameterTypes.length; i < length; i++) {
+            if (i > 0) {
+                // do not use a space here, because spaces are removed
+                // in CreateFunctionAlias.setJavaClassMethod()
+                buff.append(',');
+            }
+            Class<?> p = parameterTypes[i];
+            if (p.isArray()) {
+                buff.append(unsandbox(p.getComponentType().getName())).append("[]");
+            } else {
+                buff.append(unsandbox(p.getName()));
+            }
+        }
+        return buff.append(')').toString();
     }
 
     private static void handleSyntaxError(String output, int exitStatus) {
@@ -273,7 +309,8 @@ public class Functions implements UserSource {
                               "sandbox/com/salesforce/apollo/dsql/SQLXMLWrapper",
                               "sandbox/com/salesforce/apollo/dsql/StatementWrapper",
                               "sandbox/com/salesforce/apollo/dsql/StructWrapper",
-                              "sandbox/com/salesforce/apollo/dsql/TriggerWrapper"));
+                              "sandbox/com/salesforce/apollo/dsql/TriggerWrapper",
+                              "sandbox/com/salesforce/apollo/dsql/JavaMethod"));
     }
 
     private static File tempDir() throws IllegalStateException {
@@ -289,16 +326,20 @@ public class Functions implements UserSource {
         return tempDir;
     }
 
+    private static String unsandbox(String className) {
+        return className.startsWith(SANDBOX_PREFIX) ? className.substring(SANDBOX_PREFIX.length() + 1) : className;
+    }
+
     private final File              cacheDir;
     private final Map<String, File> compiledClasses = new ConcurrentHashMap<>();
 
     private final SandboxRuntimeContext context;
 
-    public Functions() throws IOException, ClassNotFoundException, IllegalStateException {
+    public DeterministicCompiler() throws IOException, ClassNotFoundException, IllegalStateException {
         this(DEFAULT_CONFIG, ExecutionProfile.DEFAULT, tempDir());
     }
 
-    public Functions(AnalysisConfiguration config, ExecutionProfile execution, File cacheDir)
+    public DeterministicCompiler(AnalysisConfiguration config, ExecutionProfile execution, File cacheDir)
             throws ClassNotFoundException, IOException {
         Utils.clean(cacheDir);
         cacheDir.mkdirs();
@@ -359,25 +400,33 @@ public class Functions implements UserSource {
         return clazz;
     }
 
-    public Trigger compileTrigger(String packageAndClassName, String source) throws ClassNotFoundException {
-        compile(packageAndClassName, source);
-        AtomicReference<Trigger> holder = new AtomicReference<>();
+    public void compileClass(String packageAndClassName, String source) throws ClassNotFoundException {
+        String packageName = null;
+        int idx = packageAndClassName.lastIndexOf('.');
+        String className;
+        if (idx >= 0) {
+            packageName = packageAndClassName.substring(0, idx);
+            className = packageAndClassName.substring(idx + 1);
+        } else {
+            className = packageAndClassName;
+        }
+        byte[] classBytes = javaxToolsJavac(packageName, className,
+                                            getCompleteSourceCode(packageName, className, source));
+        String binaryName = toBinaryName(packageAndClassName);
+        File clazzFile;
+        try {
+            clazzFile = File.createTempFile(binaryName, "class", cacheDir);
+        } catch (IOException e) {
+            throw new ClassNotFoundException("unable to store: " + packageAndClassName, e);
+        }
 
-        context.use(ctx -> {
-            SandboxClassLoader cl = ctx.getClassLoader();
+        try (OutputStream os = new FileOutputStream(clazzFile)) {
+            os.write(classBytes);
+        } catch (IOException e) {
+            throw new ClassNotFoundException("unable to store: " + packageAndClassName, e);
+        }
 
-            try {
-                holder.set(new SandboxTrigger(context,
-                        cl.loadClass(TriggerWrapper.class.getCanonicalName())
-                          .getDeclaredConstructor(Object.class)
-                          .newInstance(cl.loadClass("sandbox." + packageAndClassName)
-                                         .getDeclaredConstructor()
-                                         .newInstance())));
-            } catch (Exception e) {
-                throw new IllegalStateException("cannot create trigger", e);
-            }
-        });
-        return holder.get();
+        compiledClasses.put(binaryName, clazzFile);
     }
 
     public void execute(Class<? extends Function<long[], Long>> clazz) {
@@ -437,9 +486,187 @@ public class Functions implements UserSource {
         };
     }
 
+    /**
+     * Get the first public static method of the given class.
+     *
+     * @param className the class name
+     * @return the method name
+     */
+    public Method getMethod(String className) throws ClassNotFoundException {
+        Class<?> clazz = getClass(SANDBOX_PREFIX + className);
+        Method[] methods = clazz.getDeclaredMethods();
+        for (Method m : methods) {
+            int modifiers = m.getModifiers();
+            if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers)) {
+                String name = m.getName();
+                if (!name.startsWith("_") && !m.getName().equals("main")) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    public BiFunction<Session, Value[], Object> getMethod(String className, String method, String source) {
+        AtomicReference<BiFunction<Session, Value[], Object>> m = new AtomicReference<>();
+        context.use(ctx -> {
+            try {
+                compileClass(className, source);
+                Class<?> clazz = ctx.getClassLoader().loadClass(SANDBOX_PREFIX + className);
+
+                Method call = null;
+                for (Method mth : clazz.getDeclaredMethods()) {
+                    if (method.equals(mth.getName())) {
+                        call = mth;
+                        break;
+                    }
+                }
+
+                if (call == null) {
+                    throw DbException.get(ErrorCode.SYNTAX_ERROR_1, new IllegalArgumentException(
+                            "Must contain invocation method named: " + method + "(...)"), source);
+                }
+                Object instance = clazz.getDeclaredConstructor().newInstance();
+                SandboxJavaMethod sandboxJavaMethod = wrap(call, 0, ctx.getClassLoader());
+                m.set((session, args) -> sandboxJavaMethod.invoke(instance, session, args));
+            } catch (DbException e) {
+                throw e;
+            } catch (Exception e) {
+                throw DbException.get(ErrorCode.SYNTAX_ERROR_1, e, source);
+            }
+
+        });
+        return m.get();
+    }
+
     @Override
     public URL[] getURLs() {
         return new URL[0];
+    }
+
+    public SandboxJavaMethod[] loadFunction(String className, String methodName) {
+        AtomicReference<SandboxJavaMethod[]> methodsList = new AtomicReference<>();
+        context.use(ctx -> {
+            SandboxClassLoader cl = ctx.getClassLoader();
+            Class<?> javaClass;
+            try {
+                javaClass = cl.loadClass(className);
+            } catch (Exception e) {
+                throw new IllegalStateException("Cannot find sandboxed class: " + className, e);
+            }
+            Method[] methods = javaClass.getMethods();
+            ArrayList<SandboxJavaMethod> list = new ArrayList<>(1);
+            for (int i = 0, len = methods.length; i < len; i++) {
+                Method m = methods[i];
+                if (!Modifier.isStatic(m.getModifiers())) {
+                    continue;
+                }
+                if (m.getName().equals(methodName) || getMethodSignature(m).equals(methodName)) {
+                    SandboxJavaMethod javaMethod;
+                    try {
+                        javaMethod = wrap(m, i, cl);
+                    } catch (Exception e) {
+                        throw new IllegalStateException("Cannot construct JavaMethod wrapper on: " + m, e);
+                    }
+                    for (SandboxJavaMethod old : list) {
+                        if (old.getParameterCount() == javaMethod.getParameterCount()) {
+                            throw DbException.get(ErrorCode.METHODS_MUST_HAVE_DIFFERENT_PARAMETER_COUNTS_2,
+                                                  old.toString(), javaMethod.toString());
+                        }
+                    }
+                    list.add(javaMethod);
+                }
+            }
+            if (list.isEmpty()) {
+                throw DbException.get(ErrorCode.PUBLIC_STATIC_JAVA_METHOD_NOT_FOUND_1,
+                                      methodName + " (" + className + ")");
+            }
+            SandboxJavaMethod[] javaMethods = list.toArray(new SandboxJavaMethod[0]);
+            // Sort elements. Methods with a variable number of arguments must be at
+            // the end. Reason: there could be one method without parameters and one
+            // with a variable number. The one without parameters needs to be used
+            // if no parameters are given.
+            Arrays.sort(javaMethods);
+            methodsList.set(javaMethods);
+        });
+        return methodsList.get();
+    }
+
+    public SandboxJavaMethod[] loadFunctionFromSource(String name, String source) {
+        AtomicReference<SandboxJavaMethod[]> returned = new AtomicReference<>();
+        context.use(ctx -> {
+            String fullClassName = Constants.USER_PACKAGE + "." + name;
+            try {
+                compileClass(fullClassName, source);
+                Method m = getMethod(fullClassName);
+                SandboxJavaMethod method = wrap(m, 0, ctx.getClassLoader());
+                returned.set(new SandboxJavaMethod[] { method });
+            } catch (DbException e) {
+                throw e;
+            } catch (Exception e) {
+                throw DbException.get(ErrorCode.SYNTAX_ERROR_1, e, source);
+            }
+        });
+        return returned.get();
+    }
+
+    public Trigger loadTrigger(String packageAndClassName) {
+        AtomicReference<Trigger> holder = new AtomicReference<>();
+
+        context.use(ctx -> {
+            SandboxClassLoader cl = ctx.getClassLoader();
+
+            try {
+                holder.set(new SandboxTrigger(context,
+                        cl.loadClass(TriggerWrapper.class.getCanonicalName())
+                          .getDeclaredConstructor(Object.class)
+                          .newInstance(cl.loadClass(SANDBOX_PREFIX + packageAndClassName)
+                                         .getDeclaredConstructor()
+                                         .newInstance())));
+            } catch (Exception e) {
+                throw DbException.get(ErrorCode.ERROR_CREATING_TRIGGER_OBJECT_3, e, packageAndClassName, "..source..",
+                                      e.toString());
+            }
+        });
+        return holder.get();
+    }
+
+    public Trigger loadTriggerFromSource(String name, String triggerSource) {
+        AtomicReference<Trigger> trigger = new AtomicReference<>();
+        context.use(ctx -> {
+            String fullClassName = Constants.USER_PACKAGE + ".trigger." + name;
+            try {
+                String source = getCompleteSourceCode(Constants.USER_PACKAGE, name, triggerSource);
+                compileClass(fullClassName, source);
+                final Method m = getMethod(fullClassName);
+                if (m.getParameterTypes().length > 0) {
+                    throw new IllegalStateException("No parameters are allowed for a trigger");
+                }
+                trigger.set(new SandboxTrigger(context,
+                        new SandboxTrigger(context,
+                                ctx.getClassLoader()
+                                   .loadClass(TriggerWrapper.class.getCanonicalName())
+                                   .getDeclaredConstructor(Object.class)
+                                   .newInstance(m.invoke(null)))));
+            } catch (DbException e) {
+                throw e;
+            } catch (Exception e) {
+                throw DbException.get(ErrorCode.ERROR_CREATING_TRIGGER_OBJECT_3, e, name, triggerSource, e.toString());
+            }
+        });
+        return trigger.get();
+    }
+
+    private Class<?> getClass(String className) {
+        AtomicReference<Class<?>> clazz = new AtomicReference<>();
+        context.use(ctx -> {
+            try {
+                clazz.set(ctx.getClassLoader().loadClass(className));
+            } catch (ClassNotFoundException e) {
+                log.warn("Failed to load class: {}", className, e);
+            }
+        });
+        return clazz.get();
     }
 
     private byte[] javaxToolsJavac(String packageName, String className, String source) {
@@ -477,5 +704,13 @@ public class Functions implements UserSource {
             return name;
         }
         return name.substring(0, name.length() - DOT_CLASS_LENGTH).replace('/', '.');
+    }
+
+    private SandboxJavaMethod wrap(Method method, int index, SandboxClassLoader classLoader) throws Exception {
+        return new SandboxJavaMethod(context,
+                classLoader.loadClass(JavaMethod.class.getCanonicalName())
+                           .getDeclaredConstructor(Method.class)
+                           .newInstance(method),
+                index);
     }
 }

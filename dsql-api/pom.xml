@@ -16,6 +16,10 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>net.corda.djvm</groupId>
 			<artifactId>corda-djvm</artifactId>
 		</dependency>
@@ -44,7 +48,7 @@
 						<configuration>
 							<excludes>
 								<exclude>sandbox/java/lang/</exclude>
-                                <exclude>sandbox/java/util/</exclude>
+								<exclude>sandbox/java/util/</exclude>
 							</excludes>
 						</configuration>
 					</execution>
