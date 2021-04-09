@@ -253,5 +253,9 @@ public enum JDBCType implements SQLType {
         }
         throw new IllegalArgumentException("Type:" + type + " is not a valid "
                 + "Types.java value.");
+    } 
+    
+    public java.sql.SQLType toJsSQLType() {
+        return Enum.valueOf(java.sql.JDBCType.class, name());
     }
 }

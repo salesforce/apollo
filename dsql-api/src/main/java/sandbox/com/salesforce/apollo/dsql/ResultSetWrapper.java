@@ -6,6 +6,8 @@
  */
 package sandbox.com.salesforce.apollo.dsql;
 
+import static sandbox.com.salesforce.apollo.dsql.ConnectionWrapper.convertClassMap;
+
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -13,7 +15,7 @@ import java.net.URL;
 import java.util.Calendar;
 import java.util.Map;
 
-import sandbox.java.lang.Object;
+import sandbox.java.lang.DJVM;
 import sandbox.java.lang.String;
 import sandbox.java.sql.Array;
 import sandbox.java.sql.Blob;
@@ -38,794 +40,1580 @@ import sandbox.java.sql.Timestamp;
  */
 @SuppressWarnings("deprecation")
 public class ResultSetWrapper implements ResultSet {
-    private final ResultSet wrapped;
+    private final java.sql.ResultSet wrapped;
 
     public ResultSetWrapper(java.sql.ResultSet wrapped) {
-        this.wrapped = null;
-    }
-
-    public ResultSetWrapper(ResultSet wrapped) {
         this.wrapped = wrapped;
     }
 
     public boolean absolute(int row) throws SQLException {
-        return wrapped.absolute(row);
+        try {
+            return wrapped.absolute(row);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void afterLast() throws SQLException {
-        wrapped.afterLast();
+        try {
+            wrapped.afterLast();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void beforeFirst() throws SQLException {
-        wrapped.beforeFirst();
+        try {
+            wrapped.beforeFirst();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void cancelRowUpdates() throws SQLException {
-        wrapped.cancelRowUpdates();
+        try {
+            wrapped.cancelRowUpdates();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void clearWarnings() throws SQLException {
-        wrapped.clearWarnings();
+        try {
+            wrapped.clearWarnings();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void close() throws SQLException {
-        wrapped.close();
+        try {
+            wrapped.close();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void deleteRow() throws SQLException {
-        wrapped.deleteRow();
+        try {
+            wrapped.deleteRow();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int findColumn(String columnLabel) throws SQLException {
-        return wrapped.findColumn(columnLabel);
+        try {
+            return wrapped.findColumn(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean first() throws SQLException {
-        return wrapped.first();
+        try {
+            return wrapped.first();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Array getArray(int columnIndex) throws SQLException {
-        return wrapped.getArray(columnIndex);
+        try {
+            return new ArrayWrapper(wrapped.getArray(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Array getArray(String columnLabel) throws SQLException {
-        return wrapped.getArray(columnLabel);
+        try {
+            return new ArrayWrapper(wrapped.getArray(String.fromDJVM(columnLabel)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public InputStream getAsciiStream(int columnIndex) throws SQLException {
-        return wrapped.getAsciiStream(columnIndex);
+        try {
+            return wrapped.getAsciiStream(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public InputStream getAsciiStream(String columnLabel) throws SQLException {
-        return wrapped.getAsciiStream(columnLabel);
+        try {
+            return wrapped.getAsciiStream(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
-        return wrapped.getBigDecimal(columnIndex);
+        try {
+            return wrapped.getBigDecimal(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
-        return wrapped.getBigDecimal(columnIndex, scale);
+        try {
+            return wrapped.getBigDecimal(columnIndex, scale);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
-        return wrapped.getBigDecimal(columnLabel);
+        try {
+            return wrapped.getBigDecimal(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException {
-        return wrapped.getBigDecimal(columnLabel, scale);
+        try {
+            return wrapped.getBigDecimal(String.fromDJVM(columnLabel), scale);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public InputStream getBinaryStream(int columnIndex) throws SQLException {
-        return wrapped.getBinaryStream(columnIndex);
+        try {
+            return wrapped.getBinaryStream(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public InputStream getBinaryStream(String columnLabel) throws SQLException {
-        return wrapped.getBinaryStream(columnLabel);
+        try {
+            return wrapped.getBinaryStream(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Blob getBlob(int columnIndex) throws SQLException {
-        return wrapped.getBlob(columnIndex);
+        try {
+            return new BlobWrapper(wrapped.getBlob(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Blob getBlob(String columnLabel) throws SQLException {
-        return wrapped.getBlob(columnLabel);
+        try {
+            return new BlobWrapper(wrapped.getBlob(String.fromDJVM(columnLabel)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean getBoolean(int columnIndex) throws SQLException {
-        return wrapped.getBoolean(columnIndex);
+        try {
+            return wrapped.getBoolean(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean getBoolean(String columnLabel) throws SQLException {
-        return wrapped.getBoolean(columnLabel);
+        try {
+            return wrapped.getBoolean(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public byte getByte(int columnIndex) throws SQLException {
-        return wrapped.getByte(columnIndex);
+        try {
+            return wrapped.getByte(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public byte getByte(String columnLabel) throws SQLException {
-        return wrapped.getByte(columnLabel);
+        try {
+            return wrapped.getByte(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public byte[] getBytes(int columnIndex) throws SQLException {
-        return wrapped.getBytes(columnIndex);
+        try {
+            return wrapped.getBytes(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public byte[] getBytes(String columnLabel) throws SQLException {
-        return wrapped.getBytes(columnLabel);
+        try {
+            return wrapped.getBytes(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Reader getCharacterStream(int columnIndex) throws SQLException {
-        return wrapped.getCharacterStream(columnIndex);
+        try {
+            return wrapped.getCharacterStream(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Reader getCharacterStream(String columnLabel) throws SQLException {
-        return wrapped.getCharacterStream(columnLabel);
+        try {
+            return wrapped.getCharacterStream(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Clob getClob(int columnIndex) throws SQLException {
-        return wrapped.getClob(columnIndex);
+        try {
+            return new ClobWrapper(wrapped.getClob(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Clob getClob(String columnLabel) throws SQLException {
-        return wrapped.getClob(columnLabel);
+        try {
+            return new ClobWrapper(wrapped.getClob(String.fromDJVM(columnLabel)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getConcurrency() throws SQLException {
-        return wrapped.getConcurrency();
+        try {
+            return wrapped.getConcurrency();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getCursorName() throws SQLException {
-        return wrapped.getCursorName();
+        try {
+            return String.toDJVM(wrapped.getCursorName());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Date getDate(int columnIndex) throws SQLException {
-        return wrapped.getDate(columnIndex);
+        try {
+            return new Date(wrapped.getDate(columnIndex).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Date getDate(int columnIndex, Calendar cal) throws SQLException {
-        return wrapped.getDate(columnIndex, cal);
+        try {
+            return new Date(wrapped.getDate(columnIndex, cal).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Date getDate(String columnLabel) throws SQLException {
-        return wrapped.getDate(columnLabel);
+        try {
+            return new Date(wrapped.getDate(String.fromDJVM(columnLabel)).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Date getDate(String columnLabel, Calendar cal) throws SQLException {
-        return wrapped.getDate(columnLabel, cal);
+        try {
+            return new Date(wrapped.getDate(String.fromDJVM(columnLabel), cal).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public double getDouble(int columnIndex) throws SQLException {
-        return wrapped.getDouble(columnIndex);
+        try {
+            return wrapped.getDouble(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public double getDouble(String columnLabel) throws SQLException {
-        return wrapped.getDouble(columnLabel);
+        try {
+            return wrapped.getDouble(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getFetchDirection() throws SQLException {
-        return wrapped.getFetchDirection();
+        try {
+            return wrapped.getFetchDirection();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getFetchSize() throws SQLException {
-        return wrapped.getFetchSize();
+        try {
+            return wrapped.getFetchSize();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public float getFloat(int columnIndex) throws SQLException {
-        return wrapped.getFloat(columnIndex);
+        try {
+            return wrapped.getFloat(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public float getFloat(String columnLabel) throws SQLException {
-        return wrapped.getFloat(columnLabel);
+        try {
+            return wrapped.getFloat(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getHoldability() throws SQLException {
-        return wrapped.getHoldability();
+        try {
+            return wrapped.getHoldability();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getInt(int columnIndex) throws SQLException {
-        return wrapped.getInt(columnIndex);
+        try {
+            return wrapped.getInt(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getInt(String columnLabel) throws SQLException {
-        return wrapped.getInt(columnLabel);
+        try {
+            return wrapped.getInt(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public long getLong(int columnIndex) throws SQLException {
-        return wrapped.getLong(columnIndex);
+        try {
+            return wrapped.getLong(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public long getLong(String columnLabel) throws SQLException {
-        return wrapped.getLong(columnLabel);
+        try {
+            return wrapped.getLong(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public ResultSetMetaData getMetaData() throws SQLException {
-        return wrapped.getMetaData();
+        try {
+            return new ResultSetMetaDataWrapper(wrapped.getMetaData());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Reader getNCharacterStream(int columnIndex) throws SQLException {
-        return wrapped.getNCharacterStream(columnIndex);
+        try {
+            return wrapped.getNCharacterStream(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Reader getNCharacterStream(String columnLabel) throws SQLException {
-        return wrapped.getNCharacterStream(columnLabel);
+        try {
+            return wrapped.getNCharacterStream(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public NClob getNClob(int columnIndex) throws SQLException {
-        return wrapped.getNClob(columnIndex);
+        try {
+            return new NClobWrapper(wrapped.getNClob(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public NClob getNClob(String columnLabel) throws SQLException {
-        return wrapped.getNClob(columnLabel);
+        try {
+            return new NClobWrapper(wrapped.getNClob(String.fromDJVM(columnLabel)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getNString(int columnIndex) throws SQLException {
-        return wrapped.getNString(columnIndex);
+        try {
+            return String.toDJVM(wrapped.getNString(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getNString(String columnLabel) throws SQLException {
-        return wrapped.getNString(columnLabel);
+        try {
+            return String.toDJVM(wrapped.getNString(String.fromDJVM(columnLabel)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Object getObject(int columnIndex) throws SQLException {
-        return wrapped.getObject(columnIndex);
+        try {
+            return DJVM.sandbox(wrapped.getObject(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        } catch (ClassNotFoundException e) {
+            throw DJVM.toRuntimeException(e);
+        }
     }
 
     public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
-        return wrapped.getObject(columnIndex, type);
+        try {
+            return wrapped.getObject(columnIndex, type);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Object getObject(int columnIndex, Map<String, Class<?>> map) throws SQLException {
-        return wrapped.getObject(columnIndex, map);
+        try {
+            return wrapped.getObject(columnIndex, convertClassMap(map));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Object getObject(String columnLabel) throws SQLException {
-        return wrapped.getObject(columnLabel);
+        try {
+            return wrapped.getObject(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
-        return wrapped.getObject(columnLabel, type);
+        try {
+            return wrapped.getObject(String.fromDJVM(columnLabel), type);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Object getObject(String columnLabel, Map<String, Class<?>> map) throws SQLException {
-        return wrapped.getObject(columnLabel, map);
+        try {
+            return wrapped.getObject(String.fromDJVM(columnLabel), convertClassMap(map));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Ref getRef(int columnIndex) throws SQLException {
-        return wrapped.getRef(columnIndex);
+        try {
+            return new RefWrapper(wrapped.getRef(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Ref getRef(String columnLabel) throws SQLException {
-        return wrapped.getRef(columnLabel);
+        try {
+            return new RefWrapper(wrapped.getRef(String.fromDJVM(columnLabel)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getRow() throws SQLException {
-        return wrapped.getRow();
+        try {
+            return wrapped.getRow();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public RowId getRowId(int columnIndex) throws SQLException {
-        return wrapped.getRowId(columnIndex);
+        try {
+            return new RowIdWrapper(wrapped.getRowId(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public RowId getRowId(String columnLabel) throws SQLException {
-        return wrapped.getRowId(columnLabel);
+        try {
+            return new RowIdWrapper(wrapped.getRowId(String.fromDJVM(columnLabel)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public short getShort(int columnIndex) throws SQLException {
-        return wrapped.getShort(columnIndex);
+        try {
+            return wrapped.getShort(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public short getShort(String columnLabel) throws SQLException {
-        return wrapped.getShort(columnLabel);
+        try {
+            return wrapped.getShort(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public SQLXML getSQLXML(int columnIndex) throws SQLException {
-        return wrapped.getSQLXML(columnIndex);
+        try {
+            return new SQLXMLWrapper(wrapped.getSQLXML(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public SQLXML getSQLXML(String columnLabel) throws SQLException {
-        return wrapped.getSQLXML(columnLabel);
+        try {
+            return new SQLXMLWrapper(wrapped.getSQLXML(String.fromDJVM(columnLabel)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Statement getStatement() throws SQLException {
-        return wrapped.getStatement();
+        try {
+            java.sql.Statement statement = wrapped.getStatement();
+            return new StatementWrapper(new ConnectionWrapper(statement.getConnection()), statement);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getString(int columnIndex) throws SQLException {
-        return wrapped.getString(columnIndex);
+        try {
+            return String.toDJVM(wrapped.getString(columnIndex));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public String getString(String columnLabel) throws SQLException {
-        return wrapped.getString(columnLabel);
+        try {
+            return String.toDJVM(wrapped.getString(String.fromDJVM(columnLabel)));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Time getTime(int columnIndex) throws SQLException {
-        return wrapped.getTime(columnIndex);
+        try {
+            return new Time(wrapped.getTime(columnIndex).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Time getTime(int columnIndex, Calendar cal) throws SQLException {
-        return wrapped.getTime(columnIndex, cal);
+        try {
+            return new Time(wrapped.getTime(columnIndex, cal).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Time getTime(String columnLabel) throws SQLException {
-        return wrapped.getTime(columnLabel);
+        try {
+            return new Time(wrapped.getTime(String.fromDJVM(columnLabel)).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Time getTime(String columnLabel, Calendar cal) throws SQLException {
-        return wrapped.getTime(columnLabel, cal);
+        try {
+            return new Time(wrapped.getTime(String.fromDJVM(columnLabel), cal).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Timestamp getTimestamp(int columnIndex) throws SQLException {
-        return wrapped.getTimestamp(columnIndex);
+        try {
+            return new Timestamp(wrapped.getTimestamp(columnIndex).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
-        return wrapped.getTimestamp(columnIndex, cal);
+        try {
+            return new Timestamp(wrapped.getTimestamp(columnIndex, cal).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Timestamp getTimestamp(String columnLabel) throws SQLException {
-        return wrapped.getTimestamp(columnLabel);
+        try {
+            return new Timestamp(wrapped.getTimestamp(String.fromDJVM(columnLabel)).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
-        return wrapped.getTimestamp(columnLabel, cal);
+        try {
+            return new Timestamp(wrapped.getTimestamp(String.fromDJVM(columnLabel), cal).getTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public int getType() throws SQLException {
-        return wrapped.getType();
+        try {
+            return wrapped.getType();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public InputStream getUnicodeStream(int columnIndex) throws SQLException {
-        return wrapped.getUnicodeStream(columnIndex);
+        try {
+            return wrapped.getUnicodeStream(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public InputStream getUnicodeStream(String columnLabel) throws SQLException {
-        return wrapped.getUnicodeStream(columnLabel);
+        try {
+            return wrapped.getUnicodeStream(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public URL getURL(int columnIndex) throws SQLException {
-        return wrapped.getURL(columnIndex);
+        try {
+            return wrapped.getURL(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public URL getURL(String columnLabel) throws SQLException {
-        return wrapped.getURL(columnLabel);
+        try {
+            return wrapped.getURL(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public SQLWarning getWarnings() throws SQLException {
-        return wrapped.getWarnings();
+        try {
+            java.sql.SQLWarning warnings = wrapped.getWarnings();
+            return new SQLWarning(String.toDJVM(warnings.getMessage()), String.toDJVM(warnings.getSQLState()),
+                    warnings.getErrorCode());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void insertRow() throws SQLException {
-        wrapped.insertRow();
+        try {
+            wrapped.insertRow();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean isAfterLast() throws SQLException {
-        return wrapped.isAfterLast();
+        try {
+            return wrapped.isAfterLast();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean isBeforeFirst() throws SQLException {
-        return wrapped.isBeforeFirst();
+        try {
+            return wrapped.isBeforeFirst();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean isClosed() throws SQLException {
-        return wrapped.isClosed();
+        try {
+            return wrapped.isClosed();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean isFirst() throws SQLException {
-        return wrapped.isFirst();
+        try {
+            return wrapped.isFirst();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean isLast() throws SQLException {
-        return wrapped.isLast();
+        try {
+            return wrapped.isLast();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean isWrapperFor(Class<?> iface) throws SQLException {
-        return wrapped.isWrapperFor(iface);
+        try {
+            return wrapped.isWrapperFor(iface);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean last() throws SQLException {
-        return wrapped.last();
+        try {
+            return wrapped.last();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void moveToCurrentRow() throws SQLException {
-        wrapped.moveToCurrentRow();
+        try {
+            wrapped.moveToCurrentRow();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void moveToInsertRow() throws SQLException {
-        wrapped.moveToInsertRow();
+        try {
+            wrapped.moveToInsertRow();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean next() throws SQLException {
-        return wrapped.next();
+        try {
+            return wrapped.next();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean previous() throws SQLException {
-        return wrapped.previous();
+        try {
+            return wrapped.previous();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void refreshRow() throws SQLException {
-        wrapped.refreshRow();
+        try {
+            wrapped.refreshRow();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean relative(int rows) throws SQLException {
-        return wrapped.relative(rows);
+        try {
+            return wrapped.relative(rows);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean rowDeleted() throws SQLException {
-        return wrapped.rowDeleted();
+        try {
+            return wrapped.rowDeleted();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean rowInserted() throws SQLException {
-        return wrapped.rowInserted();
+        try {
+            return wrapped.rowInserted();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean rowUpdated() throws SQLException {
-        return wrapped.rowUpdated();
+        try {
+            return wrapped.rowUpdated();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setFetchDirection(int direction) throws SQLException {
-        wrapped.setFetchDirection(direction);
+        try {
+            wrapped.setFetchDirection(direction);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void setFetchSize(int rows) throws SQLException {
-        wrapped.setFetchSize(rows);
+        try {
+            wrapped.setFetchSize(rows);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
+    }
+
+    @Override
+    public java.sql.ResultSet toJsResultSet() {
+        return wrapped;
     }
 
     public <T> T unwrap(Class<T> iface) throws SQLException {
-        return wrapped.unwrap(iface);
+        try {
+            return wrapped.unwrap(iface);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateArray(int columnIndex, Array x) throws SQLException {
-        wrapped.updateArray(columnIndex, x);
+        try {
+            wrapped.updateArray(columnIndex, x.toJsArray());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateArray(String columnLabel, Array x) throws SQLException {
-        wrapped.updateArray(columnLabel, x);
+        try {
+            wrapped.updateArray(String.fromDJVM(columnLabel), x.toJsArray());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateAsciiStream(int columnIndex, InputStream x) throws SQLException {
-        wrapped.updateAsciiStream(columnIndex, x);
+        try {
+            wrapped.updateAsciiStream(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateAsciiStream(int columnIndex, InputStream x, int length) throws SQLException {
-        wrapped.updateAsciiStream(columnIndex, x, length);
+        try {
+            wrapped.updateAsciiStream(columnIndex, x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateAsciiStream(int columnIndex, InputStream x, long length) throws SQLException {
-        wrapped.updateAsciiStream(columnIndex, x, length);
+        try {
+            wrapped.updateAsciiStream(columnIndex, x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateAsciiStream(String columnLabel, InputStream x) throws SQLException {
-        wrapped.updateAsciiStream(columnLabel, x);
+        try {
+            wrapped.updateAsciiStream(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateAsciiStream(String columnLabel, InputStream x, int length) throws SQLException {
-        wrapped.updateAsciiStream(columnLabel, x, length);
+        try {
+            wrapped.updateAsciiStream(String.fromDJVM(columnLabel), x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateAsciiStream(String columnLabel, InputStream x, long length) throws SQLException {
-        wrapped.updateAsciiStream(columnLabel, x, length);
+        try {
+            wrapped.updateAsciiStream(String.fromDJVM(columnLabel), x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBigDecimal(int columnIndex, BigDecimal x) throws SQLException {
-        wrapped.updateBigDecimal(columnIndex, x);
+        try {
+            wrapped.updateBigDecimal(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBigDecimal(String columnLabel, BigDecimal x) throws SQLException {
-        wrapped.updateBigDecimal(columnLabel, x);
+        try {
+            wrapped.updateBigDecimal(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBinaryStream(int columnIndex, InputStream x) throws SQLException {
-        wrapped.updateBinaryStream(columnIndex, x);
+        try {
+            wrapped.updateBinaryStream(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBinaryStream(int columnIndex, InputStream x, int length) throws SQLException {
-        wrapped.updateBinaryStream(columnIndex, x, length);
+        try {
+            wrapped.updateBinaryStream(columnIndex, x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBinaryStream(int columnIndex, InputStream x, long length) throws SQLException {
-        wrapped.updateBinaryStream(columnIndex, x, length);
+        try {
+            wrapped.updateBinaryStream(columnIndex, x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBinaryStream(String columnLabel, InputStream x) throws SQLException {
-        wrapped.updateBinaryStream(columnLabel, x);
+        try {
+            wrapped.updateBinaryStream(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBinaryStream(String columnLabel, InputStream x, int length) throws SQLException {
-        wrapped.updateBinaryStream(columnLabel, x, length);
+        try {
+            wrapped.updateBinaryStream(String.fromDJVM(columnLabel), x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBinaryStream(String columnLabel, InputStream x, long length) throws SQLException {
-        wrapped.updateBinaryStream(columnLabel, x, length);
+        try {
+            wrapped.updateBinaryStream(String.fromDJVM(columnLabel), x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBlob(int columnIndex, Blob x) throws SQLException {
-        wrapped.updateBlob(columnIndex, x);
+        try {
+            wrapped.updateBlob(columnIndex, x.toJsBlob());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBlob(int columnIndex, InputStream inputStream) throws SQLException {
-        wrapped.updateBlob(columnIndex, inputStream);
+        try {
+            wrapped.updateBlob(columnIndex, inputStream);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBlob(int columnIndex, InputStream inputStream, long length) throws SQLException {
-        wrapped.updateBlob(columnIndex, inputStream, length);
+        try {
+            wrapped.updateBlob(columnIndex, inputStream, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBlob(String columnLabel, Blob x) throws SQLException {
-        wrapped.updateBlob(columnLabel, x);
+        try {
+            wrapped.updateBlob(String.fromDJVM(columnLabel), x.toJsBlob());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBlob(String columnLabel, InputStream inputStream) throws SQLException {
-        wrapped.updateBlob(columnLabel, inputStream);
+        try {
+            wrapped.updateBlob(String.fromDJVM(columnLabel), inputStream);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBlob(String columnLabel, InputStream inputStream, long length) throws SQLException {
-        wrapped.updateBlob(columnLabel, inputStream, length);
+        try {
+            wrapped.updateBlob(String.fromDJVM(columnLabel), inputStream, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBoolean(int columnIndex, boolean x) throws SQLException {
-        wrapped.updateBoolean(columnIndex, x);
+        try {
+            wrapped.updateBoolean(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBoolean(String columnLabel, boolean x) throws SQLException {
-        wrapped.updateBoolean(columnLabel, x);
+        try {
+            wrapped.updateBoolean(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateByte(int columnIndex, byte x) throws SQLException {
-        wrapped.updateByte(columnIndex, x);
+        try {
+            wrapped.updateByte(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateByte(String columnLabel, byte x) throws SQLException {
-        wrapped.updateByte(columnLabel, x);
+        try {
+            wrapped.updateByte(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBytes(int columnIndex, byte[] x) throws SQLException {
-        wrapped.updateBytes(columnIndex, x);
+        try {
+            wrapped.updateBytes(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateBytes(String columnLabel, byte[] x) throws SQLException {
-        wrapped.updateBytes(columnLabel, x);
+        try {
+            wrapped.updateBytes(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateCharacterStream(int columnIndex, Reader x) throws SQLException {
-        wrapped.updateCharacterStream(columnIndex, x);
+        try {
+            wrapped.updateCharacterStream(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateCharacterStream(int columnIndex, Reader x, int length) throws SQLException {
-        wrapped.updateCharacterStream(columnIndex, x, length);
+        try {
+            wrapped.updateCharacterStream(columnIndex, x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateCharacterStream(int columnIndex, Reader x, long length) throws SQLException {
-        wrapped.updateCharacterStream(columnIndex, x, length);
+        try {
+            wrapped.updateCharacterStream(columnIndex, x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateCharacterStream(String columnLabel, Reader reader) throws SQLException {
-        wrapped.updateCharacterStream(columnLabel, reader);
+        try {
+            wrapped.updateCharacterStream(String.fromDJVM(columnLabel), reader);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateCharacterStream(String columnLabel, Reader reader, int length) throws SQLException {
-        wrapped.updateCharacterStream(columnLabel, reader, length);
+        try {
+            wrapped.updateCharacterStream(String.fromDJVM(columnLabel), reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateCharacterStream(String columnLabel, Reader reader, long length) throws SQLException {
-        wrapped.updateCharacterStream(columnLabel, reader, length);
+        try {
+            wrapped.updateCharacterStream(String.fromDJVM(columnLabel), reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateClob(int columnIndex, Clob x) throws SQLException {
-        wrapped.updateClob(columnIndex, x);
+        try {
+            wrapped.updateClob(columnIndex, x.toJsClob());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateClob(int columnIndex, Reader reader) throws SQLException {
-        wrapped.updateClob(columnIndex, reader);
+        try {
+            wrapped.updateClob(columnIndex, reader);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateClob(int columnIndex, Reader reader, long length) throws SQLException {
-        wrapped.updateClob(columnIndex, reader, length);
+        try {
+            wrapped.updateClob(columnIndex, reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateClob(String columnLabel, Clob x) throws SQLException {
-        wrapped.updateClob(columnLabel, x);
+        try {
+            wrapped.updateClob(String.fromDJVM(columnLabel), x.toJsClob());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateClob(String columnLabel, Reader reader) throws SQLException {
-        wrapped.updateClob(columnLabel, reader);
+        try {
+            wrapped.updateClob(String.fromDJVM(columnLabel), reader);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateClob(String columnLabel, Reader reader, long length) throws SQLException {
-        wrapped.updateClob(columnLabel, reader, length);
+        try {
+            wrapped.updateClob(String.fromDJVM(columnLabel), reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateDate(int columnIndex, Date x) throws SQLException {
-        wrapped.updateDate(columnIndex, x);
+        try {
+            wrapped.updateDate(columnIndex, new java.sql.Date(x.getTime()));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateDate(String columnLabel, Date x) throws SQLException {
-        wrapped.updateDate(columnLabel, x);
+        try {
+            wrapped.updateDate(String.fromDJVM(columnLabel), new java.sql.Date(x.getTime()));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateDouble(int columnIndex, double x) throws SQLException {
-        wrapped.updateDouble(columnIndex, x);
+        try {
+            wrapped.updateDouble(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateDouble(String columnLabel, double x) throws SQLException {
-        wrapped.updateDouble(columnLabel, x);
+        try {
+            wrapped.updateDouble(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateFloat(int columnIndex, float x) throws SQLException {
-        wrapped.updateFloat(columnIndex, x);
+        try {
+            wrapped.updateFloat(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateFloat(String columnLabel, float x) throws SQLException {
-        wrapped.updateFloat(columnLabel, x);
+        try {
+            wrapped.updateFloat(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateInt(int columnIndex, int x) throws SQLException {
-        wrapped.updateInt(columnIndex, x);
+        try {
+            wrapped.updateInt(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateInt(String columnLabel, int x) throws SQLException {
-        wrapped.updateInt(columnLabel, x);
+        try {
+            wrapped.updateInt(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateLong(int columnIndex, long x) throws SQLException {
-        wrapped.updateLong(columnIndex, x);
+        try {
+            wrapped.updateLong(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateLong(String columnLabel, long x) throws SQLException {
-        wrapped.updateLong(columnLabel, x);
+        try {
+            wrapped.updateLong(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNCharacterStream(int columnIndex, Reader x) throws SQLException {
-        wrapped.updateNCharacterStream(columnIndex, x);
+        try {
+            wrapped.updateNCharacterStream(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNCharacterStream(int columnIndex, Reader x, long length) throws SQLException {
-        wrapped.updateNCharacterStream(columnIndex, x, length);
+        try {
+            wrapped.updateNCharacterStream(columnIndex, x, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNCharacterStream(String columnLabel, Reader reader) throws SQLException {
-        wrapped.updateNCharacterStream(columnLabel, reader);
+        try {
+            wrapped.updateNCharacterStream(String.fromDJVM(columnLabel), reader);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNCharacterStream(String columnLabel, Reader reader, long length) throws SQLException {
-        wrapped.updateNCharacterStream(columnLabel, reader, length);
+        try {
+            wrapped.updateNCharacterStream(String.fromDJVM(columnLabel), reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNClob(int columnIndex, NClob nClob) throws SQLException {
-        wrapped.updateNClob(columnIndex, nClob);
+        try {
+            wrapped.updateNClob(columnIndex, nClob.toJsNClob());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNClob(int columnIndex, Reader reader) throws SQLException {
-        wrapped.updateNClob(columnIndex, reader);
+        try {
+            wrapped.updateNClob(columnIndex, reader);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNClob(int columnIndex, Reader reader, long length) throws SQLException {
-        wrapped.updateNClob(columnIndex, reader, length);
+        try {
+            wrapped.updateNClob(columnIndex, reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNClob(String columnLabel, NClob nClob) throws SQLException {
-        wrapped.updateNClob(columnLabel, nClob);
+        try {
+            wrapped.updateNClob(String.fromDJVM(columnLabel), nClob.toJsNClob());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNClob(String columnLabel, Reader reader) throws SQLException {
-        wrapped.updateNClob(columnLabel, reader);
+        try {
+            wrapped.updateNClob(String.fromDJVM(columnLabel), reader);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNClob(String columnLabel, Reader reader, long length) throws SQLException {
-        wrapped.updateNClob(columnLabel, reader, length);
+        try {
+            wrapped.updateNClob(String.fromDJVM(columnLabel), reader, length);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNString(int columnIndex, String nString) throws SQLException {
-        wrapped.updateNString(columnIndex, nString);
+        try {
+            wrapped.updateNString(columnIndex, String.fromDJVM(nString));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNString(String columnLabel, String nString) throws SQLException {
-        wrapped.updateNString(columnLabel, nString);
+        try {
+            wrapped.updateNString(String.fromDJVM(columnLabel), String.fromDJVM(nString));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNull(int columnIndex) throws SQLException {
-        wrapped.updateNull(columnIndex);
+        try {
+            wrapped.updateNull(columnIndex);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateNull(String columnLabel) throws SQLException {
-        wrapped.updateNull(columnLabel);
+        try {
+            wrapped.updateNull(String.fromDJVM(columnLabel));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateObject(int columnIndex, Object x) throws SQLException {
-        wrapped.updateObject(columnIndex, x);
+        try {
+            wrapped.updateObject(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateObject(int columnIndex, Object x, int scaleOrLength) throws SQLException {
-        wrapped.updateObject(columnIndex, x, scaleOrLength);
+        try {
+            wrapped.updateObject(columnIndex, x, scaleOrLength);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateObject(int columnIndex, Object x, SQLType targetSqlType) throws SQLException {
-        wrapped.updateObject(columnIndex, x, targetSqlType);
+        try {
+            wrapped.updateObject(columnIndex, x, targetSqlType.toJsSQLType());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateObject(int columnIndex, Object x, SQLType targetSqlType, int scaleOrLength) throws SQLException {
-        wrapped.updateObject(columnIndex, x, targetSqlType, scaleOrLength);
+        try {
+            wrapped.updateObject(columnIndex, x, targetSqlType.toJsSQLType(), scaleOrLength);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateObject(String columnLabel, Object x) throws SQLException {
-        wrapped.updateObject(columnLabel, x);
+        try {
+            wrapped.updateObject(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateObject(String columnLabel, Object x, int scaleOrLength) throws SQLException {
-        wrapped.updateObject(columnLabel, x, scaleOrLength);
+        try {
+            wrapped.updateObject(String.fromDJVM(columnLabel), x, scaleOrLength);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateObject(String columnLabel, Object x, SQLType targetSqlType) throws SQLException {
-        wrapped.updateObject(columnLabel, x, targetSqlType);
+        try {
+            wrapped.updateObject(String.fromDJVM(columnLabel), x, targetSqlType.toJsSQLType());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateObject(String columnLabel, Object x, SQLType targetSqlType,
                              int scaleOrLength) throws SQLException {
-        wrapped.updateObject(columnLabel, x, targetSqlType, scaleOrLength);
+        try {
+            wrapped.updateObject(String.fromDJVM(columnLabel), x, targetSqlType.toJsSQLType(), scaleOrLength);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateRef(int columnIndex, Ref x) throws SQLException {
-        wrapped.updateRef(columnIndex, x);
+        try {
+            wrapped.updateRef(columnIndex, x.toJsRef());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateRef(String columnLabel, Ref x) throws SQLException {
-        wrapped.updateRef(columnLabel, x);
+        try {
+            wrapped.updateRef(String.fromDJVM(columnLabel), x.toJsRef());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateRow() throws SQLException {
-        wrapped.updateRow();
+        try {
+            wrapped.updateRow();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateRowId(int columnIndex, RowId x) throws SQLException {
-        wrapped.updateRowId(columnIndex, x);
+        try {
+            wrapped.updateRowId(columnIndex, x.toJsRowId());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateRowId(String columnLabel, RowId x) throws SQLException {
-        wrapped.updateRowId(columnLabel, x);
+        try {
+            wrapped.updateRowId(String.fromDJVM(columnLabel), x.toJsRowId());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateShort(int columnIndex, short x) throws SQLException {
-        wrapped.updateShort(columnIndex, x);
+        try {
+            wrapped.updateShort(columnIndex, x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateShort(String columnLabel, short x) throws SQLException {
-        wrapped.updateShort(columnLabel, x);
+        try {
+            wrapped.updateShort(String.fromDJVM(columnLabel), x);
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateSQLXML(int columnIndex, SQLXML xmlObject) throws SQLException {
-        wrapped.updateSQLXML(columnIndex, xmlObject);
+        try {
+            wrapped.updateSQLXML(columnIndex, xmlObject.toJsSQLXML());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateSQLXML(String columnLabel, SQLXML xmlObject) throws SQLException {
-        wrapped.updateSQLXML(columnLabel, xmlObject);
+        try {
+            wrapped.updateSQLXML(String.fromDJVM(columnLabel), xmlObject.toJsSQLXML());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateString(int columnIndex, String x) throws SQLException {
-        wrapped.updateString(columnIndex, x);
+        try {
+            wrapped.updateString(columnIndex, String.fromDJVM(x));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateString(String columnLabel, String x) throws SQLException {
-        wrapped.updateString(columnLabel, x);
+        try {
+            wrapped.updateString(String.fromDJVM(columnLabel), String.fromDJVM(x));
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateTime(int columnIndex, Time x) throws SQLException {
-        wrapped.updateTime(columnIndex, x);
+        try {
+            wrapped.updateTime(columnIndex, x.toJsTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateTime(String columnLabel, Time x) throws SQLException {
-        wrapped.updateTime(columnLabel, x);
+        try {
+            wrapped.updateTime(String.fromDJVM(columnLabel), x.toJsTime());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateTimestamp(int columnIndex, Timestamp x) throws SQLException {
-        wrapped.updateTimestamp(columnIndex, x);
+        try {
+            wrapped.updateTimestamp(columnIndex, x.toJsTimestamp());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public void updateTimestamp(String columnLabel, Timestamp x) throws SQLException {
-        wrapped.updateTimestamp(columnLabel, x);
+        try {
+            wrapped.updateTimestamp(String.fromDJVM(columnLabel), x.toJsTimestamp());
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 
     public boolean wasNull() throws SQLException {
-        return wrapped.wasNull();
+        try {
+            return wrapped.wasNull();
+        } catch (java.sql.SQLException e) {
+            throw new SQLException(e);
+        }
     }
 }

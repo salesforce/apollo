@@ -30,7 +30,6 @@ import java.io.Reader;
 import java.math.BigDecimal;
 import java.util.Calendar;
 
-import sandbox.java.lang.Object;
 import sandbox.java.lang.String;
 
 /**
@@ -1393,6 +1392,8 @@ public interface ResultSet extends Wrapper, AutoCloseable {
      * @see #setFetchSize
      */
     int getFetchSize() throws SQLException;
+
+    java.sql.ResultSet toJsResultSet();
 
     /**
      * The constant indicating the type for a <code>ResultSet</code> object whose

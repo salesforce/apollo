@@ -56,4 +56,6 @@ public interface SQLType {
      * @return An Integer representing the vendor specific data type
      */
     Integer getVendorTypeNumber();
+    
+    java.sql.SQLType toJsSQLType();
 }
