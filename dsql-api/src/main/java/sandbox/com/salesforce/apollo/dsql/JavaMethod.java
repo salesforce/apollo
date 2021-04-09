@@ -102,7 +102,125 @@ public class JavaMethod {
      * @return the value
      */
     public Value getValue(Session session, Expression[] args, boolean columnList) {
-        return getValue(session, args, columnList);
+        Class<?>[] paramClasses = method.getParameterTypes();
+        Object[] params = new Object[paramClasses.length];
+        int p = 0;
+        if (hasConnectionParam && params.length > 0) {
+            params[p++] = new ConnectionWrapper(session.createConnection(columnList));
+        }
+
+        // allocate array for varArgs parameters
+        Object varArg = null;
+        if (varArgs) {
+            int len = args.length - params.length + 1 +
+                    (hasConnectionParam ? 1 : 0);
+            varArg = Array.newInstance(varArgClass, len);
+            params[params.length - 1] = varArg;
+        }
+
+        for (int a = 0, len = args.length; a < len; a++, p++) {
+            boolean currentIsVarArg = varArgs &&
+                    p >= paramClasses.length - 1;
+            Class<?> paramClass;
+            if (currentIsVarArg) {
+                paramClass = varArgClass;
+            } else {
+                paramClass = paramClasses[p];
+            }
+            int type;
+            try {
+                type = DataType.getTypeFromClass(DJVM.fromDJVMType(paramClass));
+            } catch (ClassNotFoundException e) {
+                throw DJVM.toRuntimeException(e);
+            }
+            Value v = args[a].getValue(session);
+            Object o;
+            if (Value.class.isAssignableFrom(paramClass)) {
+                o = v;
+            } else if (v.getValueType() == Value.ARRAY &&
+                    paramClass.isArray() &&
+                    paramClass.getComponentType() != Object.class) {
+                Value[] array = ((ValueArray) v).getList();
+                Object[] objArray = (Object[]) Array.newInstance(
+                        paramClass.getComponentType(), array.length);
+                int componentType = DataType.getTypeFromClass(
+                        paramClass.getComponentType());
+                for (int i = 0; i < objArray.length; i++) {
+                    objArray[i] = array[i].convertTo(componentType, session, false).getObject();
+                }
+                o = objArray;
+            } else {
+                v = v.convertTo(type, session, false);
+                try {
+                    o = DJVM.sandbox(v.getObject());
+                } catch (ClassNotFoundException e) {
+                    throw DJVM.toRuntimeException(e);
+                }
+            }
+            if (o == null) {
+                if (paramClass.isPrimitive()) {
+                    if (columnList) {
+                        // If the column list is requested, the parameters
+                        // may be null. Need to set to default value,
+                        // otherwise the function can't be called at all.
+                        o = DataType.getDefaultForPrimitiveType(paramClass);
+                    } else {
+                        // NULL for a java primitive: return NULL
+                        return ValueNull.INSTANCE;
+                    }
+                }
+            } else {
+                if (!paramClass.isAssignableFrom(o.getClass()) && !paramClass.isPrimitive()) {
+                    o = DataType.convertTo(session.createConnection(false), v, paramClass);
+                }
+            }
+            if (currentIsVarArg) {
+                Array.set(varArg, p - params.length + 1, o);
+            } else {
+                params[p] = o;
+            }
+        }
+        boolean old = session.getAutoCommit();
+        Value identity = session.getLastScopeIdentity();
+        boolean defaultConnection = session.getDatabase().
+                getSettings().defaultConnection;
+        try {
+            session.setAutoCommit(false);
+            Object returnValue;
+            try {
+                if (defaultConnection) {
+                    Driver.setDefaultConnection(
+                            session.createConnection(columnList));
+                }
+                returnValue = method.invoke(null, params);
+                if (returnValue == null) {
+                    return ValueNull.INSTANCE;
+                }
+            } catch (InvocationTargetException e) {
+                StringBuilder builder = new StringBuilder(method.getName()).append('(');
+                for (int i = 0, length = params.length; i < length; i++) {
+                    if (i > 0) {
+                        builder.append(", ");
+                    }
+                    builder.append(params[i]);
+                }
+                builder.append(')');
+                throw DbException.convertInvocation(e, builder.toString());
+            } catch (Exception e) {
+                throw DbException.convert(e);
+            }
+            if (Value.class.isAssignableFrom(method.getReturnType())) {
+                return (Value) returnValue;
+            }
+            Value ret = DataType.convertToValue(session, returnValue, dataType);
+            return ret.convertTo(dataType, session, false);
+        } finally {
+            session.setLastScopeIdentity(identity);
+            session.setAutoCommit(old);
+            if (defaultConnection) {
+                Driver.setDefaultConnection(null);
+            }
+        }
     }
 
     /**

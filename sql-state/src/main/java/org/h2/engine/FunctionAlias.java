@@ -33,11 +33,11 @@ import com.salesforce.apollo.state.SandboxJavaMethod;
  */
 public class FunctionAlias extends SchemaObjectBase {
 
-    private String className;
-    private String methodName;
-    private String source;
+    private String              className;
+    private String              methodName;
+    private String              source;
     private SandboxJavaMethod[] javaMethods;
-    private boolean deterministic;
+    private boolean             deterministic;
 
     private FunctionAlias(Schema schema, int id, String name) {
         super(schema, id, name, Trace.FUNCTION);
@@ -46,20 +46,18 @@ public class FunctionAlias extends SchemaObjectBase {
     /**
      * Create a new alias based on a method name.
      *
-     * @param schema the schema
-     * @param id the id
-     * @param name the name
+     * @param schema          the schema
+     * @param id              the id
+     * @param name            the name
      * @param javaClassMethod the class and method name
-     * @param force create the object even if the class or method does not exist
+     * @param force           create the object even if the class or method does not
+     *                        exist
      * @return the database object
      */
-    public static FunctionAlias newInstance(
-            Schema schema, int id, String name, String javaClassMethod,
-            boolean force) {
+    public static FunctionAlias newInstance(Schema schema, int id, String name, String javaClassMethod, boolean force) {
         FunctionAlias alias = new FunctionAlias(schema, id, name);
         int paren = javaClassMethod.indexOf('(');
-        int lastDot = javaClassMethod.lastIndexOf('.', paren < 0 ?
-                javaClassMethod.length() : paren);
+        int lastDot = javaClassMethod.lastIndexOf('.', paren < 0 ? javaClassMethod.length() : paren);
         if (lastDot < 0) {
             throw DbException.get(ErrorCode.SYNTAX_ERROR_1, javaClassMethod);
         }
@@ -73,14 +71,14 @@ public class FunctionAlias extends SchemaObjectBase {
      * Create a new alias based on source code.
      *
      * @param schema the schema
-     * @param id the id
-     * @param name the name
+     * @param id     the id
+     * @param name   the name
      * @param source the source code
-     * @param force create the object even if the class or method does not exist
+     * @param force  create the object even if the class or method does not exist
      * @return the database object
      */
-    public static FunctionAlias newInstanceFromSource(
-            Schema schema, int id, String name, String source, boolean force) {
+    public static FunctionAlias newInstanceFromSource(Schema schema, int id, String name, String source,
+                                                      boolean force) {
         FunctionAlias alias = new FunctionAlias(schema, id, name);
         alias.source = source;
         alias.init(force);
@@ -117,10 +115,8 @@ public class FunctionAlias extends SchemaObjectBase {
             String fullClassName = Constants.USER_PACKAGE + "." + getName();
             compiler.loadFunctionFromSource(fullClassName, fullClassName);
             try {
-                SandboxJavaMethod m = compiler.getMethod(fullClassName); 
-                javaMethods = new SandboxJavaMethod[] {
-                        m
-                };
+                SandboxJavaMethod m = compiler.getMethod(fullClassName);
+                javaMethods = new SandboxJavaMethod[] { m };
             } catch (DbException e) {
                 throw e;
             } catch (Exception e) {
@@ -201,13 +197,12 @@ public class FunctionAlias extends SchemaObjectBase {
         int parameterCount = args.length;
         for (SandboxJavaMethod m : javaMethods) {
             int count = m.getParameterCount();
-            if (count == parameterCount || (m.isVarArgs() &&
-                    count <= parameterCount + 1)) {
+            if (count == parameterCount || (m.isVarArgs() && count <= parameterCount + 1)) {
                 return m;
             }
         }
-        throw DbException.get(ErrorCode.METHOD_NOT_FOUND_1, getName() + " (" +
-                className + ", parameter count: " + parameterCount + ")");
+        throw DbException.get(ErrorCode.METHOD_NOT_FOUND_1,
+                              getName() + " (" + className + ", parameter count: " + parameterCount + ")");
     }
 
     public String getJavaClassName() {

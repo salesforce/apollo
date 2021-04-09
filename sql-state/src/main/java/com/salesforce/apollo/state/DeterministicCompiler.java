@@ -309,7 +309,8 @@ public class DeterministicCompiler implements UserSource {
                               "sandbox/com/salesforce/apollo/dsql/StatementWrapper",
                               "sandbox/com/salesforce/apollo/dsql/StructWrapper",
                               "sandbox/com/salesforce/apollo/dsql/TriggerWrapper",
-                              "sandbox/com/salesforce/apollo/dsql/JavaMethod"));
+                              "sandbox/com/salesforce/apollo/dsql/JavaMethod",
+                              "sandbox.com.salesforce.apollo.dsql/PublishFunction"));
     }
 
     private static File tempDir() throws IllegalStateException {

@@ -85,7 +85,7 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         AtomicReference<Class<?>[]> returned = new AtomicReference<>();
         context.use(ctx -> {
             try {
-                returned.set((Class<?>[]) getColumnClasses.invokeWithArguments(new Object[] { wrapped }));
+                returned.set((Class<?>[]) getColumnClasses.invokeWithArguments(wrapped));
             } catch (Throwable e) {
                 throw new IllegalStateException("Unable to invoke method ", e);
             }
@@ -97,7 +97,7 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         AtomicInteger returned = new AtomicInteger();
         context.use(ctx -> {
             try {
-                returned.set((Integer) getDataType.invokeWithArguments(new Object[] { wrapped }));
+                returned.set((Integer) getDataType.invokeWithArguments(wrapped));
             } catch (Throwable e) {
                 throw new IllegalStateException("Unable to invoke method ", e);
             }
@@ -113,7 +113,7 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         AtomicInteger returned = new AtomicInteger();
         context.use(ctx -> {
             try {
-                returned.set((Integer) getParameterCount.invokeWithArguments(new Object[] { wrapped }));
+                returned.set((Integer) getParameterCount.invokeWithArguments(wrapped));
             } catch (Throwable e) {
                 throw new IllegalStateException("Unable to invoke method ", e);
             }
@@ -125,7 +125,7 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         AtomicReference<Value> returned = new AtomicReference<>();
         context.use(ctx -> {
             try {
-                returned.set((Value) getValue.invokeWithArguments(new Object[] { wrapped, session, args }));
+                returned.set((Value) getValue.invokeWithArguments(wrapped, session, args, columnList));
             } catch (Throwable e) {
                 throw new IllegalStateException("Unable to invoke method ", e);
             }
@@ -137,7 +137,7 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         AtomicBoolean returned = new AtomicBoolean();
         context.use(ctx -> {
             try {
-                returned.set((Boolean) hasConnectionParam.invokeWithArguments(new Object[] { wrapped }));
+                returned.set((Boolean) hasConnectionParam.invokeWithArguments(wrapped));
             } catch (Throwable e) {
                 throw new IllegalStateException("Unable to invoke method ", e);
             }
@@ -149,7 +149,7 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         AtomicReference<Object> returned = new AtomicReference<>();
         context.use(ctx -> {
             try {
-                returned.set(invoke.invokeWithArguments(new Object[] { wrapped, receiver, session, args }));
+                returned.set(invoke.invokeWithArguments(wrapped, receiver, session, args));
             } catch (Throwable e) {
                 throw new IllegalStateException("Unable to invoke method ", e);
             }
@@ -161,7 +161,7 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         AtomicBoolean returned = new AtomicBoolean();
         context.use(ctx -> {
             try {
-                returned.set((Boolean) isVarArgs.invokeWithArguments(new Object[] { wrapped }));
+                returned.set((Boolean) isVarArgs.invokeWithArguments(wrapped));
             } catch (Throwable e) {
                 throw new IllegalStateException("Unable to invoke method ", e);
             }
@@ -173,7 +173,7 @@ public class SandboxJavaMethod implements Comparable<SandboxJavaMethod> {
         AtomicReference<String> returned = new AtomicReference<>();
         context.use(ctx -> {
             try {
-                returned.set((String) toString.invokeWithArguments(new Object[] { wrapped }));
+                returned.set((String) toString.invokeWithArguments(wrapped));
             } catch (Throwable e) {
                 throw new IllegalStateException("Unable to invoke method ", e);
             }
