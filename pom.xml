@@ -25,7 +25,6 @@
 		<module>consortium</module>
 		<module>test-population</module>
 		<module>tron</module>
-		<module>dsql-api</module>
 	</modules>
 
 	<properties>
@@ -160,12 +159,7 @@
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>tron</artifactId>
 				<version>${project.version}</version>
-			</dependency>
-            <dependency>
-                <groupId>com.salesforce.apollo</groupId>
-                <artifactId>dsql-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
+			</dependency> 
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>consortium</artifactId>
@@ -277,16 +271,6 @@
 				<groupId>com.github.javaparser</groupId>
 				<artifactId>javaparser-symbol-solver-core</artifactId>
 				<version>3.19.0</version>
-			</dependency>
-			<dependency>
-				<groupId>net.corda</groupId>
-				<artifactId>deterministic-rt</artifactId>
-				<version>1.0-RC02</version>
-			</dependency>
-			<dependency>
-				<groupId>net.corda.djvm</groupId>
-				<artifactId>corda-djvm</artifactId>
-				<version>1.1.1</version>
 			</dependency>
 
 			<!-- Test dependencies only below this line! -->

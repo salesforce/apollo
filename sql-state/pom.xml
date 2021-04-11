@@ -14,12 +14,12 @@
 	<dependencies>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>consortium</artifactId> 
+			<artifactId>consortium</artifactId>
 		</dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>dsql-api</artifactId> 
-        </dependency>
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.jooq</groupId>
 			<artifactId>jooq</artifactId>
@@ -31,10 +31,6 @@
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>jcl-over-slf4j</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>net.corda.djvm</groupId>
-			<artifactId>corda-djvm</artifactId>
 		</dependency>
 
 		<!-- Test only deps below this line -->
@@ -84,30 +80,6 @@
 			</extension>
 		</extensions>
 		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-dependency-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>copy</id>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>copy</goal>
-						</goals>
-						<configuration>
-							<artifactItems>
-								<artifactItem>
-									<groupId>net.corda</groupId>
-									<artifactId>deterministic-rt</artifactId>
-								</artifactItem>
-							</artifactItems>
-							<stripVersion>true</stripVersion>
-							<overWrite>true</overWrite>
-							<outputDirectory>src/main/resources</outputDirectory>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
 			<plugin>
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-maven-plugin</artifactId>

@@ -53,9 +53,5 @@ However, things like TIME and RANDOM make that impossible.  So, the underlying H
 we provide the RANDOM function, we guarantee that the results of these RANDOM function invocations will be identical across all nodes.  Likewise with TIME and some other functions.  This
 is accomplished by slight modifications of the underlying H2 database, and the use of block hashes for seeding these functions.  This results in deterministic SQL execution across the system.
 
-Likewise, it's important in the Java stored procedures, functions and triggers to likewise deterministically execute.  This is done by using the [Derministic Java VM](https://github.com/corda/djvm).
-All Java executed as part of a transaction - functions, triggers, etc - are executed by the DJVM in a sandbox.  This execution sandbox forces Java to be deterministic by performing some serious
-black magic with byte code rewriting and a determistic rewrite of the underlying class system.  Seriously impressive work.  The issue, of course, is how running in this sandbox, one is to effect mutable
-changes - i.e. SQL transactions - on the embedding SQL store.  This SQL JDBC bridge is provided by the DSQL module of Apollo.  This provides a fully functional wrapped access to the JDBC connection
-and allows the deterministic code to execute transactions against the DB and read/write as expected.  Combined with the Deterministic SQL of the underlying DB, we get an air tight system that
-can reliably replicate SQL state across the network.
+Likewise, it's important in the Java stored procedures, functions and triggers to likewise deterministically execute.  However, this is currently not the case as the DJVM which was considered
+for this deterministic implementation is an incorrect license and so another mechanism will have to be engineered to enforce determinism.

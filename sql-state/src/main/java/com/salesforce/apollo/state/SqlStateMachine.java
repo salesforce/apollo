@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.sql.CallableStatement;
@@ -28,7 +29,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
 
@@ -36,10 +36,12 @@ import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
 
+import org.h2.api.ErrorCode;
 import org.h2.engine.Session;
 import org.h2.jdbc.JdbcConnection;
 import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
 import org.h2.jdbc.JdbcSQLNonTransientException;
+import org.h2.message.DbException;
 import org.h2.store.Data;
 import org.h2.value.Value;
 import org.slf4j.Logger;
@@ -67,9 +69,6 @@ import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.protocols.Hash.HkHasher;
-
-import sandbox.com.salesforce.apollo.dsql.PublishFunction;
-
 import com.salesforce.apollo.protocols.HashKey;
 
 /**
@@ -238,7 +237,7 @@ public class SqlStateMachine {
     }
 
     private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH    = String.format("CREATE ALIAS __APOLLO_INTERNAL__.PUBLISH FOR \"%s.publish\"",
-                                                                                                           PublishFunction.class.getCanonicalName());
+                                                                                                           SqlStateMachine.class.getCanonicalName());
     private static final String                    CREATE_SCHEMA_APOLLO_INTERNAL           = "CREATE SCHEMA __APOLLO_INTERNAL__";
     private static final String                    CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE = "CREATE TABLE __APOLLO_INTERNAL__.TRAMPOLINE(ID INT AUTO_INCREMENT, CHANNEL VARCHAR(255), BODY JSON)";
     private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE  = "DELETE FROM __APOLLO_INTERNAL__.TRAMPOLINE";
@@ -277,8 +276,7 @@ public class SqlStateMachine {
     }
 
     private final LoadingCache<String, CallableStatement> callCache;
-    private final File                                    checkpointDirectory;
-    private final DeterministicCompiler                   compiler;
+    private final File                                    checkpointDirectory; 
     private final JdbcConnection                          connection;
     private final AtomicReference<SecureRandom>           entropy    = new AtomicReference<>();
     private final TxnExec                                 executor   = new TxnExec();
@@ -297,11 +295,6 @@ public class SqlStateMachine {
         this.info = info;
         this.fjPool = fjPool;
         this.checkpointDirectory = cpDir;
-        try {
-            this.compiler = new DeterministicCompiler();
-        } catch (ClassNotFoundException | IllegalStateException | IOException e) {
-            throw new IllegalStateException("cannot create deterministic compiler", e);
-        }
         if (checkpointDirectory.exists()) {
             if (!checkpointDirectory.isDirectory()) {
                 throw new IllegalArgumentException("Must be a directory: " + checkpointDirectory.getAbsolutePath());
@@ -563,16 +556,57 @@ public class SqlStateMachine {
         }
     }
 
-    private Object acceptScript(HashKey hash, Script script) throws Exception {
+    private final ScriptCompiler compiler = new ScriptCompiler();
+    
+    @SuppressWarnings("unused")
+    private Object acceptScript(HashKey hash, Script script) throws SQLException {
+        List<ResultSet> results = new ArrayList<>();
+        String className;
+        String source;
+        ClassLoader parent;
+
+        Object instance;
+
         Value[] args = new Value[script.getArgsCount()];
         int i = 1;
         for (ByteString argument : script.getArgsList()) {
             Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
             args[i++] = data.readValue();
         }
-        BiFunction<Session, Value[], Object> f = compiler.getMethod(script.getClassName(), script.getMethod(),
-                                                                    script.getSource());
-        return f.apply(getSession(), args);
+
+        try {
+            Class<?> clazz = compiler.getClass(script.getClassName(), script.getSource(), getClass().getClassLoader());
+            instance = clazz.getConstructor().newInstance();
+        } catch (DbException e) {
+            throw e;
+        } catch (Exception e) {
+            throw DbException.get(ErrorCode.SYNTAX_ERROR_1, e, script.getSource());
+        }
+
+        Method call = null;
+        String callName = script.getMethod();
+        for (Method m : instance.getClass().getDeclaredMethods()) {
+            if (callName.equals(m.getName())) {
+                call = m;
+                break;
+            }
+        }
+
+        if (call == null) {
+            throw DbException.get(ErrorCode.SYNTAX_ERROR_1,
+                                  new IllegalArgumentException(
+                                          "Must contain invocation method named: " + callName + "(...)"),
+                                  script.getSource());
+        }
+
+        Object returnValue = new JavaMethod(call).getValue(instance, getSession(), args);
+        if (returnValue instanceof ResultSet) {
+            CachedRowSet rowset = factory.createCachedRowSet();
+
+            rowset.populate((ResultSet) returnValue);
+            return rowset;
+        }
+        return returnValue;
     }
 
     private void beginBlock(long height, HashKey hash) {
