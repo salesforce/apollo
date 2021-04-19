@@ -20,7 +20,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -98,10 +97,10 @@ public class ConsortiumTest {
     private File                               baseDir;
     private Builder                            builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private File                               checkpointDirBase;
-    private Map<HashKey, Router>               communications = new HashMap<>();
-    private final Map<Member, Consortium>      consortium     = new HashMap<>();
+    private Map<HashKey, Router>               communications = new ConcurrentHashMap<>();
+    private final Map<Member, Consortium>      consortium     = new ConcurrentHashMap<>();
     private List<Member>                       members;
-    private final Map<Member, SqlStateMachine> updaters       = new HashMap<>();
+    private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
 
     @AfterEach
     public void after() {

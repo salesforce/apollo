@@ -100,8 +100,8 @@ public class TestConsortium {
 
     private File                          baseDir;
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
-    private Map<HashKey, Router>          communications = new HashMap<>();
-    private final Map<Member, Consortium> consortium     = new HashMap<>();
+    private Map<HashKey, Router>          communications = new ConcurrentHashMap<>();
+    private final Map<Member, Consortium> consortium     = new ConcurrentHashMap<>();
     private List<Node>                    members;
 
     @AfterEach
