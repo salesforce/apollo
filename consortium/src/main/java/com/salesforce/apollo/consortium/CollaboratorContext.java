@@ -70,6 +70,7 @@ import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.HashedBlock;
+import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.consortium.support.ProcessedBuffer;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
@@ -369,7 +370,7 @@ public class CollaboratorContext {
         if (currentConsensus() >= 0) {
             return;
         }
-        HashedBlock current = consortium.getCurrent();
+        HashedCertifiedBlock current = consortium.getCurrent();
         currentConsensus(current != null ? current.height() : 0);
     }
 
@@ -575,8 +576,8 @@ public class CollaboratorContext {
         return toOrder;
     }
 
-    void processCheckpoint(HashedBlock next) {
-        Checkpoint body = checkpointBody(next.block);
+    void processCheckpoint(HashedCertifiedBlock next) {
+        Checkpoint body = checkpointBody(next.block.getBlock());
         if (body == null) {
             return;
         }
@@ -593,8 +594,8 @@ public class CollaboratorContext {
         log.info("Processed checkpoint block: {} height: {} on: {}", hash, next.height(), consortium.getMember());
     }
 
-    void processGenesis(HashedBlock next) {
-        Genesis body = genesisBody(next.block);
+    void processGenesis(HashedCertifiedBlock next) {
+        Genesis body = genesisBody(next.block.getBlock());
         if (body == null) {
             return;
         }
@@ -611,8 +612,8 @@ public class CollaboratorContext {
         log.info("Processed genesis block: {} on: {}", next.hash, consortium.getMember());
     }
 
-    void processReconfigure(HashedBlock next) {
-        Reconfigure body = reconfigureBody(next.block);
+    void processReconfigure(HashedCertifiedBlock next) {
+        Reconfigure body = reconfigureBody(next.block.getBlock());
         if (body == null) {
             return;
         }
@@ -621,8 +622,8 @@ public class CollaboratorContext {
         log.info("Processed reconfigure block: {} height: {} on: {}", next.hash, next.height(), consortium.getMember());
     }
 
-    void processUser(HashedBlock next) {
-        User body = userBody(next.block);
+    void processUser(HashedCertifiedBlock next) {
+        User body = userBody(next.block.getBlock());
         if (body == null) {
             return;
         }
@@ -639,7 +640,7 @@ public class CollaboratorContext {
         log.info("Processed user block: {} height: {} on: {}", next.hash, next.height(), consortium.getMember());
     }
 
-    void reconfigure(HashedBlock block, Reconfigure view, boolean genesis) {
+    void reconfigure(HashedCertifiedBlock block, Reconfigure view, boolean genesis) {
         this.view.pause();
         consortium.setLastViewChange(block, view);
         ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
@@ -652,7 +653,7 @@ public class CollaboratorContext {
     }
 
     void synchronize(Sync syncData, Member regent) {
-        HashedBlock current = consortium.getCurrent();
+        HashedCertifiedBlock current = consortium.getCurrent();
         final long currentHeight = current != null ? current.height() : -1;
         workingBlocks.clear();
         syncData.getBlocksList()
@@ -673,7 +674,7 @@ public class CollaboratorContext {
         }
     }
 
-    private void accept(HashedBlock next) {
+    private void accept(HashedCertifiedBlock next) {
         workingBlocks.remove(next.hash);
         consortium.setCurrent(next);
         store().put(next.hash, next.block);
@@ -879,8 +880,8 @@ public class CollaboratorContext {
     private Block generate(byte[] previous, final long height, Body body) {
         Instant time = Instant.now();
         Timestamp timestamp = Timestamp.newBuilder().setSeconds(time.getEpochSecond()).setNanos(time.getNano()).build();
-        HashedBlock cp = consortium.getLastCheckpointBlock();
-        HashedBlock vc = consortium.getLastViewChangeBlock();
+        HashedCertifiedBlock cp = consortium.getLastCheckpointBlock();
+        HashedCertifiedBlock vc = consortium.getLastViewChangeBlock();
         byte[] nonce = new byte[32];
         Utils.secureEntropy().nextBytes(nonce);
         Block block = Block.newBuilder()
@@ -945,11 +946,9 @@ public class CollaboratorContext {
         builder.addCertifications(Certification.newBuilder()
                                                .setId(validation.getId())
                                                .setSignature(validation.getSignature()));
-        store().put(hash, block);
         lastBlock(new HashedBlock(hash, block));
         view.publish(block);
         view.publish(validation);
-        consortium.setLastCheckpoint(new HashedBlock(hash, block));
         cancel(Timers.CHECKPOINTING);
 
         log.info("Generated next checkpoint block: {} height: {} on: {} ", hash, thisHeight, consortium.getMember());
@@ -1090,7 +1089,6 @@ public class CollaboratorContext {
         builder.addCertifications(Certification.newBuilder()
                                                .setId(validation.getId())
                                                .setSignature(validation.getSignature()));
-        store().put(hash, block);
         lastBlock(new HashedBlock(hash, block));
         view.publish(block);
         view.publish(validation);
@@ -1423,7 +1421,7 @@ public class CollaboratorContext {
     private void validateCheckpoint(HashKey hash, Block block, Member from) {
         Checkpoint checkpoint = checkpointBody(block);
 
-        HashedBlock current = consortium.getCurrent();
+        HashedCertifiedBlock current = consortium.getCurrent();
         if (current.height() >= checkpoint.getCheckpoint()) {
             if (checkpoint(checkpoint) == null) {
                 log.error("Unable to generate checkpoint: {} on {}", checkpoint.getCheckpoint(), getMember());

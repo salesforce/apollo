@@ -19,6 +19,7 @@ public enum Recovery implements Transitions {
         public void aquireView() {
             context().aquireInitialView();
         }
+        
     },
     ASSEMBLE_CHECKPOINT, BOOTSTRAP;
 }

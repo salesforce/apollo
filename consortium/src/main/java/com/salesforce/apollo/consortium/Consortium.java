@@ -48,6 +48,7 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.BlockReplication;
 import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.BodyType;
+import com.salesfoce.apollo.consortium.proto.BootstrapSync;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
@@ -72,7 +73,7 @@ import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
-import com.salesforce.apollo.consortium.support.HashedBlock;
+import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler;
@@ -93,20 +94,14 @@ public class Consortium {
 
     public class Service {
 
-        public CertifiedBlock checkpointSync(CheckpointSync request, HashKey from) {
+        public BootstrapSync checkpointSync(CheckpointSync request, HashKey from) {
             Member member = getParams().context.getMember(from);
             if (member == null) {
                 log.warn("Received checkpoint sync from non member: {} on: {}", from, getMember());
-                return CertifiedBlock.getDefaultInstance();
+                return BootstrapSync.getDefaultInstance();
             }
-            HashedBlock c = lastCheckpoint.get();
-            if (c == null) {
-                return CertifiedBlock.getDefaultInstance();
-            }
-            return CertifiedBlock.newBuilder()
-                                 .addAllCertifications(store.certifications(c.height()))
-                                 .setBlock(c.block)
-                                 .build();
+
+            return BootstrapSync.getDefaultInstance();
         }
 
         public TransactionResult clientSubmit(SubmitTransaction request, HashKey from) {
@@ -285,26 +280,27 @@ public class Consortium {
         return builder;
     }
 
-    final Store                                         store;
-    private final Map<Long, CheckpointState>            cachedCheckpoints     = new ConcurrentHashMap<>();
-    private final AtomicReference<HashedBlock>          current               = new AtomicReference<>();
-    private final PriorityBlockingQueue<HashedBlock>    deferedBlocks         = new PriorityBlockingQueue<>(1024,
+    final Store                                               store;
+    private final Map<Long, CheckpointState>                  cachedCheckpoints     = new ConcurrentHashMap<>();
+    private final AtomicReference<HashedCertifiedBlock>       current               = new AtomicReference<>();
+    private final PriorityBlockingQueue<HashedCertifiedBlock> deferedBlocks         = new PriorityBlockingQueue<>(1024,
             (a, b) -> Long.compare(height(a.block), height(b.block)));
-    private final List<DelayedMessage>                  delayed               = new CopyOnWriteArrayList<>();
-    private final AtomicInteger                         deltaCheckpointBlocks = new AtomicInteger(Integer.MAX_VALUE);
-    private final Fsm<CollaboratorContext, Transitions> fsm;
-    private final AtomicReference<HashedBlock>          genesis               = new AtomicReference<>();
-    private final AtomicReference<HashedBlock>          lastCheckpoint        = new AtomicReference<>();
-    private final AtomicReference<HashedBlock>          lastViewChange        = new AtomicReference<>();
-    private final Parameters                            params;
-    private final AtomicReference<PendingAction>        pending               = new AtomicReference<>();
-    private final TickScheduler                         scheduler             = new TickScheduler();
-    private final Lock                                  sequencer             = new ReentrantLock();
-    private final AtomicBoolean                         started               = new AtomicBoolean();
-    private final Map<HashKey, SubmittedTransaction>    submitted             = new ConcurrentHashMap<>();
-    private final Transitions                           transitions;
-    private final View                                  view;
-    final Service                                       service               = new Service();
+    private final List<DelayedMessage>                        delayed               = new CopyOnWriteArrayList<>();
+    private final AtomicInteger                               deltaCheckpointBlocks = new AtomicInteger(
+            Integer.MAX_VALUE);
+    private final Fsm<CollaboratorContext, Transitions>       fsm;
+    private final AtomicReference<HashedCertifiedBlock>       genesis               = new AtomicReference<>();
+    private final AtomicReference<HashedCertifiedBlock>       lastCheckpoint        = new AtomicReference<>();
+    private final AtomicReference<HashedCertifiedBlock>       lastViewChange        = new AtomicReference<>();
+    private final Parameters                                  params;
+    private final AtomicReference<PendingAction>              pending               = new AtomicReference<>();
+    private final TickScheduler                               scheduler             = new TickScheduler();
+    private final Lock                                        sequencer             = new ReentrantLock();
+    private final AtomicBoolean                               started               = new AtomicBoolean();
+    private final Map<HashKey, SubmittedTransaction>          submitted             = new ConcurrentHashMap<>();
+    private final Transitions                                 transitions;
+    private final View                                        view;
+    final Service                                             service               = new Service();
 
     public Consortium(Parameters parameters) {
         this(parameters, defaultBuilder(parameters).open());
@@ -324,26 +320,26 @@ public class Consortium {
         return fsm;
     }
 
-    public HashedBlock getGenesis() {
+    public HashedCertifiedBlock getGenesis() {
         return genesis.get();
     }
 
     public long getLastCheckpoint() {
-        HashedBlock c = lastCheckpoint.get();
+        HashedCertifiedBlock c = lastCheckpoint.get();
         return c == null ? 0 : lastCheckpoint.get().height();
     }
 
-    public HashedBlock getLastCheckpointBlock() {
+    public HashedCertifiedBlock getLastCheckpointBlock() {
         return lastCheckpoint.get();
     }
 
     public long getLastViewChange() {
-        final HashedBlock c = lastViewChange.get();
+        final HashedCertifiedBlock c = lastViewChange.get();
         return c == null ? 0 : c.height();
     }
 
-    public HashedBlock getLastViewChangeBlock() {
-        final HashedBlock c = lastViewChange.get();
+    public HashedCertifiedBlock getLastViewChangeBlock() {
+        final HashedCertifiedBlock c = lastViewChange.get();
         return c;
     }
 
@@ -414,7 +410,7 @@ public class Consortium {
         return cachedCheckpoints.get(checkpoint);
     }
 
-    HashedBlock getCurrent() {
+    HashedCertifiedBlock getCurrent() {
         return current.get();
     }
 
@@ -449,7 +445,7 @@ public class Consortium {
     }
 
     void performAfter(Runnable action, long blockHeight) {
-        HashedBlock cb = getCurrent();
+        HashedCertifiedBlock cb = getCurrent();
         if (cb == null) {
             return;
         }
@@ -475,21 +471,21 @@ public class Consortium {
         }
     }
 
-    void setCurrent(HashedBlock current) {
+    void setCurrent(HashedCertifiedBlock current) {
         this.current.set(current);
     }
 
-    void setGenesis(HashedBlock next) {
+    void setGenesis(HashedCertifiedBlock next) {
         if (!this.genesis.compareAndSet(null, next)) {
             throw new IllegalStateException("Genesis already set on: " + getMember());
         }
     }
 
-    void setLastCheckpoint(HashedBlock next) {
+    void setLastCheckpoint(HashedCertifiedBlock next) {
         this.lastCheckpoint.set(next);
     }
 
-    void setLastViewChange(HashedBlock block, Reconfigure view) {
+    void setLastViewChange(HashedCertifiedBlock block, Reconfigure view) {
         lastViewChange.set(block);
         deltaCheckpointBlocks.set(view.getCheckpointBlocks());
         log.info("Checkpoint in: {} blocks on: {}", view.getCheckpointBlocks(), getMember());
@@ -512,7 +508,7 @@ public class Consortium {
 
     long targetCheckpoint() {
         final long delta = deltaCheckpointBlocks.get();
-        final HashedBlock cp = lastCheckpoint.get();
+        final HashedCertifiedBlock cp = lastCheckpoint.get();
         return cp == null ? delta : cp.height() + delta;
     }
 
@@ -567,8 +563,8 @@ public class Consortium {
                           .build();
     }
 
-    private boolean next(HashedBlock next) {
-        switch (next.block.getBody().getType()) {
+    private boolean next(HashedCertifiedBlock next) {
+        switch (next.block.getBlock().getBody().getType()) {
         case CHECKPOINT:
             getState().processCheckpoint(next);
             break;
@@ -658,7 +654,7 @@ public class Consortium {
     }
 
     private void processDeferred() {
-        HashedBlock delayed = deferedBlocks.poll();
+        HashedCertifiedBlock delayed = deferedBlocks.poll();
         while (delayed != null) {
             long height = delayed.height();
             long currentHeight = getCurrent().height();
@@ -815,7 +811,7 @@ public class Consortium {
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
         log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
                   block.getHeader().getHeight(), getMember());
-        final HashedBlock previousBlock = getCurrent();
+        final HashedCertifiedBlock previousBlock = getCurrent();
         long height = height(block);
         if (previousBlock != null) {
             HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
@@ -826,9 +822,9 @@ public class Consortium {
                 return;
             }
             if (height != prevHeight + 1) {
-                deferedBlocks.add(new HashedBlock(hash, block));
-                log.debug("Deferring block on {}.  Block: {} height should be {} and next block height is {}",
-                          getMember(), hash, previousBlock.height() + 1, block.getHeader().getHeight());
+                deferedBlocks.add(new HashedCertifiedBlock(hash, certifiedBlock));
+                log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}", getMember(),
+                          hash, previousBlock.height() + 1, block.getHeader().getHeight());
                 return;
             }
             if (!previousBlock.hash.equals(prev)) {
@@ -842,7 +838,9 @@ public class Consortium {
             }
         } else {
             if (block.getBody().getType() != BodyType.GENESIS) {
-                log.error("Invalid genesis block on: {} block: {}", getMember(), block.getBody().getType());
+                deferedBlocks.add(new HashedCertifiedBlock(hash, certifiedBlock));
+                log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}", getMember(),
+                          hash, 0, block.getHeader().getHeight());
                 return;
             }
             Genesis body;
@@ -860,7 +858,7 @@ public class Consortium {
                 return;
             }
         }
-        if (next(new HashedBlock(hash, block))) {
+        if (next(new HashedCertifiedBlock(hash, certifiedBlock))) {
             PendingAction pendingAction = pending.get();
             if (pendingAction != null && pendingAction.targetBlock == height) {
                 runPending(pendingAction);

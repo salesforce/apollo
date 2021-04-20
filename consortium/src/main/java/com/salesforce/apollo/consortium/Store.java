@@ -49,6 +49,7 @@ public class Store {
     private static final String CERTIFICATIONS      = "CERTIFICATIONS";
     private static final String CHECKPOINT_TEMPLATE = "CHECKPOINT-%s";
     private static final String HASH_TO_HEIGHT      = "HASH_TO_HEIGHT";
+    private static final String VIEW_CHAIN          = "VIEW_CHAIN";
     private static final String HASHES              = "HASHES";
     private static final Logger log                 = LoggerFactory.getLogger(Store.class);
 
@@ -57,12 +58,14 @@ public class Store {
     private final Map<Long, MVMap<Integer, byte[]>> checkpoints = new HashMap<>();
     private final MVMap<Long, byte[]>               hashes;
     private final MVMap<byte[], Long>               hashToHeight;
+    private final MVMap<Long, Long>             viewChain;
 
     public Store(MVStore store) {
         hashes = store.openMap(HASHES);
         blocks = store.openMap(BLOCKS);
         hashToHeight = store.openMap(HASH_TO_HEIGHT);
         certifications = store.openMap(CERTIFICATIONS);
+        viewChain = store.openMap(VIEW_CHAIN);
     }
 
     public byte[] block(byte[] hash) {
@@ -109,6 +112,21 @@ public class Store {
                      .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
     }
 
+    public void fetchViewChain(BloomFilter<Long> chainBff, CheckpointSegments.Builder replication,
+                            int maxChainCount, long incompleteStart) throws IllegalStateException {
+        StreamSupport.stream(((Iterable<Long>) () -> viewChainFrom(incompleteStart)).spliterator(), false)
+                     .collect(new ReservoirSampler<Long>(-1, maxChainCount, Utils.bitStreamGenerator()))
+                     .stream()
+                     .filter(s -> !chainBff.contains(s))
+                     .map(height -> getBlockBits(height))
+                     .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
+    }
+
+    private Iterator<Long> viewChainFrom(long from) {
+
+        return viewChain.keyIterator(from);
+    }
+
     public HashedBlock getBlock(long height) {
         byte[] block = block(height);
         try {
@@ -138,7 +156,7 @@ public class Store {
         return hashes;
     }
 
-    public void put(HashKey h, Block block) {
+    private void put(HashKey h, Block block) {
         long height = height(block);
         byte[] hash = h.bytes();
         blocks.put(height, block.toByteArray());

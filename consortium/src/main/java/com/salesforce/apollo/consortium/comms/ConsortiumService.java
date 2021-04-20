@@ -7,7 +7,7 @@
 package com.salesforce.apollo.consortium.comms;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.BootstrapSync;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.CheckpointSync;
@@ -22,7 +22,7 @@ import com.salesfoce.apollo.consortium.proto.TransactionResult;
  *
  */
 public interface ConsortiumService {
-    ListenableFuture<CertifiedBlock> checkpointSync(CheckpointSync sync);
+    ListenableFuture<BootstrapSync> checkpointSync(CheckpointSync sync);
 
     ListenableFuture<TransactionResult> clientSubmit(SubmitTransaction request);
 

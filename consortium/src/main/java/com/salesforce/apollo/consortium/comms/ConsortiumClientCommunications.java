@@ -7,7 +7,7 @@
 package com.salesforce.apollo.consortium.comms;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.BootstrapSync;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.CheckpointSync;
@@ -47,7 +47,7 @@ public class ConsortiumClientCommunications implements ConsortiumService {
     }
 
     @Override
-    public ListenableFuture<CertifiedBlock> checkpointSync(CheckpointSync sync) {
+    public ListenableFuture<BootstrapSync> checkpointSync(CheckpointSync sync) {
         return client.checkpointSync(sync);
     }
 

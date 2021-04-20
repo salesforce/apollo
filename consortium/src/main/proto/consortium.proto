@@ -16,8 +16,19 @@ service OrderingService {
     rpc stopData(StopData) returns (google.protobuf.Empty){}
     
     rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
-    rpc checkpointSync(CheckpointSync) returns (CertifiedBlock) {}
+    rpc checkpointSync(CheckpointSync) returns (BootstrapSync) {}
     rpc fetchBlocks(BlockReplication) returns (Blocks) {}
+    rpc fetchViewChain(ViewChainSync) returns (ViewChain) {}
+}
+
+message ViewChainSync {
+    bytes context = 1;
+    bytes chainBff = 2;
+    int64 incompleteStart = 3;
+}
+
+message ViewChain {
+    repeated CertifiedBlock viewChanges = 1;
 }
 
 message BlockReplication {
@@ -34,6 +45,11 @@ message CheckpointReplication {
     int64 checkpoint = 2;
     bytes checkpointSegments = 3;
     bytes blocks = 4;
+}
+
+message BootstrapSync {
+    CertifiedBlock view = 1;
+    CertifiedBlock genesis = 2;
 }
 
 message CheckpointSync {

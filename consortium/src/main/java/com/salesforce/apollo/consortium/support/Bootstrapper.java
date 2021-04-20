@@ -137,8 +137,7 @@ public class Bootstrapper {
             return;
         }
 
-        ListenableFuture<CheckpointSegments> futureSailor = link.fetch(request);
-        futureSailor.addListener(gossip(link, futureSailor, entropy, s), ForkJoinPool.commonPool());
+        link.fetch(request).addListener(gossip(link, link.fetch(request), entropy, s), ForkJoinPool.commonPool());
 
     }
 
