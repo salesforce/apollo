@@ -32,10 +32,10 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  * @since 220
  */
-public class FfClientCommunications implements Fireflies {
+public class FfClient implements Fireflies {
 
-    public static CreateClientCommunications<FfClientCommunications> getCreate(FireflyMetrics metrics) {
-        return (t, f, c) -> new FfClientCommunications(c, (Participant) t, metrics);
+    public static CreateClientCommunications<FfClient> getCreate(FireflyMetrics metrics) {
+        return (t, f, c) -> new FfClient(c, (Participant) t, metrics);
 
     }
 
@@ -44,7 +44,7 @@ public class FfClientCommunications implements Fireflies {
     private final Participant             member;
     private final FireflyMetrics          metrics;
 
-    public FfClientCommunications(ManagedServerConnection channel, Participant member, FireflyMetrics metrics) {
+    public FfClient(ManagedServerConnection channel, Participant member, FireflyMetrics metrics) {
         this.member = member;
         assert !(member instanceof Node) : "whoops : " + member;
         this.channel = channel;

@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.communications.FfClientCommunications.getCreate;
+import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
 import java.io.ByteArrayInputStream;
 import java.security.InvalidKeyException;
@@ -57,8 +57,8 @@ import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.StandardEpProvider;
-import com.salesforce.apollo.fireflies.communications.FfClientCommunications;
-import com.salesforce.apollo.fireflies.communications.FfServerCommunications;
+import com.salesforce.apollo.fireflies.communications.FfClient;
+import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
@@ -187,7 +187,7 @@ public class View {
             if (!started.get()) {
                 return;
             }
-            FfClientCommunications link = nextRing();
+            FfClient link = nextRing();
 
             if (link == null) {
                 log.debug("No members to gossip with on ring: {}", lastRing);
@@ -220,7 +220,7 @@ public class View {
                 return;
             }
 
-            FfClientCommunications link = linkFor(successor);
+            FfClient link = linkFor(successor);
             if (link == null) {
                 log.info("Accusing: {} on: {}", successor.getId(), ring);
                 accuseOn(successor, ring);
@@ -348,8 +348,8 @@ public class View {
         /**
          * @return the next ClientCommunications in the next ring
          */
-        FfClientCommunications nextRing() {
-            FfClientCommunications link = null;
+        FfClient nextRing() {
+            FfClient link = null;
             int last = lastRing;
             int current = (last + 1) % getParameters().rings;
             for (int i = 0; i < getParameters().rings; i++) {
@@ -405,7 +405,7 @@ public class View {
     /**
      * Communications with other members
      */
-    private final CommonCommunications<FfClientCommunications, Service> comm;
+    private final CommonCommunications<FfClient, Service> comm;
 
     /**
      * View context
@@ -465,7 +465,7 @@ public class View {
         this.node = node;
         this.fjPool = fjPool;
         this.comm = communications.create(node, id, service,
-                                          r -> new FfServerCommunications(service,
+                                          r -> new FfServer(service,
                                                   communications.getClientIdentityProvider(), metrics, r),
                                           getCreate(metrics));
         context = new Context<>(id, getParameters().rings);
@@ -888,7 +888,7 @@ public class View {
      * @param completion
      * @throws Exception
      */
-    void gossip(int ring, FfClientCommunications link, Runnable completion) {
+    void gossip(int ring, FfClient link, Runnable completion) {
         Participant member = link.getMember();
         Signed signedNote = node.getSignedNote();
         if (signedNote == null) {
@@ -1007,7 +1007,7 @@ public class View {
      * @return the communication link for this ring, based on current membership
      *         state
      */
-    FfClientCommunications linkFor(Integer ring) {
+    FfClient linkFor(Integer ring) {
         Participant successor = context.ring(ring).successor(node, m -> !m.isFailed());
         if (successor == null) {
             log.debug("No successor to node on ring: {} members: {}", ring, context.ring(ring).size());
@@ -1049,7 +1049,7 @@ public class View {
      * @param link     - the ClientCommunications link to check
      * @param lastRing - the ring for this link
      */
-    void monitor(FfClientCommunications link, int lastRing) {
+    void monitor(FfClient link, int lastRing) {
         try {
             link.ping(context.getId(), 200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
@@ -1372,7 +1372,7 @@ public class View {
         }
     }
 
-    private FfClientCommunications linkFor(Participant m) {
+    private FfClient linkFor(Participant m) {
         try {
             return comm.apply(m, node);
         } catch (Throwable e) {

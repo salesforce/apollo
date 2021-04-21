@@ -10,6 +10,20 @@ import "google/protobuf/timestamp.proto";
 
 package apollo.consortium;
 
+service GenesisService {
+    rpc certify (GenesisBlock) returns (GenesisCertification) {}
+}
+
+message GenesisCertification {
+    ViewMember member = 1;
+    Certification certification = 2;
+}
+
+message GenesisBlock {
+    bytes context = 1;
+    Block genesis = 2;
+}
+
 service OrderingService { 
     rpc submit (SubmitTransaction) returns (TransactionResult) {}
     rpc join (Join) returns (JoinResult) {} 

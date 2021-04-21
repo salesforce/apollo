@@ -24,12 +24,12 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  *
  */
-public class FfServerCommunications extends FirefliesImplBase {
+public class FfServer extends FirefliesImplBase {
     private ClientIdentity                 identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
 
-    public FfServerCommunications(Service system, ClientIdentity identity, FireflyMetrics metrics,
+    public FfServer(Service system, ClientIdentity identity, FireflyMetrics metrics,
             RoutableService<Service> router) {
         this.metrics = metrics;
         this.identity = identity;

@@ -30,13 +30,13 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  *
  */
-public class ConsortiumServerCommunications extends OrderingServiceImplBase {
+public class ConsortiumServer extends OrderingServiceImplBase {
     private ClientIdentity                 identity;
     @SuppressWarnings("unused")
     private final ConsortiumMetrics        metrics;
     private final RoutableService<Service> router;
 
-    public ConsortiumServerCommunications(ClientIdentity identity, ConsortiumMetrics metrics,
+    public ConsortiumServer(ClientIdentity identity, ConsortiumMetrics metrics,
             RoutableService<Service> router) {
         this.metrics = metrics;
         this.identity = identity;

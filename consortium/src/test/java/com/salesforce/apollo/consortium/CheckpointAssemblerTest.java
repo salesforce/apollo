@@ -44,7 +44,7 @@ import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.Slice;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
-import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
+import com.salesforce.apollo.consortium.comms.ConsortiumClient;
 import com.salesforce.apollo.consortium.support.CheckpointAssembler;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.membership.Context;
@@ -124,7 +124,7 @@ public class CheckpointAssemblerTest {
         }
         assertEquals(new HashKey(checkpoint.getStateHash()), new HashKey(testCs.getStateHash()));
 
-        ConsortiumClientCommunications client = mock(ConsortiumClientCommunications.class);
+        ConsortiumClient client = mock(ConsortiumClient.class);
         when(client.fetch(any())).then(new Answer<>() {
             @Override
             public ListenableFuture<CheckpointSegments> answer(InvocationOnMock invocation) throws Throwable {
@@ -137,7 +137,7 @@ public class CheckpointAssemblerTest {
             }
         });
         @SuppressWarnings("unchecked")
-        CommonCommunications<ConsortiumClientCommunications, Service> comm = mock(CommonCommunications.class);
+        CommonCommunications<ConsortiumClient, Service> comm = mock(CommonCommunications.class);
         when(comm.apply(any(), any())).thenReturn(client);
 
         Store store2 = new Store(new MVStore.Builder().open());

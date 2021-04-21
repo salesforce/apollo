@@ -65,7 +65,7 @@ import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.consortium.Consortium.Result;
 import com.salesforce.apollo.consortium.Consortium.Timers;
-import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
+import com.salesforce.apollo.consortium.comms.ConsortiumClient;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
@@ -326,7 +326,7 @@ public class CollaboratorContext {
             consortium.getTransitions().synchronizingLeader();
             consortium.getTransitions().deliverStopData(stopData, consortium.getMember());
         } else {
-            ConsortiumClientCommunications link = consortium.linkFor(leader);
+            ConsortiumClient link = consortium.linkFor(leader);
             if (link == null) {
                 log.warn("Cannot get link to leader: {} on: {}", leader, consortium.getMember());
             } else {
@@ -398,7 +398,7 @@ public class CollaboratorContext {
             if (getMember().equals(c)) {
                 return;
             }
-            ConsortiumClientCommunications link = consortium.linkFor(c);
+            ConsortiumClient link = consortium.linkFor(c);
             if (link == null) {
                 log.debug("Cannot get link for {}", c.getId());
                 pending.decrementAndGet();
@@ -819,8 +819,8 @@ public class CollaboratorContext {
 
         if (block.getBody().getType() != BodyType.GENESIS) {
             log.error("Failed on {} [{}] prev: [{}] delivering genesis block: {} invalid body: {}",
-                      consortium.getMember(), consortium.fsm().prettyPrint(consortium.fsm().getCurrentState()),
-                      consortium.fsm().prettyPrint(consortium.fsm().getPreviousState()), hash,
+                      consortium.getMember(), consortium.fsm.prettyPrint(consortium.fsm.getCurrentState()),
+                      consortium.fsm.prettyPrint(consortium.fsm.getPreviousState()), hash,
                       block.getBody().getType());
             return;
         }
@@ -1357,10 +1357,10 @@ public class CollaboratorContext {
     }
 
     private void schedule(Timers label, Runnable a, Duration delta) {
-        Transitions timerState = consortium.fsm().getCurrentState();
+        Transitions timerState = consortium.fsm.getCurrentState();
         Runnable action = () -> {
             timers.remove(label);
-            Transitions currentState = consortium.fsm().getCurrentState();
+            Transitions currentState = consortium.fsm.getCurrentState();
             if (timerState.equals(currentState)) {
                 a.run();
             } else {

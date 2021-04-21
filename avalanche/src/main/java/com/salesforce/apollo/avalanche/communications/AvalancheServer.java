@@ -27,13 +27,13 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  * @since 220
  */
-public class AvalancheServerCommunications extends AvalancheImplBase {
+public class AvalancheServer extends AvalancheImplBase {
     @SuppressWarnings("unused")
     private final ClientIdentity           identity;
     private final AvalancheMetrics         metrics;
     private final RoutableService<Service> router;
 
-    public AvalancheServerCommunications(ClientIdentity identity, AvalancheMetrics metrics,
+    public AvalancheServer(ClientIdentity identity, AvalancheMetrics metrics,
             RoutableService<Service> router) {
         this.identity = identity;
         this.metrics = metrics;

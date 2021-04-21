@@ -185,14 +185,14 @@ public class TestConsortium {
                            + consortium.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
-                                       .map(c -> c.fsm().getCurrentState())
+                                       .map(c -> c.fsm.getCurrentState())
                                        .filter(b -> b != CollaboratorFsm.CLIENT)
                                        .collect(Collectors.toSet())
                            + " : "
                            + consortium.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
-                                       .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
+                                       .filter(c -> c.fsm.getCurrentState() != CollaboratorFsm.CLIENT)
                                        .map(c -> c.getMember())
                                        .collect(Collectors.toList()));
 
@@ -324,32 +324,32 @@ public class TestConsortium {
         long clientsInWrongState = consortium.values()
                                              .stream()
                                              .filter(c -> !blueRibbon.contains(c))
-                                             .map(c -> c.fsm().getCurrentState())
+                                             .map(c -> c.fsm.getCurrentState())
                                              .filter(b -> b != CollaboratorFsm.CLIENT)
                                              .count();
         Set<Transitions> failedMembers = consortium.values()
                                                    .stream()
                                                    .filter(c -> !blueRibbon.contains(c))
-                                                   .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
-                                                   .map(c -> c.fsm().getCurrentState())
+                                                   .filter(c -> c.fsm.getCurrentState() != CollaboratorFsm.CLIENT)
+                                                   .map(c -> c.fsm.getCurrentState())
                                                    .collect(Collectors.toSet());
         assertEquals(0, clientsInWrongState, "True clients gone bad: " + failedMembers);
         assertEquals(view.getRingCount() - 1,
                      blueRibbon.stream()
-                               .map(c -> c.fsm().getCurrentState())
+                               .map(c -> c.fsm.getCurrentState())
                                .filter(b -> b == CollaboratorFsm.FOLLOWER)
                                .count(),
                      "True follower gone bad: " + blueRibbon.stream().map(c -> {
-                         Transitions cs = c.fsm().getCurrentState();
-                         return c.fsm().prettyPrint(cs);
+                         Transitions cs = c.fsm.getCurrentState();
+                         return c.fsm.prettyPrint(cs);
                      }).collect(Collectors.toSet()));
         assertEquals(1,
                      blueRibbon.stream()
-                               .map(c -> c.fsm().getCurrentState())
+                               .map(c -> c.fsm.getCurrentState())
                                .filter(b -> b == CollaboratorFsm.LEADER)
                                .count(),
                      "True leader gone bad: "
-                             + blueRibbon.stream().map(c -> c.fsm().getCurrentState()).collect(Collectors.toSet()));
+                             + blueRibbon.stream().map(c -> c.fsm.getCurrentState()).collect(Collectors.toSet()));
         System.out.println("Blue ribbon cimittee toOrder state: " + blueRibbon.stream()
                                                                               .map(c -> c.getState())
                                                                               .map(cc -> cc.getToOrder().size())

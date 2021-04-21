@@ -26,10 +26,10 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public class ConsortiumClientCommunications implements ConsortiumService {
+public class ConsortiumClient implements ConsortiumService {
 
-    public static CreateClientCommunications<ConsortiumClientCommunications> getCreate(ConsortiumMetrics metrics) {
-        return (t, f, c) -> new ConsortiumClientCommunications(c, t, metrics);
+    public static CreateClientCommunications<ConsortiumClient> getCreate(ConsortiumMetrics metrics) {
+        return (t, f, c) -> new ConsortiumClient(c, t, metrics);
 
     }
 
@@ -39,7 +39,7 @@ public class ConsortiumClientCommunications implements ConsortiumService {
     @SuppressWarnings("unused")
     private final ConsortiumMetrics         metrics;
 
-    public ConsortiumClientCommunications(ManagedServerConnection channel, Member member, ConsortiumMetrics metrics) {
+    public ConsortiumClient(ManagedServerConnection channel, Member member, ConsortiumMetrics metrics) {
         this.member = member;
         this.channel = channel;
         this.client = OrderingServiceGrpc.newFutureStub(channel.channel).withCompression("gzip");
