@@ -45,7 +45,7 @@ import com.salesfoce.apollo.consortium.proto.Slice;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.comms.ConsortiumClientCommunications;
-import com.salesforce.apollo.consortium.support.Bootstrapper;
+import com.salesforce.apollo.consortium.support.CheckpointAssembler;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -59,7 +59,7 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
  * @author hal.hildebrand
  *
  */
-public class BootstrapperTest {
+public class CheckpointAssemblerTest {
 
     private static final int                               BLOCK_SIZE = 256;
     private static Map<HashKey, CertificateWithPrivateKey> certs;
@@ -141,7 +141,7 @@ public class BootstrapperTest {
         when(comm.apply(any(), any())).thenReturn(client);
 
         Store store2 = new Store(new MVStore.Builder().open());
-        Bootstrapper boot = new Bootstrapper(checkpoint, bootstrapping, store2, comm, context, 0.125);
+        CheckpointAssembler boot = new CheckpointAssembler(checkpoint, bootstrapping, store2, comm, context, 0.125);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10), entropy);

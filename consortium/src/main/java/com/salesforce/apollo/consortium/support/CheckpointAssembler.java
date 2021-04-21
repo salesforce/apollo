@@ -41,8 +41,8 @@ import com.salesforce.apollo.protocols.Utils;
  * @author hal.hildebrand
  *
  */
-public class Bootstrapper {
-    private static final Logger log = LoggerFactory.getLogger(Bootstrapper.class);
+public class CheckpointAssembler {
+    private static final Logger log = LoggerFactory.getLogger(CheckpointAssembler.class);
 
     private final CompletableFuture<CheckpointState>                            assembled = new CompletableFuture<>();
     private final Checkpoint                                                    checkpoint;
@@ -54,7 +54,7 @@ public class Bootstrapper {
     private final MVMap<Integer, byte[]>                                        state;
     private final Store                                                         store;
 
-    public Bootstrapper(Checkpoint checkpoint, Member member, Store store,
+    public CheckpointAssembler(Checkpoint checkpoint, Member member, Store store,
             CommonCommunications<ConsortiumClientCommunications, Service> comms, Context<Member> context,
             double falsePositiveRate) {
         this.member = member;
