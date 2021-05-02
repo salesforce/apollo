@@ -592,6 +592,7 @@ public class CollaboratorContext {
         accept(next);
         consortium.setLastCheckpoint(next);
         log.info("Processed checkpoint block: {} height: {} on: {}", hash, next.height(), consortium.getMember());
+        store().gcFrom(height(next.block.getBlock()));
     }
 
     void processGenesis(HashedCertifiedBlock next) {
@@ -820,8 +821,7 @@ public class CollaboratorContext {
         if (block.getBody().getType() != BodyType.GENESIS) {
             log.error("Failed on {} [{}] prev: [{}] delivering genesis block: {} invalid body: {}",
                       consortium.getMember(), consortium.fsm.prettyPrint(consortium.fsm.getCurrentState()),
-                      consortium.fsm.prettyPrint(consortium.fsm.getPreviousState()), hash,
-                      block.getBody().getType());
+                      consortium.fsm.prettyPrint(consortium.fsm.getPreviousState()), hash, block.getBody().getType());
             return;
         }
         Builder existing = workingBlocks.get(hash);

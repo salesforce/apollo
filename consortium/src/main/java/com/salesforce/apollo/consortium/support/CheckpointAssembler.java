@@ -29,7 +29,7 @@ import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.Store;
-import com.salesforce.apollo.consortium.comms.ConsortiumClient;
+import com.salesforce.apollo.consortium.comms.BootstrapClient;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.BloomFilter;
@@ -44,19 +44,18 @@ import com.salesforce.apollo.protocols.Utils;
 public class CheckpointAssembler {
     private static final Logger log = LoggerFactory.getLogger(CheckpointAssembler.class);
 
-    private final CompletableFuture<CheckpointState>                            assembled = new CompletableFuture<>();
-    private final Checkpoint                                                    checkpoint;
-    private final CommonCommunications<ConsortiumClient, Service> comms;
-    private final Context<Member>                                               context;
-    private final double                                                        fpr;
-    private final List<HashKey>                                                 hashes    = new ArrayList<>();
-    private final Member                                                        member;
-    private final MVMap<Integer, byte[]>                                        state;
-    private final Store                                                         store;
+    private final CompletableFuture<CheckpointState>             assembled = new CompletableFuture<>();
+    private final Checkpoint                                     checkpoint;
+    private final CommonCommunications<BootstrapClient, Service> comms;
+    private final Context<Member>                                context;
+    private final double                                         fpr;
+    private final List<HashKey>                                  hashes    = new ArrayList<>();
+    private final Member                                         member;
+    private final MVMap<Integer, byte[]>                         state;
+    private final Store                                          store;
 
     public CheckpointAssembler(Checkpoint checkpoint, Member member, Store store,
-            CommonCommunications<ConsortiumClient, Service> comms, Context<Member> context,
-            double falsePositiveRate) {
+            CommonCommunications<BootstrapClient, Service> comms, Context<Member> context, double falsePositiveRate) {
         this.member = member;
         this.checkpoint = checkpoint;
         this.store = store;
@@ -92,7 +91,7 @@ public class CheckpointAssembler {
         return request.build();
     }
 
-    private Runnable gossip(ConsortiumClient link, ListenableFuture<CheckpointSegments> futureSailor,
+    private Runnable gossip(BootstrapClient link, ListenableFuture<CheckpointSegments> futureSailor,
                             BitsStreamGenerator entropy, Runnable scheduler) {
         return () -> {
             link.release();
@@ -130,15 +129,15 @@ public class CheckpointAssembler {
             return;
         }
         Member m = sample.get(0);
-        ConsortiumClient link = comms.apply(m, member);
+        BootstrapClient link = comms.apply(m, member);
         if (link == null) {
             log.trace("No link for: {} on: {}", m, member);
             s.run();
             return;
         }
 
-        link.fetch(request).addListener(gossip(link, link.fetch(request), entropy, s), ForkJoinPool.commonPool());
-
+        ListenableFuture<CheckpointSegments> fetched = link.fetch(request);
+        fetched.addListener(gossip(link, fetched, entropy, s), ForkJoinPool.commonPool());
     }
 
     private boolean process(CheckpointSegments segments) {

@@ -280,10 +280,6 @@ public class Consortium {
         return builder;
     }
 
-    public final Fsm<CollaboratorContext, Transitions> fsm;
-
-    public final HashedCertifiedBlock                         genesis;
-    final Service                                             service               = new Service();
     final Store                                               store;
     private final Map<Long, CheckpointState>                  cachedCheckpoints     = new ConcurrentHashMap<>();
     private final AtomicReference<HashedCertifiedBlock>       current               = new AtomicReference<>();
@@ -292,6 +288,8 @@ public class Consortium {
     private final List<DelayedMessage>                        delayed               = new CopyOnWriteArrayList<>();
     private final AtomicInteger                               deltaCheckpointBlocks = new AtomicInteger(
             Integer.MAX_VALUE);
+    public final Fsm<CollaboratorContext, Transitions>        fsm;
+    private final AtomicReference<HashedCertifiedBlock>       genesis               = new AtomicReference<>();
     private final AtomicReference<HashedCertifiedBlock>       lastCheckpoint        = new AtomicReference<>();
     private final AtomicReference<HashedCertifiedBlock>       lastViewChange        = new AtomicReference<>();
     private final Parameters                                  params;
@@ -302,6 +300,7 @@ public class Consortium {
     private final Map<HashKey, SubmittedTransaction>          submitted             = new ConcurrentHashMap<>();
     private final Transitions                                 transitions;
     private final View                                        view;
+    final Service                                             service               = new Service();
 
     public Consortium(Parameters parameters) {
         this(parameters, defaultBuilder(parameters).open());
@@ -309,13 +308,16 @@ public class Consortium {
 
     public Consortium(Parameters parameters, MVStore store) {
         this.params = parameters;
-        genesis = new HashedCertifiedBlock(parameters.genesis);
         this.store = new Store(store);
         view = new View(new Service(), parameters, (id, messages) -> process(id, messages));
         fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
         fsm.setName(getMember().getId().b64Encoded());
         transitions = fsm.getTransitions();
         view.nextViewConsensusKey();
+    }
+
+    public HashedCertifiedBlock getGenesis() {
+        return genesis.get();
     }
 
     public long getLastCheckpoint() {
@@ -424,10 +426,6 @@ public class Consortium {
         return transitions;
     }
 
-    View getView() {
-        return view;
-    }
-
     void joinMessageGroup(ViewContext newView) {
         view.joinMessageGroup(newView, scheduler, process());
     }
@@ -473,6 +471,12 @@ public class Consortium {
         this.current.set(current);
     }
 
+    void setGenesis(HashedCertifiedBlock next) {
+        if (!this.genesis.compareAndSet(null, next)) {
+            throw new IllegalStateException("Genesis already set on: " + getMember());
+        }
+    }
+
     void setLastCheckpoint(HashedCertifiedBlock next) {
         this.lastCheckpoint.set(next);
     }
@@ -481,6 +485,10 @@ public class Consortium {
         lastViewChange.set(block);
         deltaCheckpointBlocks.set(view.getCheckpointBlocks());
         log.info("Checkpoint in: {} blocks on: {}", view.getCheckpointBlocks(), getMember());
+    }
+
+    View getView() {
+        return view;
     }
 
     HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,

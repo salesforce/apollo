@@ -17,6 +17,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.google.common.base.Supplier;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.membership.Context;
@@ -38,7 +39,8 @@ public class Parameters {
         private Executor                                       dispatcher            = ForkJoinPool.commonPool();
         private TransactionExecutor                            executor              = (bh, et, c) -> {
                                                                                      };
-        private CertifiedBlock                                 genesis;
+        private Message                                        genesisData;
+        private HashKey                                        genesisViewId;
         private Duration                                       gossipDuration;
         private Duration                                       initialViewTimeout    = Duration.ofSeconds(60);
         private Duration                                       joinTimeout           = Duration.ofMillis(500);
@@ -59,8 +61,8 @@ public class Parameters {
         public Parameters build() {
             return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
                     consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, maxCheckpointSegments,
-                    viewTimeout, submitTimeout, processedBufferSize, genesis, maxCheckpointBlocks, executor,
-                    checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, initialViewTimeout,
+                    viewTimeout, submitTimeout, processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks,
+                    executor, checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, initialViewTimeout,
                     dispatcher);
         }
 
@@ -94,6 +96,14 @@ public class Parameters {
 
         public TransactionExecutor getExecutor() {
             return executor;
+        }
+
+        public Message getGenesisData() {
+            return genesisData;
+        }
+
+        public HashKey getGenesisViewId() {
+            return genesisViewId;
         }
 
         public Duration getGossipDuration() {
@@ -205,6 +215,16 @@ public class Parameters {
             return this;
         }
 
+        public Builder setGenesisData(Message genesisData) {
+            this.genesisData = genesisData;
+            return this;
+        }
+
+        public Builder setGenesisViewId(HashKey genesisViewId) {
+            this.genesisViewId = genesisViewId;
+            return this;
+        }
+
         public Parameters.Builder setGossipDuration(Duration gossipDuration) {
             this.gossipDuration = gossipDuration;
             return this;
@@ -306,7 +326,8 @@ public class Parameters {
     public final int                                            deltaCheckpointBlocks;
     public final Executor                                       dispatcher;
     public final TransactionExecutor                            executor;
-    public final CertifiedBlock                                 genesis;
+    public final Message                                        genesisData;
+    public final HashKey                                        genesisViewId;
     public final Duration                                       gossipDuration;
     public final Duration                                       initialViewTimeout;
     public final Duration                                       joinTimeout;
@@ -328,9 +349,10 @@ public class Parameters {
             ScheduledExecutorService scheduler, Supplier<Signature> signature, Duration gossipDuration,
             BiFunction<CertifiedBlock, Future<?>, HashKey> consensus, int maxBatchSize, int maxBatchByteSize,
             Duration maxBatchDelay, Duration joinTimeout, int maxCheckpointSegments, Duration viewTimeout,
-            Duration submitTimeout, int processedBufferSize, CertifiedBlock genesis, int maxCheckpointBlocks,
-            TransactionExecutor executor, Function<Long, File> checkpointer, int deltaCheckpointBlocks, File storeFile,
-            int checkpointBlockSize, Duration initialViewTimeout, Executor dispatcher) {
+            Duration submitTimeout, int processedBufferSize, Message genesisData, HashKey genesisViewId,
+            int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
+            int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Duration initialViewTimeout,
+            Executor dispatcher) {
         this.context = context;
         this.communications = communications;
         this.member = member;
@@ -346,10 +368,11 @@ public class Parameters {
         this.viewTimeout = viewTimeout;
         this.submitTimeout = submitTimeout;
         this.processedBufferSize = processedBufferSize;
+        this.genesisData = genesisData;
         this.executor = executor;
         this.checkpointer = checkpointer;
         this.storeFile = storeFile;
-        this.genesis = genesis;
+        this.genesisViewId = genesisViewId;
         this.maxCheckpointBlocks = maxCheckpointBlocks;
         this.maxCheckpointSegments = maxCheckpointSegments;
         this.checkpointBlockSize = checkpointBlockSize;

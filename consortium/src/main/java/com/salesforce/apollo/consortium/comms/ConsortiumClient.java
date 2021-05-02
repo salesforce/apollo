@@ -7,10 +7,6 @@
 package com.salesforce.apollo.consortium.comms;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.consortium.proto.BootstrapSync;
-import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
-import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
-import com.salesfoce.apollo.consortium.proto.CheckpointSync;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc;
@@ -47,18 +43,8 @@ public class ConsortiumClient implements ConsortiumService {
     }
 
     @Override
-    public ListenableFuture<BootstrapSync> checkpointSync(CheckpointSync sync) {
-        return client.checkpointSync(sync);
-    }
-
-    @Override
     public ListenableFuture<TransactionResult> clientSubmit(SubmitTransaction txn) {
         return client.submit(txn);
-    }
-
-    @Override
-    public ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
-        return client.fetch(request);
     }
 
     public Member getMember() {

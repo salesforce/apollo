@@ -192,4 +192,8 @@ public class Store {
         checkpoints.put(blockHeight, cp);
         return cp;
     }
+
+    public void gcFrom(long lastCheckpoint) {
+        
+    }
 }

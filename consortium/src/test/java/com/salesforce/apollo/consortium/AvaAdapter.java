@@ -73,8 +73,7 @@ public class AvaAdapter implements Processor {
     public HashKey validate(HashKey key, DagEntry entry) {
         CertifiedBlock cb = certifiedBlock(entry);
         if (cb == null) {
-            System.out.println("null from: " + key + " descr: " + entry.getDescription());
-            return key;
+            return null;
         }
         return new HashKey(cb.getBlock().getHeader().getPrevious());
     }

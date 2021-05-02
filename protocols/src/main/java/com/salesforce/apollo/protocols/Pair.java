@@ -11,7 +11,16 @@ package com.salesforce.apollo.protocols;
  *
  */
 public class Pair<A, B> {
+
+    public static final Pair<?, ?> EMPTY_PAIR = new Pair<>(null, null);
+
+    @SuppressWarnings("unchecked")
+    public static <A, B> Pair<A, B> emptyPair() {
+        return (Pair<A, B>) EMPTY_PAIR;
+    }
+
     public final A a;
+
     public final B b;
 
     public Pair(A a, B b) {

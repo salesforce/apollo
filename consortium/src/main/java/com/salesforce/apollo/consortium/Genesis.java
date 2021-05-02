@@ -37,4 +37,7 @@ public class Genesis {
         }
     }
 
+    public Genesis(Parameters parameters) {
+        
+    }
 }

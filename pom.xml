@@ -327,10 +327,10 @@
 				<enabled>true</enabled>
 			</snapshots>
 		</repository>
-		<repository>
+		<!-- <repository>
 			<id>corda-djvm</id>
 			<url>https://software.r3.com/artifactory/corda-dependencies/</url>
-		</repository>
+		</repository> -->
 	</repositories>
 
 	<pluginRepositories>
