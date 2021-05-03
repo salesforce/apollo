@@ -906,6 +906,7 @@ public class WorkingSet {
         List<HashKey> keys = new ArrayList<>();
         for (int i = 0; i < hashes.size(); i++) {
             HashKey key = new HashKey(hashes.get(i));
+            keys.add(key);
             Node node = read(() -> unfinalized.get(key));
             if (node == null || node.isUnknown()) {
                 ByteString t = transactions.get(i);
@@ -913,10 +914,10 @@ public class WorkingSet {
                 boolean isNoOp = entry.getDescription() == EntryType.NO_OP;
                 HashKey conflictSet = isNoOp ? key : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
                                              : processor.validate(key, entry);
-                if (conflictSet != null) {
-                    keys.add(key);
-                    insert(key, entry, isNoOp, discovered, conflictSet);
+                if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
+                    assert entry.getDescription() == EntryType.GENSIS : "Not in the genesis set";
                 }
+                insert(key, entry, isNoOp, discovered, conflictSet);
             }
         }
         return keys;
