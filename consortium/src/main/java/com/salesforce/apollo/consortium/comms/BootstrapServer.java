@@ -9,10 +9,8 @@ package com.salesforce.apollo.consortium.comms;
 import com.salesfoce.apollo.consortium.proto.BlockReplication;
 import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.BootstrapServiceGrpc.BootstrapServiceImplBase;
-import com.salesfoce.apollo.consortium.proto.BootstrapSync;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
-import com.salesfoce.apollo.consortium.proto.CheckpointSync;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -34,20 +32,6 @@ public class BootstrapServer extends BootstrapServiceImplBase {
         this.metrics = metrics;
         this.identity = identity;
         this.router = router;
-    }
-
-    @Override
-    public void checkpointSync(CheckpointSync request, StreamObserver<BootstrapSync> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
-                        s -> {
-                            HashKey from = identity.getFrom();
-                            if (from == null) {
-                                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                                return;
-                            }
-                            responseObserver.onNext(s.checkpointSync(request, from));
-                            responseObserver.onCompleted();
-                        });
     }
 
     @Override

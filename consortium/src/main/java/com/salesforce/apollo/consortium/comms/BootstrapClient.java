@@ -9,12 +9,8 @@ package com.salesforce.apollo.consortium.comms;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.consortium.proto.BootstrapServiceGrpc;
 import com.salesfoce.apollo.consortium.proto.BootstrapServiceGrpc.BootstrapServiceFutureStub;
-import com.salesfoce.apollo.consortium.proto.BootstrapSync;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
-import com.salesfoce.apollo.consortium.proto.CheckpointSync;
-import com.salesfoce.apollo.consortium.proto.ViewChain;
-import com.salesfoce.apollo.consortium.proto.ViewChainSync;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -44,18 +40,8 @@ public class BootstrapClient implements BootstrapService {
     }
 
     @Override
-    public ListenableFuture<BootstrapSync> checkpointSync(CheckpointSync sync) {
-        return client.checkpointSync(sync);
-    }
-
-    @Override
     public ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
         return client.fetch(request);
-    }
-
-    @Override
-    public ListenableFuture<ViewChain> fetchViewChain(ViewChainSync request) {
-        return client.fetchViewChain(request);
     }
 
     public Member getMember() {

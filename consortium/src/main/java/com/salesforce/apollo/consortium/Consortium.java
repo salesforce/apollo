@@ -48,12 +48,10 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.BlockReplication;
 import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.BodyType;
-import com.salesfoce.apollo.consortium.proto.BootstrapSync;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
-import com.salesfoce.apollo.consortium.proto.CheckpointSync;
 import com.salesfoce.apollo.consortium.proto.Genesis;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
@@ -93,16 +91,6 @@ import com.salesforce.apollo.protocols.Utils;
 public class Consortium {
 
     public class Service {
-
-        public BootstrapSync checkpointSync(CheckpointSync request, HashKey from) {
-            Member member = getParams().context.getMember(from);
-            if (member == null) {
-                log.warn("Received checkpoint sync from non member: {} on: {}", from, getMember());
-                return BootstrapSync.getDefaultInstance();
-            }
-
-            return BootstrapSync.getDefaultInstance();
-        }
 
         public TransactionResult clientSubmit(SubmitTransaction request, HashKey from) {
             Member member = getParams().context.getMember(from);
