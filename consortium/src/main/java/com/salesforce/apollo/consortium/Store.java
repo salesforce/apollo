@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.StreamSupport;
 
+import org.h2.mvstore.Cursor;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.Certifications;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
@@ -49,16 +51,16 @@ public class Store {
     private static final String CERTIFICATIONS      = "CERTIFICATIONS";
     private static final String CHECKPOINT_TEMPLATE = "CHECKPOINT-%s";
     private static final String HASH_TO_HEIGHT      = "HASH_TO_HEIGHT";
-    private static final String VIEW_CHAIN          = "VIEW_CHAIN";
     private static final String HASHES              = "HASHES";
     private static final Logger log                 = LoggerFactory.getLogger(Store.class);
+    private static final String VIEW_CHAIN          = "VIEW_CHAIN";
 
     private final MVMap<Long, byte[]>               blocks;
     private final MVMap<Long, byte[]>               certifications;
     private final Map<Long, MVMap<Integer, byte[]>> checkpoints = new HashMap<>();
     private final MVMap<Long, byte[]>               hashes;
     private final MVMap<byte[], Long>               hashToHeight;
-    private final MVMap<Long, Long>             viewChain;
+    private final MVMap<Long, Long>                 viewChain;
 
     public Store(MVStore store) {
         hashes = store.openMap(HASHES);
@@ -112,9 +114,9 @@ public class Store {
                      .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
     }
 
-    public void fetchViewChain(BloomFilter<Long> chainBff, CheckpointSegments.Builder replication,
-                            int maxChainCount, long incompleteStart) throws IllegalStateException {
-        StreamSupport.stream(((Iterable<Long>) () -> viewChainFrom(incompleteStart)).spliterator(), false)
+    public void fetchViewChain(BloomFilter<Long> chainBff, CheckpointSegments.Builder replication, int maxChainCount,
+                               long incompleteStart, long target) throws IllegalStateException {
+        StreamSupport.stream(((Iterable<Long>) () -> viewChainFrom(incompleteStart, target)).spliterator(), false)
                      .collect(new ReservoirSampler<Long>(-1, maxChainCount, Utils.bitStreamGenerator()))
                      .stream()
                      .filter(s -> !chainBff.contains(s))
@@ -122,9 +124,8 @@ public class Store {
                      .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
     }
 
-    private Iterator<Long> viewChainFrom(long from) {
+    public void gcFrom(long lastCheckpoint) {
 
-        return viewChain.keyIterator(from);
     }
 
     public HashedBlock getBlock(long height) {
@@ -156,12 +157,14 @@ public class Store {
         return hashes;
     }
 
-    private void put(HashKey h, Block block) {
-        long height = height(block);
-        byte[] hash = h.bytes();
-        blocks.put(height, block.toByteArray());
-        hashes.put(height, hash);
-        hashToHeight.put(hash, height);
+    public long lastViewChainFrom(long height) {
+        long last = height;
+        Long next = viewChain.get(height);
+        while (next != null && next >= 0) {
+            last = next;
+            next = viewChain.get(height);
+        }
+        return last;
     }
 
     public void put(HashKey hash, CertifiedBlock cb) {
@@ -193,7 +196,19 @@ public class Store {
         return cp;
     }
 
-    public void gcFrom(long lastCheckpoint) {
-        
+    public Iterator<Long> viewChainFrom(long from, long to) {
+        return new Cursor<Long, Long>(viewChain.getRootPage(), from, to);
+    }
+
+    private void put(HashKey h, Block block) {
+        long height = height(block);
+        byte[] hash = h.bytes();
+        blocks.put(height, block.toByteArray());
+        hashes.put(height, hash);
+        hashToHeight.put(hash, height);
+        BodyType type = block.getBody().getType();
+        if (type == BodyType.RECONFIGURE || type == BodyType.GENESIS) {
+            viewChain.put(block.getHeader().getHeight(), block.getHeader().getLastReconfig());
+        }
     }
 }

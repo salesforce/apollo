@@ -17,7 +17,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
-import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.h2.mvstore.MVMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,9 +65,8 @@ public class CheckpointAssembler {
         checkpoint.getSegmentsList().stream().map(bs -> new HashKey(bs)).forEach(hash -> hashes.add(hash));
     }
 
-    public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration,
-                                                       BitsStreamGenerator entropy) {
-        gossip(scheduler, duration, entropy);
+    public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
+        gossip(scheduler, duration);
         return assembled;
     }
 
@@ -92,7 +90,7 @@ public class CheckpointAssembler {
     }
 
     private Runnable gossip(BootstrapClient link, ListenableFuture<CheckpointSegments> futureSailor,
-                            BitsStreamGenerator entropy, Runnable scheduler) {
+                            Runnable scheduler) {
         return () -> {
             link.release();
 
@@ -113,13 +111,13 @@ public class CheckpointAssembler {
         };
     }
 
-    private void gossip(ScheduledExecutorService scheduler, Duration duration, BitsStreamGenerator entropy) {
+    private void gossip(ScheduledExecutorService scheduler, Duration duration) {
         if (assembled.isDone()) {
             return;
         }
-        Runnable s = () -> scheduler.schedule(() -> gossip(scheduler, duration, entropy), duration.toMillis(),
+        Runnable s = () -> scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),
                                               TimeUnit.MILLISECONDS);
-        List<Member> sample = context.sample(1, entropy, member.getId());
+        List<Member> sample = context.sample(1, Utils.bitStreamEntropy(), member.getId());
         if (sample.size() < 1) {
             s.run();
         }
@@ -137,7 +135,7 @@ public class CheckpointAssembler {
         }
 
         ListenableFuture<CheckpointSegments> fetched = link.fetch(request);
-        fetched.addListener(gossip(link, fetched, entropy, s), ForkJoinPool.commonPool());
+        fetched.addListener(gossip(link, fetched, s), ForkJoinPool.commonPool());
     }
 
     private boolean process(CheckpointSegments segments) {

@@ -7,10 +7,14 @@
 package com.salesforce.apollo.consortium.comms;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.salesfoce.apollo.consortium.proto.BlockReplication;
+import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.BootstrapServiceGrpc;
 import com.salesfoce.apollo.consortium.proto.BootstrapServiceGrpc.BootstrapServiceFutureStub;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
+import com.salesfoce.apollo.consortium.proto.Initial;
+import com.salesfoce.apollo.consortium.proto.Synchronize;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -50,5 +54,20 @@ public class BootstrapClient implements BootstrapService {
 
     public void release() {
         channel.release();
+    }
+
+    @Override
+    public ListenableFuture<Blocks> fetchBlocks(BlockReplication replication) {
+        return client.fetchBlocks(replication);
+    }
+
+    @Override
+    public ListenableFuture<Blocks> fetchViewChain(BlockReplication replication) {
+        return client.fetchViewChain(replication);
+    }
+
+    @Override
+    public ListenableFuture<Initial> sync(Synchronize sync) {
+        return client.sync(sync);
     }
 }

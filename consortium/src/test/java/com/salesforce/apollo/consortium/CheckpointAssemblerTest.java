@@ -144,7 +144,7 @@ public class CheckpointAssemblerTest {
         CheckpointAssembler boot = new CheckpointAssembler(checkpoint, bootstrapping, store2, comm, context, 0.125);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-        assembled = boot.assemble(scheduler, Duration.ofMillis(10), entropy);
+        assembled = boot.assemble(scheduler, Duration.ofMillis(10));
         CheckpointState assembledCs;
         try {
             assembledCs = assembled.get(10, TimeUnit.SECONDS);

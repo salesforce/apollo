@@ -112,6 +112,17 @@ public class CollaboratorContext {
         return builder.build();
     }
 
+    public static Checkpoint checkpointBody(Block block) {
+        Checkpoint body;
+        try {
+            body = Checkpoint.parseFrom(Consortium.getBody(block));
+        } catch (IOException e) {
+            log.debug("Protocol violation.  Cannot decode checkpoint body: {}", e);
+            return null;
+        }
+        return body;
+    }
+
     public static <T> Stream<List<T>> chunked(Stream<T> stream, int chunkSize) {
         AtomicInteger index = new AtomicInteger(0);
 
@@ -120,6 +131,17 @@ public class CollaboratorContext {
                      .stream()
                      .sorted(Map.Entry.comparingByKey())
                      .map(Map.Entry::getValue);
+    }
+
+    public static Genesis genesisBody(Block block) {
+        Genesis body;
+        try {
+            body = Genesis.parseFrom(Consortium.getBody(block));
+        } catch (IOException e) {
+            log.debug("Protocol violation.  Cannot decode genesis body: {}", e);
+            return null;
+        }
+        return body;
     }
 
     public static long height(Block block) {
@@ -152,14 +174,28 @@ public class CollaboratorContext {
                          .collect(Collectors.toList());
     }
 
-    final Consortium                                consortium;
-    private final AtomicLong                        currentConsensus = new AtomicLong(-1);
-    private final AtomicReference<HashedBlock>      lastBlock        = new AtomicReference<>();
-    private final ProcessedBuffer                   processed;
-    private final Regency                           regency          = new Regency();
-    private final Map<Timers, Timer>                timers           = new ConcurrentHashMap<>();
-    private final Map<HashKey, EnqueuedTransaction> toOrder          = new ConcurrentHashMap<>();
-    private final View                              view;
+    public static Reconfigure reconfigureBody(Block block) {
+        Reconfigure body;
+        try {
+            body = Reconfigure.parseFrom(Consortium.getBody(block));
+        } catch (IOException e) {
+            log.debug("Protocol violation.  Cannot decode reconfiguration body", e);
+            return null;
+        }
+        return body;
+    }
+
+    final Consortium                           consortium;
+    private final AtomicLong                   currentConsensus = new AtomicLong(-1);
+    private final AtomicReference<HashedBlock> lastBlock        = new AtomicReference<>();
+    private final ProcessedBuffer              processed;
+    private final Regency                      regency          = new Regency();
+
+    private final Map<Timers, Timer> timers = new ConcurrentHashMap<>();
+
+    private final Map<HashKey, EnqueuedTransaction> toOrder = new ConcurrentHashMap<>();
+
+    private final View view;
 
     private final Map<HashKey, CertifiedBlock.Builder> workingBlocks = new ConcurrentHashMap<>();
 
@@ -770,17 +806,6 @@ public class CollaboratorContext {
         return checkpoint;
     }
 
-    private Checkpoint checkpointBody(Block block) {
-        Checkpoint body;
-        try {
-            body = Checkpoint.parseFrom(consortium.getBody(block));
-        } catch (IOException e) {
-            log.debug("Protocol violation on: {}.  Cannot decode checkpoint body: {}", consortium.getMember(), e);
-            return null;
-        }
-        return body;
-    }
-
     private long currentConsensus() {
         return currentConsensus.get();
     }
@@ -888,8 +913,9 @@ public class CollaboratorContext {
                            .setHeader(Header.newBuilder()
                                             .setTimestamp(timestamp)
                                             .setNonce(ByteString.copyFrom(nonce))
-                                            .setLastCheckpoint((cp == null ? HashKey.ORIGIN : cp.hash).toByteString())
-                                            .setLastReconfig((vc == null ? HashKey.ORIGIN : vc.hash).toByteString())
+                                            .setLastCheckpoint(cp == null ? -1
+                                                    : cp.height())
+                                            .setLastReconfig(vc == null ? -1 : vc.height())
                                             .setPrevious(ByteString.copyFrom(previous))
                                             .setHeight(height)
                                             .setBodyHash(ByteString.copyFrom(Conversion.hashOf(body.toByteString())))
@@ -1116,17 +1142,6 @@ public class CollaboratorContext {
 
     }
 
-    private Genesis genesisBody(Block block) {
-        Genesis body;
-        try {
-            body = Genesis.parseFrom(consortium.getBody(block));
-        } catch (IOException e) {
-            log.debug("Protocol violation on {}.  Cannot decode genesis body: {}", consortium.getMember(), e);
-            return null;
-        }
-        return body;
-    }
-
     private Member getRegent(int regent) {
         return view.getContext().getRegent(regent);
     }
@@ -1267,17 +1282,6 @@ public class CollaboratorContext {
         });
     }
 
-    private Reconfigure reconfigureBody(Block block) {
-        Reconfigure body;
-        try {
-            body = Reconfigure.parseFrom(consortium.getBody(block));
-        } catch (IOException e) {
-            log.debug("Protocol violation on: {}.  Cannot decode reconfiguration body: {}", consortium.getMember(), e);
-            return null;
-        }
-        return body;
-    }
-
     @SuppressWarnings("unused")
     // Incrementally assemble target checkpoint from random gossip
     private void recoverFromCheckpoint() {
@@ -1410,9 +1414,9 @@ public class CollaboratorContext {
     private User userBody(Block block) {
         User body;
         try {
-            body = User.parseFrom(consortium.getBody(block));
+            body = User.parseFrom(Consortium.getBody(block));
         } catch (IOException e) {
-            log.debug("Protocol violation on: {}.  Cannot decode reconfiguration body", consortium.getMember(), e);
+            log.debug("Protocol violation.  Cannot decode reconfiguration body", e);
             return null;
         }
         return body;

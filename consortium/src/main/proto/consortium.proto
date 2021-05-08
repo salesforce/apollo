@@ -46,13 +46,13 @@ message Block {
 }
 
 message Header {
-    int64 height = 1;
-    google.protobuf.Timestamp timestamp = 2; 
-    bytes previous = 3;
-    bytes lastCheckpoint = 4; 
-    bytes lastReconfig = 5;
-    bytes bodyHash = 6;
-    bytes nonce = 7;
+    int64 height = 1; 
+    int64 lastCheckpoint = 2; 
+    int64 lastReconfig = 3;
+    google.protobuf.Timestamp timestamp = 4;
+    bytes nonce = 5;
+    bytes previous = 6;
+    bytes bodyHash = 7;
 }
 
 message Body {
@@ -182,14 +182,14 @@ message Initial {
     CertifiedBlock genesis = 1;
     CertifiedBlock checkpoint = 2;
     CertifiedBlock checkpointView = 3;
-    repeated CertifiedBlock chain = 4;
+    repeated CertifiedBlock viewChain = 4;
 }
 
 message BlockReplication {
     bytes context = 1;
     int64 from = 2;
     int64 to = 3;
-    repeated bytes blocksBff = 4;
+    bytes blocksBff = 4;
 }
 
 message Blocks {

@@ -85,6 +85,13 @@ import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
 /**
+ * Consortium represents the group that owns a linear ledger of blocks. These
+ * blocks are ordered by a subset of the group, chosen using a psuedo random
+ * function based on the last block's hash of the view change, and the cut
+ * across the receiver's context's rings to determine member subset.
+ * <p>
+ * 
+ * 
  * @author hal.hildebrand
  *
  */
@@ -238,6 +245,11 @@ public class Consortium {
         }
     }
 
+    public static InputStream getBody(Block block) {
+        return new InflaterInputStream(
+                BbBackedInputStream.aggregate(block.getBody().getContents().asReadOnlyByteBufferList()));
+    }
+
     public static HashKey hashOf(TransactionOrBuilder transaction) {
         List<ByteString> buffers = new ArrayList<>();
         buffers.add(transaction.getNonce());
@@ -268,6 +280,8 @@ public class Consortium {
         return builder;
     }
 
+    public final Fsm<CollaboratorContext, Transitions>        fsm;
+    final Service                                             service               = new Service();
     final Store                                               store;
     private final Map<Long, CheckpointState>                  cachedCheckpoints     = new ConcurrentHashMap<>();
     private final AtomicReference<HashedCertifiedBlock>       current               = new AtomicReference<>();
@@ -276,7 +290,6 @@ public class Consortium {
     private final List<DelayedMessage>                        delayed               = new CopyOnWriteArrayList<>();
     private final AtomicInteger                               deltaCheckpointBlocks = new AtomicInteger(
             Integer.MAX_VALUE);
-    public final Fsm<CollaboratorContext, Transitions>        fsm;
     private final AtomicReference<HashedCertifiedBlock>       genesis               = new AtomicReference<>();
     private final AtomicReference<HashedCertifiedBlock>       lastCheckpoint        = new AtomicReference<>();
     private final AtomicReference<HashedCertifiedBlock>       lastViewChange        = new AtomicReference<>();
@@ -287,8 +300,8 @@ public class Consortium {
     private final AtomicBoolean                               started               = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>          submitted             = new ConcurrentHashMap<>();
     private final Transitions                                 transitions;
-    private final View                                        view;
-    final Service                                             service               = new Service();
+
+    private final View view;
 
     public Consortium(Parameters parameters) {
         this(parameters, defaultBuilder(parameters).open());
@@ -385,11 +398,6 @@ public class Consortium {
         delayed.add(new DelayedMessage(from, message));
     }
 
-    InputStream getBody(Block block) {
-        return new InflaterInputStream(
-                BbBackedInputStream.aggregate(block.getBody().getContents().asReadOnlyByteBufferList()));
-    }
-
     CheckpointState getChekpoint(long checkpoint) {
         return cachedCheckpoints.get(checkpoint);
     }
@@ -412,6 +420,10 @@ public class Consortium {
 
     Transitions getTransitions() {
         return transitions;
+    }
+
+    View getView() {
+        return view;
     }
 
     void joinMessageGroup(ViewContext newView) {
@@ -473,10 +485,6 @@ public class Consortium {
         lastViewChange.set(block);
         deltaCheckpointBlocks.set(view.getCheckpointBlocks());
         log.info("Checkpoint in: {} blocks on: {}", view.getCheckpointBlocks(), getMember());
-    }
-
-    View getView() {
-        return view;
     }
 
     HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,

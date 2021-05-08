@@ -16,8 +16,8 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class HashedCertifiedBlock {
-    public final CertifiedBlock   block;
-    public final HashKey hash;
+    public final CertifiedBlock block;
+    public final HashKey        hash;
 
     public HashedCertifiedBlock(CertifiedBlock block) {
         this(new HashKey(Conversion.hashOf(block.toByteString())), block);
@@ -26,6 +26,19 @@ public class HashedCertifiedBlock {
     public HashedCertifiedBlock(HashKey hash, CertifiedBlock block) {
         this.hash = hash;
         this.block = block;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof HashedCertifiedBlock) {
+            return hash.equals(((HashedCertifiedBlock) obj).hash);
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return hash.hashCode();
     }
 
     public long height() {
