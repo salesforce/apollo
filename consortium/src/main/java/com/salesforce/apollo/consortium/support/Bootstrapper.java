@@ -331,7 +331,8 @@ public class Bootstrapper {
 
             try {
                 votes.put(m.getId(), future.get());
-                log.info("Synchronization vote from: {} recorded on: {}", m, member);
+                log.info("Synchronization vote: {} from: {} recorded on: {}",
+                         new HashedCertifiedBlock(future.get().getGenesis()).hash, m, member);
             } catch (InterruptedException e) {
                 log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
             } catch (ExecutionException e) {
