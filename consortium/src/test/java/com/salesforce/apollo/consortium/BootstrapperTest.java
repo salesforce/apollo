@@ -172,6 +172,120 @@ public class BootstrapperTest {
 
         lastBlock = new HashedCertifiedBlock(
                 CertifiedBlock.newBuilder()
+                              .setBlock(Block.newBuilder()
+                                             .setHeader(Header.newBuilder()
+                                                              .setHeight(lastBlock.height() + 1)
+                                                              .setLastCheckpoint(genesis.height())
+                                                              .setLastReconfig(lastView.height())
+                                                              .setPrevious(lastBlock.hash.toByteString()))
+                                             .setBody(Body.newBuilder().setType(BodyType.RECONFIGURE))
+                                             .build())
+                              .build());
+        bootstrapStore.put(lastBlock.hash, lastBlock.block);
+        lastView = lastBlock;
+
+        for (int i = 0; i < 10; i++) {
+            HashedCertifiedBlock block = new HashedCertifiedBlock(
+                    CertifiedBlock.newBuilder()
+                                  .setBlock(Block.newBuilder()
+                                                 .setHeader(Header.newBuilder()
+                                                                  .setHeight(lastBlock.height() + 1)
+                                                                  .setLastCheckpoint(genesis.height())
+                                                                  .setLastReconfig(lastView.height())
+                                                                  .setPrevious(lastBlock.hash.toByteString()))
+                                                 .setBody(Body.newBuilder().setType(BodyType.USER))
+                                                 .build())
+                                  .build());
+            bootstrapStore.put(block.hash, block.block);
+            lastBlock = block;
+        }
+
+        lastBlock = new HashedCertifiedBlock(
+                CertifiedBlock.newBuilder()
+                              .setBlock(Block.newBuilder()
+                                             .setHeader(Header.newBuilder()
+                                                              .setHeight(lastBlock.height() + 1)
+                                                              .setLastCheckpoint(genesis.height())
+                                                              .setLastReconfig(lastView.height())
+                                                              .setPrevious(lastBlock.hash.toByteString()))
+                                             .setBody(Body.newBuilder().setType(BodyType.RECONFIGURE))
+                                             .build())
+                              .build());
+        bootstrapStore.put(lastBlock.hash, lastBlock.block);
+        lastView = lastBlock;
+
+        for (int i = 0; i < 10; i++) {
+            HashedCertifiedBlock block = new HashedCertifiedBlock(
+                    CertifiedBlock.newBuilder()
+                                  .setBlock(Block.newBuilder()
+                                                 .setHeader(Header.newBuilder()
+                                                                  .setHeight(lastBlock.height() + 1)
+                                                                  .setLastCheckpoint(genesis.height())
+                                                                  .setLastReconfig(lastView.height())
+                                                                  .setPrevious(lastBlock.hash.toByteString()))
+                                                 .setBody(Body.newBuilder().setType(BodyType.USER))
+                                                 .build())
+                                  .build());
+            bootstrapStore.put(block.hash, block.block);
+            lastBlock = block;
+        }
+
+        lastBlock = new HashedCertifiedBlock(
+                CertifiedBlock.newBuilder()
+                              .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
+                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.CHECKPOINT, CollaboratorContext.checkpoint(lastBlock.height() + 1, null, 0)), lastView))
+                              .build());
+        bootstrapStore.put(lastBlock.hash, lastBlock.block);
+
+        checkpoint = lastBlock;
+
+        for (int i = 0; i < 10; i++) {
+            HashedCertifiedBlock block = new HashedCertifiedBlock(
+                    CertifiedBlock.newBuilder()
+                                  .setBlock(Block.newBuilder()
+                                                 .setHeader(Header.newBuilder()
+                                                                  .setHeight(lastBlock.height() + 1)
+                                                                  .setLastCheckpoint(genesis.height())
+                                                                  .setLastReconfig(lastView.height())
+                                                                  .setPrevious(lastBlock.hash.toByteString()))
+                                                 .setBody(Body.newBuilder().setType(BodyType.USER))
+                                                 .build())
+                                  .build());
+            bootstrapStore.put(block.hash, block.block);
+            lastBlock = block;
+        }
+
+        lastBlock = new HashedCertifiedBlock(
+                CertifiedBlock.newBuilder()
+                              .setBlock(Block.newBuilder()
+                                             .setHeader(Header.newBuilder()
+                                                              .setHeight(lastBlock.height() + 1)
+                                                              .setLastCheckpoint(genesis.height())
+                                                              .setLastReconfig(lastView.height())
+                                                              .setPrevious(lastBlock.hash.toByteString()))
+                                             .setBody(Body.newBuilder().setType(BodyType.RECONFIGURE))
+                                             .build())
+                              .build());
+        bootstrapStore.put(lastBlock.hash, lastBlock.block);
+        lastView = lastBlock;
+
+        for (int i = 0; i < 10; i++) {
+            HashedCertifiedBlock block = new HashedCertifiedBlock(
+                    CertifiedBlock.newBuilder()
+                                  .setBlock(Block.newBuilder()
+                                                 .setHeader(Header.newBuilder()
+                                                                  .setHeight(lastBlock.height() + 1)
+                                                                  .setLastCheckpoint(genesis.height())
+                                                                  .setLastReconfig(lastView.height())
+                                                                  .setPrevious(lastBlock.hash.toByteString()))
+                                                 .setBody(Body.newBuilder().setType(BodyType.USER))
+                                                 .build())
+                                  .build());
+            bootstrapStore.put(block.hash, block.block);
+            lastBlock = block;
+        }
+        lastBlock = new HashedCertifiedBlock(
+                CertifiedBlock.newBuilder()
                               .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
                                       + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.CHECKPOINT, CollaboratorContext.checkpoint(lastBlock.height() + 1, null, 0)), lastView))
                               .build());
