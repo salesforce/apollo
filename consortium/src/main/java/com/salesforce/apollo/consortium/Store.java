@@ -25,15 +25,14 @@ import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.consortium.proto.Block;
+import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.Certifications;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
-import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.protocols.BloomFilter;
@@ -108,24 +107,25 @@ public class Store {
         return blocks.store.openMap(String.format(CHECKPOINT_TEMPLATE, blockHeight));
     }
 
-    public void fetchBlocks(BloomFilter<Long> blocksBff, CheckpointSegments.Builder replication,
-                            int maxCheckpointBlocks, long checkpoint) throws IllegalStateException {
+    public void fetchBlocks(BloomFilter<Long> blocksBff, Blocks.Builder replication, int maxCheckpointBlocks,
+                            long checkpoint) throws IllegalStateException {
         StreamSupport.stream(((Iterable<Long>) () -> blocksFrom(checkpoint)).spliterator(), false)
-                     .collect(new ReservoirSampler<Long>(-1, maxCheckpointBlocks, Utils.bitStreamGenerator()))
+                     .collect(new ReservoirSampler<Long>(-1, maxCheckpointBlocks, Utils.bitStreamEntropy()))
                      .stream()
                      .filter(s -> !blocksBff.contains(s))
-                     .map(height -> getBlockBits(height))
-                     .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
+                     .map(height -> getCertifiedBlock(height))
+                     .forEach(block -> replication.addBlocks(block));
     }
 
-    public void fetchViewChain(BloomFilter<Long> chainBff, CheckpointSegments.Builder replication, int maxChainCount,
+    public void fetchViewChain(BloomFilter<Long> chainBff, Blocks.Builder replication, int maxChainCount,
                                long incompleteStart, long target) throws IllegalStateException {
         StreamSupport.stream(((Iterable<Long>) () -> viewChainFrom(incompleteStart, target)).spliterator(), false)
-                     .collect(new ReservoirSampler<Long>(-1, maxChainCount, Utils.bitStreamGenerator()))
+                     .collect(new ReservoirSampler<Long>(-1, maxChainCount, Utils.bitStreamEntropy()))
                      .stream()
                      .filter(s -> !chainBff.contains(s))
-                     .map(height -> getBlockBits(height))
-                     .forEach(block -> replication.addBlocks(ByteString.copyFrom(block)));
+                     .peek(l -> System.out.println("processing: " + l))
+                     .map(height -> getCertifiedBlock(height))
+                     .forEach(block -> replication.addBlocks(block));
     }
 
     public void gcFrom(long lastCheckpoint) {
@@ -175,7 +175,7 @@ public class Store {
             if (next == 0) {
                 break;
             }
-            next = viewChain.get(height);
+            next = viewChain.get(next);
         }
         return last;
     }
@@ -210,17 +210,15 @@ public class Store {
     }
 
     public Iterator<Long> viewChainFrom(long from, long to) {
-        return new Cursor<Long, Long>(viewChain.getRootPage(), from, to);
+        return new Cursor<Long, Long>(viewChain.getRootPage(), to, from);
     }
 
     private boolean isCheckpoint(long test) {
-        // TODO Auto-generated method stub
-        return false;
+        return checkpoints.containsKey(test);
     }
 
     private boolean isReconfigure(long next) {
-        // TODO Auto-generated method stub
-        return false;
+        return viewChain.containsKey(next);
     }
 
     private void put(HashKey h, Block block) {

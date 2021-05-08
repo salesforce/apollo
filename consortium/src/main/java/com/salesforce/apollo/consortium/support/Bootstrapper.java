@@ -283,9 +283,8 @@ public class Bootstrapper {
                   .map(cb -> new HashedCertifiedBlock(cb))
                   .forEach(reconfigure -> {
                       store.put(reconfigure.hash, reconfigure.block);
-                  });
-        long from = store.lastViewChainFrom(checkpointView.height());
-        scheduleCompletion(from, 0);
+                  }); 
+        scheduleCompletion(checkpointView.height(), 0);
     }
 
     private void countdown(Iterator<Member> graphCut, long from, long target) {

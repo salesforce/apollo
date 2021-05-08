@@ -547,9 +547,6 @@ public class Consortium {
         }
         CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
 
-        store.fetchBlocks(BloomFilter.from(request.getCheckpointSegments()), replication, params.maxCheckpointBlocks,
-                          state.checkpoint.getCheckpoint());
-
         return replication.addAllSegments(state.fetchSegments(BloomFilter.from(request.getCheckpointSegments()),
                                                               params.maxCheckpointSegments, Utils.bitStreamEntropy()))
                           .build();

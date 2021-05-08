@@ -46,6 +46,7 @@ import com.salesforce.apollo.consortium.support.Bootstrapper;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Pair;
 import com.salesforce.apollo.protocols.Utils;
@@ -123,7 +124,37 @@ public class BootstrapperTest {
 
         lastView = lastBlock;
 
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < 10; i++) {
+            HashedCertifiedBlock block = new HashedCertifiedBlock(
+                    CertifiedBlock.newBuilder()
+                                  .setBlock(Block.newBuilder()
+                                                 .setHeader(Header.newBuilder()
+                                                                  .setHeight(lastBlock.height() + 1)
+                                                                  .setLastCheckpoint(genesis.height())
+                                                                  .setLastReconfig(lastView.height())
+                                                                  .setPrevious(lastBlock.hash.toByteString()))
+                                                 .setBody(Body.newBuilder().setType(BodyType.USER))
+                                                 .build())
+                                  .build());
+            bootstrapStore.put(block.hash, block.block);
+            lastBlock = block;
+        }
+
+        lastBlock = new HashedCertifiedBlock(
+                CertifiedBlock.newBuilder()
+                              .setBlock(Block.newBuilder()
+                                             .setHeader(Header.newBuilder()
+                                                              .setHeight(lastBlock.height() + 1)
+                                                              .setLastCheckpoint(genesis.height())
+                                                              .setLastReconfig(lastView.height())
+                                                              .setPrevious(lastBlock.hash.toByteString()))
+                                             .setBody(Body.newBuilder().setType(BodyType.RECONFIGURE))
+                                             .build())
+                              .build());
+        bootstrapStore.put(lastBlock.hash, lastBlock.block);
+        lastView = lastBlock;
+
+        for (int i = 0; i < 10; i++) {
             HashedCertifiedBlock block = new HashedCertifiedBlock(
                     CertifiedBlock.newBuilder()
                                   .setBlock(Block.newBuilder()
@@ -235,8 +266,10 @@ public class BootstrapperTest {
             public ListenableFuture<Blocks> answer(InvocationOnMock invocation) throws Throwable {
                 SettableFuture<Blocks> futureSailor = SettableFuture.create();
                 BlockReplication rep = invocation.getArgumentAt(0, BlockReplication.class);
-                Blocks blocks = Blocks.newBuilder().build();
-                futureSailor.set(blocks);
+                BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+                Blocks.Builder blocks = Blocks.newBuilder();
+                bootstrapStore.fetchViewChain(bff, blocks, 1, rep.getFrom(), rep.getTo());
+                futureSailor.set(blocks.build());
                 return futureSailor;
             }
         });
