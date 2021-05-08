@@ -17,9 +17,9 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.stream.StreamSupport;
 
-import org.h2.mvstore.Cursor;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
@@ -123,7 +123,6 @@ public class Store {
                      .collect(new ReservoirSampler<Long>(-1, maxChainCount, Utils.bitStreamEntropy()))
                      .stream()
                      .filter(s -> !chainBff.contains(s))
-                     .peek(l -> System.out.println("processing: " + l))
                      .map(height -> getCertifiedBlock(height))
                      .forEach(block -> replication.addBlocks(block));
     }
@@ -171,6 +170,9 @@ public class Store {
         long last = height;
         Long next = viewChain.get(height);
         while (next != null && next >= 0) {
+            if (!viewChain.containsKey(next)) {
+                return last;
+            }
             last = next;
             if (next == 0) {
                 break;
@@ -210,7 +212,39 @@ public class Store {
     }
 
     public Iterator<Long> viewChainFrom(long from, long to) {
-        return new Cursor<Long, Long>(viewChain.getRootPage(), to, from);
+        return new Iterator<Long>() {
+            Long next;
+            {
+                next = viewChain.get(from);
+                if (!viewChain.containsKey(next)) {
+                    next = null;
+                }
+            }
+
+            @Override
+            public boolean hasNext() {
+                return next != null;
+            }
+
+            @Override
+            public Long next() {
+                if (next == null) {
+                    throw new NoSuchElementException();
+                }
+                Long returned = next;
+                if (next == 0) {
+                    next = null;
+                } else if (next >= to) {
+                    next = viewChain.get(next);
+                    if (!viewChain.containsKey(next)) {
+                        next = null;
+                    }
+                } else {
+                    next = null;
+                }
+                return returned;
+            }
+        };
     }
 
     private boolean isCheckpoint(long test) {

@@ -142,7 +142,10 @@ public class Bootstrapper {
             int seed = Utils.bitStreamEntropy().nextInt();
             BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, maxViewBlocks, fpr);
             from = store.lastViewChainFrom(from);
-            store.viewChainFrom(from, to).forEachRemaining(h -> blocksBff.add(h));
+            store.viewChainFrom(from, to).forEachRemaining(h -> {
+                System.out.println("Adding: " + h);
+                blocksBff.add(h);
+            });
             BlockReplication replication = BlockReplication.newBuilder()
                                                            .setContext(context.getId().toByteString())
                                                            .setBlocksBff(blocksBff.toBff().toByteString())
@@ -206,8 +209,6 @@ public class Bootstrapper {
             }
             long checkpointViewHeight = CollaboratorContext.height(e.getValue().getCheckpointView().getBlock());
             long recordedCheckpointViewHeight = e.getValue().getCheckpoint().getBlock().getHeader().getLastReconfig();
-            log.info("checkpoint view height: {} recorded: {} on: {}", checkpointViewHeight,
-                     recordedCheckpointViewHeight, member);
             return checkpointViewHeight == recordedCheckpointViewHeight;
         })
                                            .peek(e -> tally.add(new HashedCertifiedBlock(e.getValue().getGenesis())))
@@ -283,7 +284,7 @@ public class Bootstrapper {
                   .map(cb -> new HashedCertifiedBlock(cb))
                   .forEach(reconfigure -> {
                       store.put(reconfigure.hash, reconfigure.block);
-                  }); 
+                  });
         scheduleCompletion(checkpointView.height(), 0);
     }
 
