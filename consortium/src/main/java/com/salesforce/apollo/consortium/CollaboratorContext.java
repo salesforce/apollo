@@ -87,27 +87,37 @@ public class CollaboratorContext {
 
     private static final Logger log = LoggerFactory.getLogger(CollaboratorContext.class);
 
+    public static Body body(BodyType type, Message contents) {
+        return Body.newBuilder().setType(type).setContents(Consortium.compress(contents.toByteString())).build();
+    }
+
     public static Checkpoint checkpoint(long currentHeight, File state, int blockSize) {
-        HashKey stateHash;
-        try (FileInputStream fis = new FileInputStream(state)) {
-            stateHash = new HashKey(Conversion.hashOf(fis));
-        } catch (IOException e) {
-            log.error("Invalid checkpoint!", e);
-            return null;
+        HashKey stateHash = HashKey.ORIGIN;
+        long length = 0;
+        if (state != null) {
+            try (FileInputStream fis = new FileInputStream(state)) {
+                stateHash = new HashKey(Conversion.hashOf(fis));
+            } catch (IOException e) {
+                log.error("Invalid checkpoint!", e);
+                return null;
+            }
+            length = state.length();
         }
         Checkpoint.Builder builder = Checkpoint.newBuilder()
                                                .setCheckpoint(currentHeight)
-                                               .setByteSize(state.length())
+                                               .setByteSize(length)
                                                .setSegmentSize(blockSize)
                                                .setStateHash(stateHash.toByteString());
-        byte[] buff = new byte[blockSize];
-        try (FileInputStream fis = new FileInputStream(state)) {
-            for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
-                builder.addSegments(ByteString.copyFrom(Conversion.hashOf(buff, read)));
+        if (state != null) {
+            byte[] buff = new byte[blockSize];
+            try (FileInputStream fis = new FileInputStream(state)) {
+                for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
+                    builder.addSegments(ByteString.copyFrom(Conversion.hashOf(buff, read)));
+                }
+            } catch (IOException e) {
+                log.error("Invalid checkpoint!", e);
+                return null;
             }
-        } catch (IOException e) {
-            log.error("Invalid checkpoint!", e);
-            return null;
         }
         return builder.build();
     }
@@ -131,6 +141,27 @@ public class CollaboratorContext {
                      .stream()
                      .sorted(Map.Entry.comparingByKey())
                      .map(Map.Entry::getValue);
+    }
+
+    public static Block generateBlock(HashedCertifiedBlock checkpoint, final long height, byte[] previous, Body body,
+                                      HashedCertifiedBlock viewChange) {
+        Instant time = Instant.now();
+        Timestamp timestamp = Timestamp.newBuilder().setSeconds(time.getEpochSecond()).setNanos(time.getNano()).build();
+        byte[] nonce = new byte[32];
+        Utils.secureEntropy().nextBytes(nonce);
+        Block block = Block.newBuilder()
+                           .setHeader(Header.newBuilder()
+                                            .setTimestamp(timestamp)
+                                            .setNonce(ByteString.copyFrom(nonce))
+                                            .setLastCheckpoint(checkpoint == null ? 0 : checkpoint.height())
+                                            .setLastReconfig(viewChange == null ? 0 : viewChange.height())
+                                            .setPrevious(ByteString.copyFrom(previous))
+                                            .setHeight(height)
+                                            .setBodyHash(ByteString.copyFrom(Conversion.hashOf(body.toByteString())))
+                                            .build())
+                           .setBody(body)
+                           .build();
+        return block;
     }
 
     public static Genesis genesisBody(Block block) {
@@ -188,8 +219,10 @@ public class CollaboratorContext {
     final Consortium                           consortium;
     private final AtomicLong                   currentConsensus = new AtomicLong(-1);
     private final AtomicReference<HashedBlock> lastBlock        = new AtomicReference<>();
-    private final ProcessedBuffer              processed;
-    private final Regency                      regency          = new Regency();
+
+    private final ProcessedBuffer processed;
+
+    private final Regency regency = new Regency();
 
     private final Map<Timers, Timer> timers = new ConcurrentHashMap<>();
 
@@ -591,10 +624,6 @@ public class CollaboratorContext {
         });
     }
 
-    Body body(BodyType type, Message contents) {
-        return Body.newBuilder().setType(type).setContents(Consortium.compress(contents.toByteString())).build();
-    }
-
     void clear() {
         regency.currentRegent(-1);
         regency.nextRegent(-2);
@@ -902,29 +931,6 @@ public class CollaboratorContext {
         });
     }
 
-    private Block generate(byte[] previous, final long height, Body body) {
-        Instant time = Instant.now();
-        Timestamp timestamp = Timestamp.newBuilder().setSeconds(time.getEpochSecond()).setNanos(time.getNano()).build();
-        HashedCertifiedBlock cp = consortium.getLastCheckpointBlock();
-        HashedCertifiedBlock vc = consortium.getLastViewChangeBlock();
-        byte[] nonce = new byte[32];
-        Utils.secureEntropy().nextBytes(nonce);
-        Block block = Block.newBuilder()
-                           .setHeader(Header.newBuilder()
-                                            .setTimestamp(timestamp)
-                                            .setNonce(ByteString.copyFrom(nonce))
-                                            .setLastCheckpoint(cp == null ? -1
-                                                    : cp.height())
-                                            .setLastReconfig(vc == null ? -1 : vc.height())
-                                            .setPrevious(ByteString.copyFrom(previous))
-                                            .setHeight(height)
-                                            .setBodyHash(ByteString.copyFrom(Conversion.hashOf(body.toByteString())))
-                                            .build())
-                           .setBody(body)
-                           .build();
-        return block;
-    }
-
     private void generateCheckpointBlock(long currentHeight) {
         final long thisHeight = lastBlock() + 1;
 
@@ -954,7 +960,8 @@ public class CollaboratorContext {
             consortium.getTransitions().fail();
             return;
         }
-        Block block = generate(previous, thisHeight, body(BodyType.CHECKPOINT, checkpoint));
+        Block block = generateBlock(consortium.getLastCheckpointBlock(), thisHeight, previous,
+                                    body(BodyType.CHECKPOINT, checkpoint), consortium.getLastViewChangeBlock());
 
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
 
@@ -1022,12 +1029,14 @@ public class CollaboratorContext {
         }
         toOrder.values().forEach(e -> e.cancel());
         toOrder.clear();
-        Block block = generate(consortium.getParams().genesisViewId.bytes(), 0,
-                               body(BodyType.GENESIS,
-                                    Genesis.newBuilder()
-                                           .setGenesisData(Any.pack(consortium.getParams().genesisData))
-                                           .setInitialView(genesisView)
-                                           .build()));
+        Block block = generateBlock(consortium.getLastCheckpointBlock(), (long) 0,
+                                    consortium.getParams().genesisViewId.bytes(),
+                                    body(BodyType.GENESIS,
+                                         Genesis.newBuilder()
+                                                .setGenesisData(Any.pack(consortium.getParams().genesisData))
+                                                .setInitialView(genesisView)
+                                                .build()),
+                                    consortium.getLastViewChangeBlock());
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
         log.info("Genesis block: {} generated on {}", hash, consortium.getMember());
         Builder cb = workingBlocks.get(hash);
@@ -1101,7 +1110,8 @@ public class CollaboratorContext {
         log.debug("Generating next block on: {} height: {} transactions: {}", consortium.getMember(), thisHeight,
                   processed.size());
 
-        Block block = generate(curr, thisHeight, body(BodyType.USER, user.build()));
+        Block block = generateBlock(consortium.getLastCheckpointBlock(), thisHeight, curr,
+                                    body(BodyType.USER, user.build()), consortium.getLastViewChangeBlock());
         HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
 
         CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()

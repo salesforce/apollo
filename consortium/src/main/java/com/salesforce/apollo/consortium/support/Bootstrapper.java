@@ -16,7 +16,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -40,6 +39,7 @@ import com.salesforce.apollo.consortium.comms.BootstrapClient;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.BloomFilter;
+import com.salesforce.apollo.protocols.CountdownAction;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Pair;
 import com.salesforce.apollo.protocols.Utils;
@@ -80,7 +80,8 @@ public class Bootstrapper {
     private final ScheduledExecutorService                                            scheduler;
     private final int                                                                 slice;
     private final Store                                                               store;
-    private final CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> sync = new CompletableFuture<>();
+    private final CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> sync                  = new CompletableFuture<>();
+    private final CompletableFuture<Boolean>                                          viewChainSynchronized = new CompletableFuture<>();
 
     public Bootstrapper(Block anchor, Member member, Context<Member> context,
             CommonCommunications<BootstrapClient, Service> comms, double falsePositiveRate, Store store, int slice,
@@ -96,6 +97,13 @@ public class Bootstrapper {
         this.anchor = anchor;
         this.maxBlocks = maxBlocks;
         this.maxViewBlocks = maxViewBlocks;
+        viewChainSynchronized.whenComplete((r, t) -> {
+            log.info("Viewchain complete on: {}", checkpoint.hash, member);
+            if (assembledFuture.isDone()) {
+                sync.complete(new Pair<>(genesis, checkpoint));
+                return;
+            }
+        });
     }
 
     public CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> synchronize() {
@@ -103,9 +111,19 @@ public class Bootstrapper {
         return sync;
     }
 
-    private void completeViewchain(long from, long target) {
-        if (store.lastViewChainFrom(from) == target) {
+    private void assemblyComplete() {
+        log.info("Assembled checkpoint: {} on: {}", checkpoint.hash, member);
+        if (viewChainSynchronized.isDone()) {
+            sync.complete(new Pair<>(genesis, checkpoint));
+            return;
+        }
+    }
 
+    private void completeViewchain(long from, long target) {
+        if (store.completeFrom(from)) {
+            viewChainSynchronized.complete(true);
+        } else {
+            completeViewChain(from, target);
         }
     }
 
@@ -117,6 +135,7 @@ public class Bootstrapper {
             Member m = graphCut.next();
             BootstrapClient link = comms.apply(member, m);
             if (link == null) {
+                log.info("No line for view chain completion: {} on: {}", m.getId(), member.getId());
                 continue;
             }
 
@@ -130,6 +149,9 @@ public class Bootstrapper {
                                                            .setFrom(from)
                                                            .setTo(to)
                                                            .build();
+
+            log.info("Attempting view chain completion ({} to {}) with: {} on: {}", from, to, m.getId(),
+                     member.getId());
             try {
                 ListenableFuture<Blocks> future = link.fetchViewChain(replication);
                 future.addListener(completeViewChain(m, graphCut, future, from, to), ForkJoinPool.commonPool());
@@ -142,7 +164,9 @@ public class Bootstrapper {
 
     private void completeViewChain(long from, long to) {
         List<Member> sample = context.successors(randomCut());
-        AtomicInteger countdown = new AtomicInteger(sample.size());
+        CountdownAction countdown = new CountdownAction(() -> {
+            completeViewchain(from, to);
+        }, sample.size());
         completeViewChain(sample.iterator(), from, to);
     }
 
@@ -154,6 +178,7 @@ public class Bootstrapper {
             }
             try {
                 Blocks blocks = future.get();
+                log.info("View chain completion ({} to {}) from: {} on: {}", from, to, m.getId(), member.getId());
                 blocks.getBlocksList()
                       .stream()
                       .map(cb -> new HashedCertifiedBlock(cb))
@@ -168,11 +193,9 @@ public class Bootstrapper {
     }
 
     private void computeGenesis(Map<HashKey, Initial> votes) {
-        final HashedCertifiedBlock established = genesis;
-        if (genesis != null) {
-            return;
-        }
 
+        log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(), context.toleranceLevel() + 1,
+                 member);
         Multiset<HashedCertifiedBlock> tally = HashMultiset.create();
         Map<HashKey, Initial> valid = votes.entrySet().stream().filter(e -> e.getValue().hasGenesis()).filter(e -> {
             if (!e.getValue().hasCheckpoint()) {
@@ -181,11 +204,11 @@ public class Bootstrapper {
             if (!e.getValue().hasCheckpointView()) {
                 return false;
             }
-            return CollaboratorContext.height(e.getValue().getCheckpointView().getBlock()) == e.getValue()
-                                                                                               .getCheckpoint()
-                                                                                               .getBlock()
-                                                                                               .getHeader()
-                                                                                               .getLastReconfig();
+            long checkpointViewHeight = CollaboratorContext.height(e.getValue().getCheckpointView().getBlock());
+            long recordedCheckpointViewHeight = e.getValue().getCheckpoint().getBlock().getHeader().getLastReconfig();
+            log.info("checkpoint view height: {} recorded: {} on: {}", checkpointViewHeight,
+                     recordedCheckpointViewHeight, member);
+            return checkpointViewHeight == recordedCheckpointViewHeight;
         })
                                            .peek(e -> tally.add(new HashedCertifiedBlock(e.getValue().getGenesis())))
                                            .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
@@ -193,6 +216,7 @@ public class Bootstrapper {
         Pair<HashedCertifiedBlock, Integer> winner = null;
         int threshold = context.toleranceLevel();
 
+        log.info("Tally: {} required: {} on: {}", tally, context.toleranceLevel() + 1, member);
         for (HashedCertifiedBlock cb : tally) {
             int count = tally.count(cb);
             if (count > threshold) {
@@ -203,11 +227,13 @@ public class Bootstrapper {
         }
 
         if (winner == null) {
+            log.info("No winner on: {}", member);
             scheduleSample();
             return;
         }
 
         genesis = winner.a;
+        log.info("Winner: {} on: {}", genesis.hash, member);
         CertifiedBlock.getDefaultInstance();
 
         // get the most recent checkpoint.
@@ -233,6 +259,7 @@ public class Bootstrapper {
 
         checkpointView = new HashedCertifiedBlock(mostRecent.getCheckpointView());
         store.put(checkpointView.hash, checkpointView.block);
+        log.info("Checkpoint: {} on: {}", checkpoint.hash, member);
 
         CheckpointAssembler assembler = new CheckpointAssembler(
                 CollaboratorContext.checkpointBody(checkpoint.block.getBlock()), member, store, comms, context,
@@ -240,6 +267,14 @@ public class Bootstrapper {
 
         // assemble the checkpoint
         assembledFuture = assembler.assemble(scheduler, duration);
+        assembledFuture.whenComplete((c, t) -> {
+            if (t != null) {
+                log.error("Unable to assemble checkpoint: {} on: {}", checkpoint.hash, member);
+                sync.completeExceptionally(t);
+            } else {
+                assemblyComplete();
+            }
+        });
 
         // reconstruct chain to genesis
         mostRecent.getViewChainList()
@@ -261,86 +296,87 @@ public class Bootstrapper {
         }
     }
 
-    private void countdown(Iterator<Member> graphCut, Map<HashKey, Initial> votes, AtomicInteger countdown) {
-        if (countdown.decrementAndGet() == 0) {
-            computeGenesis(votes);
-        } else {
-            initialize(graphCut, votes, countdown);
-        }
-    }
-
-    private void initialize(Iterator<Member> graphCut, Map<HashKey, Initial> votes, AtomicInteger countdown) {
+    private void initialize(List<Member> graphCut, Map<HashKey, Initial> votes, CountdownAction countdown) {
         if (sync.isDone()) {
             return;
         }
+        Member m = graphCut.get(0);
+        graphCut = graphCut.subList(1, graphCut.size());
 
-        // No consensus, recut and retry
-        if (!graphCut.hasNext() && !sync.isDone()) {
-            scheduleSample();
+        BootstrapClient link = comms.apply(member, m);
+        if (link == null) {
+            log.info("No link for {} on: {}", m, member);
+            countdown.countdown();
             return;
         }
-
-        for (int i = 0; i < slice && graphCut.hasNext(); i++) {
-            if (sync.isDone()) {
-                return;
-            }
-            Member m = graphCut.next();
-            BootstrapClient link = comms.apply(member, m);
-            if (link == null) {
-                countdown(graphCut, votes, countdown);
-                continue;
-            }
-            Synchronize s = Synchronize.newBuilder()
-                                       .setContext(context.getId().toByteString())
-                                       .setHeight(anchor.getHeader().getHeight())
-                                       .build();
-            try {
-                ListenableFuture<Initial> future = link.sync(s);
-                future.addListener(initialize(m, graphCut, future, votes, countdown), ForkJoinPool.commonPool());
-            } finally {
-                link.release();
-            }
+        Synchronize s = Synchronize.newBuilder()
+                                   .setContext(context.getId().toByteString())
+                                   .setHeight(anchor.getHeader().getHeight())
+                                   .build();
+        log.info("Attempting synchronization with: {} on: {}", m, member);
+        try {
+            ListenableFuture<Initial> future = link.sync(s);
+            future.addListener(initialize(m, graphCut, future, votes, countdown), ForkJoinPool.commonPool());
+        } finally {
+            link.release();
         }
     }
 
-    private Runnable initialize(Member m, Iterator<Member> graphCut, ListenableFuture<Initial> future,
-                                Map<HashKey, Initial> votes, AtomicInteger countdown) {
+    private Runnable initialize(Member m, List<Member> graphCut, ListenableFuture<Initial> future,
+                                Map<HashKey, Initial> votes, CountdownAction countdown) {
         return () -> {
             if (sync.isDone()) {
                 return;
             }
-            final HashedCertifiedBlock discovered = genesis;
-            if (discovered != null) {
-                return;
-            }
+
             try {
                 votes.put(m.getId(), future.get());
+                log.info("Synchronization vote from: {} recorded on: {}", m, member);
             } catch (InterruptedException e) {
                 log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
             } catch (ExecutionException e) {
                 log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
             }
-            countdown(graphCut, votes, countdown);
+            if (!countdown.countdown()) {
+                initialize(graphCut, votes, countdown);
+            }
         };
     }
 
     private void sample() {
         List<Member> sample = context.successors(randomCut());
-        AtomicInteger countdown = new AtomicInteger(sample.size());
-        initialize(sample.iterator(), new HashMap<>(), countdown);
+        HashMap<HashKey, Initial> votes = new HashMap<>();
+        CountdownAction countdown = new CountdownAction(() -> computeGenesis(votes), sample.size());
+        initialize(sample, votes, countdown);
     }
 
     private void scheduleCompletion(long from, long to) {
         if (sync.isDone()) {
             return;
         }
-        scheduler.schedule(() -> completeViewChain(from, to), duration.toMillis(), TimeUnit.MILLISECONDS);
+        log.info("Scheduling view chain completion ({} to {}) duration: {} millis on: {}", from, to,
+                 duration.toMillis(), member);
+        scheduler.schedule(() -> {
+            try {
+                completeViewChain(from, to);
+            } catch (Throwable e) {
+                log.error("Cannot execute completeViewChain on: {}", member);
+                sync.completeExceptionally(e);
+            }
+        }, duration.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private void scheduleSample() {
         if (sync.isDone()) {
             return;
         }
-        scheduler.schedule(() -> sample(), duration.toMillis(), TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> {
+            try {
+                sample();
+            } catch (Throwable e) {
+                log.error("Unable to sample sync state on: {}", member, e);
+                sync.completeExceptionally(e);
+            }
+        }, duration.toMillis(), TimeUnit.MILLISECONDS);
     }
 }

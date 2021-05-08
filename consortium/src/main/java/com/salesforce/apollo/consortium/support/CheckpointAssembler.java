@@ -66,7 +66,13 @@ public class CheckpointAssembler {
     }
 
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
-        gossip(scheduler, duration);
+        log.info("Scheduling assembly of checkpoint: {} segments: {} period: {} millis on: {}",
+                 checkpoint.getCheckpoint(), checkpoint.getSegmentsCount(), duration.toMillis(), member);
+        if (checkpoint.getSegmentsCount() == 0) {
+            assembled.complete(new CheckpointState(checkpoint, state));
+        } else {
+            scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
+        }
         return assembled;
     }
 
@@ -117,25 +123,31 @@ public class CheckpointAssembler {
         }
         Runnable s = () -> scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),
                                               TimeUnit.MILLISECONDS);
-        List<Member> sample = context.sample(1, Utils.bitStreamEntropy(), member.getId());
-        if (sample.size() < 1) {
-            s.run();
-        }
-        CheckpointReplication request = buildRequest();
-        if (request == null) {
-            s.run();
-            return;
-        }
-        Member m = sample.get(0);
-        BootstrapClient link = comms.apply(m, member);
-        if (link == null) {
-            log.trace("No link for: {} on: {}", m, member);
-            s.run();
-            return;
-        }
+        try {
+            List<Member> sample = context.sample(1, Utils.bitStreamEntropy(), member.getId());
+            if (sample.size() < 1) {
+                log.trace("No member sample for checkpoint assembly on: {}", member);
+                s.run();
+            }
+            CheckpointReplication request = buildRequest();
+            if (request == null) {
+                log.trace("No member sample for checkpoint assembly on: {}", member);
+                s.run();
+                return;
+            }
+            Member m = sample.get(0);
+            BootstrapClient link = comms.apply(m, member);
+            if (link == null) {
+                log.trace("No link for: {} on: {}", m, member);
+                s.run();
+                return;
+            }
 
-        ListenableFuture<CheckpointSegments> fetched = link.fetch(request);
-        fetched.addListener(gossip(link, fetched, s), ForkJoinPool.commonPool());
+            ListenableFuture<CheckpointSegments> fetched = link.fetch(request);
+            fetched.addListener(gossip(link, fetched, s), ForkJoinPool.commonPool());
+        } catch (Throwable e) {
+            log.error("Error in scheduled checkpoint assembly gossip on: {}", member, e);
+        }
     }
 
     private boolean process(CheckpointSegments segments) {

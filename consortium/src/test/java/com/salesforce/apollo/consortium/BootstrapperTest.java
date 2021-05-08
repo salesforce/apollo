@@ -141,14 +141,8 @@ public class BootstrapperTest {
 
         lastBlock = new HashedCertifiedBlock(
                 CertifiedBlock.newBuilder()
-                              .setBlock(Block.newBuilder()
-                                             .setHeader(Header.newBuilder()
-                                                              .setHeight(lastBlock.height() + 1)
-                                                              .setLastCheckpoint(genesis.height())
-                                                              .setLastReconfig(lastView.height())
-                                                              .setPrevious(lastBlock.hash.toByteString()))
-                                             .setBody(Body.newBuilder().setType(BodyType.CHECKPOINT))
-                                             .build())
+                              .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
+                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.CHECKPOINT, CollaboratorContext.checkpoint(lastBlock.height() + 1, null, 0)), lastView))
                               .build());
         bootstrapStore.put(lastBlock.hash, lastBlock.block);
 
@@ -182,8 +176,6 @@ public class BootstrapperTest {
                                              .build())
                               .build());
         bootstrapStore.put(lastBlock.hash, lastBlock.block);
-
-        lastView = lastBlock;
 
         for (int i = 0; i < 20; i++) {
             HashedCertifiedBlock block = new HashedCertifiedBlock(
@@ -268,6 +260,6 @@ public class BootstrapperTest {
         Bootstrapper boot = new Bootstrapper(anchor.block.getBlock(), member, context, comms, 0.15, store, 5, scheduler,
                 100, duration, 100);
         CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> syncFuture = boot.synchronize();
-        syncFuture.get(1, TimeUnit.MINUTES);
+        syncFuture.get(10, TimeUnit.SECONDS);
     }
 }

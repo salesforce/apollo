@@ -96,6 +96,10 @@ public class Store {
         }
     }
 
+    public boolean completeFrom(long from) {
+        return lastViewChainFrom(from) == 0;
+    }
+
     public boolean containsBlock(long l) {
         return blocks.containsKey(l);
     }
@@ -125,7 +129,13 @@ public class Store {
     }
 
     public void gcFrom(long lastCheckpoint) {
+        Iterator<Long> gcd = blocks.keyIterator(lastCheckpoint + 1);
+        while (gcd.hasNext()) {
+            long test = gcd.next();
+            if (test != 0 && !isReconfigure(test) && !isCheckpoint(test)) {
 
+            }
+        }
     }
 
     public HashedBlock getBlock(long height) {
@@ -162,6 +172,9 @@ public class Store {
         Long next = viewChain.get(height);
         while (next != null && next >= 0) {
             last = next;
+            if (next == 0) {
+                break;
+            }
             next = viewChain.get(height);
         }
         return last;
@@ -198,6 +211,16 @@ public class Store {
 
     public Iterator<Long> viewChainFrom(long from, long to) {
         return new Cursor<Long, Long>(viewChain.getRootPage(), from, to);
+    }
+
+    private boolean isCheckpoint(long test) {
+        // TODO Auto-generated method stub
+        return false;
+    }
+
+    private boolean isReconfigure(long next) {
+        // TODO Auto-generated method stub
+        return false;
     }
 
     private void put(HashKey h, Block block) {
