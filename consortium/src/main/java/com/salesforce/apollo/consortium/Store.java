@@ -34,10 +34,8 @@ import com.salesfoce.apollo.consortium.proto.Certifications;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesforce.apollo.consortium.support.HashedBlock;
-import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2
@@ -78,8 +76,51 @@ public class Store {
         return blocks.get(height);
     }
 
-    public Iterator<Long> blocksFrom(long from) {
-        return blocks.keyIterator(from);
+    public Iterator<Long> blocksFrom(long from, long to, int max) {
+        return new Iterator<Long>() {
+            int  remaining = max;
+            Long next;
+            {
+                next = from;
+                while (!blocks.containsKey(next) && remaining > 0 && next >= to) {
+                    next--;
+                    remaining--;
+                }
+                if (next < to || !blocks.containsKey(next)) {
+                    next = null;
+                }
+            }
+
+            @Override
+            public boolean hasNext() {
+                return next != null;
+            }
+
+            @Override
+            public Long next() {
+                if (next == null) {
+                    throw new NoSuchElementException();
+                }
+                remaining--;
+                Long returned = next;
+
+                if (next == 0) {
+                    next = null;
+                } else if (next >= to && remaining > 0) {
+                    next--;
+                    while (!blocks.containsKey(next) && remaining > 0 && next >= to) {
+                        next--;
+                        remaining--;
+                    }
+                    if (next < to || !blocks.containsKey(next)) {
+                        next = null;
+                    }
+                } else {
+                    next = null;
+                }
+                return returned;
+            }
+        };
     }
 
     public List<Certification> certifications(long height) {
@@ -107,11 +148,9 @@ public class Store {
         return blocks.store.openMap(String.format(CHECKPOINT_TEMPLATE, blockHeight));
     }
 
-    public void fetchBlocks(BloomFilter<Long> blocksBff, Blocks.Builder replication, int maxCheckpointBlocks,
-                            long checkpoint) throws IllegalStateException {
-        StreamSupport.stream(((Iterable<Long>) () -> blocksFrom(checkpoint)).spliterator(), false)
-                     .collect(new ReservoirSampler<Long>(-1, maxCheckpointBlocks, Utils.bitStreamEntropy()))
-                     .stream()
+    public void fetchBlocks(BloomFilter<Long> blocksBff, Blocks.Builder replication, int max, long from,
+                            long to) throws IllegalStateException {
+        StreamSupport.stream(((Iterable<Long>) () -> blocksFrom(from, to, max)).spliterator(), false)
                      .filter(s -> !blocksBff.contains(s))
                      .map(height -> getCertifiedBlock(height))
                      .forEach(block -> replication.addBlocks(block));
@@ -120,11 +159,21 @@ public class Store {
     public void fetchViewChain(BloomFilter<Long> chainBff, Blocks.Builder replication, int maxChainCount,
                                long incompleteStart, long target) throws IllegalStateException {
         StreamSupport.stream(((Iterable<Long>) () -> viewChainFrom(incompleteStart, target)).spliterator(), false)
-                     .collect(new ReservoirSampler<Long>(-1, maxChainCount, Utils.bitStreamEntropy()))
-                     .stream()
                      .filter(s -> !chainBff.contains(s))
                      .map(height -> getCertifiedBlock(height))
                      .forEach(block -> replication.addBlocks(block));
+    }
+
+    public long firstGap(long from, long to) {
+        long current = from;
+        while (current > to) {
+            if (blocks.containsKey(current)) {
+                current--;
+            } else {
+                break;
+            }
+        }
+        return current;
     }
 
     public void gcFrom(long lastCheckpoint) {
@@ -265,5 +314,6 @@ public class Store {
         if (type == BodyType.RECONFIGURE || type == BodyType.GENESIS) {
             viewChain.put(block.getHeader().getHeight(), block.getHeader().getLastReconfig());
         }
+        log.trace("insert: {}:{}", height, h);
     }
 }

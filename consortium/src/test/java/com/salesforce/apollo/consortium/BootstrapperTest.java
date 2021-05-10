@@ -33,7 +33,6 @@ import com.salesfoce.apollo.consortium.proto.BlockReplication;
 import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.Initial;
 import com.salesfoce.apollo.consortium.proto.Initial.Builder;
-import com.salesfoce.apollo.consortium.proto.Synchronize;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
@@ -63,7 +62,6 @@ public class BootstrapperTest {
                          .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
-    @SuppressWarnings("unused")
     @Test
     public void smoke() throws Exception {
         Context<Member> context = new Context<>(HashKey.ORIGIN, 3);
@@ -105,7 +103,6 @@ public class BootstrapperTest {
             @Override
             public ListenableFuture<Initial> answer(InvocationOnMock invocation) throws Throwable {
                 SettableFuture<Initial> futureSailor = SettableFuture.create();
-                Synchronize rep = invocation.getArgumentAt(0, Synchronize.class);
                 Builder initial = Initial.newBuilder()
                                          .setCheckpoint(testChain.getSynchronizeCheckpoint().block)
                                          .setCheckpointView(testChain.getSynchronizeView().block)
@@ -133,8 +130,10 @@ public class BootstrapperTest {
             public ListenableFuture<Blocks> answer(InvocationOnMock invocation) throws Throwable {
                 SettableFuture<Blocks> futureSailor = SettableFuture.create();
                 BlockReplication rep = invocation.getArgumentAt(0, BlockReplication.class);
-                Blocks blocks = Blocks.newBuilder().build();
-                futureSailor.set(blocks);
+                BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+                Blocks.Builder blocks = Blocks.newBuilder();
+                bootstrapStore.fetchBlocks(bff, blocks, 5, rep.getFrom(), rep.getTo());
+                futureSailor.set(blocks.build());
                 return futureSailor;
             }
         });
@@ -145,8 +144,11 @@ public class BootstrapperTest {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         Duration duration = Duration.ofMillis(100);
         Store store = new Store(new MVStore.Builder().open());
-        Bootstrapper boot = new Bootstrapper(testChain.getAnchor().block.getBlock(), member, context, comms, 0.15,
-                store, 5, scheduler, 100, duration, 100);
+        
+        
+        Bootstrapper boot = new Bootstrapper(testChain.getAnchor(), member, context, comms, 0.15, store, 5, scheduler,
+                100, duration, 100);
+        
         CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> syncFuture = boot.synchronize();
         syncFuture.get(10, TimeUnit.SECONDS);
     }

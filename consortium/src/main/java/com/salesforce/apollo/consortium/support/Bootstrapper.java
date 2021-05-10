@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.BlockReplication;
 import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.BodyType;
@@ -65,8 +64,8 @@ public class Bootstrapper {
         return new HashKey(cut);
     }
 
-    private final Block                                                               anchor;
-    private CompletableFuture<CheckpointState>                                        assembledFuture;
+    private final HashedCertifiedBlock                                                anchor;
+    private CompletableFuture<CheckpointState>                                        checkpointAssembled;
     private HashedCertifiedBlock                                                      checkpoint;
     private HashedCertifiedBlock                                                      checkpointView;
     private final CommonCommunications<BootstrapClient, Service>                      comms;
@@ -82,8 +81,9 @@ public class Bootstrapper {
     private final Store                                                               store;
     private final CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> sync                  = new CompletableFuture<>();
     private final CompletableFuture<Boolean>                                          viewChainSynchronized = new CompletableFuture<>();
+    private final CompletableFuture<Boolean>                                          anchorSynchronized    = new CompletableFuture<>();
 
-    public Bootstrapper(Block anchor, Member member, Context<Member> context,
+    public Bootstrapper(HashedCertifiedBlock anchor, Member member, Context<Member> context,
             CommonCommunications<BootstrapClient, Service> comms, double falsePositiveRate, Store store, int slice,
             ScheduledExecutorService scheduler, int maxViewBlocks, Duration duration, int maxBlocks) {
         this.comms = comms;
@@ -97,13 +97,7 @@ public class Bootstrapper {
         this.anchor = anchor;
         this.maxBlocks = maxBlocks;
         this.maxViewBlocks = maxViewBlocks;
-        viewChainSynchronized.whenComplete((r, t) -> {
-            log.info("Viewchain complete on: {}", checkpoint.hash, member);
-            if (assembledFuture.isDone()) {
-                sync.complete(new Pair<>(genesis, checkpoint));
-                return;
-            }
-        });
+        store.put(anchor.hash, anchor.block);
     }
 
     public CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> synchronize() {
@@ -119,33 +113,26 @@ public class Bootstrapper {
         }
     }
 
-    private void completeViewchain(long from, long target) {
-        if (store.completeFrom(from)) {
-            viewChainSynchronized.complete(true);
-        } else {
-            completeViewChain(from, target);
-        }
-    }
-
     private void completeViewChain(Iterator<Member> graphCut, long from, long to) {
         if (sync.isDone()) {
+            return;
+        }
+        if (!graphCut.hasNext()) {
+            scheduleCompletion(store.lastViewChainFrom(from), to);
             return;
         }
         while (graphCut.hasNext()) {
             Member m = graphCut.next();
             BootstrapClient link = comms.apply(member, m);
             if (link == null) {
-                log.info("No line for view chain completion: {} on: {}", m.getId(), member.getId());
+                log.info("No link for view chain completion: {} on: {}", m.getId(), member.getId());
                 continue;
             }
 
             int seed = Utils.bitStreamEntropy().nextInt();
             BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, maxViewBlocks, fpr);
             from = store.lastViewChainFrom(from);
-            store.viewChainFrom(from, to).forEachRemaining(h -> {
-                System.out.println("Adding: " + h);
-                blocksBff.add(h);
-            });
+            store.viewChainFrom(from, to).forEachRemaining(h -> blocksBff.add(h));
             BlockReplication replication = BlockReplication.newBuilder()
                                                            .setContext(context.getId().toByteString())
                                                            .setBlocksBff(blocksBff.toBff().toByteString())
@@ -153,7 +140,7 @@ public class Bootstrapper {
                                                            .setTo(to)
                                                            .build();
 
-            log.info("Attempting view chain completion ({} to {}) with: {} on: {}", from, to, m.getId(),
+            log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", from, to, m.getId(),
                      member.getId());
             try {
                 ListenableFuture<Blocks> future = link.fetchViewChain(replication);
@@ -167,9 +154,6 @@ public class Bootstrapper {
 
     private void completeViewChain(long from, long to) {
         List<Member> sample = context.successors(randomCut());
-        CountdownAction countdown = new CountdownAction(() -> {
-            completeViewchain(from, to);
-        }, sample.size());
         completeViewChain(sample.iterator(), from, to);
     }
 
@@ -181,10 +165,12 @@ public class Bootstrapper {
             }
             try {
                 Blocks blocks = future.get();
-                log.info("View chain completion ({} to {}) from: {} on: {}", from, to, m.getId(), member.getId());
+                log.debug("View chain completion reply ({} to {}) from: {} on: {}", from, to, m.getId(), member.getId());
                 blocks.getBlocksList()
                       .stream()
                       .map(cb -> new HashedCertifiedBlock(cb))
+                      .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(),
+                                            cb.hash, m, member))
                       .forEach(cb -> store.put(cb.hash, cb.block));
             } catch (InterruptedException e) {
                 log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
@@ -267,13 +253,29 @@ public class Bootstrapper {
                 threshold);
 
         // assemble the checkpoint
-        assembledFuture = assembler.assemble(scheduler, duration);
-        assembledFuture.whenComplete((c, t) -> {
+        checkpointAssembled = assembler.assemble(scheduler, duration);
+        checkpointAssembled.whenComplete((c, t) -> {
             if (t != null) {
                 log.error("Unable to assemble checkpoint: {} on: {}", checkpoint.hash, member);
                 sync.completeExceptionally(t);
             } else {
                 assemblyComplete();
+            }
+        });
+
+        // Checkpoint must be assembled, view chain synchronized, and blocks spanning
+        // the anchor block to the checkpoint must be filled
+        CompletableFuture.allOf(checkpointAssembled, viewChainSynchronized, anchorSynchronized).whenComplete((v, t) -> {
+            if (t == null) {
+                log.info("Synchronized to {} from: {} last view: {} on: {}", genesis.hash,
+                         checkpoint == null ? genesis.hash : checkpoint.hash,
+                         checkpointView == null ? genesis.hash : checkpoint.hash, member);
+                sync.complete(new Pair<>(genesis, checkpoint == null ? genesis : checkpoint));
+            } else {
+                log.error("Failed synchronizing to {} from: {} last view: {} on: {}", genesis.hash,
+                          checkpoint == null ? genesis.hash : checkpoint.hash,
+                          checkpointView == null ? genesis.hash : checkpoint.hash, t);
+                sync.completeExceptionally(t);
             }
         });
 
@@ -286,11 +288,107 @@ public class Bootstrapper {
                       store.put(reconfigure.hash, reconfigure.block);
                   });
         scheduleCompletion(checkpointView.height(), 0);
+        scheduleAnchorCompletion(anchor.height(), checkpoint.height());
+    }
+
+    private void scheduleAnchorCompletion(long from, long to) {
+        if (sync.isDone()) {
+            return;
+        }
+        log.info("Scheduling Anchor completion ({} to {}) duration: {} millis on: {}", from, checkpoint.height(),
+                 duration.toMillis(), member);
+        scheduler.schedule(() -> {
+            try {
+                completeAnchor(from, to);
+            } catch (Throwable e) {
+                log.error("Cannot execute completeViewChain on: {}", member);
+                sync.completeExceptionally(e);
+            }
+        }, duration.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private void completeAnchor(long from, long to) {
+        List<Member> sample = context.successors(randomCut());
+        completeAnchor(sample.iterator(), from, to);
+    }
+
+    private void completeAnchor(Iterator<Member> graphCut, long from, long to) {
+        if (sync.isDone()) {
+            return;
+        }
+        if (!graphCut.hasNext()) {
+            scheduleAnchorCompletion(store.firstGap(from, to), to);
+            return;
+        }
+        while (graphCut.hasNext()) {
+            Member m = graphCut.next();
+            BootstrapClient link = comms.apply(member, m);
+            if (link == null) {
+                log.debug("No link for anchor completion: {} on: {}", m.getId(), member.getId());
+                continue;
+            }
+
+            int seed = Utils.bitStreamEntropy().nextInt();
+            BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, maxViewBlocks, fpr);
+            from = store.firstGap(from, to);
+            store.blocksFrom(from, to, maxBlocks).forEachRemaining(h -> blocksBff.add(h));
+            BlockReplication replication = BlockReplication.newBuilder()
+                                                           .setContext(context.getId().toByteString())
+                                                           .setBlocksBff(blocksBff.toBff().toByteString())
+                                                           .setFrom(from)
+                                                           .setTo(to)
+                                                           .build();
+
+            log.debug("Attempting Anchor completion ({} to {}) with: {} on: {}", from, to, m.getId(), member.getId());
+            try {
+                ListenableFuture<Blocks> future = link.fetchBlocks(replication);
+                future.addListener(completeAnchor(m, graphCut, future, from, to), ForkJoinPool.commonPool());
+            } finally {
+                link.release();
+            }
+            return;
+        }
+    }
+
+    private Runnable completeAnchor(Member m, Iterator<Member> graphCut, ListenableFuture<Blocks> future, long from,
+                                    long to) {
+        return () -> {
+            if (sync.isDone()) {
+                return;
+            }
+            try {
+                Blocks blocks = future.get();
+                log.debug("Anchor completion ({} to {}) from: {} on: {}", from, to, m.getId(), member.getId());
+                blocks.getBlocksList()
+                      .stream()
+                      .map(cb -> new HashedCertifiedBlock(cb))
+                      .peek(cb -> log.trace("Adding anchor completion: {} block[{}] from: {} on: {}", cb.height(),
+                                            cb.hash, m, member))
+                      .forEach(cb -> store.put(cb.hash, cb.block));
+            } catch (InterruptedException e) {
+                log.debug("Error completing Anchor from: {} on: {}", m.getId(), member.getId());
+            } catch (ExecutionException e) {
+                log.debug("Error completing Anchor from: {} on: {}", m.getId(), member.getId());
+            }
+            countdownAnchor(graphCut, from, to);
+        };
+    }
+
+    private void countdownAnchor(Iterator<Member> graphCut, long from, long to) {
+        if (store.firstGap(from, to) == to) {
+            log.info("Anchor chain to checkpoint synchronized on: {}", member);
+            anchorSynchronized.complete(true);
+        } else {
+            completeAnchor(graphCut, from, to);
+        }
     }
 
     private void countdown(Iterator<Member> graphCut, long from, long target) {
-        if (!graphCut.hasNext()) {
-            completeViewchain(from, target);
+        if (store.completeFrom(from)) {
+            if (!viewChainSynchronized.isDone()) {
+                log.info("View chain synchronized on: {}", member);
+                viewChainSynchronized.complete(true);
+            }
         } else {
             completeViewChain(graphCut, from, target);
         }
@@ -311,9 +409,9 @@ public class Bootstrapper {
         }
         Synchronize s = Synchronize.newBuilder()
                                    .setContext(context.getId().toByteString())
-                                   .setHeight(anchor.getHeader().getHeight())
+                                   .setHeight(anchor.height())
                                    .build();
-        log.info("Attempting synchronization with: {} on: {}", m, member);
+        log.debug("Attempting synchronization with: {} on: {}", m, member);
         try {
             ListenableFuture<Initial> future = link.sync(s);
             future.addListener(initialize(m, graphCut, future, votes, countdown), ForkJoinPool.commonPool());
@@ -331,7 +429,7 @@ public class Bootstrapper {
 
             try {
                 votes.put(m.getId(), future.get());
-                log.info("Synchronization vote: {} from: {} recorded on: {}",
+                log.debug("Synchronization vote: {} from: {} recorded on: {}",
                          new HashedCertifiedBlock(future.get().getGenesis()).hash, m, member);
             } catch (InterruptedException e) {
                 log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
