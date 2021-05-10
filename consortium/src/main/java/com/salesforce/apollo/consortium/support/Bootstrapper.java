@@ -105,16 +105,8 @@ public class Bootstrapper {
         return sync;
     }
 
-    private void assemblyComplete() {
-        log.info("Assembled checkpoint: {} on: {}", checkpoint.hash, member);
-        if (viewChainSynchronized.isDone()) {
-            sync.complete(new Pair<>(genesis, checkpoint));
-            return;
-        }
-    }
-
     private void completeViewChain(Iterator<Member> graphCut, long from, long to) {
-        if (sync.isDone()) {
+        if (sync.isDone() || viewChainSynchronized.isDone()) {
             return;
         }
         if (!graphCut.hasNext()) {
@@ -141,7 +133,7 @@ public class Bootstrapper {
                                                            .build();
 
             log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", from, to, m.getId(),
-                     member.getId());
+                      member.getId());
             try {
                 ListenableFuture<Blocks> future = link.fetchViewChain(replication);
                 future.addListener(completeViewChain(m, graphCut, future, from, to), ForkJoinPool.commonPool());
@@ -160,12 +152,13 @@ public class Bootstrapper {
     private Runnable completeViewChain(Member m, Iterator<Member> graphCut, ListenableFuture<Blocks> future, long from,
                                        long to) {
         return () -> {
-            if (sync.isDone()) {
+            if (sync.isDone() || viewChainSynchronized.isDone()) {
                 return;
             }
             try {
                 Blocks blocks = future.get();
-                log.debug("View chain completion reply ({} to {}) from: {} on: {}", from, to, m.getId(), member.getId());
+                log.debug("View chain completion reply ({} to {}) from: {} on: {}", from, to, m.getId(),
+                          member.getId());
                 blocks.getBlocksList()
                       .stream()
                       .map(cb -> new HashedCertifiedBlock(cb))
@@ -254,14 +247,6 @@ public class Bootstrapper {
 
         // assemble the checkpoint
         checkpointAssembled = assembler.assemble(scheduler, duration);
-        checkpointAssembled.whenComplete((c, t) -> {
-            if (t != null) {
-                log.error("Unable to assemble checkpoint: {} on: {}", checkpoint.hash, member);
-                sync.completeExceptionally(t);
-            } else {
-                assemblyComplete();
-            }
-        });
 
         // Checkpoint must be assembled, view chain synchronized, and blocks spanning
         // the anchor block to the checkpoint must be filled
@@ -313,7 +298,7 @@ public class Bootstrapper {
     }
 
     private void completeAnchor(Iterator<Member> graphCut, long from, long to) {
-        if (sync.isDone()) {
+        if (sync.isDone() || anchorSynchronized.isDone()) {
             return;
         }
         if (!graphCut.hasNext()) {
@@ -353,7 +338,7 @@ public class Bootstrapper {
     private Runnable completeAnchor(Member m, Iterator<Member> graphCut, ListenableFuture<Blocks> future, long from,
                                     long to) {
         return () -> {
-            if (sync.isDone()) {
+            if (sync.isDone() || anchorSynchronized.isDone()) {
                 return;
             }
             try {
@@ -395,7 +380,8 @@ public class Bootstrapper {
     }
 
     private void initialize(List<Member> graphCut, Map<HashKey, Initial> votes, CountdownAction countdown) {
-        if (sync.isDone()) {
+        final HashedCertifiedBlock established = genesis;
+        if (sync.isDone() || established != null) {
             return;
         }
         Member m = graphCut.get(0);
@@ -423,14 +409,15 @@ public class Bootstrapper {
     private Runnable initialize(Member m, List<Member> graphCut, ListenableFuture<Initial> future,
                                 Map<HashKey, Initial> votes, CountdownAction countdown) {
         return () -> {
-            if (sync.isDone()) {
+            final HashedCertifiedBlock established = genesis;
+            if (sync.isDone() || established != null) {
                 return;
             }
 
             try {
                 votes.put(m.getId(), future.get());
                 log.debug("Synchronization vote: {} from: {} recorded on: {}",
-                         new HashedCertifiedBlock(future.get().getGenesis()).hash, m, member);
+                          new HashedCertifiedBlock(future.get().getGenesis()).hash, m, member);
             } catch (InterruptedException e) {
                 log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
             } catch (ExecutionException e) {
