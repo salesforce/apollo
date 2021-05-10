@@ -18,8 +18,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.StreamSupport;
 
+import org.h2.mvstore.Cursor;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
@@ -78,8 +80,8 @@ public class Store {
 
     public Iterator<Long> blocksFrom(long from, long to, int max) {
         return new Iterator<Long>() {
-            int  remaining = max;
             Long next;
+            int  remaining = max;
             {
                 next = from;
                 while (!blocks.containsKey(next) && remaining > 0 && next >= to) {
@@ -215,6 +217,10 @@ public class Store {
         return hashes;
     }
 
+    public HashKey hashKey(long height) {
+        return new HashKey(hash(height));
+    }
+
     public long lastViewChainFrom(long height) {
         long last = height;
         Long next = viewChain.get(height);
@@ -258,6 +264,33 @@ public class Store {
                 + checkpoint.getSegmentsCount();
         checkpoints.put(blockHeight, cp);
         return cp;
+    }
+
+    public void validate(long from, long to) throws IllegalStateException {
+        AtomicReference<HashKey> prevHash = new AtomicReference<>();
+        new Cursor<Long, byte[]>(blocks.getRootPage(), to, from).forEachRemaining(l -> {
+            if (l == to) {
+                HashKey k = hashKey(l);
+                if (k == null) {
+                    throw new IllegalStateException(String.format("Invalid chain (%s, %s) missing: %s", from, to, l));
+                }
+                prevHash.set(k);
+            } else {
+                HashedBlock current = getBlock(l);
+                if (current == null) {
+                    throw new IllegalStateException(String.format("Invalid chain (%s, %s) missing: %s", from, to, l));
+                } else {
+                    HashKey pointer = new HashKey(current.block.getHeader().getPrevious());
+                    if (!prevHash.get().equals(pointer)) {
+                        throw new IllegalStateException(
+                                String.format("Invalid chain (%s, %s) block: %s has invalid previous hash: %s, expected: %s",
+                                              from, to, l, pointer, prevHash.get()));
+                    } else {
+                        prevHash.set(current.hash);
+                    }
+                }
+            }
+        });
     }
 
     public Iterator<Long> viewChainFrom(long from, long to) {

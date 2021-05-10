@@ -46,7 +46,10 @@ public class TestChain {
         genesis = new HashedCertifiedBlock(
                 CertifiedBlock.newBuilder()
                               .setBlock(Block.newBuilder()
-                                             .setHeader(Header.newBuilder().setHeight(0))
+                                             .setHeader(Header.newBuilder()
+                                                              .setHeight(0)
+                                                              .setLastCheckpoint(-1)
+                                                              .setLastReconfig(-1))
                                              .setBody(Body.newBuilder().setType(BodyType.GENESIS))
                                              .build())
                               .build());
@@ -61,6 +64,10 @@ public class TestChain {
 
     public HashedCertifiedBlock getGenesis() {
         return genesis;
+    }
+
+    public HashedCertifiedBlock getLastBlock() {
+        return lastBlock;
     }
 
     public HashedCertifiedBlock getSynchronizeCheckpoint() {

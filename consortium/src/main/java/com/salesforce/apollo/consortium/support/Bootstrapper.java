@@ -42,6 +42,7 @@ import com.salesforce.apollo.protocols.CountdownAction;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Pair;
 import com.salesforce.apollo.protocols.Utils;
+import com.sun.jdi.request.InvalidRequestStateException;
 
 /**
  * @author hal.hildebrand
@@ -361,10 +362,21 @@ public class Bootstrapper {
 
     private void countdownAnchor(Iterator<Member> graphCut, long from, long to) {
         if (store.firstGap(from, to) == to) {
-            log.info("Anchor chain to checkpoint synchronized on: {}", member);
-            anchorSynchronized.complete(true);
+            validateAnchor();
         } else {
             completeAnchor(graphCut, from, to);
+        }
+    }
+
+    private void validateAnchor() {
+        try {
+            store.validate(anchor.height(), checkpoint.height());
+            anchorSynchronized.complete(true);
+            log.info("Anchor chain to checkpoint synchronized on: {}", member);
+        } catch (Throwable e) {
+            log.info("Anchor chain from: {} to: {} does not validate on: {}", anchor.height(), checkpoint.height(),
+                     member);
+            anchorSynchronized.completeExceptionally(e);
         }
     }
 

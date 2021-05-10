@@ -95,6 +95,10 @@ public class BootstrapperTest {
                  .userBlocks(20)
                  .anchor()
                  .userBlocks(5);
+        
+        HashedCertifiedBlock lastBlock = testChain.getLastBlock();
+        
+        bootstrapStore.validate(lastBlock.height(), 0);
 
         Member member = members.get(0);
         BootstrapClient client = mock(BootstrapClient.class);
