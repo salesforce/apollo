@@ -149,14 +149,18 @@ public class CollaboratorContext {
         Timestamp timestamp = Timestamp.newBuilder().setSeconds(time.getEpochSecond()).setNanos(time.getNano()).build();
         byte[] nonce = new byte[32];
         Utils.secureEntropy().nextBytes(nonce);
+        HashKey checkpointHash = checkpoint == null ? HashKey.ORIGIN : checkpoint.hash;
+        HashKey viewChangeHash = viewChange == null ? HashKey.ORIGIN : viewChange.hash;
+        long checkpointHeight = checkpoint == null ? 0 : checkpoint.height();
+        long viewChangeHeight = viewChange == null ? 0 : viewChange.height();
         Block block = Block.newBuilder()
                            .setHeader(Header.newBuilder()
                                             .setTimestamp(timestamp)
                                             .setNonce(ByteString.copyFrom(nonce))
-                                            .setLastCheckpoint(checkpoint.height())
-                                            .setLastCheckpointHash(checkpoint.hash.toByteString())
-                                            .setLastReconfig(viewChange.height())
-                                            .setLastReconfigHash(viewChange.hash.toByteString())
+                                            .setLastCheckpoint(checkpointHeight)
+                                            .setLastCheckpointHash(checkpointHash.toByteString())
+                                            .setLastReconfig(viewChangeHeight)
+                                            .setLastReconfigHash(viewChangeHash.toByteString())
                                             .setPrevious(ByteString.copyFrom(previous))
                                             .setHeight(height)
                                             .setBodyHash(ByteString.copyFrom(Conversion.hashOf(body.toByteString())))
