@@ -319,7 +319,7 @@ public class Bootstrapper {
         // the anchor block to the checkpoint must be filled
         CompletableFuture.allOf(checkpointAssembled, viewChainSynchronized, anchorSynchronized).whenComplete((v, t) -> {
             if (t == null) {
-                log.info("Synchronized to {} from: {} last view: {} on: {}", genesis.hash,
+                log.info("Synchronized to: {} from: {} last view: {} on: {}", genesis.hash,
                          checkpoint == null ? genesis.hash : checkpoint.hash,
                          checkpointView == null ? genesis.hash : checkpoint.hash, member);
                 sync.complete(new Pair<>(genesis, checkpoint == null ? genesis : checkpoint));
@@ -329,6 +329,12 @@ public class Bootstrapper {
                           checkpointView == null ? genesis.hash : checkpoint.hash, t);
                 sync.completeExceptionally(t);
             }
+        }).exceptionally(t -> {
+            log.error("Failed synchronizing to {} from: {} last view: {} on: {}", genesis.hash,
+                      checkpoint == null ? genesis.hash : checkpoint.hash,
+                      checkpointView == null ? genesis.hash : checkpoint.hash, t);
+            sync.completeExceptionally(t);
+            return null;
         });
 
         // reconstruct chain to genesis
@@ -471,7 +477,6 @@ public class Bootstrapper {
             log.error("Anchor chain from: {} to: {} does not validate on: {}", anchor.height(), checkpoint.height(),
                       member, e);
             anchorSynchronized.completeExceptionally(e);
-            sync.completeExceptionally(e);
         }
     }
 
@@ -483,8 +488,7 @@ public class Bootstrapper {
                 viewChainSynchronized.complete(true);
             } catch (Throwable t) {
                 log.error("View chain from: {} to: {} does not validate on: {}", checkpointView.height(), 0, member, t);
-                anchorSynchronized.completeExceptionally(t);
-                sync.completeExceptionally(t);
+                viewChainSynchronized.completeExceptionally(t);
             }
         }
     }
