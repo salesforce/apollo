@@ -47,12 +47,14 @@ message Block {
 
 message Header {
     int64 height = 1; 
-    int64 lastCheckpoint = 2; 
+    int64 lastCheckpoint = 2;
     int64 lastReconfig = 3;
     google.protobuf.Timestamp timestamp = 4;
-    bytes nonce = 5;
-    bytes previous = 6;
-    bytes bodyHash = 7;
+    bytes lastCheckpointHash = 5;
+    bytes lastReconfigHash = 6;
+    bytes nonce = 7;
+    bytes previous = 8;
+    bytes bodyHash = 9;
 }
 
 message Body {

@@ -95,10 +95,11 @@ public class BootstrapperTest {
                  .userBlocks(20)
                  .anchor()
                  .userBlocks(5);
-        
+
         HashedCertifiedBlock lastBlock = testChain.getLastBlock();
-        
+
         bootstrapStore.validate(lastBlock.height(), 0);
+        bootstrapStore.validateViewChain(testChain.getSynchronizeView().height());
 
         Member member = members.get(0);
         BootstrapClient client = mock(BootstrapClient.class);
@@ -148,11 +149,10 @@ public class BootstrapperTest {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         Duration duration = Duration.ofMillis(100);
         Store store = new Store(new MVStore.Builder().open());
-        
-        
+
         Bootstrapper boot = new Bootstrapper(testChain.getAnchor(), member, context, comms, 0.15, store, 5, scheduler,
                 100, duration, 100);
-        
+
         CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> syncFuture = boot.synchronize();
         syncFuture.get(10, TimeUnit.SECONDS);
     }

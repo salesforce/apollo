@@ -113,14 +113,8 @@ public class TestChain {
     private HashedCertifiedBlock reconfigureBlock() {
         lastBlock = new HashedCertifiedBlock(
                 CertifiedBlock.newBuilder()
-                              .setBlock(Block.newBuilder()
-                                             .setHeader(Header.newBuilder()
-                                                              .setHeight(lastBlock.height() + 1)
-                                                              .setLastCheckpoint(checkpoint.height())
-                                                              .setLastReconfig(lastView.height())
-                                                              .setPrevious(lastBlock.hash.toByteString()))
-                                             .setBody(Body.newBuilder().setType(BodyType.RECONFIGURE))
-                                             .build())
+                              .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
+                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.RECONFIGURE, CollaboratorContext.checkpoint(lastBlock.height() + 1, null, 0)), lastView))
                               .build());
         store.put(lastBlock.hash, lastBlock.block);
         return lastBlock;
@@ -129,14 +123,8 @@ public class TestChain {
     private HashedCertifiedBlock userBlock() {
         HashedCertifiedBlock block = new HashedCertifiedBlock(
                 CertifiedBlock.newBuilder()
-                              .setBlock(Block.newBuilder()
-                                             .setHeader(Header.newBuilder()
-                                                              .setHeight(lastBlock.height() + 1)
-                                                              .setLastCheckpoint(checkpoint.height())
-                                                              .setLastReconfig(lastView.height())
-                                                              .setPrevious(lastBlock.hash.toByteString()))
-                                             .setBody(Body.newBuilder().setType(BodyType.USER))
-                                             .build())
+                              .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
+                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.USER, CollaboratorContext.checkpoint(lastBlock.height() + 1, null, 0)), lastView))
                               .build());
         store.put(block.hash, block.block);
         lastBlock = block;

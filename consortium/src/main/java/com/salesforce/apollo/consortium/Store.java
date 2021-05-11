@@ -293,6 +293,31 @@ public class Store {
         });
     }
 
+    public void validateViewChain(long from) throws IllegalStateException {
+        HashedBlock previous = getBlock(from);
+        if (previous == null) {
+            throw new IllegalStateException(String.format("Invalid view chain (%s, %s) missing: %s", from, 0, from));
+        }
+        long next = previous.block.getHeader().getLastReconfig();
+        HashedBlock current = getBlock(next);
+        while (current != null) {
+            if (current.height() == 0) {
+                break;
+            }
+
+            HashKey pointer = new HashKey(previous.block.getHeader().getLastReconfigHash());
+            if (pointer.equals(current.hash)) {
+                previous = current;
+                next = current.block.getHeader().getLastReconfig();
+                current = getBlock(next);
+            } else {
+                throw new IllegalStateException(
+                        String.format("Invalid view chain (%s, %s) invalid: %s expected: %s have: %s", from, 0,
+                                      current.height(), pointer, current.hash));
+            }
+        }
+    }
+
     public Iterator<Long> viewChainFrom(long from, long to) {
         return new Iterator<Long>() {
             Long next;
