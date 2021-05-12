@@ -63,10 +63,13 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.User;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Result;
+import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.comms.ConsortiumClient;
 import com.salesforce.apollo.consortium.fsm.Transitions;
+import com.salesforce.apollo.consortium.support.Bootstrapper;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.HashedBlock;
@@ -222,21 +225,15 @@ public class CollaboratorContext {
         return body;
     }
 
-    final Consortium                           consortium;
-    private final AtomicLong                   currentConsensus = new AtomicLong(-1);
-    private final AtomicReference<HashedBlock> lastBlock        = new AtomicReference<>();
-
-    private final ProcessedBuffer processed;
-
-    private final Regency regency = new Regency();
-
-    private final Map<Timers, Timer> timers = new ConcurrentHashMap<>();
-
-    private final Map<HashKey, EnqueuedTransaction> toOrder = new ConcurrentHashMap<>();
-
-    private final View view;
-
-    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks = new ConcurrentHashMap<>();
+    final Consortium                                   consortium;
+    private final AtomicLong                           currentConsensus = new AtomicLong(-1);
+    private final AtomicReference<HashedBlock>         lastBlock        = new AtomicReference<>();
+    private final ProcessedBuffer                      processed;
+    private final Regency                              regency          = new Regency();
+    private final Map<Timers, Timer>                   timers           = new ConcurrentHashMap<>();
+    private final Map<HashKey, EnqueuedTransaction>    toOrder          = new ConcurrentHashMap<>();
+    private final View                                 view;
+    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks    = new ConcurrentHashMap<>();
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
@@ -245,7 +242,7 @@ public class CollaboratorContext {
         view = consortium.getView();
     }
 
-    public void aquireInitialView() {
+    public void recover() {
         schedule(Timers.AWAIT_INITIAL_VIEW, () -> {
             consortium.getTransitions().missingInitialView();
         }, consortium.getParams().initialViewTimeout);
@@ -628,6 +625,12 @@ public class CollaboratorContext {
                 }
             }
         });
+    }
+
+    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
+        CommonCommunications<ConsortiumClient, Service> comms = null;
+        return new Bootstrapper(anchor, getMember(), consortium.getParams().context, comms,
+                consortium.getParams().msgParameters.falsePositiveRate, consortium.store, 0, null, 0, null, 0);
     }
 
     void clear() {

@@ -300,8 +300,7 @@ public class Consortium {
     private final AtomicBoolean                               started               = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>          submitted             = new ConcurrentHashMap<>();
     private final Transitions                                 transitions;
-
-    private final View view;
+    private final View                                        view;
 
     public Consortium(Parameters parameters) {
         this(parameters, defaultBuilder(parameters).open());
@@ -836,8 +835,7 @@ public class Consortium {
             try {
                 body = Genesis.parseFrom(getBody(block));
             } catch (IOException e) {
-                log.error("Protocol violation ont: {}. Genesis block body cannot be deserialized {}", getMember(),
-                          hash);
+                log.error("Protocol violation on: {}. Genesis block body cannot be deserialized {}", getMember(), hash);
                 return;
             }
             Context<Member> context = getParams().context;

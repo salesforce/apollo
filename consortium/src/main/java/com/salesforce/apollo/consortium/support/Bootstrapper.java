@@ -34,7 +34,8 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.Store;
-import com.salesforce.apollo.consortium.comms.BootstrapClient;
+import com.salesforce.apollo.consortium.comms.ConsortiumClient;
+import com.salesforce.apollo.consortium.comms.ConsortiumClient;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.BloomFilter;
@@ -69,7 +70,7 @@ public class Bootstrapper {
     private HashedCertifiedBlock                                                      checkpoint;
     private CompletableFuture<CheckpointState>                                        checkpointAssembled;
     private HashedCertifiedBlock                                                      checkpointView;
-    private final CommonCommunications<BootstrapClient, Service>                      comms;
+    private final CommonCommunications<ConsortiumClient, Service>                      comms;
     private final Context<Member>                                                     context;
     private final Duration                                                            duration;
     private final double                                                              fpr;
@@ -84,7 +85,7 @@ public class Bootstrapper {
     private final CompletableFuture<Boolean>                                          viewChainSynchronized = new CompletableFuture<>();
 
     public Bootstrapper(HashedCertifiedBlock anchor, Member member, Context<Member> context,
-            CommonCommunications<BootstrapClient, Service> comms, double falsePositiveRate, Store store, int slice,
+            CommonCommunications<ConsortiumClient, Service> comms, double falsePositiveRate, Store store, int slice,
             ScheduledExecutorService scheduler, int maxViewBlocks, Duration duration, int maxBlocks) {
         this.comms = comms;
         this.context = context;
@@ -115,7 +116,7 @@ public class Bootstrapper {
         }
         while (graphCut.hasNext()) {
             Member m = graphCut.next();
-            BootstrapClient link = comms.apply(member, m);
+            ConsortiumClient link = comms.apply(member, m);
             if (link == null) {
                 log.debug("No link for anchor completion: {} on: {}", m.getId(), member.getId());
                 continue;
@@ -182,7 +183,7 @@ public class Bootstrapper {
         }
         while (graphCut.hasNext()) {
             Member m = graphCut.next();
-            BootstrapClient link = comms.apply(member, m);
+            ConsortiumClient link = comms.apply(member, m);
             if (link == null) {
                 log.info("No link for view chain completion: {} on: {}", m.getId(), member.getId());
                 continue;
@@ -373,7 +374,7 @@ public class Bootstrapper {
         Member m = graphCut.get(0);
         graphCut = graphCut.subList(1, graphCut.size());
 
-        BootstrapClient link = comms.apply(member, m);
+        ConsortiumClient link = comms.apply(member, m);
         if (link == null) {
             log.info("No link for {} on: {}", m, member);
             countdown.countdown();

@@ -14,12 +14,12 @@ import com.chiralbehaviors.tron.Entry;
  */
 public enum Recovery implements Transitions {
 
-    ACQUIRE_VIEW {
+    SYNCHRONIZE {
         @Entry
-        public void aquireView() {
-            context().aquireInitialView();
+        public void recover() {
+            context().recover();
         }
-        
+
     },
-    ASSEMBLE_CHECKPOINT, BOOTSTRAP;
+    BOOTSTRAP;
 }
