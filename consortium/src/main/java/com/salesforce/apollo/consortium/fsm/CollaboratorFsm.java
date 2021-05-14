@@ -195,12 +195,6 @@ public enum CollaboratorFsm implements Transitions {
 
     },
     RECOVERING {
-        @Entry
-        public void awaitGenesis() {
-            context().awaitGenesis();
-            context().establishGenesisView();
-        }
-
         @Override
         public Transitions becomeClient() {
             return CLIENT;
@@ -241,6 +235,12 @@ public enum CollaboratorFsm implements Transitions {
         public Transitions missingGenesis() {
             context().awaitGenesis();
             return null;
+        }
+
+        @Entry
+        public void synchronize() {
+            context().awaitGenesis();
+            context().establishGenesisView();
         }
     };
 }

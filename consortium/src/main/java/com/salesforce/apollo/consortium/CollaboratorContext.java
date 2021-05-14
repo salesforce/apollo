@@ -17,9 +17,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -63,9 +65,7 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.User;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Result;
-import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.comms.ConsortiumClient;
 import com.salesforce.apollo.consortium.fsm.Transitions;
@@ -80,6 +80,7 @@ import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Pair;
 import com.salesforce.apollo.protocols.Utils;
 
 /**
@@ -225,27 +226,22 @@ public class CollaboratorContext {
         return body;
     }
 
-    final Consortium                                   consortium;
-    private final AtomicLong                           currentConsensus = new AtomicLong(-1);
-    private final AtomicReference<HashedBlock>         lastBlock        = new AtomicReference<>();
-    private final ProcessedBuffer                      processed;
-    private final Regency                              regency          = new Regency();
-    private final Map<Timers, Timer>                   timers           = new ConcurrentHashMap<>();
-    private final Map<HashKey, EnqueuedTransaction>    toOrder          = new ConcurrentHashMap<>();
-    private final View                                 view;
-    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks    = new ConcurrentHashMap<>();
+    final Consortium                                                            consortium;
+    private final AtomicLong                                                    currentConsensus = new AtomicLong(-1);
+    private CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> futureBootstrap;
+    private final AtomicReference<HashedBlock>                                  lastBlock        = new AtomicReference<>();
+    private final ProcessedBuffer                                               processed;
+    private final Regency                                                       regency          = new Regency();
+    private final Map<Timers, Timer>                                            timers           = new ConcurrentHashMap<>();
+    private final Map<HashKey, EnqueuedTransaction>                             toOrder          = new ConcurrentHashMap<>();
+    private final View                                                          view;
+    private final Map<HashKey, CertifiedBlock.Builder>                          workingBlocks    = new ConcurrentHashMap<>();
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
         Parameters params = consortium.getParams();
         processed = new ProcessedBuffer(params.processedBufferSize);
         view = consortium.getView();
-    }
-
-    public void recover() {
-        schedule(Timers.AWAIT_INITIAL_VIEW, () -> {
-            consortium.getTransitions().missingInitialView();
-        }, consortium.getParams().initialViewTimeout);
     }
 
     public void awaitGenesis() {
@@ -555,6 +551,18 @@ public class CollaboratorContext {
         reduceJoinTransactions();
     }
 
+    public void recover(HashedCertifiedBlock anchor) {
+        futureBootstrap = bootstrapper(anchor).synchronize().whenComplete((p, t) -> {
+            if (t == null) {
+//                synchronize(p.a, p.b);
+            } else {
+//                consortium.getTransitions().synchronizationFailed();
+            }
+        }).exceptionally(t -> {
+            return null;
+        });
+    }
+
     public void reschedule(List<EnqueuedTransaction> transactions) {
         transactions.forEach(txn -> {
             txn.setTimedOut(false);
@@ -570,6 +578,12 @@ public class CollaboratorContext {
         } else {
             consortium.getTransitions().becomeFollower();
         }
+    }
+    
+    
+    // Synchronize the context with the current population
+    public void synchronize() {
+        
     }
 
     public void scheduleCheckpointBlock() {
@@ -627,13 +641,11 @@ public class CollaboratorContext {
         });
     }
 
-    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
-        CommonCommunications<ConsortiumClient, Service> comms = null;
-        return new Bootstrapper(anchor, getMember(), consortium.getParams().context, comms,
-                consortium.getParams().msgParameters.falsePositiveRate, consortium.store, 0, null, 0, null, 0);
-    }
-
     void clear() {
+        if (futureBootstrap != null) {
+            futureBootstrap.cancel(true);
+            futureBootstrap = null;
+        }
         regency.currentRegent(-1);
         regency.nextRegent(-2);
         currentConsensus(-1);
@@ -753,6 +765,13 @@ public class CollaboratorContext {
         workingBlocks.remove(next.hash);
         consortium.setCurrent(next);
         store().put(next.hash, next.block);
+    }
+
+    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
+        Parameters params = consortium.getParams();
+        return new Bootstrapper(anchor, getMember(), params.context, consortium.getView().getComm(),
+                params.msgParameters.falsePositiveRate, consortium.store, 5,
+                Executors.newSingleThreadScheduledExecutor(), 500, Duration.ofMillis(500), 20);
     }
 
     private StopData buildStopData(int currentRegent) {

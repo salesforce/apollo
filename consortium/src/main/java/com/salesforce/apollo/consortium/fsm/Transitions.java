@@ -23,6 +23,7 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
+import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -47,6 +48,10 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     default Transitions becomeLeader() {
         fsm().pop().becomeLeader();
         return null;
+    }
+
+    default Transitions bootstrap(HashedCertifiedBlock anchor) {
+        throw fsm().invalidTransitionOn();
     }
 
     default Transitions checkpointGenerated() {

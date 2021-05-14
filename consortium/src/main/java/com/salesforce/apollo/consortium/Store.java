@@ -18,6 +18,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.StreamSupport;
 
@@ -34,10 +36,13 @@ import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.Certifications;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.consortium.proto.CertifiedBlock.Builder;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesforce.apollo.consortium.support.HashedBlock;
+import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Pair;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2
@@ -82,6 +87,7 @@ public class Store {
         return new Iterator<Long>() {
             Long next;
             int  remaining = max;
+
             {
                 next = from;
                 while (!blocks.containsKey(next) && remaining > 0 && next >= to) {
@@ -203,10 +209,16 @@ public class Store {
     }
 
     public CertifiedBlock getCertifiedBlock(long height) {
-        return CertifiedBlock.newBuilder()
-                             .setBlock(getBlock(height).block)
-                             .addAllCertifications(certifications(height))
-                             .build();
+        Builder builder = CertifiedBlock.newBuilder();
+        HashedBlock block = getBlock(height);
+        if (block != null) {
+            builder.setBlock(block.block);
+        }
+        List<Certification> certs = certifications(height);
+        if (certs != null) {
+            builder.addAllCertifications(certs);
+        }
+        return builder.build();
     }
 
     public byte[] hash(long height) {
@@ -238,32 +250,56 @@ public class Store {
     }
 
     public void put(HashKey hash, CertifiedBlock cb) {
-        long height = height(cb.getBlock());
-        Certifications certs = Certifications.newBuilder().addAllCerts(cb.getCertificationsList()).build();
-        put(hash, cb.getBlock());
-        certifications.put(height, certs.toByteArray());
+        transactionally(() -> {
+            Certifications certs = Certifications.newBuilder().addAllCerts(cb.getCertificationsList()).build();
+            put(hash, cb.getBlock());
+            certifications.put(height(cb.getBlock()), certs.toByteArray());
+        });
     }
 
     public MVMap<Integer, byte[]> putCheckpoint(long blockHeight, File state, Checkpoint checkpoint) {
-        MVMap<Integer, byte[]> cp = checkpoints.get(blockHeight);
-        if (cp != null) {
-            return cp;
-        }
-        cp = createCheckpoint(blockHeight);
+        try {
+            return transactionally(() -> {
+                MVMap<Integer, byte[]> cp = checkpoints.get(blockHeight);
+                if (cp != null) {
+                    return cp;
+                }
+                cp = createCheckpoint(blockHeight);
 
-        byte[] buffer = new byte[checkpoint.getSegmentSize()];
-        try (FileInputStream fis = new FileInputStream(state)) {
-            int i = 0;
-            for (int read = fis.read(buffer); read > 0; read = fis.read(buffer)) {
-                cp.put(i++, Arrays.copyOf(buffer, read));
-            }
-        } catch (IOException e) {
-            throw new IllegalStateException("Error storing checkpoint " + blockHeight, e);
+                byte[] buffer = new byte[checkpoint.getSegmentSize()];
+                try (FileInputStream fis = new FileInputStream(state)) {
+                    int i = 0;
+                    for (int read = fis.read(buffer); read > 0; read = fis.read(buffer)) {
+                        cp.put(i++, Arrays.copyOf(buffer, read));
+                    }
+                } catch (IOException e) {
+                    throw new IllegalStateException("Error storing checkpoint " + blockHeight, e);
+                }
+                assert cp.size() == checkpoint.getSegmentsCount() : "Invalid number of segments: " + cp.size()
+                        + " should be: " + checkpoint.getSegmentsCount();
+                checkpoints.put(blockHeight, cp);
+                return cp;
+            });
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
         }
-        assert cp.size() == checkpoint.getSegmentsCount() : "Invalid number of segments: " + cp.size() + " should be: "
-                + checkpoint.getSegmentsCount();
-        checkpoints.put(blockHeight, cp);
-        return cp;
+    }
+
+    public Pair<HashedCertifiedBlock, HashedCertifiedBlock> restoreFrom() {
+        CertifiedBlock genesis = getCertifiedBlock(0L);
+        if (genesis == null) {
+            return Pair.emptyPair();
+        }
+        Long lastCheckpoint = checkpoints.keySet().stream().max((a, b) -> a.compareTo(b)).orElse(-1L);
+        if (lastCheckpoint < 0) {
+            return Pair.emptyPair();
+        }
+        return new Pair<>(new HashedCertifiedBlock(genesis),
+                new HashedCertifiedBlock(getCertifiedBlock(lastCheckpoint)));
+    }
+
+    public void rollbackTo(long version) {
+        blocks.store.rollbackTo(version);
     }
 
     public void validate(long from, long to) throws IllegalStateException {
@@ -316,6 +352,10 @@ public class Store {
                                       current.height(), pointer, current.hash));
             }
         }
+    }
+
+    public long version() {
+        return blocks.store.getStoreVersion();
     }
 
     public Iterator<Long> viewChainFrom(long from, long to) {
@@ -373,5 +413,26 @@ public class Store {
             viewChain.put(block.getHeader().getHeight(), block.getHeader().getLastReconfig());
         }
         log.trace("insert: {}:{}", height, h);
+    }
+
+    private <T> T transactionally(Callable<T> action) throws ExecutionException {
+        try {
+            T result = action.call();
+            blocks.store.commit();
+            return result;
+        } catch (Throwable t) {
+            blocks.store.rollback();
+            throw new ExecutionException(t);
+        }
+    }
+
+    private void transactionally(Runnable action) {
+        try {
+            action.run();
+            blocks.store.commit();
+        } catch (Exception t) {
+            blocks.store.rollback();
+            throw t;
+        }
     }
 }

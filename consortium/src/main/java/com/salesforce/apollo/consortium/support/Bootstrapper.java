@@ -70,7 +70,7 @@ public class Bootstrapper {
     private HashedCertifiedBlock                                                      checkpoint;
     private CompletableFuture<CheckpointState>                                        checkpointAssembled;
     private HashedCertifiedBlock                                                      checkpointView;
-    private final CommonCommunications<ConsortiumClient, Service>                      comms;
+    private final CommonCommunications<ConsortiumClient, Service>                     comms;
     private final Context<Member>                                                     context;
     private final Duration                                                            duration;
     private final double                                                              fpr;
@@ -78,6 +78,8 @@ public class Bootstrapper {
     private final int                                                                 maxBlocks;
     private final int                                                                 maxViewBlocks;
     private final Member                                                              member;
+    private final Pair<HashedCertifiedBlock, HashedCertifiedBlock>                    restoreFrom;
+    private final long                                                                rollbackTo;
     private final ScheduledExecutorService                                            scheduler;
     private final int                                                                 slice;
     private final Store                                                               store;
@@ -98,7 +100,13 @@ public class Bootstrapper {
         this.anchor = anchor;
         this.maxBlocks = maxBlocks;
         this.maxViewBlocks = maxViewBlocks;
+        this.rollbackTo = store.version();
+        restoreFrom = store.restoreFrom();
         store.put(anchor.hash, anchor.block);
+        if (restoreFrom.a != null) {
+            genesis = restoreFrom.a;
+            log.info("Restoring using genesis: {} on: {}", genesis.hash, member);
+        }
     }
 
     public CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> synchronize() {
@@ -247,42 +255,62 @@ public class Bootstrapper {
         log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(), context.toleranceLevel() + 1,
                  member);
         Multiset<HashedCertifiedBlock> tally = HashMultiset.create();
-        Map<HashKey, Initial> valid = votes.entrySet().stream().filter(e -> e.getValue().hasGenesis()).filter(e -> {
-            if (!e.getValue().hasCheckpoint()) {
-                return true;
-            }
-            if (!e.getValue().hasCheckpointView()) {
-                return false;
-            }
-            long checkpointViewHeight = CollaboratorContext.height(e.getValue().getCheckpointView().getBlock());
-            long recordedCheckpointViewHeight = e.getValue().getCheckpoint().getBlock().getHeader().getLastReconfig();
-            return checkpointViewHeight == recordedCheckpointViewHeight;
-        })
+        Map<HashKey, Initial> valid = votes.entrySet()
+                                           .stream()
+                                           .filter(e -> e.getValue().hasGenesis()) // Has a genesis
+                                           .filter(e -> genesis == null ? true : genesis.equals(e.getKey())) // If
+                                                                                                             // restoring
+                                                                                                             // from
+                                                                                                             // known
+                                                                                                             // genesis...
+                                           .filter(e -> {
+                                               if (!e.getValue().hasCheckpoint()) {
+                                                   return true;
+                                               }
+                                               if (!e.getValue().hasCheckpointView()) {
+                                                   return false; // if we have a checkpoint, we must have a view
+                                               }
+
+                                               long checkpointViewHeight = CollaboratorContext.height(e.getValue()
+                                                                                                       .getCheckpointView()
+                                                                                                       .getBlock());
+                                               long recordedCheckpointViewHeight = e.getValue()
+                                                                                    .getCheckpoint()
+                                                                                    .getBlock()
+                                                                                    .getHeader()
+                                                                                    .getLastReconfig();
+                                               // checkpoint's view should match
+                                               return checkpointViewHeight == recordedCheckpointViewHeight;
+                                           })
+                                           .filter(e -> restoreFrom.b == null ? true
+                                                   : CollaboratorContext.height(e.getValue()
+                                                                                 .getCheckpoint()) > restoreFrom.b.height())
                                            .peek(e -> tally.add(new HashedCertifiedBlock(e.getValue().getGenesis())))
                                            .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
 
-        Pair<HashedCertifiedBlock, Integer> winner = null;
         int threshold = context.toleranceLevel();
+        if (genesis == null) {
+            Pair<HashedCertifiedBlock, Integer> winner = null;
 
-        log.info("Tally: {} required: {} on: {}", tally, context.toleranceLevel() + 1, member);
-        for (HashedCertifiedBlock cb : tally) {
-            int count = tally.count(cb);
-            if (count > threshold) {
-                if (winner == null || count > winner.b) {
-                    winner = new Pair<HashedCertifiedBlock, Integer>(cb, count);
+            log.info("Tally: {} required: {} on: {}", tally, context.toleranceLevel() + 1, member);
+            for (HashedCertifiedBlock cb : tally) {
+                int count = tally.count(cb);
+                if (count > threshold) {
+                    if (winner == null || count > winner.b) {
+                        winner = new Pair<HashedCertifiedBlock, Integer>(cb, count);
+                    }
                 }
             }
-        }
 
-        if (winner == null) {
-            log.info("No winner on: {}", member);
-            scheduleSample();
-            return;
-        }
+            if (winner == null) {
+                log.info("No winner on: {}", member);
+                scheduleSample();
+                return;
+            }
 
-        genesis = winner.a;
-        log.info("Winner: {} on: {}", genesis.hash, member);
-        CertifiedBlock.getDefaultInstance();
+            genesis = winner.a;
+            log.info("Winner: {} on: {}", genesis.hash, member);
+        }
 
         // get the most recent checkpoint.
         Initial mostRecent = valid.values()
@@ -298,7 +326,7 @@ public class Bootstrapper {
 
         if (mostRecent == null) {
             // Nothing but Genesis
-            sync.complete(new Pair<>(winner.a, null));
+            sync.complete(new Pair<>(genesis, null));
             return;
         }
 
