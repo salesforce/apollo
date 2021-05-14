@@ -21,6 +21,7 @@ import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
+import com.salesforce.apollo.consortium.Collaborator;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
@@ -76,7 +77,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions deliverStop(Stop stop, Member from) {
-        CollaboratorContext context = context();
+        Collaborator context = context();
         if (stop.getNextRegent() > context.getCurrentRegent() + 1) {
             log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
                       context.getCurrentRegent() + 1, from, context.getMember(), this);
@@ -91,7 +92,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions deliverStopData(StopData stopData, Member from) {
-        CollaboratorContext context = context();
+        Collaborator context = context();
         if (stopData.getCurrentRegent() > context.nextRegent()) {
             log.debug("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
                       context.nextRegent(), from, context.getMember(), this);
@@ -111,7 +112,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions deliverSync(Sync sync, Member from) {
-        CollaboratorContext context = context();
+        Collaborator context = context();
         if (context().nextRegent() == sync.getCurrentRegent()) {
             if (context.isRegent(sync.getCurrentRegent())) {
                 log.debug("Invalid state: {}, discarding invalid Sync: {} from: {} on: {} at: {}", this,

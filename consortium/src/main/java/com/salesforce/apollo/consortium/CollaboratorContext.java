@@ -87,7 +87,7 @@ import com.salesforce.apollo.protocols.Utils;
  * Context for the state machine. These are the leaf actions driven by the FSM.
  *
  */
-public class CollaboratorContext {
+public class CollaboratorContext implements Collaborator {
 
     private static final Logger log = LoggerFactory.getLogger(CollaboratorContext.class);
 
@@ -244,12 +244,14 @@ public class CollaboratorContext {
         view = consortium.getView();
     }
 
+    @Override
     public void awaitGenesis() {
         schedule(Timers.AWAIT_GENESIS, () -> {
             consortium.getTransitions().missingGenesis();
         }, consortium.getParams().viewTimeout);
     }
 
+    @Override
     public void cancel(Timers t) {
         Timer timer = timers.remove(t);
         if (timer != null) {
@@ -260,6 +262,7 @@ public class CollaboratorContext {
         }
     }
 
+    @Override
     public void changeRegency(List<EnqueuedTransaction> transactions) {
         regency.nextRegent(regency.currentRegent() + 1);
         log.info("Starting change of regent from: {} to: {} on: {}", regency.currentRegent(), regency.nextRegent(),
@@ -274,10 +277,12 @@ public class CollaboratorContext {
         consortium.getTransitions().deliverStop(stop, consortium.getMember());
     }
 
+    @Override
     public void delay(Message message, Member from) {
         consortium.delay(message, from);
     }
 
+    @Override
     public void deliverBlock(Block block, Member from) {
         Member regent = view.getContext().getRegent(regency.currentRegent());
         if (!regent.equals(from)) {
@@ -312,6 +317,7 @@ public class CollaboratorContext {
         }
     }
 
+    @Override
     public void deliverCheckpointing(CheckpointProcessing checkpointProcessing, Member from) {
         Member regent = getRegent(regency.currentRegent());
         if (!regent.equals(from)) {
@@ -331,18 +337,22 @@ public class CollaboratorContext {
         });
     }
 
+    @Override
     public void deliverStop(Stop data, Member from) {
         regency.deliverStop(data, from, consortium, view, toOrder, processed);
     }
 
+    @Override
     public void deliverStopData(StopData stopData, Member from) {
         regency.deliverStopData(stopData, from, view, consortium);
     }
 
+    @Override
     public void deliverSync(Sync syncData, Member from) {
         regency.deliverSync(syncData, from, view, this);
     }
 
+    @Override
     public void deliverValidate(Validate v) {
         HashKey hash = new HashKey(v.getHash());
         CertifiedBlock.Builder certifiedBlock = workingBlocks.get(hash);
@@ -363,6 +373,7 @@ public class CollaboratorContext {
         }
     }
 
+    @Override
     public void establishGenesisView() {
         ViewContext newView = new ViewContext(consortium.getParams().genesisViewId, consortium.getParams().context,
                 consortium.getMember(), this.view.nextViewConsensusKey(), Collections.emptyList());
@@ -378,6 +389,7 @@ public class CollaboratorContext {
         }
     }
 
+    @Override
     public void establishNextRegent() {
         if (regency.currentRegent() == regency.nextRegent()) {
             log.trace("Regent already established on {}", consortium.getMember());
@@ -412,10 +424,12 @@ public class CollaboratorContext {
         }
     }
 
+    @Override
     public void generateBlock() {
         generateNextBlock(needCheckpoint());
     }
 
+    @Override
     public void generateView() {
         if (consortium.getCurrent() == null) {
             log.trace("Generating genesis view on: {}", consortium.getMember());
@@ -426,14 +440,17 @@ public class CollaboratorContext {
         }
     }
 
+    @Override
     public int getCurrentRegent() {
         return regency.currentRegent();
     }
 
+    @Override
     public Member getMember() {
         return consortium.getMember();
     }
 
+    @Override
     public void initializeConsensus() {
         if (currentConsensus() >= 0) {
             return;
@@ -442,11 +459,13 @@ public class CollaboratorContext {
         currentConsensus(current != null ? current.height() : 0);
     }
 
+    @Override
     public boolean isRegent(int regency) {
         Member regent = getRegent(regency);
         return consortium.getMember().equals(regent);
     }
 
+    @Override
     public void join() {
         log.debug("Petitioning to join view: {} on: {}", view.getContext().getId(), consortium.getParams().member);
 
@@ -493,22 +512,27 @@ public class CollaboratorContext {
         });
     }
 
+    @Override
     public void joinView() {
         joinView(0);
     }
 
+    @Override
     public int nextRegent() {
         return regency.nextRegent();
     }
 
+    @Override
     public void receive(ReplicateTransactions transactions, Member from) {
         transactions.getTransactionsList().forEach(txn -> receive(txn, true));
     }
 
+    @Override
     public void receive(Transaction txn) {
         receive(txn, false);
     }
 
+    @Override
     public boolean receive(Transaction txn, boolean replicated) {
         EnqueuedTransaction transaction = new EnqueuedTransaction(Consortium.hashOf(txn), txn);
         if (processed.contains(transaction.hash)) {
@@ -538,6 +562,7 @@ public class CollaboratorContext {
         return added.get();
     }
 
+    @Override
     public void receiveJoin(Transaction txn) {
         if (!txn.getJoin()) {
             return;
@@ -546,11 +571,13 @@ public class CollaboratorContext {
         reduceJoinTransactions();
     }
 
+    @Override
     public void receiveJoins(ReplicateTransactions transactions, Member from) {
         receive(transactions, from);
         reduceJoinTransactions();
     }
 
+    @Override
     public void recover(HashedCertifiedBlock anchor) {
         futureBootstrap = bootstrapper(anchor).synchronize().whenComplete((p, t) -> {
             if (t == null) {
@@ -563,6 +590,7 @@ public class CollaboratorContext {
         });
     }
 
+    @Override
     public void reschedule(List<EnqueuedTransaction> transactions) {
         transactions.forEach(txn -> {
             txn.setTimedOut(false);
@@ -570,6 +598,7 @@ public class CollaboratorContext {
         });
     }
 
+    @Override
     public void resolveRegentStatus() {
         Member regent = getRegent(regency.nextRegent());
         log.debug("Regent: {} on: {}", regent, consortium.getMember());
@@ -582,19 +611,23 @@ public class CollaboratorContext {
     
     
     // Synchronize the context with the current population
+    @Override
     public void synchronize() {
         
     }
 
+    @Override
     public void scheduleCheckpointBlock() {
         final long currentHeight = lastBlock();
         consortium.performAfter(() -> generateCheckpointBlock(currentHeight), currentHeight);
     }
 
+    @Override
     public void shutdown() {
         consortium.stop();
     }
 
+    @Override
     public void synchronize(int elected, Map<Member, StopData> regencyData) {
         log.trace("Start synchronizing: {} votes: {} on: {}", elected, regencyData.size(), consortium.getMember());
         Sync synch = buildSync(elected, regencyData);
@@ -610,6 +643,7 @@ public class CollaboratorContext {
         }
     }
 
+    @Override
     public void totalOrderDeliver() {
         long current = currentConsensus();
         log.trace("Attempting total ordering of working blocks: {} current consensus: {} on: {}", workingBlocks.size(),

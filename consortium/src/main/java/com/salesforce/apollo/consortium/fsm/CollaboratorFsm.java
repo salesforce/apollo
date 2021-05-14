@@ -13,7 +13,7 @@ import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
-import com.salesforce.apollo.consortium.CollaboratorContext;
+import com.salesforce.apollo.consortium.Collaborator;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.membership.Member;
 
@@ -115,13 +115,13 @@ public enum CollaboratorFsm implements Transitions {
 
         @Exit
         public void cancelBatchGeneration() {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             context.cancel(Timers.FLUSH_BATCH);
         }
 
         @Override
         public Transitions deliverValidate(Validate validation) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             context.deliverValidate(validation);
             context.totalOrderDeliver();
             return null;
