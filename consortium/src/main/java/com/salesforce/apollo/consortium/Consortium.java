@@ -82,6 +82,7 @@ import com.salesforce.apollo.protocols.BbBackedInputStream;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.protocols.Pair;
 import com.salesforce.apollo.protocols.Utils;
 
 /**
@@ -306,14 +307,30 @@ public class Consortium {
         this(parameters, defaultBuilder(parameters).open());
     }
 
-    public Consortium(Parameters parameters, MVStore store) {
+    public Consortium(Parameters parameters, MVStore s) {
         this.params = parameters;
-        this.store = new Store(store);
+        store = new Store(s);
         view = new View(new Service(), parameters, (id, messages) -> process(id, messages));
         fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
         fsm.setName(getMember().getId().b64Encoded());
         transitions = fsm.getTransitions();
         view.nextViewConsensusKey();
+
+        Pair<HashedCertifiedBlock, HashedCertifiedBlock> restoreFrom = store.restoreFrom();
+        if (restoreFrom.a != null) {
+            setGenesis(restoreFrom.a);
+        }
+        if (restoreFrom.b != null) {
+            setLastCheckpoint(restoreFrom.b);
+        }
+        Pair<HashedCertifiedBlock, HashedCertifiedBlock> synchronizeFrom = store.synchronizeFrom();
+        if (synchronizeFrom.a != null) {
+            setLastViewChange(synchronizeFrom.a);
+            if (synchronizeFrom.b == null) {
+                throw new IllegalStateException("No last block defined for recovery on: " + params.member);
+            }
+            setCurrent(synchronizeFrom.b);
+        }
     }
 
     public HashedCertifiedBlock getGenesis() {
@@ -742,6 +759,18 @@ public class Consortium {
         log.info("Running action scheduled at: {} on: {}", action.targetBlock, getMember());
         pending.set(null);
         action.action.run();
+    }
+
+    private void setLastViewChange(HashedCertifiedBlock block) {
+        if (block.block.getBlock().getBody().getType() == BodyType.GENESIS) {
+            setLastViewChange(block, CollaboratorContext.genesisBody(block.block.getBlock()).getInitialView());
+        } else if (block.block.getBlock().getBody().getType() == BodyType.RECONFIGURE) {
+            setLastViewChange(block, CollaboratorContext.reconfigureBody(block.block.getBlock()));
+        } else {
+            throw new IllegalStateException(
+                    String.format("Block: %s is not a view change, body type: %s on: %s", block.hash,
+                                  block.block.getBlock().getBody().getType(), params.member));
+        }
     }
 
     private void submit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,

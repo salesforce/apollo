@@ -581,11 +581,12 @@ public class CollaboratorContext implements Collaborator {
     public void recover(HashedCertifiedBlock anchor) {
         futureBootstrap = bootstrapper(anchor).synchronize().whenComplete((p, t) -> {
             if (t == null) {
-//                synchronize(p.a, p.b);
+                synchronize(p.a, p.b);
             } else {
-//                consortium.getTransitions().synchronizationFailed();
+                synchronizationFailed(t);
             }
         }).exceptionally(t -> {
+            synchronizationFailed(t);
             return null;
         });
     }
@@ -608,13 +609,6 @@ public class CollaboratorContext implements Collaborator {
             consortium.getTransitions().becomeFollower();
         }
     }
-    
-    
-    // Synchronize the context with the current population
-    @Override
-    public void synchronize() {
-        
-    }
 
     @Override
     public void scheduleCheckpointBlock() {
@@ -625,6 +619,12 @@ public class CollaboratorContext implements Collaborator {
     @Override
     public void shutdown() {
         consortium.stop();
+    }
+
+    // Synchronize the context with the current population
+    @Override
+    public void synchronize() {
+
     }
 
     @Override
@@ -1481,6 +1481,15 @@ public class CollaboratorContext implements Collaborator {
 
     private Store store() {
         return consortium.store;
+    }
+
+    private void synchronizationFailed(Throwable t) {
+        // TODO Auto-generated method stub
+
+    }
+
+    private void synchronize(HashedCertifiedBlock genesis, HashedCertifiedBlock checkpoint) {
+        // TODO Auto-generated method stub
     }
 
     private User userBody(Block block) {

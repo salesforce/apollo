@@ -302,6 +302,18 @@ public class Store {
         blocks.store.rollbackTo(version);
     }
 
+    public Pair<HashedCertifiedBlock, HashedCertifiedBlock> synchronizeFrom() {
+        Long lastViewHeight = viewChain.floorKey(0L);
+        if (lastViewHeight != null) {
+            Long lastBlockHeight = blocks.floorKey(0L);
+            return new Pair<HashedCertifiedBlock, HashedCertifiedBlock>(
+                    new HashedCertifiedBlock(getCertifiedBlock(lastViewHeight)),
+                    lastBlockHeight != null ? new HashedCertifiedBlock(getCertifiedBlock(lastBlockHeight)) : null);
+
+        }
+        return Pair.emptyPair();
+    }
+
     public void validate(long from, long to) throws IllegalStateException {
         AtomicReference<HashKey> prevHash = new AtomicReference<>();
         new Cursor<Long, byte[]>(blocks.getRootPage(), to, from).forEachRemaining(l -> {
