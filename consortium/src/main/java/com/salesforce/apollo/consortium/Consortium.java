@@ -316,21 +316,7 @@ public class Consortium {
         transitions = fsm.getTransitions();
         view.nextViewConsensusKey();
 
-        Pair<HashedCertifiedBlock, HashedCertifiedBlock> restoreFrom = store.restoreFrom();
-        if (restoreFrom.a != null) {
-            setGenesis(restoreFrom.a);
-        }
-        if (restoreFrom.b != null) {
-            setLastCheckpoint(restoreFrom.b);
-        }
-        Pair<HashedCertifiedBlock, HashedCertifiedBlock> synchronizeFrom = store.synchronizeFrom();
-        if (synchronizeFrom.a != null) {
-            setLastViewChange(synchronizeFrom.a);
-            if (synchronizeFrom.b == null) {
-                throw new IllegalStateException("No last block defined for recovery on: " + params.member);
-            }
-            setCurrent(synchronizeFrom.b);
-        }
+        restore();
     }
 
     public HashedCertifiedBlock getGenesis() {
@@ -755,22 +741,30 @@ public class Consortium {
         return false;
     }
 
+    private void restore() throws IllegalStateException {
+        Pair<HashedCertifiedBlock, HashedCertifiedBlock> restoreFrom = store.restoreFrom();
+        if (restoreFrom.a != null) {
+            setGenesis(restoreFrom.a);
+        }
+        if (restoreFrom.b != null) {
+            setLastCheckpoint(restoreFrom.b);
+        }
+        Pair<HashedCertifiedBlock, HashedCertifiedBlock> synchronizeFrom = store.synchronizeFrom();
+        if (synchronizeFrom.a != null) {
+            Reconfigure reconfigure = null;
+            boolean isGenesis = false;
+            fsm.getContext().reconfigureView(synchronizeFrom.a, reconfigure, isGenesis, false);
+            if (synchronizeFrom.b == null) {
+                throw new IllegalStateException("No last block defined for recovery on: " + params.member);
+            }
+            setCurrent(synchronizeFrom.b);
+        }
+    }
+
     private void runPending(PendingAction action) {
         log.info("Running action scheduled at: {} on: {}", action.targetBlock, getMember());
         pending.set(null);
         action.action.run();
-    }
-
-    private void setLastViewChange(HashedCertifiedBlock block) {
-        if (block.block.getBlock().getBody().getType() == BodyType.GENESIS) {
-            setLastViewChange(block, CollaboratorContext.genesisBody(block.block.getBlock()).getInitialView());
-        } else if (block.block.getBlock().getBody().getType() == BodyType.RECONFIGURE) {
-            setLastViewChange(block, CollaboratorContext.reconfigureBody(block.block.getBlock()));
-        } else {
-            throw new IllegalStateException(
-                    String.format("Block: %s is not a view change, body type: %s on: %s", block.hash,
-                                  block.block.getBlock().getBody().getType(), params.member));
-        }
     }
 
     private void submit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,

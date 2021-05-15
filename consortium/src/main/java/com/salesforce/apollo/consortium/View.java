@@ -155,7 +155,8 @@ public class View {
     /**
      * Ye Jesus Nut
      */
-    public void viewChange(ViewContext newView, TickScheduler scheduler, int currentRegent, Service service) {
+    public void viewChange(ViewContext newView, TickScheduler scheduler, int currentRegent, Service service,
+                           boolean resume) {
         pause();
 
         log.info("Installing new view: {} rings: {} ttl: {} on: {} regent: {} member: {} view member: {}",
@@ -171,7 +172,9 @@ public class View {
             joinMessageGroup(newView, scheduler, process);
         }
 
-        resume(service);
+        if (resume) {
+            resume(service);
+        }
     }
 
     private void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {

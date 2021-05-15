@@ -33,6 +33,7 @@ import com.salesfoce.apollo.consortium.proto.Synchronize;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Service;
+import com.salesforce.apollo.consortium.Parameters;
 import com.salesforce.apollo.consortium.Store;
 import com.salesforce.apollo.consortium.comms.ConsortiumClient;
 import com.salesforce.apollo.consortium.comms.ConsortiumClient;
@@ -107,6 +108,13 @@ public class Bootstrapper {
             genesis = restoreFrom.a;
             log.info("Restoring using genesis: {} on: {}", genesis.hash, member);
         }
+    }
+
+    public Bootstrapper(HashedCertifiedBlock anchor, Member member, Parameters params, Store store,
+            CommonCommunications<ConsortiumClient, Service> comms) {
+        this(anchor, member, params.context, comms, params.msgParameters.falsePositiveRate, store,
+                params.synchronizeSlice, params.scheduler, params.maxViewBlocks, params.synchronizeDuration,
+                params.maxSyncBlocks);
     }
 
     public CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> synchronize() {
@@ -258,13 +266,13 @@ public class Bootstrapper {
         Map<HashKey, Initial> valid = votes.entrySet()
                                            .stream()
                                            .filter(e -> e.getValue().hasGenesis()) // Has a genesis
-                                           .filter(e -> genesis == null ? true : genesis.equals(e.getKey())) // If
-                                                                                                             // restoring
-                                                                                                             // from
-                                                                                                             // known
-                                                                                                             // genesis...
+                                           .filter(e -> genesis == null ? true : genesis.hash.equals(e.getKey())) // If
+                                                                                                                  // restoring
+                                                                                                                  // from
+                                                                                                                  // known
+                                                                                                                  // genesis...
                                            .filter(e -> {
-                                               if (!e.getValue().hasCheckpoint()) {
+                                               if (!e.getValue().hasCheckpoint() && restoreFrom.b == null) {
                                                    return true;
                                                }
                                                if (!e.getValue().hasCheckpointView()) {
@@ -282,9 +290,6 @@ public class Bootstrapper {
                                                // checkpoint's view should match
                                                return checkpointViewHeight == recordedCheckpointViewHeight;
                                            })
-                                           .filter(e -> restoreFrom.b == null ? true
-                                                   : CollaboratorContext.height(e.getValue()
-                                                                                 .getCheckpoint()) > restoreFrom.b.height())
                                            .peek(e -> tally.add(new HashedCertifiedBlock(e.getValue().getGenesis())))
                                            .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
 
@@ -319,6 +324,8 @@ public class Bootstrapper {
                                   .filter(i -> genesis.hash.equals(new HashedCertifiedBlock(i.getGenesis()).hash))
                                   .filter(i -> i.hasCheckpoint())
                                   .filter(i -> i.getCheckpoint().getBlock().getBody().getType() == BodyType.CHECKPOINT)
+                                  .filter(i -> restoreFrom.b == null ? true
+                                          : CollaboratorContext.height(i.getCheckpoint()) > restoreFrom.b.height())
                                   .max((a, b) -> Long.compare(a.getCheckpoint().getBlock().getHeader().getHeight(),
                                                               b.getCheckpoint().getBlock().getHeader().getHeight()))
                                   .orElse(null);

@@ -285,6 +285,10 @@ public class Store {
         }
     }
 
+    /**
+     * @return the pair of <Genesis block, Checkpoint block>. Return the empty Pair
+     *         if none exist.
+     */
     public Pair<HashedCertifiedBlock, HashedCertifiedBlock> restoreFrom() {
         CertifiedBlock genesis = getCertifiedBlock(0L);
         if (genesis == null) {

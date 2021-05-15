@@ -21,7 +21,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -378,7 +377,7 @@ public class CollaboratorContext implements Collaborator {
         ViewContext newView = new ViewContext(consortium.getParams().genesisViewId, consortium.getParams().context,
                 consortium.getMember(), this.view.nextViewConsensusKey(), Collections.emptyList());
         newView.activeAll();
-        view.viewChange(newView, consortium.getScheduler(), 0, consortium.service);
+        view.viewChange(newView, consortium.getScheduler(), 0, consortium.service, true);
         if (view.getContext().isMember()) {
             regency.currentRegent(-1);
             regency.nextRegent(-2);
@@ -762,6 +761,11 @@ public class CollaboratorContext implements Collaborator {
     }
 
     void reconfigure(HashedCertifiedBlock block, Reconfigure view, boolean genesis) {
+        reconfigureView(block, view, genesis, true);
+        resolveStatus();
+    }
+
+    void reconfigureView(HashedCertifiedBlock block, Reconfigure view, boolean genesis, boolean resume) {
         this.view.pause();
         consortium.setLastViewChange(block, view);
         ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
@@ -769,8 +773,7 @@ public class CollaboratorContext implements Collaborator {
         int current = genesis ? 2 : 0;
         regency.currentRegent(current);
         regency.nextRegent(current);
-        this.view.viewChange(newView, consortium.getScheduler(), current, consortium.service);
-        resolveStatus();
+        this.view.viewChange(newView, consortium.getScheduler(), current, consortium.service, resume);
     }
 
     void synchronize(Sync syncData, Member regent) {
@@ -803,9 +806,7 @@ public class CollaboratorContext implements Collaborator {
 
     private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
         Parameters params = consortium.getParams();
-        return new Bootstrapper(anchor, getMember(), params.context, consortium.getView().getComm(),
-                params.msgParameters.falsePositiveRate, consortium.store, 5,
-                Executors.newSingleThreadScheduledExecutor(), 500, Duration.ofMillis(500), 20);
+        return new Bootstrapper(anchor, getMember(), params, store(), view.getComm());
     }
 
     private StopData buildStopData(int currentRegent) {
