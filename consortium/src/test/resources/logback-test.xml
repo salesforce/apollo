@@ -25,7 +25,7 @@
         <appender-ref ref="STDOUT" />
     </logger> 
     
-    <logger name="com.chiralbehaviors.tron" level="info"
+    <logger name="com.chiralbehaviors.tron" level="INFO"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
