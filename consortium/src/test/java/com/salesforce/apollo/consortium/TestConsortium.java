@@ -293,6 +293,7 @@ public class TestConsortium {
                                                   .setMaxBatchDelay(Duration.ofMillis(1000))
                                                   .setGossipDuration(gossipDuration)
                                                   .setViewTimeout(Duration.ofMillis(1500))
+                                                  .setSynchronizeTimeout(Duration.ofMillis(1500))
                                                   .setJoinTimeout(Duration.ofSeconds(5))
                                                   .setTransactonTimeout(Duration.ofSeconds(30))
                                                   .setScheduler(scheduler)

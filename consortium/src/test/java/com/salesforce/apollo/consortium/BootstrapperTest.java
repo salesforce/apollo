@@ -112,8 +112,6 @@ public class BootstrapperTest {
                                          .setCheckpoint(testChain.getSynchronizeCheckpoint().block)
                                          .setCheckpointView(testChain.getSynchronizeView().block)
                                          .setGenesis(testChain.getGenesis().block);
-                bootstrapStore.viewChainFrom(testChain.getSynchronizeView().height(), 0).forEachRemaining(l -> {
-                });
                 futureSailor.set(initial.build());
                 return futureSailor;
             }

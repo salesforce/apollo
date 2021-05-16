@@ -53,6 +53,7 @@ import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.Genesis;
+import com.salesfoce.apollo.consortium.proto.Initial;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
@@ -61,6 +62,7 @@ import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.Sync;
+import com.salesfoce.apollo.consortium.proto.Synchronize;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.TransactionOrBuilder;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
@@ -131,9 +133,28 @@ public class Consortium {
             return Consortium.this.fetch(request);
         }
 
-        public Blocks fetchBlocks(BlockReplication request, HashKey from) {
-            // TODO Auto-generated method stub
-            return null;
+        public Blocks fetchBlocks(BlockReplication rep, HashKey from) {
+            Member member = getParams().context.getMember(from);
+            if (member == null) {
+                log.warn("Received fetchBlocks from non member: {} on: {}", from, getMember());
+                return Blocks.getDefaultInstance();
+            }
+            BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+            Blocks.Builder blocks = Blocks.newBuilder();
+            store.fetchBlocks(bff, blocks, 5, rep.getFrom(), rep.getTo());
+            return blocks.build();
+        }
+
+        public Blocks fetchViewChain(BlockReplication rep, HashKey from) {
+            Member member = getParams().context.getMember(from);
+            if (member == null) {
+                log.warn("Received fetchViewChain from non member: {} on: {}", from, getMember());
+                return Blocks.getDefaultInstance();
+            }
+            BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+            Blocks.Builder blocks = Blocks.newBuilder();
+            store.fetchViewChain(bff, blocks, 1, rep.getFrom(), rep.getTo());
+            return blocks.build();
         }
 
         public JoinResult join(Join request, HashKey fromID) {
@@ -183,11 +204,29 @@ public class Consortium {
             transitions.deliverStopData(stopData, member);
         }
 
+        public Initial sync(Synchronize request, HashKey from) {
+            Member member = getParams().context.getMember(from);
+            if (member == null) {
+                log.warn("Received sync from non member: {} on: {}", from, getMember());
+                return Initial.getDefaultInstance();
+            }
+            Initial.Builder initial = Initial.newBuilder();
+            if (getGenesis() != null) {
+                initial.setGenesis(getGenesis().block);
+                HashedCertifiedBlock cp = getLastCheckpointBlock();
+                if (cp != null) {
+                    long lastReconfig = cp.block.getBlock().getHeader().getLastReconfig();
+                    initial.setCheckpoint(cp.block).setCheckpointView(store.getCertifiedBlock(lastReconfig));
+                }
+            }
+            return initial.build();
+        }
     }
 
     public enum Timers {
-        ASSEMBLE_CHECKPOINT, AWAIT_GENESIS, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_INITIAL_VIEW, AWAIT_VIEW_MEMBERS,
-        CHECKPOINT_TIMEOUT, CHECKPOINTING, FLUSH_BATCH, PROCLAIM, TRANSACTION_TIMEOUT_1, TRANSACTION_TIMEOUT_2;
+        ASSEMBLE_CHECKPOINT, AWAIT_GENESIS_VIEW, AWAIT_GROUP, AWAIT_INITIAL_VIEW, AWAIT_SYNCHRONIZATION,
+        AWAIT_VIEW_MEMBERS, CHECKPOINT_TIMEOUT, CHECKPOINTING, FLUSH_BATCH, PROCLAIM, TRANSACTION_TIMEOUT_1,
+        TRANSACTION_TIMEOUT_2;
     }
 
     public static class TransactionSubmitFailure extends Exception {
@@ -300,6 +339,7 @@ public class Consortium {
     private final Lock                                        sequencer             = new ReentrantLock();
     private final AtomicBoolean                               started               = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>          submitted             = new ConcurrentHashMap<>();
+    private final AtomicBoolean                               synced                = new AtomicBoolean(false);
     private final Transitions                                 transitions;
     private final View                                        view;
 

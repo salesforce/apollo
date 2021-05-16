@@ -22,6 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -228,6 +230,7 @@ public class CollaboratorContext implements Collaborator {
     final Consortium                                                            consortium;
     private final AtomicLong                                                    currentConsensus = new AtomicLong(-1);
     private CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> futureBootstrap;
+    private ScheduledFuture<?>                                                  futureSynchronization;
     private final AtomicReference<HashedBlock>                                  lastBlock        = new AtomicReference<>();
     private final ProcessedBuffer                                               processed;
     private final Regency                                                       regency          = new Regency();
@@ -244,10 +247,12 @@ public class CollaboratorContext implements Collaborator {
     }
 
     @Override
-    public void awaitGenesis() {
-        schedule(Timers.AWAIT_GENESIS, () -> {
-            consortium.getTransitions().missingGenesis();
-        }, consortium.getParams().viewTimeout);
+    public void awaitSynchronization() {
+        Parameters params = consortium.getParams();
+        futureSynchronization = params.scheduler.schedule(() -> {
+            futureSynchronization = null;
+            consortium.getTransitions().synchronizationFailed();
+        }, params.viewTimeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -258,6 +263,18 @@ public class CollaboratorContext implements Collaborator {
             timer.cancel();
         } else {
             log.trace("No timer to cancel: {} on: {}", t, consortium.getMember());
+        }
+    }
+
+    @Override
+    public void cancelSynchronization() {
+        if (futureSynchronization != null) {
+            futureSynchronization.cancel(true);
+            futureSynchronization = null;
+        }
+        if (futureBootstrap != null) {
+            futureBootstrap.cancel(true);
+            futureBootstrap = null;
         }
     }
 
@@ -578,6 +595,10 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public void recover(HashedCertifiedBlock anchor) {
+        if (futureSynchronization != null) {
+            futureSynchronization.cancel(true);
+            futureSynchronization = null;
+        }
         futureBootstrap = bootstrapper(anchor).synchronize().whenComplete((p, t) -> {
             if (t == null) {
                 synchronize(p.a, p.b);
@@ -587,7 +608,7 @@ public class CollaboratorContext implements Collaborator {
         }).exceptionally(t -> {
             synchronizationFailed(t);
             return null;
-        });
+        }).orTimeout(consortium.getParams().synchronizeTimeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -618,12 +639,6 @@ public class CollaboratorContext implements Collaborator {
     @Override
     public void shutdown() {
         consortium.stop();
-    }
-
-    // Synchronize the context with the current population
-    @Override
-    public void synchronize() {
-
     }
 
     @Override
@@ -684,7 +699,7 @@ public class CollaboratorContext implements Collaborator {
         currentConsensus(-1);
         timers.values().forEach(e -> e.cancel());
         timers.clear();
-        cancelToTimers();
+        cancelTimers();
         toOrder.clear();
         lastBlock(null);
         consortium.getScheduler().cancelAll();
@@ -720,7 +735,8 @@ public class CollaboratorContext implements Collaborator {
             return;
         }
         accept(next);
-        cancelToTimers();
+        cancelTimers();
+        cancelSynchronization();
         toOrder.clear();
         consortium.getSubmitted().clear();
         consortium.setGenesis(next);
@@ -859,7 +875,7 @@ public class CollaboratorContext implements Collaborator {
                    .build();
     }
 
-    private void cancelToTimers() {
+    private void cancelTimers() {
         toOrder.values().forEach(eqt -> eqt.cancel());
     }
 
@@ -947,7 +963,7 @@ public class CollaboratorContext implements Collaborator {
             if (genesis == null) {
                 return;
             }
-            cancelToTimers();
+            cancelTimers();
             toOrder.clear();
             Validate validation = view.getContext().generateValidation(hash, block);
             if (validation == null) {

@@ -161,7 +161,7 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
-    default Transitions missingGenesis() {
+    default Transitions synchronizationFailed() {
         throw fsm().invalidTransitionOn();
     }
 

@@ -60,6 +60,7 @@ public class Parameters {
         private Duration                                       submitTimeout         = Duration.ofSeconds(30);
         private Duration                                       synchonrizeDuration   = Duration.ofMillis(500);
         private int                                            synchronizeSlice      = 5;
+        private Duration                                       synchronizeTimeout    = Duration.ofMinutes(2);
         private Duration                                       viewTimeout           = Duration.ofSeconds(60);
 
         public Parameters build() {
@@ -67,7 +68,8 @@ public class Parameters {
                     consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, maxCheckpointSegments,
                     viewTimeout, submitTimeout, processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks,
                     executor, checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, initialViewTimeout,
-                    dispatcher, synchonrizeDuration, maxViewBlocks, maxSyncBlocks, synchronizeSlice);
+                    dispatcher, synchonrizeDuration, maxViewBlocks, maxSyncBlocks, synchronizeSlice,
+                    synchronizeTimeout);
         }
 
         public int getCheckpointBlockSize() {
@@ -184,6 +186,10 @@ public class Parameters {
 
         public int getSynchronizeSlice() {
             return synchronizeSlice;
+        }
+
+        public Duration getSynchronizeTimeout() {
+            return synchronizeTimeout;
         }
 
         public Duration getTransactonTimeout() {
@@ -340,6 +346,11 @@ public class Parameters {
             return this;
         }
 
+        public Builder setSynchronizeTimeout(Duration synchronizeTimeout) {
+            this.synchronizeTimeout = synchronizeTimeout;
+            return this;
+        }
+
         public Builder setTransactonTimeout(Duration transactonTimeout) {
             this.submitTimeout = transactonTimeout;
             return this;
@@ -387,6 +398,7 @@ public class Parameters {
     public final Duration                                       submitTimeout;
     public final Duration                                       synchronizeDuration;
     public final int                                            synchronizeSlice;
+    public final Duration                                       synchronizeTimeout;
     public final Duration                                       viewTimeout;
 
     public Parameters(Context<Member> context, Router communications, Member member, Messenger.Parameters msgParameters,
@@ -397,7 +409,7 @@ public class Parameters {
             int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
             int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Duration initialViewTimeout,
             Executor dispatcher, Duration synchronizeDuration, int maxViewBlocks, int maxSyncBlocks,
-            int synchronizeSlice) {
+            int synchronizeSlice, Duration synchronizeTimeout) {
         this.context = context;
         this.communications = communications;
         this.maxSyncBlocks = maxSyncBlocks;
@@ -428,5 +440,6 @@ public class Parameters {
         this.dispatcher = dispatcher;
         this.synchronizeDuration = synchronizeDuration;
         this.synchronizeSlice = synchronizeSlice;
+        this.synchronizeTimeout = synchronizeTimeout;
     }
 }

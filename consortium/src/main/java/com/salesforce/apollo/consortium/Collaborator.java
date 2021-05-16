@@ -29,7 +29,7 @@ import com.salesforce.apollo.membership.Member;
  */
 public interface Collaborator {
 
-    void awaitGenesis();
+    void awaitSynchronization();
 
     void cancel(Timers t);
 
@@ -89,13 +89,12 @@ public interface Collaborator {
 
     void scheduleCheckpointBlock();
 
-    void shutdown();
-
-    // Synchronize the context with the current population
-    void synchronize();
+    void shutdown(); 
 
     void synchronize(int elected, Map<Member, StopData> regencyData);
 
     void totalOrderDeliver();
+
+    void cancelSynchronization();
 
 }

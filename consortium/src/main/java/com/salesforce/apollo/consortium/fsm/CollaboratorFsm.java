@@ -172,28 +172,6 @@ public enum CollaboratorFsm implements Transitions {
         }
 
     },
-    RECOVERED {
-        @Override
-        public Transitions becomeClient() {
-            return CLIENT;
-        }
-
-        @Override
-        public Transitions becomeFollower() {
-            return FOLLOWER;
-        }
-
-        @Override
-        public Transitions becomeLeader() {
-            return LEADER;
-        }
-
-        @Override
-        public Transitions joinAsMember() {
-            return JOINING_MEMBER;
-        }
-
-    },
     RECOVERING {
         @Override
         public Transitions becomeClient() {
@@ -212,7 +190,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Exit
         public void cancelTimer() {
-            context().cancel(Timers.AWAIT_GENESIS);
+            context().cancel(Timers.AWAIT_SYNCHRONIZATION);
         }
 
         @Override
@@ -232,15 +210,15 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions missingGenesis() {
-            context().awaitGenesis();
+        public Transitions synchronizationFailed() {
+            context().awaitSynchronization();
+            context().establishGenesisView();
             return null;
         }
 
         @Entry
         public void synchronize() {
-            context().awaitGenesis();
-            context().establishGenesisView();
+            context().awaitSynchronization();
         }
     };
 }

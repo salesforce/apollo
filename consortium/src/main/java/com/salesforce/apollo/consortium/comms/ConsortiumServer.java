@@ -11,11 +11,13 @@ import com.salesfoce.apollo.consortium.proto.BlockReplication;
 import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
+import com.salesfoce.apollo.consortium.proto.Initial;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.LinearServiceGrpc.LinearServiceImplBase;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
+import com.salesfoce.apollo.consortium.proto.Synchronize;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.consortium.Consortium.Service;
@@ -104,5 +106,23 @@ public class ConsortiumServer extends LinearServiceImplBase {
                             responseObserver.onNext(s.fetchBlocks(request, identity.getFrom()));
                             responseObserver.onCompleted();
                         });
+    }
+
+    @Override
+    public void sync(Synchronize request, StreamObserver<Initial> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                s -> {
+                    responseObserver.onNext(s.sync(request, identity.getFrom()));
+                    responseObserver.onCompleted();
+                });
+    }
+
+    @Override
+    public void fetchViewChain(BlockReplication request, StreamObserver<Blocks> responseObserver) {
+        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
+                s -> {
+                    responseObserver.onNext(s.fetchViewChain(request, identity.getFrom()));
+                    responseObserver.onCompleted();
+                });
     }
 }
