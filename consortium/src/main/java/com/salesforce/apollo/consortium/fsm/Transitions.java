@@ -161,10 +161,6 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
         return null;
     }
 
-    default Transitions synchronizationFailed() {
-        throw fsm().invalidTransitionOn();
-    }
-
     default void missingInitialView() {
         throw fsm().invalidTransitionOn();
     }
@@ -197,6 +193,14 @@ public interface Transitions extends FsmExecutor<CollaboratorContext, Transition
     }
 
     default Transitions syncd() {
+        throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions synchronizationFailed() {
+        throw fsm().invalidTransitionOn();
+    }
+
+    default Transitions synchronizing() {
         throw fsm().invalidTransitionOn();
     }
 

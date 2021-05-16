@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -326,7 +325,7 @@ public class Consortium {
     private final Map<Long, CheckpointState>                  cachedCheckpoints     = new ConcurrentHashMap<>();
     private final AtomicReference<HashedCertifiedBlock>       current               = new AtomicReference<>();
     private final PriorityBlockingQueue<HashedCertifiedBlock> deferedBlocks         = new PriorityBlockingQueue<>(1024,
-            (a, b) -> Long.compare(height(a.block), height(b.block)));
+            (a, b) -> Long.compare(a.height(), b.height()));
     private final List<DelayedMessage>                        delayed               = new CopyOnWriteArrayList<>();
     private final AtomicInteger                               deltaCheckpointBlocks = new AtomicInteger(
             Integer.MAX_VALUE);
@@ -339,7 +338,6 @@ public class Consortium {
     private final Lock                                        sequencer             = new ReentrantLock();
     private final AtomicBoolean                               started               = new AtomicBoolean();
     private final Map<HashKey, SubmittedTransaction>          submitted             = new ConcurrentHashMap<>();
-    private final AtomicBoolean                               synced                = new AtomicBoolean(false);
     private final Transitions                                 transitions;
     private final View                                        view;
 
@@ -348,7 +346,7 @@ public class Consortium {
     }
 
     public Consortium(Parameters parameters, MVStore s) {
-        this.params = parameters;
+        params = parameters;
         store = new Store(s);
         view = new View(new Service(), parameters, (id, messages) -> process(id, messages));
         fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
@@ -509,18 +507,22 @@ public class Consortium {
         }
     }
 
+    HashedCertifiedBlock pollDefered() {
+        return deferedBlocks.poll();
+    }
+
     void setCurrent(HashedCertifiedBlock current) {
         this.current.set(current);
     }
 
-    void setGenesis(HashedCertifiedBlock next) {
-        if (!this.genesis.compareAndSet(null, next)) {
+    void setGenesis(HashedCertifiedBlock genesis) {
+        if (!this.genesis.compareAndSet(null, genesis)) {
             throw new IllegalStateException("Genesis already set on: " + getMember());
         }
     }
 
-    void setLastCheckpoint(HashedCertifiedBlock next) {
-        this.lastCheckpoint.set(next);
+    void setLastCheckpoint(HashedCertifiedBlock checkpoint) {
+        this.lastCheckpoint.set(checkpoint);
     }
 
     void setLastViewChange(HashedCertifiedBlock block, Reconfigure view) {
@@ -852,7 +854,7 @@ public class Consortium {
                                   e.getCause());
                     }
                     processSubmit(transaction, onSubmit, pending, completed, succeeded);
-                }, ForkJoinPool.commonPool()); // TODO, put in passed executor
+                }, params.dispatcher);
             }
         });
     }

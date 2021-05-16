@@ -217,8 +217,34 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Entry
-        public void synchronize() {
+        public void synchronizeContext() {
             context().awaitSynchronization();
+        }
+
+        @Override
+        public Transitions synchronizing() {
+            return SYNCHRONIZING;
+        }
+    },
+    SYNCHRONIZING {
+        @Override
+        public Transitions becomeClient() {
+            return CLIENT;
+        }
+
+        @Override
+        public Transitions becomeFollower() {
+            return FOLLOWER;
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            return LEADER;
+        }
+
+        @Override
+        public Transitions fail() {
+            return PROTOCOL_FAILURE;
         }
     };
 }

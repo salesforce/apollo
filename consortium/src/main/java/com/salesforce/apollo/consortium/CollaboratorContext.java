@@ -248,6 +248,11 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public void awaitSynchronization() {
+        HashedCertifiedBlock anchor = consortium.pollDefered();
+        if (anchor != null) {
+            recover(anchor);
+            return;
+        }
         Parameters params = consortium.getParams();
         futureSynchronization = params.scheduler.schedule(() -> {
             futureSynchronization = null;
@@ -603,10 +608,12 @@ public class CollaboratorContext implements Collaborator {
             if (t == null) {
                 synchronize(p.a, p.b);
             } else {
-                synchronizationFailed(t);
+                log.error("Synchronization failed on: {}", getMember(), t);
+                consortium.getTransitions().fail();
             }
         }).exceptionally(t -> {
-            synchronizationFailed(t);
+            log.error("Synchronization failed on: {}", getMember(), t);
+            consortium.getTransitions().fail();
             return null;
         }).orTimeout(consortium.getParams().synchronizeTimeout.toMillis(), TimeUnit.MILLISECONDS);
     }
@@ -1500,13 +1507,27 @@ public class CollaboratorContext implements Collaborator {
         return consortium.store;
     }
 
-    private void synchronizationFailed(Throwable t) {
+    private void sychronizeFromCheckpoint() {
         // TODO Auto-generated method stub
 
     }
 
     private void synchronize(HashedCertifiedBlock genesis, HashedCertifiedBlock checkpoint) {
+        HashedCertifiedBlock current = consortium.getGenesis();
+        if (current == null) {
+            consortium.setGenesis(genesis);
+        }
+        consortium.setLastCheckpoint(checkpoint);
+        if (checkpoint == null) {
+            synchronizeFromGenesis();
+        } else {
+            sychronizeFromCheckpoint();
+        }
+    }
+
+    private void synchronizeFromGenesis() {
         // TODO Auto-generated method stub
+
     }
 
     private User userBody(Block block) {
