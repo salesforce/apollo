@@ -234,6 +234,8 @@ public class CollaboratorContext implements Collaborator {
     private final AtomicReference<HashedBlock>                                  lastBlock        = new AtomicReference<>();
     private final ProcessedBuffer                                               processed;
     private final Regency                                                       regency          = new Regency();
+    private final AtomicBoolean                                                 synchronizing    = new AtomicBoolean(
+            false);
     private final Map<Timers, Timer>                                            timers           = new ConcurrentHashMap<>();
     private final Map<HashKey, EnqueuedTransaction>                             toOrder          = new ConcurrentHashMap<>();
     private final View                                                          view;
@@ -748,7 +750,7 @@ public class CollaboratorContext implements Collaborator {
         consortium.getSubmitted().clear();
         consortium.setGenesis(next);
         consortium.getTransitions().genesisAccepted();
-        reconfigure(next, body.getInitialView(), true);
+        reconfigure(next, body.getInitialView(), !synchronizing.get());
         TransactionExecutor exec = consortium.getParams().executor;
         exec.beginBlock(0, next.hash);
         exec.processGenesis(body.getGenesisData());
@@ -784,7 +786,7 @@ public class CollaboratorContext implements Collaborator {
     }
 
     void reconfigure(HashedCertifiedBlock block, Reconfigure view, boolean genesis) {
-        reconfigureView(block, view, genesis, true);
+        reconfigureView(block, view, genesis, !synchronizing.get());
         resolveStatus();
     }
 
@@ -1378,12 +1380,6 @@ public class CollaboratorContext implements Collaborator {
         });
     }
 
-    @SuppressWarnings("unused")
-    // Incrementally assemble target checkpoint from random gossip
-    private void recoverFromCheckpoint() {
-
-    }
-
     private void reduceJoinTransactions() {
         Map<HashKey, EnqueuedTransaction> reduced = new HashMap<>(); // Member ID -> join txn
         toOrder.forEach((h, eqt) -> {
@@ -1507,27 +1503,29 @@ public class CollaboratorContext implements Collaborator {
         return consortium.store;
     }
 
-    private void sychronizeFromCheckpoint() {
-        // TODO Auto-generated method stub
-
-    }
-
     private void synchronize(HashedCertifiedBlock genesis, HashedCertifiedBlock checkpoint) {
+        synchronizing.set(true);
+        consortium.getTransitions().synchronizing();
         HashedCertifiedBlock current = consortium.getGenesis();
         if (current == null) {
             consortium.setGenesis(genesis);
         }
-        consortium.setLastCheckpoint(checkpoint);
         if (checkpoint == null) {
-            synchronizeFromGenesis();
+            log.info("Synchronizing from genesis: {} on: {}", genesis.hash, getMember());
+            CertifiedBlock current1 = genesis.block;
+            while (current1 != null) {
+                consortium.process(current1);
+                current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()));
+            }
         } else {
-            sychronizeFromCheckpoint();
+            consortium.setLastCheckpoint(checkpoint);
+            log.info("Synchronizing from checkpoint: {} on: {}", checkpoint.hash, getMember());
+            CertifiedBlock current1 = checkpoint.block;
+            while (current1 != null) {
+                consortium.process(current1);
+                current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()));
+            }
         }
-    }
-
-    private void synchronizeFromGenesis() {
-        // TODO Auto-generated method stub
-
     }
 
     private User userBody(Block block) {
