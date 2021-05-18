@@ -12,6 +12,8 @@ Apollo also requires [Maven](https://maven.apache.org/) 3.6.3 and above.
     * Creates an overlay network in which each member gossips with the successor of the member in a ring.
     * The monitoring ring is capable of detecting member crashes (failures).
     * Reliable group message flooding.
+* Atomic Broadcast - garbage collected group based atomic broadcast
+* Consortium - evolving group based transaction ordering service producing linear logs - block chains
 * [Avalanche](https://arxiv.org/abs/1906.08936) - scalable, leaderless, byzantine fault tolerant consensus
     * Consensus on causal ordering of events with a high dynamic range of nodes.
 * Ghost- a Merkle directed acyclic graph (DAG) used for storing block data
