@@ -7,6 +7,8 @@ Apollo requires the JDK 15+.
 Apollo also requires [Maven](https://maven.apache.org/) 3.6.3 and above.  
 
 ## Protocols
+* Group based protocol routing - multiple protocol instances per process
+* MTLS network communication - Local communication simulation supported as well
 * [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications
     * Assumes byzantine members (and allows one to parameterize the system according to the probability of such).
     * Creates an overlay network in which each member gossips with the successor of the member in a ring.
@@ -14,6 +16,7 @@ Apollo also requires [Maven](https://maven.apache.org/) 3.6.3 and above.
     * Reliable group message flooding.
 * Atomic Broadcast - garbage collected group based atomic broadcast
 * Consortium - evolving group based transaction ordering service producing linear logs - block chains
+* SQL State - JDBC accessible SQL store backed materialized view evolved from Consortium linear logs.  Supports DDL, Stored Procedures, functions.
 * [Avalanche](https://arxiv.org/abs/1906.08936) - scalable, leaderless, byzantine fault tolerant consensus
     * Consensus on causal ordering of events with a high dynamic range of nodes.
 * Ghost- a Merkle directed acyclic graph (DAG) used for storing block data
