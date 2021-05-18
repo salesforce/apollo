@@ -14,12 +14,6 @@ service LinearService {
     rpc submit (SubmitTransaction) returns (TransactionResult) {}
     rpc join (Join) returns (JoinResult) {} 
     rpc stopData(StopData) returns (google.protobuf.Empty){}
-    
-    /** Bootstrapping **/
-    rpc sync(Synchronize) returns (Initial) {}
-    rpc fetchBlocks(BlockReplication) returns (Blocks) {}
-    rpc fetchViewChain(BlockReplication) returns (Blocks) {}
-    rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
 }
 
 message Join {
@@ -172,6 +166,13 @@ message ReplicateTransactions {
 }
 
 /** Bootstrapping **/
+
+service Boostrap {
+    rpc sync(Synchronize) returns (Initial) {}
+    rpc fetchBlocks(BlockReplication) returns (Blocks) {}
+    rpc fetchViewChain(BlockReplication) returns (Blocks) {}
+    rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
+}
 
 message Synchronize {
     bytes context = 1;

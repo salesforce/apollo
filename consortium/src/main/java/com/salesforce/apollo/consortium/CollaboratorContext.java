@@ -68,7 +68,7 @@ import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.consortium.Consortium.Result;
 import com.salesforce.apollo.consortium.Consortium.Timers;
-import com.salesforce.apollo.consortium.comms.ConsortiumClient;
+import com.salesforce.apollo.consortium.comms.LinearClient;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.Bootstrapper;
 import com.salesforce.apollo.consortium.support.CheckpointState;
@@ -243,9 +243,9 @@ public class CollaboratorContext implements Collaborator {
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
-        Parameters params = consortium.getParams();
+        Parameters params = consortium.params;
         processed = new ProcessedBuffer(params.processedBufferSize);
-        view = consortium.getView();
+        view = consortium.view;
     }
 
     @Override
@@ -255,10 +255,10 @@ public class CollaboratorContext implements Collaborator {
             recover(anchor);
             return;
         }
-        Parameters params = consortium.getParams();
+        Parameters params = consortium.params;
         futureSynchronization = params.scheduler.schedule(() -> {
             futureSynchronization = null;
-            consortium.getTransitions().synchronizationFailed();
+            consortium.transitions.synchronizationFailed();
         }, params.viewTimeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 
@@ -297,7 +297,7 @@ public class CollaboratorContext implements Collaborator {
         transactions.forEach(eqt -> data.addTransactions(eqt.transaction));
         Stop stop = data.build();
         view.publish(stop);
-        consortium.getTransitions().deliverStop(stop, consortium.getMember());
+        consortium.transitions.deliverStop(stop, consortium.getMember());
     }
 
     @Override
@@ -326,7 +326,7 @@ public class CollaboratorContext implements Collaborator {
             log.debug("Delivering block: {} from: {} on: {}", hash, from, getMember());
             workingBlocks.put(hash, CertifiedBlock.newBuilder().setBlock(block));
             processToOrder(block);
-            consortium.getParams().dispatcher.execute(() -> {
+            consortium.params.dispatcher.execute(() -> {
                 Validate validation = view.getContext().generateValidation(hash, block);
                 if (validation == null) {
                     log.debug("Rejecting block proposal: {}, cannot validate from: {} on: {}", hash, from,
@@ -349,8 +349,8 @@ public class CollaboratorContext implements Collaborator {
             return;
         }
         cancel(Timers.CHECKPOINT_TIMEOUT);
-        schedule(Timers.CHECKPOINT_TIMEOUT, () -> consortium.getTransitions().checkpointTimeout(),
-                 consortium.getParams().submitTimeout);
+        schedule(Timers.CHECKPOINT_TIMEOUT, () -> consortium.transitions.checkpointTimeout(),
+                 consortium.params.submitTimeout);
         log.debug("deivering checkpoint processing: {} from: {} on: {}", checkpointProcessing.getCheckpoint(), from,
                   getMember());
         toOrder.values().forEach(eqt -> {
@@ -398,16 +398,16 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public void establishGenesisView() {
-        ViewContext newView = new ViewContext(consortium.getParams().genesisViewId, consortium.getParams().context,
+        ViewContext newView = new ViewContext(consortium.params.genesisViewId, consortium.params.context,
                 consortium.getMember(), this.view.nextViewConsensusKey(), Collections.emptyList());
         newView.activeAll();
-        view.viewChange(newView, consortium.getScheduler(), 0, consortium.service, true);
+        view.viewChange(newView, consortium.scheduler, 0, consortium.service, true);
         if (view.getContext().isMember()) {
             regency.currentRegent(-1);
             regency.nextRegent(-2);
             view.pause();
             consortium.joinMessageGroup(newView);
-            consortium.getTransitions().generateView();
+            consortium.transitions.generateView();
             view.resume(consortium.service);
         }
     }
@@ -426,10 +426,10 @@ public class CollaboratorContext implements Collaborator {
             return;
         }
         if (consortium.getMember().equals(leader)) {
-            consortium.getTransitions().synchronizingLeader();
-            consortium.getTransitions().deliverStopData(stopData, consortium.getMember());
+            consortium.transitions.synchronizingLeader();
+            consortium.transitions.deliverStopData(stopData, consortium.getMember());
         } else {
-            ConsortiumClient link = consortium.linkFor(leader);
+            LinearClient link = consortium.linkFor(leader);
             if (link == null) {
                 log.warn("Cannot get link to leader: {} on: {}", leader, consortium.getMember());
             } else {
@@ -490,11 +490,11 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public void join() {
-        log.debug("Petitioning to join view: {} on: {}", view.getContext().getId(), consortium.getParams().member);
+        log.debug("Petitioning to join view: {} on: {}", view.getContext().getId(), consortium.params.member);
 
         Join voteForMe = Join.newBuilder()
                              .setMember(consortium.getCurrent() == null
-                                     ? view.getContext().getView(consortium.getParams().signature.get())
+                                     ? view.getContext().getView(consortium.params.signature.get())
                                      : view.getNextView())
                              .setContext(view.getContext().getId().toByteString())
                              .build();
@@ -508,7 +508,7 @@ public class CollaboratorContext implements Collaborator {
             if (getMember().equals(c)) {
                 return;
             }
-            ConsortiumClient link = consortium.linkFor(c);
+            LinearClient link = consortium.linkFor(c);
             if (link == null) {
                 log.debug("Cannot get link for {}", c.getId());
                 pending.decrementAndGet();
@@ -611,13 +611,13 @@ public class CollaboratorContext implements Collaborator {
                 synchronize(p.a, p.b);
             } else {
                 log.error("Synchronization failed on: {}", getMember(), t);
-                consortium.getTransitions().fail();
+                consortium.transitions.fail();
             }
         }).exceptionally(t -> {
             log.error("Synchronization failed on: {}", getMember(), t);
-            consortium.getTransitions().fail();
+            consortium.transitions.fail();
             return null;
-        }).orTimeout(consortium.getParams().synchronizeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        }).orTimeout(consortium.params.synchronizeTimeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -633,9 +633,9 @@ public class CollaboratorContext implements Collaborator {
         Member regent = getRegent(regency.nextRegent());
         log.debug("Regent: {} on: {}", regent, consortium.getMember());
         if (consortium.getMember().equals(regent)) {
-            consortium.getTransitions().becomeLeader();
+            consortium.transitions.becomeLeader();
         } else {
-            consortium.getTransitions().becomeFollower();
+            consortium.transitions.becomeFollower();
         }
     }
 
@@ -657,9 +657,9 @@ public class CollaboratorContext implements Collaborator {
         if (synch != null) {
             log.debug("Synchronizing new regent: {} on: {} voting: {}", elected, consortium.getMember(),
                       regencyData.keySet().stream().map(e -> e.getId()).collect(Collectors.toList()));
-            consortium.getTransitions().synchronizingLeader();
+            consortium.transitions.synchronizingLeader();
             view.publish(synch);
-            consortium.getTransitions().deliverSync(synch, consortium.getMember());
+            consortium.transitions.deliverSync(synch, consortium.getMember());
         } else {
             log.error("Cannot generate Sync regent: {} on: {} voting: {}", elected, consortium.getMember(),
                       regencyData.keySet().stream().map(e -> e.getId()).collect(Collectors.toList()));
@@ -683,7 +683,7 @@ public class CollaboratorContext implements Collaborator {
                              currentConsensus(height);
                              log.info("Totally ordering block: {} height: {} on: {}", e.getKey(), height,
                                       consortium.getMember());
-                             consortium.getParams().consensus.apply(e.getValue().build(), null);
+                             consortium.params.consensus.apply(e.getValue().build(), null);
                              published.add(e.getKey());
                          }
                      });
@@ -692,7 +692,7 @@ public class CollaboratorContext implements Collaborator {
             if (removed != null) {
                 Block block = removed.getBlock();
                 if (block.getBody().getType() == BodyType.CHECKPOINT) {
-                    consortium.getTransitions().checkpointGenerated();
+                    consortium.transitions.checkpointGenerated();
                 }
             }
         });
@@ -711,7 +711,7 @@ public class CollaboratorContext implements Collaborator {
         cancelTimers();
         toOrder.clear();
         lastBlock(null);
-        consortium.getScheduler().cancelAll();
+        consortium.scheduler.cancelAll();
         workingBlocks.clear();
     }
 
@@ -728,7 +728,7 @@ public class CollaboratorContext implements Collaborator {
         CheckpointState checkpointState = checkpoint(body);
         if (checkpointState == null) {
             log.error("Cannot checkpoint: {} on: {}", hash, getMember());
-            consortium.getTransitions().fail();
+            consortium.transitions.fail();
             return;
         }
         consortium.checkpoint(next.height(), checkpointState);
@@ -747,11 +747,11 @@ public class CollaboratorContext implements Collaborator {
         cancelTimers();
         cancelSynchronization();
         toOrder.clear();
-        consortium.getSubmitted().clear();
+        consortium.submitted.clear();
         consortium.setGenesis(next);
-        consortium.getTransitions().genesisAccepted();
+        consortium.transitions.genesisAccepted();
         reconfigure(next, body.getInitialView(), !synchronizing.get());
-        TransactionExecutor exec = consortium.getParams().executor;
+        TransactionExecutor exec = consortium.params.executor;
         exec.beginBlock(0, next.hash);
         exec.processGenesis(body.getGenesisData());
         log.info("Processed genesis block: {} on: {}", next.hash, consortium.getMember());
@@ -773,12 +773,12 @@ public class CollaboratorContext implements Collaborator {
             return;
         }
         long height = next.height();
-        TransactionExecutor exec = consortium.getParams().executor;
+        TransactionExecutor exec = consortium.params.executor;
         exec.beginBlock(height, next.hash);
         body.getTransactionsList().forEach(txn -> {
             HashKey hash = new HashKey(txn.getHash());
             finalized(hash);
-            SubmittedTransaction submitted = consortium.getSubmitted().remove(hash);
+            SubmittedTransaction submitted = consortium.submitted.remove(hash);
             exec.execute(next.hash, txn, submitted == null ? null : submitted.onCompletion);
         });
         accept(next);
@@ -793,12 +793,12 @@ public class CollaboratorContext implements Collaborator {
     void reconfigureView(HashedCertifiedBlock block, Reconfigure view, boolean genesis, boolean resume) {
         this.view.pause();
         consortium.setLastViewChange(block, view);
-        ViewContext newView = new ViewContext(view, consortium.getParams().context, consortium.getMember(),
+        ViewContext newView = new ViewContext(view, consortium.params.context, consortium.getMember(),
                 genesis ? this.view.getContext().getConsensusKey() : this.view.nextViewConsensusKey());
         int current = genesis ? 2 : 0;
         regency.currentRegent(current);
         regency.nextRegent(current);
-        this.view.viewChange(newView, consortium.getScheduler(), current, consortium.service, resume);
+        this.view.viewChange(newView, consortium.scheduler, current, consortium.service, resume);
     }
 
     void synchronize(Sync syncData, Member regent) {
@@ -830,8 +830,8 @@ public class CollaboratorContext implements Collaborator {
     }
 
     private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
-        Parameters params = consortium.getParams();
-        return new Bootstrapper(anchor, getMember(), params, store(), view.getComm());
+        Parameters params = consortium.params;
+        return new Bootstrapper(anchor, getMember(), params, store(), consortium.bootstrapComm);
     }
 
     private StopData buildStopData(int currentRegent) {
@@ -899,7 +899,7 @@ public class CollaboratorContext implements Collaborator {
                 return null;
             }
         } else {
-            File state = consortium.getParams().checkpointer.apply(body.getCheckpoint());
+            File state = consortium.params.checkpointer.apply(body.getCheckpoint());
             if (state == null) {
                 log.error("Invalid checkpoint on: {}", getMember());
                 return null;
@@ -1003,15 +1003,15 @@ public class CollaboratorContext implements Collaborator {
         assert !transaction.isTimedOut() : "this should be unpossible";
         transaction.setTimedOut(true);
 
-        Parameters params = consortium.getParams();
+        Parameters params = consortium.params;
         long span = transaction.transaction.getJoin() ? params.joinTimeout.toMillis() : params.submitTimeout.toMillis();
 
         chunked(toOrder.values().stream().filter(eqt -> eqt.getDelay() <= span).peek(eqt -> {
             eqt.cancel();
             eqt.setTimedOut(true);
-            eqt.setTimer(consortium.getScheduler()
-                                   .schedule(Timers.TRANSACTION_TIMEOUT_2, () -> secondTimeout(eqt),
-                                             eqt.transaction.getJoin() ? params.joinTimeout : params.submitTimeout));
+            eqt.setTimer(consortium.scheduler.schedule(Timers.TRANSACTION_TIMEOUT_2, () -> secondTimeout(eqt),
+                                                       eqt.transaction.getJoin() ? params.joinTimeout
+                                                               : params.submitTimeout));
         }).map(eqt -> eqt.transaction), 100).forEach(txns -> {
             log.debug("Replicating from: {} count: {} first timeout on: {}", transaction.hash, txns.size(),
                       consortium.getMember());
@@ -1027,17 +1027,17 @@ public class CollaboratorContext implements Collaborator {
 
         schedule(Timers.CHECKPOINTING, () -> {
             view.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
-        }, consortium.getParams().submitTimeout.dividedBy(2));
+        }, consortium.params.submitTimeout.dividedBy(2));
 
-        File state = consortium.getParams().checkpointer.apply(currentHeight);
+        File state = consortium.params.checkpointer.apply(currentHeight);
         if (state == null) {
             log.error("Cannot create checkpoint");
-            consortium.getTransitions().fail();
+            consortium.transitions.fail();
             return;
         }
-        Checkpoint checkpoint = checkpoint(currentHeight, state, consortium.getParams().checkpointBlockSize);
+        Checkpoint checkpoint = checkpoint(currentHeight, state, consortium.params.checkpointBlockSize);
         if (checkpoint == null) {
-            consortium.getTransitions().fail();
+            consortium.transitions.fail();
         }
 
         HashedBlock lb = lastBlock.get();
@@ -1045,7 +1045,7 @@ public class CollaboratorContext implements Collaborator {
         if (previous == null) {
             log.error("Cannot generate checkpoint block on: {} height: {} no previous block: {}",
                       consortium.getMember(), currentHeight, lastBlock());
-            consortium.getTransitions().fail();
+            consortium.transitions.fail();
             return;
         }
         Block block = generateBlock(consortium.getLastCheckpointBlock(), thisHeight, previous,
@@ -1060,7 +1060,7 @@ public class CollaboratorContext implements Collaborator {
         if (validation == null) {
             log.debug("Cannot generate validation for block: {} hash: {} segements: {} on: {}", hash,
                       new HashKey(checkpoint.getStateHash()), checkpoint.getSegmentsCount(), consortium.getMember());
-            consortium.getTransitions().fail();
+            consortium.transitions.fail();
             cancel(Timers.CHECKPOINTING);
             return;
         }
@@ -1082,7 +1082,7 @@ public class CollaboratorContext implements Collaborator {
         byte[] nextView = new byte[32];
         Utils.secureEntropy().nextBytes(nextView);
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
-                                                     .setCheckpointBlocks(consortium.getParams().deltaCheckpointBlocks)
+                                                     .setCheckpointBlocks(consortium.params.deltaCheckpointBlocks)
                                                      .setId(ByteString.copyFrom(nextView))
                                                      .setTolerance(view.getContext().majority());
         toOrder.values().forEach(join -> {
@@ -1092,7 +1092,7 @@ public class CollaboratorContext implements Collaborator {
             } catch (InvalidProtocolBufferException e) {
                 log.error("Cannot generate genesis, unable to parse Join txnL {} on: {}", join.hash,
                           consortium.getMember());
-                consortium.getTransitions().fail();
+                consortium.transitions.fail();
                 return;
             }
             processed.add(join.hash);
@@ -1118,10 +1118,10 @@ public class CollaboratorContext implements Collaborator {
         toOrder.values().forEach(e -> e.cancel());
         toOrder.clear();
         Block block = generateBlock(consortium.getLastCheckpointBlock(), (long) 0,
-                                    consortium.getParams().genesisViewId.bytes(),
+                                    consortium.params.genesisViewId.bytes(),
                                     body(BodyType.GENESIS,
                                          Genesis.newBuilder()
-                                                .setGenesisData(Any.pack(consortium.getParams().genesisData))
+                                                .setGenesisData(Any.pack(consortium.params.genesisData))
                                                 .setInitialView(genesisView)
                                                 .build()),
                                     consortium.getLastViewChangeBlock());
@@ -1224,11 +1224,11 @@ public class CollaboratorContext implements Collaborator {
 
     private void generateNextBlock(boolean needCheckpoint) {
         if (needCheckpoint) {
-            consortium.getTransitions().generateCheckpoint();
+            consortium.transitions.generateCheckpoint();
         } else {
             generateNextBlock();
             if (needCheckpoint()) {
-                consortium.getTransitions().generateCheckpoint();
+                consortium.transitions.generateCheckpoint();
             } else {
                 scheduleFlush();
             }
@@ -1251,7 +1251,7 @@ public class CollaboratorContext implements Collaborator {
             if (selfJoin && toOrder.size() == view.getContext().activeCardinality()) {
                 log.trace("View formed, attempt: {} on: {} have: {} require: {} self join: {}", attempt,
                           consortium.getMember(), toOrder.size(), majority, selfJoin);
-                consortium.getTransitions().formView();
+                consortium.transitions.formView();
                 return;
             }
         }
@@ -1260,7 +1260,7 @@ public class CollaboratorContext implements Collaborator {
             if (selfJoin && toOrder.size() >= majority) {
                 log.trace("View formed, attempt: {} on: {} have: {} require: {} self join: {}", attempt,
                           consortium.getMember(), toOrder.size(), majority, selfJoin);
-                consortium.getTransitions().formView();
+                consortium.transitions.formView();
                 return;
             }
         }
@@ -1268,7 +1268,7 @@ public class CollaboratorContext implements Collaborator {
         log.trace("View has not been formed, attempt: {} rescheduling on: {} have: {} require: {} self join: {}",
                   attempt, consortium.getMember(), toOrder.size(), majority, selfJoin);
         join();
-        schedule(Timers.AWAIT_VIEW_MEMBERS, () -> joinView(attempt + 1), consortium.getParams().viewTimeout);
+        schedule(Timers.AWAIT_VIEW_MEMBERS, () -> joinView(attempt + 1), consortium.params.viewTimeout);
     }
 
     private long lastBlock() {
@@ -1293,9 +1293,9 @@ public class CollaboratorContext implements Collaborator {
         AtomicInteger processedBytes = new AtomicInteger(0);
         List<EnqueuedTransaction> batch = toOrder.values()
                                                  .stream()
-                                                 .limit(consortium.getParams().maxBatchSize)
+                                                 .limit(consortium.params.maxBatchSize)
                                                  .filter(eqt -> eqt != null)
-                                                 .filter(eqt -> processedBytes.addAndGet(eqt.getSerializedSize()) <= consortium.getParams().maxBatchByteSize)
+                                                 .filter(eqt -> processedBytes.addAndGet(eqt.getSerializedSize()) <= consortium.params.maxBatchByteSize)
                                                  .peek(eqt -> eqt.cancel())
                                                  .collect(Collectors.toList());
         batch.forEach(eqt -> {
@@ -1327,7 +1327,7 @@ public class CollaboratorContext implements Collaborator {
                     return;
                 }
                 log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash, view.getContext().getId(),
-                          consortium.getParams().member);
+                          consortium.params.member);
             }
         } else {
             if (remaining + succeeded < majority) {
@@ -1393,7 +1393,7 @@ public class CollaboratorContext implements Collaborator {
                 log.error("Failure deserializing ToOrder txn Join on {}", consortium.getMember(), e);
             }
         });
-//            log.trace("Reduced joins on: {} current: {} prev: {}", getMember(), reduced.size(), toOrder.size());
+        log.trace("Reduced joins on: {} current: {} prev: {}", getMember(), reduced.size(), toOrder.size());
         toOrder.clear();
         reduced.values().forEach(eqt -> toOrder.put(eqt.hash, eqt));
     }
@@ -1415,7 +1415,7 @@ public class CollaboratorContext implements Collaborator {
                           toOrder.size(), view.getContext().majority(), selfJoin, consortium.getMember());
                 rescheduleGenesis();
             }
-        }, consortium.getParams().viewTimeout);
+        }, consortium.params.viewTimeout);
     }
 
     private void resolveStatus() {
@@ -1423,25 +1423,33 @@ public class CollaboratorContext implements Collaborator {
         if (view.getContext().isViewMember()) {
             if (consortium.getMember().equals(regent)) {
                 log.debug("becoming leader on: {}", consortium.getMember());
-                consortium.getTransitions().becomeLeader();
+                consortium.transitions.becomeLeader();
             } else {
                 log.debug("becoming follower on: {} regent: {}", consortium.getMember(), regent);
-                consortium.getTransitions().becomeFollower();
+                consortium.transitions.becomeFollower();
             }
         } else if (view.getContext().isMember()) {
             log.debug("becoming joining member on: {} regent: {}", consortium.getMember(), regent);
-            consortium.getTransitions().joinAsMember();
+            consortium.transitions.joinAsMember();
         } else {
             log.debug("becoming client on: {} regent: {}", consortium.getMember(), regent);
-            consortium.getTransitions().becomeClient();
+            consortium.transitions.becomeClient();
         }
+    }
+
+    private void restoreFrom(HashedCertifiedBlock block) {
+        CheckpointState checkpoint = consortium.getChekpoint(block.height());
+        if (checkpoint == null) {
+            log.error("No checkpoint state available for {}:{} on: {}", block.hash, block.height(), getMember());
+        }
+        consortium.params.restorer.accept(checkpoint);
     }
 
     private Timer schedule(EnqueuedTransaction eqt) {
         eqt.cancel();
-        Parameters params = consortium.getParams();
+        Parameters params = consortium.params;
         Duration delta = eqt.transaction.getJoin() ? params.joinTimeout : params.submitTimeout;
-        Timer timer = consortium.getScheduler().schedule(Timers.TRANSACTION_TIMEOUT_1, () -> {
+        Timer timer = consortium.scheduler.schedule(Timers.TRANSACTION_TIMEOUT_1, () -> {
             if (eqt.isTimedOut()) {
                 secondTimeout(eqt);
             } else {
@@ -1466,17 +1474,17 @@ public class CollaboratorContext implements Collaborator {
         };
         timers.computeIfAbsent(label, k -> {
             log.trace("Setting timer for: {} duration: {} ms on: {}", label, delta.toMillis(), consortium.getMember());
-            return consortium.getScheduler().schedule(k, action, delta);
+            return consortium.scheduler.schedule(k, action, delta);
         });
     }
 
     private void scheduleFlush() {
-        schedule(Timers.FLUSH_BATCH, () -> generateBlock(), consortium.getParams().maxBatchDelay);
+        schedule(Timers.FLUSH_BATCH, () -> generateBlock(), consortium.params.maxBatchDelay);
     }
 
     private void secondTimeout(EnqueuedTransaction transaction) {
         log.debug("Second timeout for: {} on: {}", transaction.hash, consortium.getMember());
-        Parameters params = consortium.getParams();
+        Parameters params = consortium.params;
         long span = transaction.transaction.getJoin() ? params.joinTimeout.toMillis() : params.submitTimeout.toMillis();
         List<EnqueuedTransaction> timedOut = toOrder.values()
                                                     .stream()
@@ -1484,7 +1492,7 @@ public class CollaboratorContext implements Collaborator {
                                                     .limit(99)
                                                     .peek(eqt -> eqt.cancel())
                                                     .collect(Collectors.toList());
-        consortium.getTransitions().startRegencyChange(timedOut);
+        consortium.transitions.startRegencyChange(timedOut);
     }
 
     private boolean selfJoinRecorded() {
@@ -1505,26 +1513,19 @@ public class CollaboratorContext implements Collaborator {
 
     private void synchronize(HashedCertifiedBlock genesis, HashedCertifiedBlock checkpoint) {
         synchronizing.set(true);
-        consortium.getTransitions().synchronizing();
-        HashedCertifiedBlock current = consortium.getGenesis();
-        if (current == null) {
-            consortium.setGenesis(genesis);
-        }
+        consortium.transitions.synchronizing();
+        CertifiedBlock current1;
         if (checkpoint == null) {
             log.info("Synchronizing from genesis: {} on: {}", genesis.hash, getMember());
-            CertifiedBlock current1 = genesis.block;
-            while (current1 != null) {
-                consortium.process(current1);
-                current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()));
-            }
+            current1 = genesis.block;
         } else {
-            consortium.setLastCheckpoint(checkpoint);
             log.info("Synchronizing from checkpoint: {} on: {}", checkpoint.hash, getMember());
-            CertifiedBlock current1 = checkpoint.block;
-            while (current1 != null) {
-                consortium.process(current1);
-                current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()));
-            }
+            restoreFrom(checkpoint);
+            current1 = checkpoint.block;
+        }
+        while (current1 != null) {
+            consortium.process(current1);
+            current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()));
         }
     }
 
@@ -1546,7 +1547,7 @@ public class CollaboratorContext implements Collaborator {
         if (current.height() >= checkpoint.getCheckpoint()) {
             if (checkpoint(checkpoint) == null) {
                 log.error("Unable to generate checkpoint: {} on {}", checkpoint.getCheckpoint(), getMember());
-                consortium.getTransitions().fail();
+                consortium.transitions.fail();
                 return;
             }
             Validate validation = view.getContext().generateValidation(hash, block);
@@ -1559,11 +1560,11 @@ public class CollaboratorContext implements Collaborator {
             log.debug("Validating checkpoint block: {} from: {} on: {}", hash, from, getMember());
             view.publish(validation);
             deliverValidate(validation);
-            consortium.getTransitions().checkpointGenerated();
+            consortium.transitions.checkpointGenerated();
         } else {
             log.debug("Rescheduing checkpoint block: {} from: {} on: {}", hash, from, getMember());
             schedule(Timers.CHECKPOINTING, () -> validateCheckpoint(hash, block, from),
-                     consortium.getParams().submitTimeout.dividedBy(4));
+                     consortium.params.submitTimeout.dividedBy(4));
         }
     }
 }

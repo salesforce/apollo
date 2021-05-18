@@ -88,8 +88,8 @@ public class Regency {
                       currentRegent(), votes.size(), from, consortium.getMember());
             List<EnqueuedTransaction> msgs = stopMessages.stream().collect(Collectors.toList());
             stopMessages.clear();
-            consortium.getTransitions().startRegencyChange(msgs);
-            consortium.getTransitions().stopped();
+            consortium.transitions.startRegencyChange(msgs);
+            consortium.transitions.stopped();
         } else {
             log.debug("Majority not acheived, stop: {} current: {} votes: {} from {} on: {}", data.getNextRegent(),
                       currentRegent(), votes.size(), from, consortium.getMember());
@@ -136,7 +136,7 @@ public class Regency {
         log.debug("Delivering StopData: {} from {} on: {}", elected, from, consortium.getMember());
         regencyData.put(from, stopData);
         if (regencyData.size() >= majority) {
-            consortium.getTransitions().synchronize(elected, regencyData);
+            consortium.transitions.synchronize(elected, regencyData);
         } else {
             log.trace("accepted StopData: {} votes: {} from {} on: {}", elected, regencyData.size(), from,
                       consortium.getMember());
@@ -167,7 +167,7 @@ public class Regency {
         currentRegent(nextRegent());
         sync.put(cReg, syncData);
         cContext.synchronize(syncData, regent);
-        cContext.consortium.getTransitions().syncd();
+        cContext.consortium.transitions.syncd();
         resolveRegentStatus(cContext.consortium, view);
     }
 
@@ -183,9 +183,9 @@ public class Regency {
         Member regent = view.getContext().getRegent(nextRegent());
         log.debug("Regent: {} on: {}", regent, consortium.getMember());
         if (consortium.getMember().equals(regent)) {
-            consortium.getTransitions().becomeLeader();
+            consortium.transitions.becomeLeader();
         } else {
-            consortium.getTransitions().becomeFollower();
+            consortium.transitions.becomeFollower();
         }
     }
 

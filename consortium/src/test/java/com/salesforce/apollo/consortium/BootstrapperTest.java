@@ -34,8 +34,8 @@ import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.Initial;
 import com.salesfoce.apollo.consortium.proto.Initial.Builder;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.consortium.Consortium.Service;
-import com.salesforce.apollo.consortium.comms.ConsortiumClient;
+import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
+import com.salesforce.apollo.consortium.comms.BootstrapClient;
 import com.salesforce.apollo.consortium.support.Bootstrapper;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.membership.Context;
@@ -102,7 +102,7 @@ public class BootstrapperTest {
         bootstrapStore.validateViewChain(testChain.getSynchronizeView().height());
 
         Member member = members.get(0);
-        ConsortiumClient client = mock(ConsortiumClient.class);
+        BootstrapClient client = mock(BootstrapClient.class);
 
         when(client.sync(any())).then(new Answer<>() {
             @Override
@@ -142,7 +142,7 @@ public class BootstrapperTest {
         });
 
         @SuppressWarnings("unchecked")
-        CommonCommunications<ConsortiumClient, Service> comms = mock(CommonCommunications.class);
+        CommonCommunications<BootstrapClient, BootstrappingService> comms = mock(CommonCommunications.class);
         when(comms.apply(any(), any())).thenReturn(client);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         Duration duration = Duration.ofMillis(100);

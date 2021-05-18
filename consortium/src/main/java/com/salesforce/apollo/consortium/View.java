@@ -25,8 +25,8 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
-import com.salesforce.apollo.consortium.comms.ConsortiumClient;
-import com.salesforce.apollo.consortium.comms.ConsortiumServer;
+import com.salesforce.apollo.consortium.comms.LinearClient;
+import com.salesforce.apollo.consortium.comms.LinearServer;
 import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
@@ -41,9 +41,9 @@ import com.salesforce.apollo.protocols.HashKey;
 public class View {
     private static final Logger log = LoggerFactory.getLogger(View.class);
 
-    private final AtomicReference<CommonCommunications<ConsortiumClient, Service>>   comm                     = new AtomicReference<>();
+    private final AtomicReference<CommonCommunications<LinearClient, Service>>   comm                     = new AtomicReference<>();
     private final AtomicReference<ViewContext>                                       context                  = new AtomicReference<>();
-    private final Function<HashKey, CommonCommunications<ConsortiumClient, Service>> createClientComms;
+    private final Function<HashKey, CommonCommunications<LinearClient, Service>> createClientComms;
     private final AtomicReference<Messenger>                                         messenger                = new AtomicReference<>();
     private final AtomicReference<ViewMember>                                        nextView                 = new AtomicReference<>();
     private final AtomicReference<KeyPair>                                           nextViewConsensusKeyPair = new AtomicReference<>();
@@ -53,10 +53,10 @@ public class View {
 
     public View(Service service, Parameters parameters, BiConsumer<HashKey, List<Msg>> process) {
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, service,
-                                                                       r -> new ConsortiumServer(
+                                                                       r -> new LinearServer(
                                                                                parameters.communications.getClientIdentityProvider(),
                                                                                null, r),
-                                                                       ConsortiumClient.getCreate(null));
+                                                                       LinearClient.getCreate(null));
         this.params = parameters;
         this.process = process;
     }
@@ -70,7 +70,7 @@ public class View {
         nextViewConsensusKeyPair.set(null);
     }
 
-    public CommonCommunications<ConsortiumClient, Service> getComm() {
+    public CommonCommunications<LinearClient, Service> getComm() {
         return comm.get();
     }
 
@@ -119,7 +119,7 @@ public class View {
     }
 
     public void pause() {
-        CommonCommunications<ConsortiumClient, Service> currentComm = comm.get();
+        CommonCommunications<LinearClient, Service> currentComm = comm.get();
         if (currentComm != null) {
             ViewContext current = context.get();
             assert current != null : "No current view, but comm exists!";
@@ -178,7 +178,7 @@ public class View {
     }
 
     private void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
-        CommonCommunications<ConsortiumClient, Service> currentComm = getComm();
+        CommonCommunications<LinearClient, Service> currentComm = getComm();
         if (currentComm != null) {
             ViewContext current = getContext();
             assert current != null : "No current view, but comm exists!";

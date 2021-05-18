@@ -27,16 +27,14 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.consortium.proto.BlockReplication;
 import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.BodyType;
-import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Initial;
 import com.salesfoce.apollo.consortium.proto.Synchronize;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.Consortium.Service;
+import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
 import com.salesforce.apollo.consortium.Parameters;
 import com.salesforce.apollo.consortium.Store;
-import com.salesforce.apollo.consortium.comms.ConsortiumClient;
-import com.salesforce.apollo.consortium.comms.ConsortiumClient;
+import com.salesforce.apollo.consortium.comms.BootstrapClient;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.BloomFilter;
@@ -71,7 +69,7 @@ public class Bootstrapper {
     private HashedCertifiedBlock                                                      checkpoint;
     private CompletableFuture<CheckpointState>                                        checkpointAssembled;
     private HashedCertifiedBlock                                                      checkpointView;
-    private final CommonCommunications<ConsortiumClient, Service>                     comms;
+    private final CommonCommunications<BootstrapClient, BootstrappingService>         comms;
     private final Context<Member>                                                     context;
     private final Duration                                                            duration;
     private final double                                                              fpr;
@@ -88,8 +86,9 @@ public class Bootstrapper {
     private final CompletableFuture<Boolean>                                          viewChainSynchronized = new CompletableFuture<>();
 
     public Bootstrapper(HashedCertifiedBlock anchor, Member member, Context<Member> context,
-            CommonCommunications<ConsortiumClient, Service> comms, double falsePositiveRate, Store store, int slice,
-            ScheduledExecutorService scheduler, int maxViewBlocks, Duration duration, int maxBlocks) {
+            CommonCommunications<BootstrapClient, BootstrappingService> comms, double falsePositiveRate, Store store,
+            int slice, ScheduledExecutorService scheduler, int maxViewBlocks, Duration duration, int maxBlocks) {
+        assert comms != null;
         this.comms = comms;
         this.context = context;
         this.fpr = falsePositiveRate;
@@ -111,8 +110,8 @@ public class Bootstrapper {
     }
 
     public Bootstrapper(HashedCertifiedBlock anchor, Member member, Parameters params, Store store,
-            CommonCommunications<ConsortiumClient, Service> comms) {
-        this(anchor, member, params.context, comms, params.msgParameters.falsePositiveRate, store,
+            CommonCommunications<BootstrapClient, BootstrappingService> bootstrapComm) {
+        this(anchor, member, params.context, bootstrapComm, params.msgParameters.falsePositiveRate, store,
                 params.synchronizeSlice, params.scheduler, params.maxViewBlocks, params.synchronizeDuration,
                 params.maxSyncBlocks);
     }
@@ -132,7 +131,7 @@ public class Bootstrapper {
         }
         while (graphCut.hasNext()) {
             Member m = graphCut.next();
-            ConsortiumClient link = comms.apply(member, m);
+            BootstrapClient link = comms.apply(m, member);
             if (link == null) {
                 log.debug("No link for anchor completion: {} on: {}", m.getId(), member.getId());
                 continue;
@@ -199,7 +198,7 @@ public class Bootstrapper {
         }
         while (graphCut.hasNext()) {
             Member m = graphCut.next();
-            ConsortiumClient link = comms.apply(member, m);
+            BootstrapClient link = comms.apply(m, member);
             if (link == null) {
                 log.info("No link for view chain completion: {} on: {}", m.getId(), member.getId());
                 continue;
@@ -409,7 +408,7 @@ public class Bootstrapper {
         Member m = graphCut.get(0);
         graphCut = graphCut.subList(1, graphCut.size());
 
-        ConsortiumClient link = comms.apply(member, m);
+        BootstrapClient link = comms.apply(m, member);
         if (link == null) {
             log.info("No link for {} on: {}", m, member);
             countdown.countdown();
@@ -431,22 +430,26 @@ public class Bootstrapper {
     private Runnable initialize(Member m, List<Member> graphCut, ListenableFuture<Initial> future,
                                 Map<HashKey, Initial> votes, CountdownAction countdown) {
         return () -> {
-            final HashedCertifiedBlock established = genesis;
-            if (sync.isDone() || established != null) {
-                return;
-            }
-
             try {
-                votes.put(m.getId(), future.get());
-                log.debug("Synchronization vote: {} from: {} recorded on: {}",
-                          new HashedCertifiedBlock(future.get().getGenesis()).hash, m, member);
-            } catch (InterruptedException e) {
-                log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
-            } catch (ExecutionException e) {
-                log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
-            }
-            if (!countdown.countdown()) {
-                initialize(graphCut, votes, countdown);
+                final HashedCertifiedBlock established = genesis;
+                if (sync.isDone() || established != null) {
+                    return;
+                }
+
+                try {
+                    votes.put(m.getId(), future.get());
+                    log.debug("Synchronization vote: {} from: {} recorded on: {}",
+                              new HashedCertifiedBlock(future.get().getGenesis()).hash, m, member);
+                } catch (InterruptedException e) {
+                    log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
+                } catch (ExecutionException e) {
+                    log.debug("Error counting vote from: {} on: {}", m.getId(), member.getId());
+                }
+                if (!countdown.countdown()) {
+                    initialize(graphCut, votes, countdown);
+                }
+            } catch (Throwable t) {
+                log.error("Failure in recording vote from: {} on: {}", m.getId(), member.getId());
             }
         };
     }
