@@ -7,6 +7,7 @@
 package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -36,12 +37,12 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
 import com.salesforce.apollo.consortium.support.Bootstrapper;
+import com.salesforce.apollo.consortium.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Pair;
 import com.salesforce.apollo.protocols.Utils;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
@@ -156,8 +157,13 @@ public class BootstrapperTest {
                           .build(),
                 store, comms);
 
-        CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> syncFuture = boot.synchronize();
-        syncFuture.get(10, TimeUnit.SECONDS);
+        CompletableFuture<SynchronizedState> syncFuture = boot.synchronize();
+        SynchronizedState state = syncFuture.get(10, TimeUnit.SECONDS);
+        assertNotNull(state);
+        assertNotNull(state.genesis);
+        assertNotNull(state.checkpoint);
+        assertNotNull(state.lastCheckpoint);
+        assertNotNull(state.lastView);
     }
 
 }

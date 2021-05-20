@@ -71,6 +71,7 @@ import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.comms.LinearClient;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.Bootstrapper;
+import com.salesforce.apollo.consortium.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.HashedBlock;
@@ -81,7 +82,6 @@ import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Pair;
 import com.salesforce.apollo.protocols.Utils;
 
 /**
@@ -226,19 +226,18 @@ public class CollaboratorContext implements Collaborator {
         return body;
     }
 
-    final Consortium                                                            consortium;
-    private final AtomicLong                                                    currentConsensus = new AtomicLong(-1);
-    private CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> futureBootstrap;
-    private ScheduledFuture<?>                                                  futureSynchronization;
-    private final AtomicReference<HashedBlock>                                  lastBlock        = new AtomicReference<>();
-    private final ProcessedBuffer                                               processed;
-    private final Regency                                                       regency          = new Regency();
-    private final AtomicBoolean                                                 synchronizing    = new AtomicBoolean(
-            false);
-    private final Map<Timers, Timer>                                            timers           = new ConcurrentHashMap<>();
-    private final Map<HashKey, EnqueuedTransaction>                             toOrder          = new ConcurrentHashMap<>();
-    private final View                                                          view;
-    private final Map<HashKey, CertifiedBlock.Builder>                          workingBlocks    = new ConcurrentHashMap<>();
+    final Consortium                                   consortium;
+    private final AtomicLong                           currentConsensus = new AtomicLong(-1);
+    private CompletableFuture<SynchronizedState>       futureBootstrap;
+    private ScheduledFuture<?>                         futureSynchronization;
+    private final AtomicReference<HashedBlock>         lastBlock        = new AtomicReference<>();
+    private final ProcessedBuffer                      processed;
+    private final Regency                              regency          = new Regency();
+    private final AtomicBoolean                        synchronizing    = new AtomicBoolean(false);
+    private final Map<Timers, Timer>                   timers           = new ConcurrentHashMap<>();
+    private final Map<HashKey, EnqueuedTransaction>    toOrder          = new ConcurrentHashMap<>();
+    private final View                                 view;
+    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks    = new ConcurrentHashMap<>();
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
@@ -605,9 +604,9 @@ public class CollaboratorContext implements Collaborator {
             futureSynchronization.cancel(true);
             futureSynchronization = null;
         }
-        futureBootstrap = bootstrapper(anchor).synchronize().whenComplete((p, t) -> {
+        futureBootstrap = bootstrapper(anchor).synchronize().whenComplete((s, t) -> {
             if (t == null) {
-                synchronize(p.a, p.b);
+                synchronize(s);
             } else {
                 log.error("Synchronization failed on: {}", getMember(), t);
                 consortium.transitions.fail();
@@ -1436,11 +1435,8 @@ public class CollaboratorContext implements Collaborator {
         }
     }
 
-    private void restoreFrom(HashedCertifiedBlock block) {
-        CheckpointState checkpoint = consortium.getChekpoint(block.height());
-        if (checkpoint == null) {
-            log.error("No checkpoint state available for {}:{} on: {}", block.hash, block.height(), getMember());
-        }
+    private void restoreFrom(HashedCertifiedBlock block, CheckpointState checkpoint) {
+        consortium.checkpoint(block.height(), checkpoint);
         consortium.params.restorer.accept(checkpoint);
         consortium.restore();
         processCheckpoint(block);
@@ -1512,17 +1508,17 @@ public class CollaboratorContext implements Collaborator {
         return consortium.store;
     }
 
-    private void synchronize(HashedCertifiedBlock genesis, HashedCertifiedBlock checkpoint) {
+    private void synchronize(SynchronizedState state) {
         synchronizing.set(true);
         consortium.transitions.synchronizing();
         CertifiedBlock current1;
-        if (checkpoint == null) {
-            log.info("Synchronizing from genesis: {} on: {}", genesis.hash, getMember());
-            current1 = genesis.block;
+        if (state.lastCheckpoint == null) {
+            log.info("Synchronizing from genesis: {} on: {}", state.genesis.hash, getMember());
+            current1 = state.genesis.block;
         } else {
-            log.info("Synchronizing from checkpoint: {} on: {}", checkpoint.hash, getMember());
-            restoreFrom(checkpoint);
-            current1 = consortium.store.getCertifiedBlock(checkpoint.height() + 1);
+            log.info("Synchronizing from checkpoint: {} on: {}", state.lastCheckpoint.hash, getMember());
+            restoreFrom(state.lastCheckpoint, state.checkpoint);
+            current1 = consortium.store.getCertifiedBlock(state.lastCheckpoint.height() + 1);
         }
         while (current1 != null) {
             consortium.synchronizedProcess(current1, false);

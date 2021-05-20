@@ -51,6 +51,21 @@ public class Bootstrapper {
 
     }
 
+    public static class SynchronizedState {
+        public final CheckpointState      checkpoint;
+        public final HashedCertifiedBlock genesis;
+        public final HashedCertifiedBlock lastCheckpoint;
+        public final HashedCertifiedBlock lastView;
+
+        public SynchronizedState(HashedCertifiedBlock genesis, HashedCertifiedBlock lastView,
+                HashedCertifiedBlock lastCheckpoint, CheckpointState checkpoint) {
+            this.genesis = genesis;
+            this.lastView = lastView;
+            this.lastCheckpoint = lastCheckpoint;
+            this.checkpoint = checkpoint;
+        }
+    }
+
     private static final Logger log = LoggerFactory.getLogger(Bootstrapper.class);
 
     private static HashKey randomCut() {
@@ -61,18 +76,19 @@ public class Bootstrapper {
         return new HashKey(cut);
     }
 
-    private final HashedCertifiedBlock                                                anchor;
-    private final CompletableFuture<Boolean>                                          anchorSynchronized    = new CompletableFuture<>();
-    private HashedCertifiedBlock                                                      checkpoint;
-    private CompletableFuture<CheckpointState>                                        checkpointAssembled;
-    private HashedCertifiedBlock                                                      checkpointView;
-    private final CommonCommunications<BootstrapClient, BootstrappingService>         comms;
-    private volatile HashedCertifiedBlock                                             genesis;
-    private final Store                                                               store;
-    private final CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> sync                  = new CompletableFuture<>();
-    private final CompletableFuture<Boolean>                                          viewChainSynchronized = new CompletableFuture<>();
-    private final Parameters                                                          params;
-    private final long                                                                lastCheckpoint;
+    private final HashedCertifiedBlock                                        anchor;
+    private final CompletableFuture<Boolean>                                  anchorSynchronized    = new CompletableFuture<>();
+    private HashedCertifiedBlock                                              checkpoint;
+    private CompletableFuture<CheckpointState>                                checkpointAssembled;
+    private CheckpointState                                                   checkpointState;
+    private HashedCertifiedBlock                                              checkpointView;
+    private final CommonCommunications<BootstrapClient, BootstrappingService> comms;
+    private volatile HashedCertifiedBlock                                     genesis;
+    private final long                                                        lastCheckpoint;
+    private final Parameters                                                  params;
+    private final Store                                                       store;
+    private final CompletableFuture<SynchronizedState>                        sync                  = new CompletableFuture<>();
+    private final CompletableFuture<Boolean>                                  viewChainSynchronized = new CompletableFuture<>();
 
     public Bootstrapper(HashedCertifiedBlock anchor, Parameters params, Store store,
             CommonCommunications<BootstrapClient, BootstrappingService> bootstrapComm) {
@@ -91,7 +107,7 @@ public class Bootstrapper {
         }
     }
 
-    public CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> synchronize() {
+    public CompletableFuture<SynchronizedState> synchronize() {
         scheduleSample();
         return sync;
     }
@@ -310,7 +326,7 @@ public class Bootstrapper {
 
         if (mostRecent == null) {
             // Nothing but Genesis
-            sync.complete(new Pair<>(genesis, null));
+            sync.complete(new SynchronizedState(genesis, checkpointView, checkpoint, checkpointState));
             return;
         }
 
@@ -327,6 +343,10 @@ public class Bootstrapper {
 
         // assemble the checkpoint
         checkpointAssembled = assembler.assemble(params.scheduler, params.synchronizeDuration);
+        checkpointAssembled.whenComplete((cps, t) -> {
+            log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member);
+            checkpointState = cps;
+        });
 
         // Checkpoint must be assembled, view chain synchronized, and blocks spanning
         // the anchor block to the checkpoint must be filled
@@ -335,7 +355,7 @@ public class Bootstrapper {
                 log.info("Synchronized to: {} from: {} last view: {} on: {}", genesis.hash,
                          checkpoint == null ? genesis.hash : checkpoint.hash,
                          checkpointView == null ? genesis.hash : checkpoint.hash, params.member);
-                sync.complete(new Pair<>(genesis, checkpoint == null ? genesis : checkpoint));
+                sync.complete(new SynchronizedState(genesis, checkpointView, checkpoint, checkpointState));
             } else {
                 log.error("Failed synchronizing to {} from: {} last view: {} on: {}", genesis.hash,
                           checkpoint == null ? genesis.hash : checkpoint.hash,
