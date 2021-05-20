@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.state;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
@@ -47,7 +47,7 @@ public class AvaAdapter implements Processor {
         return avalanche;
     }
 
-    public BiFunction<CertifiedBlock, Future<?>, HashKey> getConsensus() {
+    public BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> getConsensus() {
         return (cb, f) -> avalanche.submitTransaction(cb, new HashKey(cb.getBlock().getHeader().getPrevious()));
     }
 

@@ -394,15 +394,18 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public void establishGenesisView() {
-        ViewContext newView = new ViewContext(consortium.params.genesisViewId, consortium.params.context,
-                consortium.getMember(), this.consortium.view.nextViewConsensusKey(), Collections.emptyList());
-        newView.activeAll();
-        consortium.view.viewChange(newView, consortium.scheduler, 0, consortium.service, true);
-        if (consortium.view.getContext().isMember()) {
+        ViewContext current = consortium.view.getContext();
+        if (current == null || !current.getId().equals(consortium.params.genesisViewId)) {
+            current = new ViewContext(consortium.params.genesisViewId, consortium.params.context,
+                    consortium.getMember(), this.consortium.view.nextViewConsensusKey(), Collections.emptyList());
+            current.activeAll();
+            consortium.view.viewChange(current, consortium.scheduler, 0, consortium.service, true);
+        }
+        if (current.isMember()) {
             regency.currentRegent(-1);
             regency.nextRegent(-2);
             consortium.view.pause();
-            consortium.joinMessageGroup(newView);
+            consortium.joinMessageGroup(current);
             consortium.transitions.generateView();
             consortium.view.resume(consortium.service);
         }

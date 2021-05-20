@@ -42,14 +42,14 @@ public class View {
     private static final Logger log = LoggerFactory.getLogger(View.class);
 
     private final AtomicReference<CommonCommunications<LinearClient, Service>>   comm                     = new AtomicReference<>();
-    private final AtomicReference<ViewContext>                                       context                  = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                   context                  = new AtomicReference<>();
     private final Function<HashKey, CommonCommunications<LinearClient, Service>> createClientComms;
-    private final AtomicReference<Messenger>                                         messenger                = new AtomicReference<>();
-    private final AtomicReference<ViewMember>                                        nextView                 = new AtomicReference<>();
-    private final AtomicReference<KeyPair>                                           nextViewConsensusKeyPair = new AtomicReference<>();
-    private final AtomicReference<MemberOrder>                                       order                    = new AtomicReference<>();
-    private final Parameters                                                         params;
-    private final BiConsumer<HashKey, List<Msg>>                                     process;
+    private final AtomicReference<Messenger>                                     messenger                = new AtomicReference<>();
+    private final AtomicReference<ViewMember>                                    nextView                 = new AtomicReference<>();
+    private final AtomicReference<KeyPair>                                       nextViewConsensusKeyPair = new AtomicReference<>();
+    private final AtomicReference<MemberOrder>                                   order                    = new AtomicReference<>();
+    private final Parameters                                                     params;
+    private final BiConsumer<HashKey, List<Msg>>                                 process;
 
     public View(Service service, Parameters parameters, BiConsumer<HashKey, List<Msg>> process) {
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, service,
