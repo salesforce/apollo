@@ -236,14 +236,12 @@ public class CollaboratorContext implements Collaborator {
     private final AtomicBoolean                        synchronizing    = new AtomicBoolean(false);
     private final Map<Timers, Timer>                   timers           = new ConcurrentHashMap<>();
     private final Map<HashKey, EnqueuedTransaction>    toOrder          = new ConcurrentHashMap<>();
-    private final View                                 view;
     private final Map<HashKey, CertifiedBlock.Builder> workingBlocks    = new ConcurrentHashMap<>();
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
         Parameters params = consortium.params;
         processed = new ProcessedBuffer(params.processedBufferSize);
-        view = consortium.view;
     }
 
     @Override
@@ -290,11 +288,11 @@ public class CollaboratorContext implements Collaborator {
                  consortium.getMember());
         toOrder.values().forEach(t -> t.cancel());
         Stop.Builder data = Stop.newBuilder()
-                                .setContext(view.getContext().getId().toByteString())
+                                .setContext(consortium.view.getContext().getId().toByteString())
                                 .setNextRegent(regency.nextRegent());
         transactions.forEach(eqt -> data.addTransactions(eqt.transaction));
         Stop stop = data.build();
-        view.publish(stop);
+        consortium.view.publish(stop);
         consortium.transitions.deliverStop(stop, consortium.getMember());
     }
 
@@ -305,7 +303,7 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public void deliverBlock(Block block, Member from) {
-        Member regent = view.getContext().getRegent(regency.currentRegent());
+        Member regent = consortium.view.getContext().getRegent(regency.currentRegent());
         if (!regent.equals(from)) {
             log.debug("Ignoring block from non regent: {} actual: {} on: {}", from, regent, getMember());
             return;
@@ -325,14 +323,14 @@ public class CollaboratorContext implements Collaborator {
             workingBlocks.put(hash, CertifiedBlock.newBuilder().setBlock(block));
             processToOrder(block);
             consortium.params.dispatcher.execute(() -> {
-                Validate validation = view.getContext().generateValidation(hash, block);
+                Validate validation = consortium.view.getContext().generateValidation(hash, block);
                 if (validation == null) {
                     log.debug("Rejecting block proposal: {}, cannot validate from: {} on: {}", hash, from,
                               consortium.getMember());
                     workingBlocks.remove(hash);
                     return;
                 }
-                view.publish(validation);
+                consortium.view.publish(validation);
                 deliverValidate(validation);
             });
         }
@@ -360,17 +358,17 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public void deliverStop(Stop data, Member from) {
-        regency.deliverStop(data, from, consortium, view, toOrder, processed);
+        regency.deliverStop(data, from, consortium, consortium.view, toOrder, processed);
     }
 
     @Override
     public void deliverStopData(StopData stopData, Member from) {
-        regency.deliverStopData(stopData, from, view, consortium);
+        regency.deliverStopData(stopData, from, consortium.view, consortium);
     }
 
     @Override
     public void deliverSync(Sync syncData, Member from) {
-        regency.deliverSync(syncData, from, view, this);
+        regency.deliverSync(syncData, from, consortium.view, this);
     }
 
     @Override
@@ -383,7 +381,7 @@ public class CollaboratorContext implements Collaborator {
         }
         log.debug("Delivering validate: {} on: {}", hash, consortium.getMember());
         HashKey memberID = new HashKey(v.getId());
-        if (view.getContext().validate(certifiedBlock.getBlock(), v)) {
+        if (consortium.view.getContext().validate(certifiedBlock.getBlock(), v)) {
             certifiedBlock.addCertifications(Certification.newBuilder()
                                                           .setId(v.getId())
                                                           .setSignature(v.getSignature()));
@@ -397,16 +395,16 @@ public class CollaboratorContext implements Collaborator {
     @Override
     public void establishGenesisView() {
         ViewContext newView = new ViewContext(consortium.params.genesisViewId, consortium.params.context,
-                consortium.getMember(), this.view.nextViewConsensusKey(), Collections.emptyList());
+                consortium.getMember(), this.consortium.view.nextViewConsensusKey(), Collections.emptyList());
         newView.activeAll();
-        view.viewChange(newView, consortium.scheduler, 0, consortium.service, true);
-        if (view.getContext().isMember()) {
+        consortium.view.viewChange(newView, consortium.scheduler, 0, consortium.service, true);
+        if (consortium.view.getContext().isMember()) {
             regency.currentRegent(-1);
             regency.nextRegent(-2);
-            view.pause();
+            consortium.view.pause();
             consortium.joinMessageGroup(newView);
             consortium.transitions.generateView();
-            view.resume(consortium.service);
+            consortium.view.resume(consortium.service);
         }
     }
 
@@ -488,16 +486,17 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public void join() {
-        log.debug("Petitioning to join view: {} on: {}", view.getContext().getId(), consortium.params.member);
+        log.debug("Petitioning to join view: {} on: {}", consortium.view.getContext().getId(),
+                  consortium.params.member);
 
         Join voteForMe = Join.newBuilder()
                              .setMember(consortium.getCurrent() == null
-                                     ? view.getContext().getView(consortium.params.signature.get())
-                                     : view.getNextView())
-                             .setContext(view.getContext().getId().toByteString())
+                                     ? consortium.view.getContext().getView(consortium.params.signature.get())
+                                     : consortium.view.getNextView())
+                             .setContext(consortium.view.getContext().getId().toByteString())
                              .build();
 
-        List<Member> group = view.getContext().streamRandomRing().collect(Collectors.toList());
+        List<Member> group = consortium.view.getContext().streamRandomRing().collect(Collectors.toList());
         AtomicInteger pending = new AtomicInteger(group.size());
         AtomicInteger success = new AtomicInteger();
         AtomicBoolean completed = new AtomicBoolean();
@@ -656,7 +655,7 @@ public class CollaboratorContext implements Collaborator {
             log.debug("Synchronizing new regent: {} on: {} voting: {}", elected, consortium.getMember(),
                       regencyData.keySet().stream().map(e -> e.getId()).collect(Collectors.toList()));
             consortium.transitions.synchronizingLeader();
-            view.publish(synch);
+            consortium.view.publish(synch);
             consortium.transitions.deliverSync(synch, consortium.getMember());
         } else {
             log.error("Cannot generate Sync regent: {} on: {} voting: {}", elected, consortium.getMember(),
@@ -672,7 +671,7 @@ public class CollaboratorContext implements Collaborator {
         List<HashKey> published = new ArrayList<>();
         workingBlocks.entrySet()
                      .stream()
-                     .filter(e -> e.getValue().getCertificationsCount() >= view.getContext().majority())
+                     .filter(e -> e.getValue().getCertificationsCount() >= consortium.view.getContext().majority())
                      .sorted((a, b) -> Long.compare(height(a.getValue().getBlock()), height(b.getValue().getBlock())))
                      .filter(e -> height(e.getValue().getBlock()) >= current + 1)
                      .forEach(e -> {
@@ -789,14 +788,15 @@ public class CollaboratorContext implements Collaborator {
     }
 
     void reconfigureView(HashedCertifiedBlock block, Reconfigure view, boolean genesis, boolean resume) {
-        this.view.pause();
+        this.consortium.view.pause();
         consortium.setLastViewChange(block, view);
         ViewContext newView = new ViewContext(view, consortium.params.context, consortium.getMember(),
-                genesis ? this.view.getContext().getConsensusKey() : this.view.nextViewConsensusKey());
+                genesis ? this.consortium.view.getContext().getConsensusKey()
+                        : this.consortium.view.nextViewConsensusKey());
         int current = genesis ? 2 : 0;
         regency.currentRegent(current);
         regency.nextRegent(current);
-        this.view.viewChange(newView, consortium.scheduler, current, consortium.service, resume);
+        this.consortium.view.viewChange(newView, consortium.scheduler, current, consortium.service, resume);
     }
 
     void synchronize(Sync syncData, Member regent) {
@@ -836,14 +836,15 @@ public class CollaboratorContext implements Collaborator {
         Map<HashKey, CertifiedBlock> decided;
         decided = workingBlocks.entrySet()
                                .stream()
-                               .filter(e -> e.getValue().getCertificationsCount() >= view.getContext().majority())
+                               .filter(e -> e.getValue().getCertificationsCount() >= consortium.view.getContext()
+                                                                                                    .majority())
                                .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().build()));
         List<Long> gaps = noGaps(decided, store().hashes());
         if (!gaps.isEmpty()) {
             log.debug("Have no valid log on: {} gaps: {}", consortium.getMember(), gaps);
         }
         StopData.Builder builder = StopData.newBuilder().setCurrentRegent(currentRegent);
-        builder.setContext(view.getContext().getId().toByteString());
+        builder.setContext(consortium.view.getContext().getId().toByteString());
         decided.entrySet().forEach(e -> {
             builder.addBlocks(e.getValue());
         });
@@ -877,7 +878,7 @@ public class CollaboratorContext implements Collaborator {
         }
         return Sync.newBuilder()
                    .setCurrentRegent(elected)
-                   .setContext(view.getContext().getId().toByteString())
+                   .setContext(consortium.view.getContext().getId().toByteString())
                    .addAllBlocks(blocks)
                    .build();
     }
@@ -930,7 +931,7 @@ public class CollaboratorContext implements Collaborator {
     }
 
     private void deliverCheckpointBlock(Block block, Member from) {
-        Member regent = view.getContext().getRegent(regency.currentRegent());
+        Member regent = consortium.view.getContext().getRegent(regency.currentRegent());
         if (!regent.equals(from)) {
             log.debug("Ignoring checkpoint block from non regent: {} actual: {} on: {}", from, regent, getMember());
             return;
@@ -972,14 +973,14 @@ public class CollaboratorContext implements Collaborator {
             }
             cancelTimers();
             toOrder.clear();
-            Validate validation = view.getContext().generateValidation(hash, block);
+            Validate validation = consortium.view.getContext().generateValidation(hash, block);
             if (validation == null) {
                 log.error("Cannot validate generated genesis: {} on: {}", hash, consortium.getMember());
                 return;
             }
             lastBlock(new HashedBlock(block));
-            view.setContext(view.getContext().cloneWith(genesis.getInitialView().getViewList()));
-            view.publish(validation);
+            consortium.view.setContext(consortium.view.getContext().cloneWith(genesis.getInitialView().getViewList()));
+            consortium.view.publish(validation);
             workingBlocks.put(hash,
                               CertifiedBlock.newBuilder()
                                             .setBlock(block)
@@ -1013,7 +1014,7 @@ public class CollaboratorContext implements Collaborator {
         }).map(eqt -> eqt.transaction), 100).forEach(txns -> {
             log.debug("Replicating from: {} count: {} first timeout on: {}", transaction.hash, txns.size(),
                       consortium.getMember());
-            view.publish(ReplicateTransactions.newBuilder().addAllTransactions(txns).build());
+            consortium.view.publish(ReplicateTransactions.newBuilder().addAllTransactions(txns).build());
         });
     }
 
@@ -1021,10 +1022,10 @@ public class CollaboratorContext implements Collaborator {
         final long thisHeight = lastBlock() + 1;
 
         log.info("Generating checkpoint block on: {} height: {} ", consortium.getMember(), currentHeight);
-        view.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
+        consortium.view.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
 
         schedule(Timers.CHECKPOINTING, () -> {
-            view.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
+            consortium.view.publish(CheckpointProcessing.newBuilder().setCheckpoint(currentHeight).build());
         }, consortium.params.submitTimeout.dividedBy(2));
 
         File state = consortium.params.checkpointer.apply(currentHeight);
@@ -1054,7 +1055,7 @@ public class CollaboratorContext implements Collaborator {
         CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
                                                                                                 .setBlock(block));
 
-        Validate validation = view.getContext().generateValidation(hash, block);
+        Validate validation = consortium.view.getContext().generateValidation(hash, block);
         if (validation == null) {
             log.debug("Cannot generate validation for block: {} hash: {} segements: {} on: {}", hash,
                       new HashKey(checkpoint.getStateHash()), checkpoint.getSegmentsCount(), consortium.getMember());
@@ -1066,8 +1067,8 @@ public class CollaboratorContext implements Collaborator {
                                                .setId(validation.getId())
                                                .setSignature(validation.getSignature()));
         lastBlock(new HashedBlock(hash, block));
-        view.publish(block);
-        view.publish(validation);
+        consortium.view.publish(block);
+        consortium.view.publish(validation);
         cancel(Timers.CHECKPOINTING);
 
         log.info("Generated next checkpoint block: {} height: {} on: {} ", hash, thisHeight, consortium.getMember());
@@ -1075,14 +1076,14 @@ public class CollaboratorContext implements Collaborator {
 
     private void generateGenesisBlock() {
         reduceJoinTransactions();
-        assert toOrder.size() >= view.getContext().majority() : "Whoops";
+        assert toOrder.size() >= consortium.view.getContext().majority() : "Whoops";
         log.debug("Generating genesis on {} join transactions: {}", consortium.getMember(), toOrder.size());
         byte[] nextView = new byte[32];
         Utils.secureEntropy().nextBytes(nextView);
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
                                                      .setCheckpointBlocks(consortium.params.deltaCheckpointBlocks)
                                                      .setId(ByteString.copyFrom(nextView))
-                                                     .setTolerance(view.getContext().majority());
+                                                     .setTolerance(consortium.view.getContext().majority());
         toOrder.values().forEach(join -> {
             JoinTransaction txn;
             try {
@@ -1128,7 +1129,7 @@ public class CollaboratorContext implements Collaborator {
         Builder cb = workingBlocks.get(hash);
         if (cb == null) {
             lastBlock(new HashedBlock(hash, block));
-            Validate validation = view.getContext().generateValidation(hash, block);
+            Validate validation = consortium.view.getContext().generateValidation(hash, block);
             if (validation == null) {
                 log.error("Cannot validate generated genesis block: {} on: {}", hash, consortium.getMember());
             }
@@ -1137,9 +1138,9 @@ public class CollaboratorContext implements Collaborator {
                                                    .setId(validation.getId())
                                                    .setSignature(validation.getSignature()));
             workingBlocks.put(hash, builder);
-            view.setContext(view.getContext().cloneWith(genesisView.getViewList()));
-            view.publish(block);
-            view.publish(validation);
+            consortium.view.setContext(consortium.view.getContext().cloneWith(genesisView.getViewList()));
+            consortium.view.publish(block);
+            consortium.view.publish(validation);
         }
     }
 
@@ -1150,11 +1151,11 @@ public class CollaboratorContext implements Collaborator {
             return;
         }
         int txns = toOrder.size();
-        if (txns >= view.getContext().activeCardinality()) {
+        if (txns >= consortium.view.getContext().activeCardinality()) {
             generateGenesisBlock();
         } else {
             log.trace("Genesis group has not formed, rescheduling, have: {} want: {} on: {}", txns,
-                      view.getContext().activeCardinality(), consortium.getMember());
+                      consortium.view.getContext().activeCardinality(), consortium.getMember());
             rescheduleGenesis();
         }
     }
@@ -1203,7 +1204,7 @@ public class CollaboratorContext implements Collaborator {
         CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
                                                                                                 .setBlock(block));
 
-        Validate validation = view.getContext().generateValidation(hash, block);
+        Validate validation = consortium.view.getContext().generateValidation(hash, block);
         if (validation == null) {
             log.debug("Cannot generate validation for block: {} on: {}", hash, consortium.getMember());
             return false;
@@ -1212,8 +1213,8 @@ public class CollaboratorContext implements Collaborator {
                                                .setId(validation.getId())
                                                .setSignature(validation.getSignature()));
         lastBlock(new HashedBlock(hash, block));
-        view.publish(block);
-        view.publish(validation);
+        consortium.view.publish(block);
+        consortium.view.publish(validation);
 
         log.info("Generated next block: {} height: {} on: {} txns: {}", hash, thisHeight, consortium.getMember(),
                  user.getTransactionsCount());
@@ -1239,14 +1240,14 @@ public class CollaboratorContext implements Collaborator {
     }
 
     private Member getRegent(int regent) {
-        return view.getContext().getRegent(regent);
+        return consortium.view.getContext().getRegent(regent);
     }
 
     private void joinView(int attempt) {
         boolean selfJoin = selfJoinRecorded();
-        int majority = view.getContext().majority();
+        int majority = consortium.view.getContext().majority();
         if (attempt < 20) {
-            if (selfJoin && toOrder.size() == view.getContext().activeCardinality()) {
+            if (selfJoin && toOrder.size() == consortium.view.getContext().activeCardinality()) {
                 log.trace("View formed, attempt: {} on: {} have: {} require: {} self join: {}", attempt,
                           consortium.getMember(), toOrder.size(), majority, selfJoin);
                 consortium.transitions.formView();
@@ -1307,7 +1308,7 @@ public class CollaboratorContext implements Collaborator {
     private void processSubmit(Join voteForMe, List<Result> votes, AtomicInteger pending, AtomicBoolean completed,
                                int succeeded) {
         int remaining = pending.decrementAndGet();
-        int majority = view.getContext().majority();
+        int majority = consortium.view.getContext().majority();
         if (succeeded >= majority) {
             if (completed.compareAndSet(false, true)) {
                 JoinTransaction.Builder txn = JoinTransaction.newBuilder().setMember(voteForMe.getMember());
@@ -1324,15 +1325,15 @@ public class CollaboratorContext implements Collaborator {
                 } catch (TimeoutException e) {
                     return;
                 }
-                log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash, view.getContext().getId(),
-                          consortium.params.member);
+                log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash,
+                          consortium.view.getContext().getId(), consortium.params.member);
             }
         } else {
             if (remaining + succeeded < majority) {
                 if (completed.compareAndSet(false, true)) {
-                    if (votes.size() < view.getContext().majority()) {
+                    if (votes.size() < consortium.view.getContext().majority()) {
                         log.debug("Did not gather votes necessary to join consortium needed: {} got: {} on: {}",
-                                  view.getContext().majority(), votes.size(), consortium.getMember());
+                                  consortium.view.getContext().majority(), votes.size(), consortium.getMember());
                     }
                 }
             }
@@ -1406,11 +1407,11 @@ public class CollaboratorContext implements Collaborator {
     private void rescheduleGenesis() {
         schedule(Timers.AWAIT_GROUP, () -> {
             boolean selfJoin = selfJoinRecorded();
-            if (selfJoin && toOrder.size() >= view.getContext().majority()) {
+            if (selfJoin && toOrder.size() >= consortium.view.getContext().majority()) {
                 generateGenesisBlock();
             } else {
                 log.trace("Genesis group has not formed, rescheduling, have: {} want: {} self join: {} on: {}",
-                          toOrder.size(), view.getContext().majority(), selfJoin, consortium.getMember());
+                          toOrder.size(), consortium.view.getContext().majority(), selfJoin, consortium.getMember());
                 rescheduleGenesis();
             }
         }, consortium.params.viewTimeout);
@@ -1418,7 +1419,7 @@ public class CollaboratorContext implements Collaborator {
 
     private void resolveStatus() {
         Member regent = getRegent(regency.currentRegent());
-        if (view.getContext().isViewMember()) {
+        if (consortium.view.getContext().isViewMember()) {
             if (consortium.getMember().equals(regent)) {
                 log.debug("becoming leader on: {}", consortium.getMember());
                 consortium.transitions.becomeLeader();
@@ -1426,7 +1427,7 @@ public class CollaboratorContext implements Collaborator {
                 log.debug("becoming follower on: {} regent: {}", consortium.getMember(), regent);
                 consortium.transitions.becomeFollower();
             }
-        } else if (view.getContext().isMember()) {
+        } else if (consortium.view.getContext().isMember()) {
             log.debug("becoming joining member on: {} regent: {}", consortium.getMember(), regent);
             consortium.transitions.joinAsMember();
         } else {
@@ -1525,7 +1526,7 @@ public class CollaboratorContext implements Collaborator {
             current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()) + 1);
         }
         synchronizing.set(false);
-        this.view.resume(consortium.service);
+        this.consortium.view.resume(consortium.service);
         resolveStatus();
         consortium.processDeferred();
     }
@@ -1551,7 +1552,7 @@ public class CollaboratorContext implements Collaborator {
                 consortium.transitions.fail();
                 return;
             }
-            Validate validation = view.getContext().generateValidation(hash, block);
+            Validate validation = consortium.view.getContext().generateValidation(hash, block);
             if (validation == null) {
                 log.debug("Rejecting checkpoint block proposal: {}, cannot validate from: {} on: {}", hash, from,
                           consortium.getMember());
@@ -1559,7 +1560,7 @@ public class CollaboratorContext implements Collaborator {
                 return;
             }
             log.debug("Validating checkpoint block: {} from: {} on: {}", hash, from, getMember());
-            view.publish(validation);
+            consortium.view.publish(validation);
             deliverValidate(validation);
             consortium.transitions.checkpointGenerated();
         } else {
