@@ -197,7 +197,7 @@ abstract public class Hash<T> {
         if (p == 0) {
             p = Double.MIN_VALUE;
         }
-        return (int) (-n * Math.log(p) / (Math.log(2) * Math.log(2)));
+        return Math.max(8, (int) (-n * Math.log(p) / (Math.log(2) * Math.log(2))));
     }
 
     protected final int k;

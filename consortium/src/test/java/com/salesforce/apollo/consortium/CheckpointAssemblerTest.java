@@ -103,7 +103,7 @@ public class CheckpointAssemblerTest {
                                     .peek(m -> context.activate(m))
                                     .collect(Collectors.toList());
 
-        Checkpoint checkpoint = CollaboratorContext.checkpoint(0, chkptFile, BLOCK_SIZE);
+        Checkpoint checkpoint = CollaboratorContext.checkpoint(chkptFile, BLOCK_SIZE);
 
         Member bootstrapping = members.get(0);
 
@@ -116,7 +116,7 @@ public class CheckpointAssemblerTest {
         state.assemble(testFile);
 
         assertEquals(chkptFile.length(), testFile.length());
-        Checkpoint testCs = CollaboratorContext.checkpoint(0, testFile, BLOCK_SIZE);
+        Checkpoint testCs = CollaboratorContext.checkpoint(testFile, BLOCK_SIZE);
         assertEquals(checkpoint.getSegmentsCount(), testCs.getSegmentsCount());
         for (int i = 0; i < checkpoint.getSegmentsCount(); i++) {
             assertEquals(new HashKey(checkpoint.getSegments(i)), new HashKey(testCs.getSegments(i)),
@@ -141,7 +141,7 @@ public class CheckpointAssemblerTest {
         when(comm.apply(any(), any())).thenReturn(client);
 
         Store store2 = new Store(new MVStore.Builder().open());
-        CheckpointAssembler boot = new CheckpointAssembler(checkpoint, bootstrapping, store2, comm, context, 0.125);
+        CheckpointAssembler boot = new CheckpointAssembler(0, checkpoint, bootstrapping, store2, comm, context, 0.125);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10));
@@ -163,7 +163,7 @@ public class CheckpointAssemblerTest {
         assertEquals(chkptFile.length(), assembledFile.length());
 
         // create a checkpoint from the assembled file
-        Checkpoint assembledCheckpoint = CollaboratorContext.checkpoint(0, assembledFile, BLOCK_SIZE);
+        Checkpoint assembledCheckpoint = CollaboratorContext.checkpoint(assembledFile, BLOCK_SIZE);
 
         // same segment count
         assertEquals(checkpoint.getSegmentsCount(), assembledCheckpoint.getSegmentsCount());

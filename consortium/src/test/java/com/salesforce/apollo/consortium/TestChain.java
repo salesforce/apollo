@@ -104,7 +104,7 @@ public class TestChain {
         lastBlock = new HashedCertifiedBlock(
                 CertifiedBlock.newBuilder()
                               .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
-                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.CHECKPOINT, CollaboratorContext.checkpoint(lastBlock.height() + 1, null, 0)), lastView))
+                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.CHECKPOINT, CollaboratorContext.checkpoint(null, 0)), lastView))
                               .build());
         store.put(lastBlock.hash, lastBlock.block);
         return lastBlock;
@@ -114,7 +114,7 @@ public class TestChain {
         lastBlock = new HashedCertifiedBlock(
                 CertifiedBlock.newBuilder()
                               .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
-                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.RECONFIGURE, CollaboratorContext.checkpoint(lastBlock.height() + 1, null, 0)), lastView))
+                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.RECONFIGURE, CollaboratorContext.checkpoint(null, 0)), lastView))
                               .build());
         store.put(lastBlock.hash, lastBlock.block);
         return lastBlock;
@@ -124,7 +124,7 @@ public class TestChain {
         HashedCertifiedBlock block = new HashedCertifiedBlock(
                 CertifiedBlock.newBuilder()
                               .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
-                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.USER, CollaboratorContext.checkpoint(lastBlock.height() + 1, null, 0)), lastView))
+                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.USER, CollaboratorContext.checkpoint(null, 0)), lastView))
                               .build());
         store.put(block.hash, block.block);
         lastBlock = block;

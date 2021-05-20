@@ -15,7 +15,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
-import java.util.stream.LongStream;
 
 import org.h2.mvstore.MVMap;
 import org.slf4j.Logger;
@@ -49,27 +48,28 @@ public class CheckpointAssembler {
     private final Context<Member>                                             context;
     private final double                                                      fpr;
     private final List<HashKey>                                               hashes    = new ArrayList<>();
+    private final long                                                        height;
     private final Member                                                      member;
     private final MVMap<Integer, byte[]>                                      state;
-    private final Store                                                       store;
 
-    public CheckpointAssembler(Checkpoint checkpoint, Member member, Store store,
+    public CheckpointAssembler(long height, Checkpoint checkpoint, Member member, Store store,
             CommonCommunications<BootstrapClient, BootstrappingService> comms, Context<Member> context,
             double falsePositiveRate) {
+        this.height = height;
         this.member = member;
         this.checkpoint = checkpoint;
-        this.store = store;
         this.comms = comms;
         this.context = context;
         this.fpr = falsePositiveRate;
-        state = store.createCheckpoint(checkpoint.getCheckpoint());
+        state = store.createCheckpoint(height);
         checkpoint.getSegmentsList().stream().map(bs -> new HashKey(bs)).forEach(hash -> hashes.add(hash));
     }
 
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
-        log.info("Scheduling assembly of checkpoint: {} segments: {} period: {} millis on: {}",
-                 checkpoint.getCheckpoint(), checkpoint.getSegmentsCount(), duration.toMillis(), member);
+        log.info("Scheduling assembly of checkpoint: {} segments: {} period: {} millis on: {}", height,
+                 checkpoint.getSegmentsCount(), duration.toMillis(), member);
         if (checkpoint.getSegmentsCount() == 0) {
+            log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
             assembled.complete(new CheckpointState(checkpoint, state));
         } else {
             scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
@@ -85,14 +85,8 @@ public class CheckpointAssembler {
         });
         CheckpointReplication.Builder request = CheckpointReplication.newBuilder()
                                                                      .setContext(context.getId().toByteString())
-                                                                     .setCheckpoint(checkpoint.getCheckpoint());
+                                                                     .setCheckpoint(height);
         request.setCheckpointSegments(segmentsBff.toBff().toByteString());
-
-        BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, checkpoint.getSegmentsCount(), fpr);
-        LongStream.range(checkpoint.getCheckpoint() + 1, checkpoint.getSegmentsCount())
-                  .filter(l -> store.containsBlock(l))
-                  .forEach(l -> blocksBff.add(l));
-        request.setBlocks(blocksBff.toBff().toByteString());
         return request.build();
     }
 
@@ -104,15 +98,15 @@ public class CheckpointAssembler {
             try {
                 if (process(futureSailor.get())) {
                     CheckpointState cs = new CheckpointState(checkpoint, state);
+                    log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
+                             member);
                     assembled.complete(cs);
                     return;
                 }
             } catch (InterruptedException e) {
-                log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", checkpoint.getCheckpoint(),
-                          member, e);
+                log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member, e);
             } catch (ExecutionException e) {
-                log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", checkpoint.getCheckpoint(),
-                          member, e.getCause());
+                log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member, e.getCause());
             }
             scheduler.run();
         };
@@ -144,6 +138,7 @@ public class CheckpointAssembler {
                 return;
             }
 
+            log.info("Checkpoint assembly gossip with: {} on: {}", m, member);
             ListenableFuture<CheckpointSegments> fetched = link.fetch(request);
             fetched.addListener(gossip(link, fetched, s), ForkJoinPool.commonPool());
         } catch (Throwable e) {

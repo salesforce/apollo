@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -144,12 +143,18 @@ public class BootstrapperTest {
         @SuppressWarnings("unchecked")
         CommonCommunications<BootstrapClient, BootstrappingService> comms = mock(CommonCommunications.class);
         when(comms.apply(any(), any())).thenReturn(client);
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        Duration duration = Duration.ofMillis(100);
         Store store = new Store(new MVStore.Builder().open());
 
-        Bootstrapper boot = new Bootstrapper(testChain.getAnchor(), member, context, comms, 0.15, store, 5, scheduler,
-                100, duration, 100);
+        Bootstrapper boot = new Bootstrapper(testChain.getAnchor(),
+                Parameters.newBuilder()
+                          .setMsgParameters(com.salesforce.apollo.membership.messaging.Messenger.Parameters.newBuilder()
+                                                                                                           .build())
+                          .setContext(context)
+                          .setMember(member)
+                          .setSynchonrizeDuration(Duration.ofMillis(100))
+                          .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                          .build(),
+                store, comms);
 
         CompletableFuture<Pair<HashedCertifiedBlock, HashedCertifiedBlock>> syncFuture = boot.synchronize();
         syncFuture.get(10, TimeUnit.SECONDS);

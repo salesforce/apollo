@@ -13,11 +13,11 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,7 +42,6 @@ import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Pair;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2
@@ -59,12 +58,12 @@ public class Store {
     private static final Logger log                 = LoggerFactory.getLogger(Store.class);
     private static final String VIEW_CHAIN          = "VIEW_CHAIN";
 
-    private final MVMap<Long, byte[]>               blocks;
-    private final MVMap<Long, byte[]>               certifications;
-    private final Map<Long, MVMap<Integer, byte[]>> checkpoints = new HashMap<>();
-    private final MVMap<Long, byte[]>               hashes;
-    private final MVMap<byte[], Long>               hashToHeight;
-    private final MVMap<Long, Long>                 viewChain;
+    private final MVMap<Long, byte[]>                   blocks;
+    private final MVMap<Long, byte[]>                   certifications;
+    private final TreeMap<Long, MVMap<Integer, byte[]>> checkpoints = new TreeMap<>();
+    private final MVMap<Long, byte[]>                   hashes;
+    private final MVMap<byte[], Long>                   hashToHeight;
+    private final MVMap<Long, Long>                     viewChain;
 
     public Store(MVStore store) {
         hashes = store.openMap(HASHES);
@@ -213,12 +212,24 @@ public class Store {
         HashedBlock block = getBlock(height);
         if (block != null) {
             builder.setBlock(block.block);
+        } else {
+            return null;
         }
         List<Certification> certs = certifications(height);
         if (certs != null) {
             builder.addAllCertifications(certs);
         }
         return builder.build();
+    }
+
+    public HashedCertifiedBlock getLastBlock() {
+        Long lastBlock = blocks.lastKey();
+        return lastBlock == null ? null : new HashedCertifiedBlock(getCertifiedBlock(lastBlock));
+    }
+
+    public HashedCertifiedBlock getLastView() {
+        Long lastView = checkpoints.lastKey();
+        return new HashedCertifiedBlock(getCertifiedBlock(lastView));
     }
 
     public byte[] hash(long height) {
@@ -285,37 +296,8 @@ public class Store {
         }
     }
 
-    /**
-     * @return the pair of <Genesis block, Checkpoint block>. Return the empty Pair
-     *         if none exist.
-     */
-    public Pair<HashedCertifiedBlock, HashedCertifiedBlock> restoreFrom() {
-        CertifiedBlock genesis = getCertifiedBlock(0L);
-        if (genesis == null) {
-            return Pair.emptyPair();
-        }
-        Long lastCheckpoint = checkpoints.keySet().stream().max((a, b) -> a.compareTo(b)).orElse(-1L);
-        if (lastCheckpoint < 0) {
-            return Pair.emptyPair();
-        }
-        return new Pair<>(new HashedCertifiedBlock(genesis),
-                new HashedCertifiedBlock(getCertifiedBlock(lastCheckpoint)));
-    }
-
     public void rollbackTo(long version) {
         blocks.store.rollbackTo(version);
-    }
-
-    public Pair<HashedCertifiedBlock, HashedCertifiedBlock> synchronizeFrom() {
-        Long lastViewHeight = viewChain.floorKey(0L);
-        if (lastViewHeight != null) {
-            Long lastBlockHeight = blocks.floorKey(0L);
-            return new Pair<HashedCertifiedBlock, HashedCertifiedBlock>(
-                    new HashedCertifiedBlock(getCertifiedBlock(lastViewHeight)),
-                    lastBlockHeight != null ? new HashedCertifiedBlock(getCertifiedBlock(lastBlockHeight)) : null);
-
-        }
-        return Pair.emptyPair();
     }
 
     public void validate(long from, long to) throws IllegalStateException {

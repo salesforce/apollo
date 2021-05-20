@@ -63,7 +63,6 @@ public class Parameters {
         private File                                                      storeFile;
         private Duration                                                  submitTimeout         = Duration.ofSeconds(30);
         private Duration                                                  synchonrizeDuration   = Duration.ofMillis(500);
-        private int                                                       synchronizeSlice      = 5;
         private Duration                                                  synchronizeTimeout    = Duration.ofMinutes(2);
         private Duration                                                  viewTimeout           = Duration.ofSeconds(60);
 
@@ -72,8 +71,7 @@ public class Parameters {
                     consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, maxCheckpointSegments,
                     viewTimeout, submitTimeout, processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks,
                     executor, checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, initialViewTimeout,
-                    dispatcher, synchonrizeDuration, maxViewBlocks, maxSyncBlocks, synchronizeSlice, synchronizeTimeout,
-                    restorer);
+                    dispatcher, synchonrizeDuration, maxViewBlocks, maxSyncBlocks, synchronizeTimeout, restorer);
         }
 
         public int getCheckpointBlockSize() {
@@ -190,10 +188,6 @@ public class Parameters {
 
         public Duration getSynchonrizeDuration() {
             return synchonrizeDuration;
-        }
-
-        public int getSynchronizeSlice() {
-            return synchronizeSlice;
         }
 
         public Duration getSynchronizeTimeout() {
@@ -354,11 +348,6 @@ public class Parameters {
             return this;
         }
 
-        public Builder setSynchronizeSlice(int synchronizeSlice) {
-            this.synchronizeSlice = synchronizeSlice;
-            return this;
-        }
-
         public Builder setSynchronizeTimeout(Duration synchronizeTimeout) {
             this.synchronizeTimeout = synchronizeTimeout;
             return this;
@@ -411,7 +400,6 @@ public class Parameters {
     public final File                                                      storeFile;
     public final Duration                                                  submitTimeout;
     public final Duration                                                  synchronizeDuration;
-    public final int                                                       synchronizeSlice;
     public final Duration                                                  synchronizeTimeout;
     public final Duration                                                  viewTimeout;
 
@@ -423,7 +411,7 @@ public class Parameters {
             int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
             int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Duration initialViewTimeout,
             Executor dispatcher, Duration synchronizeDuration, int maxViewBlocks, int maxSyncBlocks,
-            int synchronizeSlice, Duration synchronizeTimeout, Consumer<CheckpointState> restorer) {
+            Duration synchronizeTimeout, Consumer<CheckpointState> restorer) {
         this.context = context;
         this.communications = communications;
         this.maxSyncBlocks = maxSyncBlocks;
@@ -453,7 +441,6 @@ public class Parameters {
         this.initialViewTimeout = initialViewTimeout;
         this.dispatcher = dispatcher;
         this.synchronizeDuration = synchronizeDuration;
-        this.synchronizeSlice = synchronizeSlice;
         this.synchronizeTimeout = synchronizeTimeout;
         this.restorer = restorer;
     }

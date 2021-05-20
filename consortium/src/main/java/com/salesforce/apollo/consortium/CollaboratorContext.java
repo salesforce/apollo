@@ -96,7 +96,7 @@ public class CollaboratorContext implements Collaborator {
         return Body.newBuilder().setType(type).setContents(Consortium.compress(contents.toByteString())).build();
     }
 
-    public static Checkpoint checkpoint(long currentHeight, File state, int blockSize) {
+    public static Checkpoint checkpoint(File state, int blockSize) {
         HashKey stateHash = HashKey.ORIGIN;
         long length = 0;
         if (state != null) {
@@ -109,7 +109,6 @@ public class CollaboratorContext implements Collaborator {
             length = state.length();
         }
         Checkpoint.Builder builder = Checkpoint.newBuilder()
-                                               .setCheckpoint(currentHeight)
                                                .setByteSize(length)
                                                .setSegmentSize(blockSize)
                                                .setStateHash(stateHash.toByteString());
@@ -725,7 +724,7 @@ public class CollaboratorContext implements Collaborator {
             return;
         }
         HashKey hash = next.hash;
-        CheckpointState checkpointState = checkpoint(body);
+        CheckpointState checkpointState = checkpoint(body, next.height());
         if (checkpointState == null) {
             log.error("Cannot checkpoint: {} on: {}", hash, getMember());
             consortium.transitions.fail();
@@ -831,7 +830,7 @@ public class CollaboratorContext implements Collaborator {
 
     private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
         Parameters params = consortium.params;
-        return new Bootstrapper(anchor, getMember(), params, store(), consortium.bootstrapComm);
+        return new Bootstrapper(anchor, params, store(), consortium.bootstrapComm);
     }
 
     private StopData buildStopData(int currentRegent) {
@@ -888,9 +887,9 @@ public class CollaboratorContext implements Collaborator {
         toOrder.values().forEach(eqt -> eqt.cancel());
     }
 
-    private CheckpointState checkpoint(Checkpoint body) {
+    private CheckpointState checkpoint(Checkpoint body, long height) {
         HashKey stateHash;
-        CheckpointState checkpoint = consortium.getChekpoint(body.getCheckpoint());
+        CheckpointState checkpoint = consortium.getChekpoint(height);
         HashKey bsh = new HashKey(body.getStateHash());
         if (checkpoint != null) {
             if (!body.getStateHash().equals(checkpoint.checkpoint.getStateHash())) {
@@ -899,7 +898,7 @@ public class CollaboratorContext implements Collaborator {
                 return null;
             }
         } else {
-            File state = consortium.params.checkpointer.apply(body.getCheckpoint());
+            File state = consortium.params.checkpointer.apply(height - 1);
             if (state == null) {
                 log.error("Invalid checkpoint on: {}", getMember());
                 return null;
@@ -911,12 +910,12 @@ public class CollaboratorContext implements Collaborator {
                 return null;
             }
             if (!stateHash.equals(bsh)) {
-                log.error("Cannot replicate checkpoint: {} state hash: {} does not equal recorded: {} on: {}",
-                          body.getCheckpoint(), stateHash, bsh, getMember());
+                log.error("Cannot replicate checkpoint: {} state hash: {} does not equal recorded: {} on: {}", height,
+                          stateHash, bsh, getMember());
                 state.delete();
                 return null;
             }
-            MVMap<Integer, byte[]> stored = store().putCheckpoint(body.getCheckpoint(), state, body);
+            MVMap<Integer, byte[]> stored = store().putCheckpoint(height, state, body);
             checkpoint = new CheckpointState(body, stored);
             state.delete();
         }
@@ -948,7 +947,7 @@ public class CollaboratorContext implements Collaborator {
         if (cb == null) {
             log.debug("Delivering checkpoint block: {} from: {} on: {}", hash, from, getMember());
             workingBlocks.put(hash, CertifiedBlock.newBuilder().setBlock(block));
-            consortium.performAfter(() -> validateCheckpoint(hash, block, from), body.getCheckpoint());
+            consortium.performAfter(() -> validateCheckpoint(hash, block, from), height(block) - 1);
         }
     }
 
@@ -1035,7 +1034,7 @@ public class CollaboratorContext implements Collaborator {
             consortium.transitions.fail();
             return;
         }
-        Checkpoint checkpoint = checkpoint(currentHeight, state, consortium.params.checkpointBlockSize);
+        Checkpoint checkpoint = checkpoint(state, consortium.params.checkpointBlockSize);
         if (checkpoint == null) {
             consortium.transitions.fail();
         }
@@ -1443,6 +1442,8 @@ public class CollaboratorContext implements Collaborator {
             log.error("No checkpoint state available for {}:{} on: {}", block.hash, block.height(), getMember());
         }
         consortium.params.restorer.accept(checkpoint);
+        consortium.restore();
+        processCheckpoint(block);
     }
 
     private Timer schedule(EnqueuedTransaction eqt) {
@@ -1521,12 +1522,16 @@ public class CollaboratorContext implements Collaborator {
         } else {
             log.info("Synchronizing from checkpoint: {} on: {}", checkpoint.hash, getMember());
             restoreFrom(checkpoint);
-            current1 = checkpoint.block;
+            current1 = consortium.store.getCertifiedBlock(checkpoint.height() + 1);
         }
         while (current1 != null) {
-            consortium.process(current1);
-            current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()));
+            consortium.synchronizedProcess(current1, false);
+            current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()) + 1);
         }
+        synchronizing.set(false);
+        this.view.resume(consortium.service);
+        resolveStatus();
+        consortium.processDeferred();
     }
 
     private User userBody(Block block) {
@@ -1544,9 +1549,9 @@ public class CollaboratorContext implements Collaborator {
         Checkpoint checkpoint = checkpointBody(block);
 
         HashedCertifiedBlock current = consortium.getCurrent();
-        if (current.height() >= checkpoint.getCheckpoint()) {
-            if (checkpoint(checkpoint) == null) {
-                log.error("Unable to generate checkpoint: {} on {}", checkpoint.getCheckpoint(), getMember());
+        if (current.height() >= height(block) - 1) {
+            if (checkpoint(checkpoint, height(block)) == null) {
+                log.error("Unable to generate checkpoint: {} on {}", height(block), getMember());
                 consortium.transitions.fail();
                 return;
             }

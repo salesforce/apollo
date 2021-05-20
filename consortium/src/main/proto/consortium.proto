@@ -110,12 +110,11 @@ message ViewMember {
     bytes signature = 3;
 }
 
-message Checkpoint {
-    int64 checkpoint = 1;
-    int64 byteSize = 2;
-    int32 segmentSize = 3;
-    bytes stateHash = 4;
-    repeated bytes segments = 5;
+message Checkpoint { 
+    int64 byteSize = 1;
+    int32 segmentSize = 2;
+    bytes stateHash = 3;
+    repeated bytes segments = 4;
 }
 
 message CheckpointProcessing {
@@ -202,7 +201,6 @@ message CheckpointReplication {
     bytes context = 1;
     int64 checkpoint = 2;
     bytes checkpointSegments = 3;
-    bytes blocks = 4;
 }
 
 message CheckpointSegments {

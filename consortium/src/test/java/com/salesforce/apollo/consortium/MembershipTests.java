@@ -121,6 +121,94 @@ public class MembershipTests {
 
     @Test
     public void testCheckpointBootstrap() throws Exception {
+        testCardinality = 3;
+        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality - 1));
+        gatherConsortium(Duration.ofMillis(150), processed);
+
+        Set<Consortium> blueRibbon = new HashSet<>();
+        ViewContext.viewFor(GENESIS_VIEW_ID, context).allMembers().forEach(e -> {
+            blueRibbon.add(consortium.get(e));
+        });
+
+        final Consortium testSubject = consortium.values()
+                                                 .stream()
+                                                 .filter(c -> !blueRibbon.contains(c))
+                                                 .findFirst()
+                                                 .orElse(null);
+        System.out.println("test subject: " + testSubject.getMember().getId());
+
+        System.out.println("starting consortium");
+        communications.entrySet()
+                      .stream()
+                      .filter(r -> !r.getKey().equals(testSubject.getMember().getId()))
+                      .peek(e -> System.out.println(e.getKey()))
+                      .map(e -> e.getValue())
+                      .forEach(r -> r.start());
+        consortium.values().stream().filter(c -> !c.equals(testSubject)).forEach(e -> e.start());
+
+        assertTrue(processed.get().await(30, TimeUnit.SECONDS));
+
+        Consortium client = consortium.values()
+                                      .stream()
+                                      .filter(c -> !blueRibbon.contains(c) && !testSubject.equals(c))
+                                      .findFirst()
+                                      .get();
+        Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
+        int bunchCount = 500;
+        System.out.println("Awaiting " + bunchCount + " transactions");
+        ArrayList<HashKey> submitted = new ArrayList<>();
+        final CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+        for (int i = 0; i < bunchCount; i++) {
+            outstanding.acquire();
+            try {
+                AtomicReference<HashKey> pending = new AtomicReference<>();
+                pending.set(client.submit(null, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(pending.get());
+                    submittedBunch.countDown();
+                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+                submitted.add(pending.get());
+            } catch (TimeoutException e) {
+                fail();
+                return;
+            }
+        }
+
+        boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
+        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
+        System.out.println("Completed additional " + bunchCount + " transactions");
+
+        testSubject.start();
+        communications.get(testSubject.getMember().getId()).start();
+
+        bunchCount = 100;
+        submitted.clear();
+        final CountDownLatch nextBunch = new CountDownLatch(bunchCount);
+        for (int i = 0; i < bunchCount; i++) {
+            outstanding.acquire();
+            try {
+                AtomicReference<HashKey> pending = new AtomicReference<>();
+                pending.set(client.submit(null, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(pending.get());
+                    nextBunch.countDown();
+                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+                submitted.add(pending.get());
+            } catch (TimeoutException e) {
+                fail();
+                return;
+            }
+        }
+
+        completed = nextBunch.await(10, TimeUnit.SECONDS);
+        assertTrue(completed, "Did not process transaction bunch: " + nextBunch.getCount());
+        System.out.println("Completed additional " + bunchCount + " transactions");
+
+        completed = Utils.waitForCondition(10_000, () -> {
+            return testSubject.fsm.getCurrentState() == CollaboratorFsm.CLIENT;
+        });
+
+        assertTrue(completed, "Test subject did not successfully bootstrap: " + testSubject.getMember().getId());
     }
 
     @Test
