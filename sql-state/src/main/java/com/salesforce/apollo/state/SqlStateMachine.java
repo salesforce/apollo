@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
 
@@ -68,6 +69,7 @@ import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
+import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.protocols.Hash.HkHasher;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -276,7 +278,8 @@ public class SqlStateMachine {
     }
 
     private final LoadingCache<String, CallableStatement> callCache;
-    private final File                                    checkpointDirectory; 
+    private final File                                    checkpointDirectory;
+    private final ScriptCompiler                          compiler   = new ScriptCompiler();
     private final JdbcConnection                          connection;
     private final AtomicReference<SecureRandom>           entropy    = new AtomicReference<>();
     private final TxnExec                                 executor   = new TxnExec();
@@ -284,7 +287,8 @@ public class SqlStateMachine {
     private final Properties                              info;
     private final LoadingCache<String, PreparedStatement> psCache;
     private final EventTrampoline                         trampoline = new EventTrampoline();
-    private final String                                  url;
+
+    private final String url;
 
     public SqlStateMachine(String url, Properties info, File checkpointDirectory) {
         this(url, info, checkpointDirectory, ForkJoinPool.commonPool());
@@ -330,6 +334,11 @@ public class SqlStateMachine {
             connection.close();
         } catch (SQLException e) {
         }
+    }
+
+    public Consumer<CheckpointState> getBootstrapper() {
+        return state -> {
+        };
     }
 
     public Function<Long, File> getCheckpointer() {
@@ -556,8 +565,6 @@ public class SqlStateMachine {
         }
     }
 
-    private final ScriptCompiler compiler = new ScriptCompiler();
-    
     @SuppressWarnings("unused")
     private Object acceptScript(HashKey hash, Script script) throws SQLException {
         List<ResultSet> results = new ArrayList<>();

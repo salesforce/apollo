@@ -352,7 +352,7 @@ public class ConsortiumTest {
                               .setScheduler(scheduler)
                               .setGenesisData(GENESIS_DATA)
                               .setGenesisViewId(GENESIS_VIEW_ID)
-                              .setCheckpointer(up.getCheckpointer())
+                              .setCheckpointer(up.getCheckpointer()) 
                               .build());
             return c;
         }).peek(c -> view.activate(c.getMember())).forEach(e -> consortium.put(e.getMember(), e));

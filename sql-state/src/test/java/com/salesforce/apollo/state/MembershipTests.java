@@ -12,8 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,6 +19,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,6 +28,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -97,6 +97,7 @@ public class MembershipTests {
     private List<Member>                       members;
     private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
     private Context<Member>                    context;
+    private ScheduledExecutorService           scheduler;
 
     @AfterEach
     public void after() {
@@ -106,10 +107,19 @@ public class MembershipTests {
         consortium.clear();
         communications.values().forEach(e -> e.close());
         communications.clear();
+        scheduler.shutdown();
+        scheduler = null;
     }
 
     @BeforeEach
     public void before() {
+        AtomicInteger label = new AtomicInteger();
+        scheduler = Executors.newScheduledThreadPool(2, r -> {
+            Thread t = new Thread(r, "Scheduler [" + label.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
+
         context = new Context<>(HashKey.ORIGIN.prefix(1), 3);
         checkpointDirBase = new File("target/mt-chkpoints");
         Utils.clean(checkpointDirBase);
@@ -527,14 +537,20 @@ public class MembershipTests {
             }
         };
         members.stream()
-               .map(m -> new Consortium(parameters(m, consensus, executor, msgParameters, gossipDuration)))
+               .map(m -> new Consortium(parameters(m, consensus, executor, msgParameters, gossipDuration, scheduler)))
                .peek(c -> context.activate(c.getMember()))
                .forEach(e -> consortium.put(e.getMember(), e));
     }
 
     private Parameters parameters(Member m, BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus,
                                   TransactionExecutor executor, Messenger.Parameters msgParameters,
-                                  Duration gossipDuration) {
+                                  Duration gossipDuration, ScheduledExecutorService scheduler) {
+        ForkJoinPool fj = ForkJoinPool.commonPool();
+        String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), Utils.bitStreamEntropy().nextLong());
+        System.out.println("DB URL: " + url);
+        SqlStateMachine up = new SqlStateMachine(url, new Properties(),
+                new File(checkpointDirBase, m.getId().toString()), fj);
+        updaters.put(m, up);
         return Parameters.newBuilder()
                          .setConsensus(consensus)
                          .setMember(m)
@@ -542,35 +558,20 @@ public class MembershipTests {
                                                                      Utils.secureEntropy()))
                          .setContext(context)
                          .setMsgParameters(msgParameters)
-                         .setMaxBatchByteSize(1024 * 1024)
-                         .setMaxBatchSize(1000)
+                         .setMaxBatchByteSize(1024 * 1024 * 32)
+                         .setMaxBatchSize(4000)
                          .setCommunications(communications.get(m.getId()))
-                         .setMaxBatchDelay(Duration.ofMillis(1000))
+                         .setMaxBatchDelay(Duration.ofMillis(500))
                          .setGossipDuration(gossipDuration)
-                         .setViewTimeout(Duration.ofMillis(1500))
-                         .setSynchronizeTimeout(Duration.ofMillis(1500))
-                         .setJoinTimeout(Duration.ofSeconds(5))
-                         .setTransactonTimeout(Duration.ofSeconds(30))
-                         .setScheduler(Executors.newSingleThreadScheduledExecutor())
-                         .setExecutor(executor)
+                         .setViewTimeout(Duration.ofMillis(500))
+                         .setJoinTimeout(Duration.ofSeconds(2))
+                         .setDeltaCheckpointBlocks(10)
+                         .setTransactonTimeout(Duration.ofSeconds(15))
+                         .setExecutor(up.getExecutor())
+                         .setScheduler(scheduler)
                          .setGenesisData(GENESIS_DATA)
                          .setGenesisViewId(GENESIS_VIEW_ID)
-                         .setDeltaCheckpointBlocks(5)
-                         .setCheckpointer(l -> {
-                             File temp;
-                             try {
-                                 temp = File.createTempFile("foo", "bar");
-                                 temp.deleteOnExit();
-                                 try (FileOutputStream fos = new FileOutputStream(temp)) {
-                                     fos.write("Give me food or give me slack or kill me".getBytes());
-                                     fos.flush();
-                                 }
-                             } catch (IOException e) {
-                                 throw new IllegalStateException("Cannot create temp file", e);
-                             }
-
-                             return temp;
-                         })
+                         .setCheckpointer(up.getCheckpointer())
                          .build();
     }
 

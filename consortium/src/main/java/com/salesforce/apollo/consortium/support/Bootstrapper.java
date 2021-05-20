@@ -265,7 +265,7 @@ public class Bootstrapper {
                                                                                                                   // known
                                                                                                                   // genesis...
                                            .filter(e -> {
-                                               if (!e.getValue().hasCheckpoint() && lastCheckpoint >= 0) {
+                                               if (!e.getValue().hasCheckpoint() && lastCheckpoint <= 0) {
                                                    return true;
                                                }
                                                if (!e.getValue().hasCheckpointView()) {
