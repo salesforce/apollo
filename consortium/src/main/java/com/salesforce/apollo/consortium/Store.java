@@ -260,11 +260,11 @@ public class Store {
         return last;
     }
 
-    public void put(HashKey hash, CertifiedBlock cb) {
+    public void put(HashedCertifiedBlock cb) {
         transactionally(() -> {
-            Certifications certs = Certifications.newBuilder().addAllCerts(cb.getCertificationsList()).build();
-            put(hash, cb.getBlock());
-            certifications.put(height(cb.getBlock()), certs.toByteArray());
+            Certifications certs = Certifications.newBuilder().addAllCerts(cb.block.getCertificationsList()).build();
+            put(cb.hash, cb.block.getBlock());
+            certifications.put(cb.height(), certs.toByteArray());
         });
     }
 

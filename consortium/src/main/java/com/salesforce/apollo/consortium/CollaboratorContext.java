@@ -810,12 +810,11 @@ public class CollaboratorContext implements Collaborator {
                 .stream()
                 .sorted((a, b) -> Long.compare(height(a), height(b)))
                 .filter(cb -> height(cb) > currentHeight)
+                .map(cb -> new HashedCertifiedBlock(cb))
                 .forEach(cb -> {
-                    HashKey hash = new HashKey(Conversion.hashOf(cb.getBlock().toByteString()));
-                    workingBlocks.put(hash, cb.toBuilder());
-                    store().put(hash, cb);
-                    lastBlock(new HashedBlock(hash, cb.getBlock()));
-                    processToOrder(cb.getBlock());
+                    workingBlocks.put(cb.hash, cb.block.toBuilder());
+                    lastBlock(new HashedBlock(cb.hash, cb.block.getBlock()));
+                    processToOrder(cb.block.getBlock());
                 });
         log.debug("Synchronized from: {} to: {} working blocks: {} on: {}", currentHeight, lastBlock(),
                   workingBlocks.size(), consortium.getMember());
@@ -827,7 +826,7 @@ public class CollaboratorContext implements Collaborator {
     private void accept(HashedCertifiedBlock next) {
         workingBlocks.remove(next.hash);
         consortium.setCurrent(next);
-        store().put(next.hash, next.block);
+        store().put(next);
     }
 
     private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {

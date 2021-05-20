@@ -20,10 +20,10 @@ public class HashedCertifiedBlock {
     public final HashKey        hash;
 
     public HashedCertifiedBlock(CertifiedBlock block) {
-        this(new HashKey(Conversion.hashOf(block.toByteString())), block);
+        this(new HashKey(Conversion.hashOf(block.getBlock().toByteString())), block);
     }
 
-    public HashedCertifiedBlock(HashKey hash, CertifiedBlock block) {
+    private HashedCertifiedBlock(HashKey hash, CertifiedBlock block) {
         this.hash = hash;
         this.block = block;
     }

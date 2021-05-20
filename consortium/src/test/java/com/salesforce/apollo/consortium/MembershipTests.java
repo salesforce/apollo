@@ -115,11 +115,6 @@ public class MembershipTests {
     }
 
     @Test
-    public void testBootstrapNoPrior() throws Exception {
-
-    }
-
-    @Test
     public void testCheckpointBootstrap() throws Exception {
         testCardinality = 3;
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality - 1));

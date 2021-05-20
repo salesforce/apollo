@@ -97,7 +97,7 @@ public class Bootstrapper {
         this.store = store;
         this.comms = bootstrapComm;
         CertifiedBlock g = store.getCertifiedBlock(0);
-        store.put(anchor.hash, anchor.block);
+        store.put(anchor);
         if (g != null) {
             genesis = new HashedCertifiedBlock(g);
             log.info("Restore using genesis: {} on: {}", genesis.hash, params.member);
@@ -171,7 +171,7 @@ public class Bootstrapper {
                       .map(cb -> new HashedCertifiedBlock(cb))
                       .peek(cb -> log.trace("Adding anchor completion: {} block[{}] from: {} on: {}", cb.height(),
                                             cb.hash, m, params.member))
-                      .forEach(cb -> store.put(cb.hash, cb.block));
+                      .forEach(cb -> store.put(cb));
             } catch (InterruptedException e) {
                 log.debug("Error completing Anchor from: {} on: {}", m.getId(), params.member.getId());
             } catch (ExecutionException e) {
@@ -241,7 +241,7 @@ public class Bootstrapper {
                       .map(cb -> new HashedCertifiedBlock(cb))
                       .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(),
                                             cb.hash, m, params.member))
-                      .forEach(cb -> store.put(cb.hash, cb.block));
+                      .forEach(cb -> store.put(cb));
             } catch (InterruptedException e) {
                 log.debug("Error counting vote from: {} on: {}", m.getId(), params.member.getId());
             } catch (ExecutionException e) {
@@ -322,35 +322,25 @@ public class Bootstrapper {
                                   .max((a, b) -> Long.compare(a.getCheckpoint().getBlock().getHeader().getHeight(),
                                                               b.getCheckpoint().getBlock().getHeader().getHeight()))
                                   .orElse(null);
-        store.put(genesis.hash, genesis.block);
+        store.put(genesis);
 
-        if (mostRecent == null) {
-            // Nothing but Genesis
-            sync.complete(new SynchronizedState(genesis, checkpointView, checkpoint, checkpointState));
-            return;
+        long anchorTo;
+        if (mostRecent != null) {
+            checkpointCompletion(threshold, mostRecent);
+            anchorTo = checkpoint.height();
+        } else {
+            anchorTo = 0;
         }
 
-        checkpoint = new HashedCertifiedBlock(mostRecent.getCheckpoint());
-        store.put(checkpoint.hash, checkpoint.block);
-
-        checkpointView = new HashedCertifiedBlock(mostRecent.getCheckpointView());
-        store.put(checkpointView.hash, checkpointView.block);
-        log.info("Checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash, params.member);
-
-        CheckpointAssembler assembler = new CheckpointAssembler(checkpoint.height(),
-                CollaboratorContext.checkpointBody(checkpoint.block.getBlock()), params.member, store, comms,
-                params.context, threshold);
-
-        // assemble the checkpoint
-        checkpointAssembled = assembler.assemble(params.scheduler, params.synchronizeDuration);
-        checkpointAssembled.whenComplete((cps, t) -> {
-            log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member);
-            checkpointState = cps;
-        });
+        scheduleAnchorCompletion(anchor.height(), anchorTo);
 
         // Checkpoint must be assembled, view chain synchronized, and blocks spanning
         // the anchor block to the checkpoint must be filled
-        CompletableFuture.allOf(checkpointAssembled, viewChainSynchronized, anchorSynchronized).whenComplete((v, t) -> {
+        CompletableFuture<Void> completion = mostRecent != null
+                ? CompletableFuture.allOf(checkpointAssembled, viewChainSynchronized, anchorSynchronized)
+                : CompletableFuture.allOf(anchorSynchronized);
+
+        completion.whenComplete((v, t) -> {
             if (t == null) {
                 log.info("Synchronized to: {} from: {} last view: {} on: {}", genesis.hash,
                          checkpoint == null ? genesis.hash : checkpoint.hash,
@@ -369,17 +359,35 @@ public class Bootstrapper {
             sync.completeExceptionally(t);
             return null;
         });
+    }
 
+    void checkpointCompletion(int threshold, Initial mostRecent) {
+        checkpoint = new HashedCertifiedBlock(mostRecent.getCheckpoint());
+        store.put(checkpoint);
+
+        checkpointView = new HashedCertifiedBlock(mostRecent.getCheckpointView());
+        store.put(checkpointView);
+        log.info("Checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash, params.member);
+
+        CheckpointAssembler assembler = new CheckpointAssembler(checkpoint.height(),
+                CollaboratorContext.checkpointBody(checkpoint.block.getBlock()), params.member, store, comms,
+                params.context, threshold);
+
+        // assemble the checkpoint
+        checkpointAssembled = assembler.assemble(params.scheduler, params.synchronizeDuration);
+        checkpointAssembled.whenComplete((cps, t) -> {
+            log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member);
+            checkpointState = cps;
+        });
         // reconstruct chain to genesis
         mostRecent.getViewChainList()
                   .stream()
                   .filter(cb -> cb.getBlock().getBody().getType() == BodyType.RECONFIGURE)
                   .map(cb -> new HashedCertifiedBlock(cb))
                   .forEach(reconfigure -> {
-                      store.put(reconfigure.hash, reconfigure.block);
+                      store.put(reconfigure);
                   });
         scheduleCompletion(checkpointView.height(), 0);
-        scheduleAnchorCompletion(anchor.height(), checkpoint.height());
     }
 
     private void countdown(Iterator<Member> graphCut, long from, long target) {
@@ -435,9 +443,16 @@ public class Bootstrapper {
                 }
 
                 try {
-                    votes.put(m.getId(), future.get());
-                    log.debug("Synchronization vote: {} from: {} recorded on: {}",
-                              new HashedCertifiedBlock(future.get().getGenesis()).hash, m, params.member);
+                    Initial vote = future.get();
+                    if (vote.hasGenesis()) {
+                        HashedCertifiedBlock gen = new HashedCertifiedBlock(vote.getGenesis());
+                        if (gen.height() != 0) {
+                            log.error("Returned genesis: {} is not height 0 from: {} on: {}", gen.hash, m,
+                                      params.member);
+                        }
+                        votes.put(m.getId(), vote);
+                        log.debug("Synchronization vote: {} from: {} recorded on: {}", gen.hash, m, params.member);
+                    }
                 } catch (InterruptedException e) {
                     log.debug("Error counting vote from: {} on: {}", m.getId(), params.member.getId());
                 } catch (ExecutionException e) {
@@ -447,7 +462,7 @@ public class Bootstrapper {
                     initialize(graphCut, votes, countdown);
                 }
             } catch (Throwable t) {
-                log.error("Failure in recording vote from: {} on: {}", m.getId(), params.member.getId());
+                log.error("Failure in recording vote from: {} on: {}", m.getId(), params.member.getId(), t);
             }
         };
     }
@@ -463,7 +478,7 @@ public class Bootstrapper {
         if (sync.isDone()) {
             return;
         }
-        log.info("Scheduling Anchor completion ({} to {}) duration: {} millis on: {}", from, checkpoint.height(),
+        log.info("Scheduling Anchor completion ({} to {}) duration: {} millis on: {}", from, to,
                  params.synchronizeDuration.toMillis(), params.member);
         params.scheduler.schedule(() -> {
             try {
@@ -506,13 +521,13 @@ public class Bootstrapper {
     }
 
     private void validateAnchor() {
+        long to = checkpoint == null ? 0 : checkpoint.height();
         try {
-            store.validate(anchor.height(), checkpoint.height());
+            store.validate(anchor.height(), to);
             anchorSynchronized.complete(true);
             log.info("Anchor chain to checkpoint synchronized on: {}", params.member);
         } catch (Throwable e) {
-            log.error("Anchor chain from: {} to: {} does not validate on: {}", anchor.height(), checkpoint.height(),
-                      params.member, e);
+            log.error("Anchor chain from: {} to: {} does not validate on: {}", anchor.height(), to, params.member, e);
             anchorSynchronized.completeExceptionally(e);
         }
     }

@@ -53,7 +53,7 @@ public class TestChain {
                                              .setBody(Body.newBuilder().setType(BodyType.GENESIS))
                                              .build())
                               .build());
-        store.put(genesis.hash, genesis.block);
+        store.put(genesis);
         lastBlock = lastView = checkpoint = genesis;
         return this;
     }
@@ -106,7 +106,7 @@ public class TestChain {
                               .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
                                       + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.CHECKPOINT, CollaboratorContext.checkpoint(null, 0)), lastView))
                               .build());
-        store.put(lastBlock.hash, lastBlock.block);
+        store.put(lastBlock);
         return lastBlock;
     }
 
@@ -116,7 +116,7 @@ public class TestChain {
                               .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
                                       + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.RECONFIGURE, CollaboratorContext.checkpoint(null, 0)), lastView))
                               .build());
-        store.put(lastBlock.hash, lastBlock.block);
+        store.put(lastBlock);
         return lastBlock;
     }
 
@@ -126,7 +126,7 @@ public class TestChain {
                               .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
                                       + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.USER, CollaboratorContext.checkpoint(null, 0)), lastView))
                               .build());
-        store.put(block.hash, block.block);
+        store.put(block);
         lastBlock = block;
         return lastBlock;
     }

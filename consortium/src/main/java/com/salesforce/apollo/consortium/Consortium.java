@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.consortium;
 
-import static com.salesforce.apollo.consortium.CollaboratorContext.height;
 import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
 import static com.salesforce.apollo.consortium.support.SigningUtils.validateGenesis;
 import static com.salesforce.apollo.consortium.support.SigningUtils.verify;
@@ -144,18 +143,30 @@ public class Consortium {
                 return Initial.getDefaultInstance();
             }
             Initial.Builder initial = Initial.newBuilder();
-            if (getGenesis() != null) {
-                initial.setGenesis(getGenesis().block);
+            CertifiedBlock block = getGenesis().block;
+            if (block != null) {
+                final HashedCertifiedBlock g = new HashedCertifiedBlock(block);
+                initial.setGenesis(g.block);
                 HashedCertifiedBlock cp = getLastCheckpointBlock();
                 if (cp != null) {
                     long height = request.getHeight();
+
                     while (cp.height() > height) {
                         cp = new HashedCertifiedBlock(
                                 store.getCertifiedBlock(cp.block.getBlock().getHeader().getLastCheckpoint()));
                     }
-                    long lastReconfig = cp.block.getBlock().getHeader().getLastReconfig();
-                    initial.setCheckpoint(cp.block).setCheckpointView(store.getCertifiedBlock(lastReconfig));
+                    HashedCertifiedBlock lastView = new HashedCertifiedBlock(
+                            store.getCertifiedBlock(cp.block.getBlock().getHeader().getLastReconfig()));
+
+                    initial.setCheckpoint(cp.block).setCheckpointView(lastView.block);
+
+                    log.debug("Returning sync: {} view: {} chkpt: {} to: {} on: {}", g.hash, lastView.hash, cp.hash,
+                             from, getMember());
+                } else {
+                    log.debug("Returning sync: {} to: {} on: {}", g.hash, from, getMember());
                 }
+            } else {
+                log.debug("Returning null sync to: {} on: {}", from, getMember());
             }
             return initial.build();
         }
@@ -602,59 +613,60 @@ public class Consortium {
         if (!started.get()) {
             return;
         }
-        Block block = certifiedBlock.getBlock();
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
-        log.debug("Processing block {} : {} height: {} on: {}", hash, block.getBody().getType(),
-                  block.getHeader().getHeight(), getMember());
+        HashedCertifiedBlock hcb = new HashedCertifiedBlock(certifiedBlock);
+        Block block = hcb.block.getBlock();
+        log.debug("Processing block {} : {} height: {} on: {}", hcb.hash, block.getBody().getType(), hcb.height(),
+                  getMember());
         final HashedCertifiedBlock previousBlock = getCurrent();
-        long height = height(block);
+        Header header = block.getHeader();
         if (previousBlock != null) {
-            HashKey prev = new HashKey(block.getHeader().getPrevious().toByteArray());
+            HashKey prev = new HashKey(header.getPrevious().toByteArray());
             long prevHeight = previousBlock.height();
-            if (height <= prevHeight) {
-                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hash,
-                          height, prevHeight, getMember());
+            if (hcb.height() <= prevHeight) {
+                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hcb.hash,
+                          hcb.height(), prevHeight, getMember());
                 return;
             }
-            if (height != prevHeight + 1) {
-                deferedBlocks.add(new HashedCertifiedBlock(hash, certifiedBlock));
+            if (hcb.height() != prevHeight + 1) {
+                deferedBlocks.add(hcb);
                 log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}", getMember(),
-                          hash, previousBlock.height() + 1, block.getHeader().getHeight());
+                          hcb.hash, previousBlock.height() + 1, header.getHeight());
                 return;
             }
             if (!previousBlock.hash.equals(prev)) {
                 log.error("Protocol violation on {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {}",
-                          getMember(), previousBlock.hash, prev, prevHeight, height);
+                          getMember(), previousBlock.hash, prev, prevHeight, hcb.height());
                 return;
             }
             if (!view.getContext().validate(certifiedBlock)) {
-                log.error("Protocol violation on {}. New block is not validated {}", getMember(), hash);
+                log.error("Protocol violation on {}. New block is not validated {}", getMember(), hcb.hash);
                 return;
             }
         } else {
             if (block.getBody().getType() != BodyType.GENESIS) {
-                deferedBlocks.add(new HashedCertifiedBlock(hash, certifiedBlock));
+                deferedBlocks.add(hcb);
                 log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}", getMember(),
-                          hash, 0, block.getHeader().getHeight());
+                          hcb.hash, 0, header.getHeight());
                 return;
             }
             Genesis body;
             try {
                 body = Genesis.parseFrom(getBody(block));
             } catch (IOException e) {
-                log.error("Protocol violation on: {}. Genesis block body cannot be deserialized {}", getMember(), hash);
+                log.error("Protocol violation on: {}. Genesis block body cannot be deserialized {}", getMember(),
+                          hcb.hash);
                 return;
             }
             Context<Member> context = params.context;
-            if (!validateGenesis(hash, certifiedBlock, body.getInitialView(), context,
+            if (!validateGenesis(hcb.hash, certifiedBlock, body.getInitialView(), context,
                                  context.getRingCount() - context.toleranceLevel(), getMember())) {
-                log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hash);
+                log.error("Protocol violation on: {}. Genesis block is not validated {}", getMember(), hcb.hash);
                 return;
             }
         }
-        if (next(new HashedCertifiedBlock(hash, certifiedBlock))) {
+        if (next(hcb)) {
             PendingAction pendingAction = pending.get();
-            if (pendingAction != null && pendingAction.targetBlock == height) {
+            if (pendingAction != null && pendingAction.targetBlock == hcb.height()) {
                 runPending(pendingAction);
             }
             if (processDeferred) {
