@@ -32,7 +32,7 @@
 		<avro.version>1.10.0</avro.version>
 		<h2.version>1.4.200</h2.version>
 		<jooq.version>3.14.8</jooq.version>
-		<bc.version>1.65.01</bc.version>
+		<bc.version>1.68</bc.version>
 		<logback.version>1.2.3</logback.version>
 		<asm.version>8.0.1</asm.version>
 		<antlr.version>4.8-1</antlr.version>
