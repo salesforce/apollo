@@ -55,3 +55,8 @@ is accomplished by slight modifications of the underlying H2 database, and the u
 
 Likewise, it's important in the Java stored procedures, functions and triggers to likewise deterministically execute.  However, this is currently not the case as the DJVM which was considered
 for this deterministic implementation is an incorrect license and so another mechanism will have to be engineered to enforce determinism.
+
+## Checkpointing and Bootstrapping
+Checkpoints are implemented with H2's _SCRIPT_ command which dumps the current database state in a form that will recreate the state of the database.  This is, of course, compressed and becomes the checkpointed state
+used in Consortium for bootstrapping nodes.  Currently, no facilities are implemented for incremental backup, but it should be straightforward to implement an incremental scheme.  For the future ;)
+
