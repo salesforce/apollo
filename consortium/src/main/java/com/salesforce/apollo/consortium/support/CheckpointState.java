@@ -6,13 +6,17 @@
  */
 package com.salesforce.apollo.consortium.support;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.SequenceInputStream;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.NoSuchElementException;
+import java.util.zip.GZIPInputStream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.h2.mvstore.MVMap;
@@ -21,6 +25,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.Slice;
 import com.salesforce.apollo.protocols.BloomFilter;
+import com.salesforce.apollo.protocols.Utils;
 
 /**
  * @author hal.hildebrand
@@ -35,19 +40,38 @@ public class CheckpointState {
         this.state = stored;
     }
 
-    public void close() {
-        state.clear();
+    public void assemble(File file) throws IOException {
+        try (FileOutputStream fos = new FileOutputStream(file);
+                GZIPInputStream gis = new GZIPInputStream(assembled())) {
+            Utils.copy(gis, fos);
+            gis.close();
+        }
     }
 
-    public void assemble(File file) throws IOException {
-        try (FileOutputStream fos = new FileOutputStream(file)) {
-            for (byte[] bytes : IntStream.range(0, state.size())
-                                         .mapToObj(hk -> state.get(hk))
-                                         .collect(Collectors.toList())) {
-                fos.write(bytes);
+    public InputStream assembled() {
+        return new SequenceInputStream(new Enumeration<InputStream>() {
+            int current = 0;
+
+            @Override
+            public boolean hasMoreElements() {
+                return current < state.size();
             }
-            fos.flush();
-        }
+
+            @Override
+            public InputStream nextElement() {
+                if (current >= state.size()) {
+                    throw new NoSuchElementException();
+                }
+                int c = current;
+                current++;
+                byte[] buf = state.get(c);
+                return new ByteArrayInputStream(buf);
+            }
+        });
+    }
+
+    public void close() {
+        state.clear();
     }
 
     public List<Slice> fetchSegments(BloomFilter<Integer> bff, int maxSegments, BitsStreamGenerator entropy) {

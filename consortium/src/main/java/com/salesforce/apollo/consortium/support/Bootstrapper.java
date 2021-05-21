@@ -112,6 +112,34 @@ public class Bootstrapper {
         return sync;
     }
 
+    private void checkpointCompletion(int threshold, Initial mostRecent) {
+        checkpoint = new HashedCertifiedBlock(mostRecent.getCheckpoint());
+        store.put(checkpoint);
+
+        checkpointView = new HashedCertifiedBlock(mostRecent.getCheckpointView());
+        store.put(checkpointView);
+        log.info("Checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash, params.member);
+
+        CheckpointAssembler assembler = new CheckpointAssembler(checkpoint.height(),
+                CollaboratorContext.checkpointBody(checkpoint.block.getBlock()), params.member, store, comms,
+                params.context, threshold);
+
+        // assemble the checkpoint
+        checkpointAssembled = assembler.assemble(params.scheduler, params.synchronizeDuration).whenComplete((cps, t) -> {
+            log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member);
+            checkpointState = cps;
+        });
+        // reconstruct chain to genesis
+        mostRecent.getViewChainList()
+                  .stream()
+                  .filter(cb -> cb.getBlock().getBody().getType() == BodyType.RECONFIGURE)
+                  .map(cb -> new HashedCertifiedBlock(cb))
+                  .forEach(reconfigure -> {
+                      store.put(reconfigure);
+                  });
+        scheduleCompletion(checkpointView.height(), 0);
+    }
+
     private void completeAnchor(Iterator<Member> graphCut, long from, long to) {
         if (sync.isDone() || anchorSynchronized.isDone()) {
             return;
@@ -359,35 +387,6 @@ public class Bootstrapper {
             sync.completeExceptionally(t);
             return null;
         });
-    }
-
-    void checkpointCompletion(int threshold, Initial mostRecent) {
-        checkpoint = new HashedCertifiedBlock(mostRecent.getCheckpoint());
-        store.put(checkpoint);
-
-        checkpointView = new HashedCertifiedBlock(mostRecent.getCheckpointView());
-        store.put(checkpointView);
-        log.info("Checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash, params.member);
-
-        CheckpointAssembler assembler = new CheckpointAssembler(checkpoint.height(),
-                CollaboratorContext.checkpointBody(checkpoint.block.getBlock()), params.member, store, comms,
-                params.context, threshold);
-
-        // assemble the checkpoint
-        checkpointAssembled = assembler.assemble(params.scheduler, params.synchronizeDuration);
-        checkpointAssembled.whenComplete((cps, t) -> {
-            log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member);
-            checkpointState = cps;
-        });
-        // reconstruct chain to genesis
-        mostRecent.getViewChainList()
-                  .stream()
-                  .filter(cb -> cb.getBlock().getBody().getType() == BodyType.RECONFIGURE)
-                  .map(cb -> new HashedCertifiedBlock(cb))
-                  .forEach(reconfigure -> {
-                      store.put(reconfigure);
-                  });
-        scheduleCompletion(checkpointView.height(), 0);
     }
 
     private void countdown(Iterator<Member> graphCut, long from, long target) {

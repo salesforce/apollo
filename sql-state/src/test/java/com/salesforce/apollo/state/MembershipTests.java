@@ -63,6 +63,7 @@ import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.consortium.ViewContext;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
+import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -198,10 +199,11 @@ public class MembershipTests {
         communications.entrySet()
                       .stream()
                       .filter(r -> !r.getKey().equals(testSubject.getMember().getId()))
-                      .peek(e -> System.out.println(e.getKey()))
                       .map(e -> e.getValue())
                       .forEach(r -> r.start());
-        consortium.values().stream().filter(c -> !c.equals(testSubject)).forEach(e -> e.start());
+        consortium.values().stream()
+                   .filter(c -> !c.equals(testSubject))
+                  .forEach(e -> e.start());
 
         System.out.println("awaiting genesis processing");
 
@@ -241,7 +243,7 @@ public class MembershipTests {
         System.out.println();
 
         final Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
-        int bunchCount = 150;
+        int bunchCount = 500;
         System.out.println("Submitting batches: " + bunchCount);
         final Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
@@ -335,6 +337,30 @@ public class MembershipTests {
         });
 
         assertTrue(completed, "Test subject did not successfully bootstrap: " + testSubject.getMember().getId());
+
+        long lastBlock = blueRibbon.stream().mapToLong(c -> c.getCurrrent().height()).findFirst().getAsLong();
+
+        completed = Utils.waitForCondition(10_000, () -> {
+            return testSubject.getCurrrent().height() == lastBlock;
+        });
+
+        assertTrue(completed, "Test subject did not successfully catch up to :" + lastBlock + " on: "
+                + testSubject.getMember().getId());
+
+        Connection connection = updaters.get(members.get(0)).newConnection();
+        Statement statement = connection.createStatement();
+        ResultSet results = statement.executeQuery("select ID, QTY from books");
+        ResultSetMetaData rsmd = results.getMetaData();
+        int columnsNumber = rsmd.getColumnCount();
+        while (results.next()) {
+            for (int i = 1; i <= columnsNumber; i++) {
+                if (i > 1)
+                    System.out.print(",  ");
+                Object columnValue = results.getObject(i);
+                System.out.print(columnValue + " " + rsmd.getColumnName(i));
+            }
+            System.out.println("");
+        }
     }
 
     @Test
@@ -392,10 +418,7 @@ public class MembershipTests {
                       .filter(r -> !r.getKey().equals(testSubject.getMember().getId()))
                       .map(e -> e.getValue())
                       .forEach(r -> r.start());
-        consortium.values()
-                   .stream()
-//                   .filter(c -> !c.equals(testSubject))
-                   .forEach(e -> e.start());
+        consortium.values().stream().filter(c -> !c.equals(testSubject)).forEach(e -> e.start());
 
         System.out.println("awaiting genesis processing");
 
@@ -533,7 +556,8 @@ public class MembershipTests {
         long lastBlock = blueRibbon.stream().mapToLong(c -> c.getCurrrent().height()).findFirst().getAsLong();
 
         completed = Utils.waitForCondition(10_000, () -> {
-            return testSubject.getCurrrent().height() == lastBlock;
+            HashedCertifiedBlock current = testSubject.getCurrrent();
+            return current == null ? false : current.height() == lastBlock;
         });
 
         assertTrue(completed, "Test subject did not successfully catch up to :" + lastBlock + " on: "
@@ -602,6 +626,7 @@ public class MembershipTests {
                          .setGenesisData(GENESIS_DATA)
                          .setGenesisViewId(GENESIS_VIEW_ID)
                          .setCheckpointer(up.getCheckpointer())
+                         .setRestorer(up.getBootstrapper())
                          .build();
     }
 

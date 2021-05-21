@@ -13,8 +13,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.google.common.base.Supplier;
@@ -56,7 +56,8 @@ public class Parameters {
         private Member                                                    member;
         private Messenger.Parameters                                      msgParameters;
         private int                                                       processedBufferSize   = 1000;
-        private Consumer<CheckpointState>                                 restorer              = checkpointState -> {
+        private BiConsumer<Long, CheckpointState>                         restorer              = (height,
+                                                                                                   checkpointState) -> {
                                                                                                 };
         private ScheduledExecutorService                                  scheduler;
         private Supplier<Signature>                                       signature;
@@ -166,7 +167,7 @@ public class Parameters {
             return processedBufferSize;
         }
 
-        public Consumer<CheckpointState> getRestorer() {
+        public BiConsumer<Long, CheckpointState> getRestorer() {
             return restorer;
         }
 
@@ -318,8 +319,8 @@ public class Parameters {
             return this;
         }
 
-        public Builder setRestorer(Consumer<CheckpointState> restorer) {
-            this.restorer = restorer;
+        public Builder setRestorer(BiConsumer<Long, CheckpointState> biConsumer) {
+            this.restorer = biConsumer;
             return this;
         }
 
@@ -394,7 +395,7 @@ public class Parameters {
     public final Member                                                    member;
     public final Messenger.Parameters                                      msgParameters;
     public final int                                                       processedBufferSize;
-    public final Consumer<CheckpointState>                                 restorer;
+    public final BiConsumer<Long, CheckpointState>                         restorer;
     public final ScheduledExecutorService                                  scheduler;
     public final Supplier<Signature>                                       signature;
     public final File                                                      storeFile;
@@ -411,7 +412,7 @@ public class Parameters {
             int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
             int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Duration initialViewTimeout,
             Executor dispatcher, Duration synchronizeDuration, int maxViewBlocks, int maxSyncBlocks,
-            Duration synchronizeTimeout, Consumer<CheckpointState> restorer) {
+            Duration synchronizeTimeout, BiConsumer<Long, CheckpointState> restorer2) {
         this.context = context;
         this.communications = communications;
         this.maxSyncBlocks = maxSyncBlocks;
@@ -442,6 +443,6 @@ public class Parameters {
         this.dispatcher = dispatcher;
         this.synchronizeDuration = synchronizeDuration;
         this.synchronizeTimeout = synchronizeTimeout;
-        this.restorer = restorer;
+        this.restorer = restorer2;
     }
 }

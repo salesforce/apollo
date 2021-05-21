@@ -249,7 +249,9 @@ public final class Fsm<Context, Transitions> {
             throw new IllegalStateException(String.format("[%s] Cannot pop after pushing", name));
         }
         if (stack.size() == 0) {
-            throw new IllegalStateException(String.format("[%s] State stack is empty", name));
+            throw new IllegalStateException(
+                    String.format("[%s] State stack is empty, current state: %s, transition: %s", name,
+                                  prettyPrint(current), transition));
         }
         pendingPop = true;
         popTransition = new PendingTransition();

@@ -608,7 +608,12 @@ public class CollaboratorContext implements Collaborator {
         }
         futureBootstrap = bootstrapper(anchor).synchronize().whenComplete((s, t) -> {
             if (t == null) {
-                synchronize(s);
+                try {
+                    synchronize(s);
+                } catch (Throwable e) {
+                    log.error("Cannot synchronize on: {}", getMember(), e);
+                    consortium.transitions.fail();
+                }
             } else {
                 log.error("Synchronization failed on: {}", getMember(), t);
                 consortium.transitions.fail();
@@ -1440,7 +1445,7 @@ public class CollaboratorContext implements Collaborator {
 
     private void restoreFrom(HashedCertifiedBlock block, CheckpointState checkpoint) {
         consortium.checkpoint(block.height(), checkpoint);
-        consortium.params.restorer.accept(checkpoint);
+        consortium.params.restorer.accept(block.height(), checkpoint);
         consortium.restore();
         processCheckpoint(block);
     }
@@ -1528,10 +1533,12 @@ public class CollaboratorContext implements Collaborator {
             current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()) + 1);
         }
         synchronizing.set(false);
-        log.info("Synchronized, resuming view on: {}", state.lastCheckpoint.hash, getMember());
+        log.info("Synchronized, resuming view on: {}",
+                 state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, getMember());
         this.consortium.view.resume(consortium.service);
         resolveStatus();
-        log.info("Processing deferred blocks: {} on: {}", consortium.deferredCount(), state.lastCheckpoint.hash, getMember());
+        log.info("Processing deferred blocks: {} on: {}", consortium.deferredCount(), consortium.deferredCount(),
+                 getMember());
         consortium.processDeferred();
     }
 

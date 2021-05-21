@@ -203,7 +203,8 @@ public class MembershipTests {
             return testSubject.fsm.getCurrentState() == CollaboratorFsm.CLIENT;
         });
 
-        assertTrue(completed, "Test subject did not successfully bootstrap: " + testSubject.getMember().getId());
+        assertTrue(completed, "Test subject did not successfully bootstrap: " + testSubject.getMember().getId()
+                + " state: " + testSubject.fsm.getCurrentState());
     }
 
     @Test

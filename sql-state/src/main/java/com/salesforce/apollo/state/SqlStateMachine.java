@@ -29,7 +29,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
 
@@ -336,8 +335,30 @@ public class SqlStateMachine {
         }
     }
 
-    public Consumer<CheckpointState> getBootstrapper() {
-        return state -> {
+    public BiConsumer<Long, CheckpointState> getBootstrapper() {
+        return (height, state) -> {
+            String rndm = UUID.randomUUID().toString();
+            try (java.sql.Statement statement = connection.createStatement()) {
+                File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
+                try {
+                    state.assemble(temp);
+                } catch (IOException e) {
+                    log.error("unable to assemble checkpoint: {} into: {}", height, temp, e);
+                    return;
+                }
+                try {
+                    log.error("Restoring checkpoint: {} ", height);
+                    statement.execute(String.format("RUNSCRIPT FROM '%s'", temp.getAbsolutePath()));
+                    log.error("Restored from checkpoint: {}", height);
+                    statement.close();
+                } catch (SQLException e) {
+                    log.error("unable to restore checkpoint: {}", height, e);
+                    return;
+                }
+            } catch (SQLException e) {
+                log.error("unable to restore from checkpoint: {}", height, e);
+                return;
+            }
         };
     }
 

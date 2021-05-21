@@ -28,6 +28,11 @@ public enum CollaboratorFsm implements Transitions {
     CHECKPOINT_RECOVERY {
     },
     CLIENT {
+
+        @Override
+        public Transitions becomeClient() {
+            return null;
+        }
     },
     FOLLOWER {
 
