@@ -10,8 +10,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.lang.reflect.Array;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -21,6 +19,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -37,7 +36,6 @@ import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
 
-import org.h2.Driver;
 import org.h2.api.ErrorCode;
 import org.h2.engine.Session;
 import org.h2.jdbc.JdbcConnection;
@@ -45,10 +43,7 @@ import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
 import org.h2.jdbc.JdbcSQLNonTransientException;
 import org.h2.message.DbException;
 import org.h2.store.Data;
-import org.h2.value.DataType;
 import org.h2.value.Value;
-import org.h2.value.ValueArray;
-import org.h2.value.ValueNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,6 +68,7 @@ import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
+import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.protocols.Hash.HkHasher;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -119,148 +115,6 @@ public class SqlStateMachine {
         }
     }
 
-    /**
-     * There may be multiple Java methods that match a function name. Each method
-     * must have a different number of parameters however. This helper class
-     * represents one such method.
-     */
-    public static class JavaMethod {
-        private boolean      hasConnectionParam;
-        private final Method method;
-        private int          paramCount;
-        private Class<?>     varArgClass;
-        private boolean      varArgs;
-
-        JavaMethod(Method method) {
-            this.method = method;
-            Class<?>[] paramClasses = method.getParameterTypes();
-            paramCount = paramClasses.length;
-            if (paramCount > 0) {
-                Class<?> paramClass = paramClasses[0];
-                if (Connection.class.isAssignableFrom(paramClass)) {
-                    hasConnectionParam = true;
-                    paramCount--;
-                }
-            }
-            if (paramCount > 0) {
-                Class<?> lastArg = paramClasses[paramClasses.length - 1];
-                if (lastArg.isArray() && method.isVarArgs()) {
-                    varArgs = true;
-                    varArgClass = lastArg.getComponentType();
-                }
-            }
-        }
-
-        /**
-         * Call the user-defined function and return the value.
-         *
-         * @param session the session
-         * @param args    the argument list
-         * @return the value
-         */
-        public Object getValue(Object instance, Session session, Value[] args) {
-            Class<?>[] paramClasses = method.getParameterTypes();
-            Object[] params = new Object[paramClasses.length];
-            int p = 0;
-            if (hasConnectionParam && params.length > 0) {
-                params[p++] = session.createConnection(false);
-            }
-
-            // allocate array for varArgs parameters
-            Object varArg = null;
-            if (varArgs) {
-                int len = args.length - params.length + 1 + (hasConnectionParam ? 1 : 0);
-                varArg = Array.newInstance(varArgClass, len);
-                params[params.length - 1] = varArg;
-            }
-
-            for (int a = 0, len = args.length; a < len; a++, p++) {
-                boolean currentIsVarArg = varArgs && p >= paramClasses.length - 1;
-                Class<?> paramClass;
-                if (currentIsVarArg) {
-                    paramClass = varArgClass;
-                } else {
-                    paramClass = paramClasses[p];
-                }
-                int type = DataType.getTypeFromClass(paramClass);
-                Value v = args[a];
-                Object o;
-                if (Value.class.isAssignableFrom(paramClass)) {
-                    o = v;
-                } else if (v.getValueType() == Value.ARRAY && paramClass.isArray()
-                        && paramClass.getComponentType() != Object.class) {
-                    Value[] array = ((ValueArray) v).getList();
-                    Object[] objArray = (Object[]) Array.newInstance(paramClass.getComponentType(), array.length);
-                    int componentType = DataType.getTypeFromClass(paramClass.getComponentType());
-                    for (int i = 0; i < objArray.length; i++) {
-                        objArray[i] = array[i].convertTo(componentType, session, false).getObject();
-                    }
-                    o = objArray;
-                } else {
-                    v = v.convertTo(type, session, false);
-                    o = v.getObject();
-                }
-                if (o == null) {
-                    if (paramClass.isPrimitive()) {
-                        // NULL for a java primitive: return NULL
-                        return ValueNull.INSTANCE;
-                    }
-                } else {
-                    if (!paramClass.isAssignableFrom(o.getClass()) && !paramClass.isPrimitive()) {
-                        o = DataType.convertTo(session.createConnection(false), v, paramClass);
-                    }
-                }
-                if (currentIsVarArg) {
-                    Array.set(varArg, p - params.length + 1, o);
-                } else {
-                    params[p] = o;
-                }
-            }
-            Value identity = session.getLastScopeIdentity();
-            boolean defaultConnection = session.getDatabase().getSettings().defaultConnection;
-            try {
-                session.setAutoCommit(false);
-                try {
-                    if (defaultConnection) {
-                        Driver.setDefaultConnection(session.createConnection(false));
-                    }
-                    return method.invoke(instance, params);
-                } catch (InvocationTargetException e) {
-                    StringBuilder builder = new StringBuilder(method.getName()).append('(');
-                    for (int i = 0, length = params.length; i < length; i++) {
-                        if (i > 0) {
-                            builder.append(", ");
-                        }
-                        builder.append(params[i]);
-                    }
-                    builder.append(')');
-                    throw DbException.convertInvocation(e, builder.toString());
-                } catch (Exception e) {
-                    throw DbException.convert(e);
-                }
-            } finally {
-                session.setLastScopeIdentity(identity);
-                if (defaultConnection) {
-                    Driver.setDefaultConnection(null);
-                }
-            }
-        }
-
-        /**
-         * Check if this function requires a database connection.
-         *
-         * @return if the function requires a connection
-         */
-        public boolean hasConnectionParam() {
-            return this.hasConnectionParam;
-        }
-
-        @Override
-        public String toString() {
-            return method.toString();
-        }
-    }
-
     public interface Registry {
         void deregister(String discriminator);
 
@@ -270,8 +124,8 @@ public class SqlStateMachine {
     public class TxnExec implements TransactionExecutor {
 
         @Override
-        public void beginBlock(long height, byte[] nonce) {
-            SqlStateMachine.this.beginBlock(height, nonce);
+        public void beginBlock(long height, HashKey hash) {
+            SqlStateMachine.this.beginBlock(height, hash);
         }
 
         @Override
@@ -432,7 +286,8 @@ public class SqlStateMachine {
     private final Properties                              info;
     private final LoadingCache<String, PreparedStatement> psCache;
     private final EventTrampoline                         trampoline = new EventTrampoline();
-    private final String                                  url;
+
+    private final String url;
 
     public SqlStateMachine(String url, Properties info, File checkpointDirectory) {
         this(url, info, checkpointDirectory, ForkJoinPool.commonPool());
@@ -478,6 +333,33 @@ public class SqlStateMachine {
             connection.close();
         } catch (SQLException e) {
         }
+    }
+
+    public BiConsumer<Long, CheckpointState> getBootstrapper() {
+        return (height, state) -> {
+            String rndm = UUID.randomUUID().toString();
+            try (java.sql.Statement statement = connection.createStatement()) {
+                File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
+                try {
+                    state.assemble(temp);
+                } catch (IOException e) {
+                    log.error("unable to assemble checkpoint: {} into: {}", height, temp, e);
+                    return;
+                }
+                try {
+                    log.error("Restoring checkpoint: {} ", height);
+                    statement.execute(String.format("RUNSCRIPT FROM '%s'", temp.getAbsolutePath()));
+                    log.error("Restored from checkpoint: {}", height);
+                    statement.close();
+                } catch (SQLException e) {
+                    log.error("unable to restore checkpoint: {}", height, e);
+                    return;
+                }
+            } catch (SQLException e) {
+                log.error("unable to restore from checkpoint: {}", height, e);
+                return;
+            }
+        };
     }
 
     public Function<Long, File> getCheckpointer() {
@@ -591,7 +473,7 @@ public class SqlStateMachine {
             try {
                 exec.clearBatch();
                 exec.clearParameters();
-            } catch (JdbcSQLNonTransientException e) {
+            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                 // ignore
             }
         }
@@ -618,17 +500,30 @@ public class SqlStateMachine {
                 exec.registerOutParameter(p, call.getOutParameters(p));
             }
             List<Object> out = new ArrayList<>();
-            if (exec.execute()) {
-                CachedRowSet rowset = factory.createCachedRowSet();
 
+            switch (call.getExecution()) {
+            case EXECUTE:
+                exec.execute();
+                break;
+            case QUERY:
+                exec.executeQuery();
+                break;
+            case UPDATE:
+                exec.executeUpdate();
+                break;
+            default:
+                log.debug("Invalid statement execution enum: {}", call.getExecution());
+                return new CallResult(out, results);
+            }
+            CachedRowSet rowset = factory.createCachedRowSet();
+
+            rowset.populate(exec.getResultSet());
+            results.add(rowset);
+
+            while (exec.getMoreResults()) {
+                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
-
-                while (exec.getMoreResults()) {
-                    rowset = factory.createCachedRowSet();
-                    rowset.populate(exec.getResultSet());
-                    results.add(rowset);
-                }
             }
             for (int j = 0; j < call.getOutParametersCount(); j++) {
                 out.add(exec.getObject(j));
@@ -638,7 +533,7 @@ public class SqlStateMachine {
             try {
                 exec.clearBatch();
                 exec.clearParameters();
-            } catch (JdbcSQLNonTransientException e) {
+            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                 // ignore
             }
         }
@@ -656,29 +551,36 @@ public class SqlStateMachine {
             throw new IllegalStateException("Unable to create prepared statement: " + statement.getSql(), e);
         }
         try {
-            int i = 0;
-            for (ByteString argument : statement.getArgsList()) {
-                Data data = Data.create(Helper.NULL_HANDLER, argument.toByteArray(), false);
-                setArgument(exec, i++, data.readValue());
+            switch (statement.getExecution()) {
+            case EXECUTE:
+                exec.execute();
+                break;
+            case QUERY:
+                exec.executeQuery();
+                break;
+            case UPDATE:
+                exec.executeUpdate();
+                break;
+            default:
+                log.debug("Invalid statement execution enum: {}", statement.getExecution());
+                return Collections.emptyList();
             }
-            if (exec.execute()) {
-                CachedRowSet rowset = factory.createCachedRowSet();
+            CachedRowSet rowset = factory.createCachedRowSet();
 
+            rowset.populate(exec.getResultSet());
+            results.add(rowset);
+
+            while (exec.getMoreResults()) {
+                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
-
-                while (exec.getMoreResults()) {
-                    rowset = factory.createCachedRowSet();
-                    rowset.populate(exec.getResultSet());
-                    results.add(rowset);
-                }
             }
             return results;
         } finally {
             try {
                 exec.clearBatch();
                 exec.clearParameters();
-            } catch (JdbcSQLNonTransientException e) {
+            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                 // ignore
             }
         }
@@ -701,14 +603,8 @@ public class SqlStateMachine {
         }
 
         try {
-            if (ScriptCompiler.isJavaxScriptSource(script.getSource())) {
-                instance = compiler.getCompiledScript(script.getSource()).eval();
-            } else {
-
-                Class<?> clazz = compiler.getClass(script.getClassName(), script.getSource(),
-                                                   getClass().getClassLoader());
-                instance = clazz.getConstructor().newInstance();
-            }
+            Class<?> clazz = compiler.getClass(script.getClassName(), script.getSource(), getClass().getClassLoader());
+            instance = clazz.getConstructor().newInstance();
         } catch (DbException e) {
             throw e;
         } catch (Exception e) {
@@ -741,13 +637,12 @@ public class SqlStateMachine {
         return returnValue;
     }
 
-    private void beginBlock(long height, byte[] nonce) {
-        HashKey hkNonce = new HashKey(nonce);
-        HkHasher hasher = new HkHasher(hkNonce, height);
+    private void beginBlock(long height, HashKey hash) {
+        HkHasher hasher = new HkHasher(hash, height);
         getSession().getRandom().setSeed(hasher.getH1());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
-            secureEntropy.setSeed(nonce);
+            secureEntropy.setSeed(hash.bytes());
             entropy.set(secureEntropy);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("No SHA1PRNG available", e);
@@ -776,7 +671,7 @@ public class SqlStateMachine {
             public void onRemoval(RemovalNotification<String, CallableStatement> notification) {
                 try {
                     notification.getValue().close();
-                } catch (JdbcSQLNonTransientException e) {
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                     // ignore
                 } catch (SQLException e) {
                     log.error("Error closing cached statment: {}", notification.getKey(), e);
@@ -796,7 +691,7 @@ public class SqlStateMachine {
             public void onRemoval(RemovalNotification<String, PreparedStatement> notification) {
                 try {
                     notification.getValue().close();
-                } catch (JdbcSQLNonTransientException e) {
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
                     // ignore
                 } catch (SQLException e) {
                     log.error("Error closing cached statment: {}", notification.getKey(), e);
@@ -905,6 +800,10 @@ public class SqlStateMachine {
         try {
             exec = psCache.get(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof JdbcSQLNonTransientException
+                    || e.getCause() instanceof JdbcSQLNonTransientConnectionException) {
+                return;
+            }
             log.error("Error publishing events", e.getCause());
             throw new IllegalStateException("Cannot publish events", e.getCause());
         }
@@ -920,6 +819,8 @@ public class SqlStateMachine {
                 }
                 trampoline.publish(new Event(channel, body));
             }
+        } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+            return;
         } catch (SQLException e) {
             log.error("Error retrieving published events", e.getCause());
             throw new IllegalStateException("Cannot retrieve published events", e.getCause());
@@ -933,6 +834,8 @@ public class SqlStateMachine {
         }
         try {
             exec.execute();
+        } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+            return;
         } catch (SQLException e) {
             log.error("Error cleaning published events", e);
             throw new IllegalStateException("Cannot clean published events", e);

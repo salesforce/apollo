@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, salesforce.com, inc.
+f * Copyright (c) 2020, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
@@ -20,20 +20,19 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -98,10 +97,10 @@ public class ConsortiumTest {
     private File                               baseDir;
     private Builder                            builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private File                               checkpointDirBase;
-    private Map<HashKey, Router>               communications = new HashMap<>();
-    private final Map<Member, Consortium>      consortium     = new HashMap<>();
+    private Map<HashKey, Router>               communications = new ConcurrentHashMap<>();
+    private final Map<Member, Consortium>      consortium     = new ConcurrentHashMap<>();
     private List<Member>                       members;
-    private final Map<Member, SqlStateMachine> updaters       = new HashMap<>();
+    private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
 
     @AfterEach
     public void after() {
@@ -166,7 +165,7 @@ public class ConsortiumTest {
         });
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        BiFunction<CertifiedBlock, Future<?>, HashKey> consensus = (c, f) -> {
+        BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus = (c, f) -> {
             HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
             if (decided.add(hash)) {
                 cPipeline.execute(() -> {
@@ -206,14 +205,14 @@ public class ConsortiumTest {
                            + consortium.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
-                                       .map(c -> c.fsm().getCurrentState())
+                                       .map(c -> c.fsm.getCurrentState())
                                        .filter(b -> b != CollaboratorFsm.CLIENT)
                                        .collect(Collectors.toSet())
                            + " : "
                            + consortium.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
-                                       .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
+                                       .filter(c -> c.fsm.getCurrentState() != CollaboratorFsm.CLIENT)
                                        .map(c -> c.getMember())
                                        .collect(Collectors.toList()));
 
@@ -251,7 +250,7 @@ public class ConsortiumTest {
 
         long then = System.currentTimeMillis();
         Semaphore outstanding = new Semaphore(2000); // outstanding, unfinalized txns
-        int bunchCount = 100_000;
+        int bunchCount = 10_000;
         System.out.println("Submitting batches: " + bunchCount);
         Set<HashKey> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
@@ -318,7 +317,8 @@ public class ConsortiumTest {
         }
     }
 
-    private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, Future<?>, HashKey> consensus,
+    private void gatherConsortium(Context<Member> view,
+                                  BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters) {
         AtomicBoolean frist = new AtomicBoolean(true);
@@ -352,7 +352,7 @@ public class ConsortiumTest {
                               .setScheduler(scheduler)
                               .setGenesisData(GENESIS_DATA)
                               .setGenesisViewId(GENESIS_VIEW_ID)
-                              .setCheckpointer(up.getCheckpointer())
+                              .setCheckpointer(up.getCheckpointer()) 
                               .build());
             return c;
         }).peek(c -> view.activate(c.getMember())).forEach(e -> consortium.put(e.getMember(), e));

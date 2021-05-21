@@ -85,7 +85,5 @@ abstract public class Router {
 
     abstract public ClientIdentity getClientIdentityProvider();
 
-    public void start() {
-
-    }
+    abstract public void start();
 }

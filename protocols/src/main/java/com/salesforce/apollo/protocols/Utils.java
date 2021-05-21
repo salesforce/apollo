@@ -173,11 +173,6 @@ public class Utils {
         return BIT_STREAM_ENTROPY.get();
     }
 
-    public static BitsStreamGenerator bitStreamGenerator() {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
     /**
      * Clean the contents of a directory
      * 

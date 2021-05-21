@@ -33,10 +33,10 @@ import com.salesforce.apollo.protocols.HashKey;
  * @author hal.hildebrand
  * @since 220
  */
-public class AvalancheClientCommunications implements Avalanche {
+public class AvalancheClient implements Avalanche {
 
-    public static CreateClientCommunications<AvalancheClientCommunications> getCreate(AvalancheMetrics metrics) {
-        return (t, f, c) -> new AvalancheClientCommunications(c, t, metrics);
+    public static CreateClientCommunications<AvalancheClient> getCreate(AvalancheMetrics metrics) {
+        return (t, f, c) -> new AvalancheClient(c, t, metrics);
 
     }
 
@@ -45,7 +45,7 @@ public class AvalancheClientCommunications implements Avalanche {
     private final Member                            member;
     private final AvalancheMetrics                  metrics;
 
-    public AvalancheClientCommunications(ManagedServerConnection conn, Member member, AvalancheMetrics metrics) {
+    public AvalancheClient(ManagedServerConnection conn, Member member, AvalancheMetrics metrics) {
         this.channel = conn;
         this.member = member;
         this.client = AvalancheGrpc.newFutureStub(conn.channel).withCompression("gzip");

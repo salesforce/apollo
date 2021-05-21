@@ -13,7 +13,7 @@ import com.salesfoce.apollo.consortium.proto.CheckpointProcessing;
 import com.salesfoce.apollo.consortium.proto.ReplicateTransactions;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
-import com.salesforce.apollo.consortium.CollaboratorContext;
+import com.salesforce.apollo.consortium.Collaborator;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.membership.Member;
 
@@ -28,6 +28,11 @@ public enum CollaboratorFsm implements Transitions {
     CHECKPOINT_RECOVERY {
     },
     CLIENT {
+
+        @Override
+        public Transitions becomeClient() {
+            return null;
+        }
     },
     FOLLOWER {
 
@@ -115,13 +120,13 @@ public enum CollaboratorFsm implements Transitions {
 
         @Exit
         public void cancelBatchGeneration() {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             context.cancel(Timers.FLUSH_BATCH);
         }
 
         @Override
         public Transitions deliverValidate(Validate validation) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             context.deliverValidate(validation);
             context.totalOrderDeliver();
             return null;
@@ -172,35 +177,7 @@ public enum CollaboratorFsm implements Transitions {
         }
 
     },
-    RECOVERED {
-        @Override
-        public Transitions becomeClient() {
-            return CLIENT;
-        }
-
-        @Override
-        public Transitions becomeFollower() {
-            return FOLLOWER;
-        }
-
-        @Override
-        public Transitions becomeLeader() {
-            return LEADER;
-        }
-
-        @Override
-        public Transitions joinAsMember() {
-            return JOINING_MEMBER;
-        }
-
-    },
     RECOVERING {
-        @Entry
-        public void awaitGenesis() {
-            context().awaitGenesis();
-            context().establishGenesisView();
-        }
-
         @Override
         public Transitions becomeClient() {
             return CLIENT;
@@ -218,7 +195,7 @@ public enum CollaboratorFsm implements Transitions {
 
         @Exit
         public void cancelTimer() {
-            context().cancel(Timers.AWAIT_GENESIS);
+            context().cancel(Timers.AWAIT_SYNCHRONIZATION);
         }
 
         @Override
@@ -238,9 +215,41 @@ public enum CollaboratorFsm implements Transitions {
         }
 
         @Override
-        public Transitions missingGenesis() {
-            context().awaitGenesis();
+        public Transitions synchronizationFailed() {
+            context().awaitSynchronization();
+            context().establishGenesisView();
             return null;
+        }
+
+        @Entry
+        public void synchronizeContext() {
+            context().awaitSynchronization();
+        }
+
+        @Override
+        public Transitions synchronizing() {
+            return SYNCHRONIZING;
+        }
+    },
+    SYNCHRONIZING {
+        @Override
+        public Transitions becomeClient() {
+            return CLIENT;
+        }
+
+        @Override
+        public Transitions becomeFollower() {
+            return FOLLOWER;
+        }
+
+        @Override
+        public Transitions becomeLeader() {
+            return LEADER;
+        }
+
+        @Override
+        public Transitions fail() {
+            return PROTOCOL_FAILURE;
         }
     };
 }

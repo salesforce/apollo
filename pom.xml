@@ -32,7 +32,7 @@
 		<avro.version>1.10.0</avro.version>
 		<h2.version>1.4.200</h2.version>
 		<jooq.version>3.14.8</jooq.version>
-		<bc.version>1.65.01</bc.version>
+		<bc.version>1.68</bc.version>
 		<logback.version>1.2.3</logback.version>
 		<asm.version>8.0.1</asm.version>
 		<antlr.version>4.8-1</antlr.version>
@@ -159,7 +159,12 @@
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>tron</artifactId>
 				<version>${project.version}</version>
-			</dependency>
+			</dependency> 
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>consortium</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
@@ -267,11 +272,6 @@
 				<artifactId>javaparser-symbol-solver-core</artifactId>
 				<version>3.19.0</version>
 			</dependency>
-			<dependency>
-				<groupId>net.corda</groupId>
-				<artifactId>corda-djvm</artifactId>
-				<version>4.0</version>
-			</dependency>
 
 			<!-- Test dependencies only below this line! -->
 
@@ -327,10 +327,10 @@
 				<enabled>true</enabled>
 			</snapshots>
 		</repository>
-		<repository>
-			<id>wasm</id>
-			<url>https://plugins.gradle.org/m2/</url>
-		</repository>
+		<!-- <repository>
+			<id>corda-djvm</id>
+			<url>https://software.r3.com/artifactory/corda-dependencies/</url>
+		</repository> -->
 	</repositories>
 
 	<pluginRepositories>

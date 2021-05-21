@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.consortium.proto.Transaction;
+import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -32,7 +33,7 @@ public class UpdaterTest {
     public void smoke() throws Exception {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
                 new File("target/chkpoints"));
-        updater.getExecutor().beginBlock(0, new byte[] {6, 6, 6});
+        updater.getExecutor().beginBlock(0, HashKey.LAST);
         updater.initializeEvents();
 
         Connection connection = updater.newConnection();
@@ -63,7 +64,7 @@ public class UpdaterTest {
 
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_publish", new Properties(),
                 new File("target/chkpoints"));
-        updater.getExecutor().beginBlock(0, new byte[] {6, 6, 6});
+        updater.getExecutor().beginBlock(0, HashKey.LAST);
         updater.initializeEvents();
 
         Connection connection = updater.newConnection();

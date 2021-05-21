@@ -18,14 +18,16 @@ message Arguments {
 }
 
 message Statement {
-    string sql = 1;
-    repeated bytes args = 2;
+    EXECUTION execution = 1;
+    string sql = 2;
+    repeated bytes args = 3;
 }
 
 message Call {
-    string sql = 1;
-    repeated bytes args = 2;
-    repeated int32 outParameters = 3; // value is enum of java.sql.SQLType
+    EXECUTION execution = 1;
+    string sql = 2;
+    repeated bytes args = 3;
+    repeated int32 outParameters = 4; // value is enum of java.sql.SQLType
 }
 
 message Script {
@@ -35,6 +37,12 @@ message Script {
     repeated bytes args = 4;
 }
 
+enum EXECUTION {
+    INVALID = 0;
+    EXECUTE = 1;
+    QUERY = 2;
+    UPDATE = 3;
+}
 message BatchedTransaction {
     repeated Txn transactions = 1;
 }

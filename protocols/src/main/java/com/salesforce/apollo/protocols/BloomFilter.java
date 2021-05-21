@@ -129,11 +129,11 @@ abstract public class BloomFilter<T> {
         return create(bff.getSeed(), bff.getM(), bff.getK(), bff.getBits(), bff.getType());
     }
 
-    public static <Q> BloomFilter<Q> from(ByteString checkpointSegments) {
+    public static <Q> BloomFilter<Q> from(ByteString encoded) {
         try {
-            return from(Biff.parseFrom(checkpointSegments));
+            return from(Biff.parseFrom(encoded));
         } catch (InvalidProtocolBufferException e) {
-            throw new IllegalStateException("invalid checkpoint segments", e);
+            throw new IllegalStateException("invalid bloom filter serialization", e);
         }
     }
 

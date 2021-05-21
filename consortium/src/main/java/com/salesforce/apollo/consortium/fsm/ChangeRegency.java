@@ -17,7 +17,7 @@ import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
-import com.salesforce.apollo.consortium.CollaboratorContext;
+import com.salesforce.apollo.consortium.Collaborator;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
@@ -29,7 +29,7 @@ public enum ChangeRegency implements Transitions {
     AWAIT_SYNCHRONIZATION {
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             if (stop.getNextRegent() > context.getCurrentRegent() + 1) {
                 log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
                           context.getCurrentRegent() + 1, from, context.getMember(), this);
@@ -43,7 +43,7 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverStopData(StopData stopData, Member from) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             if (stopData.getCurrentRegent() > context.nextRegent()) {
                 log.debug("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
                           context.nextRegent(), from, context.getMember(), this);
@@ -58,7 +58,7 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverSync(Sync sync, Member from) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             if (context.nextRegent() == sync.getCurrentRegent()) {
                 context.deliverSync(sync, from);
             } else if (sync.getCurrentRegent() > context.nextRegent()) {
@@ -96,7 +96,7 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             if (stop.getNextRegent() > context.getCurrentRegent() + 1) {
                 log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
                           context.getCurrentRegent() + 1, from, context.getMember(), this);
@@ -112,7 +112,7 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverStopData(StopData stopData, Member from) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             if (stopData.getCurrentRegent() > context.nextRegent()) {
                 log.debug("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
                           context.nextRegent(), from, context.getMember(), this);
@@ -133,7 +133,7 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverSync(Sync sync, Member from) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             if (context.nextRegent() == sync.getCurrentRegent()) {
                 fsm().push(AWAIT_SYNCHRONIZATION).deliverSync(sync, from);
             } else if (sync.getCurrentRegent() > context.nextRegent()) {
@@ -166,7 +166,7 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverStop(Stop stop, Member from) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             if (stop.getNextRegent() > context.getCurrentRegent() + 1) {
                 log.debug("Delaying future Stop: {} > {} from: {} on: {} at: {}", stop.getNextRegent(),
                           context.getCurrentRegent() + 1, from, context.getMember(), this);
@@ -180,7 +180,7 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverStopData(StopData stopData, Member from) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             if (stopData.getCurrentRegent() > context.nextRegent()) {
                 log.debug("Delaying future StopData: {} > {} from: {} on: {} at: {}", stopData.getCurrentRegent(),
                           context.nextRegent(), from, context.getMember(), this);
@@ -197,7 +197,7 @@ public enum ChangeRegency implements Transitions {
 
         @Override
         public Transitions deliverSync(Sync sync, Member from) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             if (context.nextRegent() == sync.getCurrentRegent()) {
                 if (context.isRegent(sync.getCurrentRegent()) && context.getMember().equals(from)) {
                     context.deliverSync(sync, from);

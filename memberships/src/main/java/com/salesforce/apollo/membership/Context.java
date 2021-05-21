@@ -162,6 +162,10 @@ public class Context<T extends Member> {
         offline(m);
     }
 
+    public List<T> activeMembers() {
+        return new ArrayList<>(active.values());
+    }
+
     public Stream<T> allMembers() {
         return Arrays.asList(active.values(), offline.values()).stream().flatMap(c -> c.stream());
     }

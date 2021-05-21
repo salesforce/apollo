@@ -7,15 +7,9 @@
 package com.salesforce.apollo.consortium.comms;
 
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.consortium.proto.BlockReplication;
-import com.salesfoce.apollo.consortium.proto.Blocks;
-import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
-import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
-import com.salesfoce.apollo.consortium.proto.CheckpointSync;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
-import com.salesfoce.apollo.consortium.proto.OrderingServiceGrpc.OrderingServiceImplBase;
+import com.salesfoce.apollo.consortium.proto.LinearServiceGrpc.LinearServiceImplBase;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
@@ -30,54 +24,16 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  *
  */
-public class ConsortiumServerCommunications extends OrderingServiceImplBase {
+public class LinearServer extends LinearServiceImplBase {
     private ClientIdentity                 identity;
     @SuppressWarnings("unused")
     private final ConsortiumMetrics        metrics;
     private final RoutableService<Service> router;
 
-    public ConsortiumServerCommunications(ClientIdentity identity, ConsortiumMetrics metrics,
-            RoutableService<Service> router) {
+    public LinearServer(ClientIdentity identity, ConsortiumMetrics metrics, RoutableService<Service> router) {
         this.metrics = metrics;
         this.identity = identity;
         this.router = router;
-    }
-
-    @Override
-    public void fetchBlocks(BlockReplication request, StreamObserver<Blocks> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
-                        s -> {
-                            responseObserver.onNext(s.fetchBlocks(request, identity.getFrom()));
-                            responseObserver.onCompleted();
-                        });
-    }
-
-    @Override
-    public void checkpointSync(CheckpointSync request, StreamObserver<CertifiedBlock> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
-                        s -> {
-                            HashKey from = identity.getFrom();
-                            if (from == null) {
-                                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                                return;
-                            }
-                            responseObserver.onNext(s.checkpointSync(request, from));
-                            responseObserver.onCompleted();
-                        });
-    }
-
-    @Override
-    public void fetch(CheckpointReplication request, StreamObserver<CheckpointSegments> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new HashKey(request.getContext()),
-                        s -> {
-                            HashKey from = identity.getFrom();
-                            if (from == null) {
-                                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                                return;
-                            }
-                            responseObserver.onNext(s.fetch(request, from));
-                            responseObserver.onCompleted();
-                        });
     }
 
     @Override

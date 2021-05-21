@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -98,15 +99,15 @@ public class AvaTest {
                          .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
-    private final Map<Member, Avalanche>       avas           = new HashMap<>();
+    private final Map<Member, Avalanche>       avas           = new ConcurrentHashMap<>();
     private File                               baseDir;
     private Builder                            builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private File                               checkpointDirBase;
-    private Map<HashKey, Router>               communications = new HashMap<>();
-    private final Map<Member, Consortium>      consortium     = new HashMap<>();
+    private Map<HashKey, Router>               communications = new ConcurrentHashMap<>();
+    private final Map<Member, Consortium>      consortium     = new ConcurrentHashMap<>();
     private SecureRandom                       entropy;
     private List<Node>                         members;
-    private final Map<Member, SqlStateMachine> updaters       = new HashMap<>();
+    private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
 
     @AfterEach
     public void after() {
@@ -180,14 +181,14 @@ public class AvaTest {
                            + consortium.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
-                                       .map(c -> c.fsm().getCurrentState())
+                                       .map(c -> c.fsm.getCurrentState())
                                        .filter(b -> b != CollaboratorFsm.CLIENT)
                                        .collect(Collectors.toSet())
                            + " : "
                            + consortium.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
-                                       .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
+                                       .filter(c -> c.fsm.getCurrentState() != CollaboratorFsm.CLIENT)
                                        .map(c -> c.getMember())
                                        .collect(Collectors.toList()));
 
@@ -275,14 +276,14 @@ public class AvaTest {
                            + consortium.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
-                                       .map(c -> c.fsm().getCurrentState())
+                                       .map(c -> c.fsm.getCurrentState())
                                        .filter(b -> b != CollaboratorFsm.CLIENT)
                                        .collect(Collectors.toSet())
                            + " : "
                            + consortium.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
-                                       .filter(c -> c.fsm().getCurrentState() != CollaboratorFsm.CLIENT)
+                                       .filter(c -> c.fsm.getCurrentState() != CollaboratorFsm.CLIENT)
                                        .map(c -> c.getMember())
                                        .collect(Collectors.toList()));
     }

@@ -10,6 +10,19 @@ in that this provides an ordered sequence of events - blocks - that all particip
 In Apollo, however, the model is more complex than simple UTXO transactions.  While some distributed ordering technique may yet emerge (I have hopes) the fact is today, we only really know how to provide total ordering via linear logs.
 This module provides a committe selection mechanism that is maintained by signed blocks of batches of batches of fundamental transactions.  See [From Byzantine Replication to Blockchain: Consensus is only the Beginning](https://arxiv.org/abs/2004.14527) for discussion of the different types of blocks processed by the _Consortium_.
 
+## Checkpointing and Bootstrapping
+
+_Consortium_  provides a model for mitigating one of the more serious issues with distributed ledger technology, that is to say *Bootstrapping*.  Consortium will periodically emit special _Checkpoint_ blocks that checkpoint the current state
+of the chain.  When these checkpoints are processed, the eliminate the usefulness of the blocks before it that went into creating this checkpointed state and may thus be discarded.  What isn't discarded is the View chain of reconfigurations,
+all the way back to genesis and it is these blocks that prove the provenance of the Checkpoint and thus the state of the ledger.
+
+To boostrap a node to an existing chain, a special bootstrap process is initiated in the node.  The node waits until a valid block has been produced by the external consensus.  This block is then considered the "anchor" block that the node
+uses to bootstrap against the current group population.  If a checkpoint is available, the node will assemble that checkpoint through gossip with the rest of the membership.  Note that this means that the network load required to obtain the
+full checkpoint state is distributed across the membership, rather than punishing particular nodes.  Once assembled, the state of the chain is restored, deferred blocks are processed and the node is now ready to participate in the group.
+
+Of course the full chain state can be gathered and moved to cold storage if desired.  Facilities for performing this archiving of the full, entire chain state will be provided in the future to perform this function in a highly available,
+exactly once fashion.
+
 ## MVP Status
 
 Currently this module is MVP status.  It's stable and fast enough to do serious simulations and thus provide the foundation for the next phase of transaction ordering and CDC event generation.  However, critical features such as

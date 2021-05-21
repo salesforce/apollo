@@ -8,8 +8,8 @@ package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.consortium.CollaboratorContext.height;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
@@ -49,7 +49,7 @@ public class AvaAdapter implements Processor {
         return avalanche;
     }
 
-    public BiFunction<CertifiedBlock, Future<?>, HashKey> getConsensus() {
+    public BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> getConsensus() {
         return (cb, f) -> avalanche.submitTransaction(cb, new HashKey(cb.getBlock().getHeader().getPrevious()));
     }
 
@@ -73,8 +73,7 @@ public class AvaAdapter implements Processor {
     public HashKey validate(HashKey key, DagEntry entry) {
         CertifiedBlock cb = certifiedBlock(entry);
         if (cb == null) {
-            System.out.println("null from: " + key + " descr: " + entry.getDescription());
-            return key;
+            return null;
         }
         return new HashKey(cb.getBlock().getHeader().getPrevious());
     }

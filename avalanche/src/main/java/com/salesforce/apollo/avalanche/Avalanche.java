@@ -51,8 +51,8 @@ import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.QueryResult.Vote;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
-import com.salesforce.apollo.avalanche.communications.AvalancheClientCommunications;
-import com.salesforce.apollo.avalanche.communications.AvalancheServerCommunications;
+import com.salesforce.apollo.avalanche.communications.AvalancheClient;
+import com.salesforce.apollo.avalanche.communications.AvalancheServer;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.fireflies.Node;
@@ -215,7 +215,7 @@ public class Avalanche {
     private final static Logger log                = LoggerFactory.getLogger(Avalanche.class);
     private final static String STORE_MAP_TEMPLATE = "%s-%s-blocks";
 
-    private final CommonCommunications<AvalancheClientCommunications, Service> comm;
+    private final CommonCommunications<AvalancheClient, Service> comm;
     private com.salesforce.apollo.membership.Context<? extends Member>         context;
     private final WorkingSet                                                   dag;
     private final int                                                          invalidThreshold;
@@ -240,9 +240,9 @@ public class Avalanche {
         this.context = context;
         this.queryExecutor = queryExecutor;
         this.comm = communications.create(node, context.getId(), service,
-                                          r -> new AvalancheServerCommunications(
+                                          r -> new AvalancheServer(
                                                   communications.getClientIdentityProvider(), metrics, r),
-                                          AvalancheClientCommunications.getCreate(metrics));
+                                          AvalancheClient.getCreate(metrics));
         DataType vB = null;
         MVMap.Builder<HashKey, byte[]> builder = new MVMap.Builder<HashKey, byte[]>().keyType(HashKeyType.INSTANCE)
                                                                                      .valueType(vB);
@@ -405,7 +405,7 @@ public class Avalanche {
             return;
         }
         Member member = new ArrayList<Member>(sample).get(Utils.bitStreamEntropy().nextInt(sample.size()));
-        AvalancheClientCommunications connection = comm.apply(member, getNode());
+        AvalancheClient connection = comm.apply(member, getNode());
         if (connection == null) {
             log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
         }
@@ -508,7 +508,7 @@ public class Avalanche {
     private void query(Member member, List<Pair<HashKey, ByteString>> query, AtomicInteger[] invalid,
                        AtomicInteger[] votes, CompletableFuture<List<Boolean>> futureSailor, AtomicInteger completed,
                        List<Boolean> queryResults, Collection<HashKey> want, Member wanted) {
-        AvalancheClientCommunications connection = comm.apply(member, getNode());
+        AvalancheClient connection = comm.apply(member, getNode());
         if (connection == null) {
             log.info("No connection querying {} for {} queries", member, query.size());
             for (int j = 0; j < query.size(); j++) {

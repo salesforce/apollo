@@ -15,7 +15,7 @@ import com.salesfoce.apollo.consortium.proto.Stop;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Validate;
-import com.salesforce.apollo.consortium.CollaboratorContext;
+import com.salesforce.apollo.consortium.Collaborator;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
@@ -58,7 +58,7 @@ public enum Checkpointing implements Transitions {
 
         @Override
         public Transitions deliverValidate(Validate validation) {
-            CollaboratorContext context = context();
+            Collaborator context = context();
             context.deliverValidate(validation);
             context.totalOrderDeliver();
             return null;
