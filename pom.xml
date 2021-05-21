@@ -25,6 +25,7 @@
 		<module>consortium</module>
 		<module>test-population</module>
 		<module>tron</module>
+		<module>model</module>
 	</modules>
 
 	<properties>
