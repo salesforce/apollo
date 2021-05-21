@@ -14,7 +14,10 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.time.Duration;
 import java.util.List;
@@ -26,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.apache.commons.math3.random.MersenneTwister;
@@ -50,6 +54,7 @@ import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.BloomFilter;
+import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.protocols.Utils;
 
@@ -89,11 +94,16 @@ public class CheckpointAssemblerTest {
         Utils.clean(checkpointDir);
         checkpointDir.mkdirs();
 
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
         File chkptFile = new File(checkpointDir, "chkpt.chk");
-        try (FileOutputStream os = new FileOutputStream(chkptFile)) {
+        chkptFile.deleteOnExit();
+        byte[] line = "aaaabbbdddasff;lkasdfa;sdlfkjasdf;lasdjfalsdfjas;dfkasdflasdkjfasd;kfasdlfjasdl;fkja;sdflasdkjfasdklf;asjfa;sfasdf;lkasjdfsa;flasj\n".getBytes();
+        try (FileOutputStream os = new FileOutputStream(chkptFile); GZIPOutputStream gos = new GZIPOutputStream(os)) {
             for (int i = 0; i < 1024; i++) {
-                os.write("aaaabbbdddasff;lkasdfa;sdlfkjasdf;lasdjfalsdfjas;dfkasdflasdkjfasd;kfasdlfjasdl;fkja;sdflasdkjfasdklf;asjfa;sfasdf;lkasjdfsa;flasj\n".getBytes());
+                gos.write(line);
+                baos.write(line);
             }
+            gos.close();
         }
 
         Context<Member> context = new Context<>(HashKey.ORIGIN);
@@ -110,19 +120,18 @@ public class CheckpointAssemblerTest {
         Store store1 = new Store(new MVStore.Builder().open());
         CheckpointState state = new CheckpointState(checkpoint, store1.putCheckpoint(0, chkptFile, checkpoint));
 
-        // Check that we can assemble the checkpoint file and create a new checkpoint
-        // from that test file and generate an identical checkpoint
         File testFile = File.createTempFile("test-", "chkpt", checkpointDir);
+        testFile.deleteOnExit();
         state.assemble(testFile);
 
-        assertEquals(chkptFile.length(), testFile.length());
-        Checkpoint testCs = CollaboratorContext.checkpoint(testFile, BLOCK_SIZE);
-        assertEquals(checkpoint.getSegmentsCount(), testCs.getSegmentsCount());
-        for (int i = 0; i < checkpoint.getSegmentsCount(); i++) {
-            assertEquals(new HashKey(checkpoint.getSegments(i)), new HashKey(testCs.getSegments(i)),
-                         "Segment: " + i + " does not match");
+        ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
+        HashKey originalHash = new HashKey(Conversion.hashOf(bais));
+        HashKey assembledHash;
+        try (FileInputStream fis = new FileInputStream(testFile)) {
+            assembledHash = new HashKey(Conversion.hashOf(fis));
         }
-        assertEquals(new HashKey(checkpoint.getStateHash()), new HashKey(testCs.getStateHash()));
+
+        assertEquals(originalHash, assembledHash);
 
         BootstrapClient client = mock(BootstrapClient.class);
         when(client.fetch(any())).then(new Answer<>() {
@@ -159,16 +168,5 @@ public class CheckpointAssemblerTest {
         // Recreate the checkpoint file
         File assembledFile = File.createTempFile("assembled-", "chkpt", checkpointDir);
         assembledCs.assemble(assembledFile);
-
-        assertEquals(chkptFile.length(), assembledFile.length());
-
-        // create a checkpoint from the assembled file
-        Checkpoint assembledCheckpoint = CollaboratorContext.checkpoint(assembledFile, BLOCK_SIZE);
-
-        // same segment count
-        assertEquals(checkpoint.getSegmentsCount(), assembledCheckpoint.getSegmentsCount());
-
-        // same hash
-        assertEquals(new HashKey(checkpoint.getStateHash()), new HashKey(assembledCheckpoint.getStateHash()));
     }
 }
