@@ -161,7 +161,7 @@ public class Consortium {
                     initial.setCheckpoint(cp.block).setCheckpointView(lastView.block);
 
                     log.debug("Returning sync: {} view: {} chkpt: {} to: {} on: {}", g.hash, lastView.hash, cp.hash,
-                             from, getMember());
+                              from, getMember());
                 } else {
                     log.debug("Returning sync: {} to: {} on: {}", g.hash, from, getMember());
                 }
@@ -398,6 +398,10 @@ public class Consortium {
         restore();
     }
 
+    public HashedCertifiedBlock getCurrrent() {
+        return current.get();
+    }
+
     public HashedCertifiedBlock getGenesis() {
         return genesis.get();
     }
@@ -473,6 +477,10 @@ public class Consortium {
 
     void checkpoint(long height, CheckpointState checkpoint) {
         cachedCheckpoints.put(height, checkpoint);
+    }
+
+    int deferredCount() {
+        return deferedBlocks.size();
     }
 
     void delay(Message message, Member from) {

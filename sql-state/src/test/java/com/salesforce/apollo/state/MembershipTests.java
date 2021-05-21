@@ -12,6 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -386,10 +390,12 @@ public class MembershipTests {
         communications.entrySet()
                       .stream()
                       .filter(r -> !r.getKey().equals(testSubject.getMember().getId()))
-                      .peek(e -> System.out.println(e.getKey()))
                       .map(e -> e.getValue())
                       .forEach(r -> r.start());
-        consortium.values().stream().filter(c -> !c.equals(testSubject)).forEach(e -> e.start());
+        consortium.values()
+                   .stream()
+//                   .filter(c -> !c.equals(testSubject))
+                   .forEach(e -> e.start());
 
         System.out.println("awaiting genesis processing");
 
@@ -523,6 +529,30 @@ public class MembershipTests {
         });
 
         assertTrue(completed, "Test subject did not successfully bootstrap: " + testSubject.getMember().getId());
+
+        long lastBlock = blueRibbon.stream().mapToLong(c -> c.getCurrrent().height()).findFirst().getAsLong();
+
+        completed = Utils.waitForCondition(10_000, () -> {
+            return testSubject.getCurrrent().height() == lastBlock;
+        });
+
+        assertTrue(completed, "Test subject did not successfully catch up to :" + lastBlock + " on: "
+                + testSubject.getMember().getId());
+
+        Connection connection = updaters.get(members.get(0)).newConnection();
+        Statement statement = connection.createStatement();
+        ResultSet results = statement.executeQuery("select ID, QTY from books");
+        ResultSetMetaData rsmd = results.getMetaData();
+        int columnsNumber = rsmd.getColumnCount();
+        while (results.next()) {
+            for (int i = 1; i <= columnsNumber; i++) {
+                if (i > 1)
+                    System.out.print(",  ");
+                Object columnValue = results.getObject(i);
+                System.out.print(columnValue + " " + rsmd.getColumnName(i));
+            }
+            System.out.println("");
+        }
     }
 
     private void gatherConsortium(Duration gossipDuration, AtomicReference<CountDownLatch> processed,

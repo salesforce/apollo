@@ -1528,8 +1528,10 @@ public class CollaboratorContext implements Collaborator {
             current1 = consortium.store.getCertifiedBlock(height(current1.getBlock()) + 1);
         }
         synchronizing.set(false);
+        log.info("Synchronized, resuming view on: {}", state.lastCheckpoint.hash, getMember());
         this.consortium.view.resume(consortium.service);
         resolveStatus();
+        log.info("Processing deferred blocks: {} on: {}", consortium.deferredCount(), state.lastCheckpoint.hash, getMember());
         consortium.processDeferred();
     }
 
