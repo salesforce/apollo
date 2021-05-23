@@ -35,7 +35,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -201,9 +200,7 @@ public class MembershipTests {
                       .filter(r -> !r.getKey().equals(testSubject.getMember().getId()))
                       .map(e -> e.getValue())
                       .forEach(r -> r.start());
-        consortium.values().stream()
-                   .filter(c -> !c.equals(testSubject))
-                  .forEach(e -> e.start());
+        consortium.values().stream().filter(c -> !c.equals(testSubject)).forEach(e -> e.start());
 
         System.out.println("awaiting genesis processing");
 
@@ -217,22 +214,17 @@ public class MembershipTests {
 
         System.out.println("Submitting transaction");
         HashKey hash;
-        try {
-            Consortium client = consortium.values()
-                                          .stream()
-                                          .filter(c -> !c.equals(testSubject))
-                                          .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
-                                          .get(0);
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                                 Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                              "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
-        } catch (TimeoutException e) {
-            fail();
-            return;
-        }
+        Consortium client = consortium.values()
+                                      .stream()
+                                      .filter(c -> !c.equals(testSubject))
+                                      .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                      .get(0);
+        hash = client.submit(null, (h, t) -> txnProcessed.set(true),
+                             Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                          "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                          "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                          "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                          "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -260,30 +252,25 @@ public class MembershipTests {
             } catch (InterruptedException e1) {
                 throw new IllegalStateException(e1);
             }
-            try {
-                List<List<Object>> batch = new ArrayList<>();
-                for (int rep = 0; rep < 10; rep++) {
-                    for (int id = 1; id < 6; id++) {
-                        batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
-                    }
+            List<List<Object>> batch = new ArrayList<>();
+            for (int rep = 0; rep < 10; rep++) {
+                for (int id = 1; id < 6; id++) {
+                    batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
-                BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
-                AtomicReference<HashKey> key = new AtomicReference<>();
-                Consortium client = consortium.values()
-                                              .stream()
-                                              .filter(c -> !c.equals(testSubject))
-                                              .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
-                                              .get(0);
-                key.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(key.get());
-                    submittedBunch.countDown();
-                }, Helper.batch(update)));
-                submitted.add(key.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
             }
+            BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
+            AtomicReference<HashKey> key = new AtomicReference<>();
+            Consortium cl = consortium.values()
+                                      .stream()
+                                      .filter(c -> !c.equals(testSubject))
+                                      .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                      .get(0);
+            key.set(cl.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(key.get());
+                submittedBunch.countDown();
+            }, Helper.batch(update)));
+            submitted.add(key.get());
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");
@@ -303,30 +290,25 @@ public class MembershipTests {
             } catch (InterruptedException e1) {
                 throw new IllegalStateException(e1);
             }
-            try {
-                List<List<Object>> batch = new ArrayList<>();
-                for (int rep = 0; rep < 10; rep++) {
-                    for (int id = 1; id < 6; id++) {
-                        batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
-                    }
+            List<List<Object>> batch = new ArrayList<>();
+            for (int rep = 0; rep < 10; rep++) {
+                for (int id = 1; id < 6; id++) {
+                    batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
-                BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
-                AtomicReference<HashKey> key = new AtomicReference<>();
-                Consortium client = consortium.values()
-                                              .stream()
-                                              .filter(c -> !c.equals(testSubject))
-                                              .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
-                                              .get(0);
-                key.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(key.get());
-                    remaining.countDown();
-                }, Helper.batch(update)));
-                submitted.add(key.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
             }
+            BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
+            AtomicReference<HashKey> key = new AtomicReference<>();
+            Consortium cl = consortium.values()
+                                      .stream()
+                                      .filter(c -> !c.equals(testSubject))
+                                      .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                      .get(0);
+            key.set(cl.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(key.get());
+                remaining.countDown();
+            }, Helper.batch(update)));
+            submitted.add(key.get());
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");
@@ -432,22 +414,17 @@ public class MembershipTests {
 
         System.out.println("Submitting transaction");
         HashKey hash;
-        try {
-            Consortium client = consortium.values()
-                                          .stream()
-                                          .filter(c -> !c.equals(testSubject))
-                                          .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
-                                          .get(0);
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                                 Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                              "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
-        } catch (TimeoutException e) {
-            fail();
-            return;
-        }
+        Consortium cl = consortium.values()
+                                  .stream()
+                                  .filter(c -> !c.equals(testSubject))
+                                  .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                  .get(0);
+        hash = cl.submit(null, (h, t) -> txnProcessed.set(true),
+                         Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                      "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                      "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                      "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                      "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -475,30 +452,25 @@ public class MembershipTests {
             } catch (InterruptedException e1) {
                 throw new IllegalStateException(e1);
             }
-            try {
-                List<List<Object>> batch = new ArrayList<>();
-                for (int rep = 0; rep < 10; rep++) {
-                    for (int id = 1; id < 6; id++) {
-                        batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
-                    }
+            List<List<Object>> batch = new ArrayList<>();
+            for (int rep = 0; rep < 10; rep++) {
+                for (int id = 1; id < 6; id++) {
+                    batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
-                BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
-                AtomicReference<HashKey> key = new AtomicReference<>();
-                Consortium client = consortium.values()
-                                              .stream()
-                                              .filter(c -> !c.equals(testSubject))
-                                              .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
-                                              .get(0);
-                key.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(key.get());
-                    submittedBunch.countDown();
-                }, Helper.batch(update)));
-                submitted.add(key.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
             }
+            BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
+            AtomicReference<HashKey> key = new AtomicReference<>();
+            Consortium cli = consortium.values()
+                                       .stream()
+                                       .filter(c -> !c.equals(testSubject))
+                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                       .get(0);
+            key.set(cli.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(key.get());
+                submittedBunch.countDown();
+            }, Helper.batch(update)));
+            submitted.add(key.get());
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");
@@ -518,30 +490,25 @@ public class MembershipTests {
             } catch (InterruptedException e1) {
                 throw new IllegalStateException(e1);
             }
-            try {
-                List<List<Object>> batch = new ArrayList<>();
-                for (int rep = 0; rep < 10; rep++) {
-                    for (int id = 1; id < 6; id++) {
-                        batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
-                    }
+            List<List<Object>> batch = new ArrayList<>();
+            for (int rep = 0; rep < 10; rep++) {
+                for (int id = 1; id < 6; id++) {
+                    batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
-                BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
-                AtomicReference<HashKey> key = new AtomicReference<>();
-                Consortium client = consortium.values()
-                                              .stream()
-                                              .filter(c -> !c.equals(testSubject))
-                                              .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
-                                              .get(0);
-                key.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(key.get());
-                    remaining.countDown();
-                }, Helper.batch(update)));
-                submitted.add(key.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
             }
+            BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
+            AtomicReference<HashKey> key = new AtomicReference<>();
+            Consortium cln = consortium.values()
+                                       .stream()
+                                       .filter(c -> !c.equals(testSubject))
+                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
+                                       .get(0);
+            key.set(cln.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(key.get());
+                remaining.countDown();
+            }, Helper.batch(update)));
+            submitted.add(key.get());
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");

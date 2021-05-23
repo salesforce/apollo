@@ -10,7 +10,6 @@ import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -32,7 +31,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
@@ -205,16 +203,10 @@ public class TestConsortium {
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
-        HashKey hash;
-        try {
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                                 ByteTransaction.newBuilder()
-                                                .setContent(ByteString.copyFromUtf8("Hello world"))
-                                                .build());
-        } catch (TimeoutException e) {
-            fail();
-            return;
-        }
+        HashKey hash = client.submit(null, (h, t) -> txnProcessed.set(true),
+                                     ByteTransaction.newBuilder()
+                                                    .setContent(ByteString.copyFromUtf8("Hello world"))
+                                                    .build());
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -231,18 +223,13 @@ public class TestConsortium {
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            try {
-                AtomicReference<HashKey> pending = new AtomicReference<>();
-                pending.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(pending.get());
-                    submittedBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-                submitted.add(pending.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
-            }
+            AtomicReference<HashKey> pending = new AtomicReference<>();
+            pending.set(client.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(pending.get());
+                submittedBunch.countDown();
+            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+            submitted.add(pending.get());
         }
 
         System.out.println("Awaiting " + bunchCount + " transactions");
@@ -277,7 +264,8 @@ public class TestConsortium {
         assertEquals(0, CollaboratorContext.noGaps(gapped, cache).size());
     }
 
-    private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus,
+    private void gatherConsortium(Context<Member> view,
+                                  BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters, TransactionExecutor executor) {
         members.stream()

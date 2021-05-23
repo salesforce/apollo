@@ -166,6 +166,16 @@
                 <artifactId>consortium</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>sql-state</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>model</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>

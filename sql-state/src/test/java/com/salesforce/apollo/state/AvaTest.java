@@ -11,7 +11,6 @@ import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.security.SecureRandom;
@@ -32,7 +31,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -199,18 +197,12 @@ public class AvaTest {
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
-        HashKey hash;
-        try {
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                                 Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                              "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
-        } catch (TimeoutException e) {
-            fail();
-            return;
-        }
+        HashKey hash = client.submit(null, (h, t) -> txnProcessed.set(true),
+                                     Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
 
@@ -238,25 +230,20 @@ public class AvaTest {
             } catch (InterruptedException e1) {
                 throw new IllegalStateException(e1);
             }
-            try {
-                List<List<Object>> batch = new ArrayList<>();
-                for (int rep = 0; rep < 10; rep++) {
-                    for (int id = 1; id < 6; id++) {
-                        batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
-                    }
+            List<List<Object>> batch = new ArrayList<>();
+            for (int rep = 0; rep < 10; rep++) {
+                for (int id = 1; id < 6; id++) {
+                    batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
-                BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
-                AtomicReference<HashKey> key = new AtomicReference<>();
-                key.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(key.get());
-                    submittedBunch.countDown();
-                }, Helper.batch(update)));
-                submitted.add(key.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
             }
+            BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
+            AtomicReference<HashKey> key = new AtomicReference<>();
+            key.set(client.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(key.get());
+                submittedBunch.countDown();
+            }, Helper.batch(update)));
+            submitted.add(key.get());
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");

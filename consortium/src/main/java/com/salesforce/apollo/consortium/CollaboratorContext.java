@@ -24,7 +24,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -399,7 +398,7 @@ public class CollaboratorContext implements Collaborator {
             current = new ViewContext(consortium.params.genesisViewId, consortium.params.context,
                     consortium.getMember(), this.consortium.view.nextViewConsensusKey(), Collections.emptyList());
             current.activeAll();
-            consortium.view.viewChange(current, consortium.scheduler, 0, consortium.service, true);
+            consortium.view.viewChange(current, consortium.scheduler, 0, true);
         }
         if (current.isMember()) {
             regency.currentRegent(-1);
@@ -407,7 +406,7 @@ public class CollaboratorContext implements Collaborator {
             consortium.view.pause();
             consortium.joinMessageGroup(current);
             consortium.transitions.generateView();
-            consortium.view.resume(consortium.service);
+            consortium.view.resume();
         }
     }
 
@@ -804,7 +803,7 @@ public class CollaboratorContext implements Collaborator {
         int current = genesis ? 2 : 0;
         regency.currentRegent(current);
         regency.nextRegent(current);
-        this.consortium.view.viewChange(newView, consortium.scheduler, current, consortium.service, resume);
+        this.consortium.view.viewChange(newView, consortium.scheduler, current, resume);
     }
 
     void synchronize(Sync syncData, Member regent) {
@@ -1326,12 +1325,7 @@ public class CollaboratorContext implements Collaborator {
                 }
                 JoinTransaction joinTxn = txn.build();
 
-                HashKey txnHash;
-                try {
-                    txnHash = consortium.submit(null, true, null, joinTxn);
-                } catch (TimeoutException e) {
-                    return;
-                }
+                HashKey txnHash = consortium.submit(null, true, null, joinTxn);
                 log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash,
                           consortium.view.getContext().getId(), consortium.params.member);
             }
@@ -1535,7 +1529,7 @@ public class CollaboratorContext implements Collaborator {
         synchronizing.set(false);
         log.info("Synchronized, resuming view on: {}",
                  state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, getMember());
-        this.consortium.view.resume(consortium.service);
+        this.consortium.view.resume();
         resolveStatus();
         log.info("Processing deferred blocks: {} on: {}", consortium.deferredCount(), consortium.deferredCount(),
                  getMember());

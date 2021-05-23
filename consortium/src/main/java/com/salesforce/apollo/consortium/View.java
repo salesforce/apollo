@@ -50,8 +50,10 @@ public class View {
     private final AtomicReference<MemberOrder>                                   order                    = new AtomicReference<>();
     private final Parameters                                                     params;
     private final BiConsumer<HashKey, List<Msg>>                                 process;
+    private final Service                                                        service;
 
     public View(Service service, Parameters parameters, BiConsumer<HashKey, List<Msg>> process) {
+        this.service = service;
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, service,
                                                                        r -> new LinearServer(
                                                                                parameters.communications.getClientIdentityProvider(),
@@ -144,7 +146,7 @@ public class View {
         currentMsgr.publish(message);
     }
 
-    public void resume(Service service) {
+    public void resume() {
         resume(service, params.gossipDuration, params.scheduler);
     }
 
@@ -155,8 +157,7 @@ public class View {
     /**
      * Ye Jesus Nut
      */
-    public void viewChange(ViewContext newView, TickScheduler scheduler, int currentRegent, Service service,
-                           boolean resume) {
+    public void viewChange(ViewContext newView, TickScheduler scheduler, int currentRegent, boolean resume) {
         pause();
 
         log.info("Installing new view: {} rings: {} ttl: {} on: {} regent: {} member: {} view member: {}",
@@ -173,7 +174,7 @@ public class View {
         }
 
         if (resume) {
-            resume(service);
+            resume();
         }
     }
 

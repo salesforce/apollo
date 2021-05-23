@@ -9,7 +9,6 @@ package com.salesforce.apollo.consortium;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -29,7 +28,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -155,18 +153,13 @@ public class MembershipTests {
         final CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            try {
-                AtomicReference<HashKey> pending = new AtomicReference<>();
-                pending.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(pending.get());
-                    submittedBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-                submitted.add(pending.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
-            }
+            AtomicReference<HashKey> pending = new AtomicReference<>();
+            pending.set(client.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(pending.get());
+                submittedBunch.countDown();
+            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+            submitted.add(pending.get());
         }
 
         boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
@@ -181,18 +174,13 @@ public class MembershipTests {
         final CountDownLatch nextBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            try {
-                AtomicReference<HashKey> pending = new AtomicReference<>();
-                pending.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(pending.get());
-                    nextBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-                submitted.add(pending.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
-            }
+            AtomicReference<HashKey> pending = new AtomicReference<>();
+            pending.set(client.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(pending.get());
+                nextBunch.countDown();
+            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+            submitted.add(pending.get());
         }
 
         completed = nextBunch.await(10, TimeUnit.SECONDS);
@@ -248,18 +236,13 @@ public class MembershipTests {
         final CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            try {
-                AtomicReference<HashKey> pending = new AtomicReference<>();
-                pending.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(pending.get());
-                    submittedBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-                submitted.add(pending.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
-            }
+            AtomicReference<HashKey> pending = new AtomicReference<>();
+            pending.set(client.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(pending.get());
+                submittedBunch.countDown();
+            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+            submitted.add(pending.get());
         }
 
         boolean completed = submittedBunch.await(125, TimeUnit.SECONDS);
@@ -274,18 +257,13 @@ public class MembershipTests {
         final CountDownLatch nextBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            try {
-                AtomicReference<HashKey> pending = new AtomicReference<>();
-                pending.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(pending.get());
-                    nextBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-                submitted.add(pending.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
-            }
+            AtomicReference<HashKey> pending = new AtomicReference<>();
+            pending.set(client.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(pending.get());
+                nextBunch.countDown();
+            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+            submitted.add(pending.get());
         }
 
         completed = nextBunch.await(10, TimeUnit.SECONDS);

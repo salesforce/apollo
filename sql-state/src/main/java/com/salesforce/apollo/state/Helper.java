@@ -271,7 +271,7 @@ public final class Helper {
         return statement(EXECUTION.EXECUTE, sql, args);
     }
 
-    private static ByteString serialized(Data data, Value arg) {
+    public static ByteString serialized(Data data, Value arg) {
         int valueLen = Data.getValueLen(arg, false);
         data.checkCapacity(valueLen);
         data.writeValue(arg);

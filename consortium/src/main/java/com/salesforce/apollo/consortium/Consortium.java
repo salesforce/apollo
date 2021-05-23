@@ -20,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -356,13 +355,11 @@ public class Consortium {
     final CommonCommunications<BootstrapClient, BootstrappingService> bootstrapComm;
     final Parameters                                                  params;
     final TickScheduler                                               scheduler = new TickScheduler();
-    final Service                                                     service   = new Service();
     final Store                                                       store;
     final Map<HashKey, SubmittedTransaction>                          submitted = new ConcurrentHashMap<>();
     final Transitions                                                 transitions;
     final View                                                        view;
 
-    private final BootstrappingService                        bootstrappingService  = new BootstrappingService();
     private final Map<Long, CheckpointState>                  cachedCheckpoints     = new ConcurrentHashMap<>();
     private final AtomicReference<HashedCertifiedBlock>       current               = new AtomicReference<>();
     private final PriorityBlockingQueue<HashedCertifiedBlock> deferedBlocks         = new PriorityBlockingQueue<>(1024,
@@ -390,7 +387,7 @@ public class Consortium {
         transitions = fsm.getTransitions();
         view.nextViewConsensusKey();
         bootstrapComm = parameters.communications.create(parameters.member, parameters.context.getId(),
-                                                         bootstrappingService,
+                                                         new BootstrappingService(),
                                                          r -> new BoostrapServer(
                                                                  parameters.communications.getClientIdentityProvider(),
                                                                  null, r),
@@ -404,6 +401,10 @@ public class Consortium {
 
     public HashedCertifiedBlock getGenesis() {
         return genesis.get();
+    }
+
+    public HashKey getId() {
+        return params.context.getId();
     }
 
     public long getLastCheckpoint() {
@@ -456,7 +457,7 @@ public class Consortium {
         }
         log.info("Starting consortium on {}", getMember());
         transitions.start();
-        view.resume(service);
+        view.resume();
     }
 
     public void stop() {
@@ -471,7 +472,7 @@ public class Consortium {
     }
 
     public HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, BiConsumer<Object, Throwable> onCompletion,
-                          Message transaction) throws TimeoutException {
+                          Message transaction) {
         return submit(onSubmit, false, onCompletion, transaction);
     }
 
@@ -607,7 +608,7 @@ public class Consortium {
     }
 
     HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,
-                   Message txn) throws TimeoutException {
+                   Message txn) {
         if (view.getContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
@@ -909,7 +910,7 @@ public class Consortium {
     }
 
     private void submit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,
-                        BiConsumer<Object, Throwable> onCompletion) throws TimeoutException {
+                        BiConsumer<Object, Throwable> onCompletion) {
         assert transaction.hash.equals(hashOf(transaction.transaction)) : "Hash does not match!";
 
         submitted.put(transaction.hash, new SubmittedTransaction(transaction.transaction, onCompletion));
