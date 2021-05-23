@@ -38,7 +38,7 @@ public class Database {
             return null;
         }
 
-        public CompletionStage<Object> execute(Script script, Batch.Builder batch) {
+        public <T> CompletionStage<T> execute(Script script, Batch.Builder batch) {
             return null;
         }
 
