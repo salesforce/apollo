@@ -20,7 +20,7 @@ public interface TransactionExecutor {
     default void beginBlock(long height, HashKey hash) {
     }
 
-    void execute(HashKey blockHash, ExecutedTransaction txn, BiConsumer<Object, Throwable> completion);
+    void execute(HashKey blockHash, ExecutedTransaction txn, BiConsumer<? super Object, Throwable> completion);
 
     default void processGenesis(Any genesisData) {
     }

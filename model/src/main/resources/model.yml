@@ -7,31 +7,24 @@ databaseChangeLog:
       author: hhildebrand
       changes:
       -  createTable:
-            tableName: settings
+            tableName: node
             columns:
             -  column:
-                  name: version
-                  type: INT
-                  autoIncrement: true
+                  name: id
+                  type: BINARY(32)
                   constraints:
                      primaryKey: true
             -  column:
-                  name: cardinality
-                  type: INT
+                  name: parent
+                  type: BINARY(32)
             -  column:
-                  name: probability_byzantine
-                  type: DOUBLE
-            -  column:
-                  name: faultTolerance
-                  type: DOUBLE
-            -  column:
-                  name: ca_certificate
+                  name: certificate
                   type: BINARY
             -  column:
-                  name: certificate_hash
+                  name: management
                   type: BINARY(32)
       -  createTable:
-            tableName: assigned_ids
+            tableName: databases
             columns:
             -  column:
                   name: id
@@ -40,7 +33,7 @@ databaseChangeLog:
                      primaryKey: true
             -  column:
                   name: version
-                  type: INT 
+                  type: INT
       -  createTable:
             tableName: members
             columns:
@@ -55,6 +48,9 @@ databaseChangeLog:
                   constraints:
                      primaryKey: true
             -  column:
+                  name: stake
+                  type: INT
+            -  column:
                   name: host
                   type: VARCHAR
             -  column:
@@ -63,12 +59,6 @@ databaseChangeLog:
             -  column:
                   name: certificate
                   type: BINARY
-            -  column:
-                  name: certificate_hash
-                  type: BINARY(32)
-            -  column:
-                  name: signing_ca
-                  type: INT
       -  addUniqueConstraint:
             tableName: members
             columnNames: id, version

@@ -266,7 +266,7 @@ public class AvaConsensusTest {
             AvaAdapter adapter = new AvaAdapter(processed);
             TransactionExecutor executor = (h, t, c) -> {
                 if (c != null) {
-                    ForkJoinPool.commonPool().execute(() -> c.accept(new HashKey(t.getHash()), null));
+                    ForkJoinPool.commonPool().execute(() -> c.accept(new HashKey(t.getHash()), (Throwable) null));
                 }
             };
             Consortium member = new Consortium(Parameters.newBuilder()

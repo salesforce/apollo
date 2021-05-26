@@ -20,8 +20,8 @@ public class SubmittedTransaction {
     public final BiConsumer<Object, Throwable> onCompletion;
     public final Transaction                   submitted;
 
-    public SubmittedTransaction(Transaction submitted, BiConsumer<Object, Throwable> onCompletion) {
+    public SubmittedTransaction(Transaction submitted, BiConsumer<Object, Throwable> onCompletion2) {
         this.submitted = submitted;
-        this.onCompletion = onCompletion;
+        this.onCompletion = onCompletion2;
     }
 }

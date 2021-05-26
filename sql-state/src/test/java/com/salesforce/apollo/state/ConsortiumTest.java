@@ -79,7 +79,7 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 public class ConsortiumTest {
 
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final Message                           GENESIS_DATA    = Helper.batch(Helper.batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
+    private static final Message                           GENESIS_DATA    = SqlStateMachine.batch(SqlStateMachine.batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
     private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
             Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private static final Duration                          gossipDuration  = Duration.ofMillis(10);
@@ -228,7 +228,7 @@ public class ConsortiumTest {
                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                       .get(0);
         hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                             Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                             SqlStateMachine.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                           "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
                                           "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                           "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
@@ -267,14 +267,14 @@ public class ConsortiumTest {
                     batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
             }
-            BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
+            BatchUpdate update = SqlStateMachine.batchOf("update books set qty = ? where id = ?", batch);
             AtomicReference<HashKey> key = new AtomicReference<>();
             Consortium c = consortium.values().stream().collect(new ReservoirSampler<Consortium>(null, 1, entropy)).get(0);
             key.set(c.submit(null, (h, t) -> {
                 outstanding.release();
                 submitted.remove(key.get());
                 submittedBunch.countDown();
-            }, Helper.batch(update)));
+            }, SqlStateMachine.batch(update)));
             submitted.add(key.get());
         }));
 

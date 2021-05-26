@@ -43,7 +43,7 @@ public class ScriptTest {
         createAndInsert(connection);
         connection.commit();
         Transaction transaction = Transaction.newBuilder()
-                                             .setTxn(Any.pack(Helper.callScript("test.DbAccess", "call",
+                                             .setTxn(Any.pack(SqlStateMachine.callScript("test.DbAccess", "call",
                                                                                 Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java")))))
                                              .build();
         byte[] hashBytes = Conversion.hashOf(transaction.toByteString());

@@ -29,6 +29,11 @@ import com.salesforce.apollo.state.SqlStateMachine.CallResult;
  */
 public class Database {
     public class DatabaseWriteConnection {
+        
+        public HashKey submit(Batch.Builder batch, CompletionStage<HashKey> submitted) {
+            consortium.submit(null, null, null);
+            return null;
+        }
 
         public CompletionStage<int[]> execute(BatchUpdate update, Batch.Builder batch) {
             return null;

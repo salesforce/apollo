@@ -471,9 +471,10 @@ public class Consortium {
         transitions.shutdown();
     }
 
-    public HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, BiConsumer<Object, Throwable> onCompletion,
+    @SuppressWarnings("unchecked")
+    public HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, BiConsumer<?, Throwable> onCompletion,
                           Message transaction) {
-        return submit(onSubmit, false, onCompletion, transaction);
+        return submit(onSubmit, false, (BiConsumer<Object, Throwable>) onCompletion, transaction);
     }
 
     void checkpoint(long height, CheckpointState checkpoint) {
