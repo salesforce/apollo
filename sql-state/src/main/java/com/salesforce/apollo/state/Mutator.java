@@ -24,6 +24,12 @@ import com.salesforce.apollo.consortium.Consortium;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.state.SqlStateMachine.CallResult;
 
+/**
+ * The mutation API for the materialized view
+ * 
+ * @author hal.hildebrand
+ * 
+ */
 public class Mutator {
     public static class BatchBuilder {
 
