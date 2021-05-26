@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
@@ -104,7 +103,6 @@ import com.salesfoce.apollo.state.proto.EXECUTION;
 import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
-import com.salesforce.apollo.consortium.Consortium;
 import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.protocols.Hash.HkHasher;
@@ -127,100 +125,6 @@ import com.salesforce.apollo.protocols.HashKey;
  *
  */
 public class SqlStateMachine {
-    public static class BatchBuilder {
-
-        public class Completion<Result> {
-            @SuppressWarnings("unchecked")
-            public BatchBuilder andThen(BiConsumer<Result, Throwable> processor) {
-                completions.add((CompletableFuture<Object>) new CompletableFuture<Result>().whenComplete(processor));
-                return BatchBuilder.this;
-            }
-
-            public BatchBuilder discard() {
-                completions.add(null);
-                return BatchBuilder.this;
-            }
-        }
-
-        private final BatchedTransaction.Builder           batch       = BatchedTransaction.newBuilder();
-        private final ArrayList<CompletableFuture<Object>> completions = new ArrayList<>();
-        private final Consortium                           node;
-
-        public BatchBuilder(Consortium node) {
-            this.node = node;
-        }
-
-        public Completion<int[]> execute(BatchUpdate update) {
-            batch.addTransactions(Txn.newBuilder().setBatchUpdate(update).build());
-            return new Completion<>();
-        }
-
-        public Completion<CallResult> execute(Call call) {
-            batch.addTransactions(Txn.newBuilder().setCall(call).build());
-            return new Completion<>();
-        }
-
-        public <T> Completion<T> execute(Script script) {
-            batch.addTransactions(Txn.newBuilder().setScript(script).build());
-            return new Completion<>();
-        }
-
-        public Completion<List<ResultSet>> execute(Statement statement) {
-            batch.addTransactions(Txn.newBuilder().setStatement(statement).build());
-            return new Completion<>();
-        }
-
-        public HashKey submit() {
-            return node.submit(null, (r, t) -> process(r, t), build());
-        }
-
-        public HashKey submit(BiConsumer<Boolean, Throwable> onSubmit) {
-            return node.submit(onSubmit, (r, t) -> process(r, t), build());
-        }
-
-        private Message build() {
-            return batch.build();
-        }
-
-        private void process(Object r, Throwable t) {
-            if (t instanceof BatchTransactionException) {
-                BatchTransactionException e = (BatchTransactionException) t;
-                completions.get(e.getIndex()).completeExceptionally(e.getCause());
-                return;
-            }
-            @SuppressWarnings("unchecked")
-            List<Object> results = (List<Object>) r;
-            assert results.size() == completions.size() : "Results: " + results.size() + " does not match Completions: "
-                    + completions.size();
-            for (int i = 0; i < results.size(); i++) {
-                CompletableFuture<Object> futureSailor = completions.get(i);
-                if (futureSailor != null) {
-                    futureSailor.complete(results.get(i));
-                }
-            }
-        }
-    }
-
-    public static class BatchTransactionException extends Exception {
-
-        private static final long serialVersionUID = 1L;
-
-        private final int index;
-
-        public BatchTransactionException(int index, String message, Throwable cause) {
-            super(message, cause);
-            this.index = index;
-        }
-
-        public BatchTransactionException(int index, Throwable cause) {
-            this(index, null, cause);
-        }
-
-        public int getIndex() {
-            return index;
-        }
-
-    }
 
     public static class CallResult {
         public final List<Object>    outValues;
@@ -245,32 +149,6 @@ public class SqlStateMachine {
         public Event(String discriminator, JsonNode body) {
             this.discriminator = discriminator;
             this.body = body;
-        }
-    }
-
-    public static class Mutator {
-
-        private final Consortium node;
-
-        public Mutator(Consortium node) {
-            this.node = node;
-        }
-
-        public BatchBuilder batch() {
-            return new BatchBuilder(node);
-        }
-
-        public <T> HashKey execute(Call call) {
-            return node.submit(null, null, call);
-        }
- 
-        public HashKey execute(Call call, BiConsumer<CallResult, Throwable> processor) {
-            return node.submit(null, processor, call);
-        }
- 
-        public HashKey execute(Call call, BiConsumer<Object, Throwable> processor,
-                               BiConsumer<Boolean, Throwable> onSubmit) {
-            return node.submit(onSubmit, processor, call);
         }
     }
 
