@@ -221,12 +221,14 @@ public class MembershipTests {
                                       .filter(c -> !c.equals(testSubject))
                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                       .get(0);
-        hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                             batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                   "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                   "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                   "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                   "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
+
+        hash = new Mutator(client).execute(
+                                           batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                                 "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                                 "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                                 "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                                 "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
+                                           (h, t) -> txnProcessed.set(true));
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -267,11 +269,11 @@ public class MembershipTests {
                                       .filter(c -> !c.equals(testSubject))
                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                       .get(0);
-            key.set(cl.submit(null, (h, t) -> {
+            key.set(new Mutator(cl).execute(update, (h, t) -> {
                 outstanding.release();
                 submitted.remove(key.get());
                 submittedBunch.countDown();
-            }, batch(update)));
+            }));
             submitted.add(key.get());
         }));
 
@@ -305,11 +307,11 @@ public class MembershipTests {
                                       .filter(c -> !c.equals(testSubject))
                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                       .get(0);
-            key.set(cl.submit(null, (h, t) -> {
+            key.set(new Mutator(cl).execute(update, (h, t) -> {
                 outstanding.release();
                 submitted.remove(key.get());
                 remaining.countDown();
-            }, batch(update)));
+            }));
             submitted.add(key.get());
         }));
 
@@ -421,12 +423,13 @@ public class MembershipTests {
                                   .filter(c -> !c.equals(testSubject))
                                   .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                   .get(0);
-        hash = cl.submit(null, (h, t) -> txnProcessed.set(true),
-                         batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                               "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                               "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
+        hash = new Mutator(cl).execute(
+                                       batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                             "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                             "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                             "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                             "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
+                                       (h, t) -> txnProcessed.set(true));
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -467,11 +470,11 @@ public class MembershipTests {
                                        .filter(c -> !c.equals(testSubject))
                                        .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                        .get(0);
-            key.set(cli.submit(null, (h, t) -> {
+            key.set(new Mutator(cli).execute(update, (h, t) -> {
                 outstanding.release();
                 submitted.remove(key.get());
                 submittedBunch.countDown();
-            }, batch(update)));
+            }));
             submitted.add(key.get());
         }));
 
@@ -505,11 +508,11 @@ public class MembershipTests {
                                        .filter(c -> !c.equals(testSubject))
                                        .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                        .get(0);
-            key.set(cln.submit(null, (h, t) -> {
+            key.set(new Mutator(cln).execute(update, (h, t) -> {
                 outstanding.release();
                 submitted.remove(key.get());
                 remaining.countDown();
-            }, batch(update)));
+            }));
             submitted.add(key.get());
         }));
 
