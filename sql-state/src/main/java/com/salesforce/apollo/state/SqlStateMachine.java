@@ -1008,8 +1008,12 @@ public class SqlStateMachine {
             throw e;
         }
         List<Object> results = new ArrayList<Object>();
-        for (Txn txn : txns.getTransactionsList()) {
-            results.add(SqlStateMachine.this.execute(t, txn, txnHash));
+        for (int i = 0; i < txns.getTransactionsCount(); i++) {
+            try {
+                results.add(SqlStateMachine.this.execute(t, txns.getTransactions(i), txnHash));
+            } catch (Throwable e) {
+                throw new Mutator.BatchedTransactionException(i, e);
+            }
         }
         return results;
     }

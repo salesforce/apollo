@@ -87,8 +87,8 @@ public class Mutator {
         }
 
         private void process(Object r, Throwable t) {
-            if (t instanceof BatchTransactionException) {
-                BatchTransactionException e = (BatchTransactionException) t;
+            if (t instanceof BatchedTransactionException) {
+                BatchedTransactionException e = (BatchedTransactionException) t;
                 completions.get(e.getIndex()).completeExceptionally(e.getCause());
                 return;
             }
@@ -105,18 +105,18 @@ public class Mutator {
         }
     }
 
-    public static class BatchTransactionException extends Exception {
+    public static class BatchedTransactionException extends Exception {
 
         private static final long serialVersionUID = 1L;
 
         private final int index;
 
-        public BatchTransactionException(int index, String message, Throwable cause) {
+        public BatchedTransactionException(int index, String message, Throwable cause) {
             super(message, cause);
             this.index = index;
         }
 
-        public BatchTransactionException(int index, Throwable cause) {
+        public BatchedTransactionException(int index, Throwable cause) {
             this(index, null, cause);
         }
 
