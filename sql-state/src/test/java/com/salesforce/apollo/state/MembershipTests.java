@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.state;
 
+import static com.salesforce.apollo.state.Mutator.batch;
+import static com.salesforce.apollo.state.Mutator.batchOf;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -80,7 +82,7 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
  */
 public class MembershipTests {
     private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final Message                           GENESIS_DATA    = SqlStateMachine.batch(SqlStateMachine.batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
+    private static final Message                           GENESIS_DATA    = batch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
     private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
             Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
     private final static int                               MAX_CARDINALITY = 11;
@@ -220,11 +222,11 @@ public class MembershipTests {
                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                       .get(0);
         hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                             SqlStateMachine.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                          "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                          "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                          "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                          "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
+                             batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                   "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                   "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                   "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                   "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -258,7 +260,7 @@ public class MembershipTests {
                     batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
             }
-            BatchUpdate update = SqlStateMachine.batchOf("update books set qty = ? where id = ?", batch);
+            BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
             AtomicReference<HashKey> key = new AtomicReference<>();
             Consortium cl = consortium.values()
                                       .stream()
@@ -269,7 +271,7 @@ public class MembershipTests {
                 outstanding.release();
                 submitted.remove(key.get());
                 submittedBunch.countDown();
-            }, SqlStateMachine.batch(update)));
+            }, batch(update)));
             submitted.add(key.get());
         }));
 
@@ -296,7 +298,7 @@ public class MembershipTests {
                     batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
             }
-            BatchUpdate update = SqlStateMachine.batchOf("update books set qty = ? where id = ?", batch);
+            BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
             AtomicReference<HashKey> key = new AtomicReference<>();
             Consortium cl = consortium.values()
                                       .stream()
@@ -307,7 +309,7 @@ public class MembershipTests {
                 outstanding.release();
                 submitted.remove(key.get());
                 remaining.countDown();
-            }, SqlStateMachine.batch(update)));
+            }, batch(update)));
             submitted.add(key.get());
         }));
 
@@ -420,11 +422,11 @@ public class MembershipTests {
                                   .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                   .get(0);
         hash = cl.submit(null, (h, t) -> txnProcessed.set(true),
-                         SqlStateMachine.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                      "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                      "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                      "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                      "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
+                         batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                               "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                               "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                               "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -458,7 +460,7 @@ public class MembershipTests {
                     batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
             }
-            BatchUpdate update = SqlStateMachine.batchOf("update books set qty = ? where id = ?", batch);
+            BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
             AtomicReference<HashKey> key = new AtomicReference<>();
             Consortium cli = consortium.values()
                                        .stream()
@@ -469,7 +471,7 @@ public class MembershipTests {
                 outstanding.release();
                 submitted.remove(key.get());
                 submittedBunch.countDown();
-            }, SqlStateMachine.batch(update)));
+            }, batch(update)));
             submitted.add(key.get());
         }));
 
@@ -496,7 +498,7 @@ public class MembershipTests {
                     batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
             }
-            BatchUpdate update = SqlStateMachine.batchOf("update books set qty = ? where id = ?", batch);
+            BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
             AtomicReference<HashKey> key = new AtomicReference<>();
             Consortium cln = consortium.values()
                                        .stream()
@@ -507,7 +509,7 @@ public class MembershipTests {
                 outstanding.release();
                 submitted.remove(key.get());
                 remaining.countDown();
-            }, SqlStateMachine.batch(update)));
+            }, batch(update)));
             submitted.add(key.get());
         }));
 

@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.state;
 
+import static com.salesforce.apollo.state.Mutator.batch;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,11 +43,11 @@ public class UpdaterTest {
         statement.execute("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))");
 
         Transaction.Builder builder = Transaction.newBuilder();
-        builder.setTxn(Any.pack(SqlStateMachine.batch(SqlStateMachine.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                                          "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                                          "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                                          "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                                          "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))));
+        builder.setTxn(Any.pack(batch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                            "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                            "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                            "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                            "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))));
         Transaction transaction = builder.build();
 
         updater.getExecutor().execute(null, ExecutedTransaction.newBuilder().setTransaction(transaction).build(), null);

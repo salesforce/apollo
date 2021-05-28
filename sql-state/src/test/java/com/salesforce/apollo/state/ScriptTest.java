@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.state;
 
+import static com.salesforce.apollo.state.Mutator.callScript;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,8 +44,8 @@ public class ScriptTest {
         createAndInsert(connection);
         connection.commit();
         Transaction transaction = Transaction.newBuilder()
-                                             .setTxn(Any.pack(SqlStateMachine.callScript("test.DbAccess", "call",
-                                                                                Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java")))))
+                                             .setTxn(Any.pack(callScript("test.DbAccess", "call",
+                                                                         Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java")))))
                                              .build();
         byte[] hashBytes = Conversion.hashOf(transaction.toByteString());
         ExecutedTransaction txn = ExecutedTransaction.newBuilder()
