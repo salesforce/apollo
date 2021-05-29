@@ -17,6 +17,7 @@ import java.util.UUID;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.DagEntry;
+import com.salesforce.apollo.crypto.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand

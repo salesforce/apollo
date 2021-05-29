@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.model;
 
+import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -18,12 +19,14 @@ public class Subsystem {
     private final Subsystem parent;
     private final CertWithKey credentials;
     private final Database management;
+    private final Avalanche avalanche;
 
-    public Subsystem(HashKey id, Subsystem parent, CertWithKey credentials, Database management) {
+    public Subsystem(HashKey id, Subsystem parent, CertWithKey credentials, Database management, Avalanche avalanche) {
         this.id = id;
         this.parent = parent;
         this.credentials = credentials;
         this.management = management;
+        this.avalanche = avalanche;
     }
 
     public Subsystem getParent() {
