@@ -25,45 +25,44 @@ public enum Digest {
     BLAKE2B_256 {
 
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.BLAKE2B_256;
+        public int digestLength() {
+            return 32;
         }
 
     },
     BLAKE2B_512 {
 
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.BLAKE2B_512;
+        public int digestLength() {
+            return 64;
         }
-
     },
     BLAKE2S_256 {
 
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.BLAKE2S_256;
+        public int digestLength() {
+            return 32;
         }
 
     },
     BLAKE3_256 {
 
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.BLAKE3_256;
+        public int digestLength() {
+            return 0;
         }
 
         @Override
         public byte[] hashOf(byte[] bytes, int len) {
             var digester = Blake3.newInstance();
             digester.update(bytes);
-            return digester.digest(algorithm().digestLength());
+            return digester.digest(digestLength());
         }
 
         @Override
         public byte[] hashOf(InputStream is) {
             var digester = Blake3.newInstance();
-            byte[] buf = new byte[algorithm().digestLength()];
+            byte[] buf = new byte[digestLength()];
             try {
                 for (int read = is.read(buf); read >= 0; read = is.read(buf)) {
                     digester.update(buf, 0, read);
@@ -71,27 +70,27 @@ public enum Digest {
             } catch (IOException e) {
                 throw new IllegalStateException("Error reading from buffers, cannot generate hash", e);
             }
-            return digester.digest(algorithm().digestLength());
+            return digester.digest(digestLength());
         }
     },
     BLAKE3_512 {
 
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.BLAKE3_512;
+        public int digestLength() {
+            return 64;
         }
 
         @Override
         public byte[] hashOf(byte[] bytes, int len) {
             var digester = Blake3.newInstance();
             digester.update(bytes);
-            return digester.digest(algorithm().digestLength());
+            return digester.digest(digestLength());
         }
 
         @Override
         public byte[] hashOf(InputStream is) {
             var digester = Blake3.newInstance();
-            byte[] buf = new byte[algorithm().digestLength()];
+            byte[] buf = new byte[digestLength()];
             try {
                 for (int read = is.read(buf); read >= 0; read = is.read(buf)) {
                     digester.update(buf, 0, read);
@@ -99,13 +98,14 @@ public enum Digest {
             } catch (IOException e) {
                 throw new IllegalStateException("Error reading from buffers, cannot generate hash", e);
             }
-            return digester.digest(algorithm().digestLength());
+            return digester.digest(digestLength());
         }
     },
     NONE {
+
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.NONE;
+        public int digestLength() {
+            return 0;
         }
 
         public byte[] hashOf(byte[] bytes, int len) {
@@ -119,8 +119,8 @@ public enum Digest {
     SHA2_256 {
 
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.SHA2_256;
+        public int digestLength() {
+            return 32;
         }
 
     },
@@ -128,8 +128,8 @@ public enum Digest {
     SHA2_512 {
 
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.SHA2_512;
+        public int digestLength() {
+            return 64;
         }
 
     },
@@ -137,44 +137,36 @@ public enum Digest {
     SHA3_256 {
 
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.BLAKE2B_256;
+        public int digestLength() {
+            return 32;
         }
 
     },
     SHA3_512 {
 
         @Override
-        public DigestAlgorithm algorithm() {
-            return DigestAlgorithm.BLAKE2B_256;
+        public int digestLength() {
+            return 32;
         }
 
     };
 
-    private static abstract class DigestCache<T> {
-        private final Map<DigestAlgorithm, T> cache = new HashMap<>();
+    private static class DigestCache {
+        private final Map<Digest, MessageDigest> cache = new HashMap<>();
 
-        public T lookup(DigestAlgorithm da) {
-            return cache.computeIfAbsent(da, k -> create(k));
+        public MessageDigest lookup(Digest da) {
+            return cache.computeIfAbsent(da, k -> k.createJCA());
         }
-
-        abstract protected T create(DigestAlgorithm da);
     }
 
-    private static final byte[] EMPTY = new byte[0];
+    private static final byte[]                   EMPTY          = new byte[0];
+    private static final ThreadLocal<DigestCache> MESSAGE_DIGEST = ThreadLocal.withInitial(() -> new DigestCache());
 
-    private static final ThreadLocal<DigestCache<MessageDigest>> MESSAGE_DIGEST = ThreadLocal.withInitial(() -> new DigestCache<MessageDigest>() {
-        protected MessageDigest create(DigestAlgorithm da) {
-            try {
-                return MessageDigest.getInstance(da.algorithmName());
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("Unable to retrieve " + da.algorithmName() + " Message Digest instance",
-                        e);
-            }
-        }
-    });
+    public String algorithmName() {
+        return name();
+    }
 
-    abstract public DigestAlgorithm algorithm();
+    abstract public int digestLength();
 
     public byte[] hashOf(byte[] bytes, int len) {
         MessageDigest md = lookupJCA();
@@ -207,8 +199,16 @@ public enum Digest {
         return md.digest();
     }
 
+    protected MessageDigest createJCA() {
+        try {
+            return MessageDigest.getInstance(algorithmName());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Unable to retrieve " + algorithmName() + " Message Digest instance", e);
+        }
+    }
+
     private MessageDigest lookupJCA() {
-        return MESSAGE_DIGEST.get().lookup(algorithm());
+        return MESSAGE_DIGEST.get().lookup(this);
     }
 
 }
