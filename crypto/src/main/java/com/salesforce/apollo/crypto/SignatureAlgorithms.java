@@ -43,7 +43,7 @@ import org.bouncycastle.jce.ECPointUtil;
  * @author hal.hildebrand
  *
  */
-public enum SignatureOperations {
+public enum SignatureAlgorithms {
 
     EC_SECP256K1 {
         private final KeyFactory       keyFactory;
@@ -132,22 +132,22 @@ public enum SignatureOperations {
         }
 
         @Override
-        public Sig sign(byte[] message, PrivateKey privateKey) {
+        public JohnHankock sign(byte[] message, PrivateKey privateKey) {
             try {
                 var sig = Signature.getInstance(signatureInstanceName());
                 sig.initSign(privateKey);
                 sig.update(message);
                 var bytes = sig.sign();
 
-                return new Sig(this, bytes);
+                return new JohnHankock(this, bytes);
             } catch (GeneralSecurityException e) {
                 throw new IllegalArgumentException("Cannot sign", e);
             }
         }
 
         @Override
-        public Sig signature(byte[] signatureBytes) {
-            return new Sig(this, signatureBytes);
+        public JohnHankock signature(byte[] signatureBytes) {
+            return new JohnHankock(this, signatureBytes);
         }
 
         @Override
@@ -156,7 +156,7 @@ public enum SignatureOperations {
         }
 
         @Override
-        public boolean verify(byte[] message, Sig signature, PublicKey publicKey) {
+        public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey) {
             try {
                 var sig = Signature.getInstance(signatureInstanceName());
                 sig.initVerify(publicKey);
@@ -214,11 +214,11 @@ public enum SignatureOperations {
             return 32;
         }
 
-        public Sig sign(byte[] message, PrivateKey privateKey) {
+        public JohnHankock sign(byte[] message, PrivateKey privateKey) {
             return ops.sign(message, privateKey);
         }
 
-        public Sig signature(byte[] signatureBytes) {
+        public JohnHankock signature(byte[] signatureBytes) {
             return ops.signature(signatureBytes);
         }
 
@@ -231,7 +231,7 @@ public enum SignatureOperations {
             return ops.toString();
         }
 
-        public boolean verify(byte[] message, Sig signature, PublicKey publicKey) {
+        public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey) {
             return ops.verify(message, signature, publicKey);
         }
     },
@@ -277,11 +277,11 @@ public enum SignatureOperations {
             return 57;
         }
 
-        public Sig sign(byte[] message, PrivateKey privateKey) {
+        public JohnHankock sign(byte[] message, PrivateKey privateKey) {
             return ops.sign(message, privateKey);
         }
 
-        public Sig signature(byte[] signatureBytes) {
+        public JohnHankock signature(byte[] signatureBytes) {
             return ops.signature(signatureBytes);
         }
 
@@ -294,7 +294,7 @@ public enum SignatureOperations {
             return ops.toString();
         }
 
-        public boolean verify(byte[] message, Sig signature, PublicKey publicKey) {
+        public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey) {
             return ops.verify(message, signature, publicKey);
         }
     };
@@ -333,9 +333,9 @@ public enum SignatureOperations {
         final KeyFactory          keyFactory;
         final KeyPairGenerator    keyPairGenerator;
         final NamedParameterSpec  parameterSpec;
-        final SignatureOperations signatureAlgorithm;
+        final SignatureAlgorithms signatureAlgorithm;
 
-        public EdDSAOperations(SignatureOperations signatureAlgorithm) {
+        public EdDSAOperations(SignatureAlgorithms signatureAlgorithm) {
             try {
                 this.signatureAlgorithm = signatureAlgorithm;
 
@@ -404,24 +404,24 @@ public enum SignatureOperations {
             }
         }
 
-        public Sig sign(byte[] message, PrivateKey privateKey) {
+        public JohnHankock sign(byte[] message, PrivateKey privateKey) {
             try {
                 var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME);
                 sig.initSign(privateKey);
                 sig.update(message);
                 var bytes = sig.sign();
 
-                return new Sig(this.signatureAlgorithm, bytes);
+                return new JohnHankock(this.signatureAlgorithm, bytes);
             } catch (GeneralSecurityException e) {
                 throw new IllegalArgumentException("Cannot sign", e);
             }
         }
 
-        public Sig signature(byte[] signatureBytes) {
-            return new Sig(this.signatureAlgorithm, signatureBytes);
+        public JohnHankock signature(byte[] signatureBytes) {
+            return new JohnHankock(this.signatureAlgorithm, signatureBytes);
         }
 
-        public boolean verify(byte[] message, Sig signature, PublicKey publicKey) {
+        public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey) {
             try {
                 var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME);
                 sig.initVerify(publicKey);
@@ -442,7 +442,7 @@ public enum SignatureOperations {
     private static final String ECDSA_SIGNATURE_ALGORITHM_SUFFIX = "withECDSA";
     private static final String EDDSA_ALGORITHM_NAME             = "EdDSA";
 
-    public static SignatureOperations lookup(PrivateKey privateKey) {
+    public static SignatureAlgorithms lookup(PrivateKey privateKey) {
         return switch (privateKey.getAlgorithm()) {
         case "EC" -> lookupEc(((ECPrivateKey) privateKey).getParams());
         case "EdDSA" -> lookupEd(((EdECPrivateKey) privateKey).getParams());
@@ -452,7 +452,7 @@ public enum SignatureOperations {
         };
     }
 
-    public static SignatureOperations lookup(PublicKey publicKey) {
+    public static SignatureAlgorithms lookup(PublicKey publicKey) {
         return switch (publicKey.getAlgorithm()) {
         case "EC" -> lookupEc(((ECPublicKey) publicKey).getParams());
         case "EdDSA" -> lookupEd(((EdECPublicKey) publicKey).getParams());
@@ -462,7 +462,7 @@ public enum SignatureOperations {
         };
     }
 
-    private static SignatureOperations lookupEc(ECParameterSpec params) {
+    private static SignatureAlgorithms lookupEc(ECParameterSpec params) {
         try {
             var algorithmParameters = AlgorithmParameters.getInstance("EC");
             algorithmParameters.init(params);
@@ -480,7 +480,7 @@ public enum SignatureOperations {
         }
     }
 
-    private static SignatureOperations lookupEd(NamedParameterSpec params) {
+    private static SignatureAlgorithms lookupEd(NamedParameterSpec params) {
         var curveName = params.getName();
         return switch (curveName.toLowerCase()) {
         case "ed25519" -> ED_25519;
@@ -511,11 +511,11 @@ public enum SignatureOperations {
 
     abstract public int publicKeyLength();
 
-    abstract public Sig sign(byte[] message, PrivateKey privateKey);
+    abstract public JohnHankock sign(byte[] message, PrivateKey privateKey);
 
-    abstract public Sig signature(byte[] signatureBytes);
+    abstract public JohnHankock signature(byte[] signatureBytes);
 
     abstract public int signatureLength();
 
-    abstract public boolean verify(byte[] message, Sig signature, PublicKey publicKey);
+    abstract public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey);
 }
