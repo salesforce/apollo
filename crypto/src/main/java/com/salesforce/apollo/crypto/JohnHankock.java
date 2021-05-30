@@ -11,15 +11,11 @@ package com.salesforce.apollo.crypto;
  *
  */
 public class JohnHankock {
-    final byte[]                      bytes;
-    private final SignatureAlgorithms algorithm;
+    final byte[]                     bytes;
+    public final SignatureAlgorithm algorithm;
 
-    public JohnHankock(SignatureAlgorithms algorithm, byte[] bytes) {
+    public JohnHankock(SignatureAlgorithm algorithm, byte[] bytes) {
         this.algorithm = algorithm;
         this.bytes = bytes;
-    }
-
-    public SignatureAlgorithms getAlgorithm() {
-        return algorithm;
     }
 }

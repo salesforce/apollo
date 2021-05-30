@@ -43,7 +43,7 @@ import org.bouncycastle.jce.ECPointUtil;
  * @author hal.hildebrand
  *
  */
-public enum SignatureAlgorithms {
+public enum SignatureAlgorithm {
 
     EC_SECP256K1 {
         private final KeyFactory       keyFactory;
@@ -333,9 +333,9 @@ public enum SignatureAlgorithms {
         final KeyFactory          keyFactory;
         final KeyPairGenerator    keyPairGenerator;
         final NamedParameterSpec  parameterSpec;
-        final SignatureAlgorithms signatureAlgorithm;
+        final SignatureAlgorithm signatureAlgorithm;
 
-        public EdDSAOperations(SignatureAlgorithms signatureAlgorithm) {
+        public EdDSAOperations(SignatureAlgorithm signatureAlgorithm) {
             try {
                 this.signatureAlgorithm = signatureAlgorithm;
 
@@ -442,7 +442,7 @@ public enum SignatureAlgorithms {
     private static final String ECDSA_SIGNATURE_ALGORITHM_SUFFIX = "withECDSA";
     private static final String EDDSA_ALGORITHM_NAME             = "EdDSA";
 
-    public static SignatureAlgorithms lookup(PrivateKey privateKey) {
+    public static SignatureAlgorithm lookup(PrivateKey privateKey) {
         return switch (privateKey.getAlgorithm()) {
         case "EC" -> lookupEc(((ECPrivateKey) privateKey).getParams());
         case "EdDSA" -> lookupEd(((EdECPrivateKey) privateKey).getParams());
@@ -452,7 +452,7 @@ public enum SignatureAlgorithms {
         };
     }
 
-    public static SignatureAlgorithms lookup(PublicKey publicKey) {
+    public static SignatureAlgorithm lookup(PublicKey publicKey) {
         return switch (publicKey.getAlgorithm()) {
         case "EC" -> lookupEc(((ECPublicKey) publicKey).getParams());
         case "EdDSA" -> lookupEd(((EdECPublicKey) publicKey).getParams());
@@ -462,7 +462,7 @@ public enum SignatureAlgorithms {
         };
     }
 
-    private static SignatureAlgorithms lookupEc(ECParameterSpec params) {
+    private static SignatureAlgorithm lookupEc(ECParameterSpec params) {
         try {
             var algorithmParameters = AlgorithmParameters.getInstance("EC");
             algorithmParameters.init(params);
@@ -480,7 +480,7 @@ public enum SignatureAlgorithms {
         }
     }
 
-    private static SignatureAlgorithms lookupEd(NamedParameterSpec params) {
+    private static SignatureAlgorithm lookupEd(NamedParameterSpec params) {
         var curveName = params.getName();
         return switch (curveName.toLowerCase()) {
         case "ed25519" -> ED_25519;
