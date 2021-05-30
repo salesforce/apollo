@@ -31,7 +31,7 @@ public final class Conversion {
         try {
             return MessageDigest.getInstance(SHA_256);
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("Unable to retrieve " + SHA_256 + " Message Digest instance", e);
+            throw new IllegalStateException("Unable to retrieve " + SHA_256 + " Message DigestAlgorithm instance", e);
         }
     });
 

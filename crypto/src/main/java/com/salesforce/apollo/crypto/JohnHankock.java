@@ -7,11 +7,13 @@
 package com.salesforce.apollo.crypto;
 
 /**
+ * A signature
+ * 
  * @author hal.hildebrand
  *
  */
 public class JohnHankock {
-    final byte[]                     bytes;
+    final byte[]                    bytes;
     public final SignatureAlgorithm algorithm;
 
     public JohnHankock(SignatureAlgorithm algorithm, byte[] bytes) {

@@ -17,13 +17,14 @@ import java.util.Map;
 import com.google.protobuf.ByteString;
 
 /**
+ * Enumerations of digest algorithms
+ * 
  * @author hal.hildebrand
  *
  */
-public enum Digest {
+public enum DigestAlgorithm {
 
     BLAKE2B_256 {
-
         @Override
         public int digestLength() {
             return 32;
@@ -31,14 +32,12 @@ public enum Digest {
 
     },
     BLAKE2B_512 {
-
         @Override
         public int digestLength() {
             return 64;
         }
     },
     BLAKE2S_256 {
-
         @Override
         public int digestLength() {
             return 32;
@@ -46,7 +45,6 @@ public enum Digest {
 
     },
     BLAKE3_256 {
-
         @Override
         public int digestLength() {
             return 0;
@@ -74,7 +72,6 @@ public enum Digest {
         }
     },
     BLAKE3_512 {
-
         @Override
         public int digestLength() {
             return 64;
@@ -102,7 +99,6 @@ public enum Digest {
         }
     },
     NONE {
-
         @Override
         public int digestLength() {
             return 0;
@@ -117,7 +113,6 @@ public enum Digest {
         }
     },
     SHA2_256 {
-
         @Override
         public int digestLength() {
             return 32;
@@ -126,7 +121,6 @@ public enum Digest {
     },
 
     SHA2_512 {
-
         @Override
         public int digestLength() {
             return 64;
@@ -135,7 +129,6 @@ public enum Digest {
     },
 
     SHA3_256 {
-
         @Override
         public int digestLength() {
             return 32;
@@ -143,7 +136,6 @@ public enum Digest {
 
     },
     SHA3_512 {
-
         @Override
         public int digestLength() {
             return 32;
@@ -152,9 +144,9 @@ public enum Digest {
     };
 
     private static class DigestCache {
-        private final Map<Digest, MessageDigest> cache = new HashMap<>();
+        private final Map<DigestAlgorithm, MessageDigest> cache = new HashMap<>();
 
-        public MessageDigest lookup(Digest da) {
+        public MessageDigest lookup(DigestAlgorithm da) {
             return cache.computeIfAbsent(da, k -> k.createJCA());
         }
     }
@@ -203,7 +195,8 @@ public enum Digest {
         try {
             return MessageDigest.getInstance(algorithmName());
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("Unable to retrieve " + algorithmName() + " Message Digest instance", e);
+            throw new IllegalStateException(
+                    "Unable to retrieve " + algorithmName() + " Message DigestAlgorithm instance", e);
         }
     }
 

@@ -40,6 +40,9 @@ import org.bouncycastle.jcajce.provider.asymmetric.util.ECUtil;
 import org.bouncycastle.jce.ECPointUtil;
 
 /**
+ * 
+ * Ye Enumeration of ye olde thyme Signature alorithms.
+ * 
  * @author hal.hildebrand
  *
  */
@@ -330,9 +333,9 @@ public enum SignatureAlgorithm {
             arr[j] = tmp;
         }
 
-        final KeyFactory          keyFactory;
-        final KeyPairGenerator    keyPairGenerator;
-        final NamedParameterSpec  parameterSpec;
+        final KeyFactory         keyFactory;
+        final KeyPairGenerator   keyPairGenerator;
+        final NamedParameterSpec parameterSpec;
         final SignatureAlgorithm signatureAlgorithm;
 
         public EdDSAOperations(SignatureAlgorithm signatureAlgorithm) {
@@ -340,15 +343,15 @@ public enum SignatureAlgorithm {
                 this.signatureAlgorithm = signatureAlgorithm;
 
                 var curveName = signatureAlgorithm.curveName().toLowerCase();
-                this.parameterSpec = switch (curveName) {
+                parameterSpec = switch (curveName) {
                 case "ed25519" -> NamedParameterSpec.ED25519;
                 case "ed448" -> NamedParameterSpec.ED448;
                 default -> throw new RuntimeException("Unknown Edwards curve: " + curveName);
                 };
 
-                this.keyPairGenerator = KeyPairGenerator.getInstance(EDDSA_ALGORITHM_NAME);
-                this.keyPairGenerator.initialize(this.parameterSpec);
-                this.keyFactory = KeyFactory.getInstance(EDDSA_ALGORITHM_NAME);
+                keyPairGenerator = KeyPairGenerator.getInstance(EDDSA_ALGORITHM_NAME);
+                keyPairGenerator.initialize(parameterSpec);
+                keyFactory = KeyFactory.getInstance(EDDSA_ALGORITHM_NAME);
             } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
                 throw new IllegalStateException("Unable to initialize", e);
             }
@@ -359,7 +362,7 @@ public enum SignatureAlgorithm {
             var encodedPoint = point.getY().toByteArray();
 
             reverse(encodedPoint);
-            encodedPoint = Arrays.copyOf(encodedPoint, this.publicKeyLength());
+            encodedPoint = Arrays.copyOf(encodedPoint, publicKeyLength());
             var msb = (byte) (point.isXOdd() ? 0x80 : 0);
             encodedPoint[encodedPoint.length - 1] |= msb;
 
@@ -367,13 +370,13 @@ public enum SignatureAlgorithm {
         }
 
         public KeyPair generateKeyPair() {
-            return this.keyPairGenerator.generateKeyPair();
+            return keyPairGenerator.generateKeyPair();
         }
 
         public KeyPair generateKeyPair(SecureRandom secureRandom) {
             try {
                 var kpg = KeyPairGenerator.getInstance(EDDSA_ALGORITHM_NAME);
-                kpg.initialize(this.parameterSpec, secureRandom);
+                kpg.initialize(parameterSpec, secureRandom);
                 return kpg.generateKeyPair();
             } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
                 throw new IllegalArgumentException("Cannot generate key pair", e);
@@ -383,7 +386,7 @@ public enum SignatureAlgorithm {
         public PrivateKey privateKey(byte[] bytes) {
             try {
 
-                return this.keyFactory.generatePrivate(new EdECPrivateKeySpec(this.parameterSpec, bytes));
+                return keyFactory.generatePrivate(new EdECPrivateKeySpec(parameterSpec, bytes));
             } catch (GeneralSecurityException e) {
                 throw new IllegalArgumentException("Cannot decode private key", e);
             }
@@ -391,14 +394,14 @@ public enum SignatureAlgorithm {
 
         public PublicKey publicKey(byte[] bytes) {
             try {
-                if (bytes.length != this.publicKeyLength()) {
+                if (bytes.length != publicKeyLength()) {
                     throw new RuntimeException(new InvalidKeyException(
-                            "key length is " + bytes.length + ", key length must be " + this.publicKeyLength()));
+                            "key length is " + bytes.length + ", key length must be " + publicKeyLength()));
                 }
 
                 var point = decodeEdPoint(bytes);
 
-                return this.keyFactory.generatePublic(new EdECPublicKeySpec(this.parameterSpec, point));
+                return keyFactory.generatePublic(new EdECPublicKeySpec(parameterSpec, point));
             } catch (GeneralSecurityException e) {
                 throw new IllegalArgumentException("Cannot decode public key", e);
             }
@@ -411,14 +414,14 @@ public enum SignatureAlgorithm {
                 sig.update(message);
                 var bytes = sig.sign();
 
-                return new JohnHankock(this.signatureAlgorithm, bytes);
+                return new JohnHankock(signatureAlgorithm, bytes);
             } catch (GeneralSecurityException e) {
                 throw new IllegalArgumentException("Cannot sign", e);
             }
         }
 
         public JohnHankock signature(byte[] signatureBytes) {
-            return new JohnHankock(this.signatureAlgorithm, signatureBytes);
+            return new JohnHankock(signatureAlgorithm, signatureBytes);
         }
 
         public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey) {
