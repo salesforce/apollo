@@ -14,6 +14,6 @@ import java.util.List;
  */
 public interface InteractionEvent extends KeyEvent, SealingEvent {
 
-    List<Seal> seals();
+    List<Seal> getSeals();
 
 }

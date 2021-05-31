@@ -9,7 +9,6 @@ package com.salesforce.apollo.stereotomy.event;
 import java.text.Format;
 import java.util.Map;
 
-import com.salesforce.apollo.stereotomy.controller.Coordinates;
 import com.salesforce.apollo.stereotomy.crypto.Digest;
 import com.salesforce.apollo.stereotomy.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -22,30 +21,30 @@ public interface KeyEvent {
 
     Map<Integer, JohnHancock> authentication();
 
-    byte[] bytes();
-
-    Coordinates coordinates();
-
-    default Digest digest() {
-        return this.coordinates().digest();
-    }
-
-    Map<Integer, JohnHancock> endorsements();
-
     Format format();
 
-    default Identifier identifier() {
-        return this.coordinates().identifier();
+    byte[] getBytes();
+
+    EventCoordinates getCoordinates();
+
+    default Digest getDigest() {
+        return this.getCoordinates().getDigest();
     }
 
-    Coordinates previous();
+    Map<Integer, JohnHancock> getEndorsements();
 
-    Map<Coordinates, Map<Integer, JohnHancock>> receipts();
-
-    default long sequenceNumber() {
-        return this.coordinates().sequenceNumber();
+    default Identifier getIdentifier() {
+        return this.getCoordinates().getIdentifier();
     }
 
-    Version version();
+    EventCoordinates getPrevious();
+
+    Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts();
+
+    default long getSequenceNumber() {
+        return this.getCoordinates().getSequenceNumber();
+    }
+
+    Version getVersion();
 
 }

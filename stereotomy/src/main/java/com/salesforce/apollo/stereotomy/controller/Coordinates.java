@@ -12,6 +12,7 @@ import static java.util.Objects.requireNonNull;
 import java.util.Objects;
 
 import com.salesforce.apollo.stereotomy.crypto.Digest;
+import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -19,9 +20,7 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  * @author hal.hildebrand
  *
  */
-public class Coordinates {
-
-    public static Coordinates NONE = new Coordinates(Identifier.NONE, -1, Digest.NONE);
+public class Coordinates implements EventCoordinates {
 
     private final Digest     digest;
     private final Identifier identifier;
@@ -31,8 +30,8 @@ public class Coordinates {
         this(identifier, 0, Digest.NONE);
     }
 
-    public Coordinates(Coordinates event, Digest digest) {
-        this(event.identifier(), event.sequenceNumber(), digest);
+    public Coordinates(EventCoordinates event, Digest digest) {
+        this(event.getIdentifier(), event.getSequenceNumber(), digest);
     }
 
     public Coordinates(Identifier identifier, long sequenceNumber, Digest digest) {
@@ -51,10 +50,6 @@ public class Coordinates {
         this.digest = requireNonNull(digest, "digest");
     }
 
-    public Digest digest() {
-        return this.digest;
-    }
-
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
@@ -69,21 +64,28 @@ public class Coordinates {
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(digest, identifier, sequenceNumber);
+    public Digest getDigest() {
+        return this.digest;
     }
 
-    public Identifier identifier() {
+    @Override
+    public Identifier getIdentifier() {
         return this.identifier;
     }
 
-    public long sequenceNumber() {
+    @Override
+    public long getSequenceNumber() {
         return this.sequenceNumber;
     }
 
     @Override
+    public int hashCode() {
+        return Objects.hash(digest, identifier, sequenceNumber);
+    }
+
+    @Override
     public String toString() {
-        return this.identifier + ":" + this.sequenceNumber + ":" + qb64(this.digest());
+        return this.identifier + ":" + this.sequenceNumber + ":" + qb64(this.getDigest());
     }
 
 }

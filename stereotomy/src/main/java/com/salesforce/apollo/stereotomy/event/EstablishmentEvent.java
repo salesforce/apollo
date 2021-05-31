@@ -18,12 +18,12 @@ import com.salesforce.apollo.stereotomy.crypto.Digest;
  */
 public interface EstablishmentEvent extends KeyEvent {
 
-    SigningThreshold signingThreshold();
+    SigningThreshold getSigningThreshold();
 
-    List<PublicKey> keys();
+    List<PublicKey> getKeys();
 
-    Optional<Digest> nextKeyConfiguration();
+    Optional<Digest> getNextKeyConfiguration();
 
-    int witnessThreshold();
+    int getWitnessThreshold();
 
 }

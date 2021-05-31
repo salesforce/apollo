@@ -9,7 +9,6 @@ package com.salesforce.apollo.stereotomy.event;
 import java.util.List;
 
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
- 
 
 /**
  * @author hal.hildebrand
@@ -17,10 +16,10 @@ import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
  */
 public interface RotationEvent extends EstablishmentEvent, SealingEvent {
 
-    List<BasicIdentifier> removedWitnesses();
+    List<BasicIdentifier> getRemovedWitnesses();
 
-    List<BasicIdentifier> addedWitnesses();
+    List<BasicIdentifier> getAddedWitnesses();
 
-    List<Seal> seals();
+    List<Seal> getSeals();
 
-  }
+}

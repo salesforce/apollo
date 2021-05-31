@@ -6,14 +6,12 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import com.salesforce.apollo.stereotomy.controller.Coordinates;
-
 /**
  * @author hal.hildebrand
  *
  */
 public interface DelegatedEstablishmentEvent extends EstablishmentEvent {
 
-    Coordinates delegatingEvent();
+    EventCoordinates getDelegatingEvent();
 
 }

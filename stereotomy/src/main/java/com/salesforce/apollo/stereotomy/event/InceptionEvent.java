@@ -20,10 +20,10 @@ public interface InceptionEvent extends EstablishmentEvent {
         ESTABLISHMENT_EVENTS_ONLY, DO_NOT_DELEGATE,
     }
 
-    byte[] inceptionStatement();
+    byte[] getInceptionStatement();
 
-    List<BasicIdentifier> witnesses();
+    List<BasicIdentifier> getWitnesses();
 
-    Set<ConfigurationTrait> configurationTraits();
+    Set<ConfigurationTrait> getConfigurationTraits();
 
 }
