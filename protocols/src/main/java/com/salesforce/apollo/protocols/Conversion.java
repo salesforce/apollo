@@ -11,13 +11,19 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.UUID;
+
+import org.bouncycastle.asn1.ASN1OctetString;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.cert.X509CertificateHolder;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.DagEntry;
-import com.salesforce.apollo.crypto.BbBackedInputStream;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand
@@ -135,6 +141,19 @@ public final class Conversion {
 
     private Conversion() {
         // Hidden
+    }
+
+    public static HashKey getMemberId(X509Certificate c) {
+        X509CertificateHolder holder;
+        try {
+            holder = new X509CertificateHolder(c.getEncoded());
+        } catch (CertificateEncodingException | IOException e) {
+            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
+        }
+        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
+    
+        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
+        return new HashKey(id);
     }
 
 }

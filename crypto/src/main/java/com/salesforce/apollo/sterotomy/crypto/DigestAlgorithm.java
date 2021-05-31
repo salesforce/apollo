@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.crypto;
+package com.salesforce.apollo.sterotomy.crypto;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * Enumerations of digest algorithms
@@ -150,6 +151,8 @@ public enum DigestAlgorithm {
             return cache.computeIfAbsent(da, k -> k.createJCA());
         }
     }
+
+    public static final DigestAlgorithm DEFAULT = BLAKE3_256;
 
     private static final byte[]                   EMPTY          = new byte[0];
     private static final ThreadLocal<DigestCache> MESSAGE_DIGEST = ThreadLocal.withInitial(() -> new DigestCache());

@@ -65,7 +65,7 @@ import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.CaValidator;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 

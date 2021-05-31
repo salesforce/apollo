@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.salesforce.apollo.sterotomy.crypto.Blake3;
 
 /**
  * @author hal.hildebrand

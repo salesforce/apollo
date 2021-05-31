@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.crypto;
+package com.salesforce.apollo.sterotomy.crypto;
 
 import java.math.BigInteger;
 import java.security.AlgorithmParameters;
@@ -135,22 +135,22 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public JohnHankock sign(byte[] message, PrivateKey privateKey) {
+        public JohnHancock sign(byte[] message, PrivateKey privateKey) {
             try {
                 var sig = Signature.getInstance(signatureInstanceName());
                 sig.initSign(privateKey);
                 sig.update(message);
                 var bytes = sig.sign();
 
-                return new JohnHankock(this, bytes);
+                return new JohnHancock(this, bytes);
             } catch (GeneralSecurityException e) {
                 throw new IllegalArgumentException("Cannot sign", e);
             }
         }
 
         @Override
-        public JohnHankock signature(byte[] signatureBytes) {
-            return new JohnHankock(this, signatureBytes);
+        public JohnHancock signature(byte[] signatureBytes) {
+            return new JohnHancock(this, signatureBytes);
         }
 
         @Override
@@ -159,7 +159,7 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey) {
+        public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
             try {
                 var sig = Signature.getInstance(signatureInstanceName());
                 sig.initVerify(publicKey);
@@ -217,11 +217,11 @@ public enum SignatureAlgorithm {
             return 32;
         }
 
-        public JohnHankock sign(byte[] message, PrivateKey privateKey) {
+        public JohnHancock sign(byte[] message, PrivateKey privateKey) {
             return ops.sign(message, privateKey);
         }
 
-        public JohnHankock signature(byte[] signatureBytes) {
+        public JohnHancock signature(byte[] signatureBytes) {
             return ops.signature(signatureBytes);
         }
 
@@ -234,7 +234,7 @@ public enum SignatureAlgorithm {
             return ops.toString();
         }
 
-        public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey) {
+        public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
             return ops.verify(message, signature, publicKey);
         }
     },
@@ -280,11 +280,11 @@ public enum SignatureAlgorithm {
             return 57;
         }
 
-        public JohnHankock sign(byte[] message, PrivateKey privateKey) {
+        public JohnHancock sign(byte[] message, PrivateKey privateKey) {
             return ops.sign(message, privateKey);
         }
 
-        public JohnHankock signature(byte[] signatureBytes) {
+        public JohnHancock signature(byte[] signatureBytes) {
             return ops.signature(signatureBytes);
         }
 
@@ -297,7 +297,7 @@ public enum SignatureAlgorithm {
             return ops.toString();
         }
 
-        public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey) {
+        public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
             return ops.verify(message, signature, publicKey);
         }
     };
@@ -407,24 +407,24 @@ public enum SignatureAlgorithm {
             }
         }
 
-        public JohnHankock sign(byte[] message, PrivateKey privateKey) {
+        public JohnHancock sign(byte[] message, PrivateKey privateKey) {
             try {
                 var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME);
                 sig.initSign(privateKey);
                 sig.update(message);
                 var bytes = sig.sign();
 
-                return new JohnHankock(signatureAlgorithm, bytes);
+                return new JohnHancock(signatureAlgorithm, bytes);
             } catch (GeneralSecurityException e) {
                 throw new IllegalArgumentException("Cannot sign", e);
             }
         }
 
-        public JohnHankock signature(byte[] signatureBytes) {
-            return new JohnHankock(signatureAlgorithm, signatureBytes);
+        public JohnHancock signature(byte[] signatureBytes) {
+            return new JohnHancock(signatureAlgorithm, signatureBytes);
         }
 
-        public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey) {
+        public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
             try {
                 var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME);
                 sig.initVerify(publicKey);
@@ -514,11 +514,11 @@ public enum SignatureAlgorithm {
 
     abstract public int publicKeyLength();
 
-    abstract public JohnHankock sign(byte[] message, PrivateKey privateKey);
+    abstract public JohnHancock sign(byte[] message, PrivateKey privateKey);
 
-    abstract public JohnHankock signature(byte[] signatureBytes);
+    abstract public JohnHancock signature(byte[] signatureBytes);
 
     abstract public int signatureLength();
 
-    abstract public boolean verify(byte[] message, JohnHankock signature, PublicKey publicKey);
+    abstract public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey);
 }

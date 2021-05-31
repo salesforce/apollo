@@ -25,7 +25,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.Slice;
 import com.salesforce.apollo.protocols.BloomFilter;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand

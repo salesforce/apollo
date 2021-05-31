@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Random;
 
 import com.salesforce.apollo.membership.CertWithKey;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * The representation of the "current" member - the subject - of a View.

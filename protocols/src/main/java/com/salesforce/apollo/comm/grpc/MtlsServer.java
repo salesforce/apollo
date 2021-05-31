@@ -47,8 +47,8 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.salesforce.apollo.protocols.CertificateValidator;
 import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
 
 import io.grpc.BindableService;
 import io.grpc.Context;
@@ -318,10 +318,9 @@ public class MtlsServer implements ClientIdentity {
 
     private final LoadingCache<X509Certificate, HashKey> cachedMembership = CacheBuilder.newBuilder()
                                                                                         .build(new CacheLoader<X509Certificate, HashKey>() {
-
                                                                                                                                                                   @Override
                                                                                                                                                                   public HashKey load(X509Certificate key) throws Exception {
-                                                                                                                                                                      return Utils.getMemberId(key);
+                                                                                                                                                                      return Conversion.getMemberId(key);
                                                                                                                                                                   }
                                                                                                                                                               });
     private final TlsInterceptor                         interceptor      = new TlsInterceptor();

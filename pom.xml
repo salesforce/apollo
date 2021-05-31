@@ -27,6 +27,7 @@
 		<module>tron</module>
 		<module>model</module>
 		<module>crypto</module>
+		<module>utils</module>
 	</modules>
 
 	<properties>
@@ -179,9 +180,14 @@
 			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>crypto</artifactId>
+				<artifactId>sterotomy</artifactId>
 				<version>${project.version}</version>
 			</dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>utils</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>

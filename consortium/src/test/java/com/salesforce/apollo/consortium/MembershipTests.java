@@ -55,7 +55,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.Utils;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 
@@ -78,7 +78,7 @@ public class MembershipTests {
         certs = IntStream.range(1, 11)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Conversion.getMemberId(cert.getX509Certificate()), cert -> cert));
     }
 
     private Map<HashKey, Router>          communications = new ConcurrentHashMap<>();
