@@ -26,7 +26,7 @@
 		<module>test-population</module>
 		<module>tron</module>
 		<module>model</module>
-		<module>crypto</module>
+		<module>stereotomy</module>
 		<module>utils</module>
 	</modules>
 
@@ -180,7 +180,7 @@
 			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>sterotomy</artifactId>
+				<artifactId>stereotomy</artifactId>
 				<version>${project.version}</version>
 			</dependency>
             <dependency>
