@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.stereotomy.QualifiedBase64.digest;
-import static com.salesforce.apollo.stereotomy.QualifiedBase64.identifier;
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;

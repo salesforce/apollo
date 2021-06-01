@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.stereotomy.QualifiedBase64.digest;
-import static com.salesforce.apollo.stereotomy.QualifiedBase64.identifier;
-import static com.salesforce.apollo.stereotomy.QualifiedBase64.signature;
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.util.Map;
 import java.util.stream.Collectors;

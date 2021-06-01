@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.stereotomy.QualifiedBase64.identifier;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.util.List;
 import java.util.Set;

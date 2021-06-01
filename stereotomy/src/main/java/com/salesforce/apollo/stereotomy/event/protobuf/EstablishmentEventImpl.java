@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.stereotomy.QualifiedBase64.digest;
-import static com.salesforce.apollo.stereotomy.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
 import java.security.PublicKey;
 import java.util.List;

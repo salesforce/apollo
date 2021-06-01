@@ -1,4 +1,4 @@
-package com.salesforce.apollo.stereotomy;
+package com.salesforce.apollo.crypto;
 
 import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE2B_256;
 import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE2B_512;
@@ -19,19 +19,10 @@ import java.util.Base64;
 
 import org.bouncycastle.util.Arrays;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.SelfSigningIdentifier;
+public class QualifiedBase64 {
 
-public final class QualifiedBase64 {
-
-    private static final Base64.Decoder DECODER = Base64.getUrlDecoder();
-    private static final Base64.Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
+    protected static final Base64.Decoder DECODER = Base64.getUrlDecoder();
+    protected static final Base64.Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
 
     private static final char[] LOOKUP = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
                                            'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
@@ -148,64 +139,6 @@ public final class QualifiedBase64 {
         };
     }
 
-    public static Identifier identifier(String qb64) {
-        if (qb64.startsWith("0")) {
-            var bytes = unbase64(qb64.substring(2));
-            return switch (qb64.substring(1, 2)) {
-            // case "A" -> null; // Random seed or private key of length 128 bits
-            case "B" -> new SelfSigningIdentifier(ED_25519.signature(bytes));
-            case "C" -> new SelfSigningIdentifier(EC_SECP256K1.signature(bytes));
-            case "D" -> new SelfAddressingIdentifier(new Digest(BLAKE3_512, bytes));
-            case "E" -> new SelfAddressingIdentifier(new Digest(SHA3_512, bytes));
-            case "F" -> new SelfAddressingIdentifier(new Digest(BLAKE2B_512, bytes));
-            case "G" -> new SelfAddressingIdentifier(new Digest(SHA2_512, bytes));
-            default -> throw new IllegalArgumentException("Unrecognized identifier: " + qb64);
-            };
-        } else if (qb64.startsWith("1")) {
-            var bytes = unbase64(qb64.substring(4));
-            return switch (qb64.substring(1, 4)) {
-            case "AAA" -> new BasicIdentifier(EC_SECP256K1.publicKey(bytes));
-            // case "AAB" -> null; // EC SECP256K1 public key
-            case "AAC" -> new BasicIdentifier(ED_448.publicKey(bytes));
-            // case "AAD" -> null; // Ed448 public key
-            case "AAE" -> new SelfSigningIdentifier(ED_25519.signature(bytes));
-            default -> throw new IllegalArgumentException("Unrecognized identifier: " + qb64);
-            };
-        } else if (!qb64.matches("^[0-6-]")) {
-            var bytes = unbase64(qb64.substring(1));
-            return switch (qb64.substring(0, 1)) {
-            // case "A" -> null; // Random seed of Ed25519 private key of length 256 bits
-            case "B" -> new BasicIdentifier(ED_25519.publicKey(bytes));
-            // case "C" -> null; // X25519 public encryption key
-            // case "D" -> null; // Ed25519 public signing verification key.
-            case "E" -> new SelfAddressingIdentifier(new Digest(BLAKE3_256, bytes));
-            case "F" -> new SelfAddressingIdentifier(new Digest(BLAKE2B_256, bytes));
-            case "G" -> new SelfAddressingIdentifier(new Digest(BLAKE2S_256, bytes));
-            case "H" -> new SelfAddressingIdentifier(new Digest(SHA3_256, bytes));
-            case "I" -> new SelfAddressingIdentifier(new Digest(SHA2_256, bytes));
-            default -> throw new IllegalArgumentException("Unrecognized identifier: " + qb64);
-            };
-        } else {
-            throw new IllegalArgumentException("Unrecognized identifier: " + qb64);
-        }
-    }
-
-    public static String identifierPlaceholder(Identifier identifier) {
-        if (identifier instanceof BasicIdentifier) {
-            var bp = (BasicIdentifier) identifier;
-            var signatureAlgorithm = SignatureAlgorithm.lookup(bp.getPublicKey());
-            return basicIdentifierPlaceholder(signatureAlgorithm);
-        } else if (identifier instanceof SelfAddressingIdentifier) {
-            var sap = (SelfAddressingIdentifier) identifier;
-            return selfAddressingIdentifierPlaceholder(sap.getDigest().getAlgorithm());
-        } else if (identifier instanceof SelfSigningIdentifier) {
-            var ssp = (SelfSigningIdentifier) identifier;
-            return selfSigningIdentifierPlaceholder(ssp.getSignature().getAlgorithm());
-        } else {
-            throw new IllegalArgumentException("unknown prefix type: " + identifier.getClass().getCanonicalName());
-        }
-    }
-
     public static String nonTransferrableIdentifierCode(SignatureAlgorithm a) {
         return switch (a) {
         case EC_SECP256K1 -> "1AAA";
@@ -251,26 +184,8 @@ public final class QualifiedBase64 {
         };
     }
 
-    public static String qb64(BasicIdentifier identifier) {
-        var stdAlgo = SignatureAlgorithm.lookup(identifier.getPublicKey());
-        var sigOps = lookup(identifier.getPublicKey());
-        return nonTransferrableIdentifierCode(stdAlgo) + base64(sigOps.encode(identifier.getPublicKey()));
-    }
-
     public static String qb64(Digest d) {
         return digestCode(d.getAlgorithm()) + base64(d.getBytes());
-    }
-
-    public static String qb64(Identifier identifier) {
-        if (identifier instanceof BasicIdentifier) {
-            return qb64((BasicIdentifier) identifier);
-        } else if ((identifier instanceof SelfAddressingIdentifier)) {
-            return qb64((SelfAddressingIdentifier) identifier);
-        } else if (identifier instanceof SelfSigningIdentifier) {
-            return qb64((SelfSigningIdentifier) identifier);
-        }
-
-        throw new IllegalStateException("Unrecognized identifier: " + identifier.getClass());
     }
 
     public static String qb64(JohnHancock s) {
@@ -281,14 +196,6 @@ public final class QualifiedBase64 {
         var stdAlgo = SignatureAlgorithm.lookup(publicKey);
         var sigOps = lookup(publicKey);
         return publicKeyCode(stdAlgo) + base64(sigOps.encode(publicKey));
-    }
-
-    public static String qb64(SelfAddressingIdentifier identifier) {
-        return qb64(identifier.getDigest());
-    }
-
-    public static String qb64(SelfSigningIdentifier identifier) {
-        return qb64(identifier.getSignature());
     }
 
     public static int qb64Length(int materialLength) {
@@ -361,7 +268,7 @@ public final class QualifiedBase64 {
         return result;
     }
 
-    private QualifiedBase64() {
+    protected QualifiedBase64() {
         throw new IllegalStateException("Do not instantiate.");
     }
 

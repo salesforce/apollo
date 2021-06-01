@@ -5,7 +5,10 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
-import static com.salesforce.apollo.stereotomy.QualifiedBase64.*;
+
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
+
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
