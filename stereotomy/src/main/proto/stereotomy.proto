@@ -1,9 +1,88 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "com.salesfoce.apollo.stereotomy";
+option java_package = "com.salesfoce.apollo.stereotomy.event.proto";
 option java_outer_classname = "StereotomyProto";
 option objc_class_prefix = "Stereo";
 import "google/protobuf/any.proto";
 
 package stereotomy;
+
+message RotationEvent {
+    Header header = 1;
+    Establishment establishment = 2;
+    repeated string removedWitnesses = 3;
+    repeated string  addedWitnesses = 4;
+    repeated Seal seals = 5;
+    EventCoordinates delegatingEvent = 6;
+}
+
+message InceptionEvent {
+    Header header = 1;
+    Establishment establishment = 2;
+    bytes inceptionStatement = 3;
+    repeated string witnesses = 4;
+    repeated string configurationTraits = 5;
+    EventCoordinates delegatingEvent = 6;
+}
+
+message InteractionEvent {
+    Header header = 1;
+    repeated Seal seals = 5;
+}
+
+message Establishment {
+    SigningThreshold signingThreshold = 1;
+    repeated string keys = 2;
+    string nextKeyConfiguration = 3;
+    int32 getWitnessThreshold = 4;
+}
+
+message Header {
+    int64 sequenceNumber = 1;
+    string identifier = 2;
+    Version version = 3;
+    map<int32, string> authentication = 4;
+    string format = 5;
+    EventCoordinates coordinates = 6;
+    map<int32, string> endorsements = 7;
+    EventCoordinates previous = 8;
+    repeated Receipt receipts = 9;
+}
+
+message Seal {
+    oneof type {
+        string digest = 1;
+        EventCoordinates coordinates = 2;
+    }
+}
+
+message Receipt {
+    EventCoordinates coordinates = 1;
+    map<int32, string> signatures = 2;
+}
+
+message Weight {
+    int32 denominator = 1;
+    int32 numerator = 2;
+}
+
+message Weights {
+    repeated Weight weights = 1;
+}
+
+message SigningThreshold {
+    int32 threshold = 1;
+    repeated Weights weights = 2;
+}
+
+message Version {
+    int32 major = 1;
+    int32 minor = 2;
+}
+
+message EventCoordinates {
+    int64 sequenceNumber = 1;
+    string identifier = 2;
+    string digest = 3;
+}

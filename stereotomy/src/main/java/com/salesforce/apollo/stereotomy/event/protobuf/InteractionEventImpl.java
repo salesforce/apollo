@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.event;
+package com.salesforce.apollo.stereotomy.event.protobuf;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface InteractionEvent extends KeyEvent, SealingEvent {
+public class InteractionEventImpl {
+
 }

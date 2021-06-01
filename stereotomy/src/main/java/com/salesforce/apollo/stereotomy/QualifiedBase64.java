@@ -1,4 +1,4 @@
-package com.salesforce.apollo.stereotomy.identifier;
+package com.salesforce.apollo.stereotomy;
 
 import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.BLAKE2B_256;
 import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.BLAKE2B_512;
@@ -23,6 +23,10 @@ import com.salesforce.apollo.stereotomy.crypto.Digest;
 import com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfSigningIdentifier;
 
 public final class QualifiedBase64 {
 

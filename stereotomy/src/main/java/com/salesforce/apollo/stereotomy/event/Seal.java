@@ -6,10 +6,18 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
+import com.salesforce.apollo.stereotomy.crypto.Digest;
+
 /**
  * @author hal.hildebrand
  *
  */
 public interface Seal {
+    interface CoordinatesSeal extends Seal {
+        EventCoordinates getCoordinates();
+    }
 
+    interface DigestSeal extends Seal {
+        Digest getDigest();
+    }
 }

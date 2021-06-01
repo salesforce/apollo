@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import java.text.Format;
 import java.util.Map;
 
 import com.salesforce.apollo.stereotomy.crypto.Digest;
@@ -19,9 +18,9 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface KeyEvent {
 
-    Map<Integer, JohnHancock> authentication();
+    Map<Integer, JohnHancock> getAuthentication();
 
-    Format format();
+    Format getFormat();
 
     byte[] getBytes();
 

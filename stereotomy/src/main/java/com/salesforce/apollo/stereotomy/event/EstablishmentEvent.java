@@ -10,6 +10,7 @@ import java.security.PublicKey;
 import java.util.List;
 import java.util.Optional;
 
+import com.salesforce.apollo.stereotomy.SigningThreshold;
 import com.salesforce.apollo.stereotomy.crypto.Digest;
 
 /**
