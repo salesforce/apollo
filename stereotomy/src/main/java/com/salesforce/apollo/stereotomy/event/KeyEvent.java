@@ -8,8 +8,8 @@ package com.salesforce.apollo.stereotomy.event;
 
 import java.util.Map;
 
-import com.salesforce.apollo.stereotomy.crypto.Digest;
-import com.salesforce.apollo.stereotomy.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**

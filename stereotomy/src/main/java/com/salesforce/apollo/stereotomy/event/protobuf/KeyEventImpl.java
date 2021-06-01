@@ -15,9 +15,9 @@ import java.util.stream.Collectors;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesfoce.apollo.stereotomy.event.proto.Receipt;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.Coordinates;
-import com.salesforce.apollo.stereotomy.crypto.Digest;
-import com.salesforce.apollo.stereotomy.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;

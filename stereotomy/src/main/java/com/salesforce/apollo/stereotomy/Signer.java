@@ -10,8 +10,8 @@ import static java.util.Objects.requireNonNull;
 
 import java.security.PrivateKey;
 
-import com.salesforce.apollo.stereotomy.crypto.JohnHancock;
-import com.salesforce.apollo.stereotomy.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 
 /**
  * @author hal.hildebrand

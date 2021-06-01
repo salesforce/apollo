@@ -11,7 +11,7 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.Objects;
 
-import com.salesforce.apollo.stereotomy.crypto.Digest;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;

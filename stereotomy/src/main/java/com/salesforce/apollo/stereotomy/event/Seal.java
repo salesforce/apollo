@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import com.salesforce.apollo.stereotomy.crypto.Digest;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand

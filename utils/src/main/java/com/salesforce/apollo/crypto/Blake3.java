@@ -1,4 +1,4 @@
-package com.salesforce.apollo.stereotomy.crypto;
+package com.salesforce.apollo.crypto;
 
 /*
     MIT License

@@ -1,28 +1,28 @@
 package com.salesforce.apollo.stereotomy;
 
-import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.BLAKE2B_256;
-import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.BLAKE2B_512;
-import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.BLAKE2S_256;
-import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.BLAKE3_256;
-import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.BLAKE3_512;
-import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.SHA2_256;
-import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.SHA2_512;
-import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.SHA3_256;
-import static com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm.SHA3_512;
-import static com.salesforce.apollo.stereotomy.crypto.SignatureAlgorithm.EC_SECP256K1;
-import static com.salesforce.apollo.stereotomy.crypto.SignatureAlgorithm.ED_25519;
-import static com.salesforce.apollo.stereotomy.crypto.SignatureAlgorithm.ED_448;
-import static com.salesforce.apollo.stereotomy.crypto.SignatureAlgorithm.lookup;
+import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE2B_256;
+import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE2B_512;
+import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE2S_256;
+import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE3_256;
+import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE3_512;
+import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA2_256;
+import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA2_512;
+import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA3_256;
+import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA3_512;
+import static com.salesforce.apollo.crypto.SignatureAlgorithm.EC_SECP256K1;
+import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
+import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
+import static com.salesforce.apollo.crypto.SignatureAlgorithm.lookup;
 
 import java.security.PublicKey;
 import java.util.Base64;
 
 import org.bouncycastle.util.Arrays;
 
-import com.salesforce.apollo.stereotomy.crypto.Digest;
-import com.salesforce.apollo.stereotomy.crypto.DigestAlgorithm;
-import com.salesforce.apollo.stereotomy.crypto.JohnHancock;
-import com.salesforce.apollo.stereotomy.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;

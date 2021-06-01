@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesfoce.apollo.stereotomy.event.proto.Weights;
-import com.salesforce.apollo.stereotomy.crypto.Digest;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
