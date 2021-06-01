@@ -7,7 +7,7 @@
 package com.salesforce.apollo.stereotomy.event.protobuf;
 import static com.salesforce.apollo.stereotomy.QualifiedBase64.*;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
-import com.salesforce.apollo.stereotomy.controller.Coordinates;
+import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 

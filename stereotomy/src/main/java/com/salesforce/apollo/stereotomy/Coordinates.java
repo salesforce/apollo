@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.controller;
+package com.salesforce.apollo.stereotomy;
 
 import static com.salesforce.apollo.stereotomy.QualifiedBase64.qb64;
 import static java.util.Objects.requireNonNull;

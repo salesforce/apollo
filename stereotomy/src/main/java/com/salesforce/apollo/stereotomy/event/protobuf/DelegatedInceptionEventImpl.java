@@ -9,7 +9,7 @@ package com.salesforce.apollo.stereotomy.event.protobuf;
 import static com.salesforce.apollo.stereotomy.QualifiedBase64.digest;
 import static com.salesforce.apollo.stereotomy.QualifiedBase64.identifier;
 
-import com.salesforce.apollo.stereotomy.controller.Coordinates;
+import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
