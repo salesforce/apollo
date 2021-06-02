@@ -4,14 +4,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy;
+package com.salesforce.apollo.crypto;
 
 import static java.util.Objects.requireNonNull;
 
 import java.security.PrivateKey;
-
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
 
 /**
  * @author hal.hildebrand

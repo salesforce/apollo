@@ -62,6 +62,10 @@ message Receipt {
     map<int32, string> signatures = 2;
 }
 
+message Signatures {
+    map<int32, string> signatures = 1;
+}
+
 message Weight {
     int32 denominator = 1;
     int32 numerator = 2;
@@ -85,4 +89,17 @@ message EventCoordinates {
     int64 sequenceNumber = 1;
     string identifier = 2;
     string digest = 3;
+}
+
+message KeyState {
+    EventCoordinates coordinates = 1;
+    string lastEvent = 2;
+    string lastEstablishmentEvent = 3;
+    string delegatingIdentifier = 4;
+    repeated string keys = 5;
+    string nextKeyConfigurationDigest = 6;
+    repeated string configurationTraits = 7;
+    SigningThreshold signingThreshold = 8;
+    repeated string witnesses = 9;
+    int32 witnessThreshold = 10;
 }
