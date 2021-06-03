@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 
@@ -54,5 +55,10 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
                     .map(s -> identifier(s))
                     .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
                     .collect(Collectors.toList());
+    }
+
+    @Override
+    protected ByteString toByteString() {
+        return event.toByteString();
     }
 }

@@ -31,6 +31,13 @@ message InteractionEvent {
     repeated Seal seals = 5;
 }
 
+message AttachmentEvent {
+    EventCoordinates coordinates = 1;
+    Signatures authentication = 2;
+    Signatures endorsements = 3; 
+    repeated Receipt receipts = 4;
+}
+
 message Establishment {
     SigningThreshold signingThreshold = 1;
     repeated string keys = 2;
@@ -91,7 +98,7 @@ message EventCoordinates {
     string digest = 3;
 }
 
-message KeyState {
+message StoredKeyState {
     EventCoordinates coordinates = 1;
     string lastEvent = 2;
     string lastEstablishmentEvent = 3;

@@ -11,6 +11,7 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
@@ -54,5 +55,10 @@ public class RotationEventImpl extends EstablishmentEventImpl implements Rotatio
     @Override
     public byte[] getBytes() {
         return event.toByteArray();
+    }
+
+    @Override
+    protected ByteString toByteString() {
+        return event.toByteString();
     }
 }

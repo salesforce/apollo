@@ -6,10 +6,39 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import com.google.protobuf.ByteString;
+import com.salesforce.apollo.stereotomy.event.InteractionEvent;
+import com.salesforce.apollo.stereotomy.event.Seal;
+
 /**
  * @author hal.hildebrand
  *
  */
-public class InteractionEventImpl {
+public class InteractionEventImpl extends KeyEventImpl implements InteractionEvent {
+
+    private final com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent event;
+
+    public InteractionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent event) {
+        super(event.getHeader());
+        this.event = event;
+    }
+
+    @Override
+    public byte[] getBytes() {
+        return event.toByteArray();
+    }
+
+    @Override
+    public List<Seal> seals() {
+        return event.getSealsList().stream().map(s -> KeyEventImpl.sealOf(s)).collect(Collectors.toList());
+    }
+
+    @Override
+    protected ByteString toByteString() {
+        return event.toByteString();
+    }
 
 }

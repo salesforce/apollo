@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy.event;
 import java.util.Map;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -20,8 +21,6 @@ public interface KeyEvent {
 
     Map<Integer, JohnHancock> getAuthentication();
 
-    Format getFormat();
-
     byte[] getBytes();
 
     EventCoordinates getCoordinates();
@@ -31,6 +30,8 @@ public interface KeyEvent {
     }
 
     Map<Integer, JohnHancock> getEndorsements();
+
+    Format getFormat();
 
     default Identifier getIdentifier() {
         return this.getCoordinates().getIdentifier();
@@ -46,4 +47,5 @@ public interface KeyEvent {
 
     Version getVersion();
 
+    Digest hash(DigestAlgorithm digest);
 }

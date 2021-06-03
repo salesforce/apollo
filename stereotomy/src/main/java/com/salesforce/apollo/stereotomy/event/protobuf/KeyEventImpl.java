@@ -13,9 +13,11 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesfoce.apollo.stereotomy.event.proto.Receipt;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
@@ -33,6 +35,42 @@ import com.salesforce.apollo.utils.Pair;
  *
  */
 abstract public class KeyEventImpl implements KeyEvent {
+
+    public static Seal sealOf(com.salesfoce.apollo.stereotomy.event.proto.Seal s) {
+        if (s.hasCoordinates()) {
+            com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = s.getCoordinates();
+            return new Seal.CoordinatesSeal() {
+
+                @Override
+                public EventCoordinates getCoordinates() {
+                    return new EventCoordinates() {
+
+                        @Override
+                        public Digest getDigest() {
+                            return digest(coordinates.getDigest());
+                        }
+
+                        @Override
+                        public Identifier getIdentifier() {
+                            return identifier(coordinates.getIdentifier());
+                        }
+
+                        @Override
+                        public long getSequenceNumber() {
+                            return coordinates.getSequenceNumber();
+                        }
+                    };
+                }
+            };
+        }
+
+        return new Seal.DigestSeal() {
+            @Override
+            public Digest getDigest() {
+                return digest(s.getDigest());
+            }
+        };
+    }
 
     private static Map<Integer, JohnHancock> signaturesOf(Receipt receipt) {
         return receipt.getSignaturesMap()
@@ -109,39 +147,10 @@ abstract public class KeyEventImpl implements KeyEvent {
         };
     }
 
-    public static Seal sealOf(com.salesfoce.apollo.stereotomy.event.proto.Seal s) {
-        if (s.hasCoordinates()) {
-            com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = s.getCoordinates();
-            return new Seal.CoordinatesSeal() {
-
-                @Override
-                public EventCoordinates getCoordinates() {
-                    return new EventCoordinates() {
-
-                        @Override
-                        public long getSequenceNumber() {
-                            return coordinates.getSequenceNumber();
-                        }
-
-                        @Override
-                        public Identifier getIdentifier() {
-                            return identifier(coordinates.getIdentifier());
-                        }
-
-                        @Override
-                        public Digest getDigest() {
-                            return digest(coordinates.getDigest());
-                        }
-                    };
-                }
-            };
-        }
-
-        return new Seal.DigestSeal() {
-            @Override
-            public Digest getDigest() {
-                return digest(s.getDigest());
-            }
-        };
+    @Override
+    public Digest hash(DigestAlgorithm digest) {
+        return new Digest(digest, digest.hashOf(toByteString()));
     }
+
+    protected abstract ByteString toByteString();
 }
