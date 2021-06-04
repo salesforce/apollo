@@ -16,7 +16,7 @@ Apollo also requires [Maven](https://maven.apache.org/) 3.6.3 and above.
     * Creates an overlay network in which each member gossips with the successor of the member in a ring.
     * The monitoring ring is capable of detecting member crashes (failures).
     * Reliable group message flooding.
-* Atomic Broadcast - garbage collected group based atomic broadcast
+* Reliable Broadcast - garbage collected group based reliable broadcast and sender total ordering
 * Consortium - evolving group based transaction ordering service producing linear logs - block chains
 * SQL State - JDBC accessible SQL store backed materialized view evolved from Consortium linear logs.  Supports DDL, Stored Procedures, functions.
 * [Avalanche](https://arxiv.org/abs/1906.08936) - scalable, leaderless, byzantine fault tolerant consensus
