@@ -34,9 +34,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.SealingEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedInceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedRotationEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
@@ -211,6 +213,11 @@ public class StateStore {
         return Optional.of(events.get(coordinateOrdering(coordinates)));
     }
 
+    public Optional<KeyState> getKeyState(EventCoordinates key) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
     public Optional<KeyState> getKeyState(Identifier identifier) {
         String stateHash = keyStateByIdentifier.get(qb64(identifier));
 
@@ -229,5 +236,10 @@ public class StateStore {
             lastReceipt.put(receiptPrefix(coordinates.getIdentifier(), otherReceipt.getKey().getIdentifier()),
                             coordinates.getSequenceNumber());
         }
+    }
+
+    public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates delegatingEvent) {
+        // TODO Auto-generated method stub
+        return null;
     }
 }

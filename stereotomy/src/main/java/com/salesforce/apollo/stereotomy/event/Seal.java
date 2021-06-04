@@ -14,7 +14,7 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public interface Seal {
     interface CoordinatesSeal extends Seal {
-        EventCoordinates getCoordinates();
+        EventCoordinates getEvent();
     }
 
     interface DigestSeal extends Seal {

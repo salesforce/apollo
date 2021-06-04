@@ -7,14 +7,13 @@
 package com.salesforce.apollo.stereotomy.event;
 
 import java.util.List;
- 
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface SealingEvent  extends KeyEvent {
+public interface SealingEvent extends KeyEvent {
 
-    List<Seal> seals();
+    List<Seal> getSeals();
 
-  }
+}

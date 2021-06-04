@@ -18,8 +18,13 @@ import java.util.Objects;
 public class Digest {
     public static final Digest NONE = new Digest(DigestAlgorithm.NONE, new byte[0]);
 
+    public static boolean matches(byte[] bytes, Digest d1) {
+        return Arrays.equals(d1.getBytes(), d1.getAlgorithm().digest(bytes).getBytes());
+    }
+
     private final DigestAlgorithm algorithm;
-    private final byte[]          bytes;
+
+    private final byte[] bytes;
 
     public Digest(DigestAlgorithm algorithm, byte[] bytes) {
         this.algorithm = algorithm;

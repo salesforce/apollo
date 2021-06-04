@@ -48,7 +48,7 @@ public class RotationEventImpl extends EstablishmentEventImpl implements Rotatio
     }
 
     @Override
-    public List<Seal> seals() {
+    public List<Seal> getSeals() {
         return event.getSealsList().stream().map(s -> KeyEventImpl.sealOf(s)).collect(Collectors.toList());
     }
 

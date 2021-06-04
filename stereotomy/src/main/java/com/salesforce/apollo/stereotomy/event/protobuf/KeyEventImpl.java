@@ -40,7 +40,7 @@ abstract public class KeyEventImpl implements KeyEvent {
             return new Seal.CoordinatesSeal() {
 
                 @Override
-                public EventCoordinates getCoordinates() {
+                public EventCoordinates getEvent() {
                     return new EventCoordinates(identifier(coordinates.getIdentifier()),
                             coordinates.getSequenceNumber(), digest(coordinates.getDigest()));
                 }
