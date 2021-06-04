@@ -41,12 +41,12 @@ public class KeyCoordinates {
     }
 
     public static KeyCoordinates of(BasicIdentifier basicIdentifier) {
-        EventCoordinates coordinates = Coordinates.of(basicIdentifier);
+        EventCoordinates coordinates = EventCoordinates.of(basicIdentifier);
         return new KeyCoordinates(coordinates, 0);
     }
 
     public static KeyCoordinates of(EstablishmentEvent establishmentEvent, int keyIndex) {
-        EventCoordinates coordinates = Coordinates.of(establishmentEvent);
+        EventCoordinates coordinates = EventCoordinates.of(establishmentEvent);
         return new KeyCoordinates(coordinates, keyIndex);
     }
 

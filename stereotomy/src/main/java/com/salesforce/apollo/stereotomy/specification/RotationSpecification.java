@@ -18,7 +18,6 @@ import java.util.stream.Stream;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
@@ -162,7 +161,7 @@ public class RotationSpecification {
             removed.removeAll(witnesses);
 
             return new RotationSpecification(format, state.getIdentifier(),
-                    state.getLastEvent().getSequenceNumber() + 1, Coordinates.of(state.getLastEvent()),
+                    state.getLastEvent().getSequenceNumber() + 1, EventCoordinates.of(state.getLastEvent()),
                     signingThreshold, keys, signer, nextKeyConfigurationDigest, witnessThreshold, removed, added,
                     seals);
         }

@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -47,7 +46,8 @@ public class InteractionSpecification {
 
         public InteractionSpecification build() {
             return new InteractionSpecification(this.format, state.getIdentifier(),
-                    state.getLastEvent().getSequenceNumber() + 1, Coordinates.of(state.getLastEvent()), signer, seals);
+                    state.getLastEvent().getSequenceNumber() + 1, EventCoordinates.of(state.getLastEvent()), signer,
+                    seals);
         }
 
         public Format getFormat() {

@@ -19,13 +19,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.Receipt;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.Version;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.Pair;
 
 /**
@@ -43,23 +41,8 @@ abstract public class KeyEventImpl implements KeyEvent {
 
                 @Override
                 public EventCoordinates getCoordinates() {
-                    return new EventCoordinates() {
-
-                        @Override
-                        public Digest getDigest() {
-                            return digest(coordinates.getDigest());
-                        }
-
-                        @Override
-                        public Identifier getIdentifier() {
-                            return identifier(coordinates.getIdentifier());
-                        }
-
-                        @Override
-                        public long getSequenceNumber() {
-                            return coordinates.getSequenceNumber();
-                        }
-                    };
+                    return new EventCoordinates(identifier(coordinates.getIdentifier()),
+                            coordinates.getSequenceNumber(), digest(coordinates.getDigest()));
                 }
             };
         }
@@ -96,7 +79,7 @@ abstract public class KeyEventImpl implements KeyEvent {
     @Override
     public EventCoordinates getCoordinates() {
         com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = header.getCoordinates();
-        return new Coordinates(identifier(coordinates.getIdentifier()), getSequenceNumber(),
+        return new EventCoordinates(identifier(coordinates.getIdentifier()), getSequenceNumber(),
                 digest(coordinates.getDigest()));
     }
 
@@ -116,7 +99,7 @@ abstract public class KeyEventImpl implements KeyEvent {
     @Override
     public EventCoordinates getPrevious() {
         com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates previous = header.getPrevious();
-        return new Coordinates(identifier(previous.getIdentifier()), previous.getSequenceNumber(),
+        return new EventCoordinates(identifier(previous.getIdentifier()), previous.getSequenceNumber(),
                 digest(previous.getDigest()));
     }
 
@@ -125,7 +108,7 @@ abstract public class KeyEventImpl implements KeyEvent {
         return header.getReceiptsList().stream().map(receipt -> {
             com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = receipt.getCoordinates();
             return new Pair<EventCoordinates, Map<Integer, JohnHancock>>(
-                    new Coordinates(identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
+                    new EventCoordinates(identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
                             digest(coordinates.getDigest())),
                     signaturesOf(receipt));
         }).collect(Collectors.toMap(e -> e.a, e -> e.b));

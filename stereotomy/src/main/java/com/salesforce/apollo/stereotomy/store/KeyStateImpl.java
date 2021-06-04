@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 
 import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
@@ -50,7 +49,7 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public EventCoordinates getCoordinates() {
-        return new Coordinates(identifier(state.getCoordinates().getIdentifier()),
+        return new EventCoordinates(identifier(state.getCoordinates().getIdentifier()),
                 state.getCoordinates().getSequenceNumber(), digest(state.getCoordinates().getDigest()));
     }
 
@@ -102,7 +101,7 @@ public class KeyStateImpl implements KeyState {
     }
 
     @Override
-    public int getWitnessThreshold() { 
+    public int getWitnessThreshold() {
         return state.getWitnessThreshold();
     }
 

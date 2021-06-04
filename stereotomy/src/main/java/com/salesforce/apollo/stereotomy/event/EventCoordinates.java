@@ -6,37 +6,112 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static java.util.Objects.requireNonNull;
+
+import java.util.Objects;
+
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface EventCoordinates {
+public class EventCoordinates {
 
-    EventCoordinates NONE = new EventCoordinates() {
+    public static EventCoordinates NONE = new EventCoordinates(Identifier.NONE, -1, Digest.NONE);
 
-        @Override
-        public Digest getDigest() {
-            return Digest.NONE;
+    public static EventCoordinates of(BasicIdentifier identifier) {
+        return new EventCoordinates(identifier, 0, Digest.NONE);
+    }
+
+    public static EventCoordinates of(EventCoordinates event, Digest digest) {
+        return new EventCoordinates(event.getIdentifier(), event.getSequenceNumber(), digest);
+    }
+
+    public static EventCoordinates of(KeyEvent event) {
+        requireNonNull(event, "event");
+        var algorithm = event.getPrevious().equals(EventCoordinates.NONE)
+                ? com.salesforce.apollo.crypto.DigestAlgorithm.DEFAULT
+                : event.getPrevious().getDigest().getAlgorithm();
+
+        return of(event, algorithm);
+    }
+
+    public static EventCoordinates of(KeyEvent event, Digest digest) {
+        return new EventCoordinates(event.getIdentifier(), event.getSequenceNumber(), digest);
+    }
+
+    public static EventCoordinates of(KeyEvent event, DigestAlgorithm algorithm) {
+        requireNonNull(event, "event");
+        requireNonNull(algorithm, "algorithm");
+        return of(event, algorithm);
+    }
+
+    private final Digest     digest;
+    private final Identifier identifier;
+
+    private final long sequenceNumber;
+
+    public EventCoordinates(BasicIdentifier identifier) {
+        this(identifier, 0, Digest.NONE);
+    }
+
+    public EventCoordinates(EventCoordinates event, Digest digest) {
+        this(event.getIdentifier(), event.getSequenceNumber(), digest);
+    }
+
+    public EventCoordinates(Identifier identifier, long sequenceNumber, Digest digest) {
+        if (sequenceNumber < 0) {
+            throw new IllegalArgumentException("sequenceNumber must be >= 0");
         }
 
-        @Override
-        public Identifier getIdentifier() {
-            return Identifier.NONE;
+        this.identifier = requireNonNull(identifier, "identifier");
+        this.sequenceNumber = sequenceNumber;
+
+        if ((!(identifier instanceof BasicIdentifier) || sequenceNumber != 0) && Digest.NONE.equals(digest)) {
+            // Digest isn't required for BasicIdentifiers or for inception events
+            throw new IllegalArgumentException("digest is required");
         }
 
-        @Override
-        public long getSequenceNumber() {
-            return -1;
+        this.digest = requireNonNull(digest, "digest");
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
         }
-    };
+        if (!(obj instanceof EventCoordinates)) {
+            return false;
+        }
+        EventCoordinates other = (EventCoordinates) obj;
+        return Objects.equals(digest, other.digest) && Objects.equals(identifier, other.identifier)
+                && sequenceNumber == other.sequenceNumber;
+    }
 
-    Digest getDigest();
+    public Digest getDigest() {
+        return this.digest;
+    }
 
-    Identifier getIdentifier();
+    public Identifier getIdentifier() {
+        return this.identifier;
+    }
 
-    long getSequenceNumber();
+    public long getSequenceNumber() {
+        return this.sequenceNumber;
+    }
 
-}
+    @Override
+    public int hashCode() {
+        return Objects.hash(digest, identifier, sequenceNumber);
+    }
+
+    @Override
+    public String toString() {
+        return this.identifier + ":" + this.sequenceNumber + ":" + qb64(this.getDigest());
+    }
+};

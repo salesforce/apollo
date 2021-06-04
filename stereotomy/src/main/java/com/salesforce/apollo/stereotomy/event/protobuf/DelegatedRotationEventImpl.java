@@ -10,7 +10,6 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
-import com.salesforce.apollo.stereotomy.Coordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
@@ -21,13 +20,14 @@ import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 public class DelegatedRotationEventImpl extends RotationEventImpl implements DelegatedRotationEvent {
 
     public DelegatedRotationEventImpl(RotationEvent event) {
-        super(event); 
+        super(event);
     }
-    
+
     @Override
-    public EventCoordinates getDelegatingEvent() { 
+    public EventCoordinates getDelegatingEvent() {
         com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = event.getDelegatingEvent();
-        return new Coordinates(identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(), digest(coordinates.getDigest()));
+        return new EventCoordinates(identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
+                digest(coordinates.getDigest()));
     }
 
 }
