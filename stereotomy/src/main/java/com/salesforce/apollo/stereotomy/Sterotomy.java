@@ -15,8 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -30,6 +28,7 @@ import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.processing.KeyStateProcessor;
 import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.specification.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
@@ -165,7 +164,17 @@ public class Sterotomy {
         }
     }
 
-    public interface ControllerKeyStore {
+    public interface EventFactory {
+
+        InceptionEvent inception(IdentifierSpecification specification);
+
+        KeyEvent interaction(InteractionSpecification specification);
+
+        RotationEvent rotation(RotationSpecification specification);
+
+    }
+
+    public interface StereotomyKeyStore {
 
         Optional<KeyPair> getKey(KeyCoordinates keyCoordinates);
 
@@ -183,28 +192,15 @@ public class Sterotomy {
 
     }
 
-    public interface EventFactory {
+    private final SecureRandom       entropy;
+    private final EventFactory       eventFactory;
+    private final StereotomyKeyStore keyStore;
+    private final KeyStateProcessor  processor;
 
-        InceptionEvent inception(IdentifierSpecification specification);
-
-        KeyEvent interaction(InteractionSpecification specification);
-
-        RotationEvent rotation(RotationSpecification specification);
-
-    }
-
-    private final SecureRandom                             entropy;
-    private final EventFactory                             eventFactory;
-    private final Function<KeyEvent, KeyState>             eventValidator;
-    private final ControllerKeyStore                       keyStore;
-    private final BiFunction<KeyState, KeyEvent, KeyState> processor;
-
-    public Sterotomy(ControllerKeyStore keyStore, SecureRandom entropy,
-            BiFunction<KeyState, KeyEvent, KeyState> processor, Function<KeyEvent, KeyState> eventValidator,
+    public Sterotomy(StereotomyKeyStore keyStore, SecureRandom entropy, KeyStateProcessor processor,
             EventFactory eventFactory) {
         this.keyStore = keyStore;
         this.entropy = entropy;
-        this.eventValidator = eventValidator;
         this.processor = processor;
         this.eventFactory = eventFactory;
     }
@@ -227,8 +223,8 @@ public class Sterotomy {
                      .setSigner(0, initialKeyPair.getPrivate());
 
         InceptionEvent event = eventFactory.inception(specification.build());
-        KeyState valid = eventValidator.apply(event);
-        if (valid == null) {
+        KeyState state = processor.apply(null, event);
+        if (state == null) {
             throw new IllegalStateException("Invalid event produced");
         }
 
@@ -236,8 +232,6 @@ public class Sterotomy {
 
         keyStore.storeKey(keyCoordinates, initialKeyPair);
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
-
-        KeyState state = processor.apply(null, event);
 
         return new ControllableIdentifierImpl(state);
     }
@@ -255,7 +249,10 @@ public class Sterotomy {
                      .setSigner(0, initialKeyPair.getPrivate());
 
         InceptionEvent event = eventFactory.inception(specification.build());
-        KeyState newState = eventValidator.apply(event);
+        KeyState newState = processor.apply(null, event);
+        if (newState == null) {
+            throw new IllegalStateException("Invalid event produced");
+        }
 
         KeyCoordinates keyCoordinates = KeyCoordinates.of(event, 0);
 
@@ -298,7 +295,7 @@ public class Sterotomy {
                      .setSigner(0, nextKeyPair.get().getPrivate())
                      .addAllSeals(seals);
         RotationEvent event = eventFactory.rotation(specification.build());
-        KeyState newState = eventValidator.apply(event);
+        KeyState newState = processor.apply(state, event);
 
         KeyCoordinates nextKeyCoordinates = KeyCoordinates.of(event, 0);
         keyStore.storeKey(nextKeyCoordinates, nextKeyPair.get());
@@ -334,7 +331,7 @@ public class Sterotomy {
         specification.setState(state).setSigner(0, keyPair.get().getPrivate()).setseals(seals);
 
         KeyEvent event = eventFactory.interaction(specification.build());
-        return eventValidator.apply(event);
+        return processor.apply(state, event);
     }
 
     public EventSignature sign(Identifier identifier, KeyEvent event) {
