@@ -15,7 +15,7 @@ represent a kind of anonymous stored procedure executed at the "server" - in thi
 
 ### Transaction Execution
 Transaction exeution is performed via the single JDBC connection to the underlying H2 database.  This implies that the contents of the transactions are representable
-with H2 SQL.  Sadly, "generic" SQL is not really a thing, but a convention, and so this is not a _generic_ SQL execution.  Further, the transaction execution model
+with H2 SQL.  Sadly, "generic" SQL is not really a thing, but a convention, and so this is not a  _generic_  SQL execution.  Further, the transaction execution model
 is JDBC, which constrains the styles of interaction as well as the argument value and return types.
 
 When a transaction is submitted, the client submitting the transaction can provide a function to execute when the transaction is finalized.  This function takes
