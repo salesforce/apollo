@@ -16,7 +16,6 @@ import java.util.Set;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.stereotomy.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
@@ -31,6 +30,7 @@ import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfSigningIdentifier;
+import com.salesforce.apollo.stereotomy.specification.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.store.StateStore;
 
 /**

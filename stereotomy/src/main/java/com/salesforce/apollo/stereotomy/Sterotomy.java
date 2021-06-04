@@ -31,6 +31,7 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.processing.KeyStateProcessor;
 import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.specification.InteractionSpecification;
+import com.salesforce.apollo.stereotomy.specification.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
 import com.salesforce.apollo.stereotomy.specification.RotationSpecification.Builder;
 
