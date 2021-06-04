@@ -1,4 +1,4 @@
-package com.salesforce.apollo.stereotomy;
+package com.salesforce.apollo.utils;
 
 import java.util.Arrays;
 

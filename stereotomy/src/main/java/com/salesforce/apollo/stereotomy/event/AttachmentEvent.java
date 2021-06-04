@@ -10,8 +10,6 @@ package com.salesforce.apollo.stereotomy.event;
  * @author hal.hildebrand
  *
  */
-public interface DelegatedEstablishmentEvent extends EstablishmentEvent {
-
-    DelegatingEventCoordinates getDelegatingEvent();
+public interface AttachmentEvent extends KeyEvent {
 
 }

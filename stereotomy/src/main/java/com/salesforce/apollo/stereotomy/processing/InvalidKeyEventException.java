@@ -1,4 +1,4 @@
-package com.salesforce.apollo.stereotomy;
+package com.salesforce.apollo.stereotomy.processing;
 
 public class InvalidKeyEventException extends RuntimeException {
 

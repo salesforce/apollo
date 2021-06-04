@@ -10,8 +10,8 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
-import com.salesforce.apollo.stereotomy.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
 /**

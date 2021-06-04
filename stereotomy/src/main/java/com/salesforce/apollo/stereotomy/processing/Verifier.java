@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy;
+package com.salesforce.apollo.stereotomy.processing;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
@@ -29,8 +30,8 @@ public class Verifier {
 
     private StateStore keyEventStore;
 
-    private HashMap<Integer, JohnHancock> verifyAuthentication(KeyState state, KeyEvent event,
-                                                               Map<Integer, JohnHancock> signatures) {
+    public HashMap<Integer, JohnHancock> verifyAuthentication(KeyState state, KeyEvent event,
+                                                              Map<Integer, JohnHancock> signatures) {
         var kee = state.getLastEstablishmentEvent();
 
         var verifiedSignatures = new HashMap<Integer, JohnHancock>();

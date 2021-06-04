@@ -99,14 +99,15 @@ message EventCoordinates {
 }
 
 message StoredKeyState {
-    EventCoordinates coordinates = 1;
-    string lastEvent = 2;
-    string lastEstablishmentEvent = 3;
-    string delegatingIdentifier = 4;
-    repeated string keys = 5;
-    string nextKeyConfigurationDigest = 6;
-    repeated string configurationTraits = 7;
-    SigningThreshold signingThreshold = 8;
-    repeated string witnesses = 9;
-    int32 witnessThreshold = 10;
+    string identifier = 1;
+    EventCoordinates coordinates = 2;
+    string lastEvent = 3;
+    string lastEstablishmentEvent = 4;
+    string delegatingIdentifier = 5;
+    repeated string keys = 6;
+    string nextKeyConfigurationDigest = 7;
+    repeated string configurationTraits = 8;
+    SigningThreshold signingThreshold = 9;
+    repeated string witnesses = 10;
+    int32 witnessThreshold = 11;
 }

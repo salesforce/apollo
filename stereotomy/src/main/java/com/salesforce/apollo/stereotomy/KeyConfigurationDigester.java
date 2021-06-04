@@ -19,6 +19,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
+import com.salesforce.apollo.utils.Hex;
 
 /**
  * @author hal.hildebrand

@@ -27,6 +27,7 @@ import org.h2.mvstore.type.DataType;
 
 import com.google.protobuf.AbstractMessage;
 import com.google.protobuf.Any;
+import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
@@ -34,8 +35,8 @@ import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.stereotomy.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SealingEvent;
@@ -241,5 +242,10 @@ public class StateStore {
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates delegatingEvent) {
         // TODO Auto-generated method stub
         return null;
+    }
+
+    public void append(AttachmentEvent attachmentEvent) {
+        // TODO Auto-generated method stub
+        
     }
 }

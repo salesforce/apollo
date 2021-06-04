@@ -1,4 +1,4 @@
-package com.salesforce.apollo.stereotomy;
+package com.salesforce.apollo.stereotomy.processing;
 
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 
