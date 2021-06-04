@@ -6,12 +6,24 @@
  */
 package com.salesforce.apollo.stereotomy.identifier;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
+
+import java.security.PublicKey;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+
 /**
  * @author hal.hildebrand
  *
  */
 public interface Identifier {
-
     Identifier NONE = new Identifier() {
 
         @Override
@@ -19,6 +31,67 @@ public interface Identifier {
             return false;
         }
     };
+
+    static BasicIdentifier basic(PublicKey key) {
+        return new BasicIdentifier(key);
+    }
+
+    /**
+     * Ordering by
+     * 
+     * <pre>
+     * <coords.identifier, coords.sequenceNumber, coords.digest>
+     * </pre>
+     */
+    static String coordinateOrdering(EventCoordinates coords) {
+        return qb64(coords.getIdentifier()) + ':' + coords.getSequenceNumber() + ':' + qb64(coords.getDigest());
+    }
+
+    static String receiptDigestSuffix(EventCoordinates event, EventCoordinates signer) {
+        return qb64(event.getDigest()) + ':' + qb64(signer.getDigest());
+    }
+
+    /**
+     * Ordering by
+     * 
+     * <pre>
+     * <event.identifier, signer.identifier, event.sequenceNumber, signer.sequenceNumber, event.digest, signer.digest>
+     * </pre>
+     */
+    static String receiptOrdering(EventCoordinates event, EventCoordinates signer) {
+        return receiptPrefix(event, signer) + receiptSequence(event, signer) + receiptDigestSuffix(event, signer);
+    }
+
+    static String receiptPrefix(EventCoordinates event, EventCoordinates signer) {
+        return receiptPrefix(event.getIdentifier(), signer.getIdentifier());
+    }
+
+    static String receiptPrefix(Identifier forIdentifier, Identifier forIdentifier2) {
+        return qb64(forIdentifier) + ':' + qb64(forIdentifier2) + '.';
+    }
+
+    static String receiptSequence(EventCoordinates event, EventCoordinates signer) {
+        return Long.toString(event.getSequenceNumber()) + ':' + signer.getSequenceNumber() + '.';
+    }
+
+    static SelfAddressingIdentifier selfAddressing(byte[] inceptionStatement, DigestAlgorithm digestAlgorithm) {
+        var digest = digestAlgorithm.digest(inceptionStatement);
+        return new SelfAddressingIdentifier(digest);
+    }
+
+    static SelfSigningIdentifier selfSigning(byte[] inceptionStatement, Signer signer) {
+        var signature = signer.sign(inceptionStatement);
+        return new SelfSigningIdentifier(signature);
+    }
+
+    static Signatures signatures(Map<Integer, JohnHancock> signatures) {
+        return Signatures.newBuilder()
+                         .putAllSignatures(signatures.entrySet()
+                                                     .stream()
+                                                     .collect(Collectors.toMap(e -> e.getKey(),
+                                                                               e -> qb64(e.getValue()))))
+                         .build();
+    }
 
     boolean isTransferable();
 }

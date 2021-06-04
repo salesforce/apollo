@@ -7,6 +7,10 @@
 package com.salesforce.apollo.stereotomy.store;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.stereotomy.identifier.Identifier.coordinateOrdering;
+import static com.salesforce.apollo.stereotomy.identifier.Identifier.receiptOrdering;
+import static com.salesforce.apollo.stereotomy.identifier.Identifier.receiptPrefix;
+import static com.salesforce.apollo.stereotomy.identifier.Identifier.signatures;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.io.IOException;
@@ -15,7 +19,6 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.stream.Collectors;
 
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
@@ -160,53 +163,6 @@ public class StateStore {
     private static final String KEY_STATE_BY_IDENTIFIER = "KEY_STATE_BY_IDENTIFIER";
     private static final String LAST_RECEIPT            = "LAST_RECEIPT";
     private static final String RECEIPTS                = "RECEIPTS";
-
-    /**
-     * Ordering by
-     * 
-     * <pre>
-     * <coords.identifier, coords.sequenceNumber, coords.digest>
-     * </pre>
-     */
-    private static String coordinateOrdering(EventCoordinates coords) {
-        return qb64(coords.getIdentifier()) + ':' + coords.getSequenceNumber() + ':' + qb64(coords.getDigest());
-    }
-
-    private static String receiptDigestSuffix(EventCoordinates event, EventCoordinates signer) {
-        return qb64(event.getDigest()) + ':' + qb64(signer.getDigest());
-    }
-
-    /**
-     * Ordering by
-     * 
-     * <pre>
-     * <event.identifier, signer.identifier, event.sequenceNumber, signer.sequenceNumber, event.digest, signer.digest>
-     * </pre>
-     */
-    private static String receiptOrdering(EventCoordinates event, EventCoordinates signer) {
-        return receiptPrefix(event, signer) + receiptSequence(event, signer) + receiptDigestSuffix(event, signer);
-    }
-
-    private static String receiptPrefix(EventCoordinates event, EventCoordinates signer) {
-        return receiptPrefix(event.getIdentifier(), signer.getIdentifier());
-    }
-
-    private static String receiptPrefix(Identifier forIdentifier, Identifier forIdentifier2) {
-        return qb64(forIdentifier) + ':' + qb64(forIdentifier2) + '.';
-    }
-
-    private static String receiptSequence(EventCoordinates event, EventCoordinates signer) {
-        return Long.toString(event.getSequenceNumber()) + ':' + signer.getSequenceNumber() + '.';
-    }
-
-    private static Signatures signatures(Map<Integer, JohnHancock> signatures) {
-        return Signatures.newBuilder()
-                         .putAllSignatures(signatures.entrySet()
-                                                     .stream()
-                                                     .collect(Collectors.toMap(e -> e.getKey(),
-                                                                               e -> qb64(e.getValue()))))
-                         .build();
-    }
 
     // Order by <stateOrdering>
     private final MVMap<String, Signatures> authentications;

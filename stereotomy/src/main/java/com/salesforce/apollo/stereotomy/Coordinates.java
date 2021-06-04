@@ -12,7 +12,9 @@ import static java.util.Objects.requireNonNull;
 import java.util.Objects;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -21,6 +23,33 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  *
  */
 public class Coordinates implements EventCoordinates {
+
+    public static EventCoordinates of(BasicIdentifier identifier) {
+        return new Coordinates(identifier, 0, Digest.NONE);
+    }
+
+    public static EventCoordinates of(EventCoordinates event, Digest digest) {
+        return new Coordinates(event.getIdentifier(), event.getSequenceNumber(), digest);
+    }
+
+    public static EventCoordinates of(KeyEvent event) {
+        requireNonNull(event, "event");
+        var algorithm = event.getPrevious().equals(EventCoordinates.NONE)
+                ? com.salesforce.apollo.crypto.DigestAlgorithm.DEFAULT
+                : event.getPrevious().getDigest().getAlgorithm();
+
+        return of(event, algorithm);
+    }
+
+    public static EventCoordinates of(KeyEvent event, Digest digest) {
+        return new Coordinates(event.getIdentifier(), event.getSequenceNumber(), digest);
+    }
+
+    public static EventCoordinates of(KeyEvent event, DigestAlgorithm algorithm) {
+        requireNonNull(event, "event");
+        requireNonNull(algorithm, "algorithm");
+        return of(event, algorithm);
+    }
 
     private final Digest     digest;
     private final Identifier identifier;

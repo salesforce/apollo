@@ -11,5 +11,6 @@ package com.salesforce.apollo.stereotomy.event;
  *
  */
 public enum Format {
+    CBOR, JSON, MESSAGE_PACK, PROTOBUF
 
 }

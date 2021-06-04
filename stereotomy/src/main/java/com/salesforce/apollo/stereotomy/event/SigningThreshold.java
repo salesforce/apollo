@@ -31,4 +31,13 @@ public interface SigningThreshold {
         Weight[][] weights();
     }
 
+    static Unweighted unweighted(int i) {
+        return new Unweighted() {
+            @Override
+            public int threshold() {
+                return i;
+            }
+        };
+    }
+
 }

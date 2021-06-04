@@ -161,6 +161,10 @@ public enum DigestAlgorithm {
         return name();
     }
 
+    public Digest digest(byte[] bytes) {
+        return new Digest(this, bytes);
+    }
+
     abstract public int digestLength();
 
     public byte[] hashOf(byte[] bytes, int len) {
