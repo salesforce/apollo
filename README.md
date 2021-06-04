@@ -1,5 +1,5 @@
 # Apollo
-The Apollo project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication layer.  The consensus layer is supplied by Avalanche.  An IPFS-esque DAG based DHT is provided in addition to DAG ledger state.
+The Apollo project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication layer.  The consensus layer is supplied by Avalanche, a **GREEN** - i.e. non POW - and quiescent consensus protocol.  An IPFS-esque DAG based DHT is provided in addition to DAG ledger state.
 
 ## Requirements
 Apollo requires the JDK 15+.
