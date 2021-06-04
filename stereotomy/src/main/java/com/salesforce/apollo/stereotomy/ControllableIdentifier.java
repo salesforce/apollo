@@ -8,9 +8,11 @@ package com.salesforce.apollo.stereotomy;
 
 import java.util.List;
 
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
- 
+import com.salesforce.apollo.stereotomy.specification.InteractionSpecification;
+import com.salesforce.apollo.stereotomy.specification.RotationSpecification.Builder;
 
 /**
  * @author hal.hildebrand
@@ -18,12 +20,12 @@ import com.salesforce.apollo.stereotomy.event.Seal;
  */
 public interface ControllableIdentifier extends KeyState {
 
-    void rotate();
+    void rotate(Builder spec, SignatureAlgorithm signatureAlgorithm);
 
-    void rotate(List<Seal> seals);
+    void rotate(List<Seal> seals, Builder spec, SignatureAlgorithm signatureAlgorithm);
 
-    void seal(List<Seal> seals);
+    void seal(List<Seal> seals, InteractionSpecification.Builder spec);
 
     EventSignature sign(KeyEvent event);
 
-  }
+}

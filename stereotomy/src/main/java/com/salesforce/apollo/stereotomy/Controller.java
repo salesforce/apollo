@@ -9,30 +9,151 @@ package com.salesforce.apollo.stereotomy;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 
 import java.security.KeyPair;
+import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
+import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.specification.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
+import com.salesforce.apollo.stereotomy.specification.RotationSpecification.Builder;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class Controller {
+
+    public class ControllableIdentifierImpl implements ControllableIdentifier {
+        private final KeyState state;
+
+        public ControllableIdentifierImpl(KeyState state) {
+            this.state = state;
+        }
+
+        @Override
+        public Set<ConfigurationTrait> configurationTraits() {
+            return state.configurationTraits();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return state.equals(o);
+        }
+
+        @Override
+        public EventCoordinates getCoordinates() {
+            return state.getCoordinates();
+        }
+
+        @Override
+        public boolean getDelegated() {
+            return state.getDelegated();
+        }
+
+        @Override
+        public Optional<Identifier> getDelegatingIdentifier() {
+            return state.getDelegatingIdentifier();
+        }
+
+        @Override
+        public Digest getDigest() {
+            return state.getDigest();
+        }
+
+        @Override
+        public Identifier getIdentifier() {
+            return state.getIdentifier();
+        }
+
+        @Override
+        public List<PublicKey> getKeys() {
+            return state.getKeys();
+        }
+
+        @Override
+        public EstablishmentEvent getLastEstablishmentEvent() {
+            return state.getLastEstablishmentEvent();
+        }
+
+        @Override
+        public KeyEvent getLastEvent() {
+            return state.getLastEvent();
+        }
+
+        @Override
+        public Optional<Digest> getNextKeyConfigurationDigest() {
+            return state.getNextKeyConfigurationDigest();
+        }
+
+        @Override
+        public long getSequenceNumber() {
+            return state.getSequenceNumber();
+        }
+
+        @Override
+        public SigningThreshold getSigningThreshold() {
+            return state.getSigningThreshold();
+        }
+
+        @Override
+        public List<BasicIdentifier> getWitnesses() {
+            return state.getWitnesses();
+        }
+
+        @Override
+        public int getWitnessThreshold() {
+            return state.getWitnessThreshold();
+        }
+
+        @Override
+        public int hashCode() {
+            return state.hashCode();
+        }
+
+        @Override
+        public boolean isTransferable() {
+            return state.isTransferable();
+        }
+
+        @Override
+        public void rotate(Builder spec, SignatureAlgorithm signatureAlgorithm) {
+            Controller.this.rotate(getIdentifier(), spec, signatureAlgorithm);
+        }
+
+        @Override
+        public void rotate(List<Seal> seals, Builder spec, SignatureAlgorithm signatureAlgorithm) {
+            Controller.this.rotate(getIdentifier(), seals, spec, signatureAlgorithm);
+        }
+
+        @Override
+        public void seal(List<Seal> seals, InteractionSpecification.Builder spec) {
+            Controller.this.seal(getIdentifier(), seals, spec);
+        }
+
+        @Override
+        public EventSignature sign(KeyEvent event) {
+            return Controller.this.sign(getIdentifier(), event);
+        }
+    }
+
     public interface ControllerKeyStore {
 
         Optional<KeyPair> getKey(KeyCoordinates keyCoordinates);
@@ -107,7 +228,7 @@ public class Controller {
 
         KeyState state = processor.apply(null, event);
 
-        return new ControllableIdentifierImpl(this, state);
+        return new ControllableIdentifierImpl(state);
     }
 
     public ControllableIdentifier newPublicIdentifier(IdentifierSpecification.Builder spec,
@@ -130,7 +251,7 @@ public class Controller {
         keyStore.storeKey(keyCoordinates, initialKeyPair);
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
 
-        return new ControllableIdentifierImpl(this, newState);
+        return new ControllableIdentifierImpl(newState);
     }
 
     public KeyState rotate(Identifier identifier, List<Seal> seals, RotationSpecification.Builder spec,
