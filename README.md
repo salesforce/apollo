@@ -35,7 +35,7 @@ Note that Apollo is very much a _work in progress_.  It is by no means a full fe
 
 
 ## Requirements
-Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.6.3+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using __Java 15__.
+Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.6.3+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using Java 15.
 
 Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html).  This means that the various modules of Apollo are built and versioned as a whole, rather than being seperated out into individual repositories.  This also means that modules refer to other modules within the project as dependencies, and consequently must be built in the correct order.  Note that Maven does this by default, so there should be no issues.  However, it does mean that you can't simply cd into a module and build it without building its dependencies first.
 
@@ -45,4 +45,5 @@ To build Apollo, cd to the root directory of the repository and then do:
    
     mvn clean install
 
-Note that the _install_ maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.
+Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly
+build any arbitrary submodule.
