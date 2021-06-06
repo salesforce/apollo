@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -111,11 +112,12 @@ public class Validator {
         this.validate(!ee.getKeys().isEmpty(), "establishment events must have at least one key");
 
         if (ee.getSigningThreshold() instanceof SigningThreshold.Unweighted) {
-            this.validate(ee.getKeys().size() >= ((SigningThreshold.Unweighted) ee.getSigningThreshold()).threshold(),
+            this.validate(ee.getKeys()
+                            .size() >= ((SigningThreshold.Unweighted) ee.getSigningThreshold()).getThreshold(),
                           "unweighted signing threshold must be less than or equals to the number of keys");
         } else if (ee.getSigningThreshold() instanceof SigningThreshold.Weighted) {
             var weightedThreshold = ((SigningThreshold.Weighted) ee.getSigningThreshold());
-            var countOfWeights = SigningThreshold.countWeights(weightedThreshold.weights());
+            var countOfWeights = SigningThreshold.countWeights(weightedThreshold.getWeights());
             this.validate(ee.getKeys().size() == countOfWeights,
                           "weighted signing threshold must specify a weight for each key");
         }
@@ -151,10 +153,15 @@ public class Validator {
                 this.validate(event.getIdentifier().isTransferable(),
                               "only transferable identifiers can have rotation events");
 
-                this.validate(state.getLastEstablishmentEvent().getNextKeyConfiguration().isPresent(),
+                Optional<KeyEvent> lookup = keyEventStore.getKeyEvent(state.getLastEstablishmentEvent());
+                if (lookup.isEmpty()) {
+                    throw new InvalidKeyEventException(String.format("previous establishment event does not exist"));
+                }
+                EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) lookup.get();
+                this.validate(lastEstablishmentEvent.getNextKeyConfiguration().isPresent(),
                               "previous establishment event must have a next key configuration for rotation");
 
-                var nextKeyConfigurationDigest = state.getLastEstablishmentEvent().getNextKeyConfiguration().get();
+                var nextKeyConfigurationDigest = lastEstablishmentEvent.getNextKeyConfiguration().get();
                 this.validate(KeyConfigurationDigester.matches(rot.getSigningThreshold(), rot.getKeys(),
                                                                nextKeyConfigurationDigest),
                               "digest of signing threshold and keys must match digest in previous establishment event");

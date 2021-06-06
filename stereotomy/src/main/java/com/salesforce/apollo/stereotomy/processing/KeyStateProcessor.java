@@ -1,5 +1,9 @@
 package com.salesforce.apollo.stereotomy.processing;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toCoordinates;
+import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toSigningThreshold;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 import static java.util.Objects.requireNonNull;
 
 import java.security.PublicKey;
@@ -7,7 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
+import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
@@ -19,18 +25,28 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.store.KeyStateImpl;
+import com.salesforce.apollo.stereotomy.store.StateStore;
 
-public interface KeyStateProcessor extends BiFunction<KeyState, KeyEvent, KeyState> {
-    
-    final static KeyStateProcessor PROCESSOR = new KeyStateProcessor() {
-    };
+public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyState> {
 
-    default KeyState apply(KeyState currentState, KeyEvent event) {
+    private final StateStore events;
+
+    public KeyStateProcessor(StateStore events) {
+        this.events = events;
+    }
+
+    public KeyState apply(KeyState currentState, KeyEvent event) {
+        EstablishmentEvent lastEstablishmentEvent;
         if (event instanceof InceptionEvent) {
             if (currentState != null) {
                 throw new IllegalArgumentException("currentState must not be passed for inception events");
             }
             currentState = initialState((InceptionEvent) event);
+            lastEstablishmentEvent = (EstablishmentEvent) event;
+        } else {
+            lastEstablishmentEvent = (EstablishmentEvent) events.getKeyEvent(currentState.getLastEstablishmentEvent())
+                                                                .get();
         }
 
         requireNonNull(currentState, "currentState is required");
@@ -40,7 +56,6 @@ public interface KeyStateProcessor extends BiFunction<KeyState, KeyEvent, KeySta
         var nextKeyConfigugurationDigest = currentState.getNextKeyConfigurationDigest();
         var witnessThreshold = currentState.getWitnessThreshold();
         var witnesses = currentState.getWitnesses();
-        var lastEstablishmentEvent = currentState.getLastEstablishmentEvent();
 
         if (event instanceof RotationEvent) {
             var re = (RotationEvent) event;
@@ -52,16 +67,16 @@ public interface KeyStateProcessor extends BiFunction<KeyState, KeyEvent, KeySta
             witnesses = new ArrayList<>(witnesses);
             witnesses.removeAll(re.getRemovedWitnesses());
             witnesses.addAll(re.getAddedWitnesses());
-
-            lastEstablishmentEvent = re;
         }
-        return newKeyState(currentState.getIdentifier(), signingThreshold, keys,
-                           nextKeyConfigugurationDigest.orElse(null), witnessThreshold, witnesses,
-                           currentState.configurationTraits(), event, lastEstablishmentEvent,
-                           currentState.getDelegatingIdentifier().orElse(null));
+        KeyState state = newKeyState(currentState.getIdentifier(), signingThreshold, keys,
+                                     nextKeyConfigugurationDigest.orElse(null), witnessThreshold, witnesses,
+                                     currentState.configurationTraits(), event, lastEstablishmentEvent,
+                                     currentState.getDelegatingIdentifier().orElse(null));
+        events.append(event, state);
+        return state;
     }
 
-    default KeyState initialState(InceptionEvent event) {
+    private KeyState initialState(InceptionEvent event) {
         var delegatingPrefix = event instanceof DelegatedInceptionEvent
                 ? ((DelegatedEstablishmentEvent) event).getDelegatingEvent().getIdentifier()
                 : null;
@@ -71,13 +86,29 @@ public interface KeyStateProcessor extends BiFunction<KeyState, KeyEvent, KeySta
                            event.getWitnesses(), event.getConfigurationTraits(), event, event, delegatingPrefix);
     }
 
-    default KeyState newKeyState(Identifier identifier,
+    private KeyState newKeyState(Identifier identifier,
                                  com.salesforce.apollo.stereotomy.event.SigningThreshold signingThreshold,
-                                 List<PublicKey> keys, Digest orElse, int witnessThreshold,
+                                 List<PublicKey> keys, Digest nextKeyConfiguration, int witnessThreshold,
                                  List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
-                                 KeyEvent event, EstablishmentEvent lastEstablishmentEvent, Identifier orElse2) {
-        // TODO Auto-generated method stub
-        return null;
+                                 KeyEvent event, EstablishmentEvent lastEstablishmentEvent,
+                                 Identifier delegatingPrefix) {
+        return new KeyStateImpl(
+                StoredKeyState.newBuilder()
+                              .addAllConfigurationTraits(configurationTraits.stream()
+                                                                            .map(e -> e.name())
+                                                                            .collect(Collectors.toList()))
+                              .setCoordinates(toCoordinates(event.getCoordinates()))
+                              .setDelegatingIdentifier(delegatingPrefix == null ? "" : qb64(delegatingPrefix))
+                              .setIdentifier(qb64(identifier))
+                              .addAllKeys(keys.stream().map(pk -> qb64(pk)).collect(Collectors.toList()))
+                              .setLastEstablishmentEvent(toCoordinates(lastEstablishmentEvent.getCoordinates()))
+                              .setLastEvent(toCoordinates(event.getCoordinates()))
+                              .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? ""
+                                      : qb64(nextKeyConfiguration))
+                              .setSigningThreshold(toSigningThreshold(signingThreshold))
+                              .addAllWitnesses(witnesses.stream().map(e -> qb64(e)).collect(Collectors.toList()))
+                              .setWitnessThreshold(witnessThreshold)
+                              .build());
     }
 
 }

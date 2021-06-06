@@ -18,7 +18,6 @@ import com.salesforce.apollo.stereotomy.store.StateStore;
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public class KeyEventProcessor {
     private final StateStore                               keyEventStore;
     private final Validator                                validator;
@@ -45,8 +44,11 @@ public class KeyEventProcessor {
 
         KeyState newState = keyStateProcessor.apply(previousState, event);
 
+        @SuppressWarnings("unused")
         var validControllerSignatures = verifier.verifyAuthentication(newState, event, event.getAuthentication());
+        @SuppressWarnings("unused")
         var validWitnessReceipts = verifier.verifyEndorsements(newState, event, event.getEndorsements());
+        @SuppressWarnings("unused")
         var validOtherReceipts = verifier.verifyReceipts(event, event.getReceipts());
 
         // TODO remove invalid signatures before appending
@@ -63,8 +65,11 @@ public class KeyEventProcessor {
                                  .orElseThrow(() -> new MissingReferencedEventException(attachmentEvent,
                                          attachmentEvent.getCoordinates()));
 
+        @SuppressWarnings("unused")
         var validControllerSignatures = verifier.verifyAuthentication(state, event, event.getAuthentication());
+        @SuppressWarnings("unused")
         var validWitnessReceipts = verifier.verifyEndorsements(state, event, event.getEndorsements());
+        @SuppressWarnings("unused")
         var validOtherReceipts = verifier.verifyReceipts(event, event.getReceipts());
 
         // TODO remove invalid signatures before appending

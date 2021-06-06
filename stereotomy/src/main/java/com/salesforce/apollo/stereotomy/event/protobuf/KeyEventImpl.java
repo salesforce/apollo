@@ -79,7 +79,7 @@ abstract public class KeyEventImpl implements KeyEvent {
     @Override
     public EventCoordinates getCoordinates() {
         com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = header.getCoordinates();
-        return new EventCoordinates(identifier(coordinates.getIdentifier()), getSequenceNumber(),
+        return new EventCoordinates(identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
                 digest(coordinates.getDigest()));
     }
 
@@ -119,12 +119,12 @@ abstract public class KeyEventImpl implements KeyEvent {
         return new Version() {
 
             @Override
-            public int major() {
+            public int getMajor() {
                 return header.getVersion().getMajor();
             }
 
             @Override
-            public int minor() {
+            public int getMinor() {
                 return header.getVersion().getMinor();
             }
         };

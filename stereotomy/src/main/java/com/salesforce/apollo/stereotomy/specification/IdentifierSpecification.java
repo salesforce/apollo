@@ -20,9 +20,11 @@ import java.util.stream.Stream;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.stereotomy.Sterotomy;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
+import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -40,6 +42,7 @@ public class IdentifierSpecification {
         // identifier derivation
         private Class<? extends Identifier> derivation                 = SelfAddressingIdentifier.class;
         private Format                      format                     = Format.PROTOBUF;
+        private DigestAlgorithm             identifierDigestAlgorithm  = DigestAlgorithm.BLAKE3_256;
         private final List<PublicKey>       keys                       = new ArrayList<>();
         private final List<Digest>          listOfNextKeyDigests       = new ArrayList<>();
         private final List<PublicKey>       listOfNextKeys             = new ArrayList<>();
@@ -49,10 +52,11 @@ public class IdentifierSpecification {
         private final DigestAlgorithm nextKeysAlgorithm = DigestAlgorithm.BLAKE3_256;
         // next key configuration
         private SigningThreshold nextSigningThreshold;
-        private DigestAlgorithm  selfAddressingDigestAlgorithm = DigestAlgorithm.BLAKE3_256;
+        private DigestAlgorithm  selfAddressingDigestAlgorithm = DigestAlgorithm.DEFAULT;
         private Signer           signer;
         // key configuration
         private SigningThreshold            signingThreshold;
+        private Version                     version          = Sterotomy.currentVersion();
         private final List<BasicIdentifier> witnesses        = new ArrayList<>();
         private int                         witnessThreshold = 0;
 
@@ -60,16 +64,6 @@ public class IdentifierSpecification {
             this.derivation = BasicIdentifier.class;
             this.keys.add(key);
             return this;
-        }
-
-        public Builder clone() {
-            Builder clone;
-            try {
-                clone = (Builder) super.clone();
-            } catch (CloneNotSupportedException e) {
-                throw new IllegalStateException(e);
-            }
-            return clone;
         }
 
         public IdentifierSpecification build() {
@@ -86,13 +80,13 @@ public class IdentifierSpecification {
 
             if (signingThreshold instanceof SigningThreshold.Unweighted) {
                 var unw = (SigningThreshold.Unweighted) signingThreshold;
-                if (unw.threshold() > keys.size()) {
+                if (unw.getThreshold() > keys.size()) {
                     throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: " + keys.size()
-                            + " threshold: " + unw.threshold());
+                            + " threshold: " + unw.getThreshold());
                 }
             } else if (signingThreshold instanceof SigningThreshold.Weighted) {
                 var w = (SigningThreshold.Weighted) signingThreshold;
-                var countOfWeights = Stream.of(w.weights()).mapToLong(wts -> wts.length).sum();
+                var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
                 if (countOfWeights != keys.size()) {
                     throw new IllegalArgumentException("Count of weights and count of keys are not equal: " + " keys: "
                             + keys.size() + " weights: " + countOfWeights);
@@ -115,13 +109,13 @@ public class IdentifierSpecification {
                     nextSigningThreshold = SigningThreshold.unweighted((keys.size() / 2) + 1);
                 } else if (nextSigningThreshold instanceof SigningThreshold.Unweighted) {
                     var unw = (SigningThreshold.Unweighted) nextSigningThreshold;
-                    if (unw.threshold() > keys.size()) {
+                    if (unw.getThreshold() > keys.size()) {
                         throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: "
-                                + keys.size() + " threshold: " + unw.threshold());
+                                + keys.size() + " threshold: " + unw.getThreshold());
                     }
                 } else if (nextSigningThreshold instanceof SigningThreshold.Weighted) {
                     var w = (SigningThreshold.Weighted) nextSigningThreshold;
-                    var countOfWeights = Stream.of(w.weights()).mapToLong(wts -> wts.length).sum();
+                    var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
                     if (countOfWeights != keys.size()) {
                         throw new IllegalArgumentException("Count of weights and count of keys are not equal: "
                                 + " keys: " + keys.size() + " weights: " + countOfWeights);
@@ -162,8 +156,19 @@ public class IdentifierSpecification {
             }
 
             // validation is provided by spec consumer
-            return new IdentifierSpecification(derivation, selfAddressingDigestAlgorithm, format, signingThreshold,
-                    keys, signer, nextKeyConfigurationDigest, witnessThreshold, witnesses, configurationTraits);
+            return new IdentifierSpecification(derivation, identifierDigestAlgorithm, format, signingThreshold, keys,
+                    signer, nextKeyConfigurationDigest, witnessThreshold, witnesses, configurationTraits, version,
+                    selfAddressingDigestAlgorithm);
+        }
+
+        public Builder clone() {
+            Builder clone;
+            try {
+                clone = (Builder) super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new IllegalStateException(e);
+            }
+            return clone;
         }
 
         public EnumSet<ConfigurationTrait> getConfigurationTraits() {
@@ -176,6 +181,10 @@ public class IdentifierSpecification {
 
         public Format getFormat() {
             return format;
+        }
+
+        public DigestAlgorithm getIdentifierDigestAlgorithm() {
+            return identifierDigestAlgorithm;
         }
 
         public List<PublicKey> getKeys() {
@@ -214,6 +223,10 @@ public class IdentifierSpecification {
             return signingThreshold;
         }
 
+        public Version getVersion() {
+            return version;
+        }
+
         public List<BasicIdentifier> getWitnesses() {
             return witnesses;
         }
@@ -239,6 +252,11 @@ public class IdentifierSpecification {
 
         public Builder setFormat(Format format) {
             format = requireNonNull(format);
+            return this;
+        }
+
+        public Builder setIdentifierDigestAlgorithm(DigestAlgorithm algorithm) {
+            identifierDigestAlgorithm = algorithm;
             return this;
         }
 
@@ -278,9 +296,8 @@ public class IdentifierSpecification {
             return this;
         }
 
-        public Builder setSelfAddressing(DigestAlgorithm algorithm) {
-            derivation = SelfAddressingIdentifier.class;
-            selfAddressingDigestAlgorithm = algorithm;
+        public Builder setSelfAddressingDigestAlgorithm(DigestAlgorithm selfAddressingDigestAlgorithm) {
+            this.selfAddressingDigestAlgorithm = selfAddressingDigestAlgorithm;
             return this;
         }
 
@@ -313,7 +330,12 @@ public class IdentifierSpecification {
         }
 
         public Builder setSigningThreshold(SigningThreshold signingThreshold) {
-            signingThreshold = requireNonNull(signingThreshold);
+            this.signingThreshold = requireNonNull(signingThreshold);
+            return this;
+        }
+
+        public Builder setVersion(Version version) {
+            this.version = version;
             return this;
         }
 
@@ -338,8 +360,34 @@ public class IdentifierSpecification {
 
     }
 
+    public static BasicIdentifier basic(PublicKey key) {
+        return new BasicIdentifier(key);
+    }
+
     public static Builder builder() {
         return new Builder();
+    }
+
+    public static Identifier identifier(IdentifierSpecification spec, byte[] inceptionStatement) {
+        var derivation = spec.getDerivation();
+        if (derivation.isAssignableFrom(BasicIdentifier.class)) {
+            return basic(spec.getKeys().get(0));
+        } else if (derivation.isAssignableFrom(SelfAddressingIdentifier.class)) {
+            return selfAddressing(inceptionStatement, spec.getIdentifierDigestAlgorithm());
+        } else if (derivation.isAssignableFrom(SelfSigningIdentifier.class)) {
+            return selfSigning(inceptionStatement, spec.getSigner());
+        } else {
+            throw new IllegalArgumentException("unknown prefix type: " + derivation.getCanonicalName());
+        }
+    }
+
+    public static SelfAddressingIdentifier selfAddressing(byte[] inceptionStatement, DigestAlgorithm digestAlgorithm) {
+        return new SelfAddressingIdentifier(digestAlgorithm.digest(inceptionStatement));
+    }
+
+    public static SelfSigningIdentifier selfSigning(byte[] inceptionStatement, Signer signer) {
+        var signature = signer.sign(inceptionStatement);
+        return new SelfSigningIdentifier(signature);
     }
 
     private final Set<ConfigurationTrait>     configurationTraits;
@@ -348,15 +396,17 @@ public class IdentifierSpecification {
     private final DigestAlgorithm             identifierDigestAlgorithm;
     private final List<PublicKey>             keys;
     private final Digest                      nextKeys;
+    private final DigestAlgorithm             selfAddressingDigestAlgorithm;
     private final Signer                      signer;
     private final SigningThreshold            signingThreshold;
+    private final Version                     version;
     private final List<BasicIdentifier>       witnesses;
     private final int                         witnessThreshold;
 
     private IdentifierSpecification(Class<? extends Identifier> derivation, DigestAlgorithm identifierDigestAlgorithm,
             Format format, SigningThreshold signingThreshold, List<PublicKey> keys, Signer signer, Digest nextKeys,
-            int witnessThreshold, List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits) {
-        super();
+            int witnessThreshold, List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
+            Version version, DigestAlgorithm selfAddressingDigestAlgorithm) {
         this.derivation = derivation;
         this.identifierDigestAlgorithm = identifierDigestAlgorithm;
         this.format = format;
@@ -367,6 +417,8 @@ public class IdentifierSpecification {
         this.witnessThreshold = witnessThreshold;
         this.witnesses = List.copyOf(witnesses);
         this.configurationTraits = Set.copyOf(configurationTraits);
+        this.version = version;
+        this.selfAddressingDigestAlgorithm = selfAddressingDigestAlgorithm;
     }
 
     public Set<ConfigurationTrait> getConfigurationTraits() {
@@ -381,6 +433,10 @@ public class IdentifierSpecification {
         return format;
     }
 
+    public DigestAlgorithm getIdentifierDigestAlgorithm() {
+        return identifierDigestAlgorithm;
+    }
+
     public List<PublicKey> getKeys() {
         return keys;
     }
@@ -390,7 +446,7 @@ public class IdentifierSpecification {
     }
 
     public DigestAlgorithm getSelfAddressingDigestAlgorithm() {
-        return identifierDigestAlgorithm;
+        return selfAddressingDigestAlgorithm;
     }
 
     public Signer getSigner() {
@@ -399,6 +455,10 @@ public class IdentifierSpecification {
 
     public SigningThreshold getSigningThreshold() {
         return signingThreshold;
+    }
+
+    public Version getVersion() {
+        return version;
     }
 
     public List<BasicIdentifier> getWitnesses() {

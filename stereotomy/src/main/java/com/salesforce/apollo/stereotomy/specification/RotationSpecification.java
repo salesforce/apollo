@@ -93,13 +93,13 @@ public class RotationSpecification {
 
             if (signingThreshold instanceof SigningThreshold.Unweighted) {
                 var unw = (SigningThreshold.Unweighted) signingThreshold;
-                if (unw.threshold() > keys.size()) {
+                if (unw.getThreshold() > keys.size()) {
                     throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: " + keys.size()
-                            + " threshold: " + unw.threshold());
+                            + " threshold: " + unw.getThreshold());
                 }
             } else if (signingThreshold instanceof SigningThreshold.Weighted) {
                 var w = (SigningThreshold.Weighted) signingThreshold;
-                var countOfWeights = Stream.of(w.weights()).mapToLong(wts -> wts.length).sum();
+                var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
                 if (countOfWeights != keys.size()) {
                     throw new IllegalArgumentException("Count of weights and count of keys are not equal: " + " keys: "
                             + keys.size() + " weights: " + countOfWeights);
@@ -122,13 +122,13 @@ public class RotationSpecification {
                     nextSigningThreshold = SigningThreshold.unweighted((keys.size() / 2) + 1);
                 } else if (nextSigningThreshold instanceof SigningThreshold.Unweighted) {
                     var unw = (SigningThreshold.Unweighted) nextSigningThreshold;
-                    if (unw.threshold() > keys.size()) {
+                    if (unw.getThreshold() > keys.size()) {
                         throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: "
-                                + keys.size() + " threshold: " + unw.threshold());
+                                + keys.size() + " threshold: " + unw.getThreshold());
                     }
                 } else if (nextSigningThreshold instanceof SigningThreshold.Weighted) {
                     var w = (SigningThreshold.Weighted) nextSigningThreshold;
-                    var countOfWeights = Stream.of(w.weights()).mapToLong(wts -> wts.length).sum();
+                    var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
                     if (countOfWeights != keys.size()) {
                         throw new IllegalArgumentException("Count of weights and count of keys are not equal: "
                                 + " keys: " + keys.size() + " weights: " + countOfWeights);
@@ -160,9 +160,8 @@ public class RotationSpecification {
             removed.removeAll(witnesses);
 
             return new RotationSpecification(format, state.getIdentifier(),
-                    state.getLastEvent().getSequenceNumber() + 1, EventCoordinates.of(state.getLastEvent()),
-                    signingThreshold, keys, signer, nextKeyConfigurationDigest, witnessThreshold, removed, added,
-                    seals);
+                    state.getLastEvent().getSequenceNumber() + 1, state.getLastEvent(), signingThreshold, keys, signer,
+                    nextKeyConfigurationDigest, witnessThreshold, removed, added, seals);
         }
 
         public Builder clone() {

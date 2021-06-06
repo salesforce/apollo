@@ -46,8 +46,7 @@ public class InteractionSpecification {
 
         public InteractionSpecification build() {
             return new InteractionSpecification(this.format, state.getIdentifier(),
-                    state.getLastEvent().getSequenceNumber() + 1, EventCoordinates.of(state.getLastEvent()), signer,
-                    seals);
+                    state.getLastEvent().getSequenceNumber() + 1, state.getLastEvent(), signer, seals);
         }
 
         public Format getFormat() {

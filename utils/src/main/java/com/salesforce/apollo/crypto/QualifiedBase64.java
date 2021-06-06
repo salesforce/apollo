@@ -100,6 +100,9 @@ public class QualifiedBase64 {
     }
 
     public static Digest digest(String qb64) {
+        if (qb64.isEmpty()) {
+            return Digest.NONE;
+        }
         if (qb64.startsWith("0")) {
             var bytes = unbase64(qb64.substring(2));
             return switch (qb64.substring(1, 2)) {
@@ -185,7 +188,7 @@ public class QualifiedBase64 {
     }
 
     public static String qb64(Digest d) {
-        return digestCode(d.getAlgorithm()) + base64(d.getBytes());
+        return Digest.NONE.equals(d) ? "" : digestCode(d.getAlgorithm()) + base64(d.getBytes());
     }
 
     public static String qb64(JohnHancock s) {

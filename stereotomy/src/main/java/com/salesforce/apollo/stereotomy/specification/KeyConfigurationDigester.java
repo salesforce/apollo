@@ -58,9 +58,9 @@ public class KeyConfigurationDigester {
 
     static byte[] signingThresholdRepresentation(SigningThreshold threshold) {
         if (threshold instanceof SigningThreshold.Unweighted) {
-            return Hex.hexNoPad(((SigningThreshold.Unweighted) threshold).threshold()).getBytes(UTF_8);
+            return Hex.hexNoPad(((SigningThreshold.Unweighted) threshold).getThreshold()).getBytes(UTF_8);
         } else if (threshold instanceof SigningThreshold.Weighted) {
-            return Stream.of(((SigningThreshold.Weighted) threshold).weights())
+            return Stream.of(((SigningThreshold.Weighted) threshold).getWeights())
                          .map(lw -> Stream.of(lw).map(KeyConfigurationDigester::weight).collect(joining(",")))
                          .collect(joining(("&")))
                          .getBytes(UTF_8);

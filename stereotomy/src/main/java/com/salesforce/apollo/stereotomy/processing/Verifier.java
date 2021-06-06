@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
@@ -32,7 +33,11 @@ public class Verifier {
 
     public HashMap<Integer, JohnHancock> verifyAuthentication(KeyState state, KeyEvent event,
                                                               Map<Integer, JohnHancock> signatures) {
-        var kee = state.getLastEstablishmentEvent();
+        Optional<KeyEvent> lookup = keyEventStore.getKeyEvent(state.getLastEstablishmentEvent());
+        if (lookup.isEmpty()) {
+            throw new MissingEstablishmentEventException(event, state.getLastEstablishmentEvent());
+        }
+        var kee = (EstablishmentEvent) lookup.get();
 
         var verifiedSignatures = new HashMap<Integer, JohnHancock>();
         for (var kv : signatures.entrySet()) {

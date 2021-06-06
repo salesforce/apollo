@@ -20,24 +20,12 @@ import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
  */
 public class KeyCoordinates {
 
-    private final int              keyIndex;
-    private final EventCoordinates establishmentEvent;
-
-    public KeyCoordinates(EventCoordinates establishmentEvent, int keyIndex) {
-        if (keyIndex < 0) {
-            throw new IllegalArgumentException("keyIndex must be >= 0");
-        }
-
-        this.establishmentEvent = requireNonNull(establishmentEvent, "establishmentEvent");
-        this.keyIndex = keyIndex;
-    }
-
     public static KeyCoordinates convert(KeyCoordinates coordinates) {
         if (coordinates instanceof KeyCoordinates) {
             return (KeyCoordinates) coordinates;
         }
 
-        return new KeyCoordinates(coordinates.establishmentEvent(), coordinates.getKeyIndex());
+        return new KeyCoordinates(coordinates.getEstablishmentEvent(), coordinates.getKeyIndex());
     }
 
     public static KeyCoordinates of(BasicIdentifier basicIdentifier) {
@@ -50,17 +38,16 @@ public class KeyCoordinates {
         return new KeyCoordinates(coordinates, keyIndex);
     }
 
-    public EventCoordinates establishmentEvent() {
-        return establishmentEvent;
-    }
+    private final EventCoordinates establishmentEvent;
+    private final int              keyIndex;
 
-    public int getKeyIndex() {
-        return keyIndex;
-    }
+    public KeyCoordinates(EventCoordinates establishmentEvent, int keyIndex) {
+        if (keyIndex < 0) {
+            throw new IllegalArgumentException("keyIndex must be >= 0");
+        }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(establishmentEvent, keyIndex);
+        this.establishmentEvent = requireNonNull(establishmentEvent, "establishmentEvent");
+        this.keyIndex = keyIndex;
     }
 
     @Override
@@ -73,6 +60,19 @@ public class KeyCoordinates {
         }
         KeyCoordinates other = (KeyCoordinates) obj;
         return Objects.equals(establishmentEvent, other.establishmentEvent) && keyIndex == other.keyIndex;
+    }
+
+    public EventCoordinates getEstablishmentEvent() {
+        return establishmentEvent;
+    }
+
+    public int getKeyIndex() {
+        return keyIndex;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(establishmentEvent, keyIndex);
     }
 
     @Override

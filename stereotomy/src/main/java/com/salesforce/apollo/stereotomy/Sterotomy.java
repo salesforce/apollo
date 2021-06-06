@@ -11,12 +11,14 @@ import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
@@ -26,14 +28,19 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
+import com.salesforce.apollo.stereotomy.event.Version;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.keys.InMemoryKeyStore;
 import com.salesforce.apollo.stereotomy.processing.KeyStateProcessor;
+import com.salesforce.apollo.stereotomy.processing.MissingEstablishmentEventException;
 import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.specification.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.specification.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
 import com.salesforce.apollo.stereotomy.specification.RotationSpecification.Builder;
+import com.salesforce.apollo.stereotomy.store.StateStore;
 
 /**
  * @author hal.hildebrand
@@ -41,10 +48,19 @@ import com.salesforce.apollo.stereotomy.specification.RotationSpecification.Buil
  */
 public class Sterotomy {
     public interface ControllableIdentifier extends KeyState {
+        void rotate();
+
+        void rotate(Builder spec);
 
         void rotate(Builder spec, SignatureAlgorithm signatureAlgorithm);
 
+        void rotate(List<Seal> of);
+
+        void rotate(List<Seal> seals, Builder spec);
+
         void rotate(List<Seal> seals, Builder spec, SignatureAlgorithm signatureAlgorithm);
+
+        void seal(List<Seal> seals);
 
         void seal(List<Seal> seals, InteractionSpecification.Builder spec);
 
@@ -100,12 +116,12 @@ public class Sterotomy {
         }
 
         @Override
-        public EstablishmentEvent getLastEstablishmentEvent() {
+        public EventCoordinates getLastEstablishmentEvent() {
             return state.getLastEstablishmentEvent();
         }
 
         @Override
-        public KeyEvent getLastEvent() {
+        public EventCoordinates getLastEvent() {
             return state.getLastEvent();
         }
 
@@ -145,13 +161,38 @@ public class Sterotomy {
         }
 
         @Override
+        public void rotate() {
+            Sterotomy.this.rotate(getIdentifier());
+        }
+
+        @Override
+        public void rotate(Builder spec) {
+            Sterotomy.this.rotate(getIdentifier(), spec);
+        }
+
+        @Override
         public void rotate(Builder spec, SignatureAlgorithm signatureAlgorithm) {
             Sterotomy.this.rotate(getIdentifier(), spec, signatureAlgorithm);
         }
 
         @Override
+        public void rotate(List<Seal> seals) {
+            Sterotomy.this.rotate(getIdentifier(), seals);
+        }
+
+        @Override
+        public void rotate(List<Seal> seals, Builder spec) {
+            Sterotomy.this.rotate(getIdentifier(), seals, spec);
+        }
+
+        @Override
         public void rotate(List<Seal> seals, Builder spec, SignatureAlgorithm signatureAlgorithm) {
             Sterotomy.this.rotate(getIdentifier(), seals, spec, signatureAlgorithm);
+        }
+
+        @Override
+        public void seal(List<Seal> seals) {
+            Sterotomy.this.seal(getIdentifier(), seals);
         }
 
         @Override
@@ -175,11 +216,36 @@ public class Sterotomy {
 
     }
 
+    public static class EventSignature {
+
+        private final EventCoordinates          event;
+        private final EventCoordinates          keyEstablishmentEvent;
+        private final Map<Integer, JohnHancock> signatures;
+
+        public EventSignature(EventCoordinates event, EventCoordinates keyEstablishmentEvent,
+                Map<Integer, JohnHancock> signatures) {
+            this.event = event;
+            this.keyEstablishmentEvent = keyEstablishmentEvent;
+            this.signatures = Collections.unmodifiableMap(signatures);
+        }
+
+        public EventCoordinates getEvent() {
+            return this.event;
+        }
+
+        public EventCoordinates getKeyEstablishmentEvent() {
+            return this.keyEstablishmentEvent;
+        }
+
+        public Map<Integer, JohnHancock> getSignatures() {
+            return this.signatures;
+        }
+
+    }
+
     public interface StereotomyKeyStore {
 
         Optional<KeyPair> getKey(KeyCoordinates keyCoordinates);
-
-        Optional<KeyState> getKeyState(Identifier identifier);
 
         Optional<KeyPair> getNextKey(KeyCoordinates keyCoordinates);
 
@@ -193,21 +259,56 @@ public class Sterotomy {
 
     }
 
+    public static final Version currentVersion() {
+        return new Version() {
+
+            @Override
+            public int getMajor() {
+                return 0;
+            }
+
+            @Override
+            public int getMinor() {
+                return 1;
+            }
+        };
+    }
+
     private final SecureRandom       entropy;
     private final EventFactory       eventFactory;
+    private final StateStore         events;
     private final StereotomyKeyStore keyStore;
     private final KeyStateProcessor  processor;
 
-    public Sterotomy(StereotomyKeyStore keyStore, SecureRandom entropy, KeyStateProcessor processor,
-            EventFactory eventFactory) {
+    public Sterotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy) {
+        this(keyStore, events, entropy, new ProtobufEventFactory());
+    }
+
+    public Sterotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy, EventFactory eventFactory) {
+        this(keyStore, events, entropy, eventFactory, new KeyStateProcessor(events));
+    }
+
+    public Sterotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy, EventFactory eventFactory,
+            KeyStateProcessor processor) {
         this.keyStore = keyStore;
         this.entropy = entropy;
         this.processor = processor;
         this.eventFactory = eventFactory;
+        this.events = events;
     }
 
     public ControllableIdentifier newDelegatedIdentifier(Identifier delegator) {
         return null;
+    }
+
+    public ControllableIdentifier newPrivateIdentifier() {
+        return newPrivateIdentifier(IdentifierSpecification.builder());
+
+    }
+
+    public ControllableIdentifier newPrivateIdentifier(IdentifierSpecification.Builder spec) {
+        return newPrivateIdentifier(spec, SignatureAlgorithm.DEFAULT);
+
     }
 
     public ControllableIdentifier newPrivateIdentifier(IdentifierSpecification.Builder spec,
@@ -217,7 +318,7 @@ public class Sterotomy {
         KeyPair initialKeyPair = signatureAllgorithm.generateKeyPair(entropy);
         KeyPair nextKeyPair = signatureAllgorithm.generateKeyPair(entropy);
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
-                                                          specification.getSelfAddressingDigestAlgorithm());
+                                                          specification.getIdentifierDigestAlgorithm());
 
         specification.setKey(initialKeyPair.getPublic())
                      .setNextKeys(nextKeys)
@@ -233,7 +334,6 @@ public class Sterotomy {
 
         keyStore.storeKey(keyCoordinates, initialKeyPair);
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
-
         return new ControllableIdentifierImpl(state);
     }
 
@@ -244,7 +344,7 @@ public class Sterotomy {
         KeyPair initialKeyPair = signatureAlgorithm.generateKeyPair(entropy);
         KeyPair nextKeyPair = signatureAlgorithm.generateKeyPair(entropy);
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
-                                                          specification.getSelfAddressingDigestAlgorithm());
+                                                          specification.getIdentifierDigestAlgorithm());
         specification.setKey(initialKeyPair.getPublic())
                      .setNextKeys(nextKeys)
                      .setSigner(0, initialKeyPair.getPrivate());
@@ -263,44 +363,65 @@ public class Sterotomy {
         return new ControllableIdentifierImpl(newState);
     }
 
+    public void rotate(Identifier identifier) {
+        rotate(identifier, RotationSpecification.newBuilder());
+    }
+
+    public void rotate(Identifier identifier, Builder spec) {
+        rotate(identifier, RotationSpecification.newBuilder(), SignatureAlgorithm.DEFAULT);
+    }
+
+    public KeyState rotate(Identifier identifier, List<Seal> seals) {
+        return rotate(identifier, seals, RotationSpecification.newBuilder());
+    }
+
+    public KeyState rotate(Identifier identifier, List<Seal> seals, RotationSpecification.Builder spec) {
+        return rotate(identifier, seals, spec, SignatureAlgorithm.DEFAULT);
+    }
+
     public KeyState rotate(Identifier identifier, List<Seal> seals, RotationSpecification.Builder spec,
                            SignatureAlgorithm signatureAlgorithm) {
         RotationSpecification.Builder specification = spec.clone();
 
-        KeyState state = keyStore.getKeyState(identifier)
-                                 .orElseThrow(() -> new IllegalArgumentException(
-                                         "identifier not found in event store"));
-
-        if (state == null) {
-            throw new IllegalArgumentException("identifier state not found in event store");
-        }
+        KeyState state = events.getKeyState(identifier)
+                               .orElseThrow(() -> new IllegalArgumentException(
+                                       "identifier key state not found in key store"));
 
         // require single keys, nextKeys
         if (state.getNextKeyConfigurationDigest().isEmpty()) {
             throw new IllegalArgumentException("identifier cannot be rotated");
         }
 
-        var currentKeyCoordinates = KeyCoordinates.of(state.getLastEstablishmentEvent(), 0);
-        Optional<KeyPair> nextKeyPair = keyStore.getNextKey(currentKeyCoordinates);
-
-        if (nextKeyPair.isEmpty()) {
-            throw new IllegalArgumentException("next key pair for identifier not found in keystore");
+        var lastEstablishing = events.getKeyEvent(state.getLastEstablishmentEvent());
+        if (lastEstablishing.isEmpty()) {
+            throw new IllegalStateException("establishment event is missing");
         }
+        EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing.get();
+        var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
+        
+        ((InMemoryKeyStore) keyStore).printContents();
+        
+        KeyPair nextKeyPair = keyStore.getNextKey(currentKeyCoordinates)
+                                      .orElseThrow(() -> new IllegalArgumentException(
+                                              "next key pair for identifier not found in keystore"));
 
         KeyPair newNextKeyPair = signatureAlgorithm.generateKeyPair(entropy);
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(newNextKeyPair.getPublic()),
                                                           specification.getNextKeysAlgorithm());
         specification.setState(state)
-                     .setKey(nextKeyPair.get().getPublic())
+                     .setKey(nextKeyPair.getPublic())
                      .setNextKeys(nextKeys)
-                     .setSigner(0, nextKeyPair.get().getPrivate())
+                     .setSigner(0, nextKeyPair.getPrivate())
                      .addAllSeals(seals);
+        
         RotationEvent event = eventFactory.rotation(specification.build());
         KeyState newState = processor.apply(state, event);
 
         KeyCoordinates nextKeyCoordinates = KeyCoordinates.of(event, 0);
-        keyStore.storeKey(nextKeyCoordinates, nextKeyPair.get());
+        
+        keyStore.storeKey(nextKeyCoordinates, nextKeyPair);
         keyStore.storeNextKey(nextKeyCoordinates, newNextKeyPair);
+        
         keyStore.removeKey(currentKeyCoordinates);
         keyStore.removeNextKey(currentKeyCoordinates);
 
@@ -312,17 +433,25 @@ public class Sterotomy {
         return rotate(identifier, List.of(), spec, signatureAlgorithm);
     }
 
+    public void seal(Identifier identifier, List<Seal> seals) {
+        seal(identifier, seals, InteractionSpecification.newBuilder());
+    }
+
     public KeyState seal(Identifier identifier, List<Seal> seals, InteractionSpecification.Builder spec) {
         InteractionSpecification.Builder specification = spec.clone();
-        KeyState state = keyStore.getKeyState(identifier)
-                                 .orElseThrow(() -> new IllegalArgumentException(
-                                         "identifier not found in event store"));
+        KeyState state = events.getKeyState(identifier)
+                               .orElseThrow(() -> new IllegalArgumentException("identifier not found in event store"));
 
         if (state == null) {
             throw new IllegalArgumentException("identifier not found in event store");
         }
 
-        KeyCoordinates currentKeyCoordinates = KeyCoordinates.of(state.getLastEstablishmentEvent(), 0);
+        Optional<KeyEvent> lastEstablishmentEvent = events.getKeyEvent(state.getLastEstablishmentEvent());
+        if (lastEstablishmentEvent.isEmpty()) {
+            throw new MissingEstablishmentEventException(events.getKeyEvent(state.getCoordinates()).get(),
+                    state.getLastEstablishmentEvent());
+        }
+        KeyCoordinates currentKeyCoordinates = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
         Optional<KeyPair> keyPair = keyStore.getKey(currentKeyCoordinates);
 
         if (keyPair.isEmpty()) {
@@ -332,15 +461,19 @@ public class Sterotomy {
         specification.setState(state).setSigner(0, keyPair.get().getPrivate()).setseals(seals);
 
         KeyEvent event = eventFactory.interaction(specification.build());
-        return processor.apply(state, event);
+        KeyState newKeyState = processor.apply(state, event);
+        return newKeyState;
     }
 
     public EventSignature sign(Identifier identifier, KeyEvent event) {
-        KeyState state = keyStore.getKeyState(identifier)
-                                 .orElseThrow(() -> new IllegalArgumentException(
-                                         "identifier not found in event store"));
-
-        KeyCoordinates keyCoords = KeyCoordinates.of(state.getLastEstablishmentEvent(), 0);
+        KeyState state = events.getKeyState(identifier)
+                               .orElseThrow(() -> new IllegalArgumentException("identifier not found in event store"));
+        var lastEstablishmentEvent = events.getKeyEvent(state.getLastEstablishmentEvent());
+        if (lastEstablishmentEvent.isEmpty()) {
+            throw new MissingEstablishmentEventException(events.getKeyEvent(state.getCoordinates()).get(),
+                    state.getLastEstablishmentEvent());
+        }
+        KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
         KeyPair keyPair = keyStore.getKey(keyCoords)
                                   .orElseThrow(() -> new IllegalArgumentException(
                                           "key pair not found for prefix: " + identifier));
@@ -348,7 +481,7 @@ public class Sterotomy {
         var ops = SignatureAlgorithm.lookup(keyPair.getPrivate());
         var signature = ops.sign(event.getBytes(), keyPair.getPrivate());
 
-        return new EventSignature(event.getCoordinates(), state.getLastEstablishmentEvent().getCoordinates(),
+        return new EventSignature(event.getCoordinates(), lastEstablishmentEvent.get().getCoordinates(),
                 Map.of(0, signature));
     }
 }

@@ -18,6 +18,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
 
 /**
  * @author hal.hildebrand
@@ -30,7 +31,24 @@ public interface Identifier {
         public boolean isTransferable() {
             return false;
         }
+
+        public String toString() {
+            return "Identifier<NONE>";
+        }
     };
+
+    public static Identifier identifier(IdentifierSpecification spec, byte[] inceptionStatement) {
+        var derivation = spec.getDerivation();
+        if (derivation.isAssignableFrom(BasicIdentifier.class)) {
+            return basic(spec.getKeys().get(0));
+        } else if (derivation.isAssignableFrom(SelfAddressingIdentifier.class)) {
+            return selfAddressing(inceptionStatement, spec.getSelfAddressingDigestAlgorithm());
+        } else if (derivation.isAssignableFrom(SelfSigningIdentifier.class)) {
+            return selfSigning(inceptionStatement, spec.getSigner());
+        } else {
+            throw new IllegalArgumentException("unknown prefix type: " + derivation.getCanonicalName());
+        }
+    }
 
     static BasicIdentifier basic(PublicKey key) {
         return new BasicIdentifier(key);
@@ -92,6 +110,12 @@ public interface Identifier {
                                                                                e -> qb64(e.getValue()))))
                          .build();
     }
+
+    @Override
+    boolean equals(Object obj);
+
+    @Override
+    int hashCode();
 
     boolean isTransferable();
 }

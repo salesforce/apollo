@@ -27,12 +27,12 @@ import org.h2.mvstore.type.DataType;
 
 import com.google.protobuf.AbstractMessage;
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -210,19 +210,29 @@ public class StateStore {
         return OptionalLong.of(lastReceipt.get(receiptPrefix(forIdentifier, byIdentifier)));
     }
 
-    public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return Optional.of(events.get(coordinateOrdering(coordinates)));
+    public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
+        KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIdentifier(),
+                coordinates.getSequenceNumber(), coordinates.getPreviousEvent().getDigest())));
+        return (keyEvent instanceof SealingEvent) ? Optional.of((SealingEvent) keyEvent) : Optional.empty();
     }
 
-    public Optional<KeyState> getKeyState(EventCoordinates key) {
-        // TODO Auto-generated method stub
-        return null;
+    public Optional<KeyEvent> getKeyEvent(Digest digest) {
+        String coordinates = eventsByHash.get(qb64(digest));
+        return coordinates == null ? Optional.empty() : Optional.of(events.get(coordinates));
+    }
+
+    public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
+        return Optional.ofNullable(events.get(coordinateOrdering(coordinates)));
+    }
+
+    public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
+        return Optional.ofNullable(keyState.get(coordinateOrdering(coordinates)));
     }
 
     public Optional<KeyState> getKeyState(Identifier identifier) {
         String stateHash = keyStateByIdentifier.get(qb64(identifier));
 
-        return stateHash == null ? Optional.empty() : Optional.of(keyState.get(stateHash));
+        return stateHash == null ? Optional.empty() : Optional.ofNullable(keyState.get(stateHash));
     }
 
     private void appendAttachments(EventCoordinates coordinates, Map<Integer, JohnHancock> signatures,
@@ -237,15 +247,5 @@ public class StateStore {
             lastReceipt.put(receiptPrefix(coordinates.getIdentifier(), otherReceipt.getKey().getIdentifier()),
                             coordinates.getSequenceNumber());
         }
-    }
-
-    public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates delegatingEvent) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    public void append(AttachmentEvent attachmentEvent) {
-        // TODO Auto-generated method stub
-        
     }
 }

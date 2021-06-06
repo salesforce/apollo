@@ -19,11 +19,10 @@ import java.util.stream.Collectors;
 import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.KeyState;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
-import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -55,8 +54,8 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public Optional<Identifier> getDelegatingIdentifier() {
-        // TODO Auto-generated method stub
-        return null;
+        return state.getDelegatingIdentifier().isEmpty() ? Optional.empty()
+                : Optional.of(identifier(state.getDelegatingIdentifier()));
     }
 
     @Override
@@ -65,15 +64,13 @@ public class KeyStateImpl implements KeyState {
     }
 
     @Override
-    public EstablishmentEvent getLastEstablishmentEvent() {
-        // TODO Auto-generated method stub
-        return null;
+    public EventCoordinates getLastEstablishmentEvent() {
+        return ProtobufEventFactory.toCoordinates(state.getLastEstablishmentEvent());
     }
 
     @Override
-    public KeyEvent getLastEvent() {
-        // TODO Auto-generated method stub
-        return null;
+    public EventCoordinates getLastEvent() {
+        return ProtobufEventFactory.toCoordinates(state.getLastEvent());
     }
 
     @Override
@@ -85,8 +82,7 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public SigningThreshold getSigningThreshold() {
-        // TODO Auto-generated method stub
-        return null;
+        return ProtobufEventFactory.toSigningThreshold(state.getSigningThreshold());
     }
 
     @Override

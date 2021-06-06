@@ -48,4 +48,9 @@ public class SelfAddressingIdentifier implements Identifier {
         return true;
     }
 
+    @Override
+    public String toString() {
+        return "SA[" + digest + "]";
+    }
+
 }

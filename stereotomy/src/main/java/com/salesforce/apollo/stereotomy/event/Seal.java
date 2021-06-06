@@ -14,10 +14,30 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public interface Seal {
     interface CoordinatesSeal extends Seal {
+        static CoordinatesSeal construct(EventCoordinates coordinates) {
+            return new CoordinatesSeal() {
+
+                @Override
+                public EventCoordinates getEvent() {
+                    return coordinates;
+                }
+            };
+        }
+
         EventCoordinates getEvent();
     }
 
     interface DigestSeal extends Seal {
+        static DigestSeal construct(Digest digest) {
+            return new DigestSeal() {
+
+                @Override
+                public Digest getDigest() {
+                    return digest;
+                }
+            };
+        }
+
         Digest getDigest();
     }
 }

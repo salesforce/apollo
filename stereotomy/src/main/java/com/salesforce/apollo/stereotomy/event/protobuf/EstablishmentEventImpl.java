@@ -16,11 +16,9 @@ import java.util.stream.Collectors;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
-import com.salesfoce.apollo.stereotomy.event.proto.Weights;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
 
 /**
  * @author hal.hildebrand
@@ -48,59 +46,11 @@ abstract public class EstablishmentEventImpl extends KeyEventImpl implements Est
 
     @Override
     public SigningThreshold getSigningThreshold() {
-        com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold signingThreshold = establishment.getSigningThreshold();
-        if (signingThreshold.getWeightsCount() == 0) {
-            return new SigningThreshold.Unweighted() {
-                @Override
-                public int threshold() {
-                    return signingThreshold.getThreshold();
-                }
-
-            };
-        } else {
-            return new SigningThreshold.Weighted() {
-
-                @Override
-                public Weight[][] weights() {
-                    Weight[][] weights = new Weight[signingThreshold.getWeightsCount()][];
-                    signingThreshold.getWeightsList()
-                                    .stream()
-                                    .map(w -> weightArrayFrom(w))
-                                    .collect(Collectors.toList())
-                                    .toArray(new Weight[signingThreshold.getWeightsCount()][]);
-                    return weights;
-                }
-
-            };
-        }
-    }
-
-    private static Weight[] weightArrayFrom(Weights w) {
-        Weight[] weights = new Weight[w.getWeightsCount()];
-        for (int i = 0; i < weights.length; i++) {
-            weights[i] = weightFrom(w.getWeights(i));
-        }
-        return weights;
-    }
-
-    private static Weight weightFrom(com.salesfoce.apollo.stereotomy.event.proto.Weight w) {
-        return new Weight() {
-
-            @Override
-            public int numerator() {
-                return w.getNumerator();
-            }
-
-            @Override
-            public Optional<Integer> denominator() {
-                return Optional.of(w.getDenominator());
-            }
-        };
-
+        return ProtobufEventFactory.toSigningThreshold(establishment.getSigningThreshold());
     }
 
     @Override
     public int getWitnessThreshold() {
-        return establishment.getGetWitnessThreshold();
+        return establishment.getWitnessThreshold();
     }
 }

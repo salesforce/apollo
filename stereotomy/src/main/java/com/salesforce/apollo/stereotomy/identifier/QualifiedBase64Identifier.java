@@ -31,6 +31,9 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 public class QualifiedBase64Identifier extends QualifiedBase64 {
 
     public static Identifier identifier(String qb64) {
+        if (qb64.isEmpty()) {
+            return Identifier.NONE;
+        }
         if (qb64.startsWith("0")) {
             var bytes = unbase64(qb64.substring(2));
             return switch (qb64.substring(1, 2)) {
@@ -101,6 +104,8 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
             return qb64((SelfAddressingIdentifier) identifier);
         } else if (identifier instanceof SelfSigningIdentifier) {
             return qb64((SelfSigningIdentifier) identifier);
+        } else if (identifier == Identifier.NONE) {
+            return "";
         }
 
         throw new IllegalStateException("Unrecognized identifier: " + identifier.getClass());

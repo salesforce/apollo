@@ -12,10 +12,8 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
-import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -47,9 +45,9 @@ public interface KeyState {
 
     List<PublicKey> getKeys();
 
-    EstablishmentEvent getLastEstablishmentEvent();
+    EventCoordinates getLastEstablishmentEvent();
 
-    KeyEvent getLastEvent();
+    EventCoordinates getLastEvent();
 
     Optional<Digest> getNextKeyConfigurationDigest();
 

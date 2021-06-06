@@ -48,4 +48,9 @@ public class SelfSigningIdentifier implements Identifier {
         return true;
     }
 
+    @Override
+    public String toString() {
+        return "SS[" + signature + "]";
+    }
+
 }

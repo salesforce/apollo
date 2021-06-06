@@ -48,7 +48,7 @@ public enum DigestAlgorithm {
     BLAKE3_256 {
         @Override
         public int digestLength() {
-            return 0;
+            return 32;
         }
 
         @Override
@@ -162,7 +162,7 @@ public enum DigestAlgorithm {
     }
 
     public Digest digest(byte[] bytes) {
-        return new Digest(this, bytes);
+        return new Digest(this, hashOf(bytes, bytes.length));
     }
 
     abstract public int digestLength();

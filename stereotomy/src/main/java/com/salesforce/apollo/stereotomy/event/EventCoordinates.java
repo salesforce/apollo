@@ -22,9 +22,9 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public class EventCoordinates {
 
-    public static EventCoordinates NONE = new EventCoordinates(Identifier.NONE, -1, Digest.NONE);
+    public static EventCoordinates NONE = new EventCoordinates();
 
-    public static EventCoordinates of(BasicIdentifier identifier) {
+    public static EventCoordinates of(Identifier identifier) {
         return new EventCoordinates(identifier, 0, Digest.NONE);
     }
 
@@ -48,7 +48,8 @@ public class EventCoordinates {
     public static EventCoordinates of(KeyEvent event, DigestAlgorithm algorithm) {
         requireNonNull(event, "event");
         requireNonNull(algorithm, "algorithm");
-        return of(event, algorithm);
+        var digest = algorithm.digest(event.getBytes());
+        return of(event, digest);
     }
 
     private final Digest     digest;
@@ -64,19 +65,15 @@ public class EventCoordinates {
         this(event.getIdentifier(), event.getSequenceNumber(), digest);
     }
 
-    public EventCoordinates(Identifier identifier, long sequenceNumber, Digest digest) {
-        if (sequenceNumber < 0) {
-            throw new IllegalArgumentException("sequenceNumber must be >= 0");
-        }
+    private EventCoordinates() {
+        identifier = Identifier.NONE;
+        digest = Digest.NONE;
+        sequenceNumber = -1;
+    }
 
+    public EventCoordinates(Identifier identifier, long sequenceNumber, Digest digest) {
         this.identifier = requireNonNull(identifier, "identifier");
         this.sequenceNumber = sequenceNumber;
-
-        if ((!(identifier instanceof BasicIdentifier) || sequenceNumber != 0) && Digest.NONE.equals(digest)) {
-            // Digest isn't required for BasicIdentifiers or for inception events
-            throw new IllegalArgumentException("digest is required");
-        }
-
         this.digest = requireNonNull(digest, "digest");
     }
 
@@ -112,6 +109,6 @@ public class EventCoordinates {
 
     @Override
     public String toString() {
-        return this.identifier + ":" + this.sequenceNumber + ":" + qb64(this.getDigest());
+        return "[" + this.identifier + ":" + this.sequenceNumber + ":" + qb64(this.getDigest()) + "]";
     }
 };

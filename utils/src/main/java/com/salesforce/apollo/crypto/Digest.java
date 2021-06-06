@@ -9,6 +9,8 @@ package com.salesforce.apollo.crypto;
 import java.util.Arrays;
 import java.util.Objects;
 
+import org.bouncycastle.util.encoders.Hex;
+
 /**
  * A computed digest
  * 
@@ -58,6 +60,11 @@ public class Digest {
         result = prime * result + Arrays.hashCode(bytes);
         result = prime * result + Objects.hash(algorithm);
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return "[" + algorithm + ":" + Hex.toHexString(bytes) + "]";
     }
 
 }

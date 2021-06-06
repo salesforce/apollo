@@ -11,6 +11,6 @@ package com.salesforce.apollo.stereotomy.event;
  *
  */
 public interface Version {
-    int major();
-    int minor();
+    int getMajor();
+    int getMinor();
 }

@@ -47,4 +47,9 @@ public class BasicIdentifier implements Identifier {
         return false;
     }
 
+    @Override
+    public String toString() {
+        return "B[" + publicKey + "]";
+    }
+
 }

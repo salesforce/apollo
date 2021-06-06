@@ -20,7 +20,7 @@ message RotationEvent {
 message InceptionEvent {
     Header header = 1;
     Establishment establishment = 2;
-    bytes inceptionStatement = 3;
+    IdentifierSpec inceptionStatement = 3;
     repeated string witnesses = 4;
     repeated string configurationTraits = 5;
     EventCoordinates delegatingEvent = 6;
@@ -42,7 +42,7 @@ message Establishment {
     SigningThreshold signingThreshold = 1;
     repeated string keys = 2;
     string nextKeyConfiguration = 3;
-    int32 getWitnessThreshold = 4;
+    int32 witnessThreshold = 4;
 }
 
 message Header {
@@ -55,6 +55,7 @@ message Header {
     map<int32, string> endorsements = 7;
     EventCoordinates previous = 8;
     repeated Receipt receipts = 9;
+    bytes configuration = 10;
 }
 
 message Seal {
@@ -101,8 +102,8 @@ message EventCoordinates {
 message StoredKeyState {
     string identifier = 1;
     EventCoordinates coordinates = 2;
-    string lastEvent = 3;
-    string lastEstablishmentEvent = 4;
+    EventCoordinates lastEvent = 3;
+    EventCoordinates lastEstablishmentEvent = 4;
     string delegatingIdentifier = 5;
     repeated string keys = 6;
     string nextKeyConfigurationDigest = 7;
@@ -110,4 +111,40 @@ message StoredKeyState {
     SigningThreshold signingThreshold = 9;
     repeated string witnesses = 10;
     int32 witnessThreshold = 11;
+}
+
+message IdentifierSpec {
+    Version version = 1;
+    string identifier = 2;
+    int64 sequenceNumber = 3;
+    string eventType = 4;
+    SigningThreshold signingThreshold = 5;
+    repeated string keys = 6;
+    string nextKeysDigest = 7;
+    int32 witnessThreshold = 8;
+    repeated string witnesses = 9;
+    repeated string configuration = 10;
+}
+
+message InteractionSpec {
+    Version version = 1;
+    string identifier = 2;
+    int64 sequenceNumber = 3;
+    string eventType = 4;
+    string priorEventDigest = 5;
+    repeated Seal anchrs = 6;
+}
+
+message RotationSpec {
+    Version version = 1;
+    string identifier = 2;
+    int64 sequenceNumber = 3;
+    string eventType = 4;
+    string priorEventDigest = 5;
+    SigningThreshold signingThreshold = 6;
+    string nextKeysDigest = 7;
+    int32 witnessThreshold = 8;
+    repeated string witnessesRemoved = 9;
+    repeated string witnessesAdded = 10;
+    repeated Seal achnors = 11;
 }
