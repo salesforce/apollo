@@ -19,13 +19,16 @@ import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
+import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.Version;
 import com.salesfoce.apollo.stereotomy.event.proto.Weights;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.stereotomy.Sterotomy.EventFactory;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.Stereotomy.EventFactory;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
+import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -53,11 +56,54 @@ public class ProtobufEventFactory implements EventFactory {
     @SuppressWarnings("unused")
     private static final String ROTATION_TYPE                  = "rot";
 
+    public static Seal sealOf(com.salesfoce.apollo.stereotomy.event.proto.Seal s) {
+        if (s.hasCoordinates()) {
+            com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = s.getCoordinates();
+            return new Seal.CoordinatesSeal() {
+
+                @Override
+                public com.salesforce.apollo.stereotomy.event.EventCoordinates getEvent() {
+                    return new com.salesforce.apollo.stereotomy.event.EventCoordinates(
+                            identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
+                            digest(coordinates.getDigest()));
+                }
+            };
+        }
+
+        return new Seal.DigestSeal() {
+
+            @Override
+            public Digest getDigest() {
+                return digest(s.getDigest());
+            }
+
+        };
+    }
+
+    public static com.salesfoce.apollo.stereotomy.event.proto.Seal sealOf(Seal s) {
+        if (s instanceof Seal.CoordinatesSeal) {
+            return com.salesfoce.apollo.stereotomy.event.proto.Seal.newBuilder()
+                                                                   .setCoordinates(toCoordinates(((Seal.CoordinatesSeal) s).getEvent()))
+                                                                   .build();
+        } else if (s instanceof Seal.DigestSeal) {
+            return com.salesfoce.apollo.stereotomy.event.proto.Seal.newBuilder()
+                                                                   .setDigest(qb64(((Seal.DigestSeal) s).getDigest()))
+                                                                   .build();
+        } else {
+            throw new IllegalArgumentException("Unknown seal type: " + s.getClass().getSimpleName());
+        }
+    }
+
     public static EventCoordinates.Builder toCoordinates(com.salesforce.apollo.stereotomy.event.EventCoordinates coordinates) {
         return EventCoordinates.newBuilder()
                                .setDigest(qb64(coordinates.getDigest()))
                                .setIdentifier(qb64(coordinates.getIdentifier()))
                                .setSequenceNumber(coordinates.getSequenceNumber());
+    }
+
+    public static com.salesforce.apollo.stereotomy.event.EventCoordinates toCoordinates(EventCoordinates coordinates) {
+        return new com.salesforce.apollo.stereotomy.event.EventCoordinates(identifier(coordinates.getIdentifier()),
+                coordinates.getSequenceNumber(), digest(coordinates.getDigest()));
     }
 
     public static SigningThreshold toSigningThreshold(com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold signingThreshold) {
@@ -152,7 +198,6 @@ public class ProtobufEventFactory implements EventFactory {
                            .setVersion(toVersion(specification.getVersion()))
                            .setFormat(specification.getFormat().name())
                            .setIdentifier(qb64(prefix))
-                           .setCoordinates(toCoordinates(com.salesforce.apollo.stereotomy.event.EventCoordinates.of(prefix)))
                            .putAllAuthentication(Map.of(0, qb64(signature)));
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
@@ -175,8 +220,46 @@ public class ProtobufEventFactory implements EventFactory {
 
     @Override
     public RotationEvent rotation(RotationSpecification specification) {
+        var rotationSpec = rotationSpec(specification.getIdentifier(), specification);
+        Map<Integer, JohnHancock> signatures = Map.of();
+
+        if (specification.getSigner() != null) {
+            var signature = specification.getSigner().sign(rotationSpec.toByteArray());
+            signatures = Map.of(0, signature);
+        }
+
+        var establishment = Establishment.newBuilder()
+                                         .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
+                                         .addAllKeys(specification.getKeys()
+                                                                  .stream()
+                                                                  .map(k -> qb64(k))
+                                                                  .collect(Collectors.toList()))
+                                         .setNextKeyConfiguration(qb64(specification.getNextKeys() == null ? Digest.NONE
+                                                 : specification.getNextKeys()))
+                                         .setWitnessThreshold(specification.getWitnessThreshold());
+
+        var header = Header.newBuilder() 
+                           .setPrevious(toCoordinates(specification.getPrevious()))
+                           .setPreviousDigest(qb64(specification.getPriorEventDigest()))
+                           .setVersion(toVersion(specification.getVersion()))
+                           .setFormat(specification.getFormat().name())
+                           .setIdentifier(qb64(specification.getIdentifier()))
+                           .putAllAuthentication(signatures.entrySet()
+                                                           .stream()
+                                                           .collect(Collectors.toMap(e -> e.getKey(),
+                                                                                     e -> qb64(e.getValue()))));
+
         com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
-        return new RotationEventImpl(builder.build());
+        builder.addAllAddedWitnesses(specification.getAddedWitnesses()
+                                                  .stream()
+                                                  .map(b -> qb64(b))
+                                                  .collect(Collectors.toList()));
+        builder.addAllRemovedWitnesses(specification.getRemovedWitnesses()
+                                                    .stream()
+                                                    .map(b -> qb64(b))
+                                                    .collect(Collectors.toList()));
+        builder.addAllSeals(specification.getSeals().stream().map(s -> sealOf(s)).collect(Collectors.toList()));
+        return new RotationEventImpl(builder.setHeader(header).setEstablishment(establishment).build());
     }
 
     com.salesfoce.apollo.stereotomy.event.proto.Version.Builder toVersion(com.salesforce.apollo.stereotomy.event.Version version) {
@@ -209,8 +292,27 @@ public class ProtobufEventFactory implements EventFactory {
                              .build();
     }
 
-    public static com.salesforce.apollo.stereotomy.event.EventCoordinates toCoordinates(EventCoordinates coordinates) {
-        return new com.salesforce.apollo.stereotomy.event.EventCoordinates(identifier(coordinates.getIdentifier()),
-                coordinates.getSequenceNumber(), digest(coordinates.getDigest()));
+    private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification) {
+        return RotationSpec.newBuilder()
+                           .setVersion(toVersion(specification.getVersion()))
+                           .setIdentifier(qb64(identifier == null ? Identifier.NONE : identifier))
+                           .setSequenceNumber(specification.getSequenceNumber())
+                           .setPriorEventDigest(qb64(specification.getPriorEventDigest()))
+                           .setEventType(INCEPTION_TYPE)
+                           .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
+                           .addAllKeys(specification.getKeys().stream().map(k -> qb64(k)).collect(Collectors.toList()))
+                           .setNextKeysDigest(qb64(specification.getNextKeys() == null ? Digest.NONE
+                                   : specification.getNextKeys()))
+                           .setWitnessThreshold(specification.getWitnessThreshold())
+                           .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
+                           .addAllWitnessesAdded(specification.getAddedWitnesses()
+                                                              .stream()
+                                                              .map(i -> qb64(i))
+                                                              .collect(Collectors.toList()))
+                           .addAllWitnessesRemoved(specification.getRemovedWitnesses()
+                                                                .stream()
+                                                                .map(i -> qb64(i))
+                                                                .collect(Collectors.toList()))
+                           .build();
     }
 }

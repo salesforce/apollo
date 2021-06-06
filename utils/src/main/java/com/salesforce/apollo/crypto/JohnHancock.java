@@ -9,6 +9,8 @@ package com.salesforce.apollo.crypto;
 import java.util.Arrays;
 import java.util.Objects;
 
+import org.bouncycastle.util.encoders.Hex;
+
 /**
  * A signature
  * 
@@ -51,5 +53,10 @@ public class JohnHancock {
         result = prime * result + Arrays.hashCode(bytes);
         result = prime * result + Objects.hash(algorithm);
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return "Sig[algorithm[" + algorithm + ":" + Hex.toHexString(bytes).substring(0, 12);
     }
 }

@@ -48,10 +48,10 @@ message Establishment {
 message Header {
     int64 sequenceNumber = 1;
     string identifier = 2;
-    Version version = 3;
-    map<int32, string> authentication = 4;
-    string format = 5;
-    EventCoordinates coordinates = 6;
+    string previousDigest = 3;
+    Version version = 4;
+    map<int32, string> authentication = 5;
+    string format = 6; 
     map<int32, string> endorsements = 7;
     EventCoordinates previous = 8;
     repeated Receipt receipts = 9;
@@ -132,7 +132,7 @@ message InteractionSpec {
     int64 sequenceNumber = 3;
     string eventType = 4;
     string priorEventDigest = 5;
-    repeated Seal anchrs = 6;
+    repeated Seal anchors = 6;
 }
 
 message RotationSpec {
@@ -141,10 +141,11 @@ message RotationSpec {
     int64 sequenceNumber = 3;
     string eventType = 4;
     string priorEventDigest = 5;
-    SigningThreshold signingThreshold = 6;
-    string nextKeysDigest = 7;
-    int32 witnessThreshold = 8;
-    repeated string witnessesRemoved = 9;
-    repeated string witnessesAdded = 10;
-    repeated Seal achnors = 11;
+    repeated string keys = 6;
+    SigningThreshold signingThreshold = 7;
+    string nextKeysDigest = 8;
+    int32 witnessThreshold = 9;
+    repeated string witnessesRemoved = 10;
+    repeated string witnessesAdded = 11;
+    repeated Seal achnors = 12;
 }

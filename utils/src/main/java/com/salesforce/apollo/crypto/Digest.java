@@ -64,7 +64,7 @@ public class Digest {
 
     @Override
     public String toString() {
-        return "[" + algorithm + ":" + Hex.toHexString(bytes) + "]";
+        return "[" + algorithm + ":" + Hex.toHexString(bytes).substring(0, 12) + "]";
     }
 
 }

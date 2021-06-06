@@ -22,9 +22,9 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
-import com.salesforce.apollo.stereotomy.Sterotomy;
-import com.salesforce.apollo.stereotomy.Sterotomy.ControllableIdentifier;
-import com.salesforce.apollo.stereotomy.Sterotomy.StereotomyKeyStore;
+import com.salesforce.apollo.stereotomy.Stereotomy;
+import com.salesforce.apollo.stereotomy.Stereotomy.ControllableIdentifier;
+import com.salesforce.apollo.stereotomy.Stereotomy.StereotomyKeyStore;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -62,7 +62,7 @@ public class StereotomyTests {
 
     @Test
     public void test_newPrivateIdentifier() {
-        var controller = new Sterotomy(testKeyStore, testEventStore, secureRandom);
+        var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
         ControllableIdentifier i = controller.newPrivateIdentifier();
 
@@ -124,7 +124,7 @@ public class StereotomyTests {
 
     @Test
     public void test_privateIdentifier_rotate() {
-        var controller = new Sterotomy(testKeyStore, testEventStore, secureRandom);
+        var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
         var i = controller.newPrivateIdentifier();
 
@@ -138,7 +138,7 @@ public class StereotomyTests {
 
     @Test
     public void test_privateIdentifier_interaction() {
-        var controller = new Sterotomy(testKeyStore, testEventStore, secureRandom);
+        var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
         var i = controller.newPrivateIdentifier();
 

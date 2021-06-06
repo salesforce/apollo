@@ -22,8 +22,8 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.Version;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.Pair;
 
 /**
@@ -33,28 +33,6 @@ import com.salesforce.apollo.utils.Pair;
  *
  */
 abstract public class KeyEventImpl implements KeyEvent {
-
-    public static Seal sealOf(com.salesfoce.apollo.stereotomy.event.proto.Seal s) {
-        if (s.hasCoordinates()) {
-            com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = s.getCoordinates();
-            return new Seal.CoordinatesSeal() {
-
-                @Override
-                public EventCoordinates getEvent() {
-                    return new EventCoordinates(identifier(coordinates.getIdentifier()),
-                            coordinates.getSequenceNumber(), digest(coordinates.getDigest()));
-                }
-            };
-        }
-
-        return new Seal.DigestSeal() {
-            @Override
-            public Digest getDigest() {
-                return digest(s.getDigest());
-            }
-        };
-    }
-
     private static Map<Integer, JohnHancock> signaturesOf(Receipt receipt) {
         return receipt.getSignaturesMap()
                       .entrySet()
@@ -77,10 +55,18 @@ abstract public class KeyEventImpl implements KeyEvent {
     }
 
     @Override
-    public EventCoordinates getCoordinates() {
-        com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = header.getCoordinates();
-        return new EventCoordinates(identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
-                digest(coordinates.getDigest()));
+    public long getSequenceNumber() {
+        return header.getSequenceNumber();
+    }
+
+    @Override
+    public Digest getPreviousDigest() {
+        return digest(header.getPreviousDigest());
+    }
+
+    @Override
+    public Identifier getIdentifier() {
+        return identifier(header.getIdentifier());
     }
 
     @Override

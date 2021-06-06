@@ -19,10 +19,12 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
+import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -43,11 +45,13 @@ public class RotationSpecification {
         private final DigestAlgorithm nextKeysAlgorithm = DigestAlgorithm.BLAKE3_256;
         // next key configuration
         private SigningThreshold nextSigningThreshold;
+        private Digest           priorEventDigest;
         private final List<Seal> seals = new ArrayList<>();
         private Signer           signer;
         // key configuration
         private SigningThreshold            signingThreshold;
         private KeyState                    state;
+        private Version                     version          = Stereotomy.currentVersion();
         private final List<BasicIdentifier> witnesses        = new ArrayList<>();
         private int                         witnessThreshold = 0;
 
@@ -161,7 +165,7 @@ public class RotationSpecification {
 
             return new RotationSpecification(format, state.getIdentifier(),
                     state.getLastEvent().getSequenceNumber() + 1, state.getLastEvent(), signingThreshold, keys, signer,
-                    nextKeyConfigurationDigest, witnessThreshold, removed, added, seals);
+                    nextKeyConfigurationDigest, witnessThreshold, removed, added, seals, version, priorEventDigest);
         }
 
         public Builder clone() {
@@ -202,6 +206,10 @@ public class RotationSpecification {
             return nextSigningThreshold;
         }
 
+        public Digest getPriorEventDigest() {
+            return priorEventDigest;
+        }
+
         public List<Seal> getSeals() {
             return seals;
         }
@@ -216,6 +224,10 @@ public class RotationSpecification {
 
         public KeyState getState() {
             return state;
+        }
+
+        public Version getVersion() {
+            return version;
         }
 
         public List<BasicIdentifier> getWitnesses() {
@@ -291,6 +303,11 @@ public class RotationSpecification {
             return this;
         }
 
+        public Builder setPriorEventDigest(Digest priorEventDigest) {
+            this.priorEventDigest = priorEventDigest;
+            return this;
+        }
+
         public Builder setSigner(int keyIndex, PrivateKey privateKey) {
             if (keyIndex < 0) {
                 throw new IllegalArgumentException("keyIndex must be >= 0");
@@ -324,6 +341,11 @@ public class RotationSpecification {
             return this;
         }
 
+        public Builder setVersion(Version version) {
+            this.version = version;
+            return this;
+        }
+
         public Builder setWitnessThreshold(int witnessThreshold) {
             if (witnessThreshold < 0) {
                 throw new IllegalArgumentException("witnessThreshold must not be negative");
@@ -345,19 +367,19 @@ public class RotationSpecification {
     private final List<PublicKey>       keys;
     private final Digest                nextKeys;
     private final EventCoordinates      previous;
+    private final Digest                priorEventDigest;
     private final List<BasicIdentifier> removedWitnesses;
     private final List<Seal>            seals;
     private final long                  sequenceNumber;
     private final Signer                signer;
-
-    private final SigningThreshold signingThreshold;
-
-    private final int witnessThreshold;
+    private final SigningThreshold      signingThreshold;
+    private final Version               version;
+    private final int                   witnessThreshold;
 
     public RotationSpecification(Format format, Identifier identifier, long sequenceNumber,
             EventCoordinates previousEvent, SigningThreshold signingThreshold, List<PublicKey> keys, Signer signer,
             Digest nextKeys, int witnessThreshold, List<BasicIdentifier> removedWitnesses,
-            List<BasicIdentifier> addedWitnesses, List<Seal> seals) {
+            List<BasicIdentifier> addedWitnesses, List<Seal> seals, Version version, Digest priorEventDigest) {
         this.format = format;
         this.identifier = identifier;
         this.sequenceNumber = sequenceNumber;
@@ -370,14 +392,12 @@ public class RotationSpecification {
         this.addedWitnesses = List.copyOf(addedWitnesses);
         this.removedWitnesses = List.copyOf(removedWitnesses);
         this.seals = List.copyOf(seals);
+        this.version = version;
+        this.priorEventDigest = priorEventDigest;
     }
 
     public List<BasicIdentifier> getAddedWitnesses() {
         return addedWitnesses;
-    }
-
-    public List<BasicIdentifier> getemovedWitnesses() {
-        return removedWitnesses;
     }
 
     public Format getFormat() {
@@ -388,12 +408,24 @@ public class RotationSpecification {
         return identifier;
     }
 
+    public List<PublicKey> getKeys() {
+        return keys;
+    }
+
     public Digest getNextKeys() {
         return nextKeys;
     }
 
     public EventCoordinates getPrevious() {
         return previous;
+    }
+
+    public Digest getPriorEventDigest() {
+        return priorEventDigest;
+    }
+
+    public List<BasicIdentifier> getRemovedWitnesses() {
+        return removedWitnesses;
     }
 
     public List<Seal> getSeals() {
@@ -404,20 +436,20 @@ public class RotationSpecification {
         return sequenceNumber;
     }
 
+    public Signer getSigner() {
+        return signer;
+    }
+
     public SigningThreshold getSigningThreshold() {
         return signingThreshold;
     }
 
+    public Version getVersion() {
+        return version;
+    }
+
     public int getWitnessThreshold() {
         return witnessThreshold;
-    }
-
-    public List<PublicKey> keys() {
-        return keys;
-    }
-
-    public Signer signer() {
-        return signer;
     }
 
 }

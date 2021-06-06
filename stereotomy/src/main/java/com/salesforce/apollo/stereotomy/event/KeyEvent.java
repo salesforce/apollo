@@ -23,27 +23,23 @@ public interface KeyEvent {
 
     byte[] getBytes();
 
-    EventCoordinates getCoordinates();
-
-    default Digest getDigest() {
-        return this.getCoordinates().getDigest();
+    default EventCoordinates getCoordinates() {
+        return new EventCoordinates(getIdentifier(), getSequenceNumber(), getPreviousDigest());
     }
+
+    Digest getPreviousDigest();
 
     Map<Integer, JohnHancock> getEndorsements();
 
     Format getFormat();
 
-    default Identifier getIdentifier() {
-        return this.getCoordinates().getIdentifier();
-    }
+    Identifier getIdentifier();
 
     EventCoordinates getPrevious();
 
     Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts();
 
-    default long getSequenceNumber() {
-        return this.getCoordinates().getSequenceNumber();
-    }
+    long getSequenceNumber();
 
     Version getVersion();
 

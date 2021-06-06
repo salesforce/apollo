@@ -20,7 +20,7 @@ import java.util.stream.Stream;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.stereotomy.Sterotomy;
+import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
@@ -56,7 +56,7 @@ public class IdentifierSpecification {
         private Signer           signer;
         // key configuration
         private SigningThreshold            signingThreshold;
-        private Version                     version          = Sterotomy.currentVersion();
+        private Version                     version          = Stereotomy.currentVersion();
         private final List<BasicIdentifier> witnesses        = new ArrayList<>();
         private int                         witnessThreshold = 0;
 

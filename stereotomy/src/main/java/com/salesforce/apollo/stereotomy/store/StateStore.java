@@ -161,10 +161,11 @@ public class StateStore {
     private static final String AUTHENTICATIONS         = "AUTHENTICATIONS";
     private static final String ENDORSEMENTS            = "ENDORSEMENTS";
     private static final String EVENTS                  = "EVENTS";
-    private static final String EVENTS_BY_HASH          = "EVENTS";
+    private static final String EVENTS_BY_HASH          = "EVENTS_BY_HASH";
     private static final String KEY_STATE               = "KEY_STATE";
     private static final String KEY_STATE_BY_IDENTIFIER = "KEY_STATE_BY_IDENTIFIER";
     private static final String LAST_RECEIPT            = "LAST_RECEIPT";
+    private static final String LOCATION_TO_HASH        = "LOCATION_TO_HASH";
     private static final String RECEIPTS                = "RECEIPTS";
 
     // Order by <stateOrdering>
@@ -179,7 +180,8 @@ public class StateStore {
     // Order by <identifier>
     private final MVMap<String, String> keyStateByIdentifier;
     // Order by <stateOrdering>
-    private final MVMap<String, Long> lastReceipt;
+    private final MVMap<String, Long>   lastReceipt;
+    private final MVMap<String, String> locationToHash;
     // Order by <receiptOrdering>
     private final MVMap<String, Signatures> receipts;
 
@@ -194,12 +196,15 @@ public class StateStore {
         keyStateByIdentifier = store.openMap(KEY_STATE_BY_IDENTIFIER);
         receipts = store.openMap(RECEIPTS, new MVMap.Builder<String, Signatures>().valueType(serializer));
         eventsByHash = store.openMap(EVENTS_BY_HASH);
+        locationToHash = store.openMap(LOCATION_TO_HASH);
     }
 
     public void append(KeyEvent event, KeyState newState) {
         String coordinates = coordinateOrdering(event.getCoordinates());
         events.put(coordinates, event);
-        eventsByHash.put(qb64(event.hash(DigestAlgorithm.DEFAULT)), coordinates);
+        String hash = qb64(event.hash(DigestAlgorithm.DEFAULT));
+        eventsByHash.put(hash, coordinates);
+        locationToHash.put(coordinates, hash);
         keyState.put(coordinates, newState);
         keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
         appendAttachments(event.getCoordinates(), event.getAuthentication(), event.getEndorsements(),
@@ -223,6 +228,10 @@ public class StateStore {
 
     public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
         return Optional.ofNullable(events.get(coordinateOrdering(coordinates)));
+    }
+
+    public Optional<String> getKeyEventHash(EventCoordinates coordinates) {
+        return Optional.of(locationToHash.get(coordinateOrdering(coordinates)));
     }
 
     public Optional<KeyState> getKeyState(EventCoordinates coordinates) {

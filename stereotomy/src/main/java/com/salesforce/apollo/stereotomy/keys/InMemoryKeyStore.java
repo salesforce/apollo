@@ -18,7 +18,7 @@ import java.util.Optional;
 
 import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
-import com.salesforce.apollo.stereotomy.Sterotomy.StereotomyKeyStore;
+import com.salesforce.apollo.stereotomy.Stereotomy.StereotomyKeyStore;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**

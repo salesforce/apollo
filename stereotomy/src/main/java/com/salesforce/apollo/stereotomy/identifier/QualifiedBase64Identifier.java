@@ -21,14 +21,31 @@ import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.lookup;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
+import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class QualifiedBase64Identifier extends QualifiedBase64 {
+
+    public static String basicIdentifierPlaceholder(SignatureAlgorithm signatureAlgorithm) {
+        var placeholderLength = qb64Length(signatureAlgorithm.publicKeyLength());
+        return "#".repeat(placeholderLength);
+    }
+
+    public static SignatureAlgorithm basicIdentifierSignatureAlgorithm(String code) {
+        return switch (code) {
+        case "1AAA" -> SignatureAlgorithm.EC_SECP256K1;
+        case "1AAC" -> SignatureAlgorithm.ED_25519;
+        case "B" -> SignatureAlgorithm.ED_448;
+        default -> throw new IllegalArgumentException("unknown code: " + code);
+        };
+    }
 
     public static Identifier identifier(String qb64) {
         if (qb64.isEmpty()) {
@@ -117,5 +134,32 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
 
     public static String qb64(SelfSigningIdentifier identifier) {
         return qb64(identifier.getSignature());
+    }
+
+    public static String selfAddressingIdentifierPlaceholder(DigestAlgorithm digestAlgorithm) {
+        var placeholderLength = qb64Length(digestAlgorithm.digestLength());
+        return "#".repeat(placeholderLength);
+    }
+
+    public static String selfSigningIdentifierPlaceholder(SignatureAlgorithm signatureAlgorithm) {
+        var placeholderLength = qb64Length(signatureAlgorithm.signatureLength());
+        return "#".repeat(placeholderLength);
+    }
+
+    public static String shortQb64(DelegatingEventCoordinates c) {
+        var p = c.getPreviousEvent();
+        return shortQb64(p.getIdentifier()) + ":" + p.getSequenceNumber() + ":" + shortQb64(p.getDigest());
+    }
+
+    public static String shortQb64(EventCoordinates c) {
+        return shortQb64(c.getIdentifier()) + ":" + c.getSequenceNumber() + ":" + shortQb64(c.getDigest());
+    }
+
+    public static String shortQb64(Identifier identifier) {
+        return qb64(identifier).substring(0, SHORTENED_LENGTH);
+    }
+
+    public static String transferrableIdentifierCode(SignatureAlgorithm a) {
+        return publicKeyCode(a);
     }
 }

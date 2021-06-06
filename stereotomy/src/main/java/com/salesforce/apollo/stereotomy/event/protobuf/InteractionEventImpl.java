@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
+import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.sealOf;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,7 +35,7 @@ public class InteractionEventImpl extends KeyEventImpl implements InteractionEve
 
     @Override
     public List<Seal> getSeals() {
-        return event.getSealsList().stream().map(s -> KeyEventImpl.sealOf(s)).collect(Collectors.toList());
+        return event.getSealsList().stream().map(s -> sealOf(s)).collect(Collectors.toList());
     }
 
     @Override

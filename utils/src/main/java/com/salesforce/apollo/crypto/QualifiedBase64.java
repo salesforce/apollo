@@ -21,6 +21,8 @@ import org.bouncycastle.util.Arrays;
 
 public class QualifiedBase64 {
 
+    public final static int SHORTENED_LENGTH = 12;
+
     protected static final Base64.Decoder DECODER = Base64.getUrlDecoder();
     protected static final Base64.Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
 
@@ -29,8 +31,7 @@ public class QualifiedBase64 {
                                            'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
                                            't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
                                            '8', '9', '-', '_' };
-
-    private static final int[] REVERSE_LOOKUP;
+    private static final int[]  REVERSE_LOOKUP;
 
     static {
         REVERSE_LOOKUP = new int[128];
@@ -83,20 +84,6 @@ public class QualifiedBase64 {
     public static int base64Length(int bytesLength) {
         var bits = bytesLength * 8;
         return bits / 6 + (bits % 6 != 0 ? 1 : 0);
-    }
-
-    public static String basicIdentifierPlaceholder(SignatureAlgorithm signatureAlgorithm) {
-        var placeholderLength = qb64Length(signatureAlgorithm.publicKeyLength());
-        return "#".repeat(placeholderLength);
-    }
-
-    public static SignatureAlgorithm basicIdentifierSignatureAlgorithm(String code) {
-        return switch (code) {
-        case "1AAA" -> SignatureAlgorithm.EC_SECP256K1;
-        case "1AAC" -> SignatureAlgorithm.ED_25519;
-        case "B" -> SignatureAlgorithm.ED_448;
-        default -> throw new IllegalArgumentException("unknown code: " + code);
-        };
     }
 
     public static Digest digest(String qb64) {
@@ -208,14 +195,16 @@ public class QualifiedBase64 {
                 + (bits % 6 == 0 ? 4 : 0);
     }
 
-    public static String selfAddressingIdentifierPlaceholder(DigestAlgorithm digestAlgorithm) {
-        var placeholderLength = qb64Length(digestAlgorithm.digestLength());
-        return "#".repeat(placeholderLength);
+    public static String shortQb64(Digest digest) {
+        return qb64(digest).substring(0, SHORTENED_LENGTH);
     }
 
-    public static String selfSigningIdentifierPlaceholder(SignatureAlgorithm signatureAlgorithm) {
-        var placeholderLength = qb64Length(signatureAlgorithm.signatureLength());
-        return "#".repeat(placeholderLength);
+    public static String shortQb64(JohnHancock signature) {
+        return qb64(signature).substring(0, SHORTENED_LENGTH);
+    }
+
+    public static String shortQb64(PublicKey publicKey) {
+        return qb64(publicKey).substring(0, SHORTENED_LENGTH);
     }
 
     public static JohnHancock signature(String qb64) {
@@ -252,10 +241,6 @@ public class QualifiedBase64 {
         case EC_SECP256K1 -> "0C";
         case ED_448 -> "1AAE";
         };
-    }
-
-    public static String transferrableIdentifierCode(SignatureAlgorithm a) {
-        return publicKeyCode(a);
     }
 
     public static byte[] unbase64(String base64) {

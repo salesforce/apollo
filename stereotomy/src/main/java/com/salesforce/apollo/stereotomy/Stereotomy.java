@@ -6,7 +6,10 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.shortQb64;
 
 import java.security.KeyPair;
 import java.security.PublicKey;
@@ -16,6 +19,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -46,7 +52,9 @@ import com.salesforce.apollo.stereotomy.store.StateStore;
  * @author hal.hildebrand
  *
  */
-public class Sterotomy {
+public class Stereotomy {
+    private static final Logger log = LoggerFactory.getLogger(Stereotomy.class);
+
     public interface ControllableIdentifier extends KeyState {
         void rotate();
 
@@ -162,47 +170,47 @@ public class Sterotomy {
 
         @Override
         public void rotate() {
-            Sterotomy.this.rotate(getIdentifier());
+            Stereotomy.this.rotate(getIdentifier());
         }
 
         @Override
         public void rotate(Builder spec) {
-            Sterotomy.this.rotate(getIdentifier(), spec);
+            Stereotomy.this.rotate(getIdentifier(), spec);
         }
 
         @Override
         public void rotate(Builder spec, SignatureAlgorithm signatureAlgorithm) {
-            Sterotomy.this.rotate(getIdentifier(), spec, signatureAlgorithm);
+            Stereotomy.this.rotate(getIdentifier(), spec, signatureAlgorithm);
         }
 
         @Override
         public void rotate(List<Seal> seals) {
-            Sterotomy.this.rotate(getIdentifier(), seals);
+            Stereotomy.this.rotate(getIdentifier(), seals);
         }
 
         @Override
         public void rotate(List<Seal> seals, Builder spec) {
-            Sterotomy.this.rotate(getIdentifier(), seals, spec);
+            Stereotomy.this.rotate(getIdentifier(), seals, spec);
         }
 
         @Override
         public void rotate(List<Seal> seals, Builder spec, SignatureAlgorithm signatureAlgorithm) {
-            Sterotomy.this.rotate(getIdentifier(), seals, spec, signatureAlgorithm);
+            Stereotomy.this.rotate(getIdentifier(), seals, spec, signatureAlgorithm);
         }
 
         @Override
         public void seal(List<Seal> seals) {
-            Sterotomy.this.seal(getIdentifier(), seals);
+            Stereotomy.this.seal(getIdentifier(), seals);
         }
 
         @Override
         public void seal(List<Seal> seals, InteractionSpecification.Builder spec) {
-            Sterotomy.this.seal(getIdentifier(), seals, spec);
+            Stereotomy.this.seal(getIdentifier(), seals, spec);
         }
 
         @Override
         public EventSignature sign(KeyEvent event) {
-            return Sterotomy.this.sign(getIdentifier(), event);
+            return Stereotomy.this.sign(getIdentifier(), event);
         }
     }
 
@@ -280,15 +288,15 @@ public class Sterotomy {
     private final StereotomyKeyStore keyStore;
     private final KeyStateProcessor  processor;
 
-    public Sterotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy) {
+    public Stereotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy) {
         this(keyStore, events, entropy, new ProtobufEventFactory());
     }
 
-    public Sterotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy, EventFactory eventFactory) {
+    public Stereotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy, EventFactory eventFactory) {
         this(keyStore, events, entropy, eventFactory, new KeyStateProcessor(events));
     }
 
-    public Sterotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy, EventFactory eventFactory,
+    public Stereotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy, EventFactory eventFactory,
             KeyStateProcessor processor) {
         this.keyStore = keyStore;
         this.entropy = entropy;
@@ -334,7 +342,12 @@ public class Sterotomy {
 
         keyStore.storeKey(keyCoordinates, initialKeyPair);
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
-        return new ControllableIdentifierImpl(state);
+        ControllableIdentifierImpl identifier = new ControllableIdentifierImpl(state);
+
+        log.info("New Private Identifier: {} coordinates: {} cur key: {} next key: {}",
+                 shortQb64(identifier.getIdentifier()), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
+                 shortQb64(nextKeyPair.getPublic()));
+        return identifier;
     }
 
     public ControllableIdentifier newPublicIdentifier(IdentifierSpecification.Builder spec,
@@ -392,38 +405,44 @@ public class Sterotomy {
             throw new IllegalArgumentException("identifier cannot be rotated");
         }
 
-        var lastEstablishing = events.getKeyEvent(state.getLastEstablishmentEvent());
-        if (lastEstablishing.isEmpty()) {
-            throw new IllegalStateException("establishment event is missing");
-        }
-        EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing.get();
+        var lastEstablishing = events.getKeyEvent(state.getLastEstablishmentEvent())
+                                     .orElseThrow(() -> new IllegalStateException("establishment event is missing"));
+        EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing;
         var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
-        
+
         ((InMemoryKeyStore) keyStore).printContents();
-        
+
         KeyPair nextKeyPair = keyStore.getNextKey(currentKeyCoordinates)
                                       .orElseThrow(() -> new IllegalArgumentException(
-                                              "next key pair for identifier not found in keystore"));
+                                              "next key pair for identifier not found in keystore: "
+                                                      + currentKeyCoordinates));
 
         KeyPair newNextKeyPair = signatureAlgorithm.generateKeyPair(entropy);
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(newNextKeyPair.getPublic()),
                                                           specification.getNextKeysAlgorithm());
         specification.setState(state)
                      .setKey(nextKeyPair.getPublic())
+                     .setPriorEventDigest(digest(events.getKeyEventHash(state.getCoordinates())
+                                                       .orElseThrow(() -> new IllegalStateException(
+                                                               "Hash for current key event is missing"))))
                      .setNextKeys(nextKeys)
                      .setSigner(0, nextKeyPair.getPrivate())
                      .addAllSeals(seals);
-        
+
         RotationEvent event = eventFactory.rotation(specification.build());
         KeyState newState = processor.apply(state, event);
 
         KeyCoordinates nextKeyCoordinates = KeyCoordinates.of(event, 0);
-        
+
         keyStore.storeKey(nextKeyCoordinates, nextKeyPair);
         keyStore.storeNextKey(nextKeyCoordinates, newNextKeyPair);
-        
+
         keyStore.removeKey(currentKeyCoordinates);
         keyStore.removeNextKey(currentKeyCoordinates);
+
+        log.info("Rotated Identifier: {} coordinates: {} cur key: {} next key: {} old coordinates: {}",
+                 shortQb64(identifier), nextKeyCoordinates, shortQb64(nextKeyPair.getPublic()),
+                 shortQb64(newNextKeyPair.getPublic()), currentKeyCoordinates);
 
         return newState;
     }

@@ -49,10 +49,10 @@ import org.bouncycastle.jce.ECPointUtil;
 public enum SignatureAlgorithm {
 
     EC_SECP256K1 {
-        private final KeyFactory       keyFactory;
+        private final KeyFactory keyFactory;
+
         private final KeyPairGenerator keyPairGenerator;
         private final ECParameterSpec  parameterSpec;
-
         {
             try {
                 var ap = AlgorithmParameters.getInstance(ECDSA_ALGORITHM_NAME);
@@ -68,7 +68,7 @@ public enum SignatureAlgorithm {
 
         @Override
         public String algorithmName() {
-            return EDDSA_ALGORITHM_NAME;
+            return ECDSA_ALGORITHM_NAME;
         }
 
         public String curveName() {
@@ -137,7 +137,7 @@ public enum SignatureAlgorithm {
         @Override
         public JohnHancock sign(byte[] message, PrivateKey privateKey) {
             try {
-                var sig = Signature.getInstance(signatureInstanceName());
+                var sig = java.security.Signature.getInstance(this.signatureInstanceName());
                 sig.initSign(privateKey);
                 sig.update(message);
                 var bytes = sig.sign();
@@ -172,7 +172,7 @@ public enum SignatureAlgorithm {
         }
 
         private String signatureInstanceName() {
-            return algorithmName() + ECDSA_SIGNATURE_ALGORITHM_SUFFIX;
+            return "SHA256" + ECDSA_SIGNATURE_ALGORITHM_SUFFIX;
         }
     },
     ED_25519 {
@@ -302,7 +302,7 @@ public enum SignatureAlgorithm {
         }
     };
 
-    private static class EdDSAOperations {
+    public static class EdDSAOperations {
 
         private static final String EDDSA_ALGORITHM_NAME = "EdDSA";
 
@@ -445,6 +445,7 @@ public enum SignatureAlgorithm {
 
     private static final String ECDSA_ALGORITHM_NAME             = "EC";
     private static final String ECDSA_SIGNATURE_ALGORITHM_SUFFIX = "withECDSA";
+    @SuppressWarnings("unused")
     private static final String EDDSA_ALGORITHM_NAME             = "EdDSA";
 
     public static SignatureAlgorithm lookup(PrivateKey privateKey) {
