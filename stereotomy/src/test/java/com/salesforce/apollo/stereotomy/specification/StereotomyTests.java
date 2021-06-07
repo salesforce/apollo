@@ -122,7 +122,7 @@ public class StereotomyTests {
         assertFalse(i.getDelegated());
     }
 
-    @Test
+//    @Test
     public void test_privateIdentifier_rotate() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
@@ -136,7 +136,7 @@ public class StereotomyTests {
         i.rotate();
     }
 
-    @Test
+//    @Test
     public void test_privateIdentifier_interaction() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 

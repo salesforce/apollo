@@ -71,6 +71,7 @@ public enum SignatureAlgorithm {
             return ECDSA_ALGORITHM_NAME;
         }
 
+        @Override
         public String curveName() {
             return "secp256k1";
         }
@@ -154,6 +155,11 @@ public enum SignatureAlgorithm {
         }
 
         @Override
+        public String signatureInstanceName() {
+            return "SHA256" + ECDSA_SIGNATURE_ALGORITHM_SUFFIX;
+        }
+
+        @Override
         public int signatureLength() {
             return 64;
         }
@@ -170,10 +176,6 @@ public enum SignatureAlgorithm {
                 throw new RuntimeException(e);
             }
         }
-
-        private String signatureInstanceName() {
-            return "SHA256" + ECDSA_SIGNATURE_ALGORITHM_SUFFIX;
-        }
     },
     ED_25519 {
         private final EdDSAOperations ops = new EdDSAOperations(this);
@@ -183,22 +185,27 @@ public enum SignatureAlgorithm {
             return ECDSA_ALGORITHM_NAME;
         }
 
+        @Override
         public String curveName() {
             return "ed25519";
         }
 
+        @Override
         public byte[] encode(PublicKey publicKey) {
             return ops.encode(publicKey);
         }
 
+        @Override
         public KeyPair generateKeyPair() {
             return ops.generateKeyPair();
         }
 
+        @Override
         public KeyPair generateKeyPair(SecureRandom secureRandom) {
             return ops.generateKeyPair(secureRandom);
         }
 
+        @Override
         public PrivateKey privateKey(byte[] bytes) {
             return ops.privateKey(bytes);
         }
@@ -208,6 +215,7 @@ public enum SignatureAlgorithm {
             return 32;
         }
 
+        @Override
         public PublicKey publicKey(byte[] bytes) {
             return ops.publicKey(bytes);
         }
@@ -217,12 +225,19 @@ public enum SignatureAlgorithm {
             return 32;
         }
 
+        @Override
         public JohnHancock sign(byte[] message, PrivateKey privateKey) {
             return ops.sign(message, privateKey);
         }
 
+        @Override
         public JohnHancock signature(byte[] signatureBytes) {
             return ops.signature(signatureBytes);
+        }
+
+        @Override
+        public String signatureInstanceName() {
+            return "ED25519";
         }
 
         @Override
@@ -230,10 +245,12 @@ public enum SignatureAlgorithm {
             return 64;
         }
 
+        @Override
         public String toString() {
             return ops.toString();
         }
 
+        @Override
         public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
             return ops.verify(message, signature, publicKey);
         }
@@ -246,22 +263,27 @@ public enum SignatureAlgorithm {
             return ECDSA_ALGORITHM_NAME;
         }
 
+        @Override
         public String curveName() {
             return "ed448";
         }
 
+        @Override
         public byte[] encode(PublicKey publicKey) {
             return ops.encode(publicKey);
         }
 
+        @Override
         public KeyPair generateKeyPair() {
             return ops.generateKeyPair();
         }
 
+        @Override
         public KeyPair generateKeyPair(SecureRandom secureRandom) {
             return ops.generateKeyPair(secureRandom);
         }
 
+        @Override
         public PrivateKey privateKey(byte[] bytes) {
             return ops.privateKey(bytes);
         }
@@ -271,6 +293,7 @@ public enum SignatureAlgorithm {
             return 56;
         }
 
+        @Override
         public PublicKey publicKey(byte[] bytes) {
             return ops.publicKey(bytes);
         }
@@ -280,12 +303,19 @@ public enum SignatureAlgorithm {
             return 57;
         }
 
+        @Override
         public JohnHancock sign(byte[] message, PrivateKey privateKey) {
             return ops.sign(message, privateKey);
         }
 
+        @Override
         public JohnHancock signature(byte[] signatureBytes) {
             return ops.signature(signatureBytes);
+        }
+
+        @Override
+        public String signatureInstanceName() {
+            return "ED448";
         }
 
         @Override
@@ -293,10 +323,12 @@ public enum SignatureAlgorithm {
             return 114;
         }
 
+        @Override
         public String toString() {
             return ops.toString();
         }
 
+        @Override
         public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
             return ops.verify(message, signature, publicKey);
         }
@@ -304,7 +336,7 @@ public enum SignatureAlgorithm {
 
     public static class EdDSAOperations {
 
-        private static final String EDDSA_ALGORITHM_NAME = "EdDSA";
+        public static final String EDDSA_ALGORITHM_NAME = "EdDSA";
 
         private static EdECPoint decodeEdPoint(byte[] in) {
             var arr = in.clone();
@@ -520,6 +552,8 @@ public enum SignatureAlgorithm {
     abstract public JohnHancock sign(byte[] message, PrivateKey privateKey);
 
     abstract public JohnHancock signature(byte[] signatureBytes);
+
+    abstract public String signatureInstanceName();
 
     abstract public int signatureLength();
 
