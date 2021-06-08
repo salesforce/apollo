@@ -10,8 +10,8 @@ import java.net.SocketAddress;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.CertificateValidator;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 

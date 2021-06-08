@@ -21,9 +21,9 @@ import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
+import com.salesforce.apollo.crypto.cert.CaValidator;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
-import com.salesforce.apollo.protocols.CaValidator;
-import com.salesforce.apollo.protocols.CertificateValidator;
 import com.salesforce.apollo.utils.Utils;
 
 import io.github.olivierlemasle.ca.CertificateWithPrivateKey;

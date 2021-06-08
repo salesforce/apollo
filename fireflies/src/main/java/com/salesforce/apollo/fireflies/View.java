@@ -57,13 +57,13 @@ import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.StandardEpProvider;
+import com.salesforce.apollo.crypto.cert.CaValidator;
 import com.salesforce.apollo.fireflies.communications.FfClient;
 import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.protocols.BloomFilter;
-import com.salesforce.apollo.protocols.CaValidator;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.utils.Utils;
 

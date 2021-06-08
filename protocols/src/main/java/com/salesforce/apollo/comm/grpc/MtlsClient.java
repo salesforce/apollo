@@ -12,7 +12,7 @@ import java.net.SocketAddress;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
-import com.salesforce.apollo.protocols.CertificateValidator;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;

@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.shortQb64;
 import static java.util.Objects.requireNonNull;
 
