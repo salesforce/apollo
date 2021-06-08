@@ -17,20 +17,56 @@ import org.bouncycastle.util.encoders.Hex;
  * @author hal.hildebrand
  *
  */
-public class Digest {
+public class Digest implements Comparable<Digest> {
     public static final Digest NONE = new Digest(DigestAlgorithm.NONE, new byte[0]);
+
+    public static int compare(byte[] o1, byte[] o2) {
+        if (o1 == null) {
+            return o2 == null ? 0 : -1;
+        } else if (o2 == null) {
+            return 1;
+        }
+        if (o1.length != o2.length) {
+            return o1.length - o2.length;
+        }
+        for (int i = 0; i < o1.length; i++) {
+            final int diff = (o1[i] & 0xFF) - (o2[i] & 0xFF);
+            if (diff != 0) {
+                return diff;
+            }
+        }
+        return 0;
+    }
 
     public static boolean matches(byte[] bytes, Digest d1) {
         return Arrays.equals(d1.getBytes(), d1.getAlgorithm().digest(bytes).getBytes());
     }
 
     private final DigestAlgorithm algorithm;
+    private final byte[]          bytes;
+    private int                   hashCode;
 
-    private final byte[] bytes;
-
-    public Digest(DigestAlgorithm algorithm, byte[] bytes) {
+    public Digest(DigestAlgorithm algorithm, byte[] b) {
+        assert b != null && algorithm != null;
+  
+        if (b.length != algorithm.digestLength()) {
+            throw new IllegalArgumentException(
+                    "Invalid bytes length.  Require: " + algorithm.digestLength() + " found: " + b.length);
+        }
         this.algorithm = algorithm;
-        this.bytes = bytes;
+        this.bytes = b.clone();
+    }
+
+    @Override
+    public int compareTo(Digest id) {
+        if (id == null) {
+            return 1;
+        }
+        if (id.algorithm != algorithm) {
+            throw new IllegalArgumentException("Cannot compare digests of different algorithm. this: " + algorithm
+                    + " is not: " + id.getAlgorithm());
+        }
+        return compare(bytes, id.bytes);
     }
 
     @Override
@@ -50,21 +86,23 @@ public class Digest {
     }
 
     public byte[] getBytes() {
-        return bytes;
+        return bytes.clone();
     }
 
     @Override
     public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + Arrays.hashCode(bytes);
-        result = prime * result + Objects.hash(algorithm);
-        return result;
+        if (hashCode < 0) {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + Arrays.hashCode(bytes);
+            result = prime * result + Objects.hash(algorithm);
+            hashCode = result;
+        }
+        return hashCode;
     }
 
     @Override
     public String toString() {
         return "[" + algorithm + ":" + Hex.toHexString(bytes).substring(0, 12) + "]";
     }
-
 }

@@ -38,20 +38,16 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
  */
 public class Certificates {
     public static X509Certificate selfSign(boolean useSubjectKeyIdentifier, BcX500NameDnImpl dn,
-                                           SecureRandom entropy, KeyPair keyPair, Date notBefore, Date notAfter,
-                                           List<CertExtension> extensions) {
-        return sign(useSubjectKeyIdentifier, dn, keyPair,
-                    serialNumber(entropy), notBefore, notAfter, extensions, dn,
-                    keyPair.getPublic());
-    }
-    private static BigInteger serialNumber(SecureRandom entropy) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-    public static X509Certificate selfSign(boolean useSubjectKeyIdentifier, BcX500NameDnImpl dn,
                                            BigInteger serialNumber, KeyPair keyPair, Date notBefore, Date notAfter,
                                            List<CertExtension> extensions) {
         return sign(useSubjectKeyIdentifier, dn, keyPair, serialNumber, notBefore, notAfter, extensions, dn,
+                    keyPair.getPublic());
+    }
+
+    public static X509Certificate selfSign(boolean useSubjectKeyIdentifier, BcX500NameDnImpl dn, SecureRandom entropy,
+                                           KeyPair keyPair, Date notBefore, Date notAfter,
+                                           List<CertExtension> extensions) {
+        return sign(useSubjectKeyIdentifier, dn, keyPair, serialNumber(entropy), notBefore, notAfter, extensions, dn,
                     keyPair.getPublic());
     }
 
@@ -91,5 +87,11 @@ public class Certificates {
                 | NoSuchProviderException | SignatureException | CertIOException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private static BigInteger serialNumber(SecureRandom entropy) {
+        byte[] sn = new byte[64];
+        entropy.nextBytes(sn);
+        return new BigInteger(sn);
     }
 }

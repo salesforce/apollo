@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -105,6 +106,16 @@ public enum DigestAlgorithm {
             return 0;
         }
 
+        @Override
+        public Digest getLast() {
+            return new Digest(this, EMPTY);
+        }
+
+        @Override
+        public Digest getOrigin() {
+            return new Digest(this, EMPTY);
+        }
+
         public byte[] hashOf(byte[] bytes, int len) {
             return EMPTY;
         }
@@ -155,7 +166,18 @@ public enum DigestAlgorithm {
     public static final DigestAlgorithm DEFAULT = BLAKE3_256;
 
     private static final byte[]                   EMPTY          = new byte[0];
+    private static final byte[]                   LAST_32;
+    private static final byte[]                   LAST_64;
     private static final ThreadLocal<DigestCache> MESSAGE_DIGEST = ThreadLocal.withInitial(() -> new DigestCache());
+    private static final byte[]                   ORIGIN_32      = new byte[32];
+    private static final byte[]                   ORIGIN_64      = new byte[64];
+
+    static {
+        LAST_32 = new byte[32];
+        Arrays.fill(LAST_32, (byte) 255);
+        LAST_64 = new byte[64];
+        Arrays.fill(LAST_32, (byte) 255);
+    }
 
     public String algorithmName() {
         return name();
@@ -166,6 +188,14 @@ public enum DigestAlgorithm {
     }
 
     abstract public int digestLength();
+
+    public Digest getLast() {
+        return new Digest(this, digestLength() == 32 ? LAST_32 : LAST_64);
+    }
+
+    public Digest getOrigin() {
+        return new Digest(this, digestLength() == 32 ? ORIGIN_32 : ORIGIN_64);
+    }
 
     public byte[] hashOf(byte[] bytes, int len) {
         MessageDigest md = lookupJCA();
@@ -210,5 +240,4 @@ public enum DigestAlgorithm {
     private MessageDigest lookupJCA() {
         return MESSAGE_DIGEST.get().lookup(this);
     }
-
 }

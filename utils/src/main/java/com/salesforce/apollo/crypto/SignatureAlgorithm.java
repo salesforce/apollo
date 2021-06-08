@@ -49,11 +49,13 @@ import org.bouncycastle.jce.ECPointUtil;
 public enum SignatureAlgorithm {
 
     EC_SECP256K1 {
-        private final KeyFactory keyFactory;
 
+        private final KeyFactory       keyFactory;
         private final KeyPairGenerator keyPairGenerator;
         private final ECParameterSpec  parameterSpec;
         {
+            // secp256k1 is considered "unsecure" so you have enable it like this:
+            System.setProperty("jdk.sunec.disableNative", "false");
             try {
                 var ap = AlgorithmParameters.getInstance(ECDSA_ALGORITHM_NAME);
                 ap.init(new ECGenParameterSpec(curveName()));

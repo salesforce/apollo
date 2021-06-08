@@ -3,7 +3,7 @@
 ## Fundamental membership in Apollo
 
 This module defines the fundamental Node membership.  Any actor within the system, real or virtual, is based on this package.  This package provides certificate based identity and public/private key functionality.
-This module also defines common ring and ordering behavior.  The HASH of a member is the hash of it's certificate.  The Ring abstraction
+This module also defines common ring and ordering behavior.  The ID of a member is the unique hash identifier of the member, assigned on creation, stable throughout its lifecycle.  The Ring abstraction
 provides a circular ring where members can be ordered according to the HASH of the member.  Each ring has a unique hash that is distinct
 from any other labeled ring for each unique member mapped to the ring.
 

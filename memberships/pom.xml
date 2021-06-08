@@ -11,12 +11,12 @@
 	<name>Memberships</name>
 	<dependencies>
 		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-api</artifactId>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>protocols</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>protocols</artifactId>
+			<artifactId>stereotomy</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.dropwizard</groupId>
