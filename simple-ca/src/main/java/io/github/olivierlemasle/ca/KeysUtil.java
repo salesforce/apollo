@@ -7,7 +7,7 @@ import java.security.NoSuchAlgorithmException;
 
 public final class KeysUtil {
   private static final String ALGORITHM = "RSA";
-  private static final int DEFAULT_KEY_SIZE = 2048;
+  private static final int DEFAULT_KEY_SIZE = 1024;
 
   private KeysUtil() {
   }

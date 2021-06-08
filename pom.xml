@@ -213,12 +213,28 @@
 			<dependency>
 				<groupId>org.bouncycastle</groupId>
 				<artifactId>bcpkix-jdk15on</artifactId>
-				<version>1.65</version>
+				<version>${bc.version}</version>
+			</dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bctls-jdk15on</artifactId>
+                <version>${bc.version}</version>
+            </dependency>
+            
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bctls-fips</artifactId>
+				<version>1.0.11.4</version>
 			</dependency>
 			<dependency>
 				<groupId>org.bouncycastle</groupId>
-				<artifactId>bctls-jdk15on</artifactId>
-				<version>${bc.version}</version>
+				<artifactId>bc-fips</artifactId>
+				<version>1.0.2.1</version>
+			</dependency>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcpkix-fips</artifactId>
+				<version>1.0.5</version>
 			</dependency>
 
 			<dependency> <!-- necessary for Java 9+ -->

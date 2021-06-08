@@ -13,7 +13,7 @@ public class BcX500NameDnImpl {
         this.x500Name = name;
     }
 
-    BcX500NameDnImpl(final String name) {
+    public BcX500NameDnImpl(final String name) {
         this.x500Name = new X500Name(name);
     }
 

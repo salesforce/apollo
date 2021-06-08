@@ -38,6 +38,9 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 public class TestMtls {
+    static {
+        // ProviderUtils.setup(true, true, false);
+    }
 
     private CertificateAuthority ca;
 
