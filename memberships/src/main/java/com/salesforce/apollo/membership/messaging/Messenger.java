@@ -12,6 +12,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -285,10 +286,25 @@ public class Messenger {
     }
 
     public void publish(com.google.protobuf.Message message) {
+        publish(message, false);
+    }
+
+    public void publish(com.google.protobuf.Message message, boolean notifyLocal) {
         if (!started.get()) {
             return;
         }
-        buffer.publish(Any.pack(message), member);
+        Message m = buffer.publish(Any.pack(message), member);
+
+        if (notifyLocal) {
+            List<Msg> newMessages = Arrays.asList(new Msg(member, m.getSequenceNumber(), m.getContent()));
+            channelHandlers.forEach(handler -> {
+                try {
+                    handler.message(context.getId(), newMessages);
+                } catch (Throwable e) {
+                    log.error("Error in message handler on: {}", member, e);
+                }
+            });
+        }
     }
 
     public void register(Consumer<Integer> roundListener) {

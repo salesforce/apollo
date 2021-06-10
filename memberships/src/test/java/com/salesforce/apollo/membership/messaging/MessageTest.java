@@ -134,16 +134,15 @@ public class MessageTest {
     @Test
     public void broadcast() throws Exception {
         List<SigningMember> members = certs.values()
-                                           .parallelStream()
+                                           .parallelStream() 
                                            .map(cert -> new SigningMember(
                                                    Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
                                            .collect(Collectors.toList());
-        assertEquals(certs.size(), members.size());
 
-        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
+        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
         members.forEach(m -> context.activate(m));
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
@@ -180,7 +179,7 @@ public class MessageTest {
             messengers.parallelStream().forEach(view -> {
                 ByteString packed = ByteString.copyFrom(buf.array());
                 assertEquals(36, packed.size());
-                view.publish(ByteMessage.newBuilder().setContents(packed).build());
+                view.publish(ByteMessage.newBuilder().setContents(packed).build(), true);
             });
             boolean success = round.await(20, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());

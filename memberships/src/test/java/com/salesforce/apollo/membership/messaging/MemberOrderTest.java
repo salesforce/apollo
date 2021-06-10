@@ -7,7 +7,6 @@
 package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -93,8 +92,8 @@ public class MemberOrderTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final Parameters                       parameters = Parameters.newBuilder()
-                                                                                 .setFalsePositiveRate(0.25)
-                                                                                 .setBufferSize(500)
+                                                                                 .setFalsePositiveRate(0.01)
+                                                                                 .setBufferSize(5_000)
                                                                                  .build();
 
     @BeforeAll
@@ -126,11 +125,10 @@ public class MemberOrderTest {
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
-                                           .limit(5)
+                                           .limit(50)
                                            .collect(Collectors.toList());
-//        assertEquals(certs.size(), members.size()); 
 
-        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
+        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
         members.forEach(m -> context.activate(m));
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
@@ -156,17 +154,22 @@ public class MemberOrderTest {
             messengers.forEach(m -> {
                 m.publish(ByteMessage.newBuilder()
                                      .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                     .build());
+                                     .build(),
+                          true);
             });
         }
 
-        boolean complete = Utils.waitForCondition(30_000, 1_000, () -> {
+        boolean complete = Utils.waitForCondition(15_000, 1_000, () -> {
             return receivers.stream()
-                            .map(r -> r.validate(messengers.size() - 1, messageCount))
+                            .map(r -> r.validate(messengers.size(), messageCount))
                             .filter(result -> !result)
                             .count() == 0;
         });
-        receivers.forEach(m -> System.out.println(m.totalOrder));
+//        receivers.forEach(m -> System.out.println(m.totalOrder));
+//        receivers.forEach(r -> {
+//            System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
+//                    + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
+//        });
         assertTrue(complete, "did not get all messages : "
                 + receivers.stream().filter(r -> !r.validate(messengers.size(), messageCount)).map(r -> r.id).count());
     }
@@ -180,10 +183,10 @@ public class MemberOrderTest {
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
+                                           .limit(50)
                                            .collect(Collectors.toList());
-        assertEquals(certs.size(), members.size());
 
-        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
+        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
         members.forEach(m -> context.activate(m));
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
@@ -209,22 +212,19 @@ public class MemberOrderTest {
             messengers.forEach(m -> {
                 m.publish(ByteMessage.newBuilder()
                                      .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                     .build());
+                                     .build(),
+                          true);
             });
         }
 
         boolean complete = Utils.waitForCondition(30_000, 1_000, () -> {
             return receivers.stream()
-                            .map(r -> r.validate(messengers.size() - 1, messageCount))
+                            .map(r -> r.validate(messengers.size(), messageCount))
                             .filter(result -> !result)
                             .count() == 0;
         });
-        assertTrue(complete,
-                   "did not get all messages : "
-                           + receivers.stream()
-                                      .filter(r -> !r.validate(messengers.size() - 1, messageCount))
-                                      .map(r -> r.id)
-                                      .count());
+        assertTrue(complete, "did not get all messages : "
+                + receivers.stream().filter(r -> !r.validate(messengers.size(), messageCount)).map(r -> r.id).count());
 
         System.out.println("Stoppig half");
         int half = members.size() / 2;
@@ -237,7 +237,8 @@ public class MemberOrderTest {
             liveRcvrs.forEach(r -> {
                 r.messenger.publish(ByteMessage.newBuilder()
                                                .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                               .build());
+                                               .build(),
+                                    true);
             });
         }
 
@@ -261,11 +262,12 @@ public class MemberOrderTest {
             receivers.forEach(r -> {
                 r.messenger.publish(ByteMessage.newBuilder()
                                                .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                               .build());
+                                               .build(),
+                                    true);
             });
         }
 
-        complete = Utils.waitForCondition(30_000, 1_000, () -> {
+        complete = Utils.waitForCondition(15_000, 1_000, () -> {
             return liveRcvrs.stream()
                             .map(r -> r.validate(liveRcvrs, messageCount * 3))
                             .filter(result -> !result)
@@ -275,6 +277,23 @@ public class MemberOrderTest {
                                 .filter(result -> !result)
                                 .count() == 0;
         });
+        System.out.println();
+        System.out.println("Live Receivers");
+        liveRcvrs.forEach(m -> System.out.println(m.totalOrder));
+        liveRcvrs.forEach(r -> {
+            System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
+                    + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
+        });
+
+        System.out.println();
+        System.out.println();
+        System.out.println("Dead Receivers");
+        deadRcvrs.forEach(m -> System.out.println(m.totalOrder));
+        deadRcvrs.forEach(r -> {
+            System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
+                    + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
+        });
+ 
         assertTrue(complete, "did not get all messages : "
                 + liveRcvrs.stream().filter(r -> !r.validate(liveRcvrs, messageCount * 3)).map(r -> r.id).count()
                 + " : " + deadRcvrs.stream().filter(r -> !r.validate(deadRcvrs, messageCount)).map(r -> r.id).count());

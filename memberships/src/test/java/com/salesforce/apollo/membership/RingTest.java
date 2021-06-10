@@ -63,8 +63,8 @@ public class RingTest {
         return new Member(id, generated, generated.getPublicKey());
     }
 
-    private Ring<Member>    ring;
     private Context<Member> context;
+    private Ring<Member>    ring;
 
     @BeforeEach
     public void before() {
@@ -81,20 +81,6 @@ public class RingTest {
                 return context.hashFor(o1, 0).compareTo(context.hashFor(o2, 0));
             }
         });
-    }
-
-    @Test
-    public void testRingCalculation() {
-        double epsilon = 0.99999;
-        double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20, 0.25, 0.33 };
-        int[] cardinality = new int[] { 10, 100, 1_0000, 10_0000, 1_000_000, 10_000_000 };
-
-        for (double pByz : probabilityByzantine) {
-            for (int card : cardinality) {
-                int t = Context.minMajority(pByz, card, epsilon);
-                System.out.println(String.format("T: %s K: %s Pbyz: %s Cardinality: %s", t, 2 * t + 1, pByz, card));
-            }
-        }
     }
 
     @Test
@@ -140,26 +126,26 @@ public class RingTest {
     }
 
     @Test
-    public void predecessors() {
-        Collection<Member> predecessors = ring.streamPredecessors(members.get(5),
-                                                                  m -> m.equals(members.get(members.size() - 3)))
-                                              .collect(Collectors.toList());
-        assertFalse(predecessors.isEmpty());
-        assertEquals(7, predecessors.size());
-    }
-
-    @Test
-    public void successors() {
-        Collection<Member> successors = ring.streamSuccessors(members.get(5), m -> m.equals(members.get(3)))
-                                            .collect(Collectors.toList());
-        assertFalse(successors.isEmpty());
-        assertEquals(7, successors.size());
+    public void noRing() {
+        context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin());
+        assertEquals(1, context.getRingCount());
+        members.forEach(m -> context.activate(m));
+        assertEquals(MEMBER_COUNT, context.getActive().size());
     }
 
     @Test
     public void predecessor() {
         assertEquals(5, members.indexOf(ring.predecessor(members.get(6))));
         assertEquals(members.size() - 1, members.indexOf(ring.predecessor(members.get(0))));
+    }
+
+    @Test
+    public void predecessors() {
+        Collection<Member> predecessors = ring.streamPredecessors(members.get(5),
+                                                                  m -> m.equals(members.get(members.size() - 3)))
+                                              .collect(Collectors.toList());
+        assertFalse(predecessors.isEmpty());
+        assertEquals(7, predecessors.size());
     }
 
     @Test
@@ -187,11 +173,25 @@ public class RingTest {
     }
 
     @Test
-    public void noRing() {
-        context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin());
-        assertEquals(1, context.getRingCount());
-        members.forEach(m -> context.activate(m));
-        assertEquals(MEMBER_COUNT, context.getActive().size());
+    public void successors() {
+        Collection<Member> successors = ring.streamSuccessors(members.get(5), m -> m.equals(members.get(3)))
+                                            .collect(Collectors.toList());
+        assertFalse(successors.isEmpty());
+        assertEquals(7, successors.size());
+    }
+
+    @Test
+    public void testRingCalculation() {
+        double epsilon = 0.99999;
+        double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20, 0.25, 0.33 };
+        int[] cardinality = new int[] { 10, 100, 1_0000, 10_0000, 1_000_000, 10_000_000 };
+
+        for (double pByz : probabilityByzantine) {
+            for (int card : cardinality) {
+                int t = Context.minMajority(pByz, card, epsilon);
+                System.out.println(String.format("T: %s K: %s Pbyz: %s Cardinality: %s", t, 2 * t + 1, pByz, card));
+            }
+        }
     }
 
     @Test

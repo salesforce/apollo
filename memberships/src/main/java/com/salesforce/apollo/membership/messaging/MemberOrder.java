@@ -61,13 +61,13 @@ public class MemberOrder {
                 }
                 queue.add(msg);
             } else {
-                log.trace("discarding previously seen: {}", msg.sequenceNumber);
+//                log.trace("discarding previously seen: {}", msg.sequenceNumber);
             }
         }
 
         @Override
         public String toString() {
-            return "Active[id=" + id + ", lsn=" + lastSequenceNumber + ", ft=" + flushTarget + "]";
+            return "AC[lsn=" + lastSequenceNumber + ", ft=" + flushTarget + "]";
         }
 
         @Override
@@ -93,8 +93,8 @@ public class MemberOrder {
                     queue.poll();
                     message = queue.peek();
                 } else {
-                    log.trace("No Msg, next: {} head: {} flushTarget: {} on: {}", current, message.sequenceNumber,
-                              currentFlushTarget, member);
+//                    log.trace("No Msg, next: {} head: {} flushTarget: {} on: {}", current, message.sequenceNumber,
+//                              currentFlushTarget, member);
                     return null;
                 }
             }
@@ -183,8 +183,8 @@ public class MemberOrder {
 
     @Override
     public String toString() {
-        return "MemberOrder [context=" + context.getId() + ", member=" + member.getId() + ", channels=" + channels + ", started="
-                + started + ", ttl=" + ttl + ", tick=" + tick + "]";
+        return "MO[" + member.getId() + ", s=" + started + ", ttl=" + ttl + ", tick=" + tick + ", channels=" + channels
+                + "]";
     }
 
     public void process(Collection<Msg> msgs, int round) {
