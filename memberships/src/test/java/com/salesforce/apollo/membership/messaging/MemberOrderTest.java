@@ -10,7 +10,6 @@ import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -94,8 +93,8 @@ public class MemberOrderTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final Parameters                       parameters = Parameters.newBuilder()
-                                                                                 .setFalsePositiveRate(0.000125)
-                                                                                 .setBufferSize(1500)
+                                                                                 .setFalsePositiveRate(0.25)
+                                                                                 .setBufferSize(500)
                                                                                  .build();
 
     @BeforeAll
@@ -120,7 +119,6 @@ public class MemberOrderTest {
 
     @Test
     public void smoke() {
-        List<X509Certificate> seeds = new ArrayList<>();
         List<SigningMember> members = certs.values()
                                            .parallelStream()
                                            .map(cert -> new SigningMember(
@@ -128,19 +126,13 @@ public class MemberOrderTest {
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
+                                           .limit(5)
                                            .collect(Collectors.toList());
-        assertEquals(certs.size(), members.size());
+//        assertEquals(certs.size(), members.size()); 
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
         members.forEach(m -> context.activate(m));
 
-        while (seeds.size() < 7) {
-            CertificateWithPrivateKey cert = certs.get(members.get(Utils.bitStreamEntropy().nextInt(members.size()))
-                                                              .getId());
-            if (!seeds.contains(cert.getX509Certificate())) {
-                seeds.add(cert.getX509Certificate());
-            }
-        }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         ForkJoinPool executor = ForkJoinPool.commonPool();
@@ -174,13 +166,13 @@ public class MemberOrderTest {
                             .filter(result -> !result)
                             .count() == 0;
         });
+        receivers.forEach(m -> System.out.println(m.totalOrder));
         assertTrue(complete, "did not get all messages : "
                 + receivers.stream().filter(r -> !r.validate(messengers.size(), messageCount)).map(r -> r.id).count());
     }
 
     @Test
     public void testGaps() throws Exception {
-        List<X509Certificate> seeds = new ArrayList<>();
         List<SigningMember> members = certs.values()
                                            .parallelStream()
                                            .map(cert -> new SigningMember(
@@ -193,14 +185,6 @@ public class MemberOrderTest {
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
         members.forEach(m -> context.activate(m));
-
-        while (seeds.size() < 7) {
-            CertificateWithPrivateKey cert = certs.get(members.get(Utils.bitStreamEntropy().nextInt(members.size()))
-                                                              .getId());
-            if (!seeds.contains(cert.getX509Certificate())) {
-                seeds.add(cert.getX509Certificate());
-            }
-        }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         ForkJoinPool executor = ForkJoinPool.commonPool();

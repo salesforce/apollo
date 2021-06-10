@@ -28,7 +28,7 @@ public class BloomFilterTest {
     @Test
     public void smoke() {
         int max = 1_000_000;
-        double target = 0.0000000125;
+        double target = 0.125;
         BloomFilter<Digest> biff = new DigestBloomFilter(666, max, target);
 
         SecureRandom random = new SecureRandom();
@@ -59,9 +59,10 @@ public class BloomFilterTest {
         }
         double failureRate = (double) failed.size() / (double) unknownSample;
         DecimalFormat format = new DecimalFormat("#.#############");
+        double targetWithSlop = target + (target * 0.05);
         System.out.print("Target failure rate: " + format.format(target) + " measured: " + format.format(failureRate)
-                + "%; failed: " + failed.size() + " out of " + unknownSample + " random probes");
-        assertTrue((target + (target * 0.1)) >= failureRate);
+                + "; failed: " + failed.size() + " out of " + unknownSample + " random probes");
+        assertTrue(targetWithSlop >= failureRate);
     }
 
 }

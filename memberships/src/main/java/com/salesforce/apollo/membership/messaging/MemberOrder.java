@@ -66,6 +66,11 @@ public class MemberOrder {
         }
 
         @Override
+        public String toString() {
+            return "Active[id=" + id + ", lsn=" + lastSequenceNumber + ", ft=" + flushTarget + "]";
+        }
+
+        @Override
         public Digest getId() {
             return id;
         }
@@ -174,6 +179,12 @@ public class MemberOrder {
                 }
             }
         });
+    }
+
+    @Override
+    public String toString() {
+        return "MemberOrder [context=" + context.getId() + ", member=" + member.getId() + ", channels=" + channels + ", started="
+                + started + ", ttl=" + ttl + ", tick=" + tick + "]";
     }
 
     public void process(Collection<Msg> msgs, int round) {

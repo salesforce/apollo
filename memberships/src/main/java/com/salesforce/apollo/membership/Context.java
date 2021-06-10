@@ -6,7 +6,8 @@
  */
 package com.salesforce.apollo.membership;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.*;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -98,14 +99,28 @@ public class Context<T extends Member> {
      *         monitors are correct with probability e/size given the uniform
      *         probability pByz that a monitor is Byzantine.
      */
-    public static int minMajority(double pByz, double faultToleranceLevel) {
-        for (int t = 1; t <= 10000; t++) {
+    public static int minMajority(double pByz, int cardinality) {
+        return minMajority(pByz, cardinality, 0.99);
+    }
+
+    /**
+     * @return the minimum t such that the probability of more than t out of 2t+1
+     *         monitors are correct with probability e/size given the uniform
+     *         probability pByz that a monitor is Byzantine.
+     */
+    public static int minMajority(double pByz, int cardinality, double epsilon) {
+        if (epsilon > 1.0 || epsilon <= 0.0) {
+            throw new IllegalArgumentException("epsilon must be > 0 and <= 1 : " + epsilon);
+        }
+        double e = epsilon / (double) cardinality;
+        for (int t = 1; t <= cardinality; t++) {
             double pf = 1.0 - Util.binomialc(t, 2 * t + 1, pByz);
-            if (faultToleranceLevel >= pf) {
+            if (e >= pf) {
                 return t;
             }
         }
-        throw new IllegalArgumentException("Cannot compute number if rings from pByz=" + pByz);
+        throw new IllegalArgumentException("Cannot compute number of rings from pByz=" + pByz + " cardinality: "
+                + cardinality + " epsilon: " + epsilon);
     }
 
     private final Map<Digest, T>               active              = new ConcurrentHashMap<>();
@@ -119,6 +134,37 @@ public class Context<T extends Member> {
 
     public Context(Digest id) {
         this(id, 1);
+    }
+
+    /**
+     * Construct a context with the given id and cardinality where the number of
+     * rings is 2 * T + 1, where T is the tolerance level. The tolerance level is
+     * calculated by the minMajority of the input probability of any member being
+     * byzantine and the epsilon indicating how close to probability 1 that a member
+     * will not be unfortunate
+     * 
+     * @param id
+     * @param pByz
+     * @param cardinality
+     */
+    public Context(Digest id, double pByz, int cardinality) {
+        this(id, minMajority(pByz, cardinality) * 2 + 1);
+    }
+
+    /**
+     * Construct a context with the given id and cardinality where the number of
+     * rings is 2 * T + 1, where T is the tolerance level. The tolerance level is
+     * calculated by the minMajority of the input probability of any member being
+     * byzantine and the epsilon indicating how close to probability 1 that a member
+     * will not be unfortunate
+     * 
+     * @param id
+     * @param pByz
+     * @param cardinality
+     * @param epsilon
+     */
+    public Context(Digest id, double pByz, int cardinality, double epsilon) {
+        this(id, minMajority(pByz, cardinality, epsilon) * 2 + 1);
     }
 
     @SuppressWarnings("unchecked")
@@ -157,12 +203,12 @@ public class Context<T extends Member> {
         return true;
     }
 
-    public void add(T m) {
-        offline(m);
-    }
-
     public List<T> activeMembers() {
         return new ArrayList<>(active.values());
+    }
+
+    public void add(T m) {
+        offline(m);
     }
 
     public Stream<T> allMembers() {

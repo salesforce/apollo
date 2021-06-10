@@ -7,7 +7,6 @@
 package com.salesforce.apollo.crypto;
 
 import java.io.IOException;
-import java.math.BigInteger;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyFactory;
@@ -19,7 +18,6 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.interfaces.EdECPublicKey;
-import java.security.spec.EdECPoint;
 import java.security.spec.EdECPrivateKeySpec;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.NamedParameterSpec;
@@ -34,16 +32,6 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 public class EdDSAOperations {
 
     public static final String EDDSA_ALGORITHM_NAME = "EdDSA";
-
-    private static EdECPoint decodeEdPoint(byte[] in) {
-        var arr = in.clone();
-        var msb = arr[arr.length - 1];
-        arr[arr.length - 1] &= (byte) 0x7F;
-        var xOdd = (msb & 0x80) != 0;
-        reverse(arr);
-        var y = new BigInteger(1, arr);
-        return new EdECPoint(xOdd, y);
-    }
 
     private static void reverse(byte[] arr) {
         var i = 0;

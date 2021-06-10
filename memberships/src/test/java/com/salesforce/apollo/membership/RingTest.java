@@ -84,6 +84,20 @@ public class RingTest {
     }
 
     @Test
+    public void testRingCalculation() {
+        double epsilon = 0.99999;
+        double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20, 0.25, 0.33 };
+        int[] cardinality = new int[] { 10, 100, 1_0000, 10_0000, 1_000_000, 10_000_000 };
+
+        for (double pByz : probabilityByzantine) {
+            for (int card : cardinality) {
+                int t = Context.minMajority(pByz, card, epsilon);
+                System.out.println(String.format("T: %s K: %s Pbyz: %s Cardinality: %s", t, 2 * t + 1, pByz, card));
+            }
+        }
+    }
+
+    @Test
     public void betweenPredecessor() {
         int start = 5;
         int stop = 3;

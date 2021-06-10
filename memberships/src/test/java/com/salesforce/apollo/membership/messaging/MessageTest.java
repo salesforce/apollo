@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
-import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -107,8 +106,8 @@ public class MessageTest {
     private static Map<Digest, CertificateWithPrivateKey> certs;
 
     private static final Parameters parameters = Parameters.newBuilder()
-                                                           .setFalsePositiveRate(0.000125)
-                                                           .setBufferSize(1500)
+                                                           .setFalsePositiveRate(0.25)
+                                                           .setBufferSize(500)
                                                            .build();
 
     @BeforeAll
@@ -134,7 +133,6 @@ public class MessageTest {
 
     @Test
     public void broadcast() throws Exception {
-        List<X509Certificate> seeds = new ArrayList<>();
         List<SigningMember> members = certs.values()
                                            .parallelStream()
                                            .map(cert -> new SigningMember(
@@ -147,14 +145,6 @@ public class MessageTest {
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
         members.forEach(m -> context.activate(m));
-
-        while (seeds.size() < 7) {
-            CertificateWithPrivateKey cert = certs.get(members.get(Utils.bitStreamEntropy().nextInt(members.size()))
-                                                              .getId());
-            if (!seeds.contains(cert.getX509Certificate())) {
-                seeds.add(cert.getX509Certificate());
-            }
-        }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         ForkJoinPool executor = ForkJoinPool.commonPool();

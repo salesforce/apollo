@@ -21,7 +21,7 @@ abstract public class Hash<T> {
 
         private static final long C1         = 0x87c37b91114253d5L;
         private static final long C2         = 0x4cf5ad432745937fL;
-        private static final long CHUNK_SIZE = 32;
+        private static final long CHUNK_SIZE = 16;
 
         private static long fmix64(long k) {
             k ^= k >>> 33;
@@ -48,6 +48,7 @@ abstract public class Hash<T> {
 
         long h1;
         long h2;
+        int length;
 
         public Hasher(T key, int seed) {
             this.h1 = seed;
@@ -74,11 +75,15 @@ abstract public class Hash<T> {
             switch (key.getAlgorithm().digestLength()) {
             case 64: {
                 bmix64(buf.getLong(), buf.getLong());
+                length += CHUNK_SIZE;
                 bmix64(buf.getLong(), buf.getLong());
+                length += CHUNK_SIZE;
             }
             case 32: {
                 bmix64(buf.getLong(), buf.getLong());
+                length += CHUNK_SIZE;
                 bmix64(buf.getLong(), buf.getLong());
+                length += CHUNK_SIZE;
                 break;
             }
             default:
@@ -89,11 +94,13 @@ abstract public class Hash<T> {
 
         protected void process(Integer i) {
             h1 ^= mixK1(0);
+            length += 2;
             h2 ^= mixK2(i.longValue());
         }
 
         protected void process(Long l) {
             h1 ^= mixK1(l.longValue());
+            length += 4;
             h2 ^= mixK2(0);
         }
 
@@ -114,8 +121,8 @@ abstract public class Hash<T> {
         }
 
         private Hasher<T> makeHash() {
-            h1 ^= CHUNK_SIZE;
-            h2 ^= CHUNK_SIZE;
+            h1 ^= length;
+            h2 ^= length;
 
             h1 += h2;
             h2 += h1;
