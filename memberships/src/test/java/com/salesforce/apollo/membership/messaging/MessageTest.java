@@ -106,7 +106,10 @@ public class MessageTest {
     public static final String                            DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
     private static Map<Digest, CertificateWithPrivateKey> certs;
 
-    private static final Parameters parameters = Parameters.newBuilder().setBufferSize(100).build();
+    private static final Parameters parameters = Parameters.newBuilder()
+                                                           .setFalsePositiveRate(0.000125)
+                                                           .setBufferSize(1500)
+                                                           .build();
 
     @BeforeAll
     public static void beforeClass() {

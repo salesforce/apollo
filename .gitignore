@@ -19,3 +19,4 @@ pom.xml.bak
 *.iml 
 **/.iml
 /conduit-ci/jenkins/jobs/
+/bc-src.zip

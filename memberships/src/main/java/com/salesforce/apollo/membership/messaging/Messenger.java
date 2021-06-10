@@ -43,7 +43,7 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications;
 import com.salesforce.apollo.membership.messaging.comms.MessagingServerCommunications;
-import com.salesforce.apollo.protocols.BloomFilter;
+import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -239,7 +239,8 @@ public class Messenger {
                                                      .setRing(ring)
                                                      .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextInt(),
                                                                                parameters.falsePositiveRate)
-                                                                       .toBff())
+                                                                       .toBff()
+                                                                       .toByteString())
                                                      .build());
             } catch (Throwable e) {
                 log.debug("error gossiping with {}", link.getMember(), e);

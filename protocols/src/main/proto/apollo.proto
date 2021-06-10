@@ -19,7 +19,7 @@ service Messaging {
 message MessageBff {
     string context = 1; 
     int32 ring = 3;
-    Biff digests = 4;
+    bytes digests = 4;
 }
 
 message Push {
@@ -43,7 +43,7 @@ message ByteMessage {
 }
 
 message Messages {
-    Biff bff = 1;
+    bytes bff = 1;
     repeated  Message updates = 2;
 }
 
@@ -148,7 +148,7 @@ message Signed {
  
 
 message AccusationGossip {
-        Biff bff = 1;
+        bytes bff = 1;
         repeated Signed updates = 2;
     } 
 
@@ -160,27 +160,19 @@ message EncodedCertificate {
     }
 
 message CertificateGossip {
-        Biff bff = 1;
+        bytes bff = 1;
         repeated EncodedCertificate updates = 2;
     }
 
-message Biff {
-        int32 m = 1;
-        int32 k = 2;
-        int32 seed = 3;
-        bytes bits = 4;
-        int32 type = 5;
-} 
-
 message NoteGossip {
-        Biff bff = 1;
+        bytes bff = 1;
         repeated Signed updates = 2;
     }
 
 message Digests { 
-        Biff certificateBff = 1;
-        Biff noteBff = 2;
-        Biff accusationBff = 3; 
+        bytes certificateBff = 1;
+        bytes noteBff = 2;
+        bytes accusationBff = 3; 
     }
 
 message Gossip {

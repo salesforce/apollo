@@ -40,8 +40,8 @@ import com.salesfoce.apollo.consortium.proto.CertifiedBlock.Builder;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
-import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.utils.BloomFilter;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2

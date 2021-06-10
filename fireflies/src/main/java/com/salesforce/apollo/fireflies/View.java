@@ -63,8 +63,8 @@ import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
-import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
@@ -840,7 +840,7 @@ public class View {
     }
 
     BloomFilter<HashKey> getAccusationsBff(int seed, double p) {
-        BloomFilter<HashKey> bff = new BloomFilter.HkBloomFilter(seed,
+        BloomFilter<HashKey> bff = new BloomFilter.DigestBloomFilter(seed,
                 getParameters().cardinality * getParameters().rings, p);
         context.getActive()
                .stream()
@@ -851,7 +851,7 @@ public class View {
     }
 
     BloomFilter<HashKey> getCertificatesBff(int seed, double p) {
-        BloomFilter<HashKey> bff = new BloomFilter.HkBloomFilter(seed, getParameters().cardinality, p);
+        BloomFilter<HashKey> bff = new BloomFilter.DigestBloomFilter(seed, getParameters().cardinality, p);
         view.values()
             .stream()
             .map(m -> m.getCertificateHash())
@@ -861,7 +861,7 @@ public class View {
     }
 
     BloomFilter<HashKey> getNotesBff(int seed, double p) {
-        BloomFilter<HashKey> bff = new BloomFilter.HkBloomFilter(seed, getParameters().cardinality, p);
+        BloomFilter<HashKey> bff = new BloomFilter.DigestBloomFilter(seed, getParameters().cardinality, p);
         view.values()
             .stream()
             .map(m -> m.getNote())

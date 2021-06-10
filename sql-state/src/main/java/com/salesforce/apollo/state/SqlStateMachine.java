@@ -71,8 +71,8 @@ import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.consortium.support.CheckpointState;
-import com.salesforce.apollo.protocols.Hash.HkHasher;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.utils.HashKey;
+import com.salesforce.apollo.utils.Hash.HkHasher;
 
 /**
  * This is ye Jesus Nut of sql state via distribute linear logs. We use H2 as a

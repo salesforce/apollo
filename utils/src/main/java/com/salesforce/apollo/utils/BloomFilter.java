@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.protocols;
+package com.salesforce.apollo.utils;
 
 import java.util.BitSet;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.proto.Biff;
+import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -18,9 +18,9 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 abstract public class BloomFilter<T> {
-    public static class HkBloomFilter extends BloomFilter<Digest> {
+    public static class DigestBloomFilter extends BloomFilter<Digest> {
 
-        public HkBloomFilter(int seed, int m, int k, ByteString bits) {
+        public DigestBloomFilter(int seed, int m, int k, ByteString bits) {
             super(new Hash<Digest>(seed, m, k) {
                 @Override
                 Hasher<Digest> newHasher(Digest key) {
@@ -29,7 +29,7 @@ abstract public class BloomFilter<T> {
             }, BitSet.valueOf(bits.toByteArray()));
         }
 
-        public HkBloomFilter(int seed, long n, double p) {
+        public DigestBloomFilter(int seed, long n, double p) {
             super(new Hash<Digest>(seed, n, p) {
                 @Override
                 Hasher<Digest> newHasher(Digest key) {
@@ -102,7 +102,7 @@ abstract public class BloomFilter<T> {
     public static <Q> BloomFilter<Q> create(int seed, int m, int k, ByteString bits, int type) {
         switch (type) {
         case 0:
-            return (BloomFilter<Q>) new HkBloomFilter(seed, m, k, bits);
+            return (BloomFilter<Q>) new DigestBloomFilter(seed, m, k, bits);
         case 1:
             return (BloomFilter<Q>) new IntBloomFilter(seed, m, k, bits);
         case 2:
@@ -116,7 +116,7 @@ abstract public class BloomFilter<T> {
     public static <Q> BloomFilter<Q> create(int seed, long n, double p, int type) {
         switch (type) {
         case 0:
-            return (BloomFilter<Q>) new HkBloomFilter(seed, n, p);
+            return (BloomFilter<Q>) new DigestBloomFilter(seed, n, p);
         case 1:
             return (BloomFilter<Q>) new IntBloomFilter(seed, n, p);
         case 2:

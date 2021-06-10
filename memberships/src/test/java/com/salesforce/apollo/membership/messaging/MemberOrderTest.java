@@ -94,8 +94,8 @@ public class MemberOrderTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final Parameters                       parameters = Parameters.newBuilder()
-                                                                                 .setFalsePositiveRate(0.25)
-                                                                                 .setBufferSize(500)
+                                                                                 .setFalsePositiveRate(0.000125)
+                                                                                 .setBufferSize(1500)
                                                                                  .build();
 
     @BeforeAll

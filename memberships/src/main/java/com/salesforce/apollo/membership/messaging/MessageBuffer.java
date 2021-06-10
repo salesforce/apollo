@@ -39,7 +39,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.protocols.BloomFilter;
+import com.salesforce.apollo.utils.BloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -111,7 +111,7 @@ public class MessageBuffer {
     }
 
     public BloomFilter<Digest> getBff(int seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.HkBloomFilter(seed, bufferSize, p);
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, bufferSize, p);
         state.keySet().forEach(h -> bff.add(h));
         return bff;
     }
@@ -139,7 +139,7 @@ public class MessageBuffer {
                 builder.addUpdates(entry.getValue());
             }
         });
-        builder.setBff(getBff(seed, p).toBff());
+        builder.setBff(getBff(seed, p).toBff().toByteString());
         Messages gossip = builder.build();
         log.trace("updates: {}", gossip.getUpdatesCount());
         return gossip;

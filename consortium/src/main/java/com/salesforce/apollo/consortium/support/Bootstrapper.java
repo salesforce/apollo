@@ -35,9 +35,9 @@ import com.salesforce.apollo.consortium.Parameters;
 import com.salesforce.apollo.consortium.Store;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.CountdownAction;
 import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Pair;
 import com.salesforce.apollo.utils.Utils;
 
