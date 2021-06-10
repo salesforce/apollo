@@ -6,7 +6,10 @@
  */
 package com.salesforce.apollo.protocols;
 
+import java.nio.ByteBuffer;
 import java.util.BitSet;
+
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
@@ -16,10 +19,9 @@ abstract public class Hash<T> {
 
     abstract public static class Hasher<T> {
 
-        public static final int HASH_KEY_SIZE = 32;
-
-        private static final long C1 = 0x87c37b91114253d5L;
-        private static final long C2 = 0x4cf5ad432745937fL;
+        private static final long C1         = 0x87c37b91114253d5L;
+        private static final long C2         = 0x4cf5ad432745937fL;
+        private static final long CHUNK_SIZE = 32;
 
         private static long fmix64(long k) {
             k ^= k >>> 33;
@@ -67,9 +69,21 @@ abstract public class Hash<T> {
             return h2;
         }
 
-        protected void process(HashKey key) {
-            bmix64(key.itself[0], key.itself[1]);
-            bmix64(key.itself[2], key.itself[3]);
+        protected void process(Digest key) {
+            ByteBuffer buf = ByteBuffer.wrap(key.getBytes());
+            switch (key.getAlgorithm().digestLength()) {
+            case 64: {
+                bmix64(buf.getLong(), buf.getLong());
+                bmix64(buf.getLong(), buf.getLong());
+            }
+            case 32: {
+                bmix64(buf.getLong(), buf.getLong());
+                bmix64(buf.getLong(), buf.getLong());
+                break;
+            }
+            default:
+                throw new IllegalArgumentException("Unknown digest length");
+            }
             makeHash();
         }
 
@@ -100,8 +114,8 @@ abstract public class Hash<T> {
         }
 
         private Hasher<T> makeHash() {
-            h1 ^= HASH_KEY_SIZE;
-            h2 ^= HASH_KEY_SIZE;
+            h1 ^= CHUNK_SIZE;
+            h2 ^= CHUNK_SIZE;
 
             h1 += h2;
             h2 += h1;
@@ -116,18 +130,18 @@ abstract public class Hash<T> {
 
     }
 
-    public static class HkHasher extends Hasher<HashKey> {
+    public static class DigestHasher extends Hasher<Digest> {
 
-        public HkHasher(HashKey key, int seed) {
+        public DigestHasher(Digest key, int seed) {
             super(key, seed);
         }
 
-        public HkHasher(HashKey key, long seed) {
+        public DigestHasher(Digest key, long seed) {
             super(key, seed);
         }
 
         @Override
-        protected void processIt(HashKey key) {
+        protected void processIt(Digest key) {
             process(key);
         }
 

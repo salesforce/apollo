@@ -10,7 +10,6 @@ import java.math.BigInteger;
 import java.security.AlgorithmParameters;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -27,13 +26,9 @@ import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.ECPrivateKeySpec;
 import java.security.spec.ECPublicKeySpec;
-import java.security.spec.EdECPoint;
-import java.security.spec.EdECPrivateKeySpec;
-import java.security.spec.EdECPublicKeySpec;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.InvalidParameterSpecException;
 import java.security.spec.NamedParameterSpec;
-import java.util.Arrays;
 
 import org.bouncycastle.crypto.params.ECPublicKeyParameters;
 import org.bouncycastle.jcajce.provider.asymmetric.util.ECUtil;
@@ -54,15 +49,13 @@ public enum SignatureAlgorithm {
         private final KeyPairGenerator keyPairGenerator;
         private final ECParameterSpec  parameterSpec;
         {
-            // secp256k1 is considered "unsecure" so you have enable it like this:
-            System.setProperty("jdk.sunec.disableNative", "false");
             try {
-                var ap = AlgorithmParameters.getInstance(ECDSA_ALGORITHM_NAME);
+                var ap = AlgorithmParameters.getInstance(ECDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
                 ap.init(new ECGenParameterSpec(curveName()));
                 parameterSpec = ap.getParameterSpec(ECParameterSpec.class);
-                keyPairGenerator = KeyPairGenerator.getInstance(ECDSA_ALGORITHM_NAME);
+                keyPairGenerator = KeyPairGenerator.getInstance(ECDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
                 keyPairGenerator.initialize(parameterSpec);
-                keyFactory = KeyFactory.getInstance(ECDSA_ALGORITHM_NAME);
+                keyFactory = KeyFactory.getInstance(ECDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
             } catch (NoSuchAlgorithmException | InvalidParameterSpecException | InvalidAlgorithmParameterException e) {
                 throw new RuntimeException(e);
             }
@@ -96,7 +89,7 @@ public enum SignatureAlgorithm {
         @Override
         public KeyPair generateKeyPair(SecureRandom secureRandom) {
             try {
-                var keyPairGenerator = KeyPairGenerator.getInstance(ECDSA_ALGORITHM_NAME);
+                var keyPairGenerator = KeyPairGenerator.getInstance(ECDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
                 keyPairGenerator.initialize(parameterSpec, secureRandom);
                 return keyPairGenerator.generateKeyPair();
             } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
@@ -140,7 +133,7 @@ public enum SignatureAlgorithm {
         @Override
         public JohnHancock sign(byte[] message, PrivateKey privateKey) {
             try {
-                var sig = java.security.Signature.getInstance(this.signatureInstanceName());
+                var sig = Signature.getInstance(this.signatureInstanceName(), ProviderUtils.getProviderBC());
                 sig.initSign(privateKey);
                 sig.update(message);
                 var bytes = sig.sign();
@@ -169,7 +162,7 @@ public enum SignatureAlgorithm {
         @Override
         public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
             try {
-                var sig = Signature.getInstance(signatureInstanceName());
+                var sig = Signature.getInstance(signatureInstanceName(), ProviderUtils.getProviderBC());
                 sig.initVerify(publicKey);
                 sig.update(message);
                 return sig.verify(signature.bytes);
@@ -336,145 +329,6 @@ public enum SignatureAlgorithm {
         }
     };
 
-    public static class EdDSAOperations {
-
-        public static final String EDDSA_ALGORITHM_NAME = "EdDSA";
-
-        private static EdECPoint decodeEdPoint(byte[] in) {
-            var arr = in.clone();
-            var msb = arr[arr.length - 1];
-            arr[arr.length - 1] &= (byte) 0x7F;
-            var xOdd = (msb & 0x80) != 0;
-            reverse(arr);
-            var y = new BigInteger(1, arr);
-            return new EdECPoint(xOdd, y);
-        }
-
-        private static void reverse(byte[] arr) {
-            var i = 0;
-            var j = arr.length - 1;
-
-            while (i < j) {
-                swap(arr, i, j);
-                i++;
-                j--;
-            }
-        }
-
-        private static void swap(byte[] arr, int i, int j) {
-            var tmp = arr[i];
-            arr[i] = arr[j];
-            arr[j] = tmp;
-        }
-
-        final KeyFactory         keyFactory;
-        final KeyPairGenerator   keyPairGenerator;
-        final NamedParameterSpec parameterSpec;
-        final SignatureAlgorithm signatureAlgorithm;
-
-        public EdDSAOperations(SignatureAlgorithm signatureAlgorithm) {
-            try {
-                this.signatureAlgorithm = signatureAlgorithm;
-
-                var curveName = signatureAlgorithm.curveName().toLowerCase();
-                parameterSpec = switch (curveName) {
-                case "ed25519" -> NamedParameterSpec.ED25519;
-                case "ed448" -> NamedParameterSpec.ED448;
-                default -> throw new RuntimeException("Unknown Edwards curve: " + curveName);
-                };
-
-                keyPairGenerator = KeyPairGenerator.getInstance(EDDSA_ALGORITHM_NAME);
-                keyPairGenerator.initialize(parameterSpec);
-                keyFactory = KeyFactory.getInstance(EDDSA_ALGORITHM_NAME);
-            } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
-                throw new IllegalStateException("Unable to initialize", e);
-            }
-        }
-
-        public byte[] encode(PublicKey publicKey) {
-            var point = ((EdECPublicKey) publicKey).getPoint();
-            var encodedPoint = point.getY().toByteArray();
-
-            reverse(encodedPoint);
-            encodedPoint = Arrays.copyOf(encodedPoint, publicKeyLength());
-            var msb = (byte) (point.isXOdd() ? 0x80 : 0);
-            encodedPoint[encodedPoint.length - 1] |= msb;
-
-            return encodedPoint;
-        }
-
-        public KeyPair generateKeyPair() {
-            return keyPairGenerator.generateKeyPair();
-        }
-
-        public KeyPair generateKeyPair(SecureRandom secureRandom) {
-            try {
-                var kpg = KeyPairGenerator.getInstance(EDDSA_ALGORITHM_NAME);
-                kpg.initialize(parameterSpec, secureRandom);
-                return kpg.generateKeyPair();
-            } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
-                throw new IllegalArgumentException("Cannot generate key pair", e);
-            }
-        }
-
-        public PrivateKey privateKey(byte[] bytes) {
-            try {
-
-                return keyFactory.generatePrivate(new EdECPrivateKeySpec(parameterSpec, bytes));
-            } catch (GeneralSecurityException e) {
-                throw new IllegalArgumentException("Cannot decode private key", e);
-            }
-        }
-
-        public PublicKey publicKey(byte[] bytes) {
-            try {
-                if (bytes.length != publicKeyLength()) {
-                    throw new RuntimeException(new InvalidKeyException(
-                            "key length is " + bytes.length + ", key length must be " + publicKeyLength()));
-                }
-
-                var point = decodeEdPoint(bytes);
-
-                return keyFactory.generatePublic(new EdECPublicKeySpec(parameterSpec, point));
-            } catch (GeneralSecurityException e) {
-                throw new IllegalArgumentException("Cannot decode public key", e);
-            }
-        }
-
-        public JohnHancock sign(byte[] message, PrivateKey privateKey) {
-            try {
-                var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME);
-                sig.initSign(privateKey);
-                sig.update(message);
-                var bytes = sig.sign();
-
-                return new JohnHancock(signatureAlgorithm, bytes);
-            } catch (GeneralSecurityException e) {
-                throw new IllegalArgumentException("Cannot sign", e);
-            }
-        }
-
-        public JohnHancock signature(byte[] signatureBytes) {
-            return new JohnHancock(signatureAlgorithm, signatureBytes);
-        }
-
-        public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
-            try {
-                var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME);
-                sig.initVerify(publicKey);
-                sig.update(message);
-                return sig.verify(signature.bytes);
-            } catch (GeneralSecurityException e) {
-                throw new IllegalArgumentException("Cannot verify", e);
-            }
-        }
-
-        private int publicKeyLength() {
-            return signatureAlgorithm.publicKeyLength();
-        }
-
-    }
-
     public static final SignatureAlgorithm DEFAULT = ED_25519;
 
     private static final String ECDSA_ALGORITHM_NAME             = "EC";
@@ -504,7 +358,7 @@ public enum SignatureAlgorithm {
 
     private static SignatureAlgorithm lookupEc(ECParameterSpec params) {
         try {
-            var algorithmParameters = AlgorithmParameters.getInstance("EC");
+            var algorithmParameters = AlgorithmParameters.getInstance("EC", ProviderUtils.getProviderBC());
             algorithmParameters.init(params);
             var genParamSpec = algorithmParameters.getParameterSpec(ECGenParameterSpec.class);
             var curveName = genParamSpec.getName();

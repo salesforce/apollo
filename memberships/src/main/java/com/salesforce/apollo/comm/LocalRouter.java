@@ -6,6 +6,9 @@
  */
 package com.salesforce.apollo.comm;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+
 import java.io.IOException;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
@@ -17,9 +20,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -49,7 +53,7 @@ public class LocalRouter extends Router {
     public static class LocalServerConnectionFactory implements ServerConnectionFactory {
 
         @Override
-        public ManagedChannel connectTo(Member to, Member from) {
+        public ManagedChannel connectTo(Member to, SigningMember from) {
             ClientInterceptor clientInterceptor = new ClientInterceptor() {
 
                 @Override
@@ -58,14 +62,14 @@ public class LocalRouter extends Router {
                     return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
                         @Override
                         public void start(Listener<RespT> responseListener, Metadata headers) {
-                            headers.put(MEMBER_ID_KEY, from.getId().b64Encoded());
+                            headers.put(MEMBER_ID_KEY, qb64(from.getId()));
                             super.start(new SimpleForwardingClientCallListener<RespT>(responseListener) {
                             }, headers);
                         }
                     };
                 }
             };
-            return InProcessChannelBuilder.forName(to.getId().b64Encoded())
+            return InProcessChannelBuilder.forName(qb64(to.getId()))
                                           .directExecutor()
                                           .intercept(clientInterceptor)
                                           .build();
@@ -89,19 +93,19 @@ public class LocalRouter extends Router {
         }
 
         @Override
-        public HashKey getFrom() {
+        public Digest getFrom() {
             Member member = CALLER.get();
             return member == null ? null : member.getId();
         }
 
     }
 
-    public static ThreadLocal<Member>         CALLER         = new ThreadLocal<>();
-    public static final ThreadIdentity        LOCAL_IDENTITY = new ThreadIdentity();
-    public static final Metadata.Key<String>  MEMBER_ID_KEY  = Metadata.Key.of("from.id",
-                                                                               Metadata.ASCII_STRING_MARSHALLER);
-    private static final Logger               log            = LoggerFactory.getLogger(LocalRouter.class);
-    private static final Map<HashKey, Member> serverMembers  = new ConcurrentHashMap<>();
+    public static ThreadLocal<Member>        CALLER         = new ThreadLocal<>();
+    public static final ThreadIdentity       LOCAL_IDENTITY = new ThreadIdentity();
+    public static final Metadata.Key<String> MEMBER_ID_KEY  = Metadata.Key.of("from.id",
+                                                                              Metadata.ASCII_STRING_MARSHALLER);
+    private static final Logger              log            = LoggerFactory.getLogger(LocalRouter.class);
+    private static final Map<Digest, Member> serverMembers  = new ConcurrentHashMap<>();
 
     private final Member member;
     private final Server server;
@@ -116,7 +120,7 @@ public class LocalRouter extends Router {
         this.member = member;
         serverMembers.put(member.getId(), member);
 
-        server = InProcessServerBuilder.forName(member.getId().b64Encoded())
+        server = InProcessServerBuilder.forName(qb64(member.getId()))
                                        .executor(executor)
                                        .intercept(new ServerInterceptor() {
 
@@ -128,11 +132,12 @@ public class LocalRouter extends Router {
                                                if (id == null) {
                                                    throw new IllegalStateException("No member ID in call");
                                                }
-                                               Member member = serverMembers.get(new HashKey(id));
+                                               Member member = serverMembers.get(digest(id));
                                                if (member == null) {
                                                    call.close(Status.INTERNAL.withCause(new NullPointerException(
                                                            "Member is null"))
-                                                                             .withDescription("Uncaught exception from grpc service"),
+                                                                             .withDescription("Member is null for id: "
+                                                                                     + id),
                                                               null);
                                                    return new ServerCall.Listener<ReqT>() {
                                                    };

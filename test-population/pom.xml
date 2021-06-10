@@ -11,7 +11,7 @@
 	<dependencies>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>simple-ca</artifactId>
+			<artifactId>utils</artifactId>
 		</dependency>
 	</dependencies>
 	<name>Generated certificates</name>

@@ -73,8 +73,11 @@ public class EcDSAOperationsTests {
         var result = (ECPublicKey) ops.publicKey(encoded);
 
         assertEquals("EC", result.getAlgorithm());
-        // TODO parameter spec equality
-        assertEquals(this.parameterSpec, result.getParams());
+        
+        assertEquals(this.parameterSpec.getCofactor(), result.getParams().getCofactor());
+        assertEquals(this.parameterSpec.getCurve(), result.getParams().getCurve());
+        assertEquals(this.parameterSpec.getGenerator(), result.getParams().getGenerator());
+        assertEquals(this.parameterSpec.getOrder(), result.getParams().getOrder()); 
 
         var expectedPoint = new ECPoint(
                 new BigInteger("c34404f02d7db7382b9ab4c9afd1f6899a8146b694f52b4642d7f083db53c8e0", 16),
@@ -96,8 +99,11 @@ public class EcDSAOperationsTests {
         var decoding = (ECPublicKey) ops.publicKey(bytes);
 
         assertEquals("EC", decoding.getAlgorithm());
-        // TODO parameter spec equality
-        assertEquals(this.parameterSpec, decoding.getParams());
+
+        assertEquals(this.parameterSpec.getCofactor(), decoding.getParams().getCofactor());
+        assertEquals(this.parameterSpec.getCurve(), decoding.getParams().getCurve());
+        assertEquals(this.parameterSpec.getGenerator(), decoding.getParams().getGenerator());
+        assertEquals(this.parameterSpec.getOrder(), decoding.getParams().getOrder()); 
 
         assertEquals(w, decoding.getW());
     }

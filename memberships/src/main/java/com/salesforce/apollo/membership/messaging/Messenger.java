@@ -6,9 +6,11 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
-import java.security.Signature;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -24,7 +26,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.proto.Message;
@@ -34,14 +35,15 @@ import com.salesfoce.apollo.proto.Push;
 import com.salesfoce.apollo.proto.Push.Builder;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications;
 import com.salesforce.apollo.membership.messaging.comms.MessagingServerCommunications;
 import com.salesforce.apollo.protocols.BloomFilter;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -69,18 +71,19 @@ public class Messenger {
             }
         }
 
-        void message(HashKey context, List<Msg> messages);
+        void message(Digest context, List<Msg> messages);
     }
 
     public static class Parameters {
         public static class Builder implements Cloneable {
 
             private int              bufferSize        = 1000;
+            private DigestAlgorithm  digestAlgorithm   = DigestAlgorithm.DEFAULT;
             private double           falsePositiveRate = 0.25;
             private MessagingMetrics metrics;
 
             public Parameters build() {
-                return new Parameters(falsePositiveRate, bufferSize, metrics);
+                return new Parameters(falsePositiveRate, bufferSize, metrics, digestAlgorithm);
             }
 
             @Override
@@ -96,6 +99,10 @@ public class Messenger {
                 return bufferSize;
             }
 
+            public DigestAlgorithm getDigestAlgorithm() {
+                return digestAlgorithm;
+            }
+
             public double getFalsePositiveRate() {
                 return falsePositiveRate;
             }
@@ -106,6 +113,11 @@ public class Messenger {
 
             public Builder setBufferSize(int bufferSize) {
                 this.bufferSize = bufferSize;
+                return this;
+            }
+
+            public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
+                this.digestAlgorithm = digestAlgorithm;
                 return this;
             }
 
@@ -126,18 +138,21 @@ public class Messenger {
         }
 
         public final int              bufferSize;
+        public final DigestAlgorithm  digestAlgorithm;
         public final double           falsePositiveRate;
         public final MessagingMetrics metrics;
 
-        public Parameters(double falsePositiveRate, int bufferSize, MessagingMetrics metrics) {
+        public Parameters(double falsePositiveRate, int bufferSize, MessagingMetrics metrics,
+                DigestAlgorithm digestAlgorithm) {
             this.falsePositiveRate = falsePositiveRate;
             this.metrics = metrics;
             this.bufferSize = bufferSize;
+            this.digestAlgorithm = digestAlgorithm;
         }
     }
 
     public class Service {
-        public Messages gossip(MessageBff inbound, HashKey from) {
+        public Messages gossip(MessageBff inbound, Digest from) {
             Member predecessor = context.ring(inbound.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.trace("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
@@ -148,7 +163,7 @@ public class Messenger {
                                   parameters.falsePositiveRate);
         }
 
-        public void update(Push push, HashKey from) {
+        public void update(Push push, Digest from) {
             Member predecessor = context.ring(push.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.trace("Invalid inbound messages update on: {}:{} from: {} on ring: {} - not predecessor: {}",
@@ -159,29 +174,27 @@ public class Messenger {
         }
     }
 
-    public static final Logger log = LoggerFactory.getLogger(Messenger.class);
+    private static final Logger log = LoggerFactory.getLogger(Messenger.class);
 
     private final MessageBuffer                                                buffer;
     private final List<MessageHandler>                                         channelHandlers = new CopyOnWriteArrayList<>();
     private final CommonCommunications<MessagingClientCommunications, Service> comm;
     private final Context<Member>                                              context;
+    private final Executor                                                     executor;
     private volatile int                                                       lastRing        = -1;
-    private final Member                                                       member;
+    private final SigningMember                                                member;
     private final Parameters                                                   parameters;
     private final AtomicInteger                                                round           = new AtomicInteger();
     private final List<Consumer<Integer>>                                      roundListeners  = new CopyOnWriteArrayList<>();
-    private final Supplier<Signature>                                          signature;
     private final AtomicBoolean                                                started         = new AtomicBoolean();
-    private final Executor                                                     executor;
 
     @SuppressWarnings("unchecked")
-    public Messenger(Member member, Supplier<Signature> signature, Context<? extends Member> context,
-            Router communications, Parameters parameters, Executor executor) {
+    public Messenger(SigningMember member, Context<? extends Member> context, Router communications,
+            Parameters parameters, Executor executor) {
         this.member = member;
-        this.signature = signature;
         this.parameters = parameters;
         this.context = (Context<Member>) context;
-        this.buffer = new MessageBuffer(parameters.bufferSize, context.timeToLive());
+        this.buffer = new MessageBuffer(parameters.digestAlgorithm, parameters.bufferSize, context.timeToLive());
         this.comm = communications.create(member, context.getId(), new Service(),
                                           r -> new MessagingServerCommunications(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
@@ -222,7 +235,7 @@ public class Messenger {
 
             try {
                 futureSailor = link.gossip(MessageBff.newBuilder()
-                                                     .setContext(context.getId().toID())
+                                                     .setContext(qb64(context.getId()))
                                                      .setRing(ring)
                                                      .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextInt(),
                                                                                parameters.falsePositiveRate)
@@ -245,7 +258,7 @@ public class Messenger {
                         return;
                     }
                     process(gossip.getUpdatesList());
-                    Builder pushBuilder = Push.newBuilder().setContext(context.getId().toID()).setRing(ring);
+                    Builder pushBuilder = Push.newBuilder().setContext(qb64(context.getId())).setRing(ring);
                     buffer.updatesFor(BloomFilter.from(gossip.getBff()), pushBuilder);
                     try {
                         link.update(pushBuilder.build());
@@ -274,7 +287,7 @@ public class Messenger {
         if (!started.get()) {
             return;
         }
-        buffer.publish(Any.pack(message), member, signature.get());
+        buffer.publish(Any.pack(message), member);
     }
 
     public void register(Consumer<Integer> roundListener) {
@@ -342,7 +355,7 @@ public class Messenger {
             return;
         }
         List<Msg> newMessages = buffer.merge(updates, (hash, message) -> validate(hash, message)).stream().map(m -> {
-            HashKey id = new HashKey(m.getSource());
+            Digest id = digest(m.getSource());
             if (member.getId().equals(id)) {
                 log.trace("Ignoriing message from self");
                 return null;
@@ -372,14 +385,14 @@ public class Messenger {
         }
     }
 
-    private boolean validate(HashKey hash, Message message) {
-        HashKey memberID = new HashKey(message.getSource());
+    private boolean validate(Digest hash, Message message) {
+        Digest memberID = digest(message.getSource());
         Member member = context.getMember(memberID);
         if (member == null) {
             log.debug("Non existent member: " + memberID);
             return false;
         }
-        if (!MessageBuffer.validate(hash, message, member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM))) {
+        if (!MessageBuffer.validate(hash, message, member, signature(message.getSignature()))) {
             log.trace("Did not validate message {} from {}", message, memberID);
             return false;
         }

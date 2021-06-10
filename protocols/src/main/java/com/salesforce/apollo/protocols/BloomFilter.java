@@ -11,28 +11,29 @@ import java.util.BitSet;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.Biff;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  *
  */
 abstract public class BloomFilter<T> {
-    public static class HkBloomFilter extends BloomFilter<HashKey> {
+    public static class HkBloomFilter extends BloomFilter<Digest> {
 
         public HkBloomFilter(int seed, int m, int k, ByteString bits) {
-            super(new Hash<HashKey>(seed, m, k) {
+            super(new Hash<Digest>(seed, m, k) {
                 @Override
-                Hasher<HashKey> newHasher(HashKey key) {
-                    return new HkHasher(key, seed);
+                Hasher<Digest> newHasher(Digest key) {
+                    return new DigestHasher(key, seed);
                 }
             }, BitSet.valueOf(bits.toByteArray()));
         }
 
         public HkBloomFilter(int seed, long n, double p) {
-            super(new Hash<HashKey>(seed, n, p) {
+            super(new Hash<Digest>(seed, n, p) {
                 @Override
-                Hasher<HashKey> newHasher(HashKey key) {
-                    return new HkHasher(key, seed);
+                Hasher<Digest> newHasher(Digest key) {
+                    return new DigestHasher(key, seed);
                 }
             });
         }

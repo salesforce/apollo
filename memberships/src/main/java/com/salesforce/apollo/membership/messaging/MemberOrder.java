@@ -21,11 +21,11 @@ import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -34,11 +34,11 @@ import com.salesforce.apollo.protocols.HashKey;
 public class MemberOrder {
     public class ActiveChannel implements Channel {
         private volatile int             flushTarget        = -1;
-        private final HashKey            id;
+        private final Digest             id;
         private volatile int             lastSequenceNumber = -1;
         private final PriorityQueue<Msg> queue;
 
-        public ActiveChannel(HashKey id) {
+        public ActiveChannel(Digest id) {
             this.id = id;
             queue = new PriorityQueue<Msg>((a, b) -> {
                 return Integer.compare(a.sequenceNumber, b.sequenceNumber);
@@ -66,7 +66,7 @@ public class MemberOrder {
         }
 
         @Override
-        public HashKey getId() {
+        public Digest getId() {
             return id;
         }
 
@@ -106,7 +106,7 @@ public class MemberOrder {
         default void enqueue(Msg msg, int round) {
         }
 
-        HashKey getId();
+        Digest getId();
 
         default Msg next(int round) {
             return null;
@@ -114,18 +114,18 @@ public class MemberOrder {
 
     }
 
-    private static Logger                        log      = LoggerFactory.getLogger(MemberOrder.class);
-    private final Map<HashKey, Channel>          channels = new HashMap<>();
-    private final Context<Member>                context;
-    private final Lock                           lock     = new ReentrantLock(true);
-    private final BiConsumer<HashKey, List<Msg>> processor;
-    private final AtomicBoolean                  started  = new AtomicBoolean();
-    private final int                            ttl;
-    private final int                            tick;
-    private final Member                         member;
+    private static Logger                       log      = LoggerFactory.getLogger(MemberOrder.class);
+    private final Map<Digest, Channel>          channels = new HashMap<>();
+    private final Context<Member>               context;
+    private final Lock                          lock     = new ReentrantLock(true);
+    private final BiConsumer<Digest, List<Msg>> processor;
+    private final AtomicBoolean                 started  = new AtomicBoolean();
+    private final int                           ttl;
+    private final int                           tick;
+    private final Member                        member;
 
     @SuppressWarnings("unchecked")
-    public MemberOrder(BiConsumer<HashKey, List<Msg>> processor, Messenger messenger) {
+    public MemberOrder(BiConsumer<Digest, List<Msg>> processor, Messenger messenger) {
         this.processor = processor;
         this.context = (Context<Member>) messenger.getContext();
         this.member = messenger.getMember();
@@ -147,7 +147,7 @@ public class MemberOrder {
                 try {
                     Channel channel = channels.put(member.getId(), new Channel() {
                         @Override
-                        public HashKey getId() {
+                        public Digest getId() {
                             return member.getId();
                         }
                     });
@@ -237,7 +237,7 @@ public class MemberOrder {
                 return;
             }
             lastFlushed = flushed.size();
-            for (Entry<HashKey, Channel> e : channels.entrySet()) {
+            for (Entry<Digest, Channel> e : channels.entrySet()) {
                 Msg message = e.getValue().next(round);
                 if (message != null) {
                     flushed.add(message);

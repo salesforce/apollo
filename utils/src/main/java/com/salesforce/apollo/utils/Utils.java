@@ -15,6 +15,8 @@
  */
 package com.salesforce.apollo.utils;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
@@ -42,6 +44,7 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.channels.ClosedChannelException;
 import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.util.Collection;
 import java.util.HashMap;
@@ -58,6 +61,9 @@ import java.util.zip.ZipOutputStream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.apache.commons.math3.random.MersenneTwister;
+
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
 
 /**
  * 
@@ -1030,5 +1036,10 @@ public class Utils {
 
     public static boolean waitForCondition(int maxWaitTime, Supplier<Boolean> condition) {
         return waitForCondition(maxWaitTime, 100, condition);
+    }
+
+    public static BcX500NameDnImpl encode(Digest digest, String host, int port, PublicKey signingKey) {
+        return new BcX500NameDnImpl(
+                String.format("CN=%s, L=%s, UID=%s, SN=%s", host, port, qb64(digest), qb64(signingKey)));
     }
 }

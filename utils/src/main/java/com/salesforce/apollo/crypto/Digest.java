@@ -46,15 +46,15 @@ public class Digest implements Comparable<Digest> {
     private final byte[]          bytes;
     private int                   hashCode;
 
-    public Digest(DigestAlgorithm algorithm, byte[] b) {
-        assert b != null && algorithm != null;
-  
-        if (b.length != algorithm.digestLength()) {
+    public Digest(DigestAlgorithm algorithm, byte[] bytes) {
+        assert bytes != null && algorithm != null;
+
+        if (bytes.length != algorithm.digestLength()) {
             throw new IllegalArgumentException(
-                    "Invalid bytes length.  Require: " + algorithm.digestLength() + " found: " + b.length);
+                    "Invalid bytes length.  Require: " + algorithm.digestLength() + " found: " + bytes.length);
         }
         this.algorithm = algorithm;
-        this.bytes = b.clone();
+        this.bytes = bytes;
     }
 
     @Override
@@ -86,7 +86,7 @@ public class Digest implements Comparable<Digest> {
     }
 
     public byte[] getBytes() {
-        return bytes.clone();
+        return bytes;
     }
 
     @Override

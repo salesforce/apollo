@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.comm;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -13,8 +15,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesfoce.apollo.proto.ID;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -27,17 +28,17 @@ import io.grpc.stub.StreamObserver;
 public class RoutableService<Service> {
     private static final Logger log = LoggerFactory.getLogger(RoutableService.class);
 
-    private final Map<HashKey, Service> services = new ConcurrentHashMap<>();
+    private final Map<Digest, Service> services = new ConcurrentHashMap<>();
 
-    public void bind(HashKey context, Service service) {
+    public void bind(Digest context, Service service) {
         services.put(context, service);
     }
 
-    public void unbind(HashKey context) {
+    public void unbind(Digest context) {
         services.remove(context);
     }
 
-    public void evaluate(StreamObserver<?> responseObserver, HashKey context, Consumer<Service> c) {
+    public void evaluate(StreamObserver<?> responseObserver, Digest context, Consumer<Service> c) {
         if (context == null) {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
             try {
@@ -62,7 +63,7 @@ public class RoutableService<Service> {
         }
     }
 
-    public void evaluate(StreamObserver<?> responseObserver, ID id, Consumer<Service> c) {
-        evaluate(responseObserver, id.getItselfCount() == 0 ? null : new HashKey(id), c);
+    public void evaluate(StreamObserver<?> responseObserver, String id, Consumer<Service> c) {
+        evaluate(responseObserver, digest(id), c);
     }
 }

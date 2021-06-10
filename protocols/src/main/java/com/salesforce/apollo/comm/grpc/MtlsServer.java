@@ -9,7 +9,6 @@ package com.salesforce.apollo.comm.grpc;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.security.PrivateKey;
-import java.security.Provider;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.ExecutionException;
@@ -22,13 +21,13 @@ import javax.net.ssl.SSLSession;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.ProviderUtils;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.crypto.ssl.NodeKeyManagerFactory;
 import com.salesforce.apollo.crypto.ssl.NodeTrustManagerFactory;
 import com.salesforce.apollo.crypto.ssl.TlsInterceptor;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.BindableService;
 import io.grpc.Context;
@@ -73,18 +72,17 @@ public class MtlsServer implements ClientIdentity {
         }
     }
 
-    private static final Provider PROVIDER = ProviderUtils.getProviderBCJSSE();
-    private static final String   TL_SV1_3 = "TLSv1.3";
+    public static final String TL_SV1_3 = "TLSv1.3";
 
     public static SslContext forClient(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forClient()
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
-                                                             privateKey, PROVIDER));
+                                                             privateKey, ProviderUtils.getProviderBCJSSE()));
         GrpcSslContexts.configure(builder);
         builder.protocols(TL_SV1_3)
                .sslProvider(SslProvider.JDK)
-               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER))
+               .trustManager(new NodeTrustManagerFactory(validator, ProviderUtils.getProviderBCJSSE()))
                .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
                        // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK
@@ -105,11 +103,11 @@ public class MtlsServer implements ClientIdentity {
     public static SslContext forServer(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forServer(new NodeKeyManagerFactory(alias, certificate,
-                privateKey, PROVIDER));
+                privateKey, ProviderUtils.getProviderBCJSSE()));
         GrpcSslContexts.configure(builder);
         builder.protocols(TL_SV1_3)
                .sslProvider(SslProvider.JDK)
-               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER))
+               .trustManager(new NodeTrustManagerFactory(validator, ProviderUtils.getProviderBCJSSE()))
                .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
                        // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK
@@ -127,25 +125,26 @@ public class MtlsServer implements ClientIdentity {
 
     }
 
-    private final LoadingCache<X509Certificate, HashKey> cachedMembership;
-    private final TlsInterceptor                         interceptor;
-    private final MutableHandlerRegistry                 registry;
-    private final Server                                 server;
-    private final Context.Key<SSLSession>                sslSessionContext = Context.key("SSLSession");
+    private final LoadingCache<X509Certificate, Digest> cachedMembership;
+    private final TlsInterceptor                        interceptor;
+    private final MutableHandlerRegistry                registry;
+    private final Server                                server;
+    private final Context.Key<SSLSession>               sslSessionContext = Context.key("SSLSession");
 
-    public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
-            PrivateKey privateKey, CertificateValidator validator, MutableHandlerRegistry registry, Executor executor) {
+    public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, ServerContextSupplier supplier,
+            CertificateValidator validator, MutableHandlerRegistry registry, Executor executor) {
         this.registry = registry;
         interceptor = new TlsInterceptor(sslSessionContext);
-        cachedMembership = CacheBuilder.newBuilder().build(new CacheLoader<X509Certificate, HashKey>() {
+        cachedMembership = CacheBuilder.newBuilder().build(new CacheLoader<X509Certificate, Digest>() {
             @Override
-            public HashKey load(X509Certificate key) throws Exception {
-                return Conversion.getMemberId(key);
+            public Digest load(X509Certificate key) throws Exception {
+                return supplier.getMemberId(key);
             }
         });
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
-                                                       .sslContext(forServer(clientAuth, alias, certificate, privateKey,
-                                                                             validator))
+                                                       .sslContext(supplier.forServer(clientAuth, alias, validator,
+                                                                                      ProviderUtils.getProviderBCJSSE(),
+                                                                                      TL_SV1_3))
                                                        .fallbackHandlerRegistry(registry)
                                                        .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                        .intercept(interceptor)
@@ -179,7 +178,7 @@ public class MtlsServer implements ClientIdentity {
     }
 
     @Override
-    public HashKey getFrom() {
+    public Digest getFrom() {
         try {
             return cachedMembership.get(getCert());
         } catch (ExecutionException e) {

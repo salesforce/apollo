@@ -10,15 +10,16 @@ import java.util.List;
 
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.Interval;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public interface SpaceGhost {
-    DagEntry get(HashKey key);
+    DagEntry get(Digest key);
 
-    List<DagEntry> intervals(List<Interval> intervals, List<HashKey> have);
+    List<DagEntry> intervals(List<Interval> intervals, List<Digest> have);
 
     void put(DagEntry entry);
 }

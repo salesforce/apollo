@@ -15,6 +15,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
@@ -22,8 +23,9 @@ import com.salesfoce.apollo.proto.SuppliedDagNodes;
  */
 public interface Avalanche {
 
-    ListenableFuture<QueryResult> query(HashKey context, List<Pair<HashKey, ByteString>> transactions, Collection<HashKey> wanted);
+    ListenableFuture<QueryResult> query(Digest context, List<Pair<Digest, ByteString>> transactions,
+                                        Collection<Digest> wanted);
 
-    ListenableFuture<SuppliedDagNodes> requestDAG(HashKey context, Collection<HashKey> want);
+    ListenableFuture<SuppliedDagNodes> requestDAG(Digest context, Collection<Digest> want);
 
 }

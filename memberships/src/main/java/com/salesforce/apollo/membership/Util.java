@@ -82,7 +82,14 @@ final public class Util {
             throw new IllegalArgumentException("invalid DN: " + dn, e);
         }
         Map<String, String> decoded = new HashMap<>();
-        ldapDN.getRdns().forEach(rdn -> decoded.put(rdn.getType(), (String) rdn.getValue()));
+        ldapDN.getRdns().forEach(rdn -> {
+            Object value = rdn.getValue();
+            try {
+            decoded.put(rdn.getType(), (String) value);
+            } catch (ClassCastException e) {
+                // skip
+            }
+        });
         return decoded;
     }
 

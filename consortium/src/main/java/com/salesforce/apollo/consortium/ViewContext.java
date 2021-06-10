@@ -149,8 +149,7 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public Messenger createMessenger(Parameters params, Executor executor) {
-        return new Messenger(params.member, params.signature, context, params.communications, params.msgParameters,
-                executor);
+        return new Messenger(params.member, context, params.communications, params.msgParameters, executor);
     }
 
     @Override

@@ -17,24 +17,24 @@ service Messaging {
 }
 
 message MessageBff {
-    ID context = 1; 
+    string context = 1; 
     int32 ring = 3;
     Biff digests = 4;
 }
 
 message Push {
-    ID context = 1;
+    string context = 1;
     int32 ring = 2;
     repeated  Message updates = 3;
 }
 
 message Message {
-    ID source = 1;
+    string source = 1;
     int32 sequenceNumber = 2;
     int32 age = 3;
     int32 channel = 4;
-    bytes signature = 5;
-    ID key = 6;
+    string signature = 5;
+    string key = 6;
     google.protobuf.Any content = 7;
 }
 
@@ -87,56 +87,56 @@ service Ghost {
 }
 
 message DagNodes {
-    ID context = 1;
-    repeated ID entries = 2;
+    string context = 1;
+    repeated string entries = 2;
 }
 
 message SuppliedDagNodes {
-    ID context = 1;
+    string context = 1;
     repeated bytes entries = 2;
 }
 
 message DagEntries {
-    ID context = 1;
+    string context = 1;
     repeated DagEntry entries = 2;
 } 
 
 message ADagEntry {
-    ID context = 1;
+    string context = 1;
     DagEntry entry = 2;
 }
 
 message Intervals {
-    ID context = 1;
+    string context = 1;
     repeated Interval intervals = 2;
     repeated bytes have = 3;
 }
 
 message Query {
-    ID context = 1;
-    repeated ID hashes = 2;
+    string context = 1;
+    repeated string hashes = 2;
     repeated bytes transactions = 3;
-    repeated ID wanted = 4;
+    repeated string wanted = 4;
 }
 
 message Get {
-    ID context = 1;
-    ID id = 2;
+    string context = 1;
+    string id = 2;
 }
 
 message Null {
-    ID context = 1;
+    string context = 1;
 }
 
 message SayWhat {
-    ID context = 1;
+    string context = 1;
     Signed note = 2;
     int32 ring = 3;
     Digests gossip = 4;
 }
 
 message State {
-    ID context = 1;
+    string context = 1;
     int32 ring = 2;
     Update update = 3;
 } 
@@ -153,7 +153,7 @@ message AccusationGossip {
     } 
 
 message EncodedCertificate {
-        ID id = 1;
+        string id = 1;
         int64 epoch = 2;
         bytes hash = 3;
         bytes content = 4; 
@@ -204,18 +204,18 @@ message DagEntry {
         USER = 3;
     } 
     EntryType description = 1;
-    repeated ID links = 2;
+    repeated string links = 2;
     google.protobuf.Any data = 3;
 }
 
 message Interval {
-        ID start = 1;
-        ID end = 2;
+        string start = 1;
+        string end = 2;
     }
 
 message JoinResponse {
         Signed forward = 1;
-        repeated ID interval = 2;
+        repeated string interval = 2;
     }
 
 message QueryResult {
@@ -226,8 +226,4 @@ message QueryResult {
     } 
     repeated Vote result = 1;
     repeated bytes wanted = 2;
-}
-
-message ID {
-    repeated int64 itself = 1;
 }

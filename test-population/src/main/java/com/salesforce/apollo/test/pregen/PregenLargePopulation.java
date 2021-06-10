@@ -5,18 +5,23 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.test.pregen;
-
-import static io.github.olivierlemasle.ca.CA.createCsr;
-import static io.github.olivierlemasle.ca.CA.dn;
+ 
 
 import java.io.File;
+import java.security.KeyPair;
+import java.security.cert.X509Certificate;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.Date;
 
-import com.salesforce.apollo.fireflies.ca.CertificateAuthority;
-
-import io.github.olivierlemasle.ca.CA;
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.CsrWithPrivateKey;
-import io.github.olivierlemasle.ca.RootCertificate;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.cert.Certificates;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.utils.Utils;
+ 
 
 /**
  * A utility to pre generate CA and member Cert/Key pairs for testing.
@@ -35,15 +40,18 @@ public class PregenLargePopulation {
     private static final String MEMBER_P12_TEMPLATE  = "member-%s.p12";
     private static final File   memberDir            = new File("src/main/resources/large/members");
     private static final double probabilityByzantine = .25;
+ 
 
-    public static RootCertificate getCa() {
-        return CA.loadRootCertificate(PregenLargePopulation.class.getResourceAsStream("/large/ca/" + caKeystoreFile),
-                                      keystorePassword, alias);
-    }
-
-    public static CertificateWithPrivateKey getMember(int index) {
-        return Util.loadFrom(PregenLargePopulation.class.getResourceAsStream("/large/members/"
-                + memberKeystoreFile(index)), keystorePassword, alias);
+    public static CertificateWithPrivateKey getMember(int index) { 
+        byte[] hash = new byte[32];
+        hash[31] = (byte) index;
+        KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
+        Date notBefore = Date.from(Instant.now());
+        Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
+        Digest id = new Digest(DigestAlgorithm.DEFAULT, hash);
+        X509Certificate generated = Certificates.selfSign(false, Member.encode(id, "foo.com", i, keyPair.getPublic()),
+                                                          Utils.secureEntropy(), keyPair, notBefore, notAfter,
+                                                          Collections.emptyList());
     }
 
     public static void main(String[] argv) {

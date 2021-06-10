@@ -13,6 +13,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.google.protobuf.ByteString;
@@ -187,6 +188,10 @@ public enum DigestAlgorithm {
         return new Digest(this, hashOf(bytes, bytes.length));
     }
 
+    public Digest digest(List<ByteBuffer> buffers) {
+        return new Digest(this, hashOf(buffers));
+    }
+
     abstract public int digestLength();
 
     public Digest getLast() {
@@ -228,9 +233,14 @@ public enum DigestAlgorithm {
         return md.digest();
     }
 
+    public byte[] hashOf(List<ByteBuffer> buffers) {
+        InputStream is = BbBackedInputStream.aggregate(buffers);
+        return hashOf(is);
+    }
+
     protected MessageDigest createJCA() {
         try {
-            return MessageDigest.getInstance(algorithmName());
+            return MessageDigest.getInstance(algorithmName(), ProviderUtils.getProviderBC());
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(
                     "Unable to retrieve " + algorithmName() + " Message DigestAlgorithm instance", e);

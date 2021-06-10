@@ -7,6 +7,7 @@
 package com.salesforce.apollo.crypto.cert;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.math.BigInteger;
 import java.security.KeyPair;
@@ -37,10 +38,21 @@ public class TestCertificates {
 
     @Test
     public void selfSigned() throws Exception {
+        boolean failed = false;
         for (SignatureAlgorithm s : SignatureAlgorithm.values()) {
-            KeyPair keyPair = s.generateKeyPair();
-
-            testSelfSigned(keyPair);
+            KeyPair keyPair;
+            try {
+                keyPair = s.generateKeyPair();
+                testSelfSigned(keyPair);
+            } catch (Throwable t) {
+                failed = true;
+                System.out.println("Unable to generate keypair for: " + s);
+                t.printStackTrace();
+                continue;
+            }
+        }
+        if (failed) {
+            fail("Failed for some algorithms");
         }
     }
 
@@ -55,4 +67,3 @@ public class TestCertificates {
         selfSignedCert.checkValidity();
     }
 }
-                                                                                                                                                                                                                    

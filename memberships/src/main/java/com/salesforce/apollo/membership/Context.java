@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.membership;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -25,10 +26,10 @@ import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
- * Provides a Context for Membership and is uniquely identified by a HashKey;.
+ * Provides a Context for Membership and is uniquely identified by a Digest;.
  * Members may be either active or offline. The Context maintains a number of
  * Rings (may be zero) that the Context provides for Firefly type ordering
  * operators. Each ring has a unique hash of each individual member, and thus
@@ -107,23 +108,21 @@ public class Context<T extends Member> {
         throw new IllegalArgumentException("Cannot compute number if rings from pByz=" + pByz);
     }
 
-    private final Map<HashKey, T> active = new ConcurrentHashMap<>();
+    private final Map<Digest, T>               active              = new ConcurrentHashMap<>();
+    private BiFunction<T, Integer, Digest>     hasher              = (m, ring) -> hashFor(m, ring);
+    private final Map<Digest, Digest[]>        hashes              = new ConcurrentHashMap<>();
+    private final Digest                       id;
+    private Logger                             log                 = LoggerFactory.getLogger(Context.class);
+    private final List<MembershipListener<T>>  membershipListeners = new CopyOnWriteArrayList<>();
+    private final ConcurrentHashMap<Digest, T> offline             = new ConcurrentHashMap<>();
+    private final Ring<T>[]                    rings;
 
-    private BiFunction<T, Integer, HashKey>     hasher              = (m, ring) -> hashFor(m, ring);
-    private final Map<HashKey, HashKey[]>       hashes              = new ConcurrentHashMap<>();
-    private final HashKey                       id;
-    private Logger                              log                 = LoggerFactory.getLogger(Context.class);
-    private final List<MembershipListener<T>>   membershipListeners = new CopyOnWriteArrayList<>();
-    private final ConcurrentHashMap<HashKey, T> offline             = new ConcurrentHashMap<>();
-
-    private final Ring<T>[] rings;
-
-    public Context(HashKey id) {
+    public Context(Digest id) {
         this(id, 1);
     }
 
     @SuppressWarnings("unchecked")
-    public Context(HashKey id, int r) {
+    public Context(Digest id, int r) {
         this.id = id;
         this.rings = new Ring[r];
         for (int i = 0; i < r; i++) {
@@ -149,7 +148,7 @@ public class Context<T extends Member> {
         });
     }
 
-    public boolean activateIfOffline(HashKey memberID) {
+    public boolean activateIfOffline(Digest memberID) {
         T offlined = offline.remove(memberID);
         if (offlined == null) {
             return false;
@@ -221,15 +220,15 @@ public class Context<T extends Member> {
         return active.values();
     }
 
-    public T getActiveMember(HashKey memberID) {
+    public T getActiveMember(Digest memberID) {
         return active.get(memberID);
     }
 
-    public HashKey getId() {
+    public Digest getId() {
         return id;
     }
 
-    public T getMember(HashKey memberID) {
+    public T getMember(Digest memberID) {
         T member = active.get(memberID);
         if (member == null) {
             member = offline.get(memberID);
@@ -255,8 +254,8 @@ public class Context<T extends Member> {
         return active.containsKey(m.getId());
     }
 
-    public boolean isOffline(HashKey hashKey) {
-        return offline.containsKey(hashKey);
+    public boolean isOffline(Digest digest) {
+        return offline.containsKey(digest);
     }
 
     public boolean isOffline(T m) {
@@ -281,7 +280,7 @@ public class Context<T extends Member> {
         });
     }
 
-    public boolean offlineIfActive(HashKey memberID) {
+    public boolean offlineIfActive(Digest memberID) {
         T activated = active.remove(memberID);
         if (activated == null) {
             return false;
@@ -293,7 +292,7 @@ public class Context<T extends Member> {
     /**
      * @return the predecessor on each ring for the provided key
      */
-    public List<T> predecessors(HashKey key) {
+    public List<T> predecessors(Digest key) {
         return predecessors(key, t -> true);
     }
 
@@ -301,7 +300,7 @@ public class Context<T extends Member> {
      * @return the predecessor on each ring for the provided key that pass the
      *         provided predicate
      */
-    public List<T> predecessors(HashKey key, Predicate<T> test) {
+    public List<T> predecessors(Digest key, Predicate<T> test) {
         List<T> predecessors = new ArrayList<>();
         for (Ring<T> ring : rings) {
             T predecessor = ring.predecessor(contextHash(key, ring.getIndex()), test);
@@ -320,7 +319,7 @@ public class Context<T extends Member> {
      * remove a member from the receiving Context
      */
     public void remove(T m) {
-        HashKey[] s = hashes.remove(m.getId());
+        Digest[] s = hashes.remove(m.getId());
         if (s == null) {
             return;
         }
@@ -358,14 +357,14 @@ public class Context<T extends Member> {
      * @return a random sample set of the view's live members. May be limited by the
      *         number of active members.
      */
-    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, HashKey excluded) {
+    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest excluded) {
         return rings[entropy.nextInt(rings.length)].stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
     }
 
     /**
      * @return the list of successors to the key on each ring
      */
-    public List<T> successors(HashKey key) {
+    public List<T> successors(Digest key) {
         return successors(key, t -> true);
     }
 
@@ -373,7 +372,7 @@ public class Context<T extends Member> {
      * @return the list of successor to the key on each ring that pass the provided
      *         predicate test
      */
-    public List<T> successors(HashKey key, Predicate<T> test) {
+    public List<T> successors(Digest key, Predicate<T> test) {
         List<T> successors = new ArrayList<>();
         for (Ring<T> ring : rings) {
             T successor = ring.successor(contextHash(key, ring.getIndex()), test);
@@ -405,14 +404,13 @@ public class Context<T extends Member> {
         return "Context [id=" + id + " " + ring(0) + "]";
     }
 
-    HashKey hashFor(T m, int index) {
-        HashKey[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
-            HashKey[] s = new HashKey[rings.length];
-            MessageDigest md = DIGEST_CACHE.get();
+    Digest hashFor(T m, int index) {
+        Digest[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
+            Digest[] s = new Digest[rings.length];
             for (int ring = 0; ring < rings.length; ring++) {
-                md.reset();
-                md.update(String.format(RING_HASH_TEMPLATE, id, m.getId(), ring).getBytes());
-                s[ring] = new HashKey(md.digest());
+                s[ring] = m.getId()
+                           .getAlgorithm()
+                           .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(m.getId()), ring).getBytes());
             }
             return s;
         });
@@ -422,10 +420,7 @@ public class Context<T extends Member> {
         return hSet[index];
     }
 
-    private HashKey contextHash(HashKey key, int ring) {
-        MessageDigest md = DIGEST_CACHE.get();
-        md.reset();
-        md.update(String.format(CONTEXT_HASH_TEMPLATE, id, ring).getBytes());
-        return new HashKey(md.digest());
+    private Digest contextHash(Digest key, int ring) {
+        return key.getAlgorithm().digest(String.format(CONTEXT_HASH_TEMPLATE, id, ring).getBytes());
     }
 }

@@ -15,9 +15,8 @@ import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.lookup;
 
 import java.security.PublicKey;
+import java.util.Arrays;
 import java.util.Base64;
-
-import org.bouncycastle.util.Arrays;
 
 public class QualifiedBase64 {
 

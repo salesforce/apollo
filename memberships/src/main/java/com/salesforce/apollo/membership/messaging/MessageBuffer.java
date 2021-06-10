@@ -6,6 +6,10 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
+
 import java.nio.ByteBuffer;
 import java.security.Signature;
 import java.security.SignatureException;
@@ -26,16 +30,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.Any;
-import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.ID;
 import com.salesfoce.apollo.proto.Message;
 import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.Messages.Builder;
 import com.salesfoce.apollo.proto.Push;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.protocols.BloomFilter;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -44,30 +48,24 @@ import com.salesforce.apollo.protocols.HashKey;
 public class MessageBuffer {
     private final static Logger log = LoggerFactory.getLogger(MessageBuffer.class);
 
-    public static byte[] sign(HashKey hash, Signature signature) {
+    public static byte[] sign(Digest hash, Signature signature) {
         try {
-            signature.update(hash.bytes());
+            signature.update(hash.getBytes());
             return signature.sign();
         } catch (SignatureException e) {
             throw new IllegalStateException("Unable to sign message content", e);
         }
     }
 
-    public static boolean validate(HashKey hash, Message message, Signature signature) {
-        try {
-            signature.update(hash.bytes());
-            return signature.verify(message.getSignature().toByteArray());
-        } catch (SignatureException e) {
-            log.trace("Message validation error", e);
-            return false;
-        }
+    public static boolean validate(Digest hash, Message message, Member verifier, JohnHancock signature) {
+        return verifier.verify(qb64(hash).getBytes(), signature(message.getSignature()));
     }
 
-    private static Queue<Entry<HashKey, Message>> findNHighest(Collection<Entry<HashKey, Message>> msgs, int n) {
-        Queue<Entry<HashKey, Message>> nthHighest = new PriorityQueue<Entry<HashKey, Message>>(
+    private static Queue<Entry<Digest, Message>> findNHighest(Collection<Entry<Digest, Message>> msgs, int n) {
+        Queue<Entry<Digest, Message>> nthHighest = new PriorityQueue<Entry<Digest, Message>>(
                 (a, b) -> Integer.compare(a.getValue().getAge(), b.getValue().getAge()));
 
-        for (Entry<HashKey, Message> each : msgs) {
+        for (Entry<Digest, Message> each : msgs) {
             nthHighest.add(each);
             if (nthHighest.size() > n) {
                 nthHighest.poll();
@@ -76,31 +74,29 @@ public class MessageBuffer {
         return nthHighest;
     }
 
-    private static HashKey idOf(int sequenceNumber, HashKey from, Any content) {
-        ByteBuffer header = ByteBuffer.allocate(32 + 4);
-        from.write(header);
+    private static Digest idOf(DigestAlgorithm algorithm, int sequenceNumber, Digest from, Any content) {
+        byte[] bytes = qb64(from).getBytes();
+        ByteBuffer header = ByteBuffer.allocate(bytes.length + 4);
+        header.put(bytes);
         header.putInt(sequenceNumber);
         header.flip();
         List<ByteBuffer> buffers = new ArrayList<>();
         buffers.add(header);
         buffers.addAll(content.toByteString().asReadOnlyByteBufferList());
 
-        return new HashKey(Conversion.hashOf(buffers));
+        return algorithm.digest(buffers);
     }
 
-    @SuppressWarnings("unused")
-    private static HashKey idOf(Message message) {
-        return idOf(message.getSequenceNumber(), new HashKey(message.getSource()), message.getContent());
-    }
+    private final int                  bufferSize;
+    private final AtomicInteger        lastSequenceNumber = new AtomicInteger();
+    private final Map<Digest, Message> state              = new ConcurrentHashMap<>();
+    private final int                  tooOld;
+    private final DigestAlgorithm      digestAlgorithm;
 
-    private final int                   bufferSize;
-    private final AtomicInteger         lastSequenceNumber = new AtomicInteger();
-    private final Map<HashKey, Message> state              = new ConcurrentHashMap<>();
-    private int                         tooOld;
-
-    public MessageBuffer(int bufferSize, int tooOld) {
+    public MessageBuffer(DigestAlgorithm algorithm, int bufferSize, int tooOld) {
         this.bufferSize = bufferSize;
         this.tooOld = tooOld;
+        this.digestAlgorithm = algorithm;
     }
 
     public void clear() {
@@ -114,8 +110,8 @@ public class MessageBuffer {
         log.trace("Buffer free after compact: " + (bufferSize - state.size()));
     }
 
-    public BloomFilter<HashKey> getBff(int seed, double p) {
-        BloomFilter<HashKey> bff = new BloomFilter.HkBloomFilter(seed, bufferSize, p);
+    public BloomFilter<Digest> getBff(int seed, double p) {
+        BloomFilter<Digest> bff = new BloomFilter.HkBloomFilter(seed, bufferSize, p);
         state.keySet().forEach(h -> bff.add(h));
         return bff;
     }
@@ -127,16 +123,16 @@ public class MessageBuffer {
      * @param validator
      * @return the list of new messages for this buffer
      */
-    public List<Message> merge(List<Message> updates, BiPredicate<HashKey, Message> validator) {
+    public List<Message> merge(List<Message> updates, BiPredicate<Digest, Message> validator) {
         List<Message> merged = updates.parallelStream().filter(message -> {
-            HashKey hash = new HashKey(message.getKey());
+            Digest hash = digest(message.getKey());
             return merge(hash, message, validator);
         }).collect(Collectors.toList());
         gc();
         return merged;
     }
 
-    public Messages process(BloomFilter<HashKey> bff, int seed, double p) {
+    public Messages process(BloomFilter<Digest> bff, int seed, double p) {
         Builder builder = Messages.newBuilder();
         state.entrySet().forEach(entry -> {
             if (!bff.contains(entry.getKey())) {
@@ -158,17 +154,17 @@ public class MessageBuffer {
      * 
      * @return the inserted Message
      */
-    public Message publish(Any msg, Member from, Signature signature) {
+    public Message publish(Any msg, SigningMember from) {
         int sequenceNumber = lastSequenceNumber.getAndIncrement();
-        HashKey id = idOf(sequenceNumber, from.getId(), msg);
+        Digest id = idOf(digestAlgorithm, sequenceNumber, from.getId(), msg);
         Message update = state.computeIfAbsent(id, k -> createUpdate(msg, sequenceNumber, from.getId(),
-                                                                     sign(k, signature), id.toID()));
+                                                                     from.sign(qb64(k).getBytes()), qb64(id)));
         gc();
         log.trace("broadcasting: {}:{} on: {}", id, sequenceNumber, from);
         return update;
     }
 
-    public void updatesFor(BloomFilter<HashKey> bff, Push.Builder builder) {
+    public void updatesFor(BloomFilter<Digest> bff, Push.Builder builder) {
         state.entrySet()
              .stream()
              .peek(entry -> entry.setValue(Message.newBuilder(entry.getValue())
@@ -180,18 +176,18 @@ public class MessageBuffer {
         purgeTheAged();
     }
 
-    private Message createUpdate(Any msg, int sequenceNumber, HashKey from, byte[] signature, ID key) {
+    private Message createUpdate(Any msg, int sequenceNumber, Digest from, String signature, String key) {
         return Message.newBuilder()
-                      .setSource(from.toID())
+                      .setSource(qb64(from))
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
                       .setKey(key)
-                      .setSignature(ByteString.copyFrom(signature))
+                      .setSignature(signature)
                       .setContent(msg)
                       .build();
     }
 
-    private boolean merge(HashKey hash, Message update, BiPredicate<HashKey, Message> validator) {
+    private boolean merge(Digest hash, Message update, BiPredicate<Digest, Message> validator) {
         if (update.getAge() > tooOld + 1) {
             log.trace("dropped as too old: {}:{}", hash, update.getSequenceNumber());
             return false;

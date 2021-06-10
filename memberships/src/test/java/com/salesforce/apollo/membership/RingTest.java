@@ -6,33 +6,37 @@
  */
 package com.salesforce.apollo.membership;
 
-import static com.salesforce.apollo.membership.TestCertUtils.generate;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import java.security.KeyPair;
+import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-import org.bouncycastle.util.Arrays;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.cert.Certificates;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class RingTest {
-    /**
-     * 
-     */
+
     private static final int    MEMBER_COUNT = 10;
     private static List<Member> members;
     private static final byte[] PROTO        = new byte[32];
@@ -40,16 +44,23 @@ public class RingTest {
     @BeforeAll
     public static void beforeClass() {
         members = new ArrayList<>();
-        for (int i = 0; i < MEMBER_COUNT; i++) {
+        for (int i = 1; i <= MEMBER_COUNT; i++) {
             Member m = createMember(i);
             members.add(m);
         }
     }
 
     private static Member createMember(int i) {
-        byte[] hash = Arrays.copyOf(PROTO, PROTO.length);
+        byte[] hash = PROTO.clone();
         hash[31] = (byte) i;
-        return new Member(new HashKey(hash), generate());
+        KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
+        Date notBefore = Date.from(Instant.now());
+        Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
+        Digest id = new Digest(DigestAlgorithm.DEFAULT, hash);
+        X509Certificate generated = Certificates.selfSign(false, Utils.encode(id, "foo.com", i, keyPair.getPublic()),
+                                                          Utils.secureEntropy(), keyPair, notBefore, notAfter,
+                                                          Collections.emptyList());
+        return new Member(id, generated, generated.getPublicKey());
     }
 
     private Ring<Member>    ring;
@@ -60,7 +71,7 @@ public class RingTest {
         Random entropy = new Random(0x1638);
         byte[] id = new byte[32];
         entropy.nextBytes(id);
-        context = new Context<>(new HashKey(id), 1);
+        context = new Context<>(new Digest(DigestAlgorithm.DEFAULT, id), 1);
         ring = context.rings().findFirst().get();
         members.forEach(m -> context.activate(m));
 
@@ -163,7 +174,7 @@ public class RingTest {
 
     @Test
     public void noRing() {
-        context = new Context<>(HashKey.ORIGIN);
+        context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin());
         assertEquals(1, context.getRingCount());
         members.forEach(m -> context.activate(m));
         assertEquals(MEMBER_COUNT, context.getActive().size());

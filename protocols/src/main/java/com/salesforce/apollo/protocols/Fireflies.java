@@ -11,6 +11,7 @@ import com.salesfoce.apollo.proto.Digests;
 import com.salesfoce.apollo.proto.Gossip;
 import com.salesfoce.apollo.proto.Signed;
 import com.salesfoce.apollo.proto.Update;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
@@ -18,10 +19,10 @@ import com.salesfoce.apollo.proto.Update;
  */
 public interface Fireflies {
 
-    ListenableFuture<Gossip> gossip(HashKey id, Signed note, int ring, Digests gossip);
+    ListenableFuture<Gossip> gossip(Digest id, Signed note, int ring, Digests gossip);
 
-    int ping(HashKey id, int ping);
+    int ping(Digest id, int ping);
 
-    void update(HashKey id, int ring, Update update);
+    void update(Digest id, int ring, Update update);
 
 }

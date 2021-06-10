@@ -14,26 +14,19 @@ import java.security.spec.EdECPrivateKeySpec;
 import java.security.spec.EdECPublicKeySpec;
 import java.security.spec.NamedParameterSpec;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.utils.Hex;
 
 public class EdDSAOperationsTests {
 
-    @BeforeAll
-    public static void beforeClass() {
-        // secp256k1 is considered "unsecure" so you have enable it like this:
-        System.setProperty("jdk.sunec.disableNative", "false");
-    }
-
     @Test
     public void test_ED25519_generateKeyPair() {
         var ops = SignatureAlgorithm.ED_25519;
         var result = ops.generateKeyPair();
 
-        assertEquals("EdDSA", result.getPrivate().getAlgorithm());
-        assertEquals("EdDSA", result.getPublic().getAlgorithm());
+        assertEquals("Ed25519", result.getPrivate().getAlgorithm());
+        assertEquals("Ed25519", result.getPublic().getAlgorithm());
     }
 
     @Test
@@ -58,7 +51,7 @@ public class EdDSAOperationsTests {
         var ops = SignatureAlgorithm.ED_25519;
         var result = (EdECPublicKey) ops.publicKey(encoded);
 
-        assertEquals("EdDSA", result.getAlgorithm());
+        assertEquals("Ed25519", result.getAlgorithm());
         assertEquals(NamedParameterSpec.ED25519.getName(), result.getParams().getName());
 
         var expectedPoint = new EdECPoint(false,
@@ -80,7 +73,7 @@ public class EdDSAOperationsTests {
         var bytes = ops.encode(publicKey);
         var decoding = (EdECPublicKey) ops.publicKey(bytes);
 
-        assertEquals("EdDSA", decoding.getAlgorithm());
+        assertEquals("Ed25519", decoding.getAlgorithm());
         assertEquals(NamedParameterSpec.ED25519.getName(), decoding.getParams().getName());
 
         var expectedPoint = new EdECPoint(false, ecPointY);
@@ -125,8 +118,8 @@ public class EdDSAOperationsTests {
         var ops = SignatureAlgorithm.ED_448;
         var result = ops.generateKeyPair();
 
-        assertEquals("EdDSA", result.getPrivate().getAlgorithm());
-        assertEquals("EdDSA", result.getPublic().getAlgorithm());
+        assertEquals("Ed448", result.getPrivate().getAlgorithm());
+        assertEquals("Ed448", result.getPublic().getAlgorithm());
     }
 
     @Test
@@ -152,7 +145,7 @@ public class EdDSAOperationsTests {
         var ops = SignatureAlgorithm.ED_448;
         var result = (EdECPublicKey) ops.publicKey(encoded);
 
-        assertEquals("EdDSA", result.getAlgorithm());
+        assertEquals("Ed448", result.getAlgorithm());
         assertEquals(NamedParameterSpec.ED448.getName(), result.getParams().getName());
 
         var expectedPoint = new EdECPoint(true, new BigInteger(
@@ -177,7 +170,7 @@ public class EdDSAOperationsTests {
         var bytes = ops.encode(publicKey);
         var decoding = (EdECPublicKey) ops.publicKey(bytes);
 
-        assertEquals("EdDSA", decoding.getAlgorithm());
+        assertEquals("Ed448", decoding.getAlgorithm());
         assertEquals(NamedParameterSpec.ED448.getName(), decoding.getParams().getName());
 
         var expectedPoint = new EdECPoint(true, ecPointY);

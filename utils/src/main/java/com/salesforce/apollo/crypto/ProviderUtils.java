@@ -1,15 +1,53 @@
-package com.salesforce.apollo.comm.grpc;
+package com.salesforce.apollo.crypto;
 
 import java.security.Provider;
 import java.security.Security;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCryptoProvider;
 
-class ProviderUtils {
+public class ProviderUtils {
+    
     static final String PROVIDER_NAME_BC     = BouncyCastleProvider.PROVIDER_NAME;
     static final String PROVIDER_NAME_BCJSSE = BouncyCastleJsseProvider.PROVIDER_NAME;
+
+    private static final AtomicBoolean initialized = new AtomicBoolean(false);
+    private static Provider PROVIDER_BC;
+    private static Provider PROVIDER_JSSE;
+
+    static {
+        setup();
+        PROVIDER_BC = Security.getProvider(PROVIDER_NAME_BC);
+        PROVIDER_JSSE = Security.getProvider(PROVIDER_NAME_BCJSSE);
+    }
+    
+    public static Provider getProviderBC() {
+        if (!initialized.get()) {
+            throw new IllegalStateException("Provider has not been initialized");
+        }
+        return PROVIDER_BC;
+    }
+
+    public static Provider getProviderBCJSSE() {
+        if (!initialized.get()) {
+            throw new IllegalStateException("Provider has not been initialized");
+        }
+        return PROVIDER_JSSE;
+    }
+
+    private static void setup() {
+        if (!initialized.compareAndSet(false, true)) {
+            return;
+        }
+        // secp256k1 is considered "unsecure" so you have enable it like this:
+        System.setProperty("jdk.sunec.disableNative", "false");
+        setupHighPriority(false);
+        for (Provider p : Security.getProviders()) {
+            System.out.println(p);
+        }
+    }
 
     static Provider createProviderBC() {
         return new BouncyCastleProvider();
@@ -25,24 +63,16 @@ class ProviderUtils {
         return new BouncyCastleJsseProvider(fips, new JcaTlsCryptoProvider());
     }
 
-    static Provider createProviderBCJSSE(Provider bc) {
-        return new BouncyCastleJsseProvider(bc);
-    }
-
     static Provider createProviderBCJSSE(boolean fips, Provider bc) {
         return new BouncyCastleJsseProvider(fips, bc);
     }
 
+    static Provider createProviderBCJSSE(Provider bc) {
+        return new BouncyCastleJsseProvider(bc);
+    }
+
     static Provider createProviderBCJSSE(String config) {
         return new BouncyCastleJsseProvider(config);
-    }
-
-    static Provider getProviderBC() {
-        return Security.getProvider(PROVIDER_NAME_BC);
-    }
-
-    static Provider getProviderBCJSSE() {
-        return Security.getProvider(PROVIDER_NAME_BCJSSE);
     }
 
     static ClassLoader getProviderClassLoaderBC() {

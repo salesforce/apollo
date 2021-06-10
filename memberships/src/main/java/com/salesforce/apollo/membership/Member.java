@@ -6,20 +6,18 @@
  */
 package com.salesforce.apollo.membership;
 
-import java.io.IOException;
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
+
 import java.net.InetSocketAddress;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.Signature;
-import java.security.cert.CertificateEncodingException;
+import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.Map;
 
-import org.bouncycastle.asn1.ASN1OctetString;
-import org.bouncycastle.asn1.x509.Extension;
-import org.bouncycastle.cert.X509CertificateHolder;
-
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 
 /**
  * A member of the view
@@ -29,17 +27,14 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class Member implements Comparable<Member> {
 
-    public static HashKey getMemberId(X509Certificate c) {
-        X509CertificateHolder holder;
-        try {
-            holder = new X509CertificateHolder(c.getEncoded());
-        } catch (CertificateEncodingException | IOException e) {
-            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
+    public static Digest getMemberIdentifier(X509Certificate cert) {
+        String dn = cert.getSubjectX500Principal().getName();
+        Map<String, String> decoded = Util.decodeDN(dn);
+        String id = decoded.get("UID");
+        if (id == null) {
+            throw new IllegalArgumentException("Invalid certificate, missing \"UID\" of dn= " + dn);
         }
-        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
-
-        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
-        return new HashKey(id);
+        return digest(id);
     }
 
     /**
@@ -54,32 +49,51 @@ public class Member implements Comparable<Member> {
         if (portString == null) {
             throw new IllegalArgumentException("Invalid certificate, no port encodings in \"L\" of dn= " + dn);
         }
-        int ffPort = Integer.parseInt(portString);
+        int port = Integer.parseInt(portString);
 
         String hostName = decoded.get("CN");
         if (hostName == null) {
             throw new IllegalArgumentException("Invalid certificate, missing \"CN\" of dn= " + dn);
         }
-        return new InetSocketAddress(hostName, ffPort);
+        return new InetSocketAddress(hostName, port);
+    }
+
+    private static PublicKey getSigningKey(X509Certificate cert) {
+        String dn = cert.getSubjectX500Principal().getName();
+        Map<String, String> decoded = Util.decodeDN(dn);
+        String pk = decoded.get("SN");
+        if (pk == null) {
+            throw new IllegalArgumentException("Invalid certificate, missing \"SN\" of dn= " + dn);
+        }
+        return publicKey(pk);
     }
 
     /**
      * Signing identity
      */
-    private final X509Certificate certificate;
-
+    protected final X509Certificate    certificate;
     /**
      * Unique ID of the memmber
      */
-    private final HashKey id;
+    protected final Digest             id;
+    /**
+     * cached signature algorithm for signing key
+     */
+    protected final SignatureAlgorithm signatureAlgorithm;
+    /**
+     * Key used by member to sign things
+     */
+    protected final PublicKey          signingKey;
 
-    public Member(HashKey id, X509Certificate c) {
+    public Member(Digest id, X509Certificate c, PublicKey sk) {
         certificate = c;
         this.id = id;
+        this.signingKey = sk;
+        signatureAlgorithm = SignatureAlgorithm.lookup(signingKey);
     }
 
     public Member(X509Certificate cert) {
-        this(getMemberId(cert), cert);
+        this(getMemberIdentifier(cert), cert, getSigningKey(cert));
     }
 
     @Override
@@ -100,28 +114,6 @@ public class Member implements Comparable<Member> {
     }
 
     /**
-     * Answer the Signature, initialized with the member's public key, using the
-     * supplied signature algorithm.
-     * 
-     * @param signatureAlgorithm
-     * @return the signature, initialized for verification
-     */
-    public Signature forVerification(String signatureAlgorithm) {
-        Signature signature;
-        try {
-            signature = Signature.getInstance(signatureAlgorithm);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("no such algorithm: " + signatureAlgorithm, e);
-        }
-        try {
-            signature.initVerify(certificate.getPublicKey());
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException("invalid public key", e);
-        }
-        return signature;
-    }
-
-    /**
      * @return the identifying certificate of the member
      */
     public X509Certificate getCertificate() {
@@ -131,7 +123,7 @@ public class Member implements Comparable<Member> {
     /**
      * @return the unique id of this member
      */
-    public HashKey getId() {
+    public Digest getId() {
         return id;
     }
 
@@ -142,7 +134,14 @@ public class Member implements Comparable<Member> {
 
     @Override
     public String toString() {
-        return "Member[" + id + "]";
+        return "Member[" + shortQb64(id) + "]";
+    }
+
+    /**
+     * Verify the signature with the member's signing key
+     */
+    public boolean verify(byte[] message, JohnHancock signature) {
+        return signatureAlgorithm.verify(message, signature, signingKey);
     }
 
 }
