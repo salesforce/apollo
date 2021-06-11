@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.membership;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
@@ -18,6 +16,7 @@ import javax.net.ssl.SSLException;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
 import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.crypto.ssl.NodeKeyManagerFactory;
@@ -109,7 +108,7 @@ public class SigningMember extends Member implements ServerContextSupplier, Clie
         return getMemberIdentifier(key);
     }
 
-    public String sign(byte[] message) {
-        return qb64(signer.sign(message));
+    public JohnHancock sign(byte[] message) {
+        return signer.sign(message);
     }
 }

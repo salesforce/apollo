@@ -57,8 +57,21 @@ public class MessageBuffer {
         }
     }
 
-    public static boolean validate(Digest hash, Message message, Member verifier, JohnHancock signature) {
+    public static boolean validate(Digest hash, Message message, Member verifier) {
         return verifier.verify(qb64(hash).getBytes(), signature(message.getSignature()));
+    }
+
+    static Digest idOf(DigestAlgorithm algorithm, int sequenceNumber, Digest from, Any content) {
+        byte[] bytes = qb64(from).getBytes();
+        ByteBuffer header = ByteBuffer.allocate(bytes.length + 4);
+        header.put(bytes);
+        header.putInt(sequenceNumber);
+        header.flip();
+        List<ByteBuffer> buffers = new ArrayList<>();
+        buffers.add(header);
+        buffers.addAll(content.toByteString().asReadOnlyByteBufferList());
+
+        return algorithm.digest(buffers);
     }
 
     private static Queue<Entry<Digest, Message>> findNHighest(Collection<Entry<Digest, Message>> msgs, int n) {
@@ -74,24 +87,11 @@ public class MessageBuffer {
         return nthHighest;
     }
 
-    private static Digest idOf(DigestAlgorithm algorithm, int sequenceNumber, Digest from, Any content) {
-        byte[] bytes = qb64(from).getBytes();
-        ByteBuffer header = ByteBuffer.allocate(bytes.length + 4);
-        header.put(bytes);
-        header.putInt(sequenceNumber);
-        header.flip();
-        List<ByteBuffer> buffers = new ArrayList<>();
-        buffers.add(header);
-        buffers.addAll(content.toByteString().asReadOnlyByteBufferList());
-
-        return algorithm.digest(buffers);
-    }
-
     private final int                  bufferSize;
+    private final DigestAlgorithm      digestAlgorithm;
     private final AtomicInteger        lastSequenceNumber = new AtomicInteger();
     private final Map<Digest, Message> state              = new ConcurrentHashMap<>();
     private final int                  tooOld;
-    private final DigestAlgorithm      digestAlgorithm;
 
     public MessageBuffer(DigestAlgorithm algorithm, int bufferSize, int tooOld) {
         this.bufferSize = bufferSize;
@@ -158,7 +158,7 @@ public class MessageBuffer {
         int sequenceNumber = lastSequenceNumber.getAndIncrement();
         Digest id = idOf(digestAlgorithm, sequenceNumber, from.getId(), msg);
         Message update = state.computeIfAbsent(id, k -> createUpdate(msg, sequenceNumber, from.getId(),
-                                                                     from.sign(qb64(k).getBytes()), qb64(id)));
+                                                                     from.sign(qb64(k).getBytes()), k));
         gc();
         log.trace("broadcasting: {}:{} on: {}", id, sequenceNumber, from);
         return update;
@@ -176,13 +176,17 @@ public class MessageBuffer {
         purgeTheAged();
     }
 
-    private Message createUpdate(Any msg, int sequenceNumber, Digest from, String signature, String key) {
+    Digest idOf(int sequenceNumber, Digest from, Any content) {
+        return idOf(digestAlgorithm, sequenceNumber, from, content);
+    }
+
+    private Message createUpdate(Any msg, int sequenceNumber, Digest from, JohnHancock signature, Digest hash) {
         return Message.newBuilder()
                       .setSource(qb64(from))
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
-                      .setKey(key)
-                      .setSignature(signature)
+                      .setKey(qb64(hash))
+                      .setSignature(qb64(signature))
                       .setContent(msg)
                       .build();
     }

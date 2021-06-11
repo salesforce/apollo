@@ -92,8 +92,8 @@ public class MemberOrderTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final Parameters                       parameters = Parameters.newBuilder()
-                                                                                 .setFalsePositiveRate(0.01)
-                                                                                 .setBufferSize(5_000)
+                                                                                 .setFalsePositiveRate(0.00125)
+                                                                                 .setBufferSize(1000)
                                                                                  .build();
 
     @BeforeAll
@@ -125,7 +125,7 @@ public class MemberOrderTest {
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
-                                           .limit(50)
+                                           .limit(20)
                                            .collect(Collectors.toList());
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
@@ -156,20 +156,24 @@ public class MemberOrderTest {
                                      .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
                                      .build(),
                           true);
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                }
             });
         }
 
-        boolean complete = Utils.waitForCondition(15_000, 1_000, () -> {
+        boolean complete = Utils.waitForCondition(30_000, 1_000, () -> {
             return receivers.stream()
                             .map(r -> r.validate(messengers.size(), messageCount))
                             .filter(result -> !result)
                             .count() == 0;
         });
-//        receivers.forEach(m -> System.out.println(m.totalOrder));
-//        receivers.forEach(r -> {
-//            System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
-//                    + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
-//        });
+        receivers.forEach(m -> System.out.println(m.totalOrder));
+        receivers.forEach(r -> {
+            System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
+                    + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
+        });
         assertTrue(complete, "did not get all messages : "
                 + receivers.stream().filter(r -> !r.validate(messengers.size(), messageCount)).map(r -> r.id).count());
     }
@@ -183,7 +187,7 @@ public class MemberOrderTest {
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
-                                           .limit(50)
+                                           .limit(30)
                                            .collect(Collectors.toList());
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
@@ -214,6 +218,10 @@ public class MemberOrderTest {
                                      .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
                                      .build(),
                           true);
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                }
             });
         }
 
@@ -232,6 +240,7 @@ public class MemberOrderTest {
         List<ToReceiver> liveRcvrs = receivers.subList(half, members.size());
 
         deadRcvrs.stream().peek(r -> context.offline(r.messenger.getMember())).forEach(m -> m.messenger.stop());
+        deadRcvrs.forEach(r -> r.messenger.clearBuffer());
 
         for (int i = 0; i < messageCount; i++) {
             liveRcvrs.forEach(r -> {
@@ -239,6 +248,10 @@ public class MemberOrderTest {
                                                .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
                                                .build(),
                                     true);
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                }
             });
         }
 
@@ -251,12 +264,14 @@ public class MemberOrderTest {
         assertTrue(complete, "did not get all messages : "
                 + liveRcvrs.stream().filter(r -> !r.validate(liveRcvrs, messageCount * 2)).map(r -> r.id).count());
 
+        liveRcvrs.forEach(r -> r.messenger.clearBuffer());
+
+        System.out.println("Restarting half");
+
         System.out.println("Restarting half");
         deadRcvrs.stream()
                  .peek(r -> context.activate(r.messenger.getMember()))
                  .forEach(m -> m.messenger.start(gossipDuration, scheduler));
-
-        Thread.sleep(2000);
 
         for (int i = 0; i < messageCount; i++) {
             receivers.forEach(r -> {
@@ -264,6 +279,10 @@ public class MemberOrderTest {
                                                .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
                                                .build(),
                                     true);
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                }
             });
         }
 
@@ -293,7 +312,7 @@ public class MemberOrderTest {
             System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
                     + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
         });
- 
+
         assertTrue(complete, "did not get all messages : "
                 + liveRcvrs.stream().filter(r -> !r.validate(liveRcvrs, messageCount * 3)).map(r -> r.id).count()
                 + " : " + deadRcvrs.stream().filter(r -> !r.validate(deadRcvrs, messageCount)).map(r -> r.id).count());

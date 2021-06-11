@@ -434,7 +434,7 @@ public class Context<T extends Member> {
      * members in the context, using the rings of the receiver as a gossip graph
      */
     public int timeToLive() {
-        return toleranceLevel() * diameter() + 1;
+        return (toleranceLevel() * diameter()) + 1;
     }
 
     /**

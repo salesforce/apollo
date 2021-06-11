@@ -8,7 +8,6 @@ package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
 import java.time.Duration;
@@ -201,6 +200,11 @@ public class Messenger {
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
                                           getCreate(parameters.metrics));
         this.executor = executor;
+    }
+
+    public void clearBuffer() {
+        log.warn("Clearing message buffer on: {}", member);
+        buffer.clear();
     }
 
     public Context<? extends Member> getContext() {
@@ -403,14 +407,15 @@ public class Messenger {
     }
 
     private boolean validate(Digest hash, Message message) {
-        Digest memberID = digest(message.getSource());
-        Member member = context.getMember(memberID);
+        Digest from = digest(message.getSource());
+        Member member = context.getMember(from);
         if (member == null) {
-            log.debug("Non existent member: " + memberID);
+            log.debug("Non existent member: " + from);
             return false;
         }
-        if (!MessageBuffer.validate(hash, message, member, signature(message.getSignature()))) {
-            log.trace("Did not validate message {} from {}", message, memberID);
+        Digest calculated = buffer.idOf(message.getSequenceNumber(), from, message.getContent());
+        if (!calculated.equals(hash) || !MessageBuffer.validate(hash, message, member)) {
+            log.error("Did not validate message {} from {}", message, from);
             return false;
         }
         return true;
