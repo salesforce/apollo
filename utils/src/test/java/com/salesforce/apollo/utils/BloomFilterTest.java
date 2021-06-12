@@ -8,10 +8,10 @@ package com.salesforce.apollo.utils;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +31,7 @@ public class BloomFilterTest {
         double target = 0.125;
         BloomFilter<Digest> biff = new DigestBloomFilter(666, max, target);
 
-        Random random = new Random(0x666);
+        SecureRandom random = new SecureRandom();
         List<Digest> added = new ArrayList<>();
         for (int i = 0; i < max; i++) {
             byte[] hash = new byte[DigestAlgorithm.DEFAULT.digestLength()];
