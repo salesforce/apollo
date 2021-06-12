@@ -27,6 +27,7 @@ import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.ProcessedBuffer;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.impl.Member;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 

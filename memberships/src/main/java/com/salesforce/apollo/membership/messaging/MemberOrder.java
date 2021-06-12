@@ -23,8 +23,8 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Context.MembershipListener;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 
 /**

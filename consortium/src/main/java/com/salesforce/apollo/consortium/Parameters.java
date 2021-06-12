@@ -24,6 +24,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.impl.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.protocols.HashKey;
 

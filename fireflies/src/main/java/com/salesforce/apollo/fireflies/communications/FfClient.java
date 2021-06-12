@@ -8,25 +8,25 @@ package com.salesforce.apollo.fireflies.communications;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
-
+import static com.salesforce.apollo.crypto.QualifiedBase64.*;
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.proto.Digests;
-import com.salesfoce.apollo.proto.FirefliesGrpc;
-import com.salesfoce.apollo.proto.FirefliesGrpc.FirefliesFutureStub;
-import com.salesfoce.apollo.proto.Gossip;
-import com.salesfoce.apollo.proto.Null;
-import com.salesfoce.apollo.proto.SayWhat;
-import com.salesfoce.apollo.proto.Signed;
-import com.salesfoce.apollo.proto.State;
-import com.salesfoce.apollo.proto.Update;
+import com.salesfoce.apollo.fireflies.proto.Digests;
+import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
+import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
+import com.salesfoce.apollo.fireflies.proto.Gossip;
+import com.salesfoce.apollo.fireflies.proto.Note;
+import com.salesfoce.apollo.fireflies.proto.Null;
+import com.salesfoce.apollo.fireflies.proto.SayWhat;
+import com.salesfoce.apollo.fireflies.proto.State;
+import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.fireflies.Fireflies;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
-import com.salesforce.apollo.protocols.Fireflies;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -57,14 +57,14 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public ListenableFuture<Gossip> gossip(HashKey context, Signed note, int ring, Digests digests) {
+    public ListenableFuture<Gossip> gossip(Digest context, Note note, int ring, Digests digests) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundGossipTimer().time();
         }
         try {
             SayWhat sw = SayWhat.newBuilder()
-                                .setContext(context.toID())
+                                .setContext(qb64(context))
                                 .setNote(note)
                                 .setRing(ring)
                                 .setGossip(digests)
@@ -99,13 +99,13 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public int ping(HashKey context, int ping) {
+    public int ping(Digest context, int ping) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundPingTimer().time();
         }
         try {
-            client.ping(Null.newBuilder().setContext(context.toID()).build());
+            client.ping(Null.newBuilder().setContext(qb64(context)).build());
             if (metrics != null) {
                 metrics.outboundPingRate().mark();
             }
@@ -133,13 +133,13 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public void update(HashKey context, int ring, Update update) {
+    public void update(Digest context, int ring, Update update) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundUpdateTimer().time();
         }
         try {
-            State state = State.newBuilder().setContext(context.toID()).setRing(ring).setUpdate(update).build();
+            State state = State.newBuilder().setContext(qb64(context)).setRing(ring).setUpdate(update).build();
             client.update(state);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(state.getSerializedSize());

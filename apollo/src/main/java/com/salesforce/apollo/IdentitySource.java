@@ -31,7 +31,7 @@ import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.impl.CertWithKey;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.utils.Utils;
 

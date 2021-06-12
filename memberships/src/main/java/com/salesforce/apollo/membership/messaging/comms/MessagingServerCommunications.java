@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.membership.messaging.comms;
 
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.proto.MessageBff;
 import com.salesfoce.apollo.proto.Messages;
 import com.salesfoce.apollo.proto.MessagingGrpc.MessagingImplBase;
-import com.salesfoce.apollo.proto.Null;
 import com.salesfoce.apollo.proto.Push;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
@@ -46,7 +46,7 @@ public class MessagingServerCommunications extends MessagingImplBase {
     }
 
     @Override
-    public void update(Push request, StreamObserver<Null> responseObserver) {
+    public void update(Push request, StreamObserver<Empty> responseObserver) {
         routing.evaluate(responseObserver, request.getContext(), s -> {
             Digest from = identity.getFrom();
             if (from == null) {
@@ -54,7 +54,7 @@ public class MessagingServerCommunications extends MessagingImplBase {
                 return;
             }
             s.update(request, from);
-            responseObserver.onNext(Null.getDefaultInstance());
+            responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
             if (metrics != null) {
                 metrics.inboundUpdateRate().mark();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, salesforce.com, inc.
+ * Copyright (c) 2021, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
@@ -8,26 +8,26 @@ package com.salesforce.apollo.membership;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
-import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 
+import java.io.InputStream;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.Map;
 
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
- * A member of the view
- * 
  * @author hal.hildebrand
- * @since 220
+ *
  */
-public class Member implements Comparable<Member> {
+public interface Member extends Comparable<Member> {
 
-    public static Digest getMemberIdentifier(X509Certificate cert) {
+    static Digest getMemberIdentifier(X509Certificate cert) {
         String dn = cert.getSubjectX500Principal().getName();
         Map<String, String> decoded = Util.decodeDN(dn);
         String id = decoded.get("UID");
@@ -37,11 +37,21 @@ public class Member implements Comparable<Member> {
         return digest(id);
     }
 
+    static PublicKey getSigningKey(X509Certificate cert) {
+        String dn = cert.getSubjectX500Principal().getName();
+        Map<String, String> decoded = Util.decodeDN(dn);
+        String pk = decoded.get("DC");
+        if (pk == null) {
+            throw new IllegalArgumentException("Invalid certificate, missing \"DC\" of dn= " + dn);
+        }
+        return publicKey(pk);
+    }
+
     /**
      * @param certificate
      * @return host and port for the member indicated by the certificate
      */
-    public static InetSocketAddress portsFrom(X509Certificate certificate) {
+    static InetSocketAddress portsFrom(X509Certificate certificate) {
 
         String dn = certificate.getSubjectX500Principal().getName();
         Map<String, String> decoded = Util.decodeDN(dn);
@@ -58,90 +68,38 @@ public class Member implements Comparable<Member> {
         return new InetSocketAddress(hostName, port);
     }
 
-    private static PublicKey getSigningKey(X509Certificate cert) {
-        String dn = cert.getSubjectX500Principal().getName();
-        Map<String, String> decoded = Util.decodeDN(dn);
-        String pk = decoded.get("SN");
-        if (pk == null) {
-            throw new IllegalArgumentException("Invalid certificate, missing \"SN\" of dn= " + dn);
-        }
-        return publicKey(pk);
-    }
+    int compareTo(Member o);
 
-    /**
-     * Signing identity
-     */
-    protected final X509Certificate    certificate;
-    /**
-     * Unique ID of the memmber
-     */
-    protected final Digest             id;
-    /**
-     * cached signature algorithm for signing key
-     */
-    protected final SignatureAlgorithm signatureAlgorithm;
-    /**
-     * Key used by member to sign things
-     */
-    protected final PublicKey          signingKey;
-
-    public Member(Digest id, X509Certificate c, PublicKey sk) {
-        certificate = c;
-        this.id = id;
-        this.signingKey = sk;
-        signatureAlgorithm = SignatureAlgorithm.lookup(signingKey);
-    }
-
-    public Member(X509Certificate cert) {
-        this(getMemberIdentifier(cert), cert, getSigningKey(cert));
-    }
-
-    @Override
-    public int compareTo(Member o) {
-        return id.compareTo(o.getId());
-    }
-
-    @Override
     // The id of a member uniquely identifies it
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (!(obj instanceof Member))
-            return false;
-        return id.equals(((Member) obj).id);
-    }
+    boolean equals(Object obj);
 
     /**
      * @return the identifying certificate of the member
      */
-    public X509Certificate getCertificate() {
-        return certificate;
-    }
+    X509Certificate getCertificate();
 
     /**
      * @return the unique id of this member
      */
-    public Digest getId() {
-        return id;
-    }
+    Digest getId();
 
-    @Override
-    public int hashCode() {
-        return id.hashCode();
-    }
-
-    @Override
-    public String toString() {
-        return "Member[" + shortQb64(id) + "]";
-    }
+    int hashCode();
 
     /**
      * Verify the signature with the member's signing key
      */
-    public boolean verify(byte[] message, JohnHancock signature) {
-        return signatureAlgorithm.verify(message, signature, signingKey);
+    default boolean verify(JohnHancock signature, byte[]... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
     }
+
+    default boolean verify(JohnHancock signature, ByteBuffer... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
+    }
+
+    default boolean verify(JohnHancock signature, ByteString... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
+    }
+
+    boolean verify(JohnHancock signature, InputStream message);
 
 }

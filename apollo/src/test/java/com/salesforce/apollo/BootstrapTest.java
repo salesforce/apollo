@@ -48,7 +48,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.impl.Member;
 import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.utils.Utils;
 

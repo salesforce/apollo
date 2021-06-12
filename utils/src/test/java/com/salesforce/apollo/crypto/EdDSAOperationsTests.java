@@ -105,12 +105,12 @@ public class EdDSAOperationsTests {
         var privateKey = (EdECPrivateKey) kf.generatePrivate(privateKeySpec);
 
         var ops = SignatureAlgorithm.ED_25519;
-        var sig = ops.sign(msg, privateKey);
+        var sig = ops.sign(privateKey, msg);
 
         assertArrayEquals(expectedSig, sig.getBytes());
 
         var publicKey = ops.publicKey(pkb);
-        assertTrue(ops.verify(msg, sig, publicKey));
+        assertTrue(ops.verify(publicKey, sig, msg));
     }
 
     @Test
@@ -201,12 +201,12 @@ public class EdDSAOperationsTests {
         var privateKey = (EdECPrivateKey) kf.generatePrivate(privateKeySpec);
 
         var ops = SignatureAlgorithm.ED_448;
-        var sig = ops.sign(msg, privateKey);
+        var sig = ops.sign(privateKey, msg);
 
         assertArrayEquals(expectedSig, sig.getBytes());
 
         var publicKey = ops.publicKey(pkb);
-        assertTrue(ops.verify(msg, sig, publicKey));
+        assertTrue(ops.verify(publicKey, sig, msg));
     }
 
 }

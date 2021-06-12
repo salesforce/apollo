@@ -6,8 +6,9 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+
+import java.io.InputStream;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -22,8 +23,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.EncodedCertificate;
-import com.salesfoce.apollo.proto.Signed;
+import com.salesfoce.apollo.fireflies.proto.Accusation;
+import com.salesfoce.apollo.fireflies.proto.EncodedCertificate;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.fireflies.View.AccTag;
 import com.salesforce.apollo.membership.Member;
 
@@ -33,23 +37,23 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  * @since 220
  */
-public class Participant extends Member {
+public class Participant implements Member {
     private static final Logger log = LoggerFactory.getLogger(Participant.class);
 
     /**
      * The member's latest note
      */
-    volatile Note note;
+    protected volatile NoteWrapper note;
 
     /**
      * The valid accusatons for this member
      */
-    final Map<Integer, Accusation> validAccusations = new ConcurrentHashMap<>();
+    protected final Map<Integer, AccusationWrapper> validAccusations = new ConcurrentHashMap<>();
 
     /**
      * The hash of the member's certificate
      */
-    private final byte[] certificateHash;
+    private final Digest certificateHash;
 
     /**
      * The DER serialized certificate
@@ -61,15 +65,20 @@ public class Participant extends Member {
      */
     private volatile Instant failedAt = Instant.now();
 
-    public Participant(X509Certificate c, FirefliesParameters parameters) {
-        this(c, null, parameters, null);
+    private final Member wrapped;
 
+    protected final DigestAlgorithm hashAlgorithm;
+
+    public Participant(Member wrapped, FirefliesParameters parameters) {
+        this(wrapped, null, null, parameters);
     }
 
-    protected Participant(X509Certificate c, byte[] derEncodedCertificate, FirefliesParameters parameters,
-            byte[] certificateHash) {
-        super(getMemberId(c), c);
-        assert c != null;
+    public Participant(Member wrapped, byte[] derEncodedCertificate, Digest certificateHash,
+            FirefliesParameters parameters) {
+        assert wrapped != null;
+        this.wrapped = wrapped;
+        this.hashAlgorithm = parameters.hashAlgorithm;
+
         if (derEncodedCertificate != null) {
             this.derEncodedCertificate = derEncodedCertificate;
         } else {
@@ -83,21 +92,25 @@ public class Participant extends Member {
         if (certificateHash != null) {
             this.certificateHash = certificateHash;
         } else {
-            MessageDigest md;
-            try {
-                md = MessageDigest.getInstance(parameters.hashAlgorithm);
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("No hash algorithm found: " + parameters.hashAlgorithm);
-            }
             try {
                 derEncodedCertificate = getCertificate().getEncoded();
             } catch (CertificateEncodingException e) {
                 throw new IllegalArgumentException("Cannot encode certifiate for member: " + getId(), e);
             }
-
-            md.update(derEncodedCertificate);
-            this.certificateHash = md.digest();
+            this.certificateHash = DigestAlgorithm.DEFAULT.digest(derEncodedCertificate);
         }
+    }
+
+    public int compareTo(Member o) {
+        return wrapped.compareTo(o);
+    }
+
+    public boolean equals(Object obj) {
+        return wrapped.equals(obj);
+    }
+
+    public X509Certificate getCertificate() {
+        return wrapped.getCertificate();
     }
 
     /**
@@ -105,6 +118,14 @@ public class Participant extends Member {
      */
     public Instant getFailedAt() {
         return failedAt;
+    }
+
+    public Digest getId() {
+        return wrapped.getId();
+    }
+
+    public int hashCode() {
+        return wrapped.hashCode();
     }
 
     public boolean isFailed() {
@@ -121,13 +142,17 @@ public class Participant extends Member {
         return "Member[" + getId() + "]";
     }
 
+    public boolean verify(JohnHancock signature, InputStream message) {
+        return wrapped.verify(signature, message);
+    }
+
     /**
      * Add an accusation to the member
      * 
      * @param accusation
      */
-    void addAccusation(Accusation accusation) {
-        Note n = getNote();
+    void addAccusation(AccusationWrapper accusation) {
+        NoteWrapper n = getNote();
         if (n == null) {
             return;
         }
@@ -152,11 +177,11 @@ public class Participant extends Member {
         log.trace("Clearing accusations for {}", getId());
     }
 
-    Accusation getAccusation(int index) {
+    AccusationWrapper getAccusation(int index) {
         return validAccusations.get(index);
     }
 
-    Stream<Accusation> getAccusations() {
+    Stream<AccusationWrapper> getAccusations() {
         return validAccusations.values().stream();
     }
 
@@ -164,48 +189,43 @@ public class Participant extends Member {
         return validAccusations.keySet().stream().map(ring -> new AccTag(getId(), ring)).collect(Collectors.toList());
     }
 
-    byte[] getCertificateHash() {
+    Digest getCertificateHash() {
         return certificateHash;
     }
 
-    Signed getEncodedAccusation(Integer ring) {
-        Accusation accusation = validAccusations.get(ring);
-        return accusation == null ? null : accusation.getSigned();
+    AccusationWrapper getEncodedAccusation(Integer ring) {
+        return validAccusations.get(ring);
     }
 
-    List<Signed> getEncodedAccusations(int rings) {
+    List<Accusation> getEncodedAccusations(int rings) {
         return IntStream.range(0, rings)
                         .mapToObj(i -> getEncodedAccusation(i))
                         .filter(e -> e != null)
+                        .map(e -> e.getWrapped())
                         .collect(Collectors.toList());
     }
 
     EncodedCertificate getEncodedCertificate() {
-        Note current = note;
+        NoteWrapper current = note;
         return current == null ? null
                 : EncodedCertificate.newBuilder()
-                                    .setId(getId().toID())
+                                    .setId(qb64(getId()))
                                     .setEpoch(current.getEpoch())
-                                    .setHash(ByteString.copyFrom(certificateHash))
+                                    .setHash(qb64(certificateHash))
                                     .setContent(ByteString.copyFrom(derEncodedCertificate))
                                     .build();
     }
 
     long getEpoch() {
-        Note current = note;
+        NoteWrapper current = note;
         if (current == null) {
             return 0;
         }
         return current.getEpoch();
     }
 
-    Note getNote() {
+    NoteWrapper getNote() {
         return note;
-    }
-
-    Signed getSignedNote() {
-        Note current = note;
-        return current == null ? null : current.getSigned();
     }
 
     void invalidateAccusationOnRing(int index) {
@@ -232,8 +252,8 @@ public class Participant extends Member {
         this.failedAt = failed ? Instant.now() : null;
     }
 
-    void setNote(Note next) {
-        Note current = this.note;
+    void setNote(NoteWrapper next) {
+        NoteWrapper current = note;
         if (current != null) {
             long nextEpoch = next.getEpoch();
             long currentEpoch = current.getEpoch();
@@ -242,7 +262,7 @@ public class Participant extends Member {
                 return;
             }
         }
-        this.note = next;
+        note = next;
         failedAt = null;
         clearAccusations();
     }

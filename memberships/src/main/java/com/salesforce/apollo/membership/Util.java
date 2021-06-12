@@ -6,22 +6,10 @@
  */
 package com.salesforce.apollo.membership;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.SignatureException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -85,7 +73,7 @@ final public class Util {
         ldapDN.getRdns().forEach(rdn -> {
             Object value = rdn.getValue();
             try {
-            decoded.put(rdn.getType(), (String) value);
+                decoded.put(rdn.getType(), (String) value);
             } catch (ClassCastException e) {
                 // skip
             }
@@ -99,40 +87,6 @@ final public class Util {
                                  .putLong(uuid.getLeastSignificantBits())
                                  .array();
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    public static CertWithKey loadFrom(final File keystoreFile, final char[] password, final String alias) {
-        try {
-            final KeyStore keystore = KeyStore.getInstance("PKCS12");
-            try (InputStream stream = new FileInputStream(keystoreFile)) {
-                keystore.load(stream, password);
-                return loadFrom(keystore, alias);
-            }
-        } catch (KeyStoreException | NoSuchAlgorithmException | CertificateException | IOException e) {
-            throw new IllegalStateException("Cannot load from: " + keystoreFile, e);
-        }
-    }
-
-    public static CertWithKey loadFrom(final InputStream stream, final char[] password, final String alias) {
-        try {
-            final KeyStore keystore = KeyStore.getInstance("PKCS12");
-            keystore.load(stream, password);
-            return loadFrom(keystore, alias);
-        } catch (KeyStoreException | NoSuchAlgorithmException | CertificateException | IOException e) {
-            throw new IllegalStateException("Cannot load from stream", e);
-        }
-    }
-
-    public static CertWithKey loadFrom(KeyStore keystore, String alias) {
-        try {
-            final Certificate certificate = keystore.getCertificate(alias);
-            final PrivateKey privateKey = (PrivateKey) keystore.getKey(alias, null);
-            if (certificate == null || privateKey == null)
-                throw new IllegalStateException("Keystore does not contain certificate and key for alias " + alias);
-            return new CertWithKey((X509Certificate) certificate, privateKey);
-        } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException e) {
-            throw new IllegalStateException(e);
-        }
     }
 
     public static int minMajority(double pByz, int size, int e) {

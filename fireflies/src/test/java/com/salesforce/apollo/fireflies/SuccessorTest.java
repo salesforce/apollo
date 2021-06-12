@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,15 +32,16 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.View.Service;
-import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
  * @author hal.hildebrand
@@ -49,17 +49,23 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class SuccessorTest {
 
-    private static final RootCertificate                   ca         = getCa();
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters               parameters = new FirefliesParameters(
-            ca.getX509Certificate());
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters              parameters;
+    private static final int                              CARDINALITY = 10;
+
+    static {
+        parameters = FirefliesParameters.newBuilder()
+                                        .setCardinality(CARDINALITY)
+                                        .setCertificateValidator(CertificateValidator.NONE)
+                                        .build();
+    }
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 10)
+        certs = IntStream.range(0, CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
 
@@ -80,8 +86,12 @@ public class SuccessorTest {
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
                                   .parallelStream()
-                                  .map(cert -> new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()))
-                                  .map(cert -> new Node(cert, parameters))
+                                  .map(cert -> new Node(
+                                          new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                  cert.getX509Certificate(), cert.getPrivateKey(),
+                                                  new Signer(0, cert.getPrivateKey()),
+                                                  cert.getX509Certificate().getPublicKey()),
+                                          parameters))
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
@@ -100,7 +110,7 @@ public class SuccessorTest {
             LocalRouter comms = new LocalRouter(node, builder, executor);
             communications.add(comms);
             comms.start();
-            return new View(HashKey.ORIGIN, node, comms, metrics);
+            return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, metrics);
         }).collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
         views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds, scheduler));

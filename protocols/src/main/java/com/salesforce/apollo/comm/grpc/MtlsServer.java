@@ -9,6 +9,7 @@ package com.salesforce.apollo.comm.grpc;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.security.PrivateKey;
+import java.security.Provider;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.ExecutionException;
@@ -55,6 +56,8 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 public class MtlsServer implements ClientIdentity {
+    private static final Provider PROVIDER_BCJSSE = ProviderUtils.getProviderBCJSSE();
+
     /**
      * Currently grpc-java doesn't return compressed responses, even if the client
      * has sent a compressed payload. This turns on gzip compression for all
@@ -78,11 +81,11 @@ public class MtlsServer implements ClientIdentity {
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forClient()
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
-                                                             privateKey, ProviderUtils.getProviderBCJSSE()));
+                                                             privateKey, PROVIDER_BCJSSE));
         GrpcSslContexts.configure(builder);
         builder.protocols(TL_SV1_3)
                .sslProvider(SslProvider.JDK)
-               .trustManager(new NodeTrustManagerFactory(validator, ProviderUtils.getProviderBCJSSE()))
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
                .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
                        // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK
@@ -103,11 +106,11 @@ public class MtlsServer implements ClientIdentity {
     public static SslContext forServer(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forServer(new NodeKeyManagerFactory(alias, certificate,
-                privateKey, ProviderUtils.getProviderBCJSSE()));
+                privateKey, PROVIDER_BCJSSE));
         GrpcSslContexts.configure(builder);
         builder.protocols(TL_SV1_3)
                .sslProvider(SslProvider.JDK)
-               .trustManager(new NodeTrustManagerFactory(validator, ProviderUtils.getProviderBCJSSE()))
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
                .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
                        // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK
@@ -143,8 +146,7 @@ public class MtlsServer implements ClientIdentity {
         });
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
                                                        .sslContext(supplier.forServer(clientAuth, alias, validator,
-                                                                                      ProviderUtils.getProviderBCJSSE(),
-                                                                                      TL_SV1_3))
+                                                                                      PROVIDER_BCJSSE, TL_SV1_3))
                                                        .fallbackHandlerRegistry(registry)
                                                        .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                        .intercept(interceptor)

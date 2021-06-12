@@ -69,7 +69,7 @@ public class Context<T extends Member> {
          * 
          * @param member
          */
-        default void fail(T member) {
+        default void fail(Member member) {
         };
 
         /**
@@ -77,7 +77,7 @@ public class Context<T extends Member> {
          * 
          * @param member
          */
-        default void recover(T member) {
+        default void recover(Member member) {
         };
     }
 

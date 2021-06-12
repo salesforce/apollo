@@ -29,6 +29,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.Certificates;
+import com.salesforce.apollo.membership.impl.MemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -60,7 +61,7 @@ public class RingTest {
         X509Certificate generated = Certificates.selfSign(false, Utils.encode(id, "foo.com", i, keyPair.getPublic()),
                                                           Utils.secureEntropy(), keyPair, notBefore, notAfter,
                                                           Collections.emptyList());
-        return new Member(id, generated, generated.getPublicKey());
+        return new MemberImpl(id, generated, generated.getPublicKey());
     }
 
     private Context<Member> context;

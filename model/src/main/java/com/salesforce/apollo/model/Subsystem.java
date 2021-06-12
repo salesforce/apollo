@@ -7,7 +7,7 @@
 package com.salesforce.apollo.model;
 
 import com.salesforce.apollo.avalanche.Avalanche;
-import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.membership.impl.CertWithKey;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**

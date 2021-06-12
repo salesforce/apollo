@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.utils;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.SequenceInputStream;
@@ -24,6 +25,14 @@ import com.google.protobuf.ByteString;
  *
  */
 public class BbBackedInputStream extends InputStream {
+
+    public static InputStream aggregate(byte[]... buffers) {
+        return aggregateStreams(Arrays.asList(buffers)
+                                      .stream()
+                                      .map(e -> new ByteArrayInputStream(e))
+                                      .collect(Collectors.toList()));
+    }
+
     public static InputStream aggregate(ByteBuffer... buffers) {
         return aggregate(Arrays.asList(buffers));
     }
@@ -38,6 +47,31 @@ public class BbBackedInputStream extends InputStream {
 
     public static InputStream aggregate(ByteString byteString) {
         return aggregate(new ByteString[] { byteString });
+    }
+
+    public static InputStream aggregateStreams(final List<InputStream> a) {
+        return new SequenceInputStream(new Enumeration<InputStream>() {
+            List<InputStream> current = a;
+
+            @Override
+            public boolean hasMoreElements() {
+                return !current.isEmpty();
+            }
+
+            @Override
+            public InputStream nextElement() {
+                if (current.isEmpty()) {
+                    throw new NoSuchElementException();
+                }
+                InputStream is = current.get(0);
+                if (current.size() == 1) {
+                    current = Collections.emptyList();
+                } else {
+                    current = current.subList(1, current.size());
+                }
+                return is;
+            }
+        });
     }
 
     @SafeVarargs

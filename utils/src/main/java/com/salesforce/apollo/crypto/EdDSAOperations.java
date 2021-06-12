@@ -7,6 +7,7 @@
 package com.salesforce.apollo.crypto;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyFactory;
@@ -131,14 +132,19 @@ public class EdDSAOperations {
         }
     }
 
-    public JohnHancock sign(byte[] message, PrivateKey privateKey) {
+    public JohnHancock sign(PrivateKey privateKey, InputStream is) {
         try {
             var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
             sig.initSign(privateKey);
-            sig.update(message);
-            var bytes = sig.sign();
-
-            return new JohnHancock(signatureAlgorithm, bytes);
+            byte[] buf = new byte[1024];
+            try {
+                for (int read = is.read(buf); read > 0; read = is.read(buf)) {
+                    sig.update(buf, 0, read);
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("Io error", e);
+            }
+            return new JohnHancock(signatureAlgorithm, sig.sign());
         } catch (GeneralSecurityException e) {
             throw new IllegalArgumentException("Cannot sign", e);
         }
@@ -156,6 +162,25 @@ public class EdDSAOperations {
             return sig.verify(signature.bytes);
         } catch (GeneralSecurityException e) {
             throw new IllegalArgumentException("Cannot verify", e);
+        }
+    }
+
+    public boolean verify(PublicKey publicKey, JohnHancock signature, InputStream is) {
+        try {
+            var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            sig.initVerify(publicKey);
+            byte[] buf = new byte[1024];
+            try {
+                for (int read = is.read(buf); read > 0; read = is.read(buf)) {
+                    sig.update(buf, 0, read);
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("Io error", e);
+            }
+            return sig.verify(signature.bytes);
+        } catch (GeneralSecurityException e) {
+            // TODO handle better
+            throw new RuntimeException(e);
         }
     }
 

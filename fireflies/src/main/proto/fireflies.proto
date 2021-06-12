@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.fireflies.proto";
+option java_outer_classname = "FirefliesProto";
+option objc_class_prefix = "Ap";
+import "google/protobuf/any.proto";
+
+package fireflies;
+
+service Fireflies {
+    /*
+     * Fireflies 3 phase gossip
+     */
+    rpc gossip (SayWhat) returns (Gossip) {}
+    rpc update (State) returns (Null) {}
+
+    /**
+     * Fireflies liveness ping
+     */
+    rpc ping (Null) returns (Null) {}
+}
+
+message Null {
+    string context = 1;
+}
+
+message SayWhat {
+    string context = 1;
+    Note note = 2;
+    int32 ring = 3;
+    Digests gossip = 4;
+}
+
+message State {
+    string context = 1;
+    int32 ring = 2;
+    Update update = 3;
+}
+
+message Accusation {
+    int64 epoch = 1;
+    int32 ringNumber = 2;
+    string accuser = 3;
+    string accused = 4;
+    bytes content = 5;
+    string signature = 6;
+}
+
+message Note {
+    int64 epoch = 1;
+    string id = 2;
+    bytes mask = 3;
+    string signature = 4;
+}
+
+message AccusationGossip {
+    bytes bff = 1;
+    repeated Accusation updates = 2;
+} 
+
+message EncodedCertificate {
+    string id = 1;
+    int64 epoch = 2;
+    string hash = 3;
+    bytes content = 4; 
+}
+
+message CertificateGossip {
+    bytes bff = 1;
+    repeated EncodedCertificate updates = 2;
+}
+
+message NoteGossip {
+    bytes bff = 1;
+    repeated Note updates = 2;
+}
+
+message Digests { 
+    bytes certificateBff = 1;
+    bytes noteBff = 2;
+    bytes accusationBff = 3; 
+}
+
+message Gossip {
+    bool redirect = 1; 
+    CertificateGossip certificates = 2;
+    NoteGossip notes = 3;
+    AccusationGossip accusations = 4;
+}
+
+message Update {
+    repeated EncodedCertificate certificates = 1;
+    repeated Note notes = 2;
+    repeated Accusation accusations = 3; 
+}
+

@@ -80,6 +80,7 @@ import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.impl.Member;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
@@ -209,7 +210,7 @@ public class Consortium {
                     }
                     ViewMember member = request.getMember();
                     byte[] encoded = member.getConsensusKey().toByteArray();
-                    if (!verify(from, member.getSignature().toByteArray(), encoded)) {
+                    if (!verify(encoded, member.getSignature().toByteArray(), from)) {
                         log.debug("Could not verify consensus key from {} on {}", fromID, getMember());
                     }
                     PublicKey consensusKey = SigningUtils.publicKeyOf(encoded);

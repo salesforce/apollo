@@ -52,7 +52,7 @@ public class Verifier {
             var signature = kv.getValue();
 
             var ops = SignatureAlgorithm.lookup(publicKey);
-            if (ops.verify(event.getBytes(), signature, publicKey)) {
+            if (ops.verify(publicKey, signature, event.getBytes())) {
                 verifiedSignatures.put(keyIndex, signature);
             } else {
                 log.debug("signature invalid: {}", keyIndex);
@@ -82,7 +82,7 @@ public class Verifier {
             var signature = kv.getValue();
 
             var ops = SignatureAlgorithm.lookup(publicKey);
-            if (ops.verify(event.getBytes(), signature, publicKey)) {
+            if (ops.verify(publicKey, signature, event.getBytes())) {
                 validReceipts.put(witnessIndex, signature);
             } else {
                 log.debug("invalid receipt from witness {}", witnessIndex);

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.comm.grpc;
+package com.salesforce.apollo.fireflies;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -28,6 +28,9 @@ import com.salesfoce.apollo.proto.DagNodes;
 import com.salesfoce.apollo.proto.Query;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
+import com.salesforce.apollo.comm.grpc.MtlsClient;
+import com.salesforce.apollo.comm.grpc.MtlsServer;
+import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;

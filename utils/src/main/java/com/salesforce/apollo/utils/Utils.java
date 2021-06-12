@@ -1040,6 +1040,6 @@ public class Utils {
 
     public static BcX500NameDnImpl encode(Digest digest, String host, int port, PublicKey signingKey) {
         return new BcX500NameDnImpl(
-                String.format("CN=%s, L=%s, UID=%s, SN=%s", host, port, qb64(digest), qb64(signingKey)));
+                String.format("CN=%s, L=%s, UID=%s, DC=%s", host, port, qb64(digest), qb64(signingKey)));
     }
 }

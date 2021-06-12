@@ -6,8 +6,7 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.test.pregen.PregenLargePopulation.getCa;
-import static com.salesforce.apollo.test.pregen.PregenLargePopulation.getMember;
+import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,14 +34,14 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.test.pregen.PregenLargePopulation;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
  * @author hal.hildebrand
@@ -50,17 +49,23 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class LargeTest {
 
-    private static final RootCertificate                   ca         = getCa();
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters               parameters = new FirefliesParameters(
-            ca.getX509Certificate());
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters              parameters;
+    private static final int                              CARDINALITY = 100;
+
+    static {
+        parameters = FirefliesParameters.newBuilder()
+                                        .setCardinality(CARDINALITY)
+                                        .setCertificateValidator(CertificateValidator.NONE)
+                                        .build();
+    }
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, PregenLargePopulation.cardinality)
+        certs = IntStream.range(0, CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
 
@@ -82,7 +87,7 @@ public class LargeTest {
         communications.clear();
     }
 
-    // @Test
+//     @Test
     public void swarm() throws Exception {
         initialize();
 
@@ -101,7 +106,7 @@ public class LargeTest {
 
         for (int i = 0; i < parameters.rings; i++) {
             for (View view : views) {
-                Set<HashKey> difference = views.get(0).getRing(i).difference(view.getRing(i));
+                Set<Digest> difference = views.get(0).getRing(i).difference(view.getRing(i));
                 assertEquals(0, difference.size(), "difference in ring sets: " + difference);
             }
         }
@@ -145,8 +150,11 @@ public class LargeTest {
         seeds = new ArrayList<>();
         members = certs.values()
                        .parallelStream()
-                       .map(cert -> new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()))
-                       .map(cert -> new Node(cert, parameters))
+                       .map(cert -> new Node(
+                               new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                       cert.getX509Certificate(), cert.getPrivateKey(),
+                                       new Signer(0, cert.getPrivateKey()), cert.getX509Certificate().getPublicKey()),
+                               parameters))
                        .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
@@ -165,7 +173,7 @@ public class LargeTest {
             LocalRouter comms = new LocalRouter(node,
                     ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl), executor);
             communications.add(comms);
-            return new View(HashKey.ORIGIN, node, comms, fireflyMetricsImpl);
+            return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

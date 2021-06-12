@@ -498,7 +498,7 @@ public class Stereotomy {
                                           "key pair not found for prefix: " + identifier));
 
         var ops = SignatureAlgorithm.lookup(keyPair.getPrivate());
-        var signature = ops.sign(event.getBytes(), keyPair.getPrivate());
+        var signature = ops.sign(keyPair.getPrivate(), event.getBytes());
 
         return new EventSignature(event.getCoordinates(), lastEstablishmentEvent.get().getCoordinates(),
                 Map.of(0, signature));

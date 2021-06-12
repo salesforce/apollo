@@ -5,6 +5,7 @@ option java_package = "com.salesfoce.apollo.proto";
 option java_outer_classname = "ApolloProto";
 option objc_class_prefix = "Ap";
 import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
 
 package apollo;
 
@@ -13,7 +14,7 @@ service Messaging {
      * Messaging 3 phase gossip
      */
     rpc gossip (MessageBff) returns (Messages) {}
-    rpc update (Push) returns (Null) {}
+    rpc update (Push) returns (google.protobuf.Empty) {}
 }
 
 message MessageBff {
@@ -47,19 +48,6 @@ message Messages {
     repeated  Message updates = 2;
 }
 
-service Fireflies {
-    /*
-     * Fireflies 3 phase gossip
-     */
-    rpc gossip (SayWhat) returns (Gossip) {}
-    rpc update (State) returns (Null) {}
-
-    /**
-     * Fireflies liveness ping
-     */
-    rpc ping (Null) returns (Null) {}
-}
-
 service Avalanche {
     /**
      * Avalanche query
@@ -78,7 +66,7 @@ service Ghost {
      * Ghost API
      */
     rpc get ( Get ) returns (DagEntry) {}
-    rpc put ( ADagEntry ) returns (Null) {}
+    rpc put ( ADagEntry ) returns (google.protobuf.Empty) {}
 
     /**
      * Ghost interval gossip
@@ -124,70 +112,6 @@ message Get {
     string id = 2;
 }
 
-message Null {
-    string context = 1;
-}
-
-message SayWhat {
-    string context = 1;
-    Signed note = 2;
-    int32 ring = 3;
-    Digests gossip = 4;
-}
-
-message State {
-    string context = 1;
-    int32 ring = 2;
-    Update update = 3;
-} 
-
-message Signed {
-        bytes content = 1;
-        bytes signature = 2;
-    }
- 
-
-message AccusationGossip {
-        bytes bff = 1;
-        repeated Signed updates = 2;
-    } 
-
-message EncodedCertificate {
-        string id = 1;
-        int64 epoch = 2;
-        bytes hash = 3;
-        bytes content = 4; 
-    }
-
-message CertificateGossip {
-        bytes bff = 1;
-        repeated EncodedCertificate updates = 2;
-    }
-
-message NoteGossip {
-        bytes bff = 1;
-        repeated Signed updates = 2;
-    }
-
-message Digests { 
-        bytes certificateBff = 1;
-        bytes noteBff = 2;
-        bytes accusationBff = 3; 
-    }
-
-message Gossip {
-        bool redirect = 1; 
-        CertificateGossip certificates = 2;
-        NoteGossip notes = 3;
-        AccusationGossip accusations = 4;
-    }
-
-message Update {
-        repeated EncodedCertificate certificates = 1;
-        repeated Signed notes = 2;
-        repeated Signed accusations = 3; 
-    }
-
 message DagEntry {
     enum EntryType {
         INVALID = 0;
@@ -203,11 +127,6 @@ message DagEntry {
 message Interval {
         string start = 1;
         string end = 2;
-    }
-
-message JoinResponse {
-        Signed forward = 1;
-        repeated string interval = 2;
     }
 
 message QueryResult {

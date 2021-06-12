@@ -6,21 +6,33 @@
  */
 package com.salesforce.apollo.fireflies;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.fireflies.AccusationWrapper.forSigning;
+import static com.salesforce.apollo.fireflies.NoteWrapper.forSigning;
 import static com.salesforce.apollo.fireflies.View.isValidMask;
 
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.Signature;
-import java.security.cert.X509Certificate;
+import java.io.InputStream;
+import java.security.Provider;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-import com.salesforce.apollo.membership.CertWithKey;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.fireflies.proto.Accusation;
+import com.salesfoce.apollo.fireflies.proto.Accusation.Builder;
+import com.salesfoce.apollo.fireflies.proto.AccusationOrBuilder;
+import com.salesfoce.apollo.fireflies.proto.Note;
+import com.salesfoce.apollo.fireflies.proto.NoteOrBuilder;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.Utils;
+
+import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
+import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 
 /**
  * The representation of the "current" member - the subject - of a View.
@@ -28,7 +40,7 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  * @since 220
  */
-public class Node extends Participant {
+public class Node extends Participant implements SigningMember {
 
     /**
      * Create a mask of length 2t+1 with t randomly disabled rings
@@ -55,40 +67,23 @@ public class Node extends Participant {
         return mask;
     }
 
-    /**
-     * The node's signing key
-     */
-    protected final PrivateKey privateKey;
-
-    /**
-     * Ye params
-     */
     private final FirefliesParameters parameters;
+    private final SigningMember       wrapped;
 
-    public Node(CertWithKey identity, FirefliesParameters p) {
-        super(identity.getCertificate(), null, p, null);
-
-        privateKey = identity.getPrivateKey();
+    public Node(SigningMember wrapped, FirefliesParameters p) {
+        super(wrapped, p);
+        this.wrapped = wrapped;
         this.parameters = p;
     }
 
-    public Signature forSigning() {
-        Signature signature;
-        try {
-            signature = Signature.getInstance(parameters.signatureAlgorithm);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("no such algorithm: " + parameters.signatureAlgorithm, e);
-        }
-        try {
-            signature.initSign(privateKey, Utils.secureEntropy());
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException("invalid private key", e);
-        }
-        return signature;
+    public SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
+                                String tlsVersion) {
+        return wrapped.forClient(clientAuth, alias, validator, provider, tlsVersion);
     }
 
-    public X509Certificate getCA() {
-        return parameters.ca;
+    public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
+                                String tlsVersion) {
+        return wrapped.forServer(clientAuth, alias, validator, provider, tlsVersion);
     }
 
     /**
@@ -98,24 +93,40 @@ public class Node extends Participant {
         return parameters;
     }
 
+    public JohnHancock sign(byte[] message) {
+        return wrapped.sign(message);
+    }
+
+    @Override
+    public JohnHancock sign(InputStream message) {
+        return wrapped.sign(message);
+    }
+
     @Override
     public String toString() {
         return "Node[" + getId() + "]";
     }
 
-    Accusation accuse(Participant m, int ringNumber) {
-        return new Accusation(m.getEpoch(), getId(), ringNumber, m.getId(), forSigning());
+    public boolean verify(JohnHancock signature, byte[] message) {
+        return wrapped.verify(signature, message);
     }
 
-    Signature forVerification() {
-        return forVerification(parameters.signatureAlgorithm);
+    AccusationWrapper accuse(Participant m, int ringNumber) {
+        Builder builder = Accusation.newBuilder();
+        Accusation accusation = builder.setEpoch(m.getEpoch())
+                                       .setRingNumber(ringNumber)
+                                       .setAccuser(qb64(getId()))
+                                       .setAccused(qb64(m.getId()))
+                                       .setSignature(sign(builder))
+                                       .build();
+        return new AccusationWrapper(hashAlgorithm.digest(accusation.toByteString()), accusation);
     }
 
     /**
      * @return a new mask based on the previous mask and previous accusations.
      */
     BitSet nextMask() {
-        Note current = note;
+        NoteWrapper current = note;
         if (current == null) {
             BitSet mask = createInitialMask(parameters.toleranceLevel, Utils.secureEntropy());
             assert View.isValidMask(mask, parameters) : "Invalid initial mask: " + mask + "for node: " + getId();
@@ -132,7 +143,7 @@ public class Node extends Participant {
             mask.set(i, false);
         }
         if (current.getEpoch() % 2 == 1) {
-            BitSet previous = current.getMask();
+            BitSet previous = BitSet.valueOf(current.getMask().toByteArray());
             for (int index = 0; index < parameters.rings; index++) {
                 if (mask.cardinality() <= parameters.toleranceLevel + 1) {
                     assert View.isValidMask(mask, parameters) : "Invalid mask: " + mask + "for node: " + getId();
@@ -160,7 +171,7 @@ public class Node extends Participant {
      * accusations. The new note has a larger epoch number the the current note.
      */
     void nextNote() {
-        Note current = note;
+        NoteWrapper current = note;
         long newEpoch = current == null ? 1 : note.getEpoch() + 1;
         nextNote(newEpoch);
     }
@@ -171,6 +182,20 @@ public class Node extends Participant {
      * @param newEpoch
      */
     void nextNote(long newEpoch) {
-        note = new Note(getId(), newEpoch, nextMask(), forSigning());
+        Note.Builder builder = Note.newBuilder();
+        Note n = builder.setId(qb64(getId()))
+                        .setEpoch(newEpoch)
+                        .setMask(ByteString.copyFrom(nextMask().toByteArray()))
+                        .setSignature(sign(builder))
+                        .build();
+        note = new NoteWrapper(parameters.hashAlgorithm.digest(n.toByteString()), n);
+    }
+
+    private String sign(AccusationOrBuilder builder) {
+        return qb64(wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))));
+    }
+
+    private String sign(NoteOrBuilder builder) {
+        return qb64(wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))));
     }
 }

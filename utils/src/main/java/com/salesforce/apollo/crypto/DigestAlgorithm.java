@@ -184,12 +184,24 @@ public enum DigestAlgorithm {
         return name();
     }
 
-    public Digest digest(byte[] bytes) {
-        return new Digest(this, hashOf(bytes, bytes.length));
+    public Digest digest(byte[]... bytes) {
+        return new Digest(this, hashOf(bytes));
+    }
+
+    public Digest digest(ByteBuffer... buffers) {
+        return new Digest(this, hashOf(buffers));
+    }
+
+    public Digest digest(ByteString... bytes) {
+        return new Digest(this, hashOf(bytes));
+    }
+
+    public Digest digest(InputStream buffers) {
+        return new Digest(this, hashOf(buffers));
     }
 
     public Digest digest(List<ByteBuffer> buffers) {
-        return new Digest(this, hashOf(buffers));
+        return digest(BbBackedInputStream.aggregate(buffers));
     }
 
     abstract public int digestLength();
@@ -200,6 +212,11 @@ public enum DigestAlgorithm {
 
     public Digest getOrigin() {
         return new Digest(this, digestLength() == 32 ? ORIGIN_32 : ORIGIN_64);
+    }
+
+    public byte[] hashOf(byte[]... buffers) {
+        InputStream is = BbBackedInputStream.aggregate(buffers);
+        return hashOf(is);
     }
 
     public byte[] hashOf(byte[] bytes, int len) {

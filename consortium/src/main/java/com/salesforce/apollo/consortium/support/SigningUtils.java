@@ -34,6 +34,7 @@ import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.impl.Member;
 import com.salesforce.apollo.protocols.Conversion;
 import com.salesforce.apollo.protocols.HashKey;
 
@@ -151,8 +152,8 @@ public final class SigningUtils {
             HashKey memberID = new HashKey(vm.getId());
             Member member = context.getMember(memberID);
             byte[] encoded = vm.getConsensusKey().toByteArray();
-            if (!verify(member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM), vm.getSignature().toByteArray(),
-                        encoded)) {
+            if (!verify(encoded, vm.getSignature().toByteArray(),
+                        member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM))) {
                 log.warn("Could not validate consensus key for {}", memberID);
             }
             PublicKey cKey = publicKeyOf(encoded);
@@ -168,7 +169,7 @@ public final class SigningUtils {
         };
         long certifiedCount = block.getCertificationsList()
                                    .parallelStream()
-                                   .filter(c -> verify(validators, block.getBlock(), c))
+                                   .filter(c -> verify(c, block.getBlock(), validators))
                                    .count();
 
         log.debug("Certified: {} required: {} provided: {} for genesis: {} on: {}", certifiedCount, majority,
@@ -184,8 +185,8 @@ public final class SigningUtils {
             log.warn("Cannot get signature for verification for: {}", memberID);
             return false;
         }
-        boolean verified = verify(signature, c.getSignature().toByteArray(),
-                                  Conversion.hashOf(block.getHeader().toByteString()));
+        boolean verified = verify(Conversion.hashOf(block.getHeader().toByteString()), c.getSignature().toByteArray(),
+                                  signature);
         if (!verified) {
             log.warn("Could not verify block using sig from: {}", memberID);
         }
@@ -193,7 +194,7 @@ public final class SigningUtils {
     }
 
     public static boolean verify(Member member, byte[] signed, byte[]... content) {
-        return verify(member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM), signed, content);
+        return verify(content, signed, member.forVerification(Conversion.DEFAULT_SIGNATURE_ALGORITHM));
     }
 
     public static boolean verify(Signature signature, byte[] signed, byte[]... content) {

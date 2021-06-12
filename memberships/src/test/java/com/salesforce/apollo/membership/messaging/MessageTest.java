@@ -45,6 +45,7 @@ import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
 import com.salesforce.apollo.utils.Utils;
@@ -134,8 +135,8 @@ public class MessageTest {
     @Test
     public void broadcast() throws Exception {
         List<SigningMember> members = certs.values()
-                                           .parallelStream() 
-                                           .map(cert -> new SigningMember(
+                                           .parallelStream()
+                                           .map(cert -> new SigningMemberImpl(
                                                    Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
@@ -180,6 +181,10 @@ public class MessageTest {
                 ByteString packed = ByteString.copyFrom(buf.array());
                 assertEquals(36, packed.size());
                 view.publish(ByteMessage.newBuilder().setContents(packed).build(), true);
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                }
             });
             boolean success = round.await(20, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());

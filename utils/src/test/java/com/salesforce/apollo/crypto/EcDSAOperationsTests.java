@@ -131,10 +131,10 @@ public class EcDSAOperationsTests {
         var privateKey = (ECPrivateKey) kf.generatePrivate(privateKeySpec);
 
         var ops = SignatureAlgorithm.EC_SECP256K1;
-        var sig = ops.sign(msg, privateKey);
+        var sig = ops.sign(privateKey, msg);
 
         var publicKey = ops.publicKey(pkb);
-        assertTrue(ops.verify(msg, sig, publicKey));
+        assertTrue(ops.verify(publicKey, sig, msg));
     }
 
 }

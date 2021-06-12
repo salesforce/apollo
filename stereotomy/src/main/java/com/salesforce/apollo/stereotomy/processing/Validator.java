@@ -84,7 +84,7 @@ public class Validator {
             this.validate(event.getKeys().size() == 1, "self-signing identifiers can only have a single key");
 
             var ops = SignatureAlgorithm.lookup(event.getKeys().get(0));
-            this.validate(ops.verify(event.getInceptionStatement(), ssp.getSignature(), event.getKeys().get(0)),
+            this.validate(ops.verify(event.getKeys().get(0), ssp.getSignature(), event.getInceptionStatement()),
                           "self-signing prefix signature must verify against inception statement");
 
         } else {

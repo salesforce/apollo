@@ -6,7 +6,10 @@
  */
 package com.salesforce.apollo.crypto;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.security.AlgorithmParameters;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
@@ -33,6 +36,9 @@ import java.security.spec.NamedParameterSpec;
 import org.bouncycastle.crypto.params.ECPublicKeyParameters;
 import org.bouncycastle.jcajce.provider.asymmetric.util.ECUtil;
 import org.bouncycastle.jce.ECPointUtil;
+
+import com.google.protobuf.ByteString;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * 
@@ -89,7 +95,8 @@ public enum SignatureAlgorithm {
         @Override
         public KeyPair generateKeyPair(SecureRandom secureRandom) {
             try {
-                var keyPairGenerator = KeyPairGenerator.getInstance(ECDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+                var keyPairGenerator = KeyPairGenerator.getInstance(ECDSA_ALGORITHM_NAME,
+                                                                    ProviderUtils.getProviderBC());
                 keyPairGenerator.initialize(parameterSpec, secureRandom);
                 return keyPairGenerator.generateKeyPair();
             } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
@@ -130,15 +137,19 @@ public enum SignatureAlgorithm {
             return 33;
         }
 
-        @Override
-        public JohnHancock sign(byte[] message, PrivateKey privateKey) {
+        public JohnHancock sign(PrivateKey privateKey, InputStream is) {
             try {
                 var sig = Signature.getInstance(this.signatureInstanceName(), ProviderUtils.getProviderBC());
                 sig.initSign(privateKey);
-                sig.update(message);
-                var bytes = sig.sign();
-
-                return new JohnHancock(this, bytes);
+                byte[] buf = new byte[1024];
+                try {
+                    for (int read = is.read(buf); read > 0; read = is.read(buf)) {
+                        sig.update(buf, 0, read);
+                    }
+                } catch (IOException e) {
+                    throw new IllegalStateException("Io error", e);
+                }
+                return new JohnHancock(this, sig.sign());
             } catch (GeneralSecurityException e) {
                 throw new IllegalArgumentException("Cannot sign", e);
             }
@@ -160,11 +171,18 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
+        public boolean verify(PublicKey publicKey, JohnHancock signature, InputStream is) {
             try {
                 var sig = Signature.getInstance(signatureInstanceName(), ProviderUtils.getProviderBC());
                 sig.initVerify(publicKey);
-                sig.update(message);
+                byte[] buf = new byte[1024];
+                try {
+                    for (int read = is.read(buf); read > 0; read = is.read(buf)) {
+                        sig.update(buf, 0, read);
+                    }
+                } catch (IOException e) {
+                    throw new IllegalStateException("Io error", e);
+                }
                 return sig.verify(signature.bytes);
             } catch (GeneralSecurityException e) {
                 // TODO handle better
@@ -221,8 +239,8 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public JohnHancock sign(byte[] message, PrivateKey privateKey) {
-            return ops.sign(message, privateKey);
+        public JohnHancock sign(PrivateKey privateKey, InputStream is) {
+            return ops.sign(privateKey, is);
         }
 
         @Override
@@ -246,9 +264,10 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
-            return ops.verify(message, signature, publicKey);
+        public boolean verify(PublicKey publicKey, JohnHancock signature, InputStream message) {
+            return ops.verify(publicKey, signature, message);
         }
+
     },
     ED_448 {
         private final EdDSAOperations ops = new EdDSAOperations(this);
@@ -299,8 +318,8 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public JohnHancock sign(byte[] message, PrivateKey privateKey) {
-            return ops.sign(message, privateKey);
+        public JohnHancock sign(PrivateKey privateKey, InputStream is) {
+            return ops.sign(privateKey, is);
         }
 
         @Override
@@ -324,8 +343,8 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
-            return ops.verify(message, signature, publicKey);
+        public boolean verify(PublicKey publicKey, JohnHancock signature, InputStream message) {
+            return ops.verify(publicKey, signature, message);
         }
     };
 
@@ -405,7 +424,19 @@ public enum SignatureAlgorithm {
 
     abstract public int publicKeyLength();
 
-    abstract public JohnHancock sign(byte[] message, PrivateKey privateKey);
+    final public JohnHancock sign(PrivateKey privateKey, byte[]... message) {
+        return sign(privateKey, BbBackedInputStream.aggregate(message));
+    }
+
+    final public JohnHancock sign(PrivateKey privateKey, ByteBuffer... buffers) {
+        return sign(privateKey, BbBackedInputStream.aggregate(buffers));
+    }
+
+    final public JohnHancock sign(PrivateKey privateKey, ByteString... buffers) {
+        return sign(privateKey, BbBackedInputStream.aggregate(buffers));
+    }
+
+    abstract public JohnHancock sign(PrivateKey privateKey, InputStream is);
 
     abstract public JohnHancock signature(byte[] signatureBytes);
 
@@ -413,5 +444,17 @@ public enum SignatureAlgorithm {
 
     abstract public int signatureLength();
 
-    abstract public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey);
+    final public boolean verify(PublicKey publicKey, JohnHancock signature, byte[]... message) {
+        return verify(publicKey, signature, BbBackedInputStream.aggregate(message));
+    }
+
+    final public boolean verify(PublicKey publicKey, JohnHancock signature, ByteBuffer... message) {
+        return verify(publicKey, signature, BbBackedInputStream.aggregate(message));
+    }
+
+    final public boolean verify(PublicKey publicKey, JohnHancock signature, ByteString... message) {
+        return verify(publicKey, signature, BbBackedInputStream.aggregate(message));
+    }
+
+    abstract public boolean verify(PublicKey publicKey, JohnHancock signature, InputStream message);
 }

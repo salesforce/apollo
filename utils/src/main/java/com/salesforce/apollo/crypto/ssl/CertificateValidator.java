@@ -14,6 +14,18 @@ import java.security.cert.X509Certificate;
  *
  */
 public interface CertificateValidator {
+
+    static final CertificateValidator NONE = new CertificateValidator() {
+
+        @Override
+        public void validateClient(X509Certificate[] chain) throws CertificateException {
+        }
+
+        @Override
+        public void validateServer(X509Certificate[] chain) throws CertificateException {
+        }
+    };
+
     void validateClient(X509Certificate[] chain) throws CertificateException;
 
     void validateServer(X509Certificate[] chain) throws CertificateException;

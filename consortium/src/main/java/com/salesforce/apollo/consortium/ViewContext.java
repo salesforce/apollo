@@ -33,6 +33,7 @@ import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
+import com.salesforce.apollo.membership.impl.Member;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.protocols.Conversion;

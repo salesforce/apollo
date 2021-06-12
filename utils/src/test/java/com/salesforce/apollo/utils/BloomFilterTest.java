@@ -8,10 +8,10 @@ package com.salesforce.apollo.utils;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,13 +26,12 @@ import com.salesforce.apollo.utils.BloomFilter.DigestBloomFilter;
 public class BloomFilterTest {
 
     @Test
-    public void smoke() {
+    public void smoke() throws Exception {
         int max = 1_000_000;
         double target = 0.125;
         BloomFilter<Digest> biff = new DigestBloomFilter(666, max, target);
 
-        SecureRandom random = new SecureRandom();
-        random.setSeed(new byte[] { 6, 6, 6 });
+        Random random = new Random(0x666);
         List<Digest> added = new ArrayList<>();
         for (int i = 0; i < max; i++) {
             byte[] hash = new byte[DigestAlgorithm.DEFAULT.digestLength()];
@@ -52,11 +51,18 @@ public class BloomFilterTest {
         for (int i = 0; i < unknownSample; i++) {
             byte[] hash = new byte[DigestAlgorithm.DEFAULT.digestLength()];
             random.nextBytes(hash);
+            if (i % 80_000 == 0) {
+                System.out.println();
+            }
+            if (i % 1000 == 0) {
+                System.out.print('.');
+            }
             Digest d = new Digest(DigestAlgorithm.DEFAULT, hash);
             if (biff.contains(d)) {
                 failed.add(d);
             }
         }
+        System.out.println();
         double failureRate = (double) failed.size() / (double) unknownSample;
         DecimalFormat format = new DecimalFormat("#.#############");
         double targetWithSlop = target + (target * 0.05);

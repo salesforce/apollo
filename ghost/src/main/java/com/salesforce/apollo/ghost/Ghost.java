@@ -36,8 +36,8 @@ import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.ghost.communications.GhostClientCommunications;
 import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.membership.impl.Member;
 import com.salesforce.apollo.protocols.HashKey;
 
 /**

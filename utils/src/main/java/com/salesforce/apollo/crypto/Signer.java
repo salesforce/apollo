@@ -8,7 +8,10 @@ package com.salesforce.apollo.crypto;
 
 import static java.util.Objects.requireNonNull;
 
+import java.io.InputStream;
 import java.security.PrivateKey;
+
+import com.google.protobuf.ByteString;
 
 /**
  * @author hal.hildebrand
@@ -33,8 +36,16 @@ public class Signer {
         return keyIndex;
     }
 
-    public JohnHancock sign(byte[] bytes) {
-        return algorithm.sign(bytes, privateKey);
+    public JohnHancock sign(byte[]... bytes) {
+        return algorithm.sign(privateKey, bytes);
+    }
+
+    public JohnHancock sign(ByteString... message) {
+        return algorithm.sign(privateKey, message);
+    }
+
+    public JohnHancock sign(InputStream message) {
+        return algorithm.sign(privateKey, message);
     }
 
 }

@@ -58,7 +58,7 @@ public class MessageBuffer {
     }
 
     public static boolean validate(Digest hash, Message message, Member verifier) {
-        return verifier.verify(qb64(hash).getBytes(), signature(message.getSignature()));
+        return verifier.verify(signature(message.getSignature()), qb64(hash).getBytes());
     }
 
     static Digest idOf(DigestAlgorithm algorithm, int sequenceNumber, Digest from, Any content) {

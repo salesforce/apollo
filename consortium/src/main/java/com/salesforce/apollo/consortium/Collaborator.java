@@ -22,6 +22,7 @@ import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.impl.Member;
 
 /**
  * @author hal.hildebrand

@@ -36,7 +36,8 @@ public class PregenLargePopulation {
         Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
         Digest id = new Digest(DigestAlgorithm.DEFAULT, hash);
         X509Certificate generated = Certificates.selfSign(false,
-                                                          Utils.encode(id, "foo.com", index, keyPair.getPublic()),
+                                                          Utils.encode(id, "localhost", Utils.allocatePort(),
+                                                                       keyPair.getPublic()),
                                                           Utils.secureEntropy(), keyPair, notBefore, notAfter,
                                                           Collections.emptyList());
         return new CertificateWithPrivateKey(generated, keyPair.getPrivate());
