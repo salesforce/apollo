@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
@@ -32,7 +32,7 @@ public class Transactioneer {
     private final AtomicInteger                   failed      = new AtomicInteger();
     private volatile ScheduledFuture<?>           futureSailor;
     private final TimedProcessor                  processor;
-    private final Set<CompletableFuture<HashKey>> outstanding = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<CompletableFuture<Digest>> outstanding = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final AtomicInteger                   success     = new AtomicInteger();
     private final AtomicInteger                   remaining;
     private final int                             limit;
@@ -50,7 +50,7 @@ public class Transactioneer {
         return failed.get();
     }
 
-    public HashKey getId() {
+    public Digest getId() {
         return processor.getAvalanche().getNode().getId();
     }
 
@@ -82,7 +82,7 @@ public class Transactioneer {
     }
 
     private void addTransaction(Duration txnWait, ScheduledExecutorService scheduler) {
-        CompletableFuture<HashKey> future = processor.submitTransaction((ByteMessage.newBuilder()
+        CompletableFuture<Digest> future = processor.submitTransaction((ByteMessage.newBuilder()
                                                                                     .setContents(ByteString.copyFromUtf8("transaction for: "
                                                                                             + processor.getAvalanche()
                                                                                                        .getNode()

@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * 
@@ -25,11 +25,11 @@ import com.salesforce.apollo.protocols.HashKey;
 public class ConflictSet {
     private Set<KnownNode>     conflicts = new HashSet<>();
     private volatile int       counter   = 0;
-    private final HashKey      key;
+    private final Digest       key;
     private volatile KnownNode last;
     private volatile KnownNode preferred;
 
-    public ConflictSet(HashKey key, KnownNode frist) {
+    public ConflictSet(Digest key, KnownNode frist) {
         this.key = key;
         last = preferred = frist;
     }
@@ -56,7 +56,7 @@ public class ConflictSet {
         return current;
     }
 
-    public HashKey getKey() {
+    public Digest getKey() {
         return key;
     }
 

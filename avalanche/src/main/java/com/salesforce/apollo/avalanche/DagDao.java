@@ -10,7 +10,7 @@ package com.salesforce.apollo.avalanche;
 import java.util.Iterator;
 
 import com.salesfoce.apollo.proto.DagEntry;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * Restricted API on the DAG
@@ -24,15 +24,15 @@ public class DagDao {
         this.dag = dag;
     }
 
-    public DagEntry get(HashKey key) {
+    public DagEntry get(Digest key) {
         return dag.getDagEntry(key);
     }
 
-    public Boolean isFinalized(HashKey hash) {
+    public Boolean isFinalized(Digest hash) {
         return dag.isFinalized(hash);
     }
 
-    public Iterator<HashKey> allFinalized() {
+    public Iterator<Digest> allFinalized() {
         return dag.allFinalized();
     }
 

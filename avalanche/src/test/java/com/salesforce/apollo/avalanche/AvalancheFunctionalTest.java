@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -47,16 +46,17 @@ import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;
 import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.impl.CertWithKey;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
  * @author hal.hildebrand
@@ -64,24 +64,31 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 abstract public class AvalancheFunctionalTest {
 
-    private static final RootCertificate                   ca         = getCa();
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters               parameters = new FirefliesParameters(
-            ca.getX509Certificate());
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters              parameters;
+    private static final int                              CARDINALITY = 100;
+
+    static {
+        parameters = FirefliesParameters.newBuilder()
+                                        .setCardinality(CARDINALITY)
+                                        .setCertificateValidator(CertificateValidator.NONE)
+                                        .build();
+    }
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 100)
+        certs = IntStream.range(0, CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Conversion.getMemberId(cert.getX509Certificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     protected File                baseDir;
     protected MetricRegistry      registry;
     protected BitsStreamGenerator entropy        = new MersenneTwister();
     protected List<Node>          members;
-    private Map<HashKey, Router>  communications = new HashMap<>();
+    private Map<Digest, Router>   communications = new HashMap<>();
     protected MetricRegistry      node0registry;
 
     @AfterEach
@@ -102,7 +109,9 @@ abstract public class AvalancheFunctionalTest {
         members = new ArrayList<>();
         for (CertificateWithPrivateKey cert : certs.values()) {
             if (members.size() < testCardinality) {
-                members.add(new Node(new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()), parameters));
+                members.add(new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                        cert.getX509Certificate(), cert.getPrivateKey(), new Signer(0, cert.getPrivateKey()),
+                        cert.getX509Certificate().getPublicKey()), parameters));
             } else {
                 break;
             }
@@ -123,7 +132,7 @@ abstract public class AvalancheFunctionalTest {
 
     @Test
     public void smoke() throws Exception {
-        HashKey vid = HashKey.ORIGIN.prefix(1, 2, 3);
+        Digest vid = DigestAlgorithm.DEFAULT.getOrigin().prefix(1, 2, 3);
         Context<Node> context = new Context<>(vid, 9);
         members.forEach(n -> context.activate(n));
         AtomicBoolean frist = new AtomicBoolean(true);
@@ -133,7 +142,7 @@ abstract public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 12_000;
+        int target = 10000;
         int outstanding = 400;
 
         ScheduledExecutorService avaScheduler = Executors.newScheduledThreadPool(2);
@@ -144,11 +153,11 @@ abstract public class AvalancheFunctionalTest {
 
         // generate the genesis transaction
         TimedProcessor master = processors.get(0);
-        CompletableFuture<HashKey> genesis = master.createGenesis(ByteMessage.newBuilder()
-                                                                             .setContents(ByteString.copyFromUtf8("Genesis"))
-                                                                             .build(),
-                                                                  Duration.ofSeconds(90), scheduler);
-        HashKey genesisKey = null;
+        CompletableFuture<Digest> genesis = master.createGenesis(ByteMessage.newBuilder()
+                                                                            .setContents(ByteString.copyFromUtf8("Genesis"))
+                                                                            .build(),
+                                                                 Duration.ofSeconds(90), scheduler);
+        Digest genesisKey = null;
         try {
             genesisKey = genesis.get(10, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
@@ -160,7 +169,7 @@ abstract public class AvalancheFunctionalTest {
             // false)).render(Format.PNG).toFile(new
             // File("smoke.png"));
         }
-        HashKey k = genesisKey;
+        Digest k = genesisKey;
         processors.stream().map(e -> e.getAvalanche()).forEach(a -> {
             assertTrue(Utils.waitForCondition(5_000, () -> a.getDagDao().isFinalized(k)),
                        "Failed to finalize genesis on: " + a.getNode().getId());
@@ -178,7 +187,7 @@ abstract public class AvalancheFunctionalTest {
 
         transactioneers.parallelStream().forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, scheduler));
 
-        boolean finalized = latch.await(180, TimeUnit.SECONDS);
+        boolean finalized = latch.await(360, TimeUnit.SECONDS);
 
         long duration = System.currentTimeMillis() - now;
         transactioneers.forEach(t -> t.stop());

@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 public interface Processor {
 
@@ -33,7 +33,7 @@ public interface Processor {
         }
 
         @Override
-        public HashKey validate(HashKey key, DagEntry entry) {
+        public Digest validate(Digest key, DagEntry entry) {
             return key;
         }
 
@@ -41,15 +41,15 @@ public interface Processor {
 
     class TimedProcessor implements Processor {
         public static class PendingTransaction {
-            public final CompletableFuture<HashKey> pending;
-            public final ScheduledFuture<?>         timer;
+            public final CompletableFuture<Digest> pending;
+            public final ScheduledFuture<?>        timer;
 
-            public PendingTransaction(CompletableFuture<HashKey> pending, ScheduledFuture<?> timer) {
+            public PendingTransaction(CompletableFuture<Digest> pending, ScheduledFuture<?> timer) {
                 this.pending = pending;
                 this.timer = timer;
             }
 
-            public void complete(HashKey key) {
+            public void complete(Digest key) {
                 log.trace("Finalizing transaction: {}", key);
                 timer.cancel(true);
                 if (pending != null) {
@@ -61,8 +61,8 @@ public interface Processor {
 
         private final static Logger log = LoggerFactory.getLogger(TimedProcessor.class);
 
-        private Avalanche                                        avalanche;
-        private final ConcurrentMap<HashKey, PendingTransaction> pendingTransactions = new ConcurrentHashMap<>();
+        private Avalanche                                       avalanche;
+        private final ConcurrentMap<Digest, PendingTransaction> pendingTransactions = new ConcurrentHashMap<>();
 
         /**
          * Create the genesis block for this view
@@ -71,13 +71,13 @@ public interface Processor {
          * @param timeout -how long to wait for finalization of the transaction
          * @return a CompleteableFuture indicating whether the transaction is finalized
          *         or not, or whether an exception occurred that prevented processing.
-         *         The returned HashKey is the hash key of the the finalized genesis
+         *         The returned Digest is the hash key of the the finalized genesis
          *         transaction in the DAG
          */
-        public CompletableFuture<HashKey> createGenesis(Message data, Duration timeout,
-                                                        ScheduledExecutorService scheduler) {
-            CompletableFuture<HashKey> futureSailor = new CompletableFuture<>();
-            HashKey key = avalanche.submitGenesis(data);
+        public CompletableFuture<Digest> createGenesis(Message data, Duration timeout,
+                                                       ScheduledExecutorService scheduler) {
+            CompletableFuture<Digest> futureSailor = new CompletableFuture<>();
+            Digest key = avalanche.submitGenesis(data);
             log.info("Genesis added: {}", key);
             pendingTransactions.put(key, new PendingTransaction(futureSailor,
                     scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
@@ -87,7 +87,7 @@ public interface Processor {
         @Override
         public void finalize(FinalizationData finalized) {
             finalized.finalized.forEach(e -> {
-                HashKey hash = e.hash;
+                Digest hash = e.hash;
                 PendingTransaction pending = pendingTransactions.remove(hash);
                 if (pending != null) {
                     pending.complete(hash);
@@ -106,7 +106,7 @@ public interface Processor {
             return avalanche;
         }
 
-        public ConcurrentMap<HashKey, PendingTransaction> getPendingTransactions() {
+        public ConcurrentMap<Digest, PendingTransaction> getPendingTransactions() {
             return pendingTransactions;
         }
 
@@ -120,11 +120,11 @@ public interface Processor {
          * @param data    - the transaction content
          * @param timeout -how long to wait for finalization of the transaction
          * @param future  - optional future to be notified of finalization
-         * @return the HashKey of the transaction, null if invalid
+         * @return the Digest of the transaction, null if invalid
          */
-        public HashKey submitTransaction(Message data, Duration timeout, CompletableFuture<HashKey> future,
-                                         ScheduledExecutorService scheduler) {
-            HashKey key = avalanche.submitTransaction(data);
+        public Digest submitTransaction(Message data, Duration timeout, CompletableFuture<Digest> future,
+                                        ScheduledExecutorService scheduler) {
+            Digest key = avalanche.submitTransaction(data);
             if (future != null) {
                 pendingTransactions.put(key, new PendingTransaction(future,
                         scheduler.schedule(() -> timeout(key), timeout.toMillis(), TimeUnit.MILLISECONDS)));
@@ -132,15 +132,15 @@ public interface Processor {
             return key;
         }
 
-        public CompletableFuture<HashKey> submitTransaction(Message data, Duration timeout,
-                                                            ScheduledExecutorService scheduler) {
-            CompletableFuture<HashKey> future = new CompletableFuture<>();
+        public CompletableFuture<Digest> submitTransaction(Message data, Duration timeout,
+                                                           ScheduledExecutorService scheduler) {
+            CompletableFuture<Digest> future = new CompletableFuture<>();
             submitTransaction(data, timeout, future, scheduler);
             return future;
         }
 
         @Override
-        public HashKey validate(HashKey key, DagEntry entry) {
+        public Digest validate(Digest key, DagEntry entry) {
             return key;
         }
 
@@ -149,7 +149,7 @@ public interface Processor {
          * 
          * @param key
          */
-        private void timeout(HashKey key) {
+        private void timeout(Digest key) {
             PendingTransaction pending = pendingTransactions.remove(key);
             if (pending == null) {
                 return;
@@ -168,8 +168,8 @@ public interface Processor {
     /**
      * Validate the entry.
      * 
-     * @return HashKey of the conflict set for the entry, or null if invalid.
+     * @return Digest of the conflict set for the entry, or null if invalid.
      */
-    HashKey validate(HashKey key, DagEntry entry);
+    Digest validate(Digest key, DagEntry entry);
 
 }

@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.crypto;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.Objects;
 
 import org.bouncycastle.util.encoders.Hex;
 
@@ -57,6 +57,30 @@ public class Digest implements Comparable<Digest> {
         this.bytes = bytes;
     }
 
+    public Digest prefix(byte[]... prefixes) {
+        int prefixLength = 0;
+        for (byte[] p : prefixes) {
+            prefixLength += p.length;
+        }
+        ByteBuffer buffer = ByteBuffer.allocate(bytes.length + prefixLength);
+        for (byte[] prefix : prefixes) {
+            buffer.put(prefix);
+        }
+        buffer.put(bytes);
+        buffer.flip();
+        return getAlgorithm().digest(buffer);
+    }
+
+    public Digest prefix(long... prefixes) {
+        ByteBuffer buffer = ByteBuffer.allocate(bytes.length + (prefixes.length * 8));
+        for (long prefix : prefixes) {
+            buffer.putLong(prefix);
+        }
+        buffer.put(bytes);
+        buffer.flip();
+        return getAlgorithm().digest(buffer.array());
+    }
+
     @Override
     public int compareTo(Digest id) {
         if (id == null) {
@@ -92,11 +116,12 @@ public class Digest implements Comparable<Digest> {
     @Override
     public int hashCode() {
         if (hashCode < 0) {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + Arrays.hashCode(bytes);
-            result = prime * result + Objects.hash(algorithm);
-            hashCode = result;
+            ByteBuffer buffer = ByteBuffer.wrap(bytes);
+            int hc = 0;
+            while (buffer.hasRemaining()) {
+                hc ^= buffer.getInt();
+            }
+            hashCode = hc & 0xFFFFFFFF;
         }
         return hashCode;
     }

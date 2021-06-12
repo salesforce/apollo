@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.avalanche.communications;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -24,10 +26,10 @@ import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.Participant;
-import com.salesforce.apollo.membership.impl.Member;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.Avalanche;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -57,14 +59,14 @@ public class AvalancheClient implements Avalanche {
     }
 
     @Override
-    public ListenableFuture<QueryResult> query(HashKey context, List<Pair<HashKey, ByteString>> transactions,
-                                               Collection<HashKey> wanted) {
-        Builder builder = Query.newBuilder().setContext(context.toID());
+    public ListenableFuture<QueryResult> query(Digest context, List<Pair<Digest, ByteString>> transactions,
+                                               Collection<Digest> wanted) {
+        Builder builder = Query.newBuilder().setContext(qb64(context));
         transactions.forEach(t -> {
-            builder.addHashes(t.getFirst().toID());
+            builder.addHashes(qb64(t.getFirst()));
             builder.addTransactions(t.getSecond());
         });
-        wanted.forEach(e -> builder.addWanted(e.toID()));
+        wanted.forEach(e -> builder.addWanted(qb64(e)));
         try {
             Query query = builder.build();
             ListenableFuture<QueryResult> result = client.query(query);
@@ -95,9 +97,9 @@ public class AvalancheClient implements Avalanche {
     }
 
     @Override
-    public ListenableFuture<SuppliedDagNodes> requestDAG(HashKey context, Collection<HashKey> want) {
-        com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder().setContext(context.toID());
-        want.forEach(e -> builder.addEntries(e.toID()));
+    public ListenableFuture<SuppliedDagNodes> requestDAG(Digest context, Collection<Digest> want) {
+        com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder().setContext(qb64(context));
+        want.forEach(e -> builder.addEntries(qb64(e)));
         try {
             DagNodes request = builder.build();
             ListenableFuture<SuppliedDagNodes> requested = client.requestDag(request);
