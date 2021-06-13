@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -74,7 +73,7 @@ public class DagTest {
         Builder builder = DagEntry.newBuilder();
         builder.setDescription(type);
         builder.setData(Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFrom(data)).build()));
-        links.forEach(e -> builder.addLinks(qb64(e)));
+        links.forEach(e -> builder.addLinks(e.toByteString()));
         return builder.build();
     }
 

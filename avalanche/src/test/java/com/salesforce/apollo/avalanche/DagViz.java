@@ -22,6 +22,7 @@ import java.util.TreeSet;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
@@ -100,7 +101,7 @@ public class DagViz {
 
         while (!stack.isEmpty()) {
             final DagEntry node = stack.remove(stack.size() - 1);
-            final List<String> links = node.getLinksList() == null ? Collections.emptyList() : node.getLinksList();
+            final List<ByteString> links = node.getLinksList() == null ? Collections.emptyList() : node.getLinksList();
             for (Digest e : links.stream().map(e -> digest(e)).collect(Collectors.toList())) {
                 if (visited.add(e)) {
                     DagEntry child = dag.getDagEntry(e);

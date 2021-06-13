@@ -20,6 +20,7 @@ import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.Avalanche.Service;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
 import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.stub.StreamObserver;
@@ -42,7 +43,7 @@ public class AvalancheServer extends AvalancheImplBase {
 
     @Override
     public void query(Query request, StreamObserver<QueryResult> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
+        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             QueryResult result = s.onQuery(request.getHashesList(), request.getTransactionsList(),
                                            request.getWantedList()
                                                   .stream()
@@ -61,7 +62,7 @@ public class AvalancheServer extends AvalancheImplBase {
 
     @Override
     public void requestDag(DagNodes request, StreamObserver<SuppliedDagNodes> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
+        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             List<ByteString> result = s.requestDAG(request.getEntriesList()
                                                           .stream()
                                                           .map(e -> digest(e))

@@ -10,6 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import org.bouncycastle.util.encoders.Hex;
+import org.h2.mvstore.WriteBuffer;
 
 import com.google.protobuf.ByteString;
 

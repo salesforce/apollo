@@ -22,25 +22,25 @@ service Avalanche {
 } 
 
 message DagNodes {
-    string context = 1;
+    bytes context = 1;
     repeated string entries = 2;
 }
 
 message SuppliedDagNodes {
-    string context = 1;
+    bytes context = 1;
     repeated bytes entries = 2;
 }
 
 message DagEntries {
-    string context = 1;
+    bytes context = 1;
     repeated DagEntry entries = 2;
 }
 
 message Query {
-    string context = 1;
-    repeated string hashes = 2;
+    bytes context = 1;
+    repeated bytes hashes = 2;
     repeated bytes transactions = 3;
-    repeated string wanted = 4;
+    repeated bytes wanted = 4;
 }
 
 message DagEntry {
@@ -51,7 +51,7 @@ message DagEntry {
         USER = 3;
     } 
     EntryType description = 1;
-    repeated string links = 2;
+    repeated bytes links = 2;
     google.protobuf.Any data = 3;
 }
 

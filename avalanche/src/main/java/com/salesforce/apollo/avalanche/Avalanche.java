@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -73,12 +71,6 @@ public class Avalanche {
 
     public static class DigestType implements DataType {
 
-        private final DigestAlgorithm algorithm;
-
-        public DigestType(DigestAlgorithm algorithm) {
-            this.algorithm = algorithm;
-        }
-
         @Override
         public int compare(Object a, Object b) {
             return ((Digest) a).compareTo(((Digest) b));
@@ -86,14 +78,12 @@ public class Avalanche {
 
         @Override
         public int getMemory(Object obj) {
-            return ((Digest) obj).getAlgorithm().digestLength();
+            return ((Digest) obj).getAlgorithm().digestLength() + 1;
         }
 
         @Override
         public Digest read(ByteBuffer buff) {
-            byte[] bytes = new byte[buff.get()];
-            buff.get(bytes);
-            return new Digest(algorithm, bytes);
+            return new Digest(buff);
         }
 
         @Override
@@ -105,7 +95,11 @@ public class Avalanche {
 
         @Override
         public void write(WriteBuffer buff, Object obj) {
-            buff.put(((Digest) obj).getBytes());
+            Digest digest = (Digest) obj;
+            buff.put(digest.getAlgorithm().digestCode());
+            for (long l : digest.getLongs()) {
+                buff.putLong(l);
+            }
         }
 
         @Override
@@ -128,7 +122,7 @@ public class Avalanche {
 
     public class Service {
 
-        public QueryResult onQuery(List<String> hashes, List<ByteString> txns, List<Digest> wanted) {
+        public QueryResult onQuery(List<ByteString> list, List<ByteString> txns, List<Digest> wanted) {
             if (!running.get()) {
                 ArrayList<Vote> results = new ArrayList<>();
                 for (int i = 0; i < txns.size(); i++) {
@@ -142,7 +136,7 @@ public class Avalanche {
             long now = System.currentTimeMillis();
             Timer.Context timer = metrics == null ? null : metrics.getInboundQueryTimer().time();
 
-            final List<Digest> inserted = dag.insertSerialized(hashes, txns, System.currentTimeMillis());
+            final List<Digest> inserted = dag.insertSerialized(list, txns, System.currentTimeMillis());
             List<Boolean> stronglyPreferred = dag.isStronglyPreferred(inserted);
             log.trace("onquery {} txn in {} ms", stronglyPreferred.size(), System.currentTimeMillis() - now);
             List<Vote> queried = stronglyPreferred.stream().map(r -> {
@@ -203,8 +197,7 @@ public class Avalanche {
                                           r -> new AvalancheServer(communications.getClientIdentityProvider(), metrics,
                                                   r),
                                           AvalancheClient.getCreate(metrics));
-        MVMap.Builder<Digest, byte[]> builder = new MVMap.Builder<Digest, byte[]>().keyType(new DigestType(
-                node.getParameters().hashAlgorithm));
+        MVMap.Builder<Digest, byte[]> builder = new MVMap.Builder<Digest, byte[]>().keyType(new DigestType());
 
         this.dag = new WorkingSet(processor, parameters,
                 store.openMap(String.format(STORE_MAP_TEMPLATE, node.getId(), context.getId()), builder), metrics);
@@ -344,7 +337,7 @@ public class Avalanche {
                                                .setData(Any.pack(ByteMessage.newBuilder()
                                                                             .setContents(ByteString.copyFrom(dummy))
                                                                             .build()));
-            parents.forEach(e -> builder.addLinks(qb64(e)));
+            parents.forEach(e -> builder.addLinks(e.toByteString()));
             DagEntry dagEntry = builder.build();
             assert dagEntry.getLinksCount() > 0 : "Whoopsie";
             dag.insert(dagEntry, System.currentTimeMillis());
@@ -383,7 +376,7 @@ public class Avalanche {
                 dag.insertSerialized(suppliedDagNodes.getEntriesList()
                                                      .stream()
                                                      .map(e -> DigestAlgorithm.DEFAULT.digest(e))
-                                                     .map(e -> qb64(e))
+                                                     .map(e -> e.toByteString())
                                                      .collect(Collectors.toList()),
                                      suppliedDagNodes.getEntriesList(), System.currentTimeMillis());
                 if (metrics != null) {
@@ -413,7 +406,7 @@ public class Avalanche {
         dag.insertSerialized(result.getWantedList()
                                    .stream()
                                    .map(e -> DigestAlgorithm.DEFAULT.digest(e))
-                                   .map(e -> qb64(e))
+                                   .map(e -> e.toByteString())
                                    .collect(Collectors.toList()),
                              result.getWantedList(), System.currentTimeMillis());
         if (want.size() > 0 && metrics != null && m == wanted) {
@@ -643,7 +636,7 @@ public class Avalanche {
         try {
 
             DagEntry.Builder builder = DagEntry.newBuilder().setDescription(type).setData(Any.pack(data));
-            parents.stream().map(e -> qb64(e)).forEach(e -> builder.addLinks(e));
+            parents.stream().map(e -> e.toByteString()).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
 
             Digest key = dag.insert(dagEntry, conflictSet, System.currentTimeMillis());

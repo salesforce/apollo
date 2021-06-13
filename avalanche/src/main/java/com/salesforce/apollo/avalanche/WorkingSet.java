@@ -901,10 +901,10 @@ public class WorkingSet {
         return entries.stream().map(entry -> insert(entry, discovered)).collect(Collectors.toList());
     }
 
-    public List<Digest> insertSerialized(List<String> hashes, List<ByteString> transactions, long discovered) {
+    public List<Digest> insertSerialized(List<ByteString> list, List<ByteString> transactions, long discovered) {
         List<Digest> keys = new ArrayList<>();
-        for (int i = 0; i < hashes.size(); i++) {
-            Digest key = digest(hashes.get(i));
+        for (int i = 0; i < list.size(); i++) {
+            Digest key = digest(list.get(i));
             keys.add(key);
             Node node = read(() -> unfinalized.get(key));
             if (node == null || node.isUnknown()) {

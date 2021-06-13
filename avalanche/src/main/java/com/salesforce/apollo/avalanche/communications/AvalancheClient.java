@@ -60,12 +60,12 @@ public class AvalancheClient implements Avalanche {
     @Override
     public ListenableFuture<QueryResult> query(Digest context, List<Pair<Digest, ByteString>> transactions,
                                                Collection<Digest> wanted) {
-        Builder builder = Query.newBuilder().setContext(qb64(context));
+        Builder builder = Query.newBuilder().setContext(context.toByteString());
         transactions.forEach(t -> {
-            builder.addHashes(qb64(t.getFirst()));
+            builder.addHashes(t.getFirst().toByteString());
             builder.addTransactions(t.getSecond());
         });
-        wanted.forEach(e -> builder.addWanted(qb64(e)));
+        wanted.forEach(e -> builder.addWanted(e.toByteString()));
         try {
             Query query = builder.build();
             ListenableFuture<QueryResult> result = client.query(query);
@@ -97,7 +97,7 @@ public class AvalancheClient implements Avalanche {
 
     @Override
     public ListenableFuture<SuppliedDagNodes> requestDAG(Digest context, Collection<Digest> want) {
-        com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder().setContext(qb64(context));
+        com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder().setContext(context.toByteString());
         want.forEach(e -> builder.addEntries(qb64(e)));
         try {
             DagNodes request = builder.build();
