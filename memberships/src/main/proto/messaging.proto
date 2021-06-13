@@ -31,7 +31,7 @@ message Message {
     int32 sequenceNumber = 2;
     int32 age = 3;
     int32 channel = 4;
-    string signature = 5;
+    bytes signature = 5;
     bytes key = 6;
     google.protobuf.Any content = 7;
 }

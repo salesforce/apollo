@@ -185,7 +185,7 @@ public class MessageBuffer {
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
                       .setKey(hash.toByteString())
-                      .setSignature(qb64(signature))
+                      .setSignature(signature.toByteString())
                       .setContent(msg)
                       .build();
     }
