@@ -41,7 +41,7 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.NoOpNode;

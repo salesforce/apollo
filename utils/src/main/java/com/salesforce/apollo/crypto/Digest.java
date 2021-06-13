@@ -11,6 +11,8 @@ import java.util.Arrays;
 
 import org.bouncycastle.util.encoders.Hex;
 
+import com.google.protobuf.ByteString;
+
 /**
  * A computed digest
  * 
@@ -18,6 +20,7 @@ import org.bouncycastle.util.encoders.Hex;
  *
  */
 public class Digest implements Comparable<Digest> {
+
     public static final Digest NONE = new Digest(DigestAlgorithm.NONE, new byte[0]);
 
     public static int compare(byte[] o1, byte[] o2) {
@@ -38,13 +41,34 @@ public class Digest implements Comparable<Digest> {
         return 0;
     }
 
+    public static Digest from(ByteString bs) {
+        return new Digest(bs);
+    }
+
     public static boolean matches(byte[] bytes, Digest d1) {
         return Arrays.equals(d1.getBytes(), d1.getAlgorithm().digest(bytes).getBytes());
     }
 
     private final DigestAlgorithm algorithm;
-    private final byte[]          bytes;
-    private int                   hashCode;
+    private final long[]          hash;
+
+    public Digest(byte code, long[] hash) {
+        algorithm = DigestAlgorithm.fromDigestCode(code);
+        assert hash.length == algorithm.longLength();
+        this.hash = hash;
+    }
+
+    public Digest(ByteBuffer buff) {
+        algorithm = DigestAlgorithm.fromDigestCode(buff.get());
+        hash = new long[algorithm.longLength()];
+        for (int i = 0; i < hash.length; i++) {
+            hash[i] = buff.getLong();
+        }
+    }
+
+    public Digest(ByteString encoded) {
+        this(encoded.asReadOnlyByteBuffer());
+    }
 
     public Digest(DigestAlgorithm algorithm, byte[] bytes) {
         assert bytes != null && algorithm != null;
@@ -54,43 +78,27 @@ public class Digest implements Comparable<Digest> {
                     "Invalid bytes length.  Require: " + algorithm.digestLength() + " found: " + bytes.length);
         }
         this.algorithm = algorithm;
-        this.bytes = bytes;
-    }
-
-    public Digest prefix(byte[]... prefixes) {
-        int prefixLength = 0;
-        for (byte[] p : prefixes) {
-            prefixLength += p.length;
+        int length = algorithm.longLength();
+        this.hash = new long[length];
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        for (int i = 0; i < length; i++) {
+            hash[i] = buffer.getLong();
         }
-        ByteBuffer buffer = ByteBuffer.allocate(bytes.length + prefixLength);
-        for (byte[] prefix : prefixes) {
-            buffer.put(prefix);
-        }
-        buffer.put(bytes);
-        buffer.flip();
-        return getAlgorithm().digest(buffer);
-    }
-
-    public Digest prefix(long... prefixes) {
-        ByteBuffer buffer = ByteBuffer.allocate(bytes.length + (prefixes.length * 8));
-        for (long prefix : prefixes) {
-            buffer.putLong(prefix);
-        }
-        buffer.put(bytes);
-        buffer.flip();
-        return getAlgorithm().digest(buffer.array());
     }
 
     @Override
     public int compareTo(Digest id) {
-        if (id == null) {
-            return 1;
+        for (int i = 0; i < hash.length; i++) {
+            int compare = Long.compareUnsigned(hash[i], id.hash[i]);
+            if (compare != 0) {
+                return compare;
+            }
         }
-        if (id.algorithm != algorithm) {
-            throw new IllegalArgumentException("Cannot compare digests of different algorithm. this: " + algorithm
-                    + " is not: " + id.getAlgorithm());
-        }
-        return compare(bytes, id.bytes);
+        return 0;
+    }
+
+    public int digestCode() {
+        return algorithm.digestCode();
     }
 
     @Override
@@ -102,7 +110,16 @@ public class Digest implements Comparable<Digest> {
             return false;
         }
         Digest other = (Digest) obj;
-        return algorithm == other.algorithm && Arrays.equals(bytes, other.bytes);
+        if (algorithm != other.algorithm) {
+            return false;
+        }
+
+        for (int i = 0; i < hash.length; i++) {
+            if (hash[i] != other.hash[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public DigestAlgorithm getAlgorithm() {
@@ -110,24 +127,70 @@ public class Digest implements Comparable<Digest> {
     }
 
     public byte[] getBytes() {
+        byte[] bytes = new byte[algorithm.digestLength()];
+        ByteBuffer buff = ByteBuffer.wrap(bytes);
+        for (int i = 0; i < hash.length; i++) {
+            buff.putLong(hash[i]);
+        }
         return bytes;
+    }
+
+    public long[] getLongs() {
+        return hash;
     }
 
     @Override
     public int hashCode() {
-        if (hashCode < 0) {
-            ByteBuffer buffer = ByteBuffer.wrap(bytes);
-            int hc = 0;
-            while (buffer.hasRemaining()) {
-                hc ^= buffer.getInt();
+        for (long l : hash) {
+            if (l != 0) {
+                return (int) (l & 0xFFFFFFFF);
             }
-            hashCode = hc & 0xFFFFFFFF;
         }
-        return hashCode;
+        return 0;
+    }
+
+    public Digest prefix(byte[]... prefixes) {
+        int prefixLength = 0;
+        for (byte[] p : prefixes) {
+            prefixLength += p.length;
+        }
+        ByteBuffer buffer = ByteBuffer.allocate(hash.length * 8 + prefixLength);
+        for (byte[] prefix : prefixes) {
+            buffer.put(prefix);
+        }
+        for (long h : hash) {
+            buffer.putLong(h);
+        }
+        buffer.flip();
+        Digest d = getAlgorithm().digest(buffer);
+        return new Digest(getAlgorithm(), d.getBytes());
+    }
+
+    public Digest prefix(long... prefixes) {
+        ByteBuffer buffer = ByteBuffer.allocate(hash.length * 8 + (prefixes.length * 8));
+        for (long prefix : prefixes) {
+            buffer.putLong(prefix);
+        }
+        for (long h : hash) {
+            buffer.putLong(h);
+        }
+        buffer.flip();
+        Digest d = getAlgorithm().digest(buffer);
+        return new Digest(getAlgorithm(), d.getBytes());
+    }
+
+    public ByteString toByteString() {
+        ByteBuffer buffer = ByteBuffer.allocate(1 + hash.length * 8);
+        buffer.put(algorithm.digestCode());
+
+        for (long l : hash) {
+            buffer.putLong(l);
+        }
+        return ByteString.copyFrom(buffer);
     }
 
     @Override
     public String toString() {
-        return "[" + algorithm + ":" + Hex.toHexString(bytes).substring(0, 12) + "]";
+        return "[" + algorithm + ":" + Hex.toHexString(getBytes()).substring(0, 12) + "]";
     }
 }

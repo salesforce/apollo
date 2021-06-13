@@ -28,11 +28,10 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.proto.Message;
-import com.salesfoce.apollo.proto.MessageBff;
-import com.salesfoce.apollo.proto.Messages;
-import com.salesfoce.apollo.proto.Push;
-import com.salesfoce.apollo.proto.Push.Builder;
+import com.salesfoce.apollo.messaging.proto.Message;
+import com.salesfoce.apollo.messaging.proto.MessageBff;
+import com.salesfoce.apollo.messaging.proto.Messages;
+import com.salesfoce.apollo.messaging.proto.Push;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -264,7 +263,7 @@ public class Messenger {
                         return;
                     }
                     process(gossip.getUpdatesList());
-                    Builder pushBuilder = Push.newBuilder().setContext(qb64(context.getId())).setRing(ring);
+                    Push.Builder pushBuilder = Push.newBuilder().setContext(qb64(context.getId())).setRing(ring);
                     buffer.updatesFor(BloomFilter.from(gossip.getBff()), pushBuilder);
                     try {
                         link.update(pushBuilder.build());

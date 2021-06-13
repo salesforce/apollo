@@ -44,7 +44,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;

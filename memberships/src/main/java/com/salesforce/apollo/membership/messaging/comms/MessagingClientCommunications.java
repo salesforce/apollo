@@ -10,16 +10,16 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.proto.MessageBff;
-import com.salesfoce.apollo.proto.Messages;
-import com.salesfoce.apollo.proto.MessagingGrpc;
-import com.salesfoce.apollo.proto.MessagingGrpc.MessagingFutureStub;
-import com.salesfoce.apollo.proto.Push;
+import com.salesfoce.apollo.messaging.proto.MessageBff;
+import com.salesfoce.apollo.messaging.proto.Messages;
+import com.salesfoce.apollo.messaging.proto.MessagingGrpc;
+import com.salesfoce.apollo.messaging.proto.MessagingGrpc.MessagingFutureStub;
+import com.salesfoce.apollo.messaging.proto.Push;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.messaging.Messaging;
 import com.salesforce.apollo.membership.messaging.MessagingMetrics;
-import com.salesforce.apollo.protocols.Messaging;
 
 /**
  * @author hal.hildebrand

@@ -14,5 +14,4 @@ message Biff {
         int32 seed = 3;
         bytes bits = 4;
         int32 type = 5;
-} 
-
+}

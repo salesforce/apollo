@@ -136,7 +136,8 @@ public class RingTest {
 
     @Test
     public void predecessor() {
-        assertEquals(5, members.indexOf(ring.predecessor(members.get(6))));
+        Member predecessor = ring.predecessor(members.get(6));
+        assertEquals(5, members.indexOf(predecessor));
         assertEquals(members.size() - 1, members.indexOf(ring.predecessor(members.get(0))));
     }
 

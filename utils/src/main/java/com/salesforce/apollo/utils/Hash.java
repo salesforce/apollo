@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.utils;
 
-import java.nio.ByteBuffer;
 import java.util.BitSet;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -48,7 +47,7 @@ abstract public class Hash<T> {
 
         long h1;
         long h2;
-        int length;
+        int  length;
 
         public Hasher(T key, int seed) {
             this.h1 = seed;
@@ -71,18 +70,23 @@ abstract public class Hash<T> {
         }
 
         protected void process(Digest key) {
-            ByteBuffer buf = ByteBuffer.wrap(key.getBytes());
+            long[] hash = key.getLongs();
             switch (key.getAlgorithm().digestLength()) {
             case 64: {
-                bmix64(buf.getLong(), buf.getLong());
+                bmix64(hash[0], hash[1]);
                 length += CHUNK_SIZE;
-                bmix64(buf.getLong(), buf.getLong());
+                bmix64(hash[2], hash[3]);
                 length += CHUNK_SIZE;
+                bmix64(hash[4], hash[5]);
+                length += CHUNK_SIZE;
+                bmix64(hash[6], hash[7]);
+                length += CHUNK_SIZE;
+                break;
             }
             case 32: {
-                bmix64(buf.getLong(), buf.getLong());
+                bmix64(hash[0], hash[1]);
                 length += CHUNK_SIZE;
-                bmix64(buf.getLong(), buf.getLong());
+                bmix64(hash[2], hash[3]);
                 length += CHUNK_SIZE;
                 break;
             }

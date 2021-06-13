@@ -30,10 +30,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.proto.Message;
-import com.salesfoce.apollo.proto.Messages;
-import com.salesfoce.apollo.proto.Messages.Builder;
-import com.salesfoce.apollo.proto.Push;
+import com.salesfoce.apollo.messaging.proto.Message;
+import com.salesfoce.apollo.messaging.proto.Messages;
+import com.salesfoce.apollo.messaging.proto.Push;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -133,7 +132,7 @@ public class MessageBuffer {
     }
 
     public Messages process(BloomFilter<Digest> bff, int seed, double p) {
-        Builder builder = Messages.newBuilder();
+        Messages.Builder builder = Messages.newBuilder();
         state.entrySet().forEach(entry -> {
             if (!bff.contains(entry.getKey())) {
                 builder.addUpdates(entry.getValue());

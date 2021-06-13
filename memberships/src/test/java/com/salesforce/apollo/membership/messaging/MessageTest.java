@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;

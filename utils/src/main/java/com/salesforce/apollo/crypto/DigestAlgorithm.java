@@ -23,11 +23,15 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  * Enumerations of digest algorithms
  * 
  * @author hal.hildebrand
- *
  */
 public enum DigestAlgorithm {
 
     BLAKE2B_256 {
+        @Override
+        public byte digestCode() {
+            return 1;
+        }
+
         @Override
         public int digestLength() {
             return 32;
@@ -36,11 +40,21 @@ public enum DigestAlgorithm {
     },
     BLAKE2B_512 {
         @Override
+        public byte digestCode() {
+            return 2;
+        }
+
+        @Override
         public int digestLength() {
             return 64;
         }
     },
     BLAKE2S_256 {
+        @Override
+        public byte digestCode() {
+            return 3;
+        }
+
         @Override
         public int digestLength() {
             return 32;
@@ -48,6 +62,11 @@ public enum DigestAlgorithm {
 
     },
     BLAKE3_256 {
+        @Override
+        public byte digestCode() {
+            return 4;
+        }
+
         @Override
         public int digestLength() {
             return 32;
@@ -76,6 +95,11 @@ public enum DigestAlgorithm {
     },
     BLAKE3_512 {
         @Override
+        public byte digestCode() {
+            return 5;
+        }
+
+        @Override
         public int digestLength() {
             return 64;
         }
@@ -103,6 +127,11 @@ public enum DigestAlgorithm {
     },
     NONE {
         @Override
+        public byte digestCode() {
+            return 0;
+        }
+
+        @Override
         public int digestLength() {
             return 0;
         }
@@ -127,6 +156,11 @@ public enum DigestAlgorithm {
     },
     SHA2_256 {
         @Override
+        public byte digestCode() {
+            return 6;
+        }
+
+        @Override
         public int digestLength() {
             return 32;
         }
@@ -134,6 +168,11 @@ public enum DigestAlgorithm {
     },
 
     SHA2_512 {
+        @Override
+        public byte digestCode() {
+            return 7;
+        }
+
         @Override
         public int digestLength() {
             return 64;
@@ -143,12 +182,22 @@ public enum DigestAlgorithm {
 
     SHA3_256 {
         @Override
+        public byte digestCode() {
+            return 8;
+        }
+
+        @Override
         public int digestLength() {
             return 32;
         }
 
     },
     SHA3_512 {
+        @Override
+        public byte digestCode() {
+            return 9;
+        }
+
         @Override
         public int digestLength() {
             return 32;
@@ -180,6 +229,33 @@ public enum DigestAlgorithm {
         Arrays.fill(LAST_32, (byte) 255);
     }
 
+    public static DigestAlgorithm fromDigestCode(byte code) {
+        return switch (code) {
+        case 0:
+            yield NONE;
+        case 1:
+            yield BLAKE2B_256;
+        case 2:
+            yield BLAKE2B_512;
+        case 3:
+            yield BLAKE2S_256;
+        case 4:
+            yield BLAKE3_256;
+        case 5:
+            yield BLAKE3_512;
+        case 6:
+            yield SHA2_256;
+        case 7:
+            yield SHA2_512;
+        case 8:
+            yield SHA3_256;
+        case 9:
+            yield SHA3_512;
+        default:
+            throw new IllegalArgumentException("Unknown digest code: " + code);
+        };
+    }
+
     public String algorithmName() {
         return name();
     }
@@ -203,6 +279,8 @@ public enum DigestAlgorithm {
     public Digest digest(List<ByteBuffer> buffers) {
         return digest(BbBackedInputStream.aggregate(buffers));
     }
+
+    abstract public byte digestCode();
 
     abstract public int digestLength();
 
@@ -253,6 +331,10 @@ public enum DigestAlgorithm {
     public byte[] hashOf(List<ByteBuffer> buffers) {
         InputStream is = BbBackedInputStream.aggregate(buffers);
         return hashOf(is);
+    }
+
+    public int longLength() {
+        return digestLength() / 8;
     }
 
     protected MessageDigest createJCA() {

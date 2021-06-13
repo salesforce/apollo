@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
@@ -49,7 +49,7 @@ public class DagTest {
     private WorkingSet  workingSet;
     private Random      entropy;
     private DagEntry    root;
-    private Digest     rootKey;
+    private Digest      rootKey;
 
     @BeforeAll
     public static void beforeClass() {

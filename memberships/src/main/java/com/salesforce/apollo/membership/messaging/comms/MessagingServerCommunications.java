@@ -7,10 +7,10 @@
 package com.salesforce.apollo.membership.messaging.comms;
 
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.proto.MessageBff;
-import com.salesfoce.apollo.proto.Messages;
-import com.salesfoce.apollo.proto.MessagingGrpc.MessagingImplBase;
-import com.salesfoce.apollo.proto.Push;
+import com.salesfoce.apollo.messaging.proto.MessageBff;
+import com.salesfoce.apollo.messaging.proto.Messages;
+import com.salesfoce.apollo.messaging.proto.MessagingGrpc.MessagingImplBase;
+import com.salesfoce.apollo.messaging.proto.Push;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.messaging.MessagingMetrics;
