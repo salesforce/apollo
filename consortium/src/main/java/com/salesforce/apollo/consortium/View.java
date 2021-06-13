@@ -28,11 +28,11 @@ import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.comms.LinearClient;
 import com.salesforce.apollo.consortium.comms.LinearServer;
 import com.salesforce.apollo.consortium.support.TickScheduler;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -41,18 +41,18 @@ import com.salesforce.apollo.protocols.HashKey;
 public class View {
     private static final Logger log = LoggerFactory.getLogger(View.class);
 
-    private final AtomicReference<CommonCommunications<LinearClient, Service>>   comm                     = new AtomicReference<>();
-    private final AtomicReference<ViewContext>                                   context                  = new AtomicReference<>();
-    private final Function<HashKey, CommonCommunications<LinearClient, Service>> createClientComms;
-    private final AtomicReference<Messenger>                                     messenger                = new AtomicReference<>();
-    private final AtomicReference<ViewMember>                                    nextView                 = new AtomicReference<>();
-    private final AtomicReference<KeyPair>                                       nextViewConsensusKeyPair = new AtomicReference<>();
-    private final AtomicReference<MemberOrder>                                   order                    = new AtomicReference<>();
-    private final Parameters                                                     params;
-    private final BiConsumer<HashKey, List<Msg>>                                 process;
-    private final Service                                                        service;
+    private final AtomicReference<CommonCommunications<LinearClient, Service>>  comm                     = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                  context                  = new AtomicReference<>();
+    private final Function<Digest, CommonCommunications<LinearClient, Service>> createClientComms;
+    private final AtomicReference<Messenger>                                    messenger                = new AtomicReference<>();
+    private final AtomicReference<ViewMember>                                   nextView                 = new AtomicReference<>();
+    private final AtomicReference<KeyPair>                                      nextViewConsensusKeyPair = new AtomicReference<>();
+    private final AtomicReference<MemberOrder>                                  order                    = new AtomicReference<>();
+    private final Parameters                                                    params;
+    private final BiConsumer<Digest, List<Msg>>                                 process;
+    private final Service                                                       service;
 
-    public View(Service service, Parameters parameters, BiConsumer<HashKey, List<Msg>> process) {
+    public View(Service service, Parameters parameters, BiConsumer<Digest, List<Msg>> process) {
         this.service = service;
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, service,
                                                                        r -> new LinearServer(
@@ -88,7 +88,7 @@ public class View {
         return nextViewConsensusKeyPair.get();
     }
 
-    public void joinMessageGroup(ViewContext newView, TickScheduler scheduler, BiConsumer<HashKey, List<Msg>> process) {
+    public void joinMessageGroup(ViewContext newView, TickScheduler scheduler, BiConsumer<Digest, List<Msg>> process) {
         log.debug("Joining message group: {} on: {}", newView.getId(), newView.getMember());
         Messenger nextMsgr = newView.createMessenger(params, params.dispatcher);
         messenger.set(nextMsgr);
@@ -114,8 +114,8 @@ public class View {
                                .build());
         if (log.isTraceEnabled()) {
             log.trace("Generating next view consensus key current: {} next: {} on: {}",
-                      current == null ? null : new HashKey(Conversion.hashOf(current.getPublic().getEncoded())),
-                      new HashKey(Conversion.hashOf(keyPair.getPublic().getEncoded())), params.member);
+                      current == null ? null : DigestAlgorithm.DEFAULT.digest(current.getPublic().getEncoded()),
+                      DigestAlgorithm.DEFAULT.digest(keyPair.getPublic().getEncoded()), params.member);
         }
         return current;
     }

@@ -12,24 +12,24 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class ProcessedBuffer {
-    private final Deque<HashKey> buffer = new ConcurrentLinkedDeque<>();
+    private final Deque<Digest> buffer = new ConcurrentLinkedDeque<>();
 
     private final int bufferSize;
 
-    private final Set<HashKey> set = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<Digest> set = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public ProcessedBuffer(int bufferSize) {
         this.bufferSize = bufferSize;
     }
 
-    public void add(HashKey h) {
+    public void add(Digest h) {
         if (set.add(h)) {
             buffer.add(h);
             if (buffer.size() > bufferSize) {
@@ -43,7 +43,7 @@ public class ProcessedBuffer {
         set.clear();
     }
 
-    public boolean contains(HashKey h) {
+    public boolean contains(Digest h) {
         return set.contains(h);
     }
 }

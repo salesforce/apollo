@@ -28,11 +28,11 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
 import com.salesforce.apollo.consortium.Store;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.Member;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
 
@@ -47,23 +47,25 @@ public class CheckpointAssembler {
     private final Checkpoint                                                  checkpoint;
     private final CommonCommunications<BootstrapClient, BootstrappingService> comms;
     private final Context<Member>                                             context;
+    private final DigestAlgorithm                                             digestAlgorithm;
     private final double                                                      fpr;
-    private final List<HashKey>                                               hashes    = new ArrayList<>();
+    private final List<Digest>                                                hashes    = new ArrayList<>();
     private final long                                                        height;
-    private final Member                                                      member;
+    private final SigningMember                                               member;
     private final MVMap<Integer, byte[]>                                      state;
 
-    public CheckpointAssembler(long height, Checkpoint checkpoint, Member member, Store store,
+    public CheckpointAssembler(long height, Checkpoint checkpoint, SigningMember member, Store store,
             CommonCommunications<BootstrapClient, BootstrappingService> comms, Context<Member> context,
-            double falsePositiveRate) {
+            double falsePositiveRate, DigestAlgorithm digestAlgorithm) {
         this.height = height;
         this.member = member;
         this.checkpoint = checkpoint;
         this.comms = comms;
         this.context = context;
         this.fpr = falsePositiveRate;
+        this.digestAlgorithm = digestAlgorithm;
         state = store.createCheckpoint(height);
-        checkpoint.getSegmentsList().stream().map(bs -> new HashKey(bs)).forEach(hash -> hashes.add(hash));
+        checkpoint.getSegmentsList().stream().map(bs -> new Digest(bs)).forEach(hash -> hashes.add(hash));
     }
 
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
@@ -149,7 +151,7 @@ public class CheckpointAssembler {
 
     private boolean process(CheckpointSegments segments) {
         segments.getSegmentsList().forEach(segment -> {
-            HashKey hash = new HashKey(Conversion.hashOf(segment.getBlock()));
+            Digest hash = digestAlgorithm.digest(segment.getBlock());
             int index = segment.getIndex();
             if (index >= 0 && index < hashes.size()) {
                 if (hash.equals(hashes.get(index))) {

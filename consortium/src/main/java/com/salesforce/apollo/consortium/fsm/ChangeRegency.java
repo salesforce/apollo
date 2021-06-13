@@ -20,7 +20,6 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesforce.apollo.consortium.Collaborator;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.Member;
 
 /**
  * @author hal.hildebrand

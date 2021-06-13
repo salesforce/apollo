@@ -26,10 +26,8 @@ import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.ProcessedBuffer;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.Member;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -59,7 +57,7 @@ public class Regency {
     }
 
     public void deliverStop(Stop data, Member from, Consortium consortium, View view,
-                            Map<HashKey, EnqueuedTransaction> toOrder, ProcessedBuffer processed) {
+                            Map<Digest, EnqueuedTransaction> toOrder, ProcessedBuffer processed) {
         if (sync.containsKey(data.getNextRegent())) {
             log.trace("Ignoring stop, already sync'd: {} from {} on: {}", data.getNextRegent(), from,
                       consortium.getMember());
@@ -78,7 +76,7 @@ public class Regency {
         votes.add(from);
         data.getTransactionsList()
             .stream()
-            .map(tx -> new EnqueuedTransaction(Consortium.hashOf(tx), tx))
+            .map(tx -> new EnqueuedTransaction(Consortium.hashOf(consortium.params.digestAlgorithm, tx), tx))
             .peek(eqt -> stopMessages.add(eqt))
             .filter(eqt -> !processed.contains(eqt.hash))
             .forEach(eqt -> {
@@ -120,10 +118,10 @@ public class Regency {
             return;
         }
 
-        Map<HashKey, CertifiedBlock> hashed;
-        List<HashKey> hashes = new ArrayList<>();
+        Map<Digest, CertifiedBlock> hashed;
+        List<Digest> hashes = new ArrayList<>();
         hashed = stopData.getBlocksList().stream().collect(Collectors.toMap(cb -> {
-            HashKey hash = new HashKey(Conversion.hashOf(cb.getBlock().toByteString()));
+            Digest hash = consortium.params.digestAlgorithm.digest(cb.getBlock().toByteString());
             hashes.add(hash);
             return hash;
         }, cb -> cb));
@@ -191,13 +189,13 @@ public class Regency {
     }
 
     private boolean validate(Member regent, Sync sync, int regency, View view, Consortium consortium) {
-        Map<HashKey, CertifiedBlock> hashed;
-        List<HashKey> hashes = new ArrayList<>();
+        Map<Digest, CertifiedBlock> hashed;
+        List<Digest> hashes = new ArrayList<>();
         hashed = sync.getBlocksList()
                      .stream()
                      .filter(cb -> view.getContext().validate(cb))
                      .collect(Collectors.toMap(cb -> {
-                         HashKey hash = new HashKey(Conversion.hashOf(cb.getBlock().toByteString()));
+                         Digest hash = consortium.params.digestAlgorithm.digest(cb.getBlock().toByteString());
                          hashes.add(hash);
                          return hash;
                      }, cb -> cb));

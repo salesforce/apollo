@@ -8,18 +8,18 @@ package com.salesforce.apollo.consortium.support;
 
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesforce.apollo.consortium.CollaboratorContext;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 public class HashedBlock {
-    public final Block   block;
-    public final HashKey hash;
+    public final Block  block;
+    public final Digest hash;
 
-    public HashedBlock(Block block) {
-        this(new HashKey(Conversion.hashOf(block.toByteString())), block);
+    public HashedBlock(DigestAlgorithm digestAlgorithm, Block block) {
+        this(digestAlgorithm.digest(block.toByteString()), block);
     }
 
-    public HashedBlock(HashKey hash, Block block) {
+    public HashedBlock(Digest hash, Block block) {
         this.hash = hash;
         this.block = block;
     }

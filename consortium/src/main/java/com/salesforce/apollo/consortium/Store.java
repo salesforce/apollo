@@ -11,6 +11,7 @@ import static com.salesforce.apollo.consortium.CollaboratorContext.height;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
@@ -26,6 +27,8 @@ import java.util.stream.StreamSupport;
 import org.h2.mvstore.Cursor;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
+import org.h2.mvstore.WriteBuffer;
+import org.h2.mvstore.type.DataType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +43,8 @@ import com.salesfoce.apollo.consortium.proto.CertifiedBlock.Builder;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.BloomFilter;
 
 /**
@@ -50,6 +54,48 @@ import com.salesforce.apollo.utils.BloomFilter;
  *
  */
 public class Store {
+
+    public static class DigestType implements DataType {
+
+        @Override
+        public int compare(Object a, Object b) {
+            return ((Digest) a).compareTo(((Digest) b));
+        }
+
+        @Override
+        public int getMemory(Object obj) {
+            return ((Digest) obj).getAlgorithm().digestLength() + 1;
+        }
+
+        @Override
+        public Digest read(ByteBuffer buff) {
+            return new Digest(buff);
+        }
+
+        @Override
+        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
+            for (int i = 0; i < len; i++) {
+                obj[i] = read(buff);
+            }
+        }
+
+        @Override
+        public void write(WriteBuffer buff, Object obj) {
+            Digest digest = (Digest) obj;
+            buff.put(digest.getAlgorithm().digestCode());
+            for (long l : digest.getLongs()) {
+                buff.putLong(l);
+            }
+        }
+
+        @Override
+        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
+            for (int i = 0; i < len; i++) {
+                write(buff, obj[i]);
+            }
+        }
+    }
+
     private static final String BLOCKS              = "BLOCKS";
     private static final String CERTIFICATIONS      = "CERTIFICATIONS";
     private static final String CHECKPOINT_TEMPLATE = "CHECKPOINT-%s";
@@ -61,19 +107,21 @@ public class Store {
     private final MVMap<Long, byte[]>                   blocks;
     private final MVMap<Long, byte[]>                   certifications;
     private final TreeMap<Long, MVMap<Integer, byte[]>> checkpoints = new TreeMap<>();
-    private final MVMap<Long, byte[]>                   hashes;
-    private final MVMap<byte[], Long>                   hashToHeight;
+    private final MVMap<Long, Digest>                   hashes;
+    private final MVMap<Digest, Long>                   hashToHeight;
     private final MVMap<Long, Long>                     viewChain;
+    private final DigestAlgorithm                       digestAlgorithm;
 
-    public Store(MVStore store) {
-        hashes = store.openMap(HASHES);
+    public Store(DigestAlgorithm digestAlgorithm, MVStore store) {
+        this.digestAlgorithm = digestAlgorithm;
+        hashes = store.openMap(HASHES, new MVMap.Builder<Long, Digest>().valueType(new DigestType()));
         blocks = store.openMap(BLOCKS);
-        hashToHeight = store.openMap(HASH_TO_HEIGHT);
+        hashToHeight = store.openMap(HASH_TO_HEIGHT, new MVMap.Builder<Digest, Long>().keyType(new DigestType()));
         certifications = store.openMap(CERTIFICATIONS);
         viewChain = store.openMap(VIEW_CHAIN);
     }
 
-    public byte[] block(byte[] hash) {
+    public byte[] block(Digest hash) {
         Long height = hashToHeight.get(hash);
         return height == null ? null : blocks.get(height);
     }
@@ -196,7 +244,7 @@ public class Store {
     public HashedBlock getBlock(long height) {
         byte[] block = block(height);
         try {
-            return block == null ? null : new HashedBlock(new HashKey(hash(height)), Block.parseFrom(block));
+            return block == null ? null : new HashedBlock(hash(height), Block.parseFrom(block));
         } catch (InvalidProtocolBufferException e) {
             log.error("Cannot deserialize block height: {}", height, e);
             return null;
@@ -224,24 +272,20 @@ public class Store {
 
     public HashedCertifiedBlock getLastBlock() {
         Long lastBlock = blocks.lastKey();
-        return lastBlock == null ? null : new HashedCertifiedBlock(getCertifiedBlock(lastBlock));
+        return lastBlock == null ? null : new HashedCertifiedBlock(digestAlgorithm, getCertifiedBlock(lastBlock));
     }
 
     public HashedCertifiedBlock getLastView() {
         Long lastView = checkpoints.lastKey();
-        return new HashedCertifiedBlock(getCertifiedBlock(lastView));
+        return new HashedCertifiedBlock(digestAlgorithm, getCertifiedBlock(lastView));
     }
 
-    public byte[] hash(long height) {
+    public Digest hash(long height) {
         return hashes.get(height);
     }
 
-    public Map<Long, byte[]> hashes() {
+    public Map<Long, Digest> hashes() {
         return hashes;
-    }
-
-    public HashKey hashKey(long height) {
-        return new HashKey(hash(height));
     }
 
     public long lastViewChainFrom(long height) {
@@ -301,10 +345,10 @@ public class Store {
     }
 
     public void validate(long from, long to) throws IllegalStateException {
-        AtomicReference<HashKey> prevHash = new AtomicReference<>();
+        AtomicReference<Digest> prevHash = new AtomicReference<>();
         new Cursor<Long, byte[]>(blocks.getRootPage(), to, from).forEachRemaining(l -> {
             if (l == to) {
-                HashKey k = hashKey(l);
+                Digest k = hash(l);
                 if (k == null) {
                     throw new IllegalStateException(String.format("Invalid chain (%s, %s) missing: %s", from, to, l));
                 }
@@ -314,7 +358,7 @@ public class Store {
                 if (current == null) {
                     throw new IllegalStateException(String.format("Invalid chain (%s, %s) missing: %s", from, to, l));
                 } else {
-                    HashKey pointer = new HashKey(current.block.getHeader().getPrevious());
+                    Digest pointer = new Digest(current.block.getHeader().getPrevious());
                     if (!prevHash.get().equals(pointer)) {
                         throw new IllegalStateException(
                                 String.format("Invalid chain (%s, %s) block: %s has invalid previous hash: %s, expected: %s",
@@ -339,7 +383,7 @@ public class Store {
                 break;
             }
 
-            HashKey pointer = new HashKey(previous.block.getHeader().getLastReconfigHash());
+            Digest pointer = new Digest(previous.block.getHeader().getLastReconfigHash());
             if (pointer.equals(current.hash)) {
                 previous = current;
                 next = current.block.getHeader().getLastReconfig();
@@ -400,9 +444,8 @@ public class Store {
         return viewChain.containsKey(next);
     }
 
-    private void put(HashKey h, Block block) {
+    private void put(Digest hash, Block block) {
         long height = height(block);
-        byte[] hash = h.bytes();
         blocks.put(height, block.toByteArray());
         hashes.put(height, hash);
         hashToHeight.put(hash, height);
@@ -410,7 +453,7 @@ public class Store {
         if (type == BodyType.RECONFIGURE || type == BodyType.GENESIS) {
             viewChain.put(block.getHeader().getHeight(), block.getHeader().getLastReconfig());
         }
-        log.trace("insert: {}:{}", height, h);
+        log.trace("insert: {}:{}", height, hash);
     }
 
     private <T> T transactionally(Callable<T> action) throws ExecutionException {

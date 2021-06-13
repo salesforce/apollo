@@ -31,13 +31,12 @@ import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.consortium.support.SigningUtils;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
-import com.salesforce.apollo.membership.impl.Member;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -50,7 +49,7 @@ public class ViewContext implements MembershipListener<Member> {
     /**
      * Answer the live successors of the hash on the base context view
      */
-    public static Context<Member> viewFor(HashKey hash, Context<? super Member> baseContext) {
+    public static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
         Context<Member> newView = new Context<Member>(hash, baseContext.getRingCount());
         Set<Member> successors = new HashSet<Member>();
         baseContext.successors(hash, m -> {
@@ -73,11 +72,11 @@ public class ViewContext implements MembershipListener<Member> {
         return newView;
     }
 
-    private final KeyPair                 consensusKeyPair;
-    private final Context<Member>         context;
-    private final boolean                 isViewMember;
-    private final Member                  member;
-    private final Map<HashKey, PublicKey> validators = new HashMap<>();
+    private final KeyPair                consensusKeyPair;
+    private final Context<Member>        context;
+    private final boolean                isViewMember;
+    private final Member                 member;
+    private final Map<Digest, PublicKey> validators = new HashMap<>();
 
     public ViewContext(Context<Member> context, Member member, KeyPair consensusKeyPair, List<ViewMember> members) {
         assert consensusKeyPair != null;
@@ -85,14 +84,14 @@ public class ViewContext implements MembershipListener<Member> {
         this.member = member;
         this.consensusKeyPair = consensusKeyPair;
         members.forEach(vm -> {
-            HashKey mID = new HashKey(vm.getId());
+            Digest mID = new Digest(vm.getId());
             if (member.getId().equals(mID)) {
                 byte[] encoded = vm.getConsensusKey().toByteArray();
                 PublicKey consensusKey = SigningUtils.publicKeyOf(encoded);
                 if (!consensusKeyPair.getPublic().equals(consensusKey)) {
                     log.warn("Consensus key: {} for view {} does not match current consensus key: {} on: {}",
-                             new HashKey(Conversion.hashOf(consensusKeyPair.getPublic().getEncoded())), context.getId(),
-                             new HashKey(Conversion.hashOf(consensusKey.getEncoded())), member);
+                             DigestAlgorithm.DEFAULT.digest(consensusKeyPair.getPublic().getEncoded()), context.getId(),
+                             DigestAlgorithm.DEFAULT.digest(consensusKey.getEncoded()), member);
                 } else {
                     log.trace("Consensus key for view {} matches current consensus key on: {}", context.getId(),
                               member);
@@ -108,7 +107,7 @@ public class ViewContext implements MembershipListener<Member> {
                     }
                     if (log.isTraceEnabled()) {
                         log.trace("Adding consensus key: {} for: {} on: {}",
-                                  new HashKey(Conversion.hashOf(consensusKey.getEncoded())), mID, member);
+                                  DigestAlgorithm.DEFAULT.digest(consensusKey.getEncoded()), mID, member);
                     }
                     return consensusKey;
                 });
@@ -119,14 +118,14 @@ public class ViewContext implements MembershipListener<Member> {
                   context.getMember(member.getId()) != null, isViewMember, validators.size());
     }
 
-    public ViewContext(HashKey id, Context<Member> baseContext, Member m, KeyPair consensusKeyPair,
+    public ViewContext(Digest id, Context<Member> baseContext, Member m, KeyPair consensusKeyPair,
             List<ViewMember> members) {
         this(viewFor(id, baseContext), m, consensusKeyPair, members);
         baseContext.register(this);
     }
 
     public ViewContext(Reconfigure view, Context<Member> baseContext, Member member, KeyPair consensusKeyPair) {
-        this(new HashKey(view.getId()), baseContext, member, consensusKeyPair, view.getViewList());
+        this(new Digest(view.getId()), baseContext, member, consensusKeyPair, view.getViewList());
     }
 
     public void activeAll() {
@@ -158,17 +157,17 @@ public class ViewContext implements MembershipListener<Member> {
         context.offlineIfActive(member.getId());
     }
 
-    public Validate generateValidation(HashKey hash, Block block) {
+    public Validate generateValidation(Digest hash, Block block) {
         byte[] signature = sign(consensusKeyPair.getPrivate(), Utils.secureEntropy(),
                                 Conversion.hashOf(block.getHeader().toByteString()));
         if (log.isTraceEnabled()) {
             log.trace("generating validation of: {} key: {} on: {}", hash,
-                      new HashKey(Conversion.hashOf(consensusKeyPair.getPublic().getEncoded())), member);
+                      new Digest(Conversion.hashOf(consensusKeyPair.getPublic().getEncoded())), member);
         }
         return generateValidation(hash, signature);
     }
 
-    public Validate generateValidation(HashKey hash, byte[] signature) {
+    public Validate generateValidation(Digest hash, byte[] signature) {
         if (signature == null) {
             log.error("Unable to sign block: {} on: {}", hash, member);
             return null;
@@ -181,7 +180,7 @@ public class ViewContext implements MembershipListener<Member> {
         return validation;
     }
 
-    public Member getActiveMember(HashKey fromID) {
+    public Member getActiveMember(Digest fromID) {
         return context.getActiveMember(fromID);
     }
 
@@ -189,7 +188,7 @@ public class ViewContext implements MembershipListener<Member> {
         return consensusKeyPair;
     }
 
-    public HashKey getId() {
+    public Digest getId() {
         return context.getId();
     }
 
@@ -197,7 +196,7 @@ public class ViewContext implements MembershipListener<Member> {
         return member;
     }
 
-    public Member getMember(HashKey from) {
+    public Member getMember(Digest from) {
         return context.getMember(from);
     }
 
@@ -257,12 +256,12 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public boolean validate(Block block, Validate v) {
-        HashKey hash = new HashKey(v.getHash());
-        final HashKey memberID = new HashKey(v.getId());
+        Digest hash = new Digest(v.getHash());
+        final Digest memberID = new Digest(v.getId());
         final PublicKey key = validators.get(memberID);
         if (log.isTraceEnabled()) {
             log.trace("validating: {} from: {} key: {} on: {}", hash, memberID,
-                      new HashKey(Conversion.hashOf(key.getEncoded())), member);
+                      new Digest(Conversion.hashOf(key.getEncoded())), member);
         }
         if (key == null) {
             log.debug("No validator key to validate: {} for: {} on: {}", hash, memberID, member);
@@ -295,7 +294,7 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public boolean validate(CertifiedBlock block) {
-//      Function<HashKey, Signature> validators = h -> {
+//      Function<Digest, Signature> validators = h -> {
 //      Member member = view.getMember(h);
 //      if (member == null) {
 //          return null;

@@ -8,15 +8,15 @@ package com.salesforce.apollo.consortium.support;
 
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 public class EnqueuedTransaction {
-    public final HashKey     hash;
+    public final Digest      hash;
     private volatile boolean timedOut = false;
     private volatile Timer   timer;
     public final Transaction transaction;
 
-    public EnqueuedTransaction(HashKey hash, Transaction transaction) {
+    public EnqueuedTransaction(Digest hash, Transaction transaction) {
         assert hash != null : "requires non null hash";
         this.hash = hash;
         this.transaction = transaction;

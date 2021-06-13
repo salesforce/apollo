@@ -78,10 +78,9 @@ import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.consortium.support.ProcessedBuffer;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler.Timer;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.Member;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -96,12 +95,12 @@ public class CollaboratorContext implements Collaborator {
         return Body.newBuilder().setType(type).setContents(Consortium.compress(contents.toByteString())).build();
     }
 
-    public static Checkpoint checkpoint(File state, int blockSize) {
-        HashKey stateHash = HashKey.ORIGIN;
+    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int blockSize) {
+        Digest stateHash = algo.getOrigin();
         long length = 0;
         if (state != null) {
             try (FileInputStream fis = new FileInputStream(state)) {
-                stateHash = new HashKey(Conversion.hashOf(fis));
+                stateHash = algo.digest(fis);
             } catch (IOException e) {
                 log.error("Invalid checkpoint!", e);
                 return null;
@@ -116,7 +115,7 @@ public class CollaboratorContext implements Collaborator {
             byte[] buff = new byte[blockSize];
             try (FileInputStream fis = new FileInputStream(state)) {
                 for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
-                    builder.addSegments(ByteString.copyFrom(Conversion.hashOf(buff, read)));
+                    builder.addSegments(algo.digest(buff, read).toByteString());
                 }
             } catch (IOException e) {
                 log.error("Invalid checkpoint!", e);
@@ -147,14 +146,14 @@ public class CollaboratorContext implements Collaborator {
                      .map(Map.Entry::getValue);
     }
 
-    public static Block generateBlock(HashedCertifiedBlock checkpoint, final long height, byte[] previous, Body body,
-                                      HashedCertifiedBlock viewChange) {
+    public static Block generateBlock(DigestAlgorithm algo, HashedCertifiedBlock checkpoint, final long height,
+                                      byte[] previous, Body body, HashedCertifiedBlock viewChange) {
         Instant time = Instant.now();
         Timestamp timestamp = Timestamp.newBuilder().setSeconds(time.getEpochSecond()).setNanos(time.getNano()).build();
         byte[] nonce = new byte[32];
         Utils.secureEntropy().nextBytes(nonce);
-        HashKey checkpointHash = checkpoint == null ? HashKey.ORIGIN : checkpoint.hash;
-        HashKey viewChangeHash = viewChange == null ? HashKey.ORIGIN : viewChange.hash;
+        Digest checkpointHash = checkpoint == null ? Digest.NONE : checkpoint.hash;
+        Digest viewChangeHash = viewChange == null ? Digest.NONE : viewChange.hash;
         long checkpointHeight = checkpoint == null ? 0 : checkpoint.height();
         long viewChangeHeight = viewChange == null ? 0 : viewChange.height();
         Block block = Block.newBuilder()
@@ -167,7 +166,7 @@ public class CollaboratorContext implements Collaborator {
                                             .setLastReconfigHash(viewChangeHash.toByteString())
                                             .setPrevious(ByteString.copyFrom(previous))
                                             .setHeight(height)
-                                            .setBodyHash(ByteString.copyFrom(Conversion.hashOf(body.toByteString())))
+                                            .setBodyHash(algo.digest(body.toByteString()).toByteString())
                                             .build())
                            .setBody(body)
                            .build();
@@ -193,16 +192,16 @@ public class CollaboratorContext implements Collaborator {
         return height(cb.getBlock());
     }
 
-    public static List<Long> noGaps(Collection<CertifiedBlock> blocks, Map<Long, ?> cache) {
-        Map<HashKey, CertifiedBlock> hashed = blocks.stream()
-                                                    .collect(Collectors.toMap(cb -> new HashKey(
-                                                            Conversion.hashOf(cb.getBlock().toByteString())),
-                                                                              cb -> cb));
+    public static List<Long> noGaps(DigestAlgorithm algo, Collection<CertifiedBlock> blocks, Map<Long, ?> cache) {
+        Map<Digest, CertifiedBlock> hashed = blocks.stream()
+                                                   .collect(Collectors.toMap(cb -> algo.digest(cb.getBlock()
+                                                                                                 .toByteString()),
+                                                                             cb -> cb));
 
         return noGaps(hashed, cache);
     }
 
-    public static List<Long> noGaps(Map<HashKey, CertifiedBlock> hashed, Map<Long, ?> cache) {
+    public static List<Long> noGaps(Map<Digest, CertifiedBlock> hashed, Map<Long, ?> cache) {
         List<Long> ordered = hashed.values()
                                    .stream()
                                    .map(cb -> height(cb.getBlock()))
@@ -226,17 +225,17 @@ public class CollaboratorContext implements Collaborator {
         return body;
     }
 
-    final Consortium                                   consortium;
-    private final AtomicLong                           currentConsensus = new AtomicLong(-1);
-    private CompletableFuture<SynchronizedState>       futureBootstrap;
-    private ScheduledFuture<?>                         futureSynchronization;
-    private final AtomicReference<HashedBlock>         lastBlock        = new AtomicReference<>();
-    private final ProcessedBuffer                      processed;
-    private final Regency                              regency          = new Regency();
-    private final AtomicBoolean                        synchronizing    = new AtomicBoolean(false);
-    private final Map<Timers, Timer>                   timers           = new ConcurrentHashMap<>();
-    private final Map<HashKey, EnqueuedTransaction>    toOrder          = new ConcurrentHashMap<>();
-    private final Map<HashKey, CertifiedBlock.Builder> workingBlocks    = new ConcurrentHashMap<>();
+    final Consortium                                  consortium;
+    private final AtomicLong                          currentConsensus = new AtomicLong(-1);
+    private CompletableFuture<SynchronizedState>      futureBootstrap;
+    private ScheduledFuture<?>                        futureSynchronization;
+    private final AtomicReference<HashedBlock>        lastBlock        = new AtomicReference<>();
+    private final ProcessedBuffer                     processed;
+    private final Regency                             regency          = new Regency();
+    private final AtomicBoolean                       synchronizing    = new AtomicBoolean(false);
+    private final Map<Timers, Timer>                  timers           = new ConcurrentHashMap<>();
+    private final Map<Digest, EnqueuedTransaction>    toOrder          = new ConcurrentHashMap<>();
+    private final Map<Digest, CertifiedBlock.Builder> workingBlocks    = new ConcurrentHashMap<>();
 
     CollaboratorContext(Consortium consortium) {
         this.consortium = consortium;
@@ -316,7 +315,7 @@ public class CollaboratorContext implements Collaborator {
             deliverCheckpointBlock(block, from);
             return;
         }
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        Digest hash = digestAlgo().digest(block.toByteString());
         Builder cb = workingBlocks.get(hash);
         if (cb == null) {
             log.debug("Delivering block: {} from: {} on: {}", hash, from, getMember());
@@ -373,14 +372,14 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public void deliverValidate(Validate v) {
-        HashKey hash = new HashKey(v.getHash());
+        Digest hash = new Digest(v.getHash());
         CertifiedBlock.Builder certifiedBlock = workingBlocks.get(hash);
         if (certifiedBlock == null) {
             log.trace("No working block to validate: {} on: {}", hash, consortium.getMember());
             return;
         }
         log.debug("Delivering validate: {} on: {}", hash, consortium.getMember());
-        HashKey memberID = new HashKey(v.getId());
+        Digest memberID = new Digest(v.getId());
         if (consortium.view.getContext().validate(certifiedBlock.getBlock(), v)) {
             certifiedBlock.addCertifications(Certification.newBuilder()
                                                           .setId(v.getId())
@@ -557,7 +556,7 @@ public class CollaboratorContext implements Collaborator {
 
     @Override
     public boolean receive(Transaction txn, boolean replicated) {
-        EnqueuedTransaction transaction = new EnqueuedTransaction(Consortium.hashOf(txn), txn);
+        EnqueuedTransaction transaction = new EnqueuedTransaction(Consortium.hashOf(digestAlgo(), txn), txn);
         if (processed.contains(transaction.hash)) {
             return false;
         }
@@ -571,7 +570,7 @@ public class CollaboratorContext implements Collaborator {
                     log.debug("Cannot deserialize join on: {}", consortium.getMember(), e);
                     return null;
                 }
-                HashKey memberID = new HashKey(join.getMember().getId());
+                Digest memberID = new Digest(join.getMember().getId());
                 log.trace("Join txn:{} received on: {} self join: {}", transaction.hash, consortium.getMember(),
                           consortium.getMember().getId().equals(memberID));
             } else {
@@ -676,7 +675,7 @@ public class CollaboratorContext implements Collaborator {
         long current = currentConsensus();
         log.trace("Attempting total ordering of working blocks: {} current consensus: {} on: {}", workingBlocks.size(),
                   current, consortium.getMember());
-        List<HashKey> published = new ArrayList<>();
+        List<Digest> published = new ArrayList<>();
         workingBlocks.entrySet()
                      .stream()
                      .filter(e -> e.getValue().getCertificationsCount() >= consortium.view.getContext().majority())
@@ -720,7 +719,7 @@ public class CollaboratorContext implements Collaborator {
         workingBlocks.clear();
     }
 
-    Map<HashKey, EnqueuedTransaction> getToOrder() {
+    Map<Digest, EnqueuedTransaction> getToOrder() {
         return toOrder;
     }
 
@@ -729,7 +728,7 @@ public class CollaboratorContext implements Collaborator {
         if (body == null) {
             return;
         }
-        HashKey hash = next.hash;
+        Digest hash = next.hash;
         CheckpointState checkpointState = checkpoint(body, next.height());
         if (checkpointState == null) {
             log.error("Cannot checkpoint: {} on: {}", hash, getMember());
@@ -781,7 +780,7 @@ public class CollaboratorContext implements Collaborator {
         TransactionExecutor exec = consortium.params.executor;
         exec.beginBlock(height, next.hash);
         body.getTransactionsList().forEach(txn -> {
-            HashKey hash = new HashKey(txn.getHash());
+            Digest hash = new Digest(txn.getHash());
             finalized(hash);
             SubmittedTransaction submitted = consortium.submitted.remove(hash);
             exec.execute(next.hash, txn, submitted == null ? null : submitted.onCompletion);
@@ -815,7 +814,7 @@ public class CollaboratorContext implements Collaborator {
                 .stream()
                 .sorted((a, b) -> Long.compare(height(a), height(b)))
                 .filter(cb -> height(cb) > currentHeight)
-                .map(cb -> new HashedCertifiedBlock(cb))
+                .map(cb -> new HashedCertifiedBlock(digestAlgo(), cb))
                 .forEach(cb -> {
                     workingBlocks.put(cb.hash, cb.block.toBuilder());
                     lastBlock(new HashedBlock(cb.hash, cb.block.getBlock()));
@@ -840,7 +839,7 @@ public class CollaboratorContext implements Collaborator {
     }
 
     private StopData buildStopData(int currentRegent) {
-        Map<HashKey, CertifiedBlock> decided;
+        Map<Digest, CertifiedBlock> decided;
         decided = workingBlocks.entrySet()
                                .stream()
                                .filter(e -> e.getValue().getCertificationsCount() >= consortium.view.getContext()
@@ -860,9 +859,9 @@ public class CollaboratorContext implements Collaborator {
 
     private Sync buildSync(int elected, Map<Member, StopData> regencyData) {
         List<CertifiedBlock> blocks = new ArrayList<>();
-        Map<HashKey, CertifiedBlock> hashed = new HashMap<>();
+        Map<Digest, CertifiedBlock> hashed = new HashMap<>();
         regencyData.values().stream().flatMap(sd -> sd.getBlocksList().stream()).forEach(cb -> {
-            hashed.put(new HashKey(Conversion.hashOf(cb.getBlock().toByteString())), cb);
+            hashed.put(digestAlgo().digest(cb.getBlock().toByteString()), cb);
         });
         List<Long> gaps = noGaps(hashed, store().hashes());
         if (!gaps.isEmpty()) {
@@ -895,13 +894,13 @@ public class CollaboratorContext implements Collaborator {
     }
 
     private CheckpointState checkpoint(Checkpoint body, long height) {
-        HashKey stateHash;
+        Digest stateHash;
         CheckpointState checkpoint = consortium.getChekpoint(height);
-        HashKey bsh = new HashKey(body.getStateHash());
+        Digest bsh = new Digest(body.getStateHash());
         if (checkpoint != null) {
             if (!body.getStateHash().equals(checkpoint.checkpoint.getStateHash())) {
                 log.error("Invalid checkpoint state hash: {} does not equal recorded: {} on: {}",
-                          new HashKey(checkpoint.checkpoint.getStateHash()), bsh, getMember());
+                          new Digest(checkpoint.checkpoint.getStateHash()), bsh, getMember());
                 return null;
             }
         } else {
@@ -911,7 +910,7 @@ public class CollaboratorContext implements Collaborator {
                 return null;
             }
             try (FileInputStream fis = new FileInputStream(state)) {
-                stateHash = new HashKey(Conversion.hashOf(fis));
+                stateHash = digestAlgo().digest(fis);
             } catch (IOException e) {
                 log.error("Invalid checkpoint!", e);
                 return null;
@@ -943,7 +942,7 @@ public class CollaboratorContext implements Collaborator {
             log.debug("Ignoring checkpoint block from non regent: {} actual: {} on: {}", from, regent, getMember());
             return;
         }
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        Digest hash = digestAlgo().digest(block.toByteString());
         Checkpoint body = checkpointBody(block);
         if (body == null) {
             log.debug("Ignoring checkpoint invalid checkpoint body of block from: {} on: {}", from, regent,
@@ -959,7 +958,7 @@ public class CollaboratorContext implements Collaborator {
     }
 
     private void deliverGenesisBlock(final Block block, Member from) {
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        Digest hash = digestAlgo().digest(block.toByteString());
         long height = height(block);
         if (height != 0) {
             log.debug("Rejecting genesis block proposal: {} height: {} from {}, not block height 0", hash, height,
@@ -985,7 +984,7 @@ public class CollaboratorContext implements Collaborator {
                 log.error("Cannot validate generated genesis: {} on: {}", hash, consortium.getMember());
                 return;
             }
-            lastBlock(new HashedBlock(block));
+            lastBlock(new HashedBlock(digestAlgo(), block));
             consortium.view.setContext(consortium.view.getContext().cloneWith(genesis.getInitialView().getViewList()));
             consortium.view.publish(validation);
             workingBlocks.put(hash,
@@ -997,7 +996,11 @@ public class CollaboratorContext implements Collaborator {
         }
     }
 
-    private void finalized(HashKey hash) {
+    private DigestAlgorithm digestAlgo() {
+        return consortium.params.digestAlgorithm;
+    }
+
+    private void finalized(Digest hash) {
         EnqueuedTransaction removed = toOrder.remove(hash);
         if (removed != null) {
             removed.cancel();
@@ -1041,7 +1044,7 @@ public class CollaboratorContext implements Collaborator {
             consortium.transitions.fail();
             return;
         }
-        Checkpoint checkpoint = checkpoint(state, consortium.params.checkpointBlockSize);
+        Checkpoint checkpoint = checkpoint(digestAlgo(), state, consortium.params.checkpointBlockSize);
         if (checkpoint == null) {
             consortium.transitions.fail();
         }
@@ -1054,10 +1057,10 @@ public class CollaboratorContext implements Collaborator {
             consortium.transitions.fail();
             return;
         }
-        Block block = generateBlock(consortium.getLastCheckpointBlock(), thisHeight, previous,
+        Block block = generateBlock(digestAlgo(), consortium.getLastCheckpointBlock(), thisHeight, previous,
                                     body(BodyType.CHECKPOINT, checkpoint), consortium.getLastViewChangeBlock());
 
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        Digest hash = digestAlgo().digest(block.toByteString());
 
         CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
                                                                                                 .setBlock(block));
@@ -1065,7 +1068,7 @@ public class CollaboratorContext implements Collaborator {
         Validate validation = consortium.view.getContext().generateValidation(hash, block);
         if (validation == null) {
             log.debug("Cannot generate validation for block: {} hash: {} segements: {} on: {}", hash,
-                      new HashKey(checkpoint.getStateHash()), checkpoint.getSegmentsCount(), consortium.getMember());
+                      new Digest(checkpoint.getStateHash()), checkpoint.getSegmentsCount(), consortium.getMember());
             consortium.transitions.fail();
             cancel(Timers.CHECKPOINTING);
             return;
@@ -1114,9 +1117,9 @@ public class CollaboratorContext implements Collaborator {
             b.append("\n");
             for (ViewMember vm : genesisView.getViewList()) {
                 b.append("view member: ");
-                b.append(new HashKey(vm.getId()));
+                b.append(new Digest(vm.getId()));
                 b.append(" key: ");
-                b.append(new HashKey(Conversion.hashOf(vm.getConsensusKey())));
+                b.append(digestAlgo().digest(vm.getConsensusKey()));
                 b.append("\n");
             }
             log.trace("genesis view {}", b.toString());
@@ -1131,7 +1134,7 @@ public class CollaboratorContext implements Collaborator {
                                                 .setInitialView(genesisView)
                                                 .build()),
                                     consortium.getLastViewChangeBlock());
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        Digest hash = digestAlgo().digest(block.toByteString());
         log.info("Genesis block: {} generated on {}", hash, consortium.getMember());
         Builder cb = workingBlocks.get(hash);
         if (cb == null) {
@@ -1188,7 +1191,7 @@ public class CollaboratorContext implements Collaborator {
             return false;
         }
         User.Builder user = User.newBuilder();
-        List<HashKey> processed = new ArrayList<>();
+        List<Digest> processed = new ArrayList<>();
 
         batch.forEach(eqt -> {
             user.addTransactions(ExecutedTransaction.newBuilder()
@@ -1204,9 +1207,9 @@ public class CollaboratorContext implements Collaborator {
         log.debug("Generating next block on: {} height: {} transactions: {}", consortium.getMember(), thisHeight,
                   processed.size());
 
-        Block block = generateBlock(consortium.getLastCheckpointBlock(), thisHeight, curr,
+        Block block = generateBlock(digestAlgo(), consortium.getLastCheckpointBlock(), thisHeight, curr,
                                     body(BodyType.USER, user.build()), consortium.getLastViewChangeBlock());
-        HashKey hash = new HashKey(Conversion.hashOf(block.toByteString()));
+        Digest hash = digestAlgo().digest(block.toByteString());
 
         CertifiedBlock.Builder builder = workingBlocks.computeIfAbsent(hash, k -> CertifiedBlock.newBuilder()
                                                                                                 .setBlock(block));
@@ -1326,7 +1329,7 @@ public class CollaboratorContext implements Collaborator {
                 }
                 JoinTransaction joinTxn = txn.build();
 
-                HashKey txnHash = consortium.submit(null, true, null, joinTxn);
+                Digest txnHash = consortium.submit(null, true, null, joinTxn);
                 log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash,
                           consortium.view.getContext().getId(), consortium.params.member);
             }
@@ -1372,7 +1375,7 @@ public class CollaboratorContext implements Collaborator {
 
     private void processToOrder(List<ExecutedTransaction> transactions) {
         transactions.forEach(et -> {
-            HashKey hash = new HashKey(et.getHash());
+            Digest hash = new Digest(et.getHash());
             EnqueuedTransaction p = toOrder.remove(hash);
             if (p != null) {
                 p.cancel();
@@ -1382,11 +1385,11 @@ public class CollaboratorContext implements Collaborator {
     }
 
     private void reduceJoinTransactions() {
-        Map<HashKey, EnqueuedTransaction> reduced = new HashMap<>(); // Member ID -> join txn
+        Map<Digest, EnqueuedTransaction> reduced = new HashMap<>(); // Member ID -> join txn
         toOrder.forEach((h, eqt) -> {
             try {
                 JoinTransaction join = eqt.transaction.getTxn().unpack(JoinTransaction.class);
-                EnqueuedTransaction prev = reduced.put(new HashKey(join.getMember().getId()), eqt);
+                EnqueuedTransaction prev = reduced.put(new Digest(join.getMember().getId()), eqt);
                 if (prev != null) {
                     prev.cancel();
                 }
@@ -1496,7 +1499,7 @@ public class CollaboratorContext implements Collaborator {
     }
 
     private boolean selfJoinRecorded() {
-        HashKey id = consortium.getMember().getId();
+        Digest id = consortium.getMember().getId();
         return toOrder.values().stream().map(eqt -> eqt.transaction).map(t -> {
             try {
                 return t.getTxn().unpack(JoinTransaction.class);
@@ -1504,7 +1507,7 @@ public class CollaboratorContext implements Collaborator {
                 log.error("Cannot generate genesis, unable to parse Join txn on: {}", consortium.getMember());
                 return null;
             }
-        }).filter(jt -> jt != null).anyMatch(jt -> id.equals(new HashKey(jt.getMember().getId())));
+        }).filter(jt -> jt != null).anyMatch(jt -> id.equals(new Digest(jt.getMember().getId())));
     }
 
     private Store store() {
@@ -1548,7 +1551,7 @@ public class CollaboratorContext implements Collaborator {
         return body;
     }
 
-    private void validateCheckpoint(HashKey hash, Block block, Member from) {
+    private void validateCheckpoint(Digest hash, Block block, Member from) {
         Checkpoint checkpoint = checkpointBody(block);
 
         HashedCertifiedBlock current = consortium.getCurrent();

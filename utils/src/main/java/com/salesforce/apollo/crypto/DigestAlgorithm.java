@@ -264,6 +264,10 @@ public enum DigestAlgorithm {
         return new Digest(this, hashOf(bytes));
     }
 
+    public Digest digest(byte[] buff, int length) {
+        return new Digest(this, hashOf(buff, length));
+    }
+
     public Digest digest(ByteBuffer... buffers) {
         return new Digest(this, hashOf(buffers));
     }

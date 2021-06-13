@@ -86,6 +86,14 @@ public class Digest implements Comparable<Digest> {
         }
     }
 
+    public Digest(DigestAlgorithm algo, long[] hash) {
+        if (hash.length != algo.longLength()) {
+            throw new IllegalArgumentException("hash length incorrect for algorithm");
+        }
+        algorithm = algo;
+        this.hash = hash;
+    }
+
     @Override
     public int compareTo(Digest id) {
         for (int i = 0; i < hash.length; i++) {

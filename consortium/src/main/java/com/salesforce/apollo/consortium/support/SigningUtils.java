@@ -32,11 +32,10 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.Certification;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.Member;
 import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -86,7 +85,7 @@ public final class SigningUtils {
         try {
             return KEY_FACTORY.generatePublic(new X509EncodedKeySpec(encoded));
         } catch (InvalidKeySpecException e) {
-            log.error("Cannot decode public key: " + HashKey.bytesToHex(encoded), e);
+            log.error("Cannot decode public key: " + Digest.bytesToHex(encoded), e);
             return null;
         }
     }
@@ -145,11 +144,11 @@ public final class SigningUtils {
         return signature;
     }
 
-    public static boolean validateGenesis(HashKey hash, CertifiedBlock block, Reconfigure initialView,
+    public static boolean validateGenesis(Digest hash, CertifiedBlock block, Reconfigure initialView,
                                           Context<Member> context, int majority, Member node) {
-        Map<HashKey, Supplier<Signature>> signatures = new HashMap<>();
+        Map<Digest, Supplier<Signature>> signatures = new HashMap<>();
         initialView.getViewList().forEach(vm -> {
-            HashKey memberID = new HashKey(vm.getId());
+            Digest memberID = new Digest(vm.getId());
             Member member = context.getMember(memberID);
             byte[] encoded = vm.getConsensusKey().toByteArray();
             if (!verify(encoded, vm.getSignature().toByteArray(),
@@ -163,7 +162,7 @@ public final class SigningUtils {
                 log.warn("Could not deserialize consensus key for {}", memberID);
             }
         });
-        Function<HashKey, Signature> validators = h -> {
+        Function<Digest, Signature> validators = h -> {
             Supplier<Signature> signature = signatures.get(h);
             return signature == null ? null : signature.get();
         };
@@ -177,8 +176,8 @@ public final class SigningUtils {
         return certifiedCount >= majority;
     }
 
-    public static boolean verify(Function<HashKey, Signature> validators, Block block, Certification c) {
-        HashKey memberID = new HashKey(c.getId());
+    public static boolean verify(Function<Digest, Signature> validators, Block block, Certification c) {
+        Digest memberID = new Digest(c.getId());
 
         Signature signature = validators.apply(memberID);
         if (signature == null) {
