@@ -55,10 +55,10 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -174,7 +174,7 @@ public class Avalanche {
     private final WorkingSet                                     dag;
     private final int                                            invalidThreshold;
     private final AvalancheMetrics                               metrics;
-    private final Node                                           node;
+    private final SigningMember                                  node;
     private final AvalancheParameters                            parameters;
     private final BlockingDeque<Digest>                          parentSample = new LinkedBlockingDeque<>();
     private final Processor                                      processor;
@@ -186,8 +186,9 @@ public class Avalanche {
     private volatile ScheduledFuture<?>                          scheduledNoOpsCull;
     private final Service                                        service      = new Service();
 
-    public Avalanche(Node node, Context<? extends Member> context, Router communications, AvalancheParameters p,
-            AvalancheMetrics metrics, Processor processor, MVStore store, Executor queryExecutor) {
+    public Avalanche(SigningMember node, Context<? extends Member> context, Router communications,
+            AvalancheParameters p, AvalancheMetrics metrics, Processor processor, MVStore store,
+            Executor queryExecutor) {
         this.metrics = metrics;
         parameters = p;
         this.node = node;
@@ -225,7 +226,7 @@ public class Avalanche {
         return new DagDao(dag);
     }
 
-    public Node getNode() {
+    public SigningMember getNode() {
         return node;
     }
 

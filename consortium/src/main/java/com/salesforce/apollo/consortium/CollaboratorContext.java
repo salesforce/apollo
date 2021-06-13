@@ -147,7 +147,7 @@ public class CollaboratorContext implements Collaborator {
     }
 
     public static Block generateBlock(DigestAlgorithm algo, HashedCertifiedBlock checkpoint, final long height,
-                                      byte[] previous, Body body, HashedCertifiedBlock viewChange) {
+                                      Digest curr, Body body, HashedCertifiedBlock viewChange) {
         Instant time = Instant.now();
         Timestamp timestamp = Timestamp.newBuilder().setSeconds(time.getEpochSecond()).setNanos(time.getNano()).build();
         byte[] nonce = new byte[32];
@@ -164,7 +164,7 @@ public class CollaboratorContext implements Collaborator {
                                             .setLastCheckpointHash(checkpointHash.toByteString())
                                             .setLastReconfig(viewChangeHeight)
                                             .setLastReconfigHash(viewChangeHash.toByteString())
-                                            .setPrevious(ByteString.copyFrom(previous))
+                                            .setPrevious(curr.toByteString())
                                             .setHeight(height)
                                             .setBodyHash(algo.digest(body.toByteString()).toByteString())
                                             .build())
@@ -394,9 +394,10 @@ public class CollaboratorContext implements Collaborator {
     @Override
     public void establishGenesisView() {
         ViewContext current = consortium.view.getContext();
-        if (current == null || !current.getId().equals(consortium.params.genesisViewId)) {
-            current = new ViewContext(consortium.params.genesisViewId, consortium.params.context,
-                    consortium.getMember(), this.consortium.view.nextViewConsensusKey(), Collections.emptyList());
+        Parameters params = consortium.params;
+        if (current == null || !current.getId().equals(params.genesisViewId)) {
+            current = new ViewContext(params.digestAlgorithm, params.genesisViewId, params.context, params.member,
+                    this.consortium.view.nextViewConsensusKey(), Collections.emptyList());
             current.activeAll();
             consortium.view.viewChange(current, consortium.scheduler, 0, true);
         }
@@ -492,8 +493,7 @@ public class CollaboratorContext implements Collaborator {
                   consortium.params.member);
 
         Join voteForMe = Join.newBuilder()
-                             .setMember(consortium.getCurrent() == null
-                                     ? consortium.view.getContext().getView(consortium.params.signature.get())
+                             .setMember(consortium.getCurrent() == null ? consortium.view.getContext().getView()
                                      : consortium.view.getNextView())
                              .setContext(consortium.view.getContext().getId().toByteString())
                              .build();
@@ -797,7 +797,8 @@ public class CollaboratorContext implements Collaborator {
     void reconfigureView(HashedCertifiedBlock block, Reconfigure view, boolean genesis, boolean resume) {
         this.consortium.view.pause();
         consortium.setLastViewChange(block, view);
-        ViewContext newView = new ViewContext(view, consortium.params.context, consortium.getMember(),
+        Parameters params = consortium.params;
+        ViewContext newView = new ViewContext(params.digestAlgorithm, view, params.context, consortium.getMember(),
                 genesis ? this.consortium.view.getContext().getConsensusKey()
                         : this.consortium.view.nextViewConsensusKey());
         int current = genesis ? 2 : 0;
@@ -1050,7 +1051,7 @@ public class CollaboratorContext implements Collaborator {
         }
 
         HashedBlock lb = lastBlock.get();
-        byte[] previous = lb == null ? null : lb.hash.bytes();
+        Digest previous = lb == null ? null : lb.hash;
         if (previous == null) {
             log.error("Cannot generate checkpoint block on: {} height: {} no previous block: {}",
                       consortium.getMember(), currentHeight, lastBlock());
@@ -1090,9 +1091,10 @@ public class CollaboratorContext implements Collaborator {
         log.debug("Generating genesis on {} join transactions: {}", consortium.getMember(), toOrder.size());
         byte[] nextView = new byte[32];
         Utils.secureEntropy().nextBytes(nextView);
+        Parameters params = consortium.params;
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
-                                                     .setCheckpointBlocks(consortium.params.deltaCheckpointBlocks)
-                                                     .setId(ByteString.copyFrom(nextView))
+                                                     .setCheckpointBlocks(params.deltaCheckpointBlocks)
+                                                     .setId(new Digest(digestAlgo(), nextView).toByteString())
                                                      .setTolerance(consortium.view.getContext().majority());
         toOrder.values().forEach(join -> {
             JoinTransaction txn;
@@ -1126,11 +1128,11 @@ public class CollaboratorContext implements Collaborator {
         }
         toOrder.values().forEach(e -> e.cancel());
         toOrder.clear();
-        Block block = generateBlock(consortium.getLastCheckpointBlock(), (long) 0,
-                                    consortium.params.genesisViewId.bytes(),
+        Block block = generateBlock(params.digestAlgorithm, consortium.getLastCheckpointBlock(), (long) 0,
+                                    params.genesisViewId,
                                     body(BodyType.GENESIS,
                                          Genesis.newBuilder()
-                                                .setGenesisData(Any.pack(consortium.params.genesisData))
+                                                .setGenesisData(Any.pack(params.genesisData))
                                                 .setInitialView(genesisView)
                                                 .build()),
                                     consortium.getLastViewChangeBlock());
@@ -1180,7 +1182,7 @@ public class CollaboratorContext implements Collaborator {
         final long currentHeight = lastBlock();
         final long thisHeight = currentHeight + 1;
         HashedBlock lb = lastBlock.get();
-        byte[] curr = lb == null ? null : lb.hash.bytes();
+        Digest curr = lb == null ? null : lb.hash;
         if (curr == null) {
             log.debug("Cannot generate next block: {} on: {}, as previous block for height: {} not found", thisHeight,
                       consortium.getMember(), currentHeight);

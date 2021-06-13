@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.consortium;
 
-import static com.salesforce.apollo.consortium.support.SigningUtils.generateKeyPair;
-import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
-
 import java.security.KeyPair;
 import java.time.Duration;
 import java.util.List;
@@ -30,6 +27,7 @@ import com.salesforce.apollo.consortium.comms.LinearServer;
 import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
@@ -99,10 +97,10 @@ public class View {
     public KeyPair nextViewConsensusKey() {
         KeyPair current = nextViewConsensusKeyPair.get();
 
-        KeyPair keyPair = generateKeyPair(2048, "RSA");
+        KeyPair keyPair = params.signatureAlgorithm.generateKeyPair();
         nextViewConsensusKeyPair.set(keyPair);
         byte[] encoded = keyPair.getPublic().getEncoded();
-        byte[] signed = sign(params.signature.get(), encoded);
+        JohnHancock signed = params.member.sign(encoded);
         if (signed == null) {
             log.error("Unable to generate and sign consensus key on: {}", params.member);
             return null;
@@ -110,7 +108,7 @@ public class View {
         nextView.set(ViewMember.newBuilder()
                                .setId(params.member.getId().toByteString())
                                .setConsensusKey(ByteString.copyFrom(encoded))
-                               .setSignature(ByteString.copyFrom(signed))
+                               .setSignature(signed.toByteString())
                                .build());
         if (log.isTraceEnabled()) {
             log.trace("Generating next view consensus key current: {} next: {} on: {}",

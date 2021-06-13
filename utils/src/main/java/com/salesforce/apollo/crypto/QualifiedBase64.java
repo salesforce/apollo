@@ -92,8 +92,9 @@ public class QualifiedBase64 {
     public static ByteString bs(PublicKey publicKey) {
         var stdAlgo = SignatureAlgorithm.lookup(publicKey);
         try {
-            return ByteString.readFrom(BbBackedInputStream.aggregate(new byte[] { stdAlgo.signatureCode() },
-                                                                     stdAlgo.encode(publicKey)));
+            ByteString bs = ByteString.readFrom(BbBackedInputStream.aggregate(new byte[] { stdAlgo.signatureCode() },
+                                                                              stdAlgo.encode(publicKey)));
+            return bs;
         } catch (IOException e) {
             throw new IllegalArgumentException("cannot encode public key", e);
         }
@@ -157,6 +158,17 @@ public class QualifiedBase64 {
         };
     }
 
+    public static PublicKey publicKey(ByteBuffer buff) {
+        var algo = SignatureAlgorithm.fromSignatureCode(buff.get());
+        var bytes = new byte[buff.remaining()];
+        buff.get(bytes);
+        return algo.publicKey(bytes);
+    }
+
+    public static PublicKey publicKey(ByteString bs) {
+        return publicKey(bs.asReadOnlyByteBuffer());
+    }
+
     public static PublicKey publicKey(String qb64) {
         if (qb64.startsWith("1")) {
             var bytes = unbase64(qb64.substring(4));
@@ -192,13 +204,6 @@ public class QualifiedBase64 {
         case ED_448 -> "1AAD";
         default -> throw new IllegalArgumentException("Unexpected value: " + a);
         };
-    }
-
-    public static PublicKey publicKeyFrom(ByteBuffer buff) {
-        var algo = SignatureAlgorithm.fromSignatureCode(buff.get());
-        var bytes = new byte[algo.signatureLength()];
-        buff.get(bytes);
-        return algo.publicKey(bytes);
     }
 
     public static String qb64(Digest d) {

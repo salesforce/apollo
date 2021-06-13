@@ -51,15 +51,16 @@ import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
 import com.salesforce.apollo.consortium.support.CheckpointAssembler;
 import com.salesforce.apollo.consortium.support.CheckpointState;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.Member;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 
 /**
  * @author hal.hildebrand
@@ -67,15 +68,18 @@ import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
  */
 public class CheckpointAssemblerTest {
 
-    private static final int                               BLOCK_SIZE = 256;
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static final int                              BLOCK_SIZE = 256;
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+
+    private static final int CARDINALITY = 10;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 11)
+        certs = IntStream.range(0, CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Conversion.getMemberId(cert.getX509Certificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     private CompletableFuture<CheckpointState> assembled;
@@ -107,18 +111,22 @@ public class CheckpointAssemblerTest {
             gos.close();
         }
 
-        Context<Member> context = new Context<>(HashKey.ORIGIN);
-        List<Member> members = certs.values()
-                                    .stream()
-                                    .map(c -> new Member(c.getX509Certificate()))
-                                    .peek(m -> context.activate(m))
-                                    .collect(Collectors.toList());
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin());
+        List<SigningMember> members = certs.values()
+                                           .stream()
+                                           .map(c -> new SigningMemberImpl(
+                                                   Member.getMemberIdentifier(c.getX509Certificate()),
+                                                   c.getX509Certificate(), c.getPrivateKey(),
+                                                   new Signer(0, c.getPrivateKey()),
+                                                   c.getX509Certificate().getPublicKey()))
+                                           .peek(m -> context.activate(m))
+                                           .collect(Collectors.toList());
 
-        Checkpoint checkpoint = CollaboratorContext.checkpoint(chkptFile, BLOCK_SIZE);
+        Checkpoint checkpoint = CollaboratorContext.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, BLOCK_SIZE);
 
-        Member bootstrapping = members.get(0);
+        SigningMember bootstrapping = members.get(0);
 
-        Store store1 = new Store(new MVStore.Builder().open());
+        Store store1 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         CheckpointState state = new CheckpointState(checkpoint, store1.putCheckpoint(0, chkptFile, checkpoint));
 
         File testFile = File.createTempFile("test-", "chkpt", checkpointDir);
@@ -126,10 +134,10 @@ public class CheckpointAssemblerTest {
         state.assemble(testFile);
 
         ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
-        HashKey originalHash = new HashKey(Conversion.hashOf(bais));
-        HashKey assembledHash;
+        Digest originalHash = DigestAlgorithm.DEFAULT.digest(bais);
+        Digest assembledHash;
         try (FileInputStream fis = new FileInputStream(testFile)) {
-            assembledHash = new HashKey(Conversion.hashOf(fis));
+            assembledHash = DigestAlgorithm.DEFAULT.digest(fis);
         }
 
         assertEquals(originalHash, assembledHash);
@@ -150,8 +158,9 @@ public class CheckpointAssemblerTest {
         CommonCommunications<BootstrapClient, BootstrappingService> comm = mock(CommonCommunications.class);
         when(comm.apply(any(), any())).thenReturn(client);
 
-        Store store2 = new Store(new MVStore.Builder().open());
-        CheckpointAssembler boot = new CheckpointAssembler(0, checkpoint, bootstrapping, store2, comm, context, 0.125);
+        Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
+        CheckpointAssembler boot = new CheckpointAssembler(0, checkpoint, bootstrapping, store2, comm, context, 0.00125,
+                DigestAlgorithm.DEFAULT);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10));

@@ -6,15 +6,15 @@
  */
 package com.salesforce.apollo.consortium;
 
-import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
-import static com.salesforce.apollo.consortium.support.SigningUtils.validateGenesis;
-import static com.salesforce.apollo.consortium.support.SigningUtils.verify;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.PublicKey;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.zip.DeflaterInputStream;
 import java.util.zip.InflaterInputStream;
@@ -76,13 +77,15 @@ import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
-import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.BloomFilter;
@@ -209,22 +212,23 @@ public class Consortium {
                         return JoinResult.getDefaultInstance();
                     }
                     ViewMember member = request.getMember();
-                    byte[] encoded = member.getConsensusKey().toByteArray();
-                    if (!verify(encoded, member.getSignature().toByteArray(), from)) {
+                    ByteString encoded = member.getConsensusKey();
+
+                    if (!from.verify(signature(member.getSignature()), encoded)) {
                         log.debug("Could not verify consensus key from {} on {}", fromID, getMember());
                     }
-                    PublicKey consensusKey = SigningUtils.publicKeyOf(encoded);
+                    PublicKey consensusKey = publicKey(encoded);
                     if (consensusKey == null) {
                         log.debug("Could not deserialize consensus key from {} on {}", fromID, getMember());
                         return JoinResult.getDefaultInstance();
                     }
-                    byte[] signed = sign(params.signature.get(), encoded);
+                    JohnHancock signed = params.member.sign(encoded);
                     if (signed == null) {
                         log.debug("Could not sign consensus key from {} on {}", fromID, getMember());
                         return JoinResult.getDefaultInstance();
                     }
                     return JoinResult.newBuilder()
-                                     .setSignature(ByteString.copyFrom(signed))
+                                     .setSignature(signed.toByteString())
                                      .setNextView(view.getNextView())
                                      .build();
                 });
@@ -431,7 +435,7 @@ public class Consortium {
         return log;
     }
 
-    public Member getMember() {
+    public SigningMember getMember() {
         return params.member;
     }
 
@@ -705,12 +709,12 @@ public class Consortium {
         builder.setTxn(Any.pack(transaction));
 
         Digest hash = hashOf(params.digestAlgorithm, builder);
+        JohnHancock signature = params.member.sign(hash.toByteString());
 
-        byte[] signature = sign(params.signature.get(), hash.bytes());
         if (signature == null) {
             throw new IllegalStateException("Unable to sign transaction batch on: " + getMember());
         }
-        builder.setSignature(ByteString.copyFrom(signature));
+        builder.setSignature(signature.toByteString());
         return new EnqueuedTransaction(hash, builder.build());
     }
 
@@ -962,5 +966,37 @@ public class Consortium {
                 }, params.dispatcher);
             }
         });
+    }
+
+    private boolean validateGenesis(Digest hash, CertifiedBlock block, Reconfigure initialView, Context<Member> context,
+                                    int majority, Member node) {
+        Digest headerHash = params.digestAlgorithm.digest(block.getBlock().getHeader().toByteString());
+        Map<Digest, BiFunction<JohnHancock, Digest, Boolean>> validators = new HashMap<>();
+        initialView.getViewList().forEach(vm -> {
+            Digest memberID = new Digest(vm.getId());
+            Member member = context.getMember(memberID);
+            ByteString encoded = vm.getConsensusKey();
+
+            if (!member.verify(signature(vm.getSignature()), encoded)) {
+                log.warn("Could not validate consensus key for {}", memberID);
+            }
+            PublicKey cKey = publicKey(encoded);
+            if (cKey != null) {
+                validators.put(memberID,
+                               (signature, h) -> SignatureAlgorithm.lookup(cKey)
+                                                                   .verify(cKey, signature, h.toByteString()));
+            } else {
+                log.warn("Could not deserialize consensus key for {}", memberID);
+            }
+        });
+        long certifiedCount = block.getCertificationsList()
+                                   .parallelStream()
+                                   .filter(c -> validators.get(digest(c.getId()))
+                                                          .apply(signature(c.getSignature()), headerHash))
+                                   .count();
+
+        log.debug("Certified: {} required: {} provided: {} for genesis: {} on: {}", certifiedCount, majority,
+                  validators.size(), hash, node);
+        return certifiedCount >= majority;
     }
 }

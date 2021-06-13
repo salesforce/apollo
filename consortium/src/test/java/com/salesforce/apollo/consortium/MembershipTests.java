@@ -43,49 +43,51 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
-import com.salesforce.apollo.consortium.support.SigningUtils;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.Member;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.utils.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class MembershipTests {
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static Map<Digest, CertificateWithPrivateKey> certs;
 
     private static final Message GENESIS_DATA = ByteMessage.newBuilder()
                                                            .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                            .build();
 
-    private static final HashKey GENESIS_VIEW_ID = new HashKey(
-            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
+    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+
+    private static final int CARDINALITY = 10;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 11)
+        certs = IntStream.range(0, CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Conversion.getMemberId(cert.getX509Certificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
-    private Map<HashKey, Router>          communications = new ConcurrentHashMap<>();
+    private Map<Digest, Router>           communications = new ConcurrentHashMap<>();
     private final Map<Member, Consortium> consortium     = new ConcurrentHashMap<>();
     private Context<Member>               context;
-    private List<Member>                  members;
+    private List<SigningMember>           members;
     private int                           testCardinality;
 
     @AfterEach
@@ -99,11 +101,13 @@ public class MembershipTests {
     @BeforeEach
     public void before() {
 
-        context = new Context<>(HashKey.ORIGIN, 3);
+        context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 3);
 
         members = certs.values()
                        .stream()
-                       .map(c -> new Member(c.getX509Certificate()))
+                       .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),
+                               c.getX509Certificate(), c.getPrivateKey(), new Signer(0, c.getPrivateKey()),
+                               c.getX509Certificate().getPublicKey()))
                        .peek(m -> context.activate(m))
                        .collect(Collectors.toList());
         ForkJoinPool executor = ForkJoinPool.commonPool();
@@ -150,11 +154,11 @@ public class MembershipTests {
         Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
         int bunchCount = 500;
         System.out.println("Awaiting " + bunchCount + " transactions");
-        ArrayList<HashKey> submitted = new ArrayList<>();
+        ArrayList<Digest> submitted = new ArrayList<>();
         final CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            AtomicReference<HashKey> pending = new AtomicReference<>();
+            AtomicReference<Digest> pending = new AtomicReference<>();
             pending.set(client.submit(null, (h, t) -> {
                 outstanding.release();
                 submitted.remove(pending.get());
@@ -175,7 +179,7 @@ public class MembershipTests {
         final CountDownLatch nextBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            AtomicReference<HashKey> pending = new AtomicReference<>();
+            AtomicReference<Digest> pending = new AtomicReference<>();
             pending.set(client.submit(null, (h, t) -> {
                 outstanding.release();
                 submitted.remove(pending.get());
@@ -233,11 +237,11 @@ public class MembershipTests {
         Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
         int bunchCount = 150;
         System.out.println("Awaiting " + bunchCount + " transactions");
-        ArrayList<HashKey> submitted = new ArrayList<>();
+        ArrayList<Digest> submitted = new ArrayList<>();
         final CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            AtomicReference<HashKey> pending = new AtomicReference<>();
+            AtomicReference<Digest> pending = new AtomicReference<>();
             pending.set(client.submit(null, (h, t) -> {
                 outstanding.release();
                 submitted.remove(pending.get());
@@ -258,7 +262,7 @@ public class MembershipTests {
         final CountDownLatch nextBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            AtomicReference<HashKey> pending = new AtomicReference<>();
+            AtomicReference<Digest> pending = new AtomicReference<>();
             pending.set(client.submit(null, (h, t) -> {
                 outstanding.release();
                 submitted.remove(pending.get());
@@ -284,9 +288,9 @@ public class MembershipTests {
                                                                  .setBufferSize(1000)
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
-        Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus = (c, f) -> {
-            HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
+        Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
+            Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
                 cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
                     m.process(c);
@@ -297,7 +301,7 @@ public class MembershipTests {
         };
         TransactionExecutor executor = (h, et, c) -> {
             if (c != null) {
-                c.accept(new HashKey(et.getHash()), null);
+                c.accept(new Digest(et.getHash()), null);
             }
         };
         members.stream()
@@ -306,14 +310,12 @@ public class MembershipTests {
                .forEach(e -> consortium.put(e.getMember(), e));
     }
 
-    private Parameters parameters(Member m, BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus,
+    private Parameters parameters(SigningMember m, BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus,
                                   TransactionExecutor executor, Messenger.Parameters msgParameters,
                                   Duration gossipDuration) {
         return Parameters.newBuilder()
                          .setConsensus(consensus)
                          .setMember(m)
-                         .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
-                                                                     Utils.secureEntropy()))
                          .setContext(context)
                          .setMsgParameters(msgParameters)
                          .setMaxBatchByteSize(1024 * 1024)

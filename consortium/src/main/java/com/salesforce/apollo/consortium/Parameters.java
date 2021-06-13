@@ -7,7 +7,6 @@
 package com.salesforce.apollo.consortium;
 
 import java.io.File;
-import java.security.Signature;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -17,7 +16,6 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import com.google.common.base.Supplier;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.comm.Router;
@@ -64,7 +62,6 @@ public class Parameters {
                                                                                                   checkpointState) -> {
                                                                                                };
         private ScheduledExecutorService                                 scheduler;
-        private Supplier<Signature>                                      signature;
         private SignatureAlgorithm                                       signatureAlgorithm    = SignatureAlgorithm.DEFAULT;
         private File                                                     storeFile;
         private Duration                                                 submitTimeout         = Duration.ofSeconds(30);
@@ -73,12 +70,12 @@ public class Parameters {
         private Duration                                                 viewTimeout           = Duration.ofSeconds(60);
 
         public Parameters build() {
-            return new Parameters(context, communications, member, msgParameters, scheduler, signature, gossipDuration,
-                    consensus, maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, maxCheckpointSegments,
-                    viewTimeout, submitTimeout, processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks,
-                    executor, checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, initialViewTimeout,
-                    dispatcher, synchonrizeDuration, maxViewBlocks, maxSyncBlocks, synchronizeTimeout, restorer,
-                    signatureAlgorithm, digestAlgorithm);
+            return new Parameters(context, communications, member, msgParameters, scheduler, gossipDuration, consensus,
+                    maxBatchSize, maxBatchByteSize, maxBatchDelay, joinTimeout, maxCheckpointSegments, viewTimeout,
+                    submitTimeout, processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, executor,
+                    checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, initialViewTimeout, dispatcher,
+                    synchonrizeDuration, maxViewBlocks, maxSyncBlocks, synchronizeTimeout, restorer, signatureAlgorithm,
+                    digestAlgorithm);
         }
 
         public DigestAlgorithm getDigestAlgorithm() {
@@ -197,10 +194,6 @@ public class Parameters {
 
         public ScheduledExecutorService getScheduler() {
             return scheduler;
-        }
-
-        public Supplier<Signature> getSignature() {
-            return signature;
         }
 
         public File getStoreFile() {
@@ -353,11 +346,6 @@ public class Parameters {
             return this;
         }
 
-        public Parameters.Builder setSignature(Supplier<Signature> signature) {
-            this.signature = signature;
-            return this;
-        }
-
         public Builder setStoreFile(File storeFile) {
             this.storeFile = storeFile;
             return this;
@@ -422,7 +410,6 @@ public class Parameters {
     public final int                                                      processedBufferSize;
     public final BiConsumer<Long, CheckpointState>                        restorer;
     public final ScheduledExecutorService                                 scheduler;
-    public final Supplier<Signature>                                      signature;
     public final SignatureAlgorithm                                       signatureAlgorithm;
     public final File                                                     storeFile;
     public final Duration                                                 submitTimeout;
@@ -431,14 +418,14 @@ public class Parameters {
     public final Duration                                                 viewTimeout;
 
     public Parameters(Context<Member> context, Router communications, SigningMember member,
-            Messenger.Parameters msgParameters, ScheduledExecutorService scheduler, Supplier<Signature> signature,
-            Duration gossipDuration, BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus,
-            int maxBatchSize, int maxBatchByteSize, Duration maxBatchDelay, Duration joinTimeout,
-            int maxCheckpointSegments, Duration viewTimeout, Duration submitTimeout, int processedBufferSize,
-            Message genesisData, Digest genesisViewId, int maxCheckpointBlocks, TransactionExecutor executor,
-            Function<Long, File> checkpointer, int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize,
-            Duration initialViewTimeout, Executor dispatcher, Duration synchronizeDuration, int maxViewBlocks,
-            int maxSyncBlocks, Duration synchronizeTimeout, BiConsumer<Long, CheckpointState> restorer,
+            Messenger.Parameters msgParameters, ScheduledExecutorService scheduler, Duration gossipDuration,
+            BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus, int maxBatchSize, int maxBatchByteSize,
+            Duration maxBatchDelay, Duration joinTimeout, int maxCheckpointSegments, Duration viewTimeout,
+            Duration submitTimeout, int processedBufferSize, Message genesisData, Digest genesisViewId,
+            int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
+            int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Duration initialViewTimeout,
+            Executor dispatcher, Duration synchronizeDuration, int maxViewBlocks, int maxSyncBlocks,
+            Duration synchronizeTimeout, BiConsumer<Long, CheckpointState> restorer,
             SignatureAlgorithm signatureAlgorithm, DigestAlgorithm digestAlgorithm) {
         this.context = context;
         this.communications = communications;
@@ -449,7 +436,6 @@ public class Parameters {
         this.member = member;
         this.msgParameters = msgParameters;
         this.scheduler = scheduler;
-        this.signature = signature;
         this.gossipDuration = gossipDuration;
         this.consensus = consensus;
         this.maxBatchSize = maxBatchSize;
