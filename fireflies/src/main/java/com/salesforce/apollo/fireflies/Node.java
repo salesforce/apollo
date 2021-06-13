@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.fireflies.AccusationWrapper.forSigning;
 import static com.salesforce.apollo.fireflies.NoteWrapper.forSigning;
 import static com.salesforce.apollo.fireflies.View.isValidMask;
@@ -191,11 +190,11 @@ public class Node extends Participant implements SigningMember {
         note = new NoteWrapper(parameters.hashAlgorithm.digest(n.toByteString()), n);
     }
 
-    private String sign(AccusationOrBuilder builder) {
-        return qb64(wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))));
+    private ByteString sign(AccusationOrBuilder builder) {
+        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toByteString();
     }
 
-    private String sign(NoteOrBuilder builder) {
-        return qb64(wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))));
+    private ByteString sign(NoteOrBuilder builder) {
+        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toByteString();
     }
 }

@@ -44,14 +44,14 @@ message Accusation {
     bytes accuser = 3;
     bytes accused = 4;
     bytes content = 5;
-    string signature = 6;
+    bytes signature = 6;
 }
 
 message Note {
     int64 epoch = 1;
     bytes id = 2;
     bytes mask = 3;
-    string signature = 4;
+    bytes signature = 4;
 }
 
 message AccusationGossip {
