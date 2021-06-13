@@ -37,7 +37,7 @@ public class FfServer extends FirefliesImplBase {
 
     @Override
     public void gossip(SayWhat request, StreamObserver<Gossip> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
+        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Context timer = null;
             if (metrics != null) {
                 timer = metrics.inboundGossipTimer().time();
@@ -69,7 +69,7 @@ public class FfServer extends FirefliesImplBase {
 
     @Override
     public void ping(Null request, StreamObserver<Null> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
+        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             responseObserver.onNext(Null.getDefaultInstance());
             responseObserver.onCompleted();
             if (metrics != null) {
@@ -80,7 +80,7 @@ public class FfServer extends FirefliesImplBase {
 
     @Override
     public void update(State request, StreamObserver<Null> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
+        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Context timer = null;
             if (metrics != null) {
                 timer = metrics.inboundUpdateTimer().time();

@@ -23,8 +23,8 @@ import com.salesforce.apollo.crypto.JohnHancock;
 public class AccusationWrapper {
 
     public static ByteBuffer forSigning(AccusationOrBuilder accuse) {
-        byte[] accuser = accuse.getAccuser().getBytes();
-        byte[] accused = accuse.getAccused().getBytes();
+        byte[] accuser = accuse.getAccuser().toByteArray();
+        byte[] accused = accuse.getAccused().toByteArray();
         ByteBuffer accusation = ByteBuffer.allocate(8 + 4 + accuser.length + accused.length);
         accusation.putLong(accuse.getEpoch()).putInt(accuse.getRingNumber()).put(accuser).put(accused);
         accusation.flip();

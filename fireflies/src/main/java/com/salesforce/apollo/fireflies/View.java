@@ -7,7 +7,6 @@
 package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
 import java.io.ByteArrayInputStream;
@@ -760,7 +759,7 @@ public class View {
      */
     void addSeed(Participant seed) {
         Note seedNote = Note.newBuilder()
-                            .setId(qb64(seed.getId()))
+                            .setId(seed.getId().toByteString())
                             .setEpoch(-1)
                             .setMask(ByteString.copyFrom(Node.createInitialMask(getParameters().toleranceLevel,
                                                                                 Utils.secureEntropy())

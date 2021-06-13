@@ -209,7 +209,7 @@ public class Participant implements Member {
         NoteWrapper current = note;
         return current == null ? null
                 : EncodedCertificate.newBuilder()
-                                    .setId(qb64(getId()))
+                                    .setId(getId().toByteString())
                                     .setEpoch(current.getEpoch())
                                     .setHash(qb64(certificateHash))
                                     .setContent(ByteString.copyFrom(derEncodedCertificate))

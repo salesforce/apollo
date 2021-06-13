@@ -24,7 +24,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
 public class NoteWrapper {
 
     public static ByteBuffer forSigning(NoteOrBuilder n) {
-        byte[] id = n.getId().getBytes();
+        byte[] id = n.getId().toByteArray();
         byte[] mask = n.getMask().toByteArray();
         ByteBuffer note = ByteBuffer.allocate(8 + 4 + id.length + mask.length);
         note.putLong(n.getEpoch()).put(id).put(mask);

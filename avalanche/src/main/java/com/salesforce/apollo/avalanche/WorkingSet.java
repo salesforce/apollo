@@ -8,7 +8,6 @@
 package com.salesforce.apollo.avalanche;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.protocols.Conversion.manifestDag;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -45,6 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
@@ -834,7 +834,7 @@ public class WorkingSet {
                 return node.getEntry();
             }
             byte[] entry = finalized.get(key);
-            return entry == null ? null : manifestDag(entry);
+            return entry == null ? null : DagEntry.parseFrom(entry);
         });
     }
 
@@ -909,7 +909,12 @@ public class WorkingSet {
             Node node = read(() -> unfinalized.get(key));
             if (node == null || node.isUnknown()) {
                 ByteString t = transactions.get(i);
-                DagEntry entry = manifestDag(t);
+                DagEntry entry;
+                try {
+                    entry = DagEntry.parseFrom(t);
+                } catch (InvalidProtocolBufferException e) {
+                    throw new IllegalArgumentException("Cannot parse dag entry", e);
+                }
                 boolean isNoOp = entry.getDescription() == EntryType.NO_OP;
                 Digest conflictSet = isNoOp ? key : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
                                             : processor.validate(key, entry);

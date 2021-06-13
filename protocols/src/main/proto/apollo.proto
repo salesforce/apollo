@@ -7,18 +7,10 @@ option objc_class_prefix = "Ap";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 
-package apollo;
+package apollo; 
 
-service Avalanche {
-    /**
-     * Avalanche query
-     */
-    rpc query (Query) returns (QueryResult) {}
-    
-    /**
-     * parent gossip
-     */
-    rpc requestDag ( DagNodes ) returns (SuppliedDagNodes) {}
+service TestIt {
+    rpc ping ( google.protobuf.Any ) returns (google.protobuf.Any) {}
 }
 
 service Ghost {
@@ -26,33 +18,17 @@ service Ghost {
     /*
      * Ghost API
      */
-    rpc get ( Get ) returns (DagEntry) {}
-    rpc put ( ADagEntry ) returns (google.protobuf.Empty) {}
+    rpc get ( Get ) returns (google.protobuf.Any) {}
+    rpc put ( google.protobuf.Any ) returns (google.protobuf.Empty) {}
 
     /**
      * Ghost interval gossip
      */
-    rpc intervals (Intervals) returns (DagEntries) {} 
+    rpc intervals (Intervals) returns (Entries) {} 
 }
 
-message DagNodes {
-    string context = 1;
-    repeated string entries = 2;
-}
-
-message SuppliedDagNodes {
-    string context = 1;
-    repeated bytes entries = 2;
-}
-
-message DagEntries {
-    string context = 1;
-    repeated DagEntry entries = 2;
-} 
-
-message ADagEntry {
-    string context = 1;
-    DagEntry entry = 2;
+message Entries {
+    repeated google.protobuf.Any records = 1;
 }
 
 message Intervals {
@@ -61,41 +37,12 @@ message Intervals {
     repeated bytes have = 3;
 }
 
-message Query {
-    string context = 1;
-    repeated string hashes = 2;
-    repeated bytes transactions = 3;
-    repeated string wanted = 4;
-}
-
 message Get {
     string context = 1;
     string id = 2;
-}
-
-message DagEntry {
-    enum EntryType {
-        INVALID = 0;
-        GENSIS = 1; 
-        NO_OP = 2;
-        USER = 3;
-    } 
-    EntryType description = 1;
-    repeated string links = 2;
-    google.protobuf.Any data = 3;
-}
+} 
 
 message Interval {
         string start = 1;
         string end = 2;
-    }
-
-message QueryResult {
-    enum Vote {
-        TRUE = 0;
-        FALSE = 1;
-        UNKNOWN = 2; 
-    } 
-    repeated Vote result = 1;
-    repeated bytes wanted = 2;
 }

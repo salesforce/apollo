@@ -26,7 +26,7 @@ import io.grpc.stub.StreamObserver;
 public class MessagingServerCommunications extends MessagingImplBase {
     @Override
     public void gossip(MessageBff request, StreamObserver<Messages> responseObserver) {
-        routing.evaluate(responseObserver, request.getContext(), s -> {
+        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Digest from = identity.getFrom();
             if (from == null) {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));
@@ -47,7 +47,7 @@ public class MessagingServerCommunications extends MessagingImplBase {
 
     @Override
     public void update(Push request, StreamObserver<Empty> responseObserver) {
-        routing.evaluate(responseObserver, request.getContext(), s -> {
+        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Digest from = identity.getFrom();
             if (from == null) {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));

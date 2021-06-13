@@ -46,7 +46,6 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
-import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.QueryResult.Vote;
@@ -340,11 +339,11 @@ public class Avalanche {
             }
             byte[] dummy = new byte[4];
             Utils.bitStreamEntropy().nextBytes(dummy);
-            Builder builder = DagEntry.newBuilder()
-                                      .setDescription(EntryType.NO_OP)
-                                      .setData(Any.pack(ByteMessage.newBuilder()
-                                                                   .setContents(ByteString.copyFrom(dummy))
-                                                                   .build()));
+            DagEntry.Builder builder = DagEntry.newBuilder()
+                                               .setDescription(EntryType.NO_OP)
+                                               .setData(Any.pack(ByteMessage.newBuilder()
+                                                                            .setContents(ByteString.copyFrom(dummy))
+                                                                            .build()));
             parents.forEach(e -> builder.addLinks(qb64(e)));
             DagEntry dagEntry = builder.build();
             assert dagEntry.getLinksCount() > 0 : "Whoopsie";
@@ -643,7 +642,7 @@ public class Avalanche {
         Timer.Context timer = metrics == null ? null : metrics.getSubmissionTimer().time();
         try {
 
-            Builder builder = DagEntry.newBuilder().setDescription(type).setData(Any.pack(data));
+            DagEntry.Builder builder = DagEntry.newBuilder().setDescription(type).setData(Any.pack(data));
             parents.stream().map(e -> qb64(e)).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
 

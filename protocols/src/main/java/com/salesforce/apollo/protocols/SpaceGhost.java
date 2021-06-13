@@ -8,7 +8,7 @@ package com.salesforce.apollo.protocols;
 
 import java.util.List;
 
-import com.salesfoce.apollo.proto.DagEntry;
+import com.google.protobuf.Any;
 import com.salesfoce.apollo.proto.Interval;
 import com.salesforce.apollo.crypto.Digest;
 
@@ -17,9 +17,9 @@ import com.salesforce.apollo.crypto.Digest;
  * @since 220
  */
 public interface SpaceGhost {
-    DagEntry get(Digest key);
+    Any get(Digest key);
 
-    List<DagEntry> intervals(List<Interval> intervals, List<Digest> have);
+    List<Any> intervals(List<Interval> intervals, List<Digest> have);
 
-    void put(DagEntry entry);
+    void put(Any entry);
 }

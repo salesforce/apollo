@@ -8,7 +8,7 @@ package com.salesforce.apollo.fireflies.communications;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
-import static com.salesforce.apollo.crypto.QualifiedBase64.*;
+
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.fireflies.proto.Digests;
@@ -64,7 +64,7 @@ public class FfClient implements Fireflies {
         }
         try {
             SayWhat sw = SayWhat.newBuilder()
-                                .setContext(qb64(context))
+                                .setContext(context.toByteString())
                                 .setNote(note)
                                 .setRing(ring)
                                 .setGossip(digests)
@@ -105,7 +105,7 @@ public class FfClient implements Fireflies {
             timer = metrics.outboundPingTimer().time();
         }
         try {
-            client.ping(Null.newBuilder().setContext(qb64(context)).build());
+            client.ping(Null.newBuilder().setContext(context.toByteString()).build());
             if (metrics != null) {
                 metrics.outboundPingRate().mark();
             }
@@ -139,7 +139,7 @@ public class FfClient implements Fireflies {
             timer = metrics.outboundUpdateTimer().time();
         }
         try {
-            State state = State.newBuilder().setContext(qb64(context)).setRing(ring).setUpdate(update).build();
+            State state = State.newBuilder().setContext(context.toByteString()).setRing(ring).setUpdate(update).build();
             client.update(state);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(state.getSerializedSize());

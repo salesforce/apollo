@@ -186,6 +186,7 @@ public class Digest implements Comparable<Digest> {
         for (long l : hash) {
             buffer.putLong(l);
         }
+        buffer.flip();
         return ByteString.copyFrom(buffer);
     }
 

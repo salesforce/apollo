@@ -7,7 +7,6 @@
 package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
 import java.time.Duration;
@@ -239,7 +238,7 @@ public class Messenger {
 
             try {
                 futureSailor = link.gossip(MessageBff.newBuilder()
-                                                     .setContext(qb64(context.getId()))
+                                                     .setContext(context.getId().toByteString())
                                                      .setRing(ring)
                                                      .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextInt(),
                                                                                parameters.falsePositiveRate)
@@ -263,7 +262,9 @@ public class Messenger {
                         return;
                     }
                     process(gossip.getUpdatesList());
-                    Push.Builder pushBuilder = Push.newBuilder().setContext(qb64(context.getId())).setRing(ring);
+                    Push.Builder pushBuilder = Push.newBuilder()
+                                                   .setContext(context.getId().toByteString())
+                                                   .setRing(ring);
                     buffer.updatesFor(BloomFilter.from(gossip.getBff()), pushBuilder);
                     try {
                         link.update(pushBuilder.build());

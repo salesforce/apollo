@@ -29,7 +29,6 @@ import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.Avalanche;
 
 /**
  * @author hal.hildebrand

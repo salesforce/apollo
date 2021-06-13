@@ -18,6 +18,8 @@ import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Base64;
 
+import com.google.protobuf.ByteString;
+
 public class QualifiedBase64 {
 
     public final static int SHORTENED_LENGTH = 12;
@@ -83,6 +85,10 @@ public class QualifiedBase64 {
     public static int base64Length(int bytesLength) {
         var bits = bytesLength * 8;
         return bits / 6 + (bits % 6 != 0 ? 1 : 0);
+    }
+    
+    public static Digest digest(ByteString bs) {
+        return new Digest(bs);
     }
 
     public static Digest digest(String qb64) {

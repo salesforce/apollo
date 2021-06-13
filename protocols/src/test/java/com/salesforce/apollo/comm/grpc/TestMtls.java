@@ -22,12 +22,9 @@ import java.util.concurrent.ForkJoinPool;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesfoce.apollo.proto.AvalancheGrpc;
-import com.salesfoce.apollo.proto.AvalancheGrpc.AvalancheImplBase;
-import com.salesfoce.apollo.proto.DagNodes;
-import com.salesfoce.apollo.proto.Query;
-import com.salesfoce.apollo.proto.QueryResult;
-import com.salesfoce.apollo.proto.SuppliedDagNodes;
+import com.google.protobuf.Any;
+import com.salesfoce.apollo.proto.TestItGrpc;
+import com.salesfoce.apollo.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
@@ -59,24 +56,18 @@ public class TestMtls {
         MtlsClient client = client(serverAddress);
 
         for (int i = 0; i < 100; i++) {
-            QueryResult query = AvalancheGrpc.newBlockingStub(client.getChannel()).query(null);
+            Any tst = TestItGrpc.newBlockingStub(client.getChannel()).ping(Any.getDefaultInstance());
 
-            assertNotNull(query);
+            assertNotNull(tst);
         }
     }
 
-    private AvalancheImplBase avaServer() {
-        return new AvalancheImplBase() {
+    private TestItImplBase avaServer() {
+        return new TestItImplBase() {
 
             @Override
-            public void query(Query request, StreamObserver<QueryResult> responseObserver) {
-                responseObserver.onNext(QueryResult.newBuilder().build());
-                responseObserver.onCompleted();
-            }
-
-            @Override
-            public void requestDag(DagNodes request, StreamObserver<SuppliedDagNodes> responseObserver) {
-                responseObserver.onNext(SuppliedDagNodes.newBuilder().build());
+            public void ping(Any request, StreamObserver<Any> responseObserver) {
+                responseObserver.onNext(Any.newBuilder().build());
                 responseObserver.onCompleted();
             }
         };

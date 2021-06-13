@@ -181,10 +181,10 @@ public class MessageBuffer {
 
     private Message createUpdate(Any msg, int sequenceNumber, Digest from, JohnHancock signature, Digest hash) {
         return Message.newBuilder()
-                      .setSource(qb64(from))
+                      .setSource(from.toByteString())
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
-                      .setKey(qb64(hash))
+                      .setKey(hash.toByteString())
                       .setSignature(qb64(signature))
                       .setContent(msg)
                       .build();
