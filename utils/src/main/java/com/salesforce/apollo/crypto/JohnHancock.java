@@ -6,10 +6,15 @@
  */
 package com.salesforce.apollo.crypto;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 
 import org.bouncycastle.util.encoders.Hex;
+
+import com.google.protobuf.ByteString;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * A signature
@@ -18,8 +23,19 @@ import org.bouncycastle.util.encoders.Hex;
  *
  */
 public class JohnHancock {
+    public static JohnHancock from(ByteString bs) {
+        return new JohnHancock(bs);
+    }
+
     final byte[]                     bytes;
     private final SignatureAlgorithm algorithm;
+
+    public JohnHancock(ByteString bs) {
+        ByteBuffer buff = bs.asReadOnlyByteBuffer();
+        this.algorithm = SignatureAlgorithm.fromSignatureCode(buff.get());
+        bytes = new byte[algorithm.signatureLength()];
+        buff.get(bytes);
+    }
 
     public JohnHancock(SignatureAlgorithm algorithm, byte[] bytes) {
         this.algorithm = algorithm;
@@ -53,6 +69,14 @@ public class JohnHancock {
         result = prime * result + Arrays.hashCode(bytes);
         result = prime * result + Objects.hash(algorithm);
         return result;
+    }
+
+    public ByteString toByteString() {
+        try {
+            return ByteString.readFrom(BbBackedInputStream.aggregate(new byte[] { algorithm.signatureCode() }, bytes));
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot serialize to ByteString", e);
+        }
     }
 
     @Override

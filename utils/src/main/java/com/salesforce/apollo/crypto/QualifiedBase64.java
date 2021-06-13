@@ -12,13 +12,15 @@ import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA3_512;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.EC_SECP256K1;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
-import static com.salesforce.apollo.crypto.SignatureAlgorithm.lookup;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Base64;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 public class QualifiedBase64 {
 
@@ -86,7 +88,17 @@ public class QualifiedBase64 {
         var bits = bytesLength * 8;
         return bits / 6 + (bits % 6 != 0 ? 1 : 0);
     }
-    
+
+    public static ByteString bs(PublicKey publicKey) {
+        var stdAlgo = SignatureAlgorithm.lookup(publicKey);
+        try {
+            return ByteString.readFrom(BbBackedInputStream.aggregate(new byte[] { stdAlgo.signatureCode() },
+                                                                     stdAlgo.encode(publicKey)));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("cannot encode public key", e);
+        }
+    }
+
     public static Digest digest(ByteString bs) {
         if (bs.isEmpty()) {
             return Digest.NONE;
@@ -182,6 +194,13 @@ public class QualifiedBase64 {
         };
     }
 
+    public static PublicKey publicKeyFrom(ByteBuffer buff) {
+        var algo = SignatureAlgorithm.fromSignatureCode(buff.get());
+        var bytes = new byte[algo.signatureLength()];
+        buff.get(bytes);
+        return algo.publicKey(bytes);
+    }
+
     public static String qb64(Digest d) {
         return Digest.NONE.equals(d) ? "" : digestCode(d.getAlgorithm()) + base64(d.getBytes());
     }
@@ -192,8 +211,7 @@ public class QualifiedBase64 {
 
     public static String qb64(PublicKey publicKey) {
         var stdAlgo = SignatureAlgorithm.lookup(publicKey);
-        var sigOps = lookup(publicKey);
-        return publicKeyCode(stdAlgo) + base64(sigOps.encode(publicKey));
+        return publicKeyCode(stdAlgo) + base64(stdAlgo.encode(publicKey));
     }
 
     public static int qb64Length(int materialLength) {
@@ -213,6 +231,10 @@ public class QualifiedBase64 {
 
     public static String shortQb64(PublicKey publicKey) {
         return qb64(publicKey).substring(0, SHORTENED_LENGTH);
+    }
+
+    public static JohnHancock signature(ByteString bs) {
+        return new JohnHancock(bs);
     }
 
     public static JohnHancock signature(String qb64) {

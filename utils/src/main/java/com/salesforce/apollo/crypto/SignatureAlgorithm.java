@@ -189,6 +189,11 @@ public enum SignatureAlgorithm {
                 throw new RuntimeException(e);
             }
         }
+
+        @Override
+        public byte signatureCode() {
+            return 1;
+        }
     },
     ED_25519 {
         private final EdDSAOperations ops = new EdDSAOperations(this);
@@ -266,6 +271,11 @@ public enum SignatureAlgorithm {
         @Override
         public boolean verify(PublicKey publicKey, JohnHancock signature, InputStream message) {
             return ops.verify(publicKey, signature, message);
+        }
+
+        @Override
+        public byte signatureCode() {
+            return 2;
         }
 
     },
@@ -346,7 +356,27 @@ public enum SignatureAlgorithm {
         public boolean verify(PublicKey publicKey, JohnHancock signature, InputStream message) {
             return ops.verify(publicKey, signature, message);
         }
+
+        @Override
+        public byte signatureCode() {
+            return 3;
+        }
     };
+
+    public static SignatureAlgorithm fromSignatureCode(byte code) {
+        return switch (code) {
+        case 0:
+            throw new IllegalArgumentException("Unknown signature code: " + code);
+        case 1:
+            yield EC_SECP256K1;
+        case 2:
+            yield ED_25519;
+        case 3:
+            yield ED_448;
+        default:
+            throw new IllegalArgumentException("Unknown signature code: " + code);
+        };
+    }
 
     public static final SignatureAlgorithm DEFAULT = ED_25519;
 
@@ -439,6 +469,8 @@ public enum SignatureAlgorithm {
     abstract public JohnHancock sign(PrivateKey privateKey, InputStream is);
 
     abstract public JohnHancock signature(byte[] signatureBytes);
+
+    abstract public byte signatureCode();
 
     abstract public String signatureInstanceName();
 
