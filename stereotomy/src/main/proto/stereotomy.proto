@@ -41,14 +41,14 @@ message AttachmentEvent {
 message Establishment {
     SigningThreshold signingThreshold = 1;
     repeated string keys = 2;
-    string nextKeyConfiguration = 3;
+    bytes nextKeyConfiguration = 3;
     int32 witnessThreshold = 4;
 }
 
 message Header {
     int64 sequenceNumber = 1;
     string identifier = 2;
-    string previousDigest = 3;
+    bytes previousDigest = 3;
     Version version = 4;
     map<int32, string> authentication = 5;
     string format = 6; 
@@ -96,7 +96,7 @@ message Version {
 message EventCoordinates {
     int64 sequenceNumber = 1;
     string identifier = 2;
-    string digest = 3;
+    bytes digest = 3;
 }
 
 message StoredKeyState {

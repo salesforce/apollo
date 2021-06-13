@@ -96,7 +96,7 @@ public class ProtobufEventFactory implements EventFactory {
 
     public static EventCoordinates.Builder toCoordinates(com.salesforce.apollo.stereotomy.event.EventCoordinates coordinates) {
         return EventCoordinates.newBuilder()
-                               .setDigest(qb64(coordinates.getDigest()))
+                               .setDigest(coordinates.getDigest().toByteString())
                                .setIdentifier(qb64(coordinates.getIdentifier()))
                                .setSequenceNumber(coordinates.getSequenceNumber());
     }
@@ -189,20 +189,21 @@ public class ProtobufEventFactory implements EventFactory {
                                                                   .stream()
                                                                   .map(k -> qb64(k))
                                                                   .collect(Collectors.toList()))
-                                         .setNextKeyConfiguration(qb64(specification.getNextKeys() == null ? Digest.NONE
-                                                 : specification.getNextKeys()))
+                                         .setNextKeyConfiguration((specification.getNextKeys() == null ? Digest.NONE
+                                                 : specification.getNextKeys()).toByteString())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
 
         var header = Header.newBuilder()
                            .setSequenceNumber(0)
                            .setVersion(toVersion(specification.getVersion()))
+                           .setPreviousDigest(Digest.NONE.toByteString())
                            .setFormat(specification.getFormat().name())
                            .setIdentifier(qb64(prefix))
                            .putAllAuthentication(Map.of(0, qb64(signature)));
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
         builder.setHeader(header)
-               .setEstablishment(establishment)
+               .setEstablishment(establishment) 
                .setInceptionStatement(inceptionStatement)
                .addAllWitnesses(specification.getWitnesses().stream().map(i -> qb64(i)).collect(Collectors.toList()))
                .addAllConfigurationTraits(specification.getConfigurationTraits()
@@ -234,13 +235,13 @@ public class ProtobufEventFactory implements EventFactory {
                                                                   .stream()
                                                                   .map(k -> qb64(k))
                                                                   .collect(Collectors.toList()))
-                                         .setNextKeyConfiguration(qb64(specification.getNextKeys() == null ? Digest.NONE
-                                                 : specification.getNextKeys()))
+                                         .setNextKeyConfiguration((specification.getNextKeys() == null ? Digest.NONE
+                                                 : specification.getNextKeys()).toByteString())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
 
-        var header = Header.newBuilder() 
+        var header = Header.newBuilder()
                            .setPrevious(toCoordinates(specification.getPrevious()))
-                           .setPreviousDigest(qb64(specification.getPriorEventDigest()))
+                           .setPreviousDigest((specification.getPriorEventDigest()).toByteString())
                            .setVersion(toVersion(specification.getVersion()))
                            .setFormat(specification.getFormat().name())
                            .setIdentifier(qb64(specification.getIdentifier()))

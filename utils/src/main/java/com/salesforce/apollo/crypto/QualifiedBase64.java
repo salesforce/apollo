@@ -88,6 +88,9 @@ public class QualifiedBase64 {
     }
     
     public static Digest digest(ByteString bs) {
+        if (bs.isEmpty()) {
+            return Digest.NONE;
+        }
         return new Digest(bs);
     }
 
