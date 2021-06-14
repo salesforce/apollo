@@ -104,7 +104,7 @@ public class CheckpointAssemblerTest {
         chkptFile.deleteOnExit();
         byte[] line = "aaaabbbdddasff;lkasdfa;sdlfkjasdf;lasdjfalsdfjas;dfkasdflasdkjfasd;kfasdlfjasdl;fkja;sdflasdkjfasdklf;asjfa;sfasdf;lkasjdfsa;flasj\n".getBytes();
         try (FileOutputStream os = new FileOutputStream(chkptFile); GZIPOutputStream gos = new GZIPOutputStream(os)) {
-            for (int i = 0; i < 1024; i++) {
+            for (int i = 0; i < 4096; i++) {
                 gos.write(line);
                 baos.write(line);
             }
@@ -166,7 +166,7 @@ public class CheckpointAssemblerTest {
         assembled = boot.assemble(scheduler, Duration.ofMillis(10));
         CheckpointState assembledCs;
         try {
-            assembledCs = assembled.get(10, TimeUnit.SECONDS);
+            assembledCs = assembled.get(300, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             assembled.completeExceptionally(e);
             fail("Timeout waiting for assembly");

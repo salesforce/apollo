@@ -200,6 +200,6 @@ public class Digest implements Comparable<Digest> {
 
     @Override
     public String toString() {
-        return "[" + algorithm + ":" + Hex.toHexString(getBytes()).substring(0, 12) + "]";
+        return "[" + algorithm.digestCode() + ":" + Hex.toHexString(getBytes()).substring(0, 12) + "]";
     }
 }

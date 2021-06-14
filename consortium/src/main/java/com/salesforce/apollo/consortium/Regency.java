@@ -35,8 +35,7 @@ import com.salesforce.apollo.membership.Member;
  */
 
 public class Regency {
-    private final AtomicInteger currentRegent = new AtomicInteger(0);
-
+    private final AtomicInteger                       currentRegent     = new AtomicInteger(0);
     private final Map<Integer, Map<Member, StopData>> data              = new ConcurrentHashMap<>();
     private final Logger                              log               = LoggerFactory.getLogger(Regency.class);
     private final AtomicInteger                       nextRegent        = new AtomicInteger(-1);

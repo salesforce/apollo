@@ -115,7 +115,8 @@ public class CollaboratorContext implements Collaborator {
             byte[] buff = new byte[blockSize];
             try (FileInputStream fis = new FileInputStream(state)) {
                 for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
-                    builder.addSegments(algo.digest(buff, read).toByteString());
+                    ByteString segment = ByteString.copyFrom(buff, 0, read);
+                    builder.addSegments(algo.digest(segment).toByteString());
                 }
             } catch (IOException e) {
                 log.error("Invalid checkpoint!", e);

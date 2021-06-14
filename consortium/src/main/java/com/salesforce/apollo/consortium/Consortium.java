@@ -622,7 +622,7 @@ public class Consortium {
                     "The current view is undefined, unable to process transactions on: " + getMember());
         }
         EnqueuedTransaction transaction = build(join, txn);
-        submit(transaction, onSubmit, onCompletion);
+        submit(transaction, join, onSubmit, onCompletion);
         return transaction.hash;
     }
 
@@ -917,7 +917,7 @@ public class Consortium {
         action.action.run();
     }
 
-    private void submit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,
+    private void submit(EnqueuedTransaction transaction, boolean join, BiConsumer<Boolean, Throwable> onSubmit,
                         BiConsumer<Object, Throwable> onCompletion) {
         assert transaction.hash.equals(hashOf(params.digestAlgorithm,
                                               transaction.transaction)) : "Hash does not match!";
@@ -927,7 +927,7 @@ public class Consortium {
                                                           .setContext(view.getContext().getId().toByteString())
                                                           .setTransaction(transaction.transaction)
                                                           .build();
-        log.trace("Submitting txn: {} from: {}", transaction.hash, getMember());
+        log.trace("Submitting txn: {} {} from: {}", transaction.hash, join ? "Join" : "User", getMember());
         List<Member> group = view.getContext().streamRandomRing().collect(Collectors.toList());
         AtomicInteger pending = new AtomicInteger(group.size());
         AtomicInteger success = new AtomicInteger();

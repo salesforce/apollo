@@ -95,7 +95,7 @@ public class MemberImpl implements Member {
 
     @Override
     public String toString() {
-        return "Member[" + shortQb64(id) + "]";
+        return "Member[" + id + "]";
     }
 
     /**
