@@ -93,6 +93,26 @@ public class EdDSAOperations {
         return encodedPoint;
     }
 
+    public Signature forSigning(PrivateKey privateKey) {
+        try {
+            var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            sig.initSign(privateKey);
+            return sig;
+        } catch (GeneralSecurityException e) {
+            throw new IllegalArgumentException("Unable to create signature for signing", e);
+        }
+    }
+
+    public Signature forVerification(PublicKey publicKey) {
+        try {
+            var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            sig.initVerify(publicKey);
+            return sig;
+        } catch (GeneralSecurityException e) {
+            throw new IllegalArgumentException("Unable to create signature for verification", e);
+        }
+    }
+
     public KeyPair generateKeyPair() {
         return keyPairGenerator.generateKeyPair();
     }

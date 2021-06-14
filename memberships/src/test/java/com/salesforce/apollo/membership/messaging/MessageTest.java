@@ -155,6 +155,7 @@ public class MessageTest {
             return new Messenger(node, context, comms, parameters, executor);
         }).collect(Collectors.toList());
 
+        System.out.println("Messaging with " + messengers.size() + " members");
         messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
 
         Map<Member, Receiver> receivers = new HashMap<>();
@@ -164,7 +165,7 @@ public class MessageTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = 30;
+        int rounds = 100;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch round = new CountDownLatch(messengers.size());
             for (Receiver receiver : receivers.values()) {

@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.membership.impl;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.membership.Member.getMemberIdentifier;
 import static com.salesforce.apollo.membership.Member.getSigningKey;
 

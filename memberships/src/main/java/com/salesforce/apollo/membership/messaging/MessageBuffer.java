@@ -8,7 +8,6 @@ package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 import java.nio.ByteBuffer;
 import java.security.Signature;
@@ -36,7 +35,6 @@ import com.salesfoce.apollo.messaging.proto.Push;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.BloomFilter;
 
@@ -54,10 +52,6 @@ public class MessageBuffer {
         } catch (SignatureException e) {
             throw new IllegalStateException("Unable to sign message content", e);
         }
-    }
-
-    public static boolean validate(Digest hash, Message message, Member verifier) {
-        return verifier.verify(signature(message.getSignature()), qb64(hash).getBytes());
     }
 
     static Digest idOf(DigestAlgorithm algorithm, int sequenceNumber, Digest from, Any content) {
@@ -123,12 +117,13 @@ public class MessageBuffer {
      * @return the list of new messages for this buffer
      */
     public List<Message> merge(List<Message> updates, BiPredicate<Digest, Message> validator) {
-        List<Message> merged = updates.parallelStream().filter(message -> {
-            Digest hash = digest(message.getKey());
-            return merge(hash, message, validator);
-        }).collect(Collectors.toList());
-        gc();
-        return merged;
+        try {
+            return updates.parallelStream()
+                          .filter(message -> merge(digest(message.getKey()), message, validator))
+                          .collect(Collectors.toList());
+        } finally {
+            gc();
+        }
     }
 
     public Messages process(BloomFilter<Digest> bff, int seed, double p) {
@@ -157,7 +152,7 @@ public class MessageBuffer {
         int sequenceNumber = lastSequenceNumber.getAndIncrement();
         Digest id = idOf(digestAlgorithm, sequenceNumber, from.getId(), msg);
         Message update = state.computeIfAbsent(id, k -> createUpdate(msg, sequenceNumber, from.getId(),
-                                                                     from.sign(qb64(k).getBytes()), k));
+                                                                     from.sign(k.toByteString()), k));
         gc();
         log.trace("broadcasting: {}:{} on: {}", id, sequenceNumber, from);
         return update;
@@ -195,12 +190,13 @@ public class MessageBuffer {
             log.trace("dropped as too old: {}:{}", hash, update.getSequenceNumber());
             return false;
         }
-        AtomicBoolean updated = new AtomicBoolean(false);
-        state.compute(hash, (k, v) -> {
-            if (!validator.test(k, update)) {
-                return v;
-            }
 
+        if (!validator.test(hash, update)) {
+            return false;
+        }
+        AtomicBoolean updated = new AtomicBoolean(false);
+
+        state.compute(hash, (k, v) -> {
             if (v == null) {
                 updated.set(true);
                 log.trace("added: {}:{}", k, update.getSequenceNumber());

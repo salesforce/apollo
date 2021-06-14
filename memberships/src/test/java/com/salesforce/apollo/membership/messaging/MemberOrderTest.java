@@ -16,9 +16,11 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -126,10 +128,9 @@ public class MemberOrderTest {
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
-                                           .limit(20)
                                            .collect(Collectors.toList());
 
-        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
+        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size());
         members.forEach(m -> context.activate(m));
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
@@ -142,23 +143,36 @@ public class MemberOrderTest {
             return new Messenger(node, context, comms, parameters, executor);
         }).collect(Collectors.toList());
 
-        messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
+        messengers.forEach(view -> view.start(Duration.ofMillis(10), scheduler));
         List<ToReceiver> receivers = messengers.stream().map(m -> {
             ToReceiver receiver = new ToReceiver(m.getMember().getId(), m);
             receiver.totalOrder.start();
             return receiver;
         }).collect(Collectors.toList());
 
-        int messageCount = 100;
+        int messageCount = 30;
 
+        Executor exec = Executors.newFixedThreadPool(messengers.size());
+        Semaphore countDown = new Semaphore(messengers.size());
         for (int i = 0; i < messageCount; i++) {
             messengers.forEach(m -> {
-                m.publish(ByteMessage.newBuilder()
-                                     .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
-                                     .build(),
-                          true);
                 try {
-                    Thread.sleep(1);
+                    countDown.acquire();
+                } catch (InterruptedException e) {
+                    throw new IllegalStateException(e);
+                }
+                exec.execute(() -> {
+                    try {
+                        m.publish(ByteMessage.newBuilder()
+                                             .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
+                                             .build(),
+                                  true);
+                    } finally {
+                        countDown.release();
+                    }
+                });
+                try {
+                    Thread.sleep(3);
                 } catch (InterruptedException e) {
                 }
             });
@@ -170,11 +184,13 @@ public class MemberOrderTest {
                             .filter(result -> !result)
                             .count() == 0;
         });
-        receivers.forEach(m -> System.out.println(m.totalOrder));
-        receivers.forEach(r -> {
-            System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
-                    + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
-        });
+        if (!complete) {
+            receivers.forEach(m -> System.out.println(m.totalOrder));
+            receivers.forEach(r -> {
+                System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
+                        + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
+            });
+        }
         assertTrue(complete, "did not get all messages : "
                 + receivers.stream().filter(r -> !r.validate(messengers.size(), messageCount)).map(r -> r.id).count());
     }
@@ -297,23 +313,24 @@ public class MemberOrderTest {
                                 .filter(result -> !result)
                                 .count() == 0;
         });
-        System.out.println();
-        System.out.println("Live Receivers");
-        liveRcvrs.forEach(m -> System.out.println(m.totalOrder));
-        liveRcvrs.forEach(r -> {
-            System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
-                    + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
-        });
+        if (!complete) {
+            System.out.println();
+            System.out.println("Live Receivers");
+            liveRcvrs.forEach(m -> System.out.println(m.totalOrder));
+            liveRcvrs.forEach(r -> {
+                System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
+                        + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
+            });
 
-        System.out.println();
-        System.out.println();
-        System.out.println("Dead Receivers");
-        deadRcvrs.forEach(m -> System.out.println(m.totalOrder));
-        deadRcvrs.forEach(r -> {
-            System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
-                    + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
-        });
-
+            System.out.println();
+            System.out.println();
+            System.out.println("Dead Receivers");
+            deadRcvrs.forEach(m -> System.out.println(m.totalOrder));
+            deadRcvrs.forEach(r -> {
+                System.out.println(r.messenger.getMember().getId() + ":" + r.messages.size() + " : "
+                        + r.messages.values().stream().map(e -> e.size()).sorted().collect(Collectors.toList()));
+            });
+        }
         assertTrue(complete, "did not get all messages : "
                 + liveRcvrs.stream().filter(r -> !r.validate(liveRcvrs, messageCount * 3)).map(r -> r.id).count()
                 + " : " + deadRcvrs.stream().filter(r -> !r.validate(deadRcvrs, messageCount)).map(r -> r.id).count());

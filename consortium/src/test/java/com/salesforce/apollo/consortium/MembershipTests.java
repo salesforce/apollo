@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -89,7 +90,6 @@ public class MembershipTests {
     private final Map<Member, Consortium> consortium     = new ConcurrentHashMap<>();
     private Context<Member>               context;
     private List<SigningMember>           members;
-    private int                           testCardinality = 3;
 
     @AfterEach
     public void after() {
@@ -119,18 +119,19 @@ public class MembershipTests {
             communications.put(node.getId(), new LocalRouter(node, builder, executor));
         });
     }
-    private static final Duration                         gossipDuration  = Duration.ofMillis(10);
+
+    private static final Duration gossipDuration = Duration.ofMillis(10);
 
     @Test
     public void testCheckpointBootstrap() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
-                                                                 .setFalsePositiveRate(0.001)
-                                                                 .setBufferSize(1000)
+                                                                 .setFalsePositiveRate(0.25)
+                                                                 .setBufferSize(500)
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
-        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
+        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(CARDINALITY));
         Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
@@ -178,6 +179,7 @@ public class MembershipTests {
                                       .findFirst()
                                       .get();
         Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
+        Set<Digest> submitted = new HashSet<>();
         int bunchCount = 500;
         System.out.println("Awaiting " + bunchCount + " transactions");
         final CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
@@ -185,6 +187,7 @@ public class MembershipTests {
             outstanding.acquire();
             AtomicReference<Digest> pending = new AtomicReference<>();
             pending.set(client.submit(null, (h, t) -> {
+                submitted.remove(pending.get());
                 if (t != null) {
                     t.printStackTrace();
                     fail("Error in submitting txn: ", t);
@@ -192,11 +195,11 @@ public class MembershipTests {
                 outstanding.release();
                 submittedBunch.countDown();
             }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-            Thread.sleep(1);
+            submitted.add(pending.get());
         }
 
         boolean completed = submittedBunch.await(10, TimeUnit.SECONDS);
-        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
+        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount() + " : " + submitted);
         System.out.println("Completed additional " + bunchCount + " transactions");
 
         testSubject.start();
@@ -208,6 +211,7 @@ public class MembershipTests {
             outstanding.acquire();
             AtomicReference<Digest> pending = new AtomicReference<>();
             pending.set(client.submit(null, (h, t) -> {
+                submitted.remove(pending.get());
                 if (t != null) {
                     t.printStackTrace();
                     fail("Error in submitting txn: ", t);
@@ -215,11 +219,11 @@ public class MembershipTests {
                 outstanding.release();
                 nextBunch.countDown();
             }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-            Thread.sleep(1);
+            submitted.add(pending.get());
         }
 
         completed = nextBunch.await(10, TimeUnit.SECONDS);
-        assertTrue(completed, "Did not process transaction bunch: " + nextBunch.getCount());
+        assertTrue(completed, "Did not process transaction bunch: " + nextBunch.getCount() + " : " + submitted);
         System.out.println("Completed additional " + bunchCount + " transactions");
 
         completed = Utils.waitForCondition(10_000, () -> {
@@ -232,14 +236,14 @@ public class MembershipTests {
 
     @Test
     public void testGenesisBootstrap() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.000001)
                                                                  .setBufferSize(1500)
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
-        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
+        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(CARDINALITY));
         Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
@@ -289,11 +293,13 @@ public class MembershipTests {
         Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
         int bunchCount = 150;
         System.out.println("Awaiting " + bunchCount + " transactions");
+        ArrayList<Digest> submitted = new ArrayList<>();
         final CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
             AtomicReference<Digest> pending = new AtomicReference<>();
             pending.set(client.submit(null, (h, t) -> {
+                submitted.remove(pending.get());
                 if (t != null) {
                     t.printStackTrace();
                     fail("Error in submitting txn: ", t);
@@ -301,11 +307,11 @@ public class MembershipTests {
                 outstanding.release();
                 submittedBunch.countDown();
             }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-            Thread.sleep(1);
+            submitted.add(pending.get());
         }
 
         boolean completed = submittedBunch.await(10, TimeUnit.SECONDS);
-        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount());
+        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount() + " : " + submitted);
         System.out.println("Completed additional " + bunchCount + " transactions");
 
         testSubject.start();
@@ -317,6 +323,7 @@ public class MembershipTests {
             outstanding.acquire();
             AtomicReference<Digest> pending = new AtomicReference<>();
             pending.set(client.submit(null, (h, t) -> {
+                submitted.remove(pending.get());
                 if (t != null) {
                     t.printStackTrace();
                     fail("Error in submitting txn: ", t);
@@ -324,11 +331,11 @@ public class MembershipTests {
                 outstanding.release();
                 nextBunch.countDown();
             }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-            Thread.sleep(1);
+            submitted.add(pending.get());
         }
 
         completed = nextBunch.await(10, TimeUnit.SECONDS);
-        assertTrue(completed, "Did not process transaction bunch: " + nextBunch.getCount());
+        assertTrue(completed, "Did not process transaction bunch: " + nextBunch.getCount() + " : " + submitted);
         System.out.println("Completed additional " + bunchCount + " transactions");
 
         completed = Utils.waitForCondition(10_000, () -> {
@@ -381,7 +388,6 @@ public class MembershipTests {
                .peek(c -> view.activate(c.getMember()))
                .forEach(e -> consortium.put(e.getMember(), e));
     }
- 
 
     @SuppressWarnings("unused")
     private void validateState(Set<Consortium> blueRibbon) {

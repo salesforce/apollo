@@ -7,6 +7,7 @@
 package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
 import java.time.Duration;
@@ -414,7 +415,7 @@ public class Messenger {
             return false;
         }
         Digest calculated = buffer.idOf(message.getSequenceNumber(), from, message.getContent());
-        if (!calculated.equals(hash) || !MessageBuffer.validate(hash, message, member)) {
+        if (!calculated.equals(hash) || !member.verify(signature(message.getSignature()), hash.toByteString())) {
             log.error("Did not validate message {} from {}", message, from);
             return false;
         }

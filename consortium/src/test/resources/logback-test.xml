@@ -20,7 +20,7 @@
         <appender-ref ref="STDOUT" />
     </logger> 
     
-    <logger name="com.salesforce.apollo.consortium" level="trace"
+    <logger name="com.salesforce.apollo.consortium" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

@@ -88,6 +88,28 @@ public enum SignatureAlgorithm {
         }
 
         @Override
+        public Signature forSigning(PrivateKey privateKey) {
+            try {
+                var sig = Signature.getInstance(this.signatureInstanceName(), ProviderUtils.getProviderBC());
+                sig.initSign(privateKey);
+                return sig;
+            } catch (GeneralSecurityException e) {
+                throw new IllegalArgumentException("Unable to create signature for signing", e);
+            }
+        }
+
+        @Override
+        public Signature forVerification(PublicKey publicKey) {
+            try {
+                var sig = Signature.getInstance(signatureInstanceName(), ProviderUtils.getProviderBC());
+                sig.initVerify(publicKey);
+                return sig;
+            } catch (GeneralSecurityException e) {
+                throw new IllegalArgumentException("Unable to create signature for verification", e);
+            }
+        }
+
+        @Override
         public KeyPair generateKeyPair() {
             return keyPairGenerator.generateKeyPair();
         }
@@ -161,6 +183,11 @@ public enum SignatureAlgorithm {
         }
 
         @Override
+        public byte signatureCode() {
+            return 1;
+        }
+
+        @Override
         public String signatureInstanceName() {
             return "SHA256" + ECDSA_SIGNATURE_ALGORITHM_SUFFIX;
         }
@@ -185,14 +212,8 @@ public enum SignatureAlgorithm {
                 }
                 return sig.verify(signature.bytes);
             } catch (GeneralSecurityException e) {
-                // TODO handle better
-                throw new RuntimeException(e);
+                throw new IllegalArgumentException("Unable to verify", e);
             }
-        }
-
-        @Override
-        public byte signatureCode() {
-            return 1;
         }
     },
     ED_25519 {
@@ -211,6 +232,16 @@ public enum SignatureAlgorithm {
         @Override
         public byte[] encode(PublicKey publicKey) {
             return ops.encode(publicKey);
+        }
+
+        @Override
+        public Signature forSigning(PrivateKey privateKey) {
+            return ops.forSigning(privateKey);
+        }
+
+        @Override
+        public Signature forVerification(PublicKey publicKey) {
+            return ops.forVerification(publicKey);
         }
 
         @Override
@@ -254,6 +285,11 @@ public enum SignatureAlgorithm {
         }
 
         @Override
+        public byte signatureCode() {
+            return 2;
+        }
+
+        @Override
         public String signatureInstanceName() {
             return "ED25519";
         }
@@ -273,11 +309,6 @@ public enum SignatureAlgorithm {
             return ops.verify(publicKey, signature, message);
         }
 
-        @Override
-        public byte signatureCode() {
-            return 2;
-        }
-
     },
     ED_448 {
         private final EdDSAOperations ops = new EdDSAOperations(this);
@@ -295,6 +326,16 @@ public enum SignatureAlgorithm {
         @Override
         public byte[] encode(PublicKey publicKey) {
             return ops.encode(publicKey);
+        }
+
+        @Override
+        public Signature forSigning(PrivateKey privateKey) {
+            return ops.forSigning(privateKey);
+        }
+
+        @Override
+        public Signature forVerification(PublicKey publicKey) {
+            return ops.forVerification(publicKey);
         }
 
         @Override
@@ -338,6 +379,11 @@ public enum SignatureAlgorithm {
         }
 
         @Override
+        public byte signatureCode() {
+            return 3;
+        }
+
+        @Override
         public String signatureInstanceName() {
             return "ED448";
         }
@@ -357,11 +403,15 @@ public enum SignatureAlgorithm {
             return ops.verify(publicKey, signature, message);
         }
 
-        @Override
-        public byte signatureCode() {
-            return 3;
-        }
     };
+
+    public static final SignatureAlgorithm DEFAULT = ED_25519;
+
+    private static final String ECDSA_ALGORITHM_NAME = "EC";
+
+    private static final String ECDSA_SIGNATURE_ALGORITHM_SUFFIX = "withECDSA";
+    @SuppressWarnings("unused")
+    private static final String EDDSA_ALGORITHM_NAME             = "EdDSA";
 
     public static SignatureAlgorithm fromSignatureCode(byte code) {
         return switch (code) {
@@ -377,13 +427,6 @@ public enum SignatureAlgorithm {
             throw new IllegalArgumentException("Unknown signature code: " + code);
         };
     }
-
-    public static final SignatureAlgorithm DEFAULT = ED_25519;
-
-    private static final String ECDSA_ALGORITHM_NAME             = "EC";
-    private static final String ECDSA_SIGNATURE_ALGORITHM_SUFFIX = "withECDSA";
-    @SuppressWarnings("unused")
-    private static final String EDDSA_ALGORITHM_NAME             = "EdDSA";
 
     public static SignatureAlgorithm lookup(PrivateKey privateKey) {
         return switch (privateKey.getAlgorithm()) {
@@ -437,6 +480,10 @@ public enum SignatureAlgorithm {
     abstract public String curveName();
 
     abstract public byte[] encode(PublicKey publicKey);
+
+    abstract public Signature forSigning(PrivateKey privateKey);
+
+    abstract public Signature forVerification(PublicKey publicKey);
 
     abstract public KeyPair generateKeyPair();
 
