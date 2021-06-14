@@ -21,7 +21,7 @@ import com.google.protobuf.ByteString;
  */
 public class BasicIdentifier implements Identifier {
 
-    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[2]);
+    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 2 });
     private final PublicKey         publicKey;
 
     public BasicIdentifier(ByteBuffer buff) {

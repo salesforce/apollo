@@ -19,7 +19,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
  *
  */
 public class SelfSigningIdentifier implements Identifier {
-    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[3]);
+    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 3 });
 
     private final JohnHancock signature;
 

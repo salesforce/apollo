@@ -18,7 +18,7 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public class SelfAddressingIdentifier implements Identifier {
  
-    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[1]);
+    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] {1});
     private final Digest digest;
 
     public SelfAddressingIdentifier(Digest digest) {

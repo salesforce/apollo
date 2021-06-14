@@ -6,10 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.util.Map;
 import java.util.Optional;
@@ -87,7 +86,8 @@ public class ProtobufEventFactory implements EventFactory {
                                                                    .build();
         } else if (s instanceof Seal.DigestSeal) {
             return com.salesfoce.apollo.stereotomy.event.proto.Seal.newBuilder()
-                                                                   .setDigest(qb64(((Seal.DigestSeal) s).getDigest()))
+                                                                   .setDigest(((Seal.DigestSeal) s).getDigest()
+                                                                                                   .toByteString())
                                                                    .build();
         } else {
             throw new IllegalArgumentException("Unknown seal type: " + s.getClass().getSimpleName());
@@ -97,7 +97,7 @@ public class ProtobufEventFactory implements EventFactory {
     public static EventCoordinates.Builder toCoordinates(com.salesforce.apollo.stereotomy.event.EventCoordinates coordinates) {
         return EventCoordinates.newBuilder()
                                .setDigest(coordinates.getDigest().toByteString())
-                               .setIdentifier(qb64(coordinates.getIdentifier()))
+                               .setIdentifier(coordinates.getIdentifier().toByteString())
                                .setSequenceNumber(coordinates.getSequenceNumber());
     }
 
@@ -187,7 +187,7 @@ public class ProtobufEventFactory implements EventFactory {
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
                                          .addAllKeys(specification.getKeys()
                                                                   .stream()
-                                                                  .map(k -> qb64(k))
+                                                                  .map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeyConfiguration((specification.getNextKeys() == null ? Digest.NONE
                                                  : specification.getNextKeys()).toByteString())
@@ -198,14 +198,17 @@ public class ProtobufEventFactory implements EventFactory {
                            .setVersion(toVersion(specification.getVersion()))
                            .setPreviousDigest(Digest.NONE.toByteString())
                            .setFormat(specification.getFormat().name())
-                           .setIdentifier(qb64(prefix))
-                           .putAllAuthentication(Map.of(0, qb64(signature)));
+                           .setIdentifier(prefix.toByteString())
+                           .putAllAuthentication(Map.of(0, signature.toByteString()));
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
         builder.setHeader(header)
-               .setEstablishment(establishment) 
+               .setEstablishment(establishment)
                .setInceptionStatement(inceptionStatement)
-               .addAllWitnesses(specification.getWitnesses().stream().map(i -> qb64(i)).collect(Collectors.toList()))
+               .addAllWitnesses(specification.getWitnesses()
+                                             .stream()
+                                             .map(i -> i.toByteString())
+                                             .collect(Collectors.toList()))
                .addAllConfigurationTraits(specification.getConfigurationTraits()
                                                        .stream()
                                                        .map(ct -> ct.name())
@@ -233,7 +236,7 @@ public class ProtobufEventFactory implements EventFactory {
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
                                          .addAllKeys(specification.getKeys()
                                                                   .stream()
-                                                                  .map(k -> qb64(k))
+                                                                  .map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeyConfiguration((specification.getNextKeys() == null ? Digest.NONE
                                                  : specification.getNextKeys()).toByteString())
@@ -244,20 +247,21 @@ public class ProtobufEventFactory implements EventFactory {
                            .setPreviousDigest((specification.getPriorEventDigest()).toByteString())
                            .setVersion(toVersion(specification.getVersion()))
                            .setFormat(specification.getFormat().name())
-                           .setIdentifier(qb64(specification.getIdentifier()))
+                           .setIdentifier(specification.getIdentifier().toByteString())
                            .putAllAuthentication(signatures.entrySet()
                                                            .stream()
                                                            .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                     e -> qb64(e.getValue()))));
+                                                                                     e -> e.getValue()
+                                                                                           .toByteString())));
 
         com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
         builder.addAllAddedWitnesses(specification.getAddedWitnesses()
                                                   .stream()
-                                                  .map(b -> qb64(b))
+                                                  .map(b -> b.toByteString())
                                                   .collect(Collectors.toList()));
         builder.addAllRemovedWitnesses(specification.getRemovedWitnesses()
                                                     .stream()
-                                                    .map(b -> qb64(b))
+                                                    .map(b -> b.toByteString())
                                                     .collect(Collectors.toList()));
         builder.addAllSeals(specification.getSeals().stream().map(s -> sealOf(s)).collect(Collectors.toList()));
         return new RotationEventImpl(builder.setHeader(header).setEstablishment(establishment).build());
@@ -270,21 +274,18 @@ public class ProtobufEventFactory implements EventFactory {
     private IdentifierSpec identifierSpec(Identifier identifier, IdentifierSpecification specification) {
         return IdentifierSpec.newBuilder()
                              .setVersion(toVersion(specification.getVersion()))
-                             .setIdentifier(qb64(identifier == null ? Identifier.NONE : identifier))
+                             .setIdentifier((identifier == null ? Identifier.NONE : identifier).toByteString())
                              .setSequenceNumber(0)
                              .setEventType(INCEPTION_TYPE)
                              .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                             .addAllKeys(specification.getKeys()
-                                                      .stream()
-                                                      .map(k -> qb64(k))
-                                                      .collect(Collectors.toList()))
-                             .setNextKeysDigest(qb64(specification.getNextKeys() == null ? Digest.NONE
-                                     : specification.getNextKeys()))
+                             .addAllKeys(specification.getKeys().stream().map(k -> bs(k)).collect(Collectors.toList()))
+                             .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
+                                     : specification.getNextKeys()).toByteString())
                              .setWitnessThreshold(specification.getWitnessThreshold())
                              .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
                              .addAllWitnesses(specification.getWitnesses()
                                                            .stream()
-                                                           .map(i -> qb64(i))
+                                                           .map(i -> i.toByteString())
                                                            .collect(Collectors.toList()))
                              .addAllConfiguration(specification.getConfigurationTraits()
                                                                .stream()
@@ -296,23 +297,23 @@ public class ProtobufEventFactory implements EventFactory {
     private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification) {
         return RotationSpec.newBuilder()
                            .setVersion(toVersion(specification.getVersion()))
-                           .setIdentifier(qb64(identifier == null ? Identifier.NONE : identifier))
+                           .setIdentifier((identifier == null ? Identifier.NONE : identifier).toByteString())
                            .setSequenceNumber(specification.getSequenceNumber())
-                           .setPriorEventDigest(qb64(specification.getPriorEventDigest()))
+                           .setPriorEventDigest(specification.getPriorEventDigest().toByteString())
                            .setEventType(INCEPTION_TYPE)
                            .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                           .addAllKeys(specification.getKeys().stream().map(k -> qb64(k)).collect(Collectors.toList()))
-                           .setNextKeysDigest(qb64(specification.getNextKeys() == null ? Digest.NONE
-                                   : specification.getNextKeys()))
+                           .addAllKeys(specification.getKeys().stream().map(k -> bs(k)).collect(Collectors.toList()))
+                           .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
+                                   : specification.getNextKeys()).toByteString())
                            .setWitnessThreshold(specification.getWitnessThreshold())
                            .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
                            .addAllWitnessesAdded(specification.getAddedWitnesses()
                                                               .stream()
-                                                              .map(i -> qb64(i))
+                                                              .map(i -> i.toByteString())
                                                               .collect(Collectors.toList()))
                            .addAllWitnessesRemoved(specification.getRemovedWitnesses()
                                                                 .stream()
-                                                                .map(i -> qb64(i))
+                                                                .map(i -> i.toByteString())
                                                                 .collect(Collectors.toList()))
                            .build();
     }

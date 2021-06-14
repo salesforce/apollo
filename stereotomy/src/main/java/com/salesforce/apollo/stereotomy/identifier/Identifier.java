@@ -35,17 +35,22 @@ public interface Identifier {
                                }
 
                                @Override
-                               public boolean isTransferable() {
-                                   return false;
+                               public boolean isNone() {
+                                   return true;
                                }
 
-                               public String toString() {
-                                   return "Identifier<NONE>";
+                               @Override
+                               public boolean isTransferable() {
+                                   return false;
                                }
 
                                @Override
                                public ByteString toByteString() {
                                    return EMPTY;
+                               }
+
+                               public String toString() {
+                                   return "Identifier<NONE>";
                                }
                            };
 
@@ -119,7 +124,7 @@ public interface Identifier {
                          .putAllSignatures(signatures.entrySet()
                                                      .stream()
                                                      .collect(Collectors.toMap(e -> e.getKey(),
-                                                                               e -> qb64(e.getValue()))))
+                                                                               e -> e.getValue().toByteString())))
                          .build();
     }
 
@@ -130,6 +135,10 @@ public interface Identifier {
     int hashCode();
 
     byte identifierCode();
+
+    default boolean isNone() {
+        return false;
+    }
 
     boolean isTransferable();
 

@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -54,8 +55,9 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public Optional<Identifier> getDelegatingIdentifier() {
-        return state.getDelegatingIdentifier().isEmpty() ? Optional.empty()
-                : Optional.of(identifier(state.getDelegatingIdentifier()));
+        Identifier identifier = identifier(state.getDelegatingIdentifier());
+        return identifier.isNone() ? Optional.empty()
+                : Optional.of(identifier);
     }
 
     @Override
@@ -75,7 +77,7 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public Optional<Digest> getNextKeyConfigurationDigest() {
-        String nextKeyConfigurationDigest = state.getNextKeyConfigurationDigest();
+        ByteString nextKeyConfigurationDigest = state.getNextKeyConfigurationDigest();
         return nextKeyConfigurationDigest.isEmpty() ? Optional.empty()
                 : Optional.of(digest(nextKeyConfigurationDigest));
     }

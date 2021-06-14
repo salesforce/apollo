@@ -70,7 +70,7 @@ public class StereotomyTests {
         assertTrue(i.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) i.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("bf2ad468dfc1e394de41c0525dff5c08d07c1e22fac3964a5859da8927e9935d",
+        assertEquals("68470280607a80eb1f876f3958ed9efe7af05297aa3f01256554f69ab727b19f",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) i.getSigningThreshold()).getThreshold());

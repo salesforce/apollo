@@ -51,11 +51,14 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
     }
 
     public static Identifier identifier(ByteBuffer buff) {
+        if (!buff.hasRemaining()) {
+            return Identifier.NONE;
+        }
         return switch (buff.get()) {
         case 0 -> Identifier.NONE;
-        case 1 -> new SelfSigningIdentifier(buff);
+        case 1 -> new SelfAddressingIdentifier(buff);
         case 2 -> new BasicIdentifier(buff);
-        case 3 -> new SelfAddressingIdentifier(buff);
+        case 3 -> new SelfSigningIdentifier(buff);
         default -> throw new IllegalArgumentException("Unexpected value: " + buff.get());
         };
     }
@@ -173,7 +176,7 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
     }
 
     public static String shortQb64(Identifier identifier) {
-        return qb64(identifier).substring(0, SHORTENED_LENGTH);
+        return identifier == Identifier.NONE ? "<none>" : qb64(identifier).substring(0, SHORTENED_LENGTH);
     }
 
     public static String transferrableIdentifierCode(SignatureAlgorithm a) {

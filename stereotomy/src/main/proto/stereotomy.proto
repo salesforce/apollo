@@ -11,8 +11,8 @@ package stereotomy;
 message RotationEvent {
     Header header = 1;
     Establishment establishment = 2;
-    repeated string removedWitnesses = 3;
-    repeated string  addedWitnesses = 4;
+    repeated bytes removedWitnesses = 3;
+    repeated bytes  addedWitnesses = 4;
     repeated Seal seals = 5;
     EventCoordinates delegatingEvent = 6;
 }
@@ -21,7 +21,7 @@ message InceptionEvent {
     Header header = 1;
     Establishment establishment = 2;
     IdentifierSpec inceptionStatement = 3;
-    repeated string witnesses = 4;
+    repeated bytes witnesses = 4;
     repeated string configurationTraits = 5;
     EventCoordinates delegatingEvent = 6;
 }
@@ -40,19 +40,19 @@ message AttachmentEvent {
 
 message Establishment {
     SigningThreshold signingThreshold = 1;
-    repeated string keys = 2;
+    repeated bytes keys = 2;
     bytes nextKeyConfiguration = 3;
     int32 witnessThreshold = 4;
 }
 
 message Header {
     int64 sequenceNumber = 1;
-    string identifier = 2;
+    bytes identifier = 2;
     bytes previousDigest = 3;
     Version version = 4;
-    map<int32, string> authentication = 5;
+    map<int32, bytes> authentication = 5;
     string format = 6; 
-    map<int32, string> endorsements = 7;
+    map<int32, bytes> endorsements = 7;
     EventCoordinates previous = 8;
     repeated Receipt receipts = 9;
     bytes configuration = 10;
@@ -60,18 +60,18 @@ message Header {
 
 message Seal {
     oneof type {
-        string digest = 1;
+        bytes digest = 1;
         EventCoordinates coordinates = 2;
     }
 }
 
 message Receipt {
     EventCoordinates coordinates = 1;
-    map<int32, string> signatures = 2;
+    map<int32, bytes> signatures = 2;
 }
 
 message Signatures {
-    map<int32, string> signatures = 1;
+    map<int32, bytes> signatures = 1;
 }
 
 message Weight {
@@ -95,57 +95,57 @@ message Version {
 
 message EventCoordinates {
     int64 sequenceNumber = 1;
-    string identifier = 2;
+    bytes identifier = 2;
     bytes digest = 3;
 }
 
 message StoredKeyState {
-    string identifier = 1;
+    bytes identifier = 1;
     EventCoordinates coordinates = 2;
     EventCoordinates lastEvent = 3;
     EventCoordinates lastEstablishmentEvent = 4;
-    string delegatingIdentifier = 5;
-    repeated string keys = 6;
-    string nextKeyConfigurationDigest = 7;
+    bytes delegatingIdentifier = 5;
+    repeated bytes keys = 6;
+    bytes nextKeyConfigurationDigest = 7;
     repeated string configurationTraits = 8;
     SigningThreshold signingThreshold = 9;
-    repeated string witnesses = 10;
+    repeated bytes witnesses = 10;
     int32 witnessThreshold = 11;
 }
 
 message IdentifierSpec {
     Version version = 1;
-    string identifier = 2;
+    bytes identifier = 2;
     int64 sequenceNumber = 3;
     string eventType = 4;
     SigningThreshold signingThreshold = 5;
-    repeated string keys = 6;
-    string nextKeysDigest = 7;
+    repeated bytes keys = 6;
+    bytes nextKeysDigest = 7;
     int32 witnessThreshold = 8;
-    repeated string witnesses = 9;
+    repeated bytes witnesses = 9;
     repeated string configuration = 10;
 }
 
 message InteractionSpec {
     Version version = 1;
-    string identifier = 2;
+    bytes identifier = 2;
     int64 sequenceNumber = 3;
     string eventType = 4;
-    string priorEventDigest = 5;
+    bytes priorEventDigest = 5;
     repeated Seal anchors = 6;
 }
 
 message RotationSpec {
     Version version = 1;
-    string identifier = 2;
+    bytes identifier = 2;
     int64 sequenceNumber = 3;
     string eventType = 4;
-    string priorEventDigest = 5;
-    repeated string keys = 6;
+    bytes priorEventDigest = 5;
+    repeated bytes keys = 6;
     SigningThreshold signingThreshold = 7;
-    string nextKeysDigest = 8;
+    bytes nextKeysDigest = 8;
     int32 witnessThreshold = 9;
-    repeated string witnessesRemoved = 10;
-    repeated string witnessesAdded = 11;
+    repeated bytes witnessesRemoved = 10;
+    repeated bytes witnessesAdded = 11;
     repeated Seal achnors = 12;
 }

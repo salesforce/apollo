@@ -1,9 +1,8 @@
 package com.salesforce.apollo.stereotomy.processing;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toCoordinates;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toSigningThreshold;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 import static java.util.Objects.requireNonNull;
 
 import java.security.PublicKey;
@@ -98,15 +97,18 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
                                                                             .map(e -> e.name())
                                                                             .collect(Collectors.toList()))
                               .setCoordinates(toCoordinates(event.getCoordinates()))
-                              .setDelegatingIdentifier(delegatingPrefix == null ? "" : qb64(delegatingPrefix))
-                              .setIdentifier(qb64(identifier))
-                              .addAllKeys(keys.stream().map(pk -> qb64(pk)).collect(Collectors.toList()))
+                              .setDelegatingIdentifier(delegatingPrefix == null ? Digest.NONE.toByteString()
+                                      : delegatingPrefix.toByteString())
+                              .setIdentifier(identifier.toByteString())
+                              .addAllKeys(keys.stream().map(pk -> bs(pk)).collect(Collectors.toList()))
                               .setLastEstablishmentEvent(toCoordinates(lastEstablishmentEvent.getCoordinates()))
                               .setLastEvent(toCoordinates(event.getCoordinates()))
-                              .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? ""
-                                      : qb64(nextKeyConfiguration))
+                              .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? Digest.NONE.toByteString()
+                                      : nextKeyConfiguration.toByteString())
                               .setSigningThreshold(toSigningThreshold(signingThreshold))
-                              .addAllWitnesses(witnesses.stream().map(e -> qb64(e)).collect(Collectors.toList()))
+                              .addAllWitnesses(witnesses.stream()
+                                                        .map(e -> e.toByteString())
+                                                        .collect(Collectors.toList()))
                               .setWitnessThreshold(witnessThreshold)
                               .build());
     }
