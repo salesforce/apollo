@@ -65,43 +65,43 @@ import com.salesforce.apollo.consortium.ViewContext;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
-import com.salesforce.apollo.consortium.support.SigningUtils;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.ReservoirSampler;
-import com.salesforce.apollo.membership.impl.Member;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 import com.salesforce.apollo.utils.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class MembershipTests {
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final Message                           GENESIS_DATA    = batch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
-    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
-            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
-    private final static int                               MAX_CARDINALITY = 11;
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final Message                          GENESIS_DATA    = batch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
+    private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private final static int                              MAX_CARDINALITY = 11;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, MAX_CARDINALITY + 1)
+        certs = IntStream.range(0, MAX_CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Conversion.getMemberId(cert.getX509Certificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     private File                               baseDir;
     private Builder                            builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private File                               checkpointDirBase;
-    private Map<HashKey, Router>               communications = new ConcurrentHashMap<>();
+    private Map<Digest, Router>                communications = new ConcurrentHashMap<>();
     private final Map<Member, Consortium>      consortium     = new ConcurrentHashMap<>();
-    private List<Member>                       members;
+    private List<SigningMember>                members;
     private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
     private Context<Member>                    context;
     private ScheduledExecutorService           scheduler;
@@ -127,7 +127,7 @@ public class MembershipTests {
             return t;
         });
 
-        context = new Context<>(HashKey.ORIGIN.prefix(1), 3);
+        context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 3);
         checkpointDirBase = new File("target/mt-chkpoints");
         Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/mt-cluster");
@@ -136,7 +136,9 @@ public class MembershipTests {
 
         members = new ArrayList<>();
         for (CertificateWithPrivateKey cert : certs.values()) {
-            members.add(new Member(cert.getX509Certificate()));
+            members.add(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                    cert.getX509Certificate(), cert.getPrivateKey(), new Signer(0, cert.getPrivateKey()),
+                    cert.getX509Certificate().getPublicKey()));
         }
 
         ExecutorService serverThreads = ForkJoinPool.commonPool();
@@ -160,9 +162,9 @@ public class MembershipTests {
             return t;
         });
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
-        Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus = (c, f) -> {
-            HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
+        Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
+            Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
                 cPipeline.execute(() -> {
                     CountDownLatch executed = new CountDownLatch(testCardinality);
@@ -216,7 +218,7 @@ public class MembershipTests {
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
-        HashKey hash;
+        Digest hash;
         Consortium client = consortium.values()
                                       .stream()
                                       .filter(c -> !c.equals(testSubject))
@@ -242,7 +244,7 @@ public class MembershipTests {
         final Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
         int bunchCount = 500;
         System.out.println("Submitting batches: " + bunchCount);
-        final Set<HashKey> submitted = new HashSet<>();
+        final Set<Digest> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
 
         AtomicInteger txnr = new AtomicInteger();
@@ -264,7 +266,7 @@ public class MembershipTests {
                 }
             }
             BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
-            AtomicReference<HashKey> key = new AtomicReference<>();
+            AtomicReference<Digest> key = new AtomicReference<>();
             Consortium cl = consortium.values()
                                       .stream()
                                       .filter(c -> !c.equals(testSubject))
@@ -302,7 +304,7 @@ public class MembershipTests {
                 }
             }
             BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
-            AtomicReference<HashKey> key = new AtomicReference<>();
+            AtomicReference<Digest> key = new AtomicReference<>();
             Consortium cl = consortium.values()
                                       .stream()
                                       .filter(c -> !c.equals(testSubject))
@@ -362,9 +364,9 @@ public class MembershipTests {
             return t;
         });
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
-        Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus = (c, f) -> {
-            HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
+        Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
+            Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
                 cPipeline.execute(() -> {
                     CountDownLatch executed = new CountDownLatch(testCardinality);
@@ -418,7 +420,7 @@ public class MembershipTests {
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
-        HashKey hash;
+        Digest hash;
         Consortium cl = consortium.values()
                                   .stream()
                                   .filter(c -> !c.equals(testSubject))
@@ -443,7 +445,7 @@ public class MembershipTests {
         final Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
         int bunchCount = 150;
         System.out.println("Submitting batches: " + bunchCount);
-        final Set<HashKey> submitted = new HashSet<>();
+        final Set<Digest> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
 
         AtomicInteger txnr = new AtomicInteger();
@@ -465,7 +467,7 @@ public class MembershipTests {
                 }
             }
             BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
-            AtomicReference<HashKey> key = new AtomicReference<>();
+            AtomicReference<Digest> key = new AtomicReference<>();
             Consortium cli = consortium.values()
                                        .stream()
                                        .filter(c -> !c.equals(testSubject))
@@ -503,7 +505,7 @@ public class MembershipTests {
                 }
             }
             BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
-            AtomicReference<HashKey> key = new AtomicReference<>();
+            AtomicReference<Digest> key = new AtomicReference<>();
             Consortium cln = consortium.values()
                                        .stream()
                                        .filter(c -> !c.equals(testSubject))
@@ -553,14 +555,14 @@ public class MembershipTests {
     }
 
     private void gatherConsortium(Duration gossipDuration, AtomicReference<CountDownLatch> processed,
-                                  BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus) {
+                                  BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus) {
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
                                                                  .build();
         TransactionExecutor executor = (h, et, c) -> {
             if (c != null) {
-                c.accept(new HashKey(et.getHash()), null);
+                c.accept(new Digest(et.getHash()), null);
             }
         };
         members.stream()
@@ -569,7 +571,7 @@ public class MembershipTests {
                .forEach(e -> consortium.put(e.getMember(), e));
     }
 
-    private Parameters parameters(Member m, BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus,
+    private Parameters parameters(SigningMember m, BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus,
                                   TransactionExecutor executor, Messenger.Parameters msgParameters,
                                   Duration gossipDuration, ScheduledExecutorService scheduler) {
         ForkJoinPool fj = ForkJoinPool.commonPool();
@@ -581,8 +583,6 @@ public class MembershipTests {
         return Parameters.newBuilder()
                          .setConsensus(consensus)
                          .setMember(m)
-                         .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
-                                                                     Utils.secureEntropy()))
                          .setContext(context)
                          .setMsgParameters(msgParameters)
                          .setMaxBatchByteSize(1024 * 1024 * 32)

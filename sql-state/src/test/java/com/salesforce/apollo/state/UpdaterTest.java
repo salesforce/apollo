@@ -22,7 +22,8 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.consortium.proto.Transaction;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * @author hal.hildebrand
@@ -34,7 +35,7 @@ public class UpdaterTest {
     public void smoke() throws Exception {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
                 new File("target/chkpoints"));
-        updater.getExecutor().beginBlock(0, HashKey.LAST);
+        updater.getExecutor().beginBlock(0, DigestAlgorithm.DEFAULT.getLast());
         updater.initializeEvents();
 
         Connection connection = updater.newConnection();
@@ -50,7 +51,13 @@ public class UpdaterTest {
                                       "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)")));
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(null, ExecutedTransaction.newBuilder().setTransaction(transaction).build(), null);
+        updater.getExecutor()
+               .execute(DigestAlgorithm.DEFAULT.getOrigin(),
+                        ExecutedTransaction.newBuilder()
+                                           .setHash(Digest.NONE.toByteString())
+                                           .setTransaction(transaction)
+                                           .build(),
+                        null);
 
         ResultSet books = statement.executeQuery("select * from books");
         assertTrue(books.first());
@@ -65,7 +72,7 @@ public class UpdaterTest {
 
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_publish", new Properties(),
                 new File("target/chkpoints"));
-        updater.getExecutor().beginBlock(0, HashKey.LAST);
+        updater.getExecutor().beginBlock(0, DigestAlgorithm.DEFAULT.getLast());
         updater.initializeEvents();
 
         Connection connection = updater.newConnection();

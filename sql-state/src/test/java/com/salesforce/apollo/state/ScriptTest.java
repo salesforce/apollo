@@ -21,11 +21,10 @@ import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
 import com.salesfoce.apollo.consortium.proto.Transaction;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -38,7 +37,7 @@ public class ScriptTest {
     public void smoke() throws Exception {
         SqlStateMachine machine = new SqlStateMachine("jdbc:h2:mem:test_script", new Properties(),
                 new File("target/chkpoints"));
-        machine.getExecutor().beginBlock(0, HashKey.LAST);
+        machine.getExecutor().beginBlock(0, DigestAlgorithm.DEFAULT.getLast());
         machine.initializeEvents();
         Connection connection = machine.newConnection();
         createAndInsert(connection);
@@ -47,13 +46,13 @@ public class ScriptTest {
                                              .setTxn(Any.pack(callScript("test.DbAccess", "call",
                                                                          Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java")))))
                                              .build();
-        byte[] hashBytes = Conversion.hashOf(transaction.toByteString());
+        Digest hashBytes = DigestAlgorithm.DEFAULT.digest(transaction.toByteString());
         ExecutedTransaction txn = ExecutedTransaction.newBuilder()
                                                      .setTransaction(transaction)
-                                                     .setHash(ByteString.copyFrom(hashBytes))
+                                                     .setHash(hashBytes.toByteString())
                                                      .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();
-        machine.getExecutor().execute(new HashKey(hashBytes), txn, (result, err) -> {
+        machine.getExecutor().execute(hashBytes, txn, (result, err) -> {
             if (err != null) {
                 throw new IllegalStateException(err);
             }

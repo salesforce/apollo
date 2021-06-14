@@ -71,8 +71,8 @@ import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.consortium.support.CheckpointState;
-import com.salesforce.apollo.utils.HashKey;
-import com.salesforce.apollo.utils.Hash.HkHasher;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.utils.Hash.DigestHasher;
 
 /**
  * This is ye Jesus Nut of sql state via distribute linear logs. We use H2 as a
@@ -127,12 +127,12 @@ public class SqlStateMachine {
     public class TxnExec implements TransactionExecutor {
 
         @Override
-        public void beginBlock(long height, HashKey hash) {
+        public void beginBlock(long height, Digest hash) {
             SqlStateMachine.this.beginBlock(height, hash);
         }
 
         @Override
-        public void execute(HashKey blockHash, ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
+        public void execute(Digest blockHash, ExecutedTransaction t, BiConsumer<Object, Throwable> completion) {
             boolean closed;
             try {
                 closed = connection.isClosed();
@@ -143,13 +143,13 @@ public class SqlStateMachine {
                 return;
             }
             Any tx = t.getTransaction().getTxn();
-            HashKey txnHash = new HashKey(t.getHash());
+            Digest txnHash = new Digest(t.getHash());
             SecureRandom prev = secureRandom.get();
             secureRandom.set(entropy.get());
             try {
                 Object results;
                 if (tx.is(BatchedTransaction.class)) {
-                    results = executeBatchTransaction(t, tx, txnHash);
+                    results = executeBatchTransaction(t, tx);
                 } else if (tx.is(Batch.class)) {
                     results = executeBatch(blockHash, tx, txnHash);
                 } else if (tx.is(BatchUpdate.class)) {
@@ -188,17 +188,16 @@ public class SqlStateMachine {
                 log.info("Error unpacking batched transaction genesis");
                 return;
             }
-            HashKey hash = HashKey.ORIGIN;
             for (Txn txn : txns.getTransactionsList()) {
                 try {
                     if (txn.hasStatement()) {
-                        acceptPreparedStatement(hash, txn.getStatement());
+                        acceptPreparedStatement(txn.getStatement());
                     } else if (txn.hasBatch()) {
-                        acceptBatch(hash, txn.getBatch());
+                        acceptBatch(txn.getBatch());
                     } else if (txn.hasCall()) {
-                        acceptCall(hash, txn.getCall());
+                        acceptCall(txn.getCall());
                     } else if (txn.hasBatchUpdate()) {
-                        acceptBatchUpdate(hash, txn.getBatchUpdate());
+                        acceptBatchUpdate(txn.getBatchUpdate());
                     } else {
                         log.error("Unknown transaction type");
                         return;
@@ -448,7 +447,7 @@ public class SqlStateMachine {
         }
     }
 
-    private int[] acceptBatch(HashKey hash, Batch batch) throws SQLException {
+    private int[] acceptBatch(Batch batch) throws SQLException {
         try (java.sql.Statement exec = connection.createStatement()) {
             for (String sql : batch.getStatementsList()) {
                 exec.addBatch(sql);
@@ -457,7 +456,7 @@ public class SqlStateMachine {
         }
     }
 
-    private int[] acceptBatchUpdate(HashKey hash, BatchUpdate batchUpdate) throws SQLException {
+    private int[] acceptBatchUpdate(BatchUpdate batchUpdate) throws SQLException {
         PreparedStatement exec;
         try {
             exec = psCache.get(batchUpdate.getSql());
@@ -487,7 +486,7 @@ public class SqlStateMachine {
         }
     }
 
-    private CallResult acceptCall(HashKey hash, Call call) throws SQLException {
+    private CallResult acceptCall(Call call) throws SQLException {
         List<ResultSet> results = new ArrayList<>();
         CallableStatement exec;
         try {
@@ -547,7 +546,7 @@ public class SqlStateMachine {
         }
     }
 
-    private List<ResultSet> acceptPreparedStatement(HashKey hash, Statement statement) throws SQLException {
+    private List<ResultSet> acceptPreparedStatement(Statement statement) throws SQLException {
         List<ResultSet> results = new ArrayList<>();
         PreparedStatement exec;
         try {
@@ -594,7 +593,7 @@ public class SqlStateMachine {
         }
     }
 
-    private Object acceptScript(HashKey hash, Script script) throws SQLException {
+    private Object acceptScript(Digest hash, Script script) throws SQLException {
 
         Object instance;
 
@@ -640,12 +639,11 @@ public class SqlStateMachine {
         return returnValue;
     }
 
-    private void beginBlock(long height, HashKey hash) {
-        HkHasher hasher = new HkHasher(hash, height);
-        getSession().getRandom().setSeed(hasher.getH1());
+    private void beginBlock(long height, Digest hash) {
+        getSession().getRandom().setSeed(new DigestHasher(hash, height).getH1());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
-            secureEntropy.setSeed(hash.bytes());
+            secureEntropy.setSeed(hash.getBytes());
             entropy.set(secureEntropy);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("No SHA1PRNG available", e);
@@ -716,16 +714,16 @@ public class SqlStateMachine {
         }
     }
 
-    private Object execute(ExecutedTransaction t, Txn txn, HashKey hash) throws Exception {
+    private Object execute(ExecutedTransaction t, Txn txn) throws Exception {
         try {
             if (txn.hasStatement()) {
-                return acceptPreparedStatement(hash, txn.getStatement());
+                return acceptPreparedStatement(txn.getStatement());
             } else if (txn.hasBatch()) {
-                return acceptBatch(hash, txn.getBatch());
+                return acceptBatch(txn.getBatch());
             } else if (txn.hasCall()) {
-                return acceptCall(hash, txn.getCall());
+                return acceptCall(txn.getCall());
             } else if (txn.hasBatchUpdate()) {
-                return acceptBatchUpdate(hash, txn.getBatchUpdate());
+                return acceptBatchUpdate(txn.getBatchUpdate());
             } else {
                 log.error("Unknown transaction type: {}", t.getHash());
                 return null;
@@ -735,7 +733,7 @@ public class SqlStateMachine {
         }
     }
 
-    private int[] executeBatch(HashKey blockHash, Any tx, HashKey txnHash) throws Exception {
+    private int[] executeBatch(Digest blockHash, Any tx, Digest txnHash) throws Exception {
         Batch batch;
         try {
             batch = tx.unpack(Batch.class);
@@ -743,10 +741,10 @@ public class SqlStateMachine {
             log.warn("Cannot deserialize batch: {} of block: {}", txnHash, blockHash);
             throw e;
         }
-        return acceptBatch(txnHash, batch);
+        return acceptBatch(batch);
     }
 
-    private List<Object> executeBatchTransaction(ExecutedTransaction t, Any tx, HashKey txnHash) throws Exception {
+    private List<Object> executeBatchTransaction(ExecutedTransaction t, Any tx) throws Exception {
         BatchedTransaction txns;
         try {
             txns = tx.unpack(BatchedTransaction.class);
@@ -757,7 +755,7 @@ public class SqlStateMachine {
         List<Object> results = new ArrayList<Object>();
         for (int i = 0; i < txns.getTransactionsCount(); i++) {
             try {
-                results.add(SqlStateMachine.this.execute(t, txns.getTransactions(i), txnHash));
+                results.add(SqlStateMachine.this.execute(t, txns.getTransactions(i)));
             } catch (Throwable e) {
                 throw new Mutator.BatchedTransactionException(i, e);
             }
@@ -765,7 +763,7 @@ public class SqlStateMachine {
         return results;
     }
 
-    private int[] executeBatchUpdate(HashKey blockHash, Any tx, HashKey txnHash) throws Exception {
+    private int[] executeBatchUpdate(Digest blockHash, Any tx, Digest txnHash) throws Exception {
         BatchUpdate batch;
         try {
             batch = tx.unpack(BatchUpdate.class);
@@ -773,10 +771,10 @@ public class SqlStateMachine {
             log.warn("Cannot deserialize batch update: {} of block: {}", txnHash, blockHash);
             throw e;
         }
-        return acceptBatchUpdate(txnHash, batch);
+        return acceptBatchUpdate(batch);
     }
 
-    private Object executeScript(HashKey blockHash, Any tx, HashKey txnHash) throws Exception {
+    private Object executeScript(Digest blockHash, Any tx, Digest txnHash) throws Exception {
         Script script;
         try {
             script = tx.unpack(Script.class);
@@ -787,7 +785,7 @@ public class SqlStateMachine {
         return acceptScript(txnHash, script);
     }
 
-    private List<ResultSet> executeStatement(HashKey blockHash, Any tx, HashKey txnHash) throws Exception {
+    private List<ResultSet> executeStatement(Digest blockHash, Any tx, Digest txnHash) throws Exception {
         Statement statement;
         try {
             statement = tx.unpack(Statement.class);
@@ -795,7 +793,7 @@ public class SqlStateMachine {
             log.warn("Cannot deserialize Statement {} of block: {}", txnHash, blockHash);
             throw e;
         }
-        return acceptPreparedStatement(txnHash, statement);
+        return acceptPreparedStatement(statement);
     }
 
     private Session getSession() {
