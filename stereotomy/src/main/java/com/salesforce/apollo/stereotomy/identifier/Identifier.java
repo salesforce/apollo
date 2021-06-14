@@ -13,6 +13,7 @@ import java.security.PublicKey;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -25,17 +26,28 @@ import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
  *
  */
 public interface Identifier {
-    Identifier NONE = new Identifier() {
+    final ByteString EMPTY = ByteString.copyFrom(new byte[] { 0 });
+    Identifier       NONE  = new Identifier() {
 
-        @Override
-        public boolean isTransferable() {
-            return false;
-        }
+                               @Override
+                               public byte identifierCode() {
+                                   return 0;
+                               }
 
-        public String toString() {
-            return "Identifier<NONE>";
-        }
-    };
+                               @Override
+                               public boolean isTransferable() {
+                                   return false;
+                               }
+
+                               public String toString() {
+                                   return "Identifier<NONE>";
+                               }
+
+                               @Override
+                               public ByteString toByteString() {
+                                   return EMPTY;
+                               }
+                           };
 
     public static Identifier identifier(IdentifierSpecification spec, byte[] inceptionStatement) {
         var derivation = spec.getDerivation();
@@ -117,5 +129,9 @@ public interface Identifier {
     @Override
     int hashCode();
 
+    byte identifierCode();
+
     boolean isTransferable();
+
+    ByteString toByteString();
 }

@@ -31,7 +31,10 @@ public class JohnHancock {
     private final SignatureAlgorithm algorithm;
 
     public JohnHancock(ByteString bs) {
-        ByteBuffer buff = bs.asReadOnlyByteBuffer();
+        this(bs.asReadOnlyByteBuffer());
+    }
+
+    public JohnHancock(ByteBuffer buff) {
         this.algorithm = SignatureAlgorithm.fromSignatureCode(buff.get());
         bytes = new byte[algorithm.signatureLength()];
         buff.get(bytes);

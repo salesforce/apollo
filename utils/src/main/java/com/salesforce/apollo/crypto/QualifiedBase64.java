@@ -100,11 +100,15 @@ public class QualifiedBase64 {
         }
     }
 
-    public static Digest digest(ByteString bs) {
-        if (bs.isEmpty()) {
+    public static Digest digest(ByteBuffer buff) {
+        if (!buff.hasRemaining()) {
             return Digest.NONE;
         }
-        return new Digest(bs);
+        return new Digest(buff);
+    }
+
+    public static Digest digest(ByteString bs) {
+        return digest(bs.asReadOnlyByteBuffer());
     }
 
     public static Digest digest(String qb64) {
@@ -236,6 +240,10 @@ public class QualifiedBase64 {
 
     public static String shortQb64(PublicKey publicKey) {
         return qb64(publicKey).substring(0, SHORTENED_LENGTH);
+    }
+
+    public static JohnHancock signature(ByteBuffer buff) {
+        return new JohnHancock(buff);
     }
 
     public static JohnHancock signature(ByteString bs) {
