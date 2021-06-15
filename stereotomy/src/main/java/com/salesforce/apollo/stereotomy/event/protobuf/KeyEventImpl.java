@@ -14,8 +14,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
-import com.salesfoce.apollo.stereotomy.event.proto.Receipt;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -24,7 +24,6 @@ import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.utils.Pair;
 
 /**
  * Grpc implemention of abstract KeyEvent
@@ -34,35 +33,25 @@ import com.salesforce.apollo.utils.Pair;
  */
 abstract public class KeyEventImpl implements KeyEvent {
 
-    private static Map<Integer, JohnHancock> signaturesOf(Receipt receipt) {
-        return receipt.getSignaturesMap()
-                      .entrySet()
-                      .stream()
-                      .collect(Collectors.toMap(e -> e.getKey(), e -> signature(e.getValue())));
-    }
+    private final EventCommon common;
+    private final Header      header;
 
-    private final Header header;
-
-    public KeyEventImpl(Header header) {
+    public KeyEventImpl(Header header, EventCommon common) {
         this.header = header;
+        this.common = common;
     }
 
     @Override
     public Map<Integer, JohnHancock> getAuthentication() {
-        return header.getAuthenticationMap()
+        return common.getAuthenticationMap()
                      .entrySet()
                      .stream()
                      .collect(Collectors.toMap(e -> e.getKey(), e -> signature(e.getValue())));
     }
 
     @Override
-    public long getSequenceNumber() {
-        return header.getSequenceNumber();
-    }
-
-    @Override
-    public Digest getPreviousDigest() {
-        return digest(header.getPreviousDigest());
+    public Format getFormat() {
+        return Format.valueOf(common.getFormat());
     }
 
     @Override
@@ -71,34 +60,20 @@ abstract public class KeyEventImpl implements KeyEvent {
     }
 
     @Override
-    public Map<Integer, JohnHancock> getEndorsements() {
-        return header.getEndorsementsMap()
-                     .entrySet()
-                     .stream()
-                     .collect(Collectors.toMap(e -> e.getKey(), e -> signature(e.getValue())));
-    }
-
-    @Override
-    public Format getFormat() {
-        return Format.valueOf(header.getFormat());
-    }
-
-    @Override
     public EventCoordinates getPrevious() {
-        com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates previous = header.getPrevious();
+        com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates previous = common.getPrevious();
         return new EventCoordinates(identifier(previous.getIdentifier()), previous.getSequenceNumber(),
                 digest(previous.getDigest()));
     }
 
     @Override
-    public Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts() {
-        return header.getReceiptsList().stream().map(receipt -> {
-            com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = receipt.getCoordinates();
-            return new Pair<EventCoordinates, Map<Integer, JohnHancock>>(
-                    new EventCoordinates(identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
-                            digest(coordinates.getDigest())),
-                    signaturesOf(receipt));
-        }).collect(Collectors.toMap(e -> e.a, e -> e.b));
+    public Digest getPriorEventDigest() {
+        return digest(header.getPriorEventDigest());
+    }
+
+    @Override
+    public long getSequenceNumber() {
+        return header.getSequenceNumber();
     }
 
     @Override
@@ -120,6 +95,11 @@ abstract public class KeyEventImpl implements KeyEvent {
     @Override
     public Digest hash(DigestAlgorithm digest) {
         return new Digest(digest, digest.hashOf(toByteString()));
+    }
+
+    @Override
+    public final byte[] getBytes() {
+        return toByteString().toByteArray();
     }
 
     protected abstract ByteString toByteString();

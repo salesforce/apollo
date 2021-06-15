@@ -6,10 +6,18 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
+import java.util.Map;
+
+import com.salesforce.apollo.crypto.JohnHancock;
+
 /**
  * @author hal.hildebrand
  *
  */
 public interface AttachmentEvent extends KeyEvent {
+    Map<Integer, JohnHancock> getEndorsements();
 
+    Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts();
+
+    Map<Integer, JohnHancock> getAuthentication();
 }

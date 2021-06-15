@@ -8,54 +8,78 @@ import "google/protobuf/any.proto";
 
 package stereotomy;
 
-message RotationEvent {
-    Header header = 1;
-    Establishment establishment = 2;
-    repeated bytes removedWitnesses = 3;
-    repeated bytes  addedWitnesses = 4;
-    repeated Seal seals = 5;
-    EventCoordinates delegatingEvent = 6;
+message Header {
+    int64 sequenceNumber = 1;
+    bytes identifier = 2;
+    bytes priorEventDigest = 3;
+    Version version = 4;
+    string eventType = 5;
 }
 
-message InceptionEvent {
-    Header header = 1;
-    Establishment establishment = 2;
-    IdentifierSpec inceptionStatement = 3;
-    repeated bytes witnesses = 4;
-    repeated string configurationTraits = 5;
-    EventCoordinates delegatingEvent = 6;
+message EventCommon {
+    string format = 1;
+    bytes configuration = 2;
+    EventCoordinates previous = 3;
+    map<int32, bytes> authentication = 4;
 }
 
 message InteractionEvent {
+    InteractionSpec specification = 1;
+    EventCommon common = 2;
+}
+
+message InteractionSpec {
     Header header = 1;
-    repeated Seal seals = 5;
+    repeated Seal seals = 2;
 }
 
 message AttachmentEvent {
-    EventCoordinates coordinates = 1;
-    Signatures authentication = 2;
-    Signatures endorsements = 3; 
-    repeated Receipt receipts = 4;
+    Header header = 1;
+    EventCommon common = 2;
+    EventCoordinates coordinates = 3;
+    map<int32, bytes> endorsements = 5; 
+    repeated Receipt receipts = 6;
 }
 
 message Establishment {
     SigningThreshold signingThreshold = 1;
     repeated bytes keys = 2;
-    bytes nextKeyConfiguration = 3;
+    bytes nextKeysDigest = 3;
     int32 witnessThreshold = 4;
 }
 
-message Header {
+message RotationEvent {
+    RotationSpec specification = 1; 
+    EventCommon common = 2;
+    EventCoordinates delegatingEvent = 3;
+}
+
+message RotationSpec {
+    Header header = 1;
+    Establishment establishment = 2;
+    repeated bytes witnessesRemoved = 3;
+    repeated bytes witnessesAdded = 41;
+    repeated Seal seals = 5;
+}
+
+message InceptionEvent {
+    IdentifierSpec specification = 1;
+    EventCommon common = 2;
+    EventCoordinates delegatingEvent = 3;
+    bytes identifier = 4;
+}
+
+message IdentifierSpec {
+    Header header = 1;
+    Establishment establishment = 2;
+    repeated bytes witnesses = 3;
+    repeated string configuration = 4;
+}
+
+message EventCoordinates {
     int64 sequenceNumber = 1;
     bytes identifier = 2;
-    bytes previousDigest = 3;
-    Version version = 4;
-    map<int32, bytes> authentication = 5;
-    string format = 6; 
-    map<int32, bytes> endorsements = 7;
-    EventCoordinates previous = 8;
-    repeated Receipt receipts = 9;
-    bytes configuration = 10;
+    bytes digest = 3;
 }
 
 message Seal {
@@ -68,10 +92,6 @@ message Seal {
 message Receipt {
     EventCoordinates coordinates = 1;
     map<int32, bytes> signatures = 2;
-}
-
-message Signatures {
-    map<int32, bytes> signatures = 1;
 }
 
 message Weight {
@@ -93,11 +113,6 @@ message Version {
     int32 minor = 2;
 }
 
-message EventCoordinates {
-    int64 sequenceNumber = 1;
-    bytes identifier = 2;
-    bytes digest = 3;
-}
 
 message StoredKeyState {
     bytes identifier = 1;
@@ -114,39 +129,6 @@ message StoredKeyState {
     int32 witnessThreshold = 12;
 }
 
-message IdentifierSpec {
-    Version version = 1;
-    bytes identifier = 2;
-    int64 sequenceNumber = 3;
-    string eventType = 4;
-    SigningThreshold signingThreshold = 5;
-    repeated bytes keys = 6;
-    bytes nextKeysDigest = 7;
-    int32 witnessThreshold = 8;
-    repeated bytes witnesses = 9;
-    repeated string configuration = 10;
-}
-
-message InteractionSpec {
-    Version version = 1;
-    bytes identifier = 2;
-    int64 sequenceNumber = 3;
-    string eventType = 4;
-    bytes priorEventDigest = 5;
-    repeated Seal anchors = 6;
-}
-
-message RotationSpec {
-    Version version = 1;
-    bytes identifier = 2;
-    int64 sequenceNumber = 3;
-    string eventType = 4;
-    bytes priorEventDigest = 5;
-    repeated bytes keys = 6;
-    SigningThreshold signingThreshold = 7;
-    bytes nextKeysDigest = 8;
-    int32 witnessThreshold = 9;
-    repeated bytes witnessesRemoved = 10;
-    repeated bytes witnessesAdded = 11;
-    repeated Seal achnors = 12;
+message Signatures {
+    map<int32, bytes> signatures = 1;
 }

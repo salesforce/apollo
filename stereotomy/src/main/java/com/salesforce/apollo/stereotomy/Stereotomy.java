@@ -6,10 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.shortQb64;
 
 import java.security.KeyPair;
 import java.security.PublicKey;
@@ -38,7 +36,6 @@ import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.keys.InMemoryKeyStore;
 import com.salesforce.apollo.stereotomy.processing.KeyStateProcessor;
 import com.salesforce.apollo.stereotomy.processing.MissingEstablishmentEventException;
 import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
@@ -408,9 +405,6 @@ public class Stereotomy {
                                      .orElseThrow(() -> new IllegalStateException("establishment event is missing"));
         EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing;
         var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
-        System.out.println("Current key coords: " + currentKeyCoordinates);
-
-        ((InMemoryKeyStore) keyStore).printContents();
 
         KeyPair nextKeyPair = keyStore.getNextKey(currentKeyCoordinates)
                                       .orElseThrow(() -> new IllegalArgumentException(

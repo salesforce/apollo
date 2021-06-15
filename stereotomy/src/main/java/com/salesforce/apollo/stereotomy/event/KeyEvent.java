@@ -19,17 +19,11 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface KeyEvent {
 
-    Map<Integer, JohnHancock> getAuthentication();
-
-    byte[] getBytes();
-
     default EventCoordinates getCoordinates() {
-        return new EventCoordinates(getIdentifier(), getSequenceNumber(), getPreviousDigest());
+        return new EventCoordinates(getIdentifier(), getSequenceNumber(), getPriorEventDigest());
     }
 
-    Digest getPreviousDigest();
-
-    Map<Integer, JohnHancock> getEndorsements();
+    Digest getPriorEventDigest();
 
     Format getFormat();
 
@@ -37,11 +31,13 @@ public interface KeyEvent {
 
     EventCoordinates getPrevious();
 
-    Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts();
-
     long getSequenceNumber();
 
     Version getVersion();
 
     Digest hash(DigestAlgorithm digest);
+
+    Map<Integer, JohnHancock> getAuthentication();
+
+    byte[] getBytes();
 }

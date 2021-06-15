@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
@@ -129,7 +128,7 @@ public class Validator {
 
             this.validateKeyConfiguration(ee);
 
-            this.validate(ee.getIdentifier().isTransferable() || ee.getNextKeyConfiguration().isEmpty(),
+            this.validate(ee.getIdentifier().isTransferable() || ee.getNextKeysDigest().isEmpty(),
                           "non-transferable prefix must not have a next key configuration");
 
             if (event instanceof InceptionEvent) {
@@ -158,10 +157,10 @@ public class Validator {
                     throw new InvalidKeyEventException(String.format("previous establishment event does not exist"));
                 }
                 EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) lookup.get();
-                this.validate(lastEstablishmentEvent.getNextKeyConfiguration().isPresent(),
+                this.validate(lastEstablishmentEvent.getNextKeysDigest().isPresent(),
                               "previous establishment event must have a next key configuration for rotation");
 
-                var nextKeyConfigurationDigest = lastEstablishmentEvent.getNextKeyConfiguration().get();
+                var nextKeyConfigurationDigest = lastEstablishmentEvent.getNextKeysDigest().get();
                 this.validate(KeyConfigurationDigester.matches(rot.getSigningThreshold(), rot.getKeys(),
                                                                nextKeyConfigurationDigest),
                               "digest of signing threshold and keys must match digest in previous establishment event");
@@ -194,9 +193,10 @@ public class Validator {
         for (var s : seals) {
             if (s instanceof Seal.CoordinatesSeal) {
                 var ecds = (Seal.CoordinatesSeal) s;
+                var digest = ecds.getEvent().getDigest();
                 if (ecds.getEvent().getIdentifier().equals(event.getIdentifier())
                         && ecds.getEvent().getSequenceNumber() == event.getSequenceNumber()
-                        && Digest.matches(event.getBytes(), ecds.getEvent().getDigest())) {
+                        && event.hash(digest.getAlgorithm()).equals(digest)) {
                     return true;
                 }
             }
@@ -205,22 +205,22 @@ public class Validator {
     }
 
     private void validateRotationWitnesses(RotationEvent rot, KeyState state) {
-        this.validate(distinct(rot.getRemovedWitnesses()), "removed witnesses must not have duplicates");
+        this.validate(distinct(rot.getWitnessesRemovedList()), "removed witnesses must not have duplicates");
 
-        this.validate(distinct(rot.getRemovedWitnesses()), "added witnesses must not have duplicates");
+        this.validate(distinct(rot.getWitnessesRemovedList()), "added witnesses must not have duplicates");
 
-        this.validate(state.getWitnesses().containsAll(rot.getRemovedWitnesses()),
+        this.validate(state.getWitnesses().containsAll(rot.getWitnessesRemovedList()),
                       "removed witnesses must be present witness list");
 
-        this.validate(disjoint(rot.getAddedWitnesses(), rot.getRemovedWitnesses()),
+        this.validate(disjoint(rot.getWitnessesAddedList(), rot.getWitnessesRemovedList()),
                       "added and removed witnesses must be mutually exclusive");
 
-        this.validate(disjoint(rot.getAddedWitnesses(), state.getWitnesses()),
+        this.validate(disjoint(rot.getWitnessesAddedList(), state.getWitnesses()),
                       "added witnesses must not already be present in witness list");
 
         var newWitnesses = new ArrayList<>(state.getWitnesses());
-        newWitnesses.removeAll(rot.getRemovedWitnesses());
-        newWitnesses.addAll(rot.getAddedWitnesses());
+        newWitnesses.removeAll(rot.getWitnessesRemovedList());
+        newWitnesses.addAll(rot.getWitnessesAddedList());
 
         this.validate(rot.getWitnessThreshold() >= 0, "witness threshold must not be negative");
 

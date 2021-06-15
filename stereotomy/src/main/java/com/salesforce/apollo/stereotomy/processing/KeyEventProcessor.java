@@ -44,13 +44,6 @@ public class KeyEventProcessor {
 
         KeyState newState = keyStateProcessor.apply(previousState, event);
 
-        @SuppressWarnings("unused")
-        var validControllerSignatures = verifier.verifyAuthentication(newState, event, event.getAuthentication());
-        @SuppressWarnings("unused")
-        var validWitnessReceipts = verifier.verifyEndorsements(newState, event, event.getEndorsements());
-        @SuppressWarnings("unused")
-        var validOtherReceipts = verifier.verifyReceipts(event, event.getReceipts());
-
         // TODO remove invalid signatures before appending
         keyEventStore.append(event, newState);
 
@@ -66,11 +59,11 @@ public class KeyEventProcessor {
                                          attachmentEvent.getCoordinates()));
 
         @SuppressWarnings("unused")
-        var validControllerSignatures = verifier.verifyAuthentication(state, event, event.getAuthentication());
+        var validControllerSignatures = verifier.verifyAuthentication(state, event, attachmentEvent.getAuthentication());
         @SuppressWarnings("unused")
-        var validWitnessReceipts = verifier.verifyEndorsements(state, event, event.getEndorsements());
+        var validWitnessReceipts = verifier.verifyEndorsements(state, event, attachmentEvent.getEndorsements());
         @SuppressWarnings("unused")
-        var validOtherReceipts = verifier.verifyReceipts(event, event.getReceipts());
+        var validOtherReceipts = verifier.verifyReceipts(event, attachmentEvent.getReceipts());
 
         // TODO remove invalid signatures before appending
         keyEventStore.append(attachmentEvent, state);

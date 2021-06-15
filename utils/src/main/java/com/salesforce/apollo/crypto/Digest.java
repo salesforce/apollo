@@ -7,7 +7,6 @@
 package com.salesforce.apollo.crypto;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 import org.bouncycastle.util.encoders.Hex;
 
@@ -43,10 +42,6 @@ public class Digest implements Comparable<Digest> {
 
     public static Digest from(ByteString bs) {
         return new Digest(bs);
-    }
-
-    public static boolean matches(byte[] bytes, Digest d1) {
-        return Arrays.equals(d1.getBytes(), d1.getAlgorithm().digest(bytes).getBytes());
     }
 
     public static Digest normalized(DigestAlgorithm digestAlgorithm, byte[] bs) {

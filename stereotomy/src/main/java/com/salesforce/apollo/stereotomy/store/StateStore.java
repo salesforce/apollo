@@ -36,6 +36,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -201,6 +202,12 @@ public class StateStore {
         locationToHash = store.openMap(LOCATION_TO_HASH);
     }
 
+    public void append(AttachmentEvent event, KeyState newState) {
+        append((KeyEvent) event, newState);
+        appendAttachments(event.getCoordinates(), event.getAuthentication(), event.getEndorsements(),
+                          event.getReceipts());
+    }
+
     public void append(KeyEvent event, KeyState newState) {
         String coordinates = coordinateOrdering(event.getCoordinates());
         events.put(coordinates, event);
@@ -209,8 +216,6 @@ public class StateStore {
         locationToHash.put(coordinates, hashstring);
         keyState.put(coordinates, newState);
         keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
-        appendAttachments(event.getCoordinates(), event.getAuthentication(), event.getEndorsements(),
-                          event.getReceipts());
     }
 
     public OptionalLong findLatestReceipt(Identifier forIdentifier, Identifier byIdentifier) {

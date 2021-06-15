@@ -22,7 +22,7 @@ public interface EstablishmentEvent extends KeyEvent {
 
     List<PublicKey> getKeys();
 
-    Optional<Digest> getNextKeyConfiguration();
+    Optional<Digest> getNextKeysDigest();
 
     int getWitnessThreshold();
 

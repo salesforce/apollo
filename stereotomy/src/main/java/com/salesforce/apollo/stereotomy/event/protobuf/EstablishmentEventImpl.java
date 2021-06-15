@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
@@ -28,8 +29,8 @@ abstract public class EstablishmentEventImpl extends KeyEventImpl implements Est
 
     private final Establishment establishment;
 
-    public EstablishmentEventImpl(Header header, Establishment establishment) {
-        super(header);
+    public EstablishmentEventImpl(Header header, EventCommon common, Establishment establishment) {
+        super(header, common);
         this.establishment = establishment;
     }
 
@@ -39,9 +40,9 @@ abstract public class EstablishmentEventImpl extends KeyEventImpl implements Est
     }
 
     @Override
-    public Optional<Digest> getNextKeyConfiguration() {
-        return establishment.getNextKeyConfiguration().isEmpty() ? Optional.empty()
-                : Optional.of(digest(establishment.getNextKeyConfiguration()));
+    public Optional<Digest> getNextKeysDigest() {
+        return establishment.getNextKeysDigest().isEmpty() ? Optional.empty()
+                : Optional.of(digest(establishment.getNextKeysDigest()));
     }
 
     @Override

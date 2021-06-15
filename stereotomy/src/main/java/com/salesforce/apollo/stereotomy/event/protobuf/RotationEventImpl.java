@@ -26,45 +26,42 @@ public class RotationEventImpl extends EstablishmentEventImpl implements Rotatio
     final com.salesfoce.apollo.stereotomy.event.proto.RotationEvent event;
 
     public RotationEventImpl(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent event) {
-        super(event.getHeader(), event.getEstablishment());
+        super(event.getSpecification().getHeader(), event.getCommon(), event.getSpecification().getEstablishment());
         this.event = event;
     }
 
     @Override
-    public List<BasicIdentifier> getAddedWitnesses() {
-        return event.getAddedWitnessesList()
-                    .stream()
-                    .map(s -> identifier(s))
-                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
-                    .collect(Collectors.toList());
-    }
-
-    @Override
-    public List<BasicIdentifier> getRemovedWitnesses() {
-        return event.getRemovedWitnessesList()
-                    .stream()
-                    .map(s -> identifier(s))
-                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
-                    .collect(Collectors.toList());
-    }
-
-    @Override
     public List<Seal> getSeals() {
-        return event.getSealsList().stream().map(s -> sealOf(s)).collect(Collectors.toList());
+        return event.getSpecification().getSealsList().stream().map(s -> sealOf(s)).collect(Collectors.toList());
     }
 
     @Override
-    public byte[] getBytes() {
-        return event.toByteArray();
+    public List<BasicIdentifier> getWitnessesAddedList() {
+        return event.getSpecification()
+                    .getWitnessesAddedList()
+                    .stream()
+                    .map(s -> identifier(s))
+                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
+                    .collect(Collectors.toList());
     }
 
     @Override
-    protected ByteString toByteString() {
-        return event.toByteString();
+    public List<BasicIdentifier> getWitnessesRemovedList() {
+        return event.getSpecification()
+                    .getWitnessesRemovedList()
+                    .stream()
+                    .map(s -> identifier(s))
+                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
+                    .collect(Collectors.toList());
     }
 
     @Override
     public String toString() {
         return "\n" + event + "\n";
+    }
+
+    @Override
+    protected ByteString toByteString() {
+        return event.toByteString();
     }
 }

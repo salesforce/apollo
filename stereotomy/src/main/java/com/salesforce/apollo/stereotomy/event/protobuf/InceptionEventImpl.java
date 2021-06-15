@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
@@ -25,32 +26,35 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
     final com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent event;
 
     public InceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent inceptionEvent) {
-        super(inceptionEvent.getHeader(), inceptionEvent.getEstablishment());
+        super(inceptionEvent.getSpecification().getHeader(), inceptionEvent.getCommon(),
+                inceptionEvent.getSpecification().getEstablishment());
         event = inceptionEvent;
 
     }
 
     @Override
-    public byte[] getBytes() {
-        return event.toByteArray();
-    }
-
-    @Override
     public Set<ConfigurationTrait> getConfigurationTraits() {
-        return event.getConfigurationTraitsList()
+        return event.getSpecification()
+                    .getConfigurationList()
                     .stream()
                     .map(s -> ConfigurationTrait.valueOf(s))
                     .collect(Collectors.toSet());
     }
 
     @Override
+    public Identifier getIdentifier() {
+        return identifier(event.getIdentifier());
+    }
+
+    @Override
     public byte[] getInceptionStatement() {
-        return event.getInceptionStatement().toByteArray();
+        return event.getSpecification().toByteArray();
     }
 
     @Override
     public List<BasicIdentifier> getWitnesses() {
-        return event.getWitnessesList()
+        return event.getSpecification()
+                    .getWitnessesList()
                     .stream()
                     .map(s -> identifier(s))
                     .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
@@ -58,12 +62,12 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
     }
 
     @Override
-    protected ByteString toByteString() {
-        return event.toByteString();
+    public String toString() {
+        return "InceptionEventImpl\n" + event + "\n";
     }
 
     @Override
-    public String toString() {
-        return "InceptionEventImpl\n" + event + "\n";
+    protected ByteString toByteString() {
+        return event.toByteString();
     }
 }

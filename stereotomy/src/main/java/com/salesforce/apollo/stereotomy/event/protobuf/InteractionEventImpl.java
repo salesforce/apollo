@@ -24,18 +24,13 @@ public class InteractionEventImpl extends KeyEventImpl implements InteractionEve
     private final com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent event;
 
     public InteractionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent event) {
-        super(event.getHeader());
+        super(event.getSpecification().getHeader(), event.getCommon());
         this.event = event;
     }
 
     @Override
-    public byte[] getBytes() {
-        return event.toByteArray();
-    }
-
-    @Override
     public List<Seal> getSeals() {
-        return event.getSealsList().stream().map(s -> sealOf(s)).collect(Collectors.toList());
+        return event.getSpecification().getSealsList().stream().map(s -> sealOf(s)).collect(Collectors.toList());
     }
 
     @Override

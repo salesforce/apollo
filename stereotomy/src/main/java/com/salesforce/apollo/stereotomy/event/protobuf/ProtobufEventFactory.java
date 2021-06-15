@@ -15,9 +15,11 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
+import com.salesfoce.apollo.stereotomy.event.proto.InteractionSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.Version;
 import com.salesfoce.apollo.stereotomy.event.proto.Weights;
@@ -46,13 +48,11 @@ public class ProtobufEventFactory implements EventFactory {
     @SuppressWarnings("unused")
     private static final String DELEGATED_ROTATION_TYPE        = "drt";
     private static final String INCEPTION_TYPE                 = "icp";
-    @SuppressWarnings("unused")
     private static final String INTERACTION_TYPE               = "ixn";
     @SuppressWarnings("unused")
     private static final String RECEIPT_FROM_BASIC_TYPE        = "rct";
     @SuppressWarnings("unused")
     private static final String RECEIPT_FROM_TRANSFERABLE_TYPE = "vrc";
-    @SuppressWarnings("unused")
     private static final String ROTATION_TYPE                  = "rot";
 
     public static Seal sealOf(com.salesfoce.apollo.stereotomy.event.proto.Seal s) {
@@ -180,46 +180,41 @@ public class ProtobufEventFactory implements EventFactory {
     @Override
     public InceptionEvent inception(IdentifierSpecification specification) {
         var inceptionStatement = identifierSpec(null, specification);
-        var prefix = Identifier.identifier(specification, inceptionStatement.toByteArray());
-        var bytes = identifierSpec(prefix, specification);
-        var signature = specification.getSigner().sign(bytes.toByteArray());
-        var establishment = Establishment.newBuilder()
-                                         .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys()
-                                                                  .stream()
-                                                                  .map(k -> bs(k))
-                                                                  .collect(Collectors.toList()))
-                                         .setNextKeyConfiguration((specification.getNextKeys() == null ? Digest.NONE
-                                                 : specification.getNextKeys()).toByteString())
-                                         .setWitnessThreshold(specification.getWitnessThreshold());
 
-        var header = Header.newBuilder()
-                           .setSequenceNumber(0)
-                           .setVersion(toVersion(specification.getVersion()))
-                           .setPreviousDigest(Digest.NONE.toByteString())
-                           .setFormat(specification.getFormat().name())
-                           .setIdentifier(prefix.toByteString())
-                           .putAllAuthentication(Map.of(0, signature.toByteString()));
+        var prefix = Identifier.identifier(specification, inceptionStatement.toByteArray());
+        var bs = identifierSpec(prefix, specification).toByteString();
+        var signature = specification.getSigner().sign(bs);
+
+        var common = EventCommon.newBuilder().putAllAuthentication(Map.of(0, signature.toByteString()));
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
-        builder.setHeader(header)
-               .setEstablishment(establishment)
-               .setInceptionStatement(inceptionStatement)
-               .addAllWitnesses(specification.getWitnesses()
-                                             .stream()
-                                             .map(i -> i.toByteString())
-                                             .collect(Collectors.toList()))
-               .addAllConfigurationTraits(specification.getConfigurationTraits()
-                                                       .stream()
-                                                       .map(ct -> ct.name())
-                                                       .collect(Collectors.toList()));
-        return new InceptionEventImpl(builder.build());
+
+        return new InceptionEventImpl(builder.setIdentifier(prefix.toByteString())
+                                             .setCommon(common)
+                                             .setSpecification(inceptionStatement)
+                                             .build());
     }
 
     @Override
     public KeyEvent interaction(InteractionSpecification specification) {
+        InteractionSpec ispec = interactionSpec(specification);
+        Map<Integer, JohnHancock> signatures = Map.of();
+
+        if (specification.getSigner() != null) {
+            var signature = specification.getSigner().sign(ispec.toByteString());
+            signatures = Map.of(0, signature);
+        }
+
+        var common = EventCommon.newBuilder()
+                                .setPrevious(toCoordinates(specification.getPrevious()))
+                                .setFormat(specification.getFormat().name())
+                                .putAllAuthentication(signatures.entrySet()
+                                                                .stream()
+                                                                .collect(Collectors.toMap(e -> e.getKey(),
+                                                                                          e -> e.getValue()
+                                                                                                .toByteString())));
         com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
-        return new InteractionEventImpl(builder.build());
+        return new InteractionEventImpl(builder.setSpecification(ispec).setCommon(common).build());
     }
 
     @Override
@@ -232,39 +227,16 @@ public class ProtobufEventFactory implements EventFactory {
             signatures = Map.of(0, signature);
         }
 
-        var establishment = Establishment.newBuilder()
-                                         .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys()
-                                                                  .stream()
-                                                                  .map(k -> bs(k))
-                                                                  .collect(Collectors.toList()))
-                                         .setNextKeyConfiguration((specification.getNextKeys() == null ? Digest.NONE
-                                                 : specification.getNextKeys()).toByteString())
-                                         .setWitnessThreshold(specification.getWitnessThreshold());
-
-        var header = Header.newBuilder()
-                           .setPrevious(toCoordinates(specification.getPrevious()))
-                           .setPreviousDigest((specification.getPriorEventDigest()).toByteString())
-                           .setVersion(toVersion(specification.getVersion()))
-                           .setFormat(specification.getFormat().name())
-                           .setIdentifier(specification.getIdentifier().toByteString())
-                           .putAllAuthentication(signatures.entrySet()
-                                                           .stream()
-                                                           .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                     e -> e.getValue()
-                                                                                           .toByteString())));
-
+        var common = EventCommon.newBuilder()
+                                .setPrevious(toCoordinates(specification.getPrevious()))
+                                .setFormat(specification.getFormat().name())
+                                .putAllAuthentication(signatures.entrySet()
+                                                                .stream()
+                                                                .collect(Collectors.toMap(e -> e.getKey(),
+                                                                                          e -> e.getValue()
+                                                                                                .toByteString())));
         com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
-        builder.addAllAddedWitnesses(specification.getAddedWitnesses()
-                                                  .stream()
-                                                  .map(b -> b.toByteString())
-                                                  .collect(Collectors.toList()));
-        builder.addAllRemovedWitnesses(specification.getRemovedWitnesses()
-                                                    .stream()
-                                                    .map(b -> b.toByteString())
-                                                    .collect(Collectors.toList()));
-        builder.addAllSeals(specification.getSeals().stream().map(s -> sealOf(s)).collect(Collectors.toList()));
-        return new RotationEventImpl(builder.setHeader(header).setEstablishment(establishment).build());
+        return new RotationEventImpl(builder.setSpecification(rotationSpec).setCommon(common).build());
     }
 
     com.salesfoce.apollo.stereotomy.event.proto.Version.Builder toVersion(com.salesforce.apollo.stereotomy.event.Version version) {
@@ -272,17 +244,25 @@ public class ProtobufEventFactory implements EventFactory {
     }
 
     private IdentifierSpec identifierSpec(Identifier identifier, IdentifierSpecification specification) {
+        var establishment = Establishment.newBuilder()
+                                         .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
+                                         .addAllKeys(specification.getKeys()
+                                                                  .stream()
+                                                                  .map(k -> bs(k))
+                                                                  .collect(Collectors.toList()))
+                                         .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
+                                                 : specification.getNextKeys()).toByteString())
+                                         .setWitnessThreshold(specification.getWitnessThreshold());
+        var header = Header.newBuilder()
+                           .setSequenceNumber(0)
+                           .setVersion(toVersion(specification.getVersion()))
+                           .setPriorEventDigest(Digest.NONE.toByteString())
+                           .setIdentifier((identifier == null ? Identifier.NONE : identifier).toByteString())
+                           .setEventType(INCEPTION_TYPE);
+
         return IdentifierSpec.newBuilder()
-                             .setVersion(toVersion(specification.getVersion()))
-                             .setIdentifier((identifier == null ? Identifier.NONE : identifier).toByteString())
-                             .setSequenceNumber(0)
-                             .setEventType(INCEPTION_TYPE)
-                             .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                             .addAllKeys(specification.getKeys().stream().map(k -> bs(k)).collect(Collectors.toList()))
-                             .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
-                                     : specification.getNextKeys()).toByteString())
-                             .setWitnessThreshold(specification.getWitnessThreshold())
-                             .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
+                             .setHeader(header)
+                             .setEstablishment(establishment)
                              .addAllWitnesses(specification.getWitnesses()
                                                            .stream()
                                                            .map(i -> i.toByteString())
@@ -294,19 +274,45 @@ public class ProtobufEventFactory implements EventFactory {
                              .build();
     }
 
+    private InteractionSpec interactionSpec(InteractionSpecification specification) {
+
+        Header header = Header.newBuilder()
+                              .setSequenceNumber(0)
+                              .setPriorEventDigest((specification.getPriorEventDigest()).toByteString())
+                              .setVersion(toVersion(specification.getVersion()))
+                              .setIdentifier(specification.getIdentifier().toByteString())
+                              .setEventType(INTERACTION_TYPE)
+                              .build();
+
+        return InteractionSpec.newBuilder()
+                              .setHeader(header)
+                              .addAllSeals(specification.getSeals()
+                                                        .stream()
+                                                        .map(e -> sealOf(e))
+                                                        .collect(Collectors.toList()))
+                              .build();
+    }
+
     private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification) {
-        return RotationSpec.newBuilder()
-                           .setVersion(toVersion(specification.getVersion()))
-                           .setIdentifier((identifier == null ? Identifier.NONE : identifier).toByteString())
+        var establishment = Establishment.newBuilder()
+                                         .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
+                                         .addAllKeys(specification.getKeys()
+                                                                  .stream()
+                                                                  .map(k -> bs(k))
+                                                                  .collect(Collectors.toList()))
+                                         .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
+                                                 : specification.getNextKeys()).toByteString())
+                                         .setWitnessThreshold(specification.getWitnessThreshold());
+        var header = Header.newBuilder()
                            .setSequenceNumber(specification.getSequenceNumber())
+                           .setVersion(toVersion(specification.getVersion()))
                            .setPriorEventDigest(specification.getPriorEventDigest().toByteString())
-                           .setEventType(INCEPTION_TYPE)
-                           .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                           .addAllKeys(specification.getKeys().stream().map(k -> bs(k)).collect(Collectors.toList()))
-                           .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
-                                   : specification.getNextKeys()).toByteString())
-                           .setWitnessThreshold(specification.getWitnessThreshold())
-                           .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
+                           .setIdentifier(identifier.toByteString())
+                           .setEventType(ROTATION_TYPE);
+
+        return RotationSpec.newBuilder()
+                           .setHeader(header)
+                           .setEstablishment(establishment)
                            .addAllWitnessesAdded(specification.getAddedWitnesses()
                                                               .stream()
                                                               .map(i -> i.toByteString())
