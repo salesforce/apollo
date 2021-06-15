@@ -19,6 +19,7 @@ import java.util.stream.Stream;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -38,27 +39,23 @@ public class IdentifierSpecification {
 
     public static class Builder implements Cloneable {
 
-        private final EnumSet<ConfigurationTrait> configurationTraits = EnumSet.noneOf(ConfigurationTrait.class);
-        // identifier derivation
-        private Class<? extends Identifier> derivation                 = SelfAddressingIdentifier.class;
-        private Format                      format                     = Format.PROTOBUF;
-        private DigestAlgorithm             identifierDigestAlgorithm  = DigestAlgorithm.BLAKE3_256;
-        private final List<PublicKey>       keys                       = new ArrayList<>();
-        private final List<Digest>          listOfNextKeyDigests       = new ArrayList<>();
-        private final List<PublicKey>       listOfNextKeys             = new ArrayList<>();
-        private Digest                      nextKeyConfigurationDigest = Digest.NONE;
-        // provide nextKeys + digest algo, nextKeyDigests + digest algo, or
-        // nextKeysDigest
-        private final DigestAlgorithm nextKeysAlgorithm = DigestAlgorithm.BLAKE3_256;
-        // next key configuration
-        private SigningThreshold nextSigningThreshold;
-        private DigestAlgorithm  selfAddressingDigestAlgorithm = DigestAlgorithm.DEFAULT;
-        private Signer           signer;
-        // key configuration
-        private SigningThreshold            signingThreshold;
-        private Version                     version          = Stereotomy.currentVersion();
-        private final List<BasicIdentifier> witnesses        = new ArrayList<>();
-        private int                         witnessThreshold = 0;
+        private final EnumSet<ConfigurationTrait> configurationTraits           = EnumSet.noneOf(ConfigurationTrait.class);
+        private Class<? extends Identifier>       derivation                    = SelfAddressingIdentifier.class;
+        private Format                            format                        = Format.PROTOBUF;
+        private DigestAlgorithm                   identifierDigestAlgorithm     = DigestAlgorithm.BLAKE3_256;
+        private final List<PublicKey>             keys                          = new ArrayList<>();
+        private final List<Digest>                listOfNextKeyDigests          = new ArrayList<>();
+        private final List<PublicKey>             listOfNextKeys                = new ArrayList<>();
+        private Digest                            nextKeyConfigurationDigest    = Digest.NONE;
+        private final DigestAlgorithm             nextKeysAlgorithm             = DigestAlgorithm.BLAKE3_256;
+        private SigningThreshold                  nextSigningThreshold;
+        private DigestAlgorithm                   selfAddressingDigestAlgorithm = DigestAlgorithm.DEFAULT;
+        private SignatureAlgorithm                signatureAlgorithm            = SignatureAlgorithm.DEFAULT;
+        private Signer                            signer;
+        private SigningThreshold                  signingThreshold;
+        private Version                           version                       = Stereotomy.currentVersion();
+        private final List<BasicIdentifier>       witnesses                     = new ArrayList<>();
+        private int                               witnessThreshold              = 0;
 
         public Builder basicDerivation(PublicKey key) {
             this.derivation = BasicIdentifier.class;
@@ -158,7 +155,7 @@ public class IdentifierSpecification {
             // validation is provided by spec consumer
             return new IdentifierSpecification(derivation, identifierDigestAlgorithm, format, signingThreshold, keys,
                     signer, nextKeyConfigurationDigest, witnessThreshold, witnesses, configurationTraits, version,
-                    selfAddressingDigestAlgorithm);
+                    selfAddressingDigestAlgorithm, signatureAlgorithm);
         }
 
         public Builder clone() {
@@ -213,6 +210,10 @@ public class IdentifierSpecification {
 
         public DigestAlgorithm getSelfAddressingDigestAlgorithm() {
             return selfAddressingDigestAlgorithm;
+        }
+
+        public SignatureAlgorithm getSignatureAlgorithm() {
+            return signatureAlgorithm;
         }
 
         public Signer getSigner() {
@@ -306,6 +307,11 @@ public class IdentifierSpecification {
             return this;
         }
 
+        public Builder setSignatureAlgorithm(SignatureAlgorithm signatureAlgorithm) {
+            this.signatureAlgorithm = signatureAlgorithm;
+            return this;
+        }
+
         public Builder setSigner(int keyIndex, PrivateKey privateKey) {
             if (keyIndex < 0) {
                 throw new IllegalArgumentException("keyIndex must be >= 0");
@@ -364,7 +370,7 @@ public class IdentifierSpecification {
         return new BasicIdentifier(key);
     }
 
-    public static Builder builder() {
+    public static Builder newBuilder() {
         return new Builder();
     }
 
@@ -397,6 +403,7 @@ public class IdentifierSpecification {
     private final List<PublicKey>             keys;
     private final Digest                      nextKeys;
     private final DigestAlgorithm             selfAddressingDigestAlgorithm;
+    private final SignatureAlgorithm          signatureAlgorithm;
     private final Signer                      signer;
     private final SigningThreshold            signingThreshold;
     private final Version                     version;
@@ -406,7 +413,7 @@ public class IdentifierSpecification {
     private IdentifierSpecification(Class<? extends Identifier> derivation, DigestAlgorithm identifierDigestAlgorithm,
             Format format, SigningThreshold signingThreshold, List<PublicKey> keys, Signer signer, Digest nextKeys,
             int witnessThreshold, List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
-            Version version, DigestAlgorithm selfAddressingDigestAlgorithm) {
+            Version version, DigestAlgorithm selfAddressingDigestAlgorithm, SignatureAlgorithm signatureAlgorithm) {
         this.derivation = derivation;
         this.identifierDigestAlgorithm = identifierDigestAlgorithm;
         this.format = format;
@@ -419,6 +426,7 @@ public class IdentifierSpecification {
         this.configurationTraits = Set.copyOf(configurationTraits);
         this.version = version;
         this.selfAddressingDigestAlgorithm = selfAddressingDigestAlgorithm;
+        this.signatureAlgorithm = signatureAlgorithm;
     }
 
     public Set<ConfigurationTrait> getConfigurationTraits() {
@@ -447,6 +455,10 @@ public class IdentifierSpecification {
 
     public DigestAlgorithm getSelfAddressingDigestAlgorithm() {
         return selfAddressingDigestAlgorithm;
+    }
+
+    public SignatureAlgorithm getSignatureAlgorithm() {
+        return signatureAlgorithm;
     }
 
     public Signer getSigner() {

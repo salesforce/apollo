@@ -55,15 +55,11 @@ public class Stereotomy {
     public interface ControllableIdentifier extends KeyState {
         void rotate();
 
-        void rotate(Builder spec);
-
-        void rotate(Builder spec, SignatureAlgorithm signatureAlgorithm);
+        void rotate(RotationSpecification.Builder spec);
 
         void rotate(List<Seal> of);
 
-        void rotate(List<Seal> seals, Builder spec);
-
-        void rotate(List<Seal> seals, Builder spec, SignatureAlgorithm signatureAlgorithm);
+        void rotate(List<Seal> seals, RotationSpecification.Builder spec);
 
         void seal(List<Seal> seals);
 
@@ -176,11 +172,6 @@ public class Stereotomy {
         }
 
         @Override
-        public void rotate(Builder spec, SignatureAlgorithm signatureAlgorithm) {
-            Stereotomy.this.rotate(getIdentifier(), spec, signatureAlgorithm);
-        }
-
-        @Override
         public void rotate(List<Seal> seals) {
             Stereotomy.this.rotate(getIdentifier(), seals);
         }
@@ -188,11 +179,6 @@ public class Stereotomy {
         @Override
         public void rotate(List<Seal> seals, Builder spec) {
             Stereotomy.this.rotate(getIdentifier(), seals, spec);
-        }
-
-        @Override
-        public void rotate(List<Seal> seals, Builder spec, SignatureAlgorithm signatureAlgorithm) {
-            Stereotomy.this.rotate(getIdentifier(), seals, spec, signatureAlgorithm);
         }
 
         @Override
@@ -307,19 +293,13 @@ public class Stereotomy {
     }
 
     public ControllableIdentifier newPrivateIdentifier() {
-        return newPrivateIdentifier(IdentifierSpecification.builder());
+        return newPrivateIdentifier(IdentifierSpecification.newBuilder());
 
     }
 
     public ControllableIdentifier newPrivateIdentifier(IdentifierSpecification.Builder spec) {
-        return newPrivateIdentifier(spec, SignatureAlgorithm.DEFAULT);
-
-    }
-
-    public ControllableIdentifier newPrivateIdentifier(IdentifierSpecification.Builder spec,
-                                                       SignatureAlgorithm signatureAllgorithm) {
         IdentifierSpecification.Builder specification = spec.clone();
-
+        SignatureAlgorithm signatureAllgorithm = specification.getSignatureAlgorithm();
         KeyPair initialKeyPair = signatureAllgorithm.generateKeyPair(entropy);
         KeyPair nextKeyPair = signatureAllgorithm.generateKeyPair(entropy);
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
@@ -345,13 +325,16 @@ public class Stereotomy {
                  keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
         return identifier;
     }
+    
+    public ControllableIdentifier newPublicIdentifier(BasicIdentifier... witnesses) {
+        return newPublicIdentifier(IdentifierSpecification.newBuilder());
+    }
 
     public ControllableIdentifier newPublicIdentifier(IdentifierSpecification.Builder spec,
-                                                      SignatureAlgorithm signatureAlgorithm,
                                                       BasicIdentifier... witnesses) {
         IdentifierSpecification.Builder specification = spec.clone();
-        KeyPair initialKeyPair = signatureAlgorithm.generateKeyPair(entropy);
-        KeyPair nextKeyPair = signatureAlgorithm.generateKeyPair(entropy);
+        KeyPair initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        KeyPair nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
                                                           specification.getIdentifierDigestAlgorithm());
         specification.setKey(initialKeyPair.getPublic())
@@ -377,7 +360,7 @@ public class Stereotomy {
     }
 
     public void rotate(Identifier identifier, Builder spec) {
-        rotate(identifier, RotationSpecification.newBuilder(), SignatureAlgorithm.DEFAULT);
+        rotate(identifier, Collections.emptyList(), spec);
     }
 
     public KeyState rotate(Identifier identifier, List<Seal> seals) {
@@ -385,11 +368,6 @@ public class Stereotomy {
     }
 
     public KeyState rotate(Identifier identifier, List<Seal> seals, RotationSpecification.Builder spec) {
-        return rotate(identifier, seals, spec, SignatureAlgorithm.DEFAULT);
-    }
-
-    public KeyState rotate(Identifier identifier, List<Seal> seals, RotationSpecification.Builder spec,
-                           SignatureAlgorithm signatureAlgorithm) {
         RotationSpecification.Builder specification = spec.clone();
 
         KeyState state = events.getKeyState(identifier)
@@ -411,7 +389,7 @@ public class Stereotomy {
                                               "next key pair for identifier not found in keystore: "
                                                       + currentKeyCoordinates));
 
-        KeyPair newNextKeyPair = signatureAlgorithm.generateKeyPair(entropy);
+        KeyPair newNextKeyPair = spec.getSignatureAlgorithm().generateKeyPair(entropy);
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(newNextKeyPair.getPublic()),
                                                           specification.getNextKeysAlgorithm());
         specification.setState(state)
@@ -436,11 +414,6 @@ public class Stereotomy {
                  currentKeyCoordinates);
 
         return newState;
-    }
-
-    public KeyState rotate(Identifier identifier, RotationSpecification.Builder spec,
-                           SignatureAlgorithm signatureAlgorithm) {
-        return rotate(identifier, List.of(), spec, signatureAlgorithm);
     }
 
     public void seal(Identifier identifier, List<Seal> seals) {

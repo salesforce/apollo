@@ -45,7 +45,7 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void test__builder__signingThreshold__int() {
-        var spec = IdentifierSpecification.builder()
+        var spec = IdentifierSpecification.newBuilder()
                                           .setKey(this.keyPair.getPublic())
                                           .setSigner(this.signer)
                                           .setSigningThreshold(1)
@@ -57,7 +57,7 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void test__builder__signingThreshold__unweighted() {
-        var spec = IdentifierSpecification.builder()
+        var spec = IdentifierSpecification.newBuilder()
                                           .setKey(this.keyPair.getPublic())
                                           .setSigner(this.signer)
                                           .setNextSigningThreshold(SigningThreshold.unweighted(1))
@@ -69,7 +69,7 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void test__builder__signingThreshold__weighted() {
-        var spec = IdentifierSpecification.builder()
+        var spec = IdentifierSpecification.newBuilder()
                                           .setKey(this.keyPair.getPublic())
                                           .setKey(this.keyPair2.getPublic())
                                           .setSigner(this.signer)

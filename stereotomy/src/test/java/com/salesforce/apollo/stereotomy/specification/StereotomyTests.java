@@ -60,9 +60,73 @@ public class StereotomyTests {
         secureRandom = SecureRandom.getInstance("SHA1PRNG");
         secureRandom.setSeed(new byte[] { 0 });
     }
+    
+    public void newPublicIdentifier() {
+        var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
+
+        ControllableIdentifier identifier = controller.newPublicIdentifier();
+
+        // identifier
+        assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
+        var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
+        assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
+        assertEquals("3b4a44829d07f810a20d6dfacf2b4c17e6c11f8387a7b74a144a27b64735923d",
+                     Hex.hex(sap.getDigest().getBytes()));
+
+        assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
+
+        // keys
+        assertEquals(1, identifier.getKeys().size());
+        assertNotNull(identifier.getKeys().get(0));
+
+        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) testEventStore.getKeyEvent(identifier.getLastEstablishmentEvent())
+                                                                                       .get();
+        assertEquals(identifier.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
+
+        var keyCoordinates = KeyCoordinates.of(lastEstablishmentEvent, 0);
+        var keyStoreKeyPair = testKeyStore.getKey(keyCoordinates);
+        assertTrue(keyStoreKeyPair.isPresent());
+        assertEquals(keyStoreKeyPair.get().getPublic(), identifier.getKeys().get(0));
+
+        // nextKeys
+        assertTrue(identifier.getNextKeyConfigurationDigest().isPresent());
+        var keyStoreNextKeyPair = testKeyStore.getNextKey(keyCoordinates);
+        assertTrue(keyStoreNextKeyPair.isPresent());
+        var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
+                                                               List.of(keyStoreNextKeyPair.get().getPublic()),
+                                                               identifier.getNextKeyConfigurationDigest()
+                                                                         .get()
+                                                                         .getAlgorithm());
+        assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
+
+        // witnesses
+        assertEquals(0, identifier.getWitnessThreshold());
+        assertEquals(0, identifier.getWitnesses().size());
+
+        // config
+        assertEquals(0, identifier.configurationTraits().size());
+
+        // lastEstablishmentEvent
+        assertEquals(identifier.getIdentifier(), lastEstablishmentEvent.getIdentifier());
+        assertEquals(0, lastEstablishmentEvent.getSequenceNumber());
+        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT),
+                     digest(identifier.getDigest().toByteString()));
+
+        // lastEvent
+        KeyEvent lastEvent = testEventStore.getKeyEvent(identifier.getLastEvent()).get();
+        assertEquals(identifier.getIdentifier(), lastEvent.getIdentifier());
+        assertEquals(0, lastEvent.getSequenceNumber());
+        // TODO digest
+
+        assertEquals(lastEvent, lastEstablishmentEvent);
+
+        // delegation
+        assertFalse(identifier.getDelegatingIdentifier().isPresent());
+        assertFalse(identifier.isDelegated());
+    }
 
     @Test
-    public void test_newPrivateIdentifier() {
+    public void newPrivateIdentifier() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
         ControllableIdentifier identifier = controller.newPrivateIdentifier();
@@ -127,7 +191,7 @@ public class StereotomyTests {
     }
 
     @Test
-    public void test_privateIdentifier_rotate() {
+    public void privateIdentifierRotate() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
         var i = controller.newPrivateIdentifier();
@@ -141,7 +205,7 @@ public class StereotomyTests {
     }
 
     @Test
-    public void test_privateIdentifier_interaction() {
+    public void privateIdentifierInteraction() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
         var i = controller.newPrivateIdentifier();
