@@ -1,48 +1,14 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "com.salesfoce.apollo.proto";
-option java_outer_classname = "ApolloProto";
-option objc_class_prefix = "Ap";
+option java_package = "com.salesfoce.apollo.test.proto";
+option java_outer_classname = "ApolloTestProto";
+option objc_class_prefix = "ATp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 
-package apollo; 
+package apollo.test; 
 
 service TestIt {
     rpc ping ( google.protobuf.Any ) returns (google.protobuf.Any) {}
-}
-
-service Ghost {
-
-    /*
-     * Ghost API
-     */
-    rpc get ( Get ) returns (google.protobuf.Any) {}
-    rpc put ( google.protobuf.Any ) returns (google.protobuf.Empty) {}
-
-    /**
-     * Ghost interval gossip
-     */
-    rpc intervals (Intervals) returns (Entries) {} 
-}
-
-message Entries {
-    repeated google.protobuf.Any records = 1;
-}
-
-message Intervals {
-    string context = 1;
-    repeated Interval intervals = 2;
-    repeated bytes have = 3;
-}
-
-message Get {
-    string context = 1;
-    string id = 2;
-} 
-
-message Interval {
-        string start = 1;
-        string end = 2;
 }

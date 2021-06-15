@@ -202,4 +202,15 @@ public class Digest implements Comparable<Digest> {
     public String toString() {
         return "[" + Hex.toHexString(getBytes()).substring(0, 12) + ":" + algorithm.digestCode() + "]";
     }
+
+    public static Digest normalized(DigestAlgorithm digestAlgorithm, byte[] bs) {
+        if (bs.length > digestAlgorithm.digestLength()) {
+            throw new IllegalArgumentException();
+        }
+        byte[] hash = new byte[digestAlgorithm.digestLength()];
+        for (int i = 0; i < bs.length; i++) {
+            hash[i] = bs[i];
+        }
+        return new Digest(digestAlgorithm, hash);
+    }
 }

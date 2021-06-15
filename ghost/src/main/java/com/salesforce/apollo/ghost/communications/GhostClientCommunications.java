@@ -8,21 +8,19 @@ package com.salesforce.apollo.ghost.communications;
 
 import java.util.List;
 
-import com.salesfoce.apollo.proto.ADagEntry;
-import com.salesfoce.apollo.proto.DagEntries;
-import com.salesfoce.apollo.proto.DagEntry;
-import com.salesfoce.apollo.proto.Get;
-import com.salesfoce.apollo.proto.GhostGrpc;
-import com.salesfoce.apollo.proto.GhostGrpc.GhostBlockingStub;
-import com.salesfoce.apollo.proto.Interval;
-import com.salesfoce.apollo.proto.Intervals;
-import com.salesfoce.apollo.proto.Intervals.Builder;
+import com.google.protobuf.Any;
+import com.salesfoce.apollo.ghost.proto.Entries;
+import com.salesfoce.apollo.ghost.proto.Entry;
+import com.salesfoce.apollo.ghost.proto.Get;
+import com.salesfoce.apollo.ghost.proto.GhostGrpc;
+import com.salesfoce.apollo.ghost.proto.GhostGrpc.GhostBlockingStub;
+import com.salesfoce.apollo.ghost.proto.Interval;
+import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.Participant;
-import com.salesforce.apollo.membership.impl.Member;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.SpaceGhost;
+import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
@@ -34,8 +32,8 @@ public class GhostClientCommunications implements SpaceGhost {
         return (t, f, c) -> new GhostClientCommunications(c, (Participant) t);
     }
 
-    private final GhostBlockingStub       client;
     private final ManagedServerConnection channel;
+    private final GhostBlockingStub       client;
     private final Member                  member;
 
     public GhostClientCommunications(ManagedServerConnection channel, Member member) {
@@ -45,13 +43,26 @@ public class GhostClientCommunications implements SpaceGhost {
         this.client = GhostGrpc.newBlockingStub(channel.channel);
     }
 
+    @Override
+    public Any get(Digest entry) {
+        return client.get(Get.newBuilder().setId(entry.toByteString()).build());
+    }
+
     public Participant getMember() {
         return (Participant) member;
     }
 
     @Override
-    public String toString() {
-        return String.format("->[%s]", member);
+    public List<Any> intervals(List<Interval> intervals, List<Digest> have) {
+        Intervals.Builder builder = Intervals.newBuilder();
+        intervals.forEach(e -> builder.addIntervals(e));
+        Entries result = client.intervals(builder.build());
+        return result.getRecordsList();
+    }
+
+    @Override
+    public void put(Any any) {
+        client.put(Entry.newBuilder().setValue(any).build());
     }
 
     public void release() {
@@ -59,21 +70,8 @@ public class GhostClientCommunications implements SpaceGhost {
     }
 
     @Override
-    public DagEntry get(HashKey entry) {
-        return client.get(Get.newBuilder().setId(entry.toID()).build());
-    }
-
-    @Override
-    public List<DagEntry> intervals(List<Interval> intervals, List<HashKey> have) {
-        Builder builder = Intervals.newBuilder();
-        intervals.forEach(e -> builder.addIntervals(e));
-        DagEntries result = client.intervals(builder.build());
-        return result.getEntriesList();
-    }
-
-    @Override
-    public void put(DagEntry value) {
-        client.put(ADagEntry.newBuilder().setEntry(value).build());
+    public String toString() {
+        return String.format("->[%s]", member);
     }
 
 }

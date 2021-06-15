@@ -61,7 +61,15 @@
 		</dependency>
 	</dependencies>
 
+
 	<build>
+		<extensions>
+			<extension>
+				<groupId>kr.motd.maven</groupId>
+				<artifactId>os-maven-plugin</artifactId>
+				<version>1.6.2</version>
+			</extension>
+		</extensions>
 		<plugins>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -75,112 +83,32 @@
 						</goals>
 						<configuration>
 							<sources>
-								<source>${project.basedir}/target/generated-sources/jooq</source>
+								<source>${project.basedir}/src/main/proto</source>
+								<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
+								<source>${project.basedir}/target/generated-sources/protobuf/java</source>
 							</sources>
 						</configuration>
 					</execution>
 				</executions>
 			</plugin>
 			<plugin>
-				<groupId>org.liquibase</groupId>
-				<artifactId>liquibase-maven-plugin</artifactId>
+				<groupId>org.xolstice.maven.plugins</groupId>
+				<artifactId>protobuf-maven-plugin</artifactId>
+				<version>0.6.1</version>
 				<configuration>
-					<changeLogFile>src/main/resources/ghost-schema.yml</changeLogFile>
-					<driver>org.h2.Driver</driver>
-					<url>jdbc:h2:file:${project.build.directory}/data/jooq</url>
-					<username>ghost</username>
-					<password>${db.password}</password>
+					<protocArtifact>com.google.protobuf:protoc:3.12.0:exe:${os.detected.classifier}</protocArtifact>
+					<pluginId>grpc-java</pluginId>
+					<pluginArtifact>io.grpc:protoc-gen-grpc-java:1.32.1:exe:${os.detected.classifier}</pluginArtifact>
 				</configuration>
 				<executions>
 					<execution>
-						<phase>generate-sources</phase>
 						<goals>
-							<goal>update</goal>
+							<goal>compile</goal>
+							<goal>compile-custom</goal>
 						</goals>
 					</execution>
 				</executions>
-				<dependencies>
-					<dependency>
-						<groupId>com.h2database</groupId>
-						<artifactId>h2</artifactId>
-						<version>${h2.version}</version>
-					</dependency>
-				</dependencies>
-			</plugin>
-			<plugin>
-				<groupId>org.jooq</groupId>
-				<artifactId>jooq-codegen-maven</artifactId>
-				<executions>
-					<execution>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>generate</goal>
-						</goals>
-					</execution>
-				</executions>
-				<dependencies>
-					<dependency>
-						<groupId>com.h2database</groupId>
-						<artifactId>h2</artifactId>
-						<version>${h2.version}</version>
-					</dependency>
-				</dependencies>
-				<configuration>
-					<jdbc>
-						<driver>org.h2.Driver</driver>
-						<url>jdbc:h2:file:${project.build.directory}/data/jooq</url>
-						<user>ghost</user>
-						<password>${db.password}</password>
-					</jdbc>
-					<generator>
-						<database>
-							<name>org.jooq.meta.h2.H2Database</name>
-							<includes>.*</includes>
-							<excludes></excludes>
-							<inputSchema>PUBLIC</inputSchema>
-						</database>
-						<generate></generate>
-						<target>
-							<packageName>com.salesforce.apollo.ghost.schema</packageName>
-							<directory>target/generated-sources/jooq</directory>
-						</target>
-					</generator>
-				</configuration>
 			</plugin>
 		</plugins>
-		<pluginManagement>
-			<plugins>
-				<!--This plugin's configuration is used to store Eclipse m2e settings 
-					only. It has no influence on the Maven build itself. -->
-				<plugin>
-					<groupId>org.eclipse.m2e</groupId>
-					<artifactId>lifecycle-mapping</artifactId>
-					<version>1.0.0</version>
-					<configuration>
-						<lifecycleMappingMetadata>
-							<pluginExecutions>
-								<pluginExecution>
-									<pluginExecutionFilter>
-										<groupId>org.liquibase</groupId>
-										<artifactId>
-											liquibase-maven-plugin
-										</artifactId>
-										<versionRange>
-											[3.6.3,)
-										</versionRange>
-										<goals>
-											<goal>update</goal>
-										</goals>
-									</pluginExecutionFilter>
-									<action>
-										<ignore></ignore>
-									</action>
-								</pluginExecution>
-							</pluginExecutions>
-						</lifecycleMappingMetadata>
-					</configuration>
-				</plugin>
-			</plugins>
-		</pluginManagement>
 	</build>
 </project>

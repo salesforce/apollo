@@ -13,7 +13,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * @author hal.hildebrand
@@ -25,14 +26,18 @@ public class CombinedIntervalsTest {
     public void smoke() {
         List<KeyInterval> intervals = new ArrayList<>();
 
-        intervals.add(new KeyInterval(new HashKey(new byte[] { 0, (byte) 200 }),
-                new HashKey(new byte[] { 0, (byte) 241 })));
-        intervals.add(new KeyInterval(new HashKey(new byte[] { 0, 50 }), new HashKey(new byte[] { 0, 75 })));
-        intervals.add(new KeyInterval(new HashKey(new byte[] { 0, 50 }), new HashKey(new byte[] { 0, 90 })));
-        intervals.add(new KeyInterval(new HashKey(new byte[] { 0, 25 }), new HashKey(new byte[] { 0, 49 })));
-        intervals.add(new KeyInterval(new HashKey(new byte[] { 0, 25 }), new HashKey(new byte[] { 0, 49 })));
-        intervals.add(new KeyInterval(new HashKey(new byte[] { 0, (byte) 128 }),
-                new HashKey(new byte[] { 0, (byte) 175 })));
+        intervals.add(new KeyInterval(Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, (byte) 200 }),
+                Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, (byte) 241 })));
+        intervals.add(new KeyInterval(Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, 50 }),
+                Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, 75 })));
+        intervals.add(new KeyInterval(Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, 50 }),
+                Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, 90 })));
+        intervals.add(new KeyInterval(Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, 25 }),
+                Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, 49 })));
+        intervals.add(new KeyInterval(Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, 25 }),
+                Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, 49 })));
+        intervals.add(new KeyInterval(Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, (byte) 128 }),
+                Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, (byte) 175 })));
         CombinedIntervals combined = new CombinedIntervals(intervals);
         List<KeyInterval> compressed = combined.getIntervals();
         System.out.println(compressed);

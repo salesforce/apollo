@@ -5,8 +5,7 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.ghost;
-
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
+ 
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,31 +31,27 @@ import org.junit.jupiter.api.BeforeAll;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.ByteMessage;
-import com.salesfoce.apollo.proto.DagEntry;
-import com.salesfoce.apollo.proto.DagEntry.Builder;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
-import com.salesforce.apollo.membership.impl.CertWithKey;
-import com.salesforce.apollo.membership.impl.Member;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.Utils;
-
-import io.github.olivierlemasle.ca.RootCertificate;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class GhostTest {
-
-    private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey> certs;
+ 
+    private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -65,7 +60,7 @@ public class GhostTest {
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
-                                                   cert -> new CertWithKey(cert.getX509Certificate(),
+                                                   cert -> new CertificateWithPrivateKey(cert.getX509Certificate(),
                                                            cert.getPrivateKey())));
     }
 
@@ -92,7 +87,7 @@ public class GhostTest {
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
+            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
             if (!seeds.contains(cert.getCertificate())) {
                 seeds.add(cert.getCertificate());
             }
@@ -104,7 +99,7 @@ public class GhostTest {
         views = members.stream().map(node -> {
             Router com = new LocalRouter(node, ServerConnectionCache.newBuilder(), executor);
             comms.add(com);
-            View view = new View(HashKey.ORIGIN, node, com, null);
+            View view = new View(Digest.ORIGIN, node, com, null);
             return view;
         }).collect(Collectors.toList());
 
@@ -124,7 +119,7 @@ public class GhostTest {
         Iterator<Router> communications = comms.iterator();
         List<Ghost> ghosties = views.stream()
                                     .map(view -> new Ghost(new GhostParameters(), communications.next(), view,
-                                            new MemoryStore()))
+                                            new MemoryStore(DigestAlgorithm.DEFAULT)))
                                     .collect(Collectors.toList());
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),
@@ -134,7 +129,7 @@ public class GhostTest {
                              .count(),
                      "Not all nodes joined the cluster");
         int rounds = 3;
-        Map<HashKey, DagEntry> stored = new HashMap<>();
+        Map<Digest, DagEntry> stored = new HashMap<>();
         for (int i = 0; i < rounds; i++) {
             for (Ghost ghost : ghosties) {
                 Builder builder = DagEntry.newBuilder()
@@ -150,7 +145,7 @@ public class GhostTest {
         }
 
         Thread.sleep(3000);
-        for (Entry<HashKey, DagEntry> entry : stored.entrySet()) {
+        for (Entry<Digest, DagEntry> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
                 DagEntry found = ghost.getDagEntry(entry.getKey());
                 assertNotNull(found);

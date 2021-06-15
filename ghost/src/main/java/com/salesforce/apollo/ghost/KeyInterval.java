@@ -8,42 +8,42 @@ package com.salesforce.apollo.ghost;
 
 import java.util.function.Predicate;
 
-import com.salesfoce.apollo.proto.Interval;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesfoce.apollo.ghost.proto.Interval;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public class KeyInterval implements Predicate<HashKey> {
-    private final HashKey begin;
-    private final HashKey end;
+public class KeyInterval implements Predicate<Digest> {
+    private final Digest begin;
+    private final Digest end;
 
-    public KeyInterval(HashKey begin, HashKey end) {
+    public KeyInterval(Digest begin, Digest end) {
         assert begin.compareTo(end) < 0 : begin + " >= " + end;
         this.begin = begin;
         this.end = end;
     }
 
     public KeyInterval(Interval interval) {
-        this(new HashKey(interval.getStart()), new HashKey(interval.getEnd()));
+        this(new Digest(interval.getStart()), new Digest(interval.getEnd()));
     }
 
     @Override
-    public boolean test(HashKey t) {
+    public boolean test(Digest t) {
         return begin.compareTo(t) > 0 && end.compareTo(t) > 0;
     }
 
-    public HashKey getBegin() {
+    public Digest getBegin() {
         return begin;
     }
 
-    public HashKey getEnd() {
+    public Digest getEnd() {
         return end;
     }
 
     public Interval toInterval() {
-        return Interval.newBuilder().setStart(begin.toID()).setEnd(end.toID()).build();
+        return Interval.newBuilder().setStart(begin.toByteString()).setEnd(end.toByteString()).build();
     }
 
     @Override

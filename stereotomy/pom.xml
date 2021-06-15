@@ -67,6 +67,7 @@
 						</goals>
 						<configuration>
 							<sources>
+                                <source>${project.basedir}/src/main/proto</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/java</source>
 							</sources>

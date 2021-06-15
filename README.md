@@ -47,3 +47,14 @@ To build Apollo, cd to the root directory of the repository and then do:
 
 Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly
 build any arbitrary submodule.
+
+## Current Status
+Currently, the system is in heavy devlopment, due to integration of fundamental identity and digest/signature/pubKey encodings.  All very good.  However, the following modules have been disabled:
+
+ * apollo
+ * apollo-web
+ * func-testing
+ * model
+ * ghost
+
+Most are legacy and will change drastically as the underlying model is developed, so elided until that time.

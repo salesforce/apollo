@@ -14,11 +14,11 @@
 		<module>apollo-web</module>
 		<module>func-testing</module>
         <module>model</module>
+        <module>ghost</module>
 		-->
 		
 		<module>avalanche</module>
 		<module>fireflies</module>
-		<module>ghost</module>
 		<module>protocols</module>
 		<module>slush</module>
 		<module>simple-ca</module>

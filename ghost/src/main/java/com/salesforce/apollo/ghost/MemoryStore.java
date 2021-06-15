@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.ghost;
 
-import static com.salesforce.apollo.protocols.Conversion.hashOf;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -16,8 +14,9 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
-import com.salesfoce.apollo.proto.DagEntry;
-import com.salesforce.apollo.protocols.HashKey;
+import com.google.protobuf.Any;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * @author hal.hildebrand
@@ -25,23 +24,28 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class MemoryStore implements Store {
 
-    private final ConcurrentNavigableMap<HashKey, DagEntry> data = new ConcurrentSkipListMap<>();
+    private final ConcurrentNavigableMap<Digest, Any> data = new ConcurrentSkipListMap<>();
+    private final DigestAlgorithm digestAlgorithm;
+
+    public MemoryStore(DigestAlgorithm digestAlgorithm) {
+        this.digestAlgorithm = digestAlgorithm;
+    }
 
     @Override
-    public void add(List<DagEntry> entries, List<HashKey> total) {
+    public void add(List<Any> entries, List<Digest> total) {
         entries.forEach(e -> {
-            byte[] key = hashOf(e);
-            data.put(new HashKey(key), e);
-            total.add(new HashKey(key));
+            var key = digestAlgorithm.digest(e.toByteString());
+            data.put(key, e);
+            total.add(key);
         });
     }
 
     @Override
-    public List<DagEntry> entriesIn(CombinedIntervals combined, List<HashKey> have) { // TODO refactor using IBLT or
-                                                                                      // such
-        Set<HashKey> canHas = new ConcurrentSkipListSet<>();
+    public List<Any> entriesIn(CombinedIntervals combined, List<Digest> have) { // TODO refactor using IBLT or
+                                                                                // such
+        Set<Digest> canHas = new ConcurrentSkipListSet<>();
         have.forEach(e -> canHas.add(e)); // really expensive
-        List<DagEntry> entries = new ArrayList<>(); // TODO batching. we do need stinking batches for realistic scale
+        List<Any> entries = new ArrayList<>(); // TODO batching. we do need stinking batches for realistic scale
         combined.getIntervals().forEach(i -> {
             data.keySet()
                 .subSet(i.getBegin(), true, i.getEnd(), false)
@@ -53,17 +57,17 @@ public class MemoryStore implements Store {
     }
 
     @Override
-    public DagEntry get(HashKey key) {
+    public Any get(Digest key) {
         return data.get(key);
     }
 
     @Override
-    public List<DagEntry> getUpdates(List<HashKey> want) {
+    public List<Any> getUpdates(List<Digest> want) {
         return want.stream().map(e -> data.get(e)).filter(e -> e != null).collect(Collectors.toList());
     }
 
     @Override
-    public List<HashKey> have(CombinedIntervals keyIntervals) {
+    public List<Digest> have(CombinedIntervals keyIntervals) {
         return keyIntervals.getIntervals()
                            .stream()
                            .flatMap(i -> data.keySet().subSet(i.getBegin(), true, i.getEnd(), false).stream())
@@ -71,12 +75,12 @@ public class MemoryStore implements Store {
     }
 
     @Override
-    public List<HashKey> keySet() {
+    public List<Digest> keySet() {
         return data.keySet().stream().collect(Collectors.toList());
     }
 
     @Override
-    public void put(HashKey key, DagEntry value) {
+    public void put(Digest key, Any value) {
         data.putIfAbsent(key, value);
     }
 }

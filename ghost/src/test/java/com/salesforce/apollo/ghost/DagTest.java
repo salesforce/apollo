@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.ghost;
 
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,27 +35,22 @@ import org.junit.jupiter.api.BeforeEach;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.ByteMessage;
-import com.salesfoce.apollo.proto.DagEntry;
-import com.salesfoce.apollo.proto.DagEntry.Builder;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
-import com.salesforce.apollo.membership.impl.CertWithKey;
-import com.salesforce.apollo.membership.impl.Member;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.Utils;
 
-import io.github.olivierlemasle.ca.RootCertificate;
-
 public class DagTest {
-
-    private static final RootCertificate     ca         = getCa();
-    private static Map<HashKey, CertWithKey> certs;
+ 
+    private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
 
     @BeforeAll
@@ -65,7 +59,7 @@ public class DagTest {
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
-                                                   cert -> new CertWithKey(cert.getX509Certificate(),
+                                                   cert -> new CertificateWithPrivateKey(cert.getX509Certificate(),
                                                            cert.getPrivateKey())));
     }
 
@@ -93,7 +87,7 @@ public class DagTest {
         assertEquals(certs.size(), members.size());
 
         while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertWithKey cert = certs.get(members.get(entropy.nextInt(20)).getId());
+            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(20)).getId());
             if (!seeds.contains(cert.getCertificate())) {
                 seeds.add(cert.getCertificate());
             }
@@ -106,7 +100,7 @@ public class DagTest {
         views = members.stream().map(node -> {
             Router comm = new LocalRouter(node, ServerConnectionCache.newBuilder(), executor);
             comms.add(comm);
-            View view = new View(HashKey.ORIGIN, node, comm, null);
+            View view = new View(Digest.ORIGIN, node, comm, null);
             return view;
         }).collect(Collectors.toList());
     }
@@ -144,7 +138,7 @@ public class DagTest {
                              .count(),
                      "Not all nodes joined the cluster");
 
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
 
         Builder builder = DagEntry.newBuilder()
                                   .setData(Any.pack(ByteMessage.newBuilder()
@@ -174,7 +168,7 @@ public class DagTest {
             }
         }
 
-        for (Entry<HashKey, DagEntry> entry : stored.entrySet()) {
+        for (Entry<Digest, DagEntry> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
                 DagEntry found = ghost.getDagEntry(entry.getKey());
                 assertNotNull(found);
@@ -207,7 +201,7 @@ public class DagTest {
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
                 + testViews.size() + " members");
 
-        for (Entry<HashKey, DagEntry> entry : stored.entrySet()) {
+        for (Entry<Digest, DagEntry> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
                 DagEntry found = ghost.getDagEntry(entry.getKey());
                 assertNotNull(found, ghost.getNode() + " not found: " + entry.getKey());
@@ -221,11 +215,11 @@ public class DagTest {
         }
     }
 
-    private List<HashKey> randomLinksTo(Map<HashKey, DagEntry> stored) {
-        List<HashKey> links = new ArrayList<>();
-        Set<HashKey> keys = stored.keySet();
+    private List<Digest> randomLinksTo(Map<Digest, DagEntry> stored) {
+        List<Digest> links = new ArrayList<>();
+        Set<Digest> keys = stored.keySet();
         for (int i = 0; i < entropy.nextInt(10); i++) {
-            Iterator<HashKey> it = keys.iterator();
+            Iterator<Digest> it = keys.iterator();
             for (int j = 0; j < entropy.nextInt(keys.size()); j++) {
                 it.next();
             }

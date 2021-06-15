@@ -7,9 +7,6 @@
 package com.salesforce.apollo.ghost;
 
 import static com.salesforce.apollo.ghost.communications.GhostClientCommunications.getCreate;
-import static com.salesforce.apollo.protocols.Conversion.hashOf;
-import static com.salesforce.apollo.protocols.HashKey.LAST;
-import static com.salesforce.apollo.protocols.HashKey.ORIGIN;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,18 +24,19 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesfoce.apollo.proto.DagEntry;
-import com.salesfoce.apollo.proto.Interval;
+import com.google.protobuf.Any;
+import com.salesfoce.apollo.ghost.proto.Interval;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.ghost.communications.GhostClientCommunications;
 import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
-import com.salesforce.apollo.membership.impl.Member;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * Spaaaaaaaaaaaace Ghooooooooossssssstttttt.
@@ -86,10 +84,11 @@ import com.salesforce.apollo.protocols.HashKey;
 public class Ghost {
 
     public static class GhostParameters {
-        public long     maxConnections = 3;
-        public int      redundancy     = 3;
-        public long     timeout        = 30;
-        public TimeUnit unit           = TimeUnit.SECONDS;
+        public DigestAlgorithm digestAlgorithm = DigestAlgorithm.DEFAULT;
+        public long            maxConnections  = 3;
+        public int             redundancy      = 3;
+        public long            timeout         = 30;
+        public TimeUnit        unit            = TimeUnit.SECONDS;
     }
 
     /**
@@ -99,8 +98,36 @@ public class Ghost {
         private final AtomicBoolean busy    = new AtomicBoolean();
         private final AtomicBoolean started = new AtomicBoolean();
 
-        public DagEntry get(HashKey key) {
+        public Any get(Digest key) {
             return store.get(key);
+        }
+
+        public List<Any> intervals(List<Interval> intervals, List<Digest> have) {
+            return store.entriesIn(new CombinedIntervals(
+                    intervals.stream().map(e -> new KeyInterval(e)).collect(Collectors.toList())), have);
+        }
+
+        public Void put(Any value) {
+            store.put(parameters.digestAlgorithm.digest(value.toByteString()), value);
+            return null;
+        }
+
+        public List<Any> satisfy(List<Digest> want) {
+            return store.getUpdates(want);
+        }
+
+        public void start() {
+            if (!started.compareAndSet(false, true)) {
+                return;
+            }
+            communications.register(view.getContext().getId(), service);
+        }
+
+        public void stop() {
+            if (!started.compareAndSet(true, false)) {
+                return;
+            }
+            communications.deregister(view.getContext().getId());
         }
 
         @SuppressWarnings("unused")
@@ -115,7 +142,7 @@ public class Ghost {
             }
             try {
                 CombinedIntervals keyIntervals = keyIntervals();
-                List<HashKey> have = store.have(keyIntervals);
+                List<Digest> have = store.have(keyIntervals);
                 int zeros = 0;
 
                 for (int i = 0; i < view.getRings().size(); i++) {
@@ -132,7 +159,7 @@ public class Ghost {
                     }
                     try {
                         try {
-                            List<DagEntry> entries = connection.intervals(keyIntervals.toIntervals(), have);
+                            List<Any> entries = connection.intervals(keyIntervals.toIntervals(), have);
                             if (entries.isEmpty()) {
                                 zeros++;
                             }
@@ -152,34 +179,6 @@ public class Ghost {
             } finally {
                 busy.set(false);
             }
-        }
-
-        public List<DagEntry> intervals(List<Interval> intervals, List<HashKey> have) {
-            return store.entriesIn(new CombinedIntervals(
-                    intervals.stream().map(e -> new KeyInterval(e)).collect(Collectors.toList())), have);
-        }
-
-        public Void put(DagEntry value) {
-            store.put(new HashKey(hashOf(value)), value);
-            return null;
-        }
-
-        public List<DagEntry> satisfy(List<HashKey> want) {
-            return store.getUpdates(want);
-        }
-
-        public void start() {
-            if (!started.compareAndSet(false, true)) {
-                return;
-            }
-            communications.register(view.getContext().getId(), service);
-        }
-
-        public void stop() {
-            if (!started.compareAndSet(true, false)) {
-                return;
-            }
-            communications.deregister(view.getContext().getId());
         }
     }
 
@@ -206,28 +205,28 @@ public class Ghost {
     }
 
     /**
-     * Answer the DagEntry associated with the key
+     * Answer the Any associated with the key
      * 
      * @param key
-     * @return the DagEntry associated with ye key
+     * @return the Any associated with ye key
      */
-    public DagEntry getDagEntry(HashKey key) {
+    public Any getDagEntry(Digest key) {
         if (!joined()) {
             throw new IllegalStateException("Node has not joined the cluster");
         }
-        CompletionService<DagEntry> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
-        List<Future<DagEntry>> futures;
+        CompletionService<Any> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
+        List<Future<Any>> futures;
         futures = IntStream.range(0, rings).mapToObj(i -> view.getRing(i)).map(ring -> frist.submit(() -> {
             Member successor = ring.successor(key, m -> m.isLive() && !joining.contains(m));
             if (successor != null) {
-                DagEntry DagEntry;
+                Any Any;
                 GhostClientCommunications connection = communications.apply(successor, getNode());
                 if (connection == null) {
                     log.debug("Error looking up {} on {} connection is null", key, successor);
                     return null;
                 }
                 try {
-                    DagEntry = connection.get(key);
+                    Any = connection.get(key);
                 } catch (Exception e) {
                     log.debug("Error looking up {} on {} : {}", key, successor, e);
                     return null;
@@ -235,8 +234,8 @@ public class Ghost {
                     connection.release();
                 }
                 log.debug("ring {} on {} get {} from {} get: {}", ring.getIndex(), getNode().getId(), key,
-                          successor.getId(), DagEntry != null);
-                return DagEntry;
+                          successor.getId(), Any != null);
+                return Any;
             }
             return null;
         })).collect(Collectors.toList());
@@ -245,10 +244,10 @@ public class Ghost {
         long remainingTimout = parameters.unit.toMillis(parameters.timeout);
 
         try {
-            DagEntry DagEntry = null;
-            while (DagEntry == null && --retries >= 0) {
+            Any Any = null;
+            while (Any == null && --retries >= 0) {
                 long then = System.currentTimeMillis();
-                Future<DagEntry> result = null;
+                Future<Any> result = null;
                 try {
                     result = frist.poll(remainingTimout, TimeUnit.MILLISECONDS);
                 } catch (InterruptedException e) {
@@ -256,7 +255,7 @@ public class Ghost {
                     return null;
                 }
                 try {
-                    DagEntry = result.get();
+                    Any = result.get();
                 } catch (InterruptedException e) {
                     return null;
                 } catch (ExecutionException e) {
@@ -264,7 +263,7 @@ public class Ghost {
                 }
                 remainingTimout = remainingTimout - (System.currentTimeMillis() - then);
             }
-            return DagEntry;
+            return Any;
         } finally {
             futures.forEach(f -> f.cancel(true));
         }
@@ -293,18 +292,17 @@ public class Ghost {
     }
 
     /**
-     * Insert the DagEntry into the Ghost DHT. Return when a majority of rings have
-     * stored the DagEntry
+     * Insert the Any into the Ghost DHT. Return when a majority of rings have
+     * stored the Any
      * 
-     * @param DagEntry
-     * @return - the HashKey of the DagEntry
+     * @param Any
+     * @return - the Digest of the Any
      */
-    public HashKey putDagEntry(DagEntry DagEntry) {
+    public Digest putDagEntry(Any Any) {
         if (!joined()) {
             throw new IllegalStateException("Node has not joined the cluster");
         }
-        byte[] digest = hashOf(DagEntry);
-        HashKey key = new HashKey(digest);
+        Digest key = parameters.digestAlgorithm.digest(Any.toByteString());
         CompletionService<Boolean> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
         List<Future<Boolean>> futures = IntStream.range(0, rings)
                                                  .mapToObj(i -> view.getRing(i))
@@ -315,7 +313,7 @@ public class Ghost {
                                                                                                                      getNode());
                                                          if (connection != null) {
                                                              try {
-                                                                 connection.put(DagEntry);
+                                                                 connection.put(Any);
                                                                  log.debug("put {} on {}", key, successor.getId());
                                                                  return true;
                                                              } finally {
@@ -369,11 +367,11 @@ public class Ghost {
             if (predecessor == null) {
                 continue;
             }
-            HashKey begin = ring.hash(predecessor);
-            HashKey end = ring.hash(getNode());
+            Digest begin = ring.hash(predecessor);
+            Digest end = ring.hash(getNode());
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
-                intervals.add(new KeyInterval(end, LAST));
-                intervals.add(new KeyInterval(ORIGIN, begin));
+                intervals.add(new KeyInterval(end, parameters.digestAlgorithm.getLast()));
+                intervals.add(new KeyInterval(parameters.digestAlgorithm.getOrigin(), begin));
             } else {
                 intervals.add(new KeyInterval(begin, end));
             }

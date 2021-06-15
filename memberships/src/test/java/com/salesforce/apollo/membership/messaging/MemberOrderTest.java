@@ -128,6 +128,7 @@ public class MemberOrderTest {
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
+                                           .limit(30)
                                            .collect(Collectors.toList());
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size());

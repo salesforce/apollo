@@ -23,8 +23,8 @@ import java.util.concurrent.ForkJoinPool;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.proto.TestItGrpc;
-import com.salesfoce.apollo.proto.TestItGrpc.TestItImplBase;
+import com.salesfoce.apollo.test.proto.TestItGrpc;
+import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
