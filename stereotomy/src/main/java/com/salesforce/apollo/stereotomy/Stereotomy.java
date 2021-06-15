@@ -99,8 +99,8 @@ public class Stereotomy {
         }
 
         @Override
-        public boolean getDelegated() {
-            return state.getDelegated();
+        public boolean isDelegated() {
+            return state.isDelegated();
         }
 
         @Override

@@ -143,7 +143,7 @@ public class Validator {
             } else if (event instanceof RotationEvent) {
                 var rot = (RotationEvent) ee;
 
-                this.validate(!(state.getDelegated()) || rot instanceof DelegatedRotationEvent,
+                this.validate(!(state.isDelegated()) || rot instanceof DelegatedRotationEvent,
                               "delegated identifiers must use delegated rotation event type");
 
                 this.validate(rot.getSequenceNumber() > 0,

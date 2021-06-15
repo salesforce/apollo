@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.specification;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import com.salesforce.apollo.stereotomy.Stereotomy;
@@ -107,7 +109,7 @@ public class StereotomyTests {
         // lastEstablishmentEvent
         assertEquals(i.getIdentifier(), lastEstablishmentEvent.getIdentifier());
         assertEquals(0, lastEstablishmentEvent.getSequenceNumber());
-        // TODO check digest
+        assertEquals(Digest.NONE, digest(i.getDigest().toByteString()));
 
         // lastEvent
         KeyEvent lastEvent = testEventStore.getKeyEvent(i.getLastEvent()).get();
@@ -119,7 +121,7 @@ public class StereotomyTests {
 
         // delegation
         assertFalse(i.getDelegatingIdentifier().isPresent());
-        assertFalse(i.getDelegated());
+        assertFalse(i.isDelegated());
     }
 
 //    @Test

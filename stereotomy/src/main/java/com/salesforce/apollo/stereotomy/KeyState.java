@@ -29,7 +29,7 @@ public interface KeyState {
 
     EventCoordinates getCoordinates();
 
-    default boolean getDelegated() {
+    default boolean isDelegated() {
         return this.getDelegatingIdentifier().isPresent();
     }
 
