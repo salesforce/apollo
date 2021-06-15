@@ -9,9 +9,13 @@
 	<name>Apollo: Umbrella App</name>
 
 	<modules>
+		<!-- 
 		<module>apollo</module>
 		<module>apollo-web</module>
 		<module>func-testing</module>
+        <module>model</module>
+		-->
+		
 		<module>avalanche</module>
 		<module>fireflies</module>
 		<module>ghost</module>
@@ -25,7 +29,6 @@
 		<module>consortium</module>
 		<module>test-population</module>
 		<module>tron</module>
-		<module>model</module>
 		<module>stereotomy</module>
 		<module>utils</module>
 	</modules>

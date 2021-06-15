@@ -27,8 +27,7 @@ import com.salesforce.apollo.avalanche.Processor.TimedProcessor;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.fireflies.FireflyMetricsImpl;
 import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.fireflies.View; 
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -78,7 +77,7 @@ public class Apollo {
         Node node = identitySource.getNode();
         communications = c.communications.getComms(metrics, node, ForkJoinPool.commonPool());
         executor = ForkJoinPool.commonPool();
-        view = identitySource.createView(node, new HashKey(c.contextBase), communications,
+        view = identitySource.createView(node, c.contextBase, communications,
                                          new FireflyMetricsImpl(metrics), executor);
         seeds = identitySource.seeds();
         avalanche = new Avalanche(view, communications, c.avalanche, metrics == null ? null : new AvaMetrics(metrics),
