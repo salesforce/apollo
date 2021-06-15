@@ -17,7 +17,6 @@ import java.security.SecureRandom;
 import java.util.List;
 
 import org.h2.mvstore.MVStore;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -48,19 +47,13 @@ public class StereotomyTests {
     final StateStore         testEventStore = new StateStore(DigestAlgorithm.DEFAULT, MVStore.open(null));
     final StereotomyKeyStore testKeyStore   = new InMemoryKeyStore();
 
-    @BeforeAll
-    public static void beforeClass() {
-        // secp256k1 is considered "unsecure" so you have enable it like this:
-        System.setProperty("jdk.sunec.disableNative", "false");
-    }
-
     @BeforeEach
     public void beforeEachTest() throws NoSuchAlgorithmException {
         // this makes the values of secureRandom deterministic
         secureRandom = SecureRandom.getInstance("SHA1PRNG");
         secureRandom.setSeed(new byte[] { 0 });
     }
-    
+
     @Test
     public void newPublicIdentifier() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
@@ -124,7 +117,7 @@ public class StereotomyTests {
         // delegation
         assertFalse(identifier.getDelegatingIdentifier().isPresent());
         assertFalse(identifier.isDelegated());
-    } 
+    }
 
     @Test
     public void newPrivateIdentifier() {

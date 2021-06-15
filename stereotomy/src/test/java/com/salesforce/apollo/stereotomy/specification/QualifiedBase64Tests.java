@@ -6,7 +6,6 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -14,11 +13,6 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier;
 
 public class QualifiedBase64Tests {
-    @BeforeAll
-    public static void beforeClass() {
-      // secp256k1 is considered "unsecure" so you have enable it like this:
-      System.setProperty("jdk.sunec.disableNative", "false");
-    }
 
     @Test
     public void test__basicIdentifierPlaceholder() {

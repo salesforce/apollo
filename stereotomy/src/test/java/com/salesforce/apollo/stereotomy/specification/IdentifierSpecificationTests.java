@@ -7,7 +7,6 @@ import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -17,17 +16,11 @@ import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 
 public class IdentifierSpecificationTests {
 
-    @BeforeAll
-    public static void beforeClass() {
-        // secp256k1 is considered "unsecure" so you have enable it like this:
-        System.setProperty("jdk.sunec.disableNative", "false");
-    }
-
     SecureRandom deterministicRandom;
     KeyPair      keyPair;
     KeyPair      keyPair2;
     Signer       signer;
-    Signer signer2;
+    Signer       signer2;
 
     @BeforeEach
     public void beforeEachTest() throws NoSuchAlgorithmException {
