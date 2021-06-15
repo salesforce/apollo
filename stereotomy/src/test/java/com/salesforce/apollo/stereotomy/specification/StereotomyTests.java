@@ -61,6 +61,7 @@ public class StereotomyTests {
         secureRandom.setSeed(new byte[] { 0 });
     }
     
+    @Test
     public void newPublicIdentifier() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
@@ -123,7 +124,7 @@ public class StereotomyTests {
         // delegation
         assertFalse(identifier.getDelegatingIdentifier().isPresent());
         assertFalse(identifier.isDelegated());
-    }
+    } 
 
     @Test
     public void newPrivateIdentifier() {

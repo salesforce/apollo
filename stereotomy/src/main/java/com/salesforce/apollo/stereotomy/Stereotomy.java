@@ -50,16 +50,14 @@ import com.salesforce.apollo.stereotomy.store.StateStore;
  *
  */
 public class Stereotomy {
-    private static final Logger log = LoggerFactory.getLogger(Stereotomy.class);
-
     public interface ControllableIdentifier extends KeyState {
         void rotate();
-
-        void rotate(RotationSpecification.Builder spec);
 
         void rotate(List<Seal> of);
 
         void rotate(List<Seal> seals, RotationSpecification.Builder spec);
+
+        void rotate(RotationSpecification.Builder spec);
 
         void seal(List<Seal> seals);
 
@@ -69,7 +67,60 @@ public class Stereotomy {
 
     }
 
-    public class ControllableIdentifierImpl implements ControllableIdentifier {
+    public interface EventFactory {
+
+        InceptionEvent inception(IdentifierSpecification specification);
+
+        KeyEvent interaction(InteractionSpecification specification);
+
+        RotationEvent rotation(RotationSpecification specification);
+
+    }
+
+    public static class EventSignature {
+
+        private final EventCoordinates          event;
+        private final EventCoordinates          keyEstablishmentEvent;
+        private final Map<Integer, JohnHancock> signatures;
+
+        public EventSignature(EventCoordinates event, EventCoordinates keyEstablishmentEvent,
+                Map<Integer, JohnHancock> signatures) {
+            this.event = event;
+            this.keyEstablishmentEvent = keyEstablishmentEvent;
+            this.signatures = Collections.unmodifiableMap(signatures);
+        }
+
+        public EventCoordinates getEvent() {
+            return this.event;
+        }
+
+        public EventCoordinates getKeyEstablishmentEvent() {
+            return this.keyEstablishmentEvent;
+        }
+
+        public Map<Integer, JohnHancock> getSignatures() {
+            return this.signatures;
+        }
+
+    }
+
+    public interface StereotomyKeyStore {
+
+        Optional<KeyPair> getKey(KeyCoordinates keyCoordinates);
+
+        Optional<KeyPair> getNextKey(KeyCoordinates keyCoordinates);
+
+        Optional<KeyPair> removeKey(KeyCoordinates keyCoordinates);
+
+        Optional<KeyPair> removeNextKey(KeyCoordinates keyCoordinates);
+
+        void storeKey(KeyCoordinates keyCoordinates, KeyPair keyPair);
+
+        void storeNextKey(KeyCoordinates keyCoordinates, KeyPair keyPair);
+
+    }
+
+    private class ControllableIdentifierImpl implements ControllableIdentifier {
         private final KeyState state;
 
         public ControllableIdentifierImpl(KeyState state) {
@@ -89,11 +140,6 @@ public class Stereotomy {
         @Override
         public EventCoordinates getCoordinates() {
             return state.getCoordinates();
-        }
-
-        @Override
-        public boolean isDelegated() {
-            return state.isDelegated();
         }
 
         @Override
@@ -157,6 +203,11 @@ public class Stereotomy {
         }
 
         @Override
+        public boolean isDelegated() {
+            return state.isDelegated();
+        }
+
+        @Override
         public boolean isTransferable() {
             return state.isTransferable();
         }
@@ -197,58 +248,7 @@ public class Stereotomy {
         }
     }
 
-    public interface EventFactory {
-
-        InceptionEvent inception(IdentifierSpecification specification);
-
-        KeyEvent interaction(InteractionSpecification specification);
-
-        RotationEvent rotation(RotationSpecification specification);
-
-    }
-
-    public static class EventSignature {
-
-        private final EventCoordinates          event;
-        private final EventCoordinates          keyEstablishmentEvent;
-        private final Map<Integer, JohnHancock> signatures;
-
-        public EventSignature(EventCoordinates event, EventCoordinates keyEstablishmentEvent,
-                Map<Integer, JohnHancock> signatures) {
-            this.event = event;
-            this.keyEstablishmentEvent = keyEstablishmentEvent;
-            this.signatures = Collections.unmodifiableMap(signatures);
-        }
-
-        public EventCoordinates getEvent() {
-            return this.event;
-        }
-
-        public EventCoordinates getKeyEstablishmentEvent() {
-            return this.keyEstablishmentEvent;
-        }
-
-        public Map<Integer, JohnHancock> getSignatures() {
-            return this.signatures;
-        }
-
-    }
-
-    public interface StereotomyKeyStore {
-
-        Optional<KeyPair> getKey(KeyCoordinates keyCoordinates);
-
-        Optional<KeyPair> getNextKey(KeyCoordinates keyCoordinates);
-
-        Optional<KeyPair> removeKey(KeyCoordinates keyCoordinates);
-
-        Optional<KeyPair> removeNextKey(KeyCoordinates keyCoordinates);
-
-        void storeKey(KeyCoordinates keyCoordinates, KeyPair keyPair);
-
-        void storeNextKey(KeyCoordinates keyCoordinates, KeyPair keyPair);
-
-    }
+    private static final Logger log = LoggerFactory.getLogger(Stereotomy.class);
 
     public static final Version currentVersion() {
         return new Version() {
@@ -325,7 +325,7 @@ public class Stereotomy {
                  keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
         return identifier;
     }
-    
+
     public ControllableIdentifier newPublicIdentifier(BasicIdentifier... witnesses) {
         return newPublicIdentifier(IdentifierSpecification.newBuilder());
     }
