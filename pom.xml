@@ -15,15 +15,15 @@
 		<module>func-testing</module>
         <module>model</module>
         <module>ghost</module>
+        <module>simple-ca</module>
+        <module>bootstrap-service</module>
+        <module>bootstrap-client</module>
 		-->
-		
+		 
 		<module>avalanche</module>
 		<module>fireflies</module>
 		<module>protocols</module>
 		<module>slush</module>
-		<module>simple-ca</module>
-		<module>bootstrap-service</module>
-		<module>bootstrap-client</module>
 		<module>sql-state</module>
 		<module>memberships</module>
 		<module>consortium</module>

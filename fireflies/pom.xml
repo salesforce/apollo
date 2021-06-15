@@ -43,11 +43,6 @@
 		</dependency>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>simple-ca</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>test-population</artifactId>
 			<scope>test</scope>
 		</dependency>
