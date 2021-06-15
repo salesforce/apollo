@@ -29,12 +29,11 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
 import com.salesforce.apollo.crypto.cert.CertExtension;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.cert.Certificates;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.utils.Utils;
 
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.CertificateWithPrivateKeyImpl;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import io.grpc.stub.StreamObserver;
@@ -92,7 +91,7 @@ public class TestMtls {
         List<CertExtension> extensions = Collections.emptyList();
         KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
         X509Certificate selfSignedCert = Certificates.selfSign(true, dn, sn, keyPair, notBefore, notAfter, extensions);
-        return new CertificateWithPrivateKeyImpl(selfSignedCert, keyPair.getPrivate());
+        return new CertificateWithPrivateKey(selfSignedCert, keyPair.getPrivate());
     }
 
     private MtlsServer server(InetSocketAddress serverAddress) {
