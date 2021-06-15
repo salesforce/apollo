@@ -39,9 +39,9 @@ import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.avalanche.Processor.NullProcessor;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -62,7 +62,7 @@ public class TransactionsTest {
     private BitsStreamGenerator entropy;
     private AvalancheParameters parameters;
     private DagEntry            root;
-    private HashKey             rootKey;
+    private Digest              rootKey;
 
     @BeforeEach
     public void before() throws Exception {
@@ -81,15 +81,15 @@ public class TransactionsTest {
         try {
             parameters.core.beta1 = 100;
             parameters.core.beta2 = 20;
-            List<HashKey> ordered = new ArrayList<>();
-            Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+            List<Digest> ordered = new ArrayList<>();
+            Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
             stored.put(rootKey, root);
             ordered.add(rootKey);
 
-            HashKey last = rootKey;
-            HashKey firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));
+            Digest last = rootKey;
+            Digest firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));
             last = firstCommit;
-            HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
+            Digest secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
             last = secondCommit;
 
             for (int i = 0; i < parameters.core.beta2; i++) {
@@ -125,15 +125,15 @@ public class TransactionsTest {
     // test early commit logic
     @Test
     public void earlyCommit() throws Exception {
-        List<HashKey> ordered = new ArrayList<>();
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+        List<Digest> ordered = new ArrayList<>();
+        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
-        HashKey last = rootKey;
-        HashKey firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));
+        Digest last = rootKey;
+        Digest firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));
         last = firstCommit;
-        HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
+        Digest secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
         last = secondCommit;
 
         for (int i = 0; i < parameters.core.beta1 - 2; i++) {
@@ -161,12 +161,12 @@ public class TransactionsTest {
 
     @Test
     public void finalizedSet() {
-        List<HashKey> ordered = new ArrayList<>();
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+        List<Digest> ordered = new ArrayList<>();
+        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
-        HashKey last = rootKey;
+        Digest last = rootKey;
 
         for (int i = 0; i < parameters.core.beta1; i++) {
             last = newDagEntry("entry: " + i, ordered, stored, Arrays.asList(last));
@@ -174,14 +174,14 @@ public class TransactionsTest {
         FinalizationData finalized;
 
         for (int i = ordered.size() - 1; i > ordered.size() - parameters.core.beta1; i--) {
-            HashKey key = ordered.get(i);
+            Digest key = ordered.get(i);
             dag.prefer(key);
             finalized = dag.tryFinalize(key);
             assertEquals(0, finalized.finalized.size());
             assertEquals(0, finalized.deleted.size());
         }
 
-        HashKey lastKey = ordered.get(ordered.size() - 1);
+        Digest lastKey = ordered.get(ordered.size() - 1);
         dag.prefer(lastKey);
 
         finalized = dag.tryFinalize(lastKey);
@@ -195,27 +195,27 @@ public class TransactionsTest {
 
     @Test
     public void frontier() throws Exception {
-        List<HashKey> ordered = new ArrayList<>();
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+        List<Digest> ordered = new ArrayList<>();
+        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
-        HashKey last = rootKey;
-        HashKey firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(rootKey));
+        Digest last = rootKey;
+        Digest firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(rootKey));
         ordered.add(firstCommit);
         last = firstCommit;
 
-        HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(rootKey));
+        Digest secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(rootKey));
         ordered.add(secondCommit);
         last = secondCommit;
 
-        TreeSet<HashKey> frontier = dag.frontier(entropy, 3).stream().collect(Collectors.toCollection(TreeSet::new));
+        TreeSet<Digest> frontier = dag.frontier(entropy, 3).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(3, frontier.size());
 
         assertTrue(frontier.contains(secondCommit));
 
-        HashKey userTxn = newDagEntry("Ye test transaction", ordered, stored, dag.sampleParents(entropy, 4));
+        Digest userTxn = newDagEntry("Ye test transaction", ordered, stored, dag.sampleParents(entropy, 4));
         ordered.add(userTxn);
 
         frontier = dag.frontier(entropy, 4).stream().collect(Collectors.toCollection(TreeSet::new));
@@ -238,13 +238,13 @@ public class TransactionsTest {
 
     @Test
     public void isStronglyPreferred() throws Exception {
-        List<HashKey> ordered = new ArrayList<>();
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+        List<Digest> ordered = new ArrayList<>();
+        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
         DagEntry entry = dag(String.format("DagEntry: %s", 1).getBytes(), asList(rootKey));
-        HashKey key = dag.insert(entry, 0);
+        Digest key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
@@ -258,12 +258,12 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        HashKey zero = new HashKey(new byte[32]);
+        Digest zero = DigestAlgorithm.DEFAULT.getOrigin();
         assertNull(dag.isStronglyPreferred(zero), "Not exist returned true: ");
 
         byte[] o = new byte[32];
         Arrays.fill(o, (byte) 1);
-        HashKey one = new HashKey(o);
+        Digest one = new Digest(DigestAlgorithm.DEFAULT, o);
         assertNull(dag.isStronglyPreferred(one), "Not exist returned true: ");
         assertArrayEquals(new Boolean[] { null, null },
                           dag.isStronglyPreferred(Arrays.asList(zero, one)).toArray(new Boolean[2]),
@@ -271,7 +271,7 @@ public class TransactionsTest {
 
         // All are strongly preferred
         for (int i = 0; i < ordered.size(); i++) {
-            HashKey test = ordered.get(i);
+            Digest test = ordered.get(i);
             assertTrue(dag.isStronglyPreferred(test), String.format("node %s is not strongly preferred", i));
         }
 
@@ -300,7 +300,7 @@ public class TransactionsTest {
         assertFalse(dag.isStronglyPreferred(ordered.get(5)), String.format("node 5 is strongly preferred"));
 
         Boolean[] expected = new Boolean[] { true, true, true, true, false, false };
-        List<HashKey> all = ordered.stream().map(e -> e).collect(Collectors.toList());
+        List<Digest> all = ordered.stream().map(e -> e).collect(Collectors.toList());
         assertArrayEquals(expected, dag.isStronglyPreferred(all).toArray(new Boolean[ordered.size()]),
                           "Aggregate failed: ");
         dag.finalize(rootKey);
@@ -317,15 +317,15 @@ public class TransactionsTest {
         try {
             parameters.core.beta1 = 11;
             parameters.core.beta2 = 150;
-            List<HashKey> ordered = new ArrayList<>();
-            Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+            List<Digest> ordered = new ArrayList<>();
+            Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
             stored.put(rootKey, root);
             ordered.add(rootKey);
 
-            HashKey last = rootKey;
-            HashKey firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last), false);
+            Digest last = rootKey;
+            Digest firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last), false);
             last = firstCommit;
-            HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last), false);
+            Digest secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last), false);
             last = secondCommit;
 
             for (int i = 0; i < parameters.core.beta2; i++) {
@@ -361,19 +361,19 @@ public class TransactionsTest {
 
     @Test
     public void multipleParents() {
-        List<HashKey> ordered = new ArrayList<>();
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+        List<Digest> ordered = new ArrayList<>();
+        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
-        HashKey last = rootKey;
-        HashKey firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));
+        Digest last = rootKey;
+        Digest firstCommit = newDagEntry("1st commit", ordered, stored, Arrays.asList(last));
         last = firstCommit;
-        HashKey secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
+        Digest secondCommit = newDagEntry("2nd commit", ordered, stored, Arrays.asList(last));
         last = secondCommit;
 
-        HashKey userTxn = newDagEntry("Ye test transaction", ordered, stored,
-                                      dag.sampleParents(entropy, parameters.parentCount));
+        Digest userTxn = newDagEntry("Ye test transaction", ordered, stored,
+                                     dag.sampleParents(entropy, parameters.parentCount));
 
         last = userTxn;
 
@@ -392,8 +392,8 @@ public class TransactionsTest {
 
     @Test
     public void parentSelection() throws Exception {
-        List<HashKey> ordered = new ArrayList<>();
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+        List<Digest> ordered = new ArrayList<>();
+        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
@@ -402,25 +402,23 @@ public class TransactionsTest {
         assertTrue(dag.isFinalized(rootKey));
 
         // 1 elegible parent, the root
-        Collection<HashKey> sampled = dag.sampleParents(entropy, parameters.parentCount)
-                                         .stream()
-                                         .collect(Collectors.toCollection(TreeSet::new));
+        Collection<Digest> sampled = dag.sampleParents(entropy, parameters.parentCount)
+                                        .stream()
+                                        .collect(Collectors.toCollection(TreeSet::new));
         assertEquals(0, sampled.size());
 
         sampled = dag.finalized(entropy, parameters.parentCount)
-                                         .stream()
-                                         .collect(Collectors.toCollection(TreeSet::new));
+                     .stream()
+                     .collect(Collectors.toCollection(TreeSet::new));
         assertEquals(1, sampled.size());
         assertTrue(sampled.contains(ordered.get(0)));
 
         DagEntry entry = dag(String.format("DagEntry: %s", 1).getBytes(), asList(rootKey));
-        HashKey key = dag.insert(entry, 0);
+        Digest key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
-        sampled = dag.sampleParents(entropy, 1)
-                     .stream()
-                     .collect(Collectors.toCollection(TreeSet::new));
+        sampled = dag.sampleParents(entropy, 1).stream().collect(Collectors.toCollection(TreeSet::new));
         assertEquals(1, sampled.size());
         assertTrue(sampled.contains(ordered.get(1)));
 
@@ -451,9 +449,7 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        sampled = dag.sampleParents(entropy, 3)
-                     .stream()
-                     .collect(Collectors.toCollection(TreeSet::new));
+        sampled = dag.sampleParents(entropy, 3).stream().collect(Collectors.toCollection(TreeSet::new));
         assertEquals(3, sampled.size());
 
         assertTrue(sampled.contains(ordered.get(1)));
@@ -466,9 +462,7 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        sampled = dag.sampleParents(entropy, 4)
-                     .stream()
-                     .collect(Collectors.toCollection(TreeSet::new));
+        sampled = dag.sampleParents(entropy, 4).stream().collect(Collectors.toCollection(TreeSet::new));
 
         assertEquals(4, sampled.size());
 
@@ -480,13 +474,13 @@ public class TransactionsTest {
 
     @Test
     public void parentSelectionWithPreferred() throws Exception {
-        List<HashKey> ordered = new ArrayList<>();
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+        List<Digest> ordered = new ArrayList<>();
+        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
         DagEntry entry = dag(String.format("DagEntry: %s", 1).getBytes(), asList(rootKey));
-        HashKey key = dag.insert(entry, 0);
+        Digest key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
@@ -510,10 +504,10 @@ public class TransactionsTest {
         stored.put(key, entry);
         ordered.add(key);
 
-        Set<HashKey> frontier = dag.frontier(entropy, 5)
-                                   .stream()
+        Set<Digest> frontier = dag.frontier(entropy, 5)
+                                  .stream()
 
-                                   .collect(Collectors.toCollection(TreeSet::new));
+                                  .collect(Collectors.toCollection(TreeSet::new));
         assertEquals(5, frontier.size());
 
         // Nodes 3 and 4 are in conflict and are always excluded
@@ -542,13 +536,13 @@ public class TransactionsTest {
 
     @Test
     public void prefer() throws Exception {
-        List<HashKey> ordered = new ArrayList<>();
-        Map<HashKey, DagEntry> stored = new TreeMap<>();
+        List<Digest> ordered = new ArrayList<>();
+        Map<Digest, DagEntry> stored = new TreeMap<>();
         stored.put(rootKey, root);
         ordered.add(rootKey);
 
         DagEntry entry = dag(String.format("DagEntry: %s", 1).getBytes(), asList(rootKey));
-        HashKey key = dag.insert(entry, 0);
+        Digest key = dag.insert(entry, 0);
         stored.put(key, entry);
         ordered.add(key);
 
@@ -574,7 +568,7 @@ public class TransactionsTest {
         ordered.add(key);
 
 //		dumpClosure(ordered, create);
-        for (HashKey e : ordered) {
+        for (Digest e : ordered) {
             assertEquals(0, dag.get(e).getConfidence());
         }
 
@@ -624,19 +618,19 @@ public class TransactionsTest {
         assertTrue(dag.isStronglyPreferred(ordered.get(4)), String.format("node 4 is not strongly preferred"));
     }
 
-    HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links) {
+    Digest newDagEntry(String contents, List<Digest> ordered, Map<Digest, DagEntry> stored, List<Digest> links) {
         return newDagEntry(contents, ordered, stored, links, true);
     }
 
-    HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links,
-                        boolean store) {
+    Digest newDagEntry(String contents, List<Digest> ordered, Map<Digest, DagEntry> stored, List<Digest> links,
+                       boolean store) {
         return newDagEntry(contents, ordered, stored, links, null, store);
     }
 
-    HashKey newDagEntry(String contents, List<HashKey> ordered, Map<HashKey, DagEntry> stored, List<HashKey> links,
-                        HashKey conflictSet, boolean store) {
+    Digest newDagEntry(String contents, List<Digest> ordered, Map<Digest, DagEntry> stored, List<Digest> links,
+                       Digest conflictSet, boolean store) {
         DagEntry entry = dag(contents.getBytes(), links);
-        HashKey key = store ? dag.insert(entry, conflictSet, 0) : new HashKey(Conversion.hashOf(entry.toByteString()));
+        Digest key = store ? dag.insert(entry, conflictSet, 0) : DigestAlgorithm.DEFAULT.digest(entry.toByteString());
         stored.put(key, entry);
         ordered.add(key);
         return key;

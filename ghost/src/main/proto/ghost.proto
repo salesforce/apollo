@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.ghost.proto";
+option java_outer_classname = "GhostProto";
+option objc_class_prefix = "Gp";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+
+package ghost; 
+
+service TestIt {
+    rpc ping ( google.protobuf.Any ) returns (google.protobuf.Any) {}
+}
+
+service Ghost {
+
+    rpc get ( Get ) returns (google.protobuf.Any) {}
+    rpc put ( Entry ) returns (google.protobuf.Empty) {}
+
+    rpc intervals (Intervals) returns (Entries) {} 
+}
+
+message Entry {
+    bytes context = 1;
+    google.protobuf.Any value = 2;
+}
+
+message Entries {
+    repeated google.protobuf.Any records = 1;
+}
+
+message Intervals {
+    bytes context = 1;
+    repeated Interval intervals = 2;
+    repeated bytes have = 3;
+}
+
+message Get {
+    bytes context = 1;
+    bytes id = 2;
+} 
+
+message Interval {
+        bytes start = 1;
+        bytes end = 2;
+}

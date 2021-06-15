@@ -1,52 +1,57 @@
 /*
- * Copyright (c) 2019, salesforce.com, inc.
+ * Copyright (c) 2021, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.membership;
 
-import java.io.IOException;
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+
+import java.io.InputStream;
 import java.net.InetSocketAddress;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.Signature;
-import java.security.cert.CertificateEncodingException;
+import java.nio.ByteBuffer;
+import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.Map;
 
-import org.bouncycastle.asn1.ASN1OctetString;
-import org.bouncycastle.asn1.x509.Extension;
-import org.bouncycastle.cert.X509CertificateHolder;
-
-import com.salesforce.apollo.protocols.HashKey;
+import com.google.protobuf.ByteString;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
- * A member of the view
- * 
  * @author hal.hildebrand
- * @since 220
+ *
  */
-public class Member implements Comparable<Member> {
+public interface Member extends Comparable<Member> {
 
-    public static HashKey getMemberId(X509Certificate c) {
-        X509CertificateHolder holder;
-        try {
-            holder = new X509CertificateHolder(c.getEncoded());
-        } catch (CertificateEncodingException | IOException e) {
-            throw new IllegalArgumentException("invalid identity certificate for member: " + c, e);
+    static Digest getMemberIdentifier(X509Certificate cert) {
+        String dn = cert.getSubjectX500Principal().getName();
+        Map<String, String> decoded = Util.decodeDN(dn);
+        String id = decoded.get("UID");
+        if (id == null) {
+            throw new IllegalArgumentException("Invalid certificate, missing \"UID\" of dn= " + dn);
         }
-        Extension ext = holder.getExtension(Extension.subjectKeyIdentifier);
+        return digest(id);
+    }
 
-        byte[] id = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
-        return new HashKey(id);
+    static PublicKey getSigningKey(X509Certificate cert) {
+        String dn = cert.getSubjectX500Principal().getName();
+        Map<String, String> decoded = Util.decodeDN(dn);
+        String pk = decoded.get("DC");
+        if (pk == null) {
+            throw new IllegalArgumentException("Invalid certificate, missing \"DC\" of dn= " + dn);
+        }
+        return publicKey(pk);
     }
 
     /**
      * @param certificate
      * @return host and port for the member indicated by the certificate
      */
-    public static InetSocketAddress portsFrom(X509Certificate certificate) {
+    static InetSocketAddress portsFrom(X509Certificate certificate) {
 
         String dn = certificate.getSubjectX500Principal().getName();
         Map<String, String> decoded = Util.decodeDN(dn);
@@ -54,95 +59,47 @@ public class Member implements Comparable<Member> {
         if (portString == null) {
             throw new IllegalArgumentException("Invalid certificate, no port encodings in \"L\" of dn= " + dn);
         }
-        int ffPort = Integer.parseInt(portString);
+        int port = Integer.parseInt(portString);
 
         String hostName = decoded.get("CN");
         if (hostName == null) {
             throw new IllegalArgumentException("Invalid certificate, missing \"CN\" of dn= " + dn);
         }
-        return new InetSocketAddress(hostName, ffPort);
+        return new InetSocketAddress(hostName, port);
     }
 
-    /**
-     * Signing identity
-     */
-    private final X509Certificate certificate;
+    int compareTo(Member o);
 
-    /**
-     * Unique ID of the memmber
-     */
-    private final HashKey id;
-
-    public Member(HashKey id, X509Certificate c) {
-        certificate = c;
-        this.id = id;
-    }
-
-    public Member(X509Certificate cert) {
-        this(getMemberId(cert), cert);
-    }
-
-    @Override
-    public int compareTo(Member o) {
-        return id.compareTo(o.getId());
-    }
-
-    @Override
     // The id of a member uniquely identifies it
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (!(obj instanceof Member))
-            return false;
-        return id.equals(((Member) obj).id);
-    }
-
-    /**
-     * Answer the Signature, initialized with the member's public key, using the
-     * supplied signature algorithm.
-     * 
-     * @param signatureAlgorithm
-     * @return the signature, initialized for verification
-     */
-    public Signature forVerification(String signatureAlgorithm) {
-        Signature signature;
-        try {
-            signature = Signature.getInstance(signatureAlgorithm);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("no such algorithm: " + signatureAlgorithm, e);
-        }
-        try {
-            signature.initVerify(certificate.getPublicKey());
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException("invalid public key", e);
-        }
-        return signature;
-    }
+    boolean equals(Object obj);
 
     /**
      * @return the identifying certificate of the member
      */
-    public X509Certificate getCertificate() {
-        return certificate;
-    }
+    X509Certificate getCertificate();
 
     /**
      * @return the unique id of this member
      */
-    public HashKey getId() {
-        return id;
+    Digest getId();
+
+    int hashCode();
+
+    /**
+     * Verify the signature with the member's signing key
+     */
+    default boolean verify(JohnHancock signature, byte[]... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
     }
 
-    @Override
-    public int hashCode() {
-        return id.hashCode();
+    default boolean verify(JohnHancock signature, ByteBuffer... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
     }
 
-    @Override
-    public String toString() {
-        return "Member[" + id + "]";
+    default boolean verify(JohnHancock signature, ByteString... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
     }
+
+    boolean verify(JohnHancock signature, InputStream message);
 
 }

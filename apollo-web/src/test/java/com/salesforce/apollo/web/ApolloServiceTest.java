@@ -30,7 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import com.salesforce.apollo.Apollo;
 import com.salesforce.apollo.ApolloConfiguration;
 import com.salesforce.apollo.PregenPopulation;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.web.resources.ByteTransactionApi;
 import com.salesforce.apollo.web.resources.ByteTransactionApi.TransactionResult;
 import com.salesforce.apollo.web.resources.DagApi.DagNode;

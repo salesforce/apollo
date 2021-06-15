@@ -11,10 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.Signature;
-import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,18 +34,21 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler;
 import com.salesforce.apollo.membership.messaging.Messenger.Parameters;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -67,7 +66,7 @@ public class MessageTest {
         }
 
         @Override
-        public void message(HashKey context, List<Msg> messages) {
+        public void message(Digest context, List<Msg> messages) {
             messages.forEach(message -> {
                 assert message.from != null : "null member";
                 ByteBuffer buf;
@@ -104,17 +103,20 @@ public class MessageTest {
 
     }
 
-    public static final String                             DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    public static final String                            DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
+    private static Map<Digest, CertificateWithPrivateKey> certs;
 
-    private static final Parameters parameters = Parameters.newBuilder().setBufferSize(100).build();
+    private static final Parameters parameters = Parameters.newBuilder()
+                                                           .setFalsePositiveRate(0.25)
+                                                           .setBufferSize(500)
+                                                           .build();
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 101)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
 
@@ -132,34 +134,28 @@ public class MessageTest {
 
     @Test
     public void broadcast() throws Exception {
-        List<X509Certificate> seeds = new ArrayList<>();
-        List<Member> members = certs.values()
-                                    .parallelStream()
-                                    .map(cert -> cert.getX509Certificate())
-                                    .map(cert -> new Member(Member.getMemberId(cert), cert))
-                                    .collect(Collectors.toList());
-        assertEquals(certs.size(), members.size());
+        List<SigningMember> members = certs.values()
+                                           .parallelStream()
+                                           .map(cert -> new SigningMemberImpl(
+                                                   Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert.getX509Certificate(), cert.getPrivateKey(),
+                                                   new Signer(0, cert.getPrivateKey()),
+                                                   cert.getX509Certificate().getPublicKey()))
+                                           .collect(Collectors.toList());
 
-        Context<Member> context = new Context<Member>(HashKey.ORIGIN, 9);
+        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
         members.forEach(m -> context.activate(m));
-
-        while (seeds.size() < 7) {
-            CertificateWithPrivateKey cert = certs.get(members.get(Utils.bitStreamEntropy().nextInt(members.size())).getId());
-            if (!seeds.contains(cert.getX509Certificate())) {
-                seeds.add(cert.getX509Certificate());
-            }
-        }
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
         ForkJoinPool executor = ForkJoinPool.commonPool();
         messengers = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30),
-                    executor);
+            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
             comms.start();
-            return new Messenger(node, () -> forSigning(node), context, comms, parameters, executor);
+            return new Messenger(node, context, comms, parameters, executor);
         }).collect(Collectors.toList());
 
+        System.out.println("Messaging with " + messengers.size() + " members");
         messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
 
         Map<Member, Receiver> receivers = new HashMap<>();
@@ -185,7 +181,11 @@ public class MessageTest {
             messengers.parallelStream().forEach(view -> {
                 ByteString packed = ByteString.copyFrom(buf.array());
                 assertEquals(36, packed.size());
-                view.publish(ByteMessage.newBuilder().setContents(packed).build());
+                view.publish(ByteMessage.newBuilder().setContents(packed).build(), true);
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                }
             });
             boolean success = round.await(20, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
@@ -197,20 +197,5 @@ public class MessageTest {
             }
         }
         System.out.println();
-    }
-
-    private Signature forSigning(Member member) {
-        Signature signature;
-        try {
-            signature = Signature.getInstance(DEFAULT_SIGNATURE_ALGORITHM);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("no such algorithm: " + DEFAULT_SIGNATURE_ALGORITHM, e);
-        }
-        try {
-            signature.initSign(certs.get(member.getId()).getPrivateKey(), Utils.secureEntropy());
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException("invalid private key", e);
-        }
-        return signature;
     }
 }

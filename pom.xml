@@ -9,12 +9,16 @@
 	<name>Apollo: Umbrella App</name>
 
 	<modules>
+		<!-- 
 		<module>apollo</module>
 		<module>apollo-web</module>
 		<module>func-testing</module>
+        <module>model</module>
+        <module>ghost</module>
+		-->
+		
 		<module>avalanche</module>
 		<module>fireflies</module>
-		<module>ghost</module>
 		<module>protocols</module>
 		<module>slush</module>
 		<module>simple-ca</module>
@@ -25,6 +29,8 @@
 		<module>consortium</module>
 		<module>test-population</module>
 		<module>tron</module>
+		<module>stereotomy</module>
+		<module>utils</module>
 	</modules>
 
 	<properties>
@@ -32,11 +38,12 @@
 		<avro.version>1.10.0</avro.version>
 		<h2.version>1.4.200</h2.version>
 		<jooq.version>3.14.8</jooq.version>
-		<bc.version>1.68</bc.version>
+		<bc.version>1.69</bc.version>
 		<logback.version>1.2.3</logback.version>
 		<asm.version>8.0.1</asm.version>
 		<antlr.version>4.8-1</antlr.version>
-		<grpc.version>1.36.0</grpc.version>
+		<grpc.version>1.38.0</grpc.version>
+		<protobuf.version>3.15.5</protobuf.version>
 		<liquibase.version>4.3.1</liquibase.version>
 		<graalvm.version>20.3.0</graalvm.version>
 
@@ -75,7 +82,7 @@
 			<dependency>
 				<groupId>com.google.protobuf</groupId>
 				<artifactId>protobuf-java</artifactId>
-				<version>3.15.5</version>
+				<version>${protobuf.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.grpc</groupId>
@@ -159,12 +166,32 @@
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>tron</artifactId>
 				<version>${project.version}</version>
-			</dependency> 
-            <dependency>
-                <groupId>com.salesforce.apollo</groupId>
-                <artifactId>consortium</artifactId>
-                <version>${project.version}</version>
-            </dependency>
+			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>consortium</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>sql-state</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>model</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>stereotomy</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>utils</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
@@ -189,13 +216,30 @@
 			<dependency>
 				<groupId>org.bouncycastle</groupId>
 				<artifactId>bcpkix-jdk15on</artifactId>
-				<version>1.65</version>
+				<version>${bc.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.bouncycastle</groupId>
 				<artifactId>bctls-jdk15on</artifactId>
 				<version>${bc.version}</version>
 			</dependency>
+
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bctls-fips</artifactId>
+				<version>1.0.11.4</version>
+			</dependency>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bc-fips</artifactId>
+				<version>1.0.2.1</version>
+			</dependency>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcpkix-fips</artifactId>
+				<version>1.0.5</version>
+			</dependency>
+
 			<dependency> <!-- necessary for Java 9+ -->
 				<groupId>org.apache.tomcat</groupId>
 				<artifactId>annotations-api</artifactId>
@@ -327,10 +371,8 @@
 				<enabled>true</enabled>
 			</snapshots>
 		</repository>
-		<!-- <repository>
-			<id>corda-djvm</id>
-			<url>https://software.r3.com/artifactory/corda-dependencies/</url>
-		</repository> -->
+		<!-- <repository> <id>corda-djvm</id> <url>https://software.r3.com/artifactory/corda-dependencies/</url> 
+			</repository> -->
 	</repositories>
 
 	<pluginRepositories>

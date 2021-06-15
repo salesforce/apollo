@@ -28,7 +28,7 @@ import javax.ws.rs.client.WebTarget;
 import com.salesforce.apollo.ApolloConfiguration.IdentityStoreSource;
 import com.salesforce.apollo.IdentitySource.BootstrapIdentitySource;
 import com.salesforce.apollo.bootstrap.client.Bootstrap;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hhildebrand

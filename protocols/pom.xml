@@ -13,20 +13,12 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>org.bouncycastle</groupId>
-			<artifactId>bcprov-jdk15on</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.bouncycastle</groupId>
-			<artifactId>bcpkix-jdk15on</artifactId>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>utils</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.grpc</groupId>
 			<artifactId>grpc-netty-shaded</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>io.grpc</groupId>
-			<artifactId>grpc-protobuf</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.grpc</groupId>
@@ -39,10 +31,6 @@
 		<dependency>
 			<groupId>io.dropwizard</groupId>
 			<artifactId>dropwizard-metrics</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-math3</artifactId>
 		</dependency>
 
 		<!-- Test only deps below this line -->
@@ -84,10 +72,9 @@
 						</goals>
 						<configuration>
 							<sources>
+								<source>${project.basedir}/src/main/proto</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
 								<source>${project.basedir}/target/generated-sources/protobuf/java</source>
-								<source>${project.basedir}/src/main/avro</source>
-								<source>${project.basedir}/src/main/proto</source>
 							</sources>
 						</configuration>
 					</execution>

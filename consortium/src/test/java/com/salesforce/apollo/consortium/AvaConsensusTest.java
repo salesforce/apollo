@@ -6,12 +6,10 @@
  */
 package com.salesforce.apollo.consortium;
 
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -30,7 +28,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -46,7 +43,7 @@ import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
 import com.salesforce.apollo.avalanche.DagDao;
@@ -55,19 +52,17 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
-import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.membership.CertWithKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.RootCertificate;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -75,24 +70,21 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class AvaConsensusTest {
 
-    private static final RootCertificate                   ca              = getCa();
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final Message                           GENESIS_DATA    = ByteMessage.newBuilder()
-                                                                                        .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                                                        .build();
-    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
-            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
-    private static final Duration                          gossipDuration  = Duration.ofMillis(10);
-    private static final FirefliesParameters               parameters      = new FirefliesParameters(
-            ca.getX509Certificate());
-    private final static int                               testCardinality = 5;
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final Message                          GENESIS_DATA    = ByteMessage.newBuilder()
+                                                                                       .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                                       .build();
+    private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final Duration                         gossipDuration  = Duration.ofMillis(10);
+    private final static int                              testCardinality = 5;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, testCardinality + 1)
+        certs = IntStream.range(0, testCardinality)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     protected ScheduledExecutorService    scheduler;
@@ -100,9 +92,9 @@ public class AvaConsensusTest {
     private final Map<Member, Avalanche>  avas           = new HashMap<>();
     private File                          baseDir;
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
-    private Map<HashKey, Router>          communications = new ConcurrentHashMap<>();
+    private Map<Digest, Router>           communications = new ConcurrentHashMap<>();
     private final Map<Member, Consortium> consortium     = new ConcurrentHashMap<>();
-    private List<Node>                    members;
+    private List<SigningMember>           members;
 
     @AfterEach
     public void after() {
@@ -126,7 +118,9 @@ public class AvaConsensusTest {
         members = new ArrayList<>();
         for (CertificateWithPrivateKey cert : certs.values()) {
             if (members.size() < testCardinality) {
-                members.add(new Node(new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()), parameters));
+                members.add(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                        cert.getX509Certificate(), cert.getPrivateKey(), new Signer(0, cert.getPrivateKey()),
+                        cert.getX509Certificate().getPublicKey()));
             } else {
                 break;
             }
@@ -145,7 +139,7 @@ public class AvaConsensusTest {
     public void e2e() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
+        Context<Member> view = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 3);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.00001)
                                                                  .setBufferSize(1000)
@@ -178,16 +172,10 @@ public class AvaConsensusTest {
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
-        HashKey hash;
-        try {
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                                 ByteTransaction.newBuilder()
-                                                .setContent(ByteString.copyFromUtf8("Hello world"))
-                                                .build());
-        } catch (TimeoutException e) {
-            fail();
-            return;
-        }
+        Digest hash = client.submit(null, (h, t) -> txnProcessed.set(true),
+                                    ByteTransaction.newBuilder()
+                                                   .setContent(ByteString.copyFromUtf8("Hello world"))
+                                                   .build());
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -200,22 +188,17 @@ public class AvaConsensusTest {
         Semaphore outstanding = new Semaphore(1000, true); // outstanding, unfinalized txns
         int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
-        ArrayList<HashKey> submitted = new ArrayList<>();
+        ArrayList<Digest> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            try {
-                AtomicReference<HashKey> pending = new AtomicReference<>();
-                pending.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(pending.get());
-                    submittedBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-                submitted.add(pending.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
-            }
+            AtomicReference<Digest> pending = new AtomicReference<>();
+            pending.set(client.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(pending.get());
+                submittedBunch.countDown();
+            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+            submitted.add(pending.get());
         }
 
         System.out.println("Awaiting " + bunchCount + " transactions");
@@ -279,13 +262,12 @@ public class AvaConsensusTest {
             AvaAdapter adapter = new AvaAdapter(processed);
             TransactionExecutor executor = (h, t, c) -> {
                 if (c != null) {
-                    ForkJoinPool.commonPool().execute(() -> c.accept(new HashKey(t.getHash()), null));
+                    ForkJoinPool.commonPool().execute(() -> c.accept(new Digest(t.getHash()), (Throwable) null));
                 }
             };
             Consortium member = new Consortium(Parameters.newBuilder()
                                                          .setConsensus(adapter.getConsensus())
                                                          .setMember(m)
-                                                         .setSignature(() -> m.forSigning())
                                                          .setContext(view)
                                                          .setMsgParameters(msgParameters)
                                                          .setMaxBatchByteSize(1024 * 1024)
@@ -326,10 +308,10 @@ public class AvaConsensusTest {
         return adapters;
     }
 
-    private HashKey genesis(Avalanche master) {
-        HashKey genesisKey = master.submitGenesis(ByteMessage.newBuilder()
-                                                             .setContents(ByteString.copyFromUtf8("Genesis"))
-                                                             .build());
+    private Digest genesis(Avalanche master) {
+        Digest genesisKey = master.submitGenesis(ByteMessage.newBuilder()
+                                                            .setContents(ByteString.copyFromUtf8("Genesis"))
+                                                            .build());
         assertNotNull(genesisKey);
         DagDao dao = new DagDao(master.getDag());
         boolean completed = Utils.waitForCondition(10_000, () -> dao.isFinalized(genesisKey));

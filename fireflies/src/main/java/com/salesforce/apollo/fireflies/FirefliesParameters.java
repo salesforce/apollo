@@ -6,12 +6,10 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import java.security.cert.X509Certificate;
-import java.util.Map;
-
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Util;
-import com.salesforce.apollo.protocols.Conversion;
 
 /**
  * Parameters defining the operation of Fireflies
@@ -20,92 +18,130 @@ import com.salesforce.apollo.protocols.Conversion;
  * @since 220
  */
 public class FirefliesParameters {
+    public static class Builder {
+        public int                   cardinality;
+        public double                probabilityByzantine = 0.10;
+        private CertificateValidator certificateValidator;
+        private double               falsePositiveRate    = 0.125;
+        private DigestAlgorithm      hashAlgorithm        = DigestAlgorithm.DEFAULT;
+        private SignatureAlgorithm   signatureAlgorithm   = SignatureAlgorithm.DEFAULT;
 
-    public static final String  DEFAULT_HASH_ALGORITHM      = Conversion.SHA_256;
-    private static final double DEFAULT_FALSE_POSITIVE_RATE = 0.25;
+        public FirefliesParameters build() {
+            return new FirefliesParameters(cardinality, signatureAlgorithm, falsePositiveRate, hashAlgorithm,
+                    probabilityByzantine, certificateValidator);
+        }
 
-    /**
-     * The CA certificate that signs all the member's certificates
-     */
-    public final X509Certificate ca;
+        public int getCardinality() {
+            return cardinality;
+        }
+
+        public CertificateValidator getCertificateValidator() {
+            return certificateValidator;
+        }
+
+        public double getFalsePositiveRate() {
+            return falsePositiveRate;
+        }
+
+        public DigestAlgorithm getHashAlgorithm() {
+            return hashAlgorithm;
+        }
+
+        public double getProbabilityByzantine() {
+            return probabilityByzantine;
+        }
+
+        public SignatureAlgorithm getSignatureAlgorithm() {
+            return signatureAlgorithm;
+        }
+
+        public Builder setCardinality(int cardinality) {
+            this.cardinality = cardinality;
+            return this;
+        }
+
+        public Builder setCertificateValidator(CertificateValidator certificateValidator) {
+            this.certificateValidator = certificateValidator;
+            return this;
+        }
+
+        public Builder setFalsePositiveRate(double falsePositiveRate) {
+            this.falsePositiveRate = falsePositiveRate;
+            return this;
+        }
+
+        public Builder setHashAlgorithm(DigestAlgorithm hashAlgorithm) {
+            this.hashAlgorithm = hashAlgorithm;
+            return this;
+        }
+
+        public Builder setProbabilityByzantine(double probabilityByzantine) {
+            this.probabilityByzantine = probabilityByzantine;
+            return this;
+        }
+
+        public Builder setSignatureAlgorithm(SignatureAlgorithm signatureAlgorithm) {
+            this.signatureAlgorithm = signatureAlgorithm;
+            return this;
+        }
+    }
+
+    public static Builder newBuilder() {
+        return new Builder();
+    }
 
     /**
      * The maximum cardinality of the fireflies group
      */
     public final int cardinality;
 
+    public final CertificateValidator certificateValidator;
+
     /**
      * The false positive rate for the bloomfilters used for the antientropy
      * protocol
      */
-    public final double falsePositiveRate;
-
+    public final double             falsePositiveRate;
     /**
-     * The percentage of the members (cardinality) that we can tolerate from a
-     * failure or byzantine subversion
+     * The algorithm used for secure hashes
      */
-    public final double faultToleranceLevel;
-
-    /**
-     * The JCE algorithm name used for secure hashes
-     */
-    public final String hashAlgorithm;
+    public final DigestAlgorithm    hashAlgorithm;
     /**
      * The probability of a member being subversive
      */
-    public final double probabilityByzantine;
+    public final double             probabilityByzantine;
     /**
      * The number of rings based on the parameters required to resist failure in
      * gossip and byzantine members.
      */
-    public final int    rings;
+    public final int                rings;
     /**
      * The JCE algorithm name used for signatures
      */
-    public final String signatureAlgorithm;
+    public final SignatureAlgorithm signatureAlgorithm;
+
     /**
      * The number of rings tolerated either by a failure or through byzantine
      * subversion
      */
-    public final int    toleranceLevel;
+    public final int toleranceLevel;
 
-    public FirefliesParameters(X509Certificate ca) {
-        this(ca, Conversion.DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, DEFAULT_FALSE_POSITIVE_RATE);
-    }
-
-    public FirefliesParameters(X509Certificate ca, double falsePositiveRate) {
-        this(ca, Conversion.DEFAULT_SIGNATURE_ALGORITHM, DEFAULT_HASH_ALGORITHM, falsePositiveRate);
-    }
-
-    public FirefliesParameters(X509Certificate ca, String signatureAlgorithm, String hashAlgorithm,
-            double falsePositiveRate) {
-        this.ca = ca;
+    public FirefliesParameters(int cardinality, SignatureAlgorithm signatureAlgorithm, double probabilityByzantine,
+            DigestAlgorithm hashAlgorithm, double falsePositiveRate, CertificateValidator certificateValidator) {
+        this.cardinality = cardinality;
         this.signatureAlgorithm = signatureAlgorithm;
         this.hashAlgorithm = hashAlgorithm;
         this.falsePositiveRate = falsePositiveRate;
-
-        String dn = ca.getSubjectX500Principal().getName();
-        Map<String, String> decoded = Util.decodeDN(dn);
-        String encoded = decoded.get("O");
-        if (encoded == null) {
-            throw new IllegalArgumentException("No \"O\" in dn: " + dn);
-        }
-        String[] split = encoded.split(":");
-        if (split.length != 3) {
-            throw new IllegalArgumentException("Invalid format of organization: " + encoded);
-        }
-
-        cardinality = Integer.parseInt(split[0]);
-        faultToleranceLevel = Double.parseDouble(split[1]);
-        probabilityByzantine = Double.parseDouble(split[2]);
-        toleranceLevel = Context.minMajority(probabilityByzantine, faultToleranceLevel);
+        this.probabilityByzantine = probabilityByzantine;
+        toleranceLevel = Context.minMajority(probabilityByzantine, cardinality);
         rings = toleranceLevel * 2 + 1;
+        this.certificateValidator = certificateValidator;
     }
 
     @Override
     public String toString() {
-        return "cardinality=" + cardinality + ", faultToleranceLevel=" + faultToleranceLevel + ", hashAlgorithm="
-                + hashAlgorithm + ", probabilityByzantine=" + probabilityByzantine + ", rings=" + rings
-                + ", signatureAlgorithm=" + signatureAlgorithm + ", toleranceLevel=" + toleranceLevel;
+        return "cardinality=" + cardinality + ", hashAlgorithm=" + hashAlgorithm + ", probabilityByzantine="
+                + probabilityByzantine + ", rings=" + rings + ", signatureAlgorithm=" + signatureAlgorithm
+                + ", toleranceLevel=" + toleranceLevel;
     }
 }

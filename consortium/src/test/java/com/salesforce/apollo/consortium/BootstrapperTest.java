@@ -39,40 +39,49 @@ import com.salesforce.apollo.consortium.comms.BootstrapClient;
 import com.salesforce.apollo.consortium.support.Bootstrapper;
 import com.salesforce.apollo.consortium.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.BloomFilter;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.utils.BloomFilter;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class BootstrapperTest {
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+
+    private static final int CARDINALITY = 10;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 11)
+        certs = IntStream.range(0, CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     @Test
     public void smoke() throws Exception {
-        Context<Member> context = new Context<>(HashKey.ORIGIN, 3);
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 3);
 
-        Store bootstrapStore = new Store(new MVStore.Builder().open());
+        Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
-        List<Member> members = certs.values()
-                                    .stream()
-                                    .map(c -> new Member(c.getX509Certificate()))
-                                    .peek(m -> context.activate(m))
-                                    .collect(Collectors.toList());
+        List<SigningMember> members = certs.values()
+                                           .stream()
+                                           .map(c -> new SigningMemberImpl(
+                                                   Member.getMemberIdentifier(c.getX509Certificate()),
+                                                   c.getX509Certificate(), c.getPrivateKey(),
+                                                   new Signer(0, c.getPrivateKey()),
+                                                   c.getX509Certificate().getPublicKey()))
+                                           .peek(m -> context.activate(m))
+                                           .collect(Collectors.toList());
 
         TestChain testChain = new TestChain(bootstrapStore);
         testChain.genesis()
@@ -101,7 +110,7 @@ public class BootstrapperTest {
         bootstrapStore.validate(lastBlock.height(), 0);
         bootstrapStore.validateViewChain(testChain.getSynchronizeView().height());
 
-        Member member = members.get(0);
+        SigningMember member = members.get(0);
         BootstrapClient client = mock(BootstrapClient.class);
 
         when(client.sync(any())).then(new Answer<>() {
@@ -144,7 +153,7 @@ public class BootstrapperTest {
         @SuppressWarnings("unchecked")
         CommonCommunications<BootstrapClient, BootstrappingService> comms = mock(CommonCommunications.class);
         when(comms.apply(any(), any())).thenReturn(client);
-        Store store = new Store(new MVStore.Builder().open());
+        Store store = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
         Bootstrapper boot = new Bootstrapper(testChain.getAnchor(),
                 Parameters.newBuilder()

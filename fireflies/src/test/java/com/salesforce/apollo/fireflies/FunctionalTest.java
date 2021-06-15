@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -33,30 +32,37 @@ import com.google.common.collect.Sets;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
-import com.salesforce.apollo.protocols.HashKey;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.RootCertificate;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class FunctionalTest {
-    private static final RootCertificate                   ca         = getCa();
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters               parameters = new FirefliesParameters(
-            ca.getX509Certificate());
+    private static int                                    CARDINALITY = 10;
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters              parameters;
+
+    static {
+        parameters = FirefliesParameters.newBuilder()
+                                        .setCardinality(CARDINALITY)
+                                        .setCertificateValidator(CertificateValidator.NONE)
+                                        .build();
+    }
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 11)
+        certs = IntStream.range(0, CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
 
@@ -82,8 +88,12 @@ public class FunctionalTest {
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
                                   .parallelStream()
-                                  .map(cert -> new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()))
-                                  .map(cert -> new Node(cert, parameters))
+                                  .map(cert -> new Node(
+                                          new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                  cert.getX509Certificate(), cert.getPrivateKey(),
+                                                  new Signer(0, cert.getPrivateKey()),
+                                                  cert.getX509Certificate().getPublicKey()),
+                                          parameters))
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
@@ -102,7 +112,7 @@ public class FunctionalTest {
                     serverThreads);
             comms.start();
             communications.add(comms);
-            return new View(HashKey.ORIGIN, node, comms, metrics);
+            return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, metrics);
         })
                        .peek(view -> view.getService().start(Duration.ofMillis(20_000), seeds, scheduler))
                        .collect(Collectors.toList());

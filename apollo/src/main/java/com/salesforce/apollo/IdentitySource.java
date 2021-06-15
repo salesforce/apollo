@@ -13,6 +13,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -27,13 +28,12 @@ import java.util.concurrent.ForkJoinPool;
 
 import com.salesforce.apollo.bootstrap.client.Bootstrap;
 import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.fireflies.FirefliesParameters;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.membership.CertWithKey;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hhildebrand
@@ -50,18 +50,19 @@ public interface IdentitySource {
         }
 
         @Override
-        public X509Certificate getCA() {
-            return bootstrap.getCa();
-        }
-
-        @Override
-        public CertWithKey identity() {
-            return new CertWithKey(bootstrap.getIdentity(), privateKey);
+        public CertificateWithPrivateKey identity() {
+            return new CertificateWithPrivateKey(bootstrap.getIdentity(), privateKey);
         }
 
         @Override
         public List<X509Certificate> seeds() {
             return bootstrap.getSeeds();
+        }
+
+        @Override
+        public KeyPair signingKeyPair() {
+            CertificateWithPrivateKey identity = identity();
+            return new KeyPair(identity.getX509Certificate().getPublicKey(), privateKey);
         }
 
     }
@@ -130,14 +131,12 @@ public interface IdentitySource {
             return seeds;
         }
 
-        private final X509Certificate       ca;
-        private final CertWithKey           identity;
-        private final List<X509Certificate> seeds;
+        private final CertificateWithPrivateKey identity;
+        private final List<X509Certificate>     seeds;
 
-        public DefaultIdentitySource(CertWithKey identity, List<X509Certificate> seeds, X509Certificate ca) {
+        public DefaultIdentitySource(CertificateWithPrivateKey identity, List<X509Certificate> seeds) {
             this.identity = identity;
             this.seeds = seeds;
-            this.ca = ca;
         }
 
         public DefaultIdentitySource(KeyStore keystore, char[] password)
@@ -152,9 +151,8 @@ public interface IdentitySource {
 
         public DefaultIdentitySource(String caAlias, KeyStore keystore, String identityAlias, char[] password)
                 throws UnrecoverableKeyException, KeyStoreException, NoSuchAlgorithmException {
-            this(new CertWithKey((X509Certificate) keystore.getCertificate(identityAlias),
-                    (PrivateKey) keystore.getKey(identityAlias, password)), seedsFrom(keystore),
-                    (X509Certificate) keystore.getCertificate(caAlias));
+            this(new CertificateWithPrivateKey((X509Certificate) keystore.getCertificate(identityAlias),
+                    (PrivateKey) keystore.getKey(identityAlias, password)), seedsFrom(keystore));
         }
 
         public DefaultIdentitySource(String caAlias, String store, String type, String identityAlias, char[] password)
@@ -163,18 +161,19 @@ public interface IdentitySource {
         }
 
         @Override
-        public X509Certificate getCA() {
-            return ca;
-        }
-
-        @Override
-        public CertWithKey identity() {
+        public CertificateWithPrivateKey identity() {
             return identity;
         }
 
         @Override
         public List<X509Certificate> seeds() {
             return seeds;
+        }
+
+        @Override
+        public KeyPair signingKeyPair() {
+            // TODO Auto-generated method stub
+            return null;
         }
 
     }
@@ -190,7 +189,7 @@ public interface IdentitySource {
         }
 
         @Override
-        public View createView(Node node, HashKey context, Router communications, FireflyMetrics metrics,
+        public View createView(Node node, Digest context, Router communications, FireflyMetrics metrics,
                                ForkJoinPool executor) {
             return new View(context, node, communications, metrics, executor);
         }
@@ -200,20 +199,14 @@ public interface IdentitySource {
     public static final String DEFAULT_IDENTITY_ALIAS = "identity";
     public static final String SEED_PREFIX            = "seed.";
 
-    default <T extends Node> View createView(Node node, HashKey context, Router communications, FireflyMetrics metrics,
+    default <T extends Node> View createView(Node node, Digest context, Router communications, FireflyMetrics metrics,
                                              ForkJoinPool executor) {
         return new View(context, node, communications, metrics, executor);
     }
 
-    default Node getNode() {
-        FirefliesParameters parameters = new FirefliesParameters(getCA());
-        Node node = new Node(identity(), parameters);
-        return node;
-    }
+    CertificateWithPrivateKey identity();
 
-    X509Certificate getCA();
-
-    CertWithKey identity();
+    KeyPair signingKeyPair();
 
     List<X509Certificate> seeds();
 }

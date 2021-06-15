@@ -12,7 +12,9 @@ import java.util.concurrent.Executor;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.comm.grpc.MtlsClient;
 import com.salesforce.apollo.comm.grpc.MtlsServer;
+import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.ManagedChannel;
@@ -32,25 +34,26 @@ public class MtlsRouter extends Router {
         }
 
         @Override
-        public ManagedChannel connectTo(Member to, Member from) {
-            return new MtlsClient(epProvider.addressFor(to), epProvider.getClientAuth(), epProvider.getAlias(),
-                    epProvider.getCertificate(), epProvider.getPrivateKey(), epProvider.getValiator()).getChannel();
+        public ManagedChannel connectTo(Member to, SigningMember from) {
+            return new MtlsClient(epProvider.addressFor(to), epProvider.getClientAuth(), epProvider.getAlias(), from,
+                    epProvider.getValiator()).getChannel();
         }
     }
 
     private final EndpointProvider epProvider;
     private final MtlsServer       server;
 
-    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, Executor executor) {
-        this(builder, ep, new MutableHandlerRegistry(), executor);
+    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, ServerContextSupplier supplier,
+            Executor executor) {
+        this(builder, ep, supplier, new MutableHandlerRegistry(), executor);
     }
 
-    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, MutableHandlerRegistry registry,
-            Executor executor) {
+    public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, ServerContextSupplier supplier,
+            MutableHandlerRegistry registry, Executor executor) {
         super(builder.setFactory(new MtlsServerConnectionFactory(ep)).build(), registry);
         epProvider = ep;
         this.server = new MtlsServer(epProvider.getBindAddress(), epProvider.getClientAuth(), epProvider.getAlias(),
-                epProvider.getCertificate(), epProvider.getPrivateKey(), epProvider.getValiator(), registry, executor);
+                supplier, epProvider.getValiator(), registry, executor);
     }
 
     @Override

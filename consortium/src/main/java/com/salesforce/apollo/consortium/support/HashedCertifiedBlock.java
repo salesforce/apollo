@@ -8,8 +8,8 @@ package com.salesforce.apollo.consortium.support;
 
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesforce.apollo.consortium.CollaboratorContext;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * @author hal.hildebrand
@@ -17,13 +17,13 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class HashedCertifiedBlock {
     public final CertifiedBlock block;
-    public final HashKey        hash;
+    public final Digest         hash;
 
-    public HashedCertifiedBlock(CertifiedBlock block) {
-        this(new HashKey(Conversion.hashOf(block.getBlock().toByteString())), block);
+    public HashedCertifiedBlock(DigestAlgorithm digestAlgorithm, CertifiedBlock block) {
+        this(digestAlgorithm.digest(block.getBlock().toByteString()), block);
     }
 
-    private HashedCertifiedBlock(HashKey hash, CertifiedBlock block) {
+    private HashedCertifiedBlock(Digest hash, CertifiedBlock block) {
         this.hash = hash;
         this.block = block;
     }

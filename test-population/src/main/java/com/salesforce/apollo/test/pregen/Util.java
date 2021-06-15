@@ -17,8 +17,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.CertificateWithPrivateKeyImpl;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 
 /**
  * @author hal.hildebrand
@@ -43,7 +42,7 @@ public class Util {
             final PrivateKey privateKey = (PrivateKey) keystore.getKey(alias, null);
             if (certificate == null || privateKey == null)
                 throw new IllegalStateException("Keystore does not contain certificate and key for alias " + alias);
-            return new CertificateWithPrivateKeyImpl((X509Certificate) certificate, privateKey);
+            return new CertificateWithPrivateKey((X509Certificate) certificate, privateKey);
         } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException e) {
             throw new IllegalStateException(e);
         }

@@ -6,16 +6,16 @@
  */
 package com.salesforce.apollo.membership.messaging.comms;
 
-import com.salesfoce.apollo.proto.MessageBff;
-import com.salesfoce.apollo.proto.Messages;
-import com.salesfoce.apollo.proto.MessagingGrpc.MessagingImplBase;
-import com.salesfoce.apollo.proto.Null;
-import com.salesfoce.apollo.proto.Push;
+import com.google.protobuf.Empty;
+import com.salesfoce.apollo.messaging.proto.MessageBff;
+import com.salesfoce.apollo.messaging.proto.Messages;
+import com.salesfoce.apollo.messaging.proto.MessagingGrpc.MessagingImplBase;
+import com.salesfoce.apollo.messaging.proto.Push;
 import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 import com.salesforce.apollo.membership.messaging.Messenger.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.stub.StreamObserver;
 
@@ -26,8 +26,8 @@ import io.grpc.stub.StreamObserver;
 public class MessagingServerCommunications extends MessagingImplBase {
     @Override
     public void gossip(MessageBff request, StreamObserver<Messages> responseObserver) {
-        routing.evaluate(responseObserver, request.getContext(), s -> {
-            HashKey from = identity.getFrom();
+        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            Digest from = identity.getFrom();
             if (from == null) {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));
                 return;
@@ -46,15 +46,15 @@ public class MessagingServerCommunications extends MessagingImplBase {
     }
 
     @Override
-    public void update(Push request, StreamObserver<Null> responseObserver) {
-        routing.evaluate(responseObserver, request.getContext(), s -> {
-            HashKey from = identity.getFrom();
+    public void update(Push request, StreamObserver<Empty> responseObserver) {
+        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            Digest from = identity.getFrom();
             if (from == null) {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));
                 return;
             }
             s.update(request, from);
-            responseObserver.onNext(Null.getDefaultInstance());
+            responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
             if (metrics != null) {
                 metrics.inboundUpdateRate().mark();

@@ -89,7 +89,7 @@ public interface Collaborator {
 
     void scheduleCheckpointBlock();
 
-    void shutdown(); 
+    void shutdown();
 
     void synchronize(int elected, Map<Member, StopData> regencyData);
 

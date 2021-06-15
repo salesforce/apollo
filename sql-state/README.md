@@ -1,4 +1,4 @@
-#Apollo Replicated SQL State Machine
+# Apollo Replicated SQL State Machine
 The  _sql-state_  module provides a high fidelity SQL Materialized View from a linear log.  The model provided by this module is a SQL database.
 This SQL database has a single writer, which is the linear log fed into the _SqlStateMachine_.
 The log is a sequence of transactions to execute against the current SQL state of the database.  As these transactions can contain SQL Data Definition Language statements,
@@ -15,7 +15,7 @@ represent a kind of anonymous stored procedure executed at the "server" - in thi
 
 ### Transaction Execution
 Transaction exeution is performed via the single JDBC connection to the underlying H2 database.  This implies that the contents of the transactions are representable
-with H2 SQL.  Sadly, "generic" SQL is not really a thing, but a convention, and so this is not a _generic_ SQL execution.  Further, the transaction execution model
+with H2 SQL.  Sadly, "generic" SQL is not really a thing, but a convention, and so this is not a  _generic_  SQL execution.  Further, the transaction execution model
 is JDBC, which constrains the styles of interaction as well as the argument value and return types.
 
 When a transaction is submitted, the client submitting the transaction can provide a function to execute when the transaction is finalized.  This function takes

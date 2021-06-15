@@ -6,11 +6,9 @@
  */
 package com.salesforce.apollo.consortium;
 
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -32,7 +30,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
@@ -51,7 +48,7 @@ import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.ByteTransaction;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Header;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -59,18 +56,16 @@ import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.HashedBlock;
-import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.RootCertificate;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -78,31 +73,28 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class TestConsortium {
 
-    private static final RootCertificate                   ca              = getCa();
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final Message                           GENESIS_DATA    = ByteMessage.newBuilder()
-                                                                                        .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                                                        .build();
-    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
-            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
-    private static final Duration                          gossipDuration  = Duration.ofMillis(10);
-    private static final FirefliesParameters               parameters      = new FirefliesParameters(
-            ca.getX509Certificate());
-    private final static int                               testCardinality = 5;
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final Message                          GENESIS_DATA    = ByteMessage.newBuilder()
+                                                                                       .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                                       .build();
+    private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final Duration                         gossipDuration  = Duration.ofMillis(10);
+    private final static int                              testCardinality = 5;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, testCardinality + 1)
+        certs = IntStream.range(0, testCardinality)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     private File                          baseDir;
     private Builder                       builder        = ServerConnectionCache.newBuilder().setTarget(30);
-    private Map<HashKey, Router>          communications = new ConcurrentHashMap<>();
+    private Map<Digest, Router>           communications = new ConcurrentHashMap<>();
     private final Map<Member, Consortium> consortium     = new ConcurrentHashMap<>();
-    private List<Node>                    members;
+    private List<SigningMember>           members;
 
     @AfterEach
     public void after() {
@@ -124,7 +116,9 @@ public class TestConsortium {
         members = new ArrayList<>();
         for (CertificateWithPrivateKey cert : certs.values()) {
             if (members.size() < testCardinality) {
-                members.add(new Node(new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()), parameters));
+                members.add(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                        cert.getX509Certificate(), cert.getPrivateKey(), new Signer(0, cert.getPrivateKey()),
+                        cert.getX509Certificate().getPublicKey()));
             } else {
                 break;
             }
@@ -143,16 +137,16 @@ public class TestConsortium {
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 3);
+        Context<Member> view = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 3);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
-        Set<HashKey> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus = (c, f) -> {
-            HashKey hash = new HashKey(Conversion.hashOf(c.getBlock().toByteString()));
+        Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
+            Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
                 cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
                     m.process(c);
@@ -163,7 +157,7 @@ public class TestConsortium {
         };
         TransactionExecutor executor = (h, et, c) -> {
             if (c != null) {
-                c.accept(new HashKey(et.getHash()), null);
+                c.accept(new Digest(et.getHash()), null);
             }
         };
         gatherConsortium(view, consensus, gossipDuration, scheduler, msgParameters, executor);
@@ -205,16 +199,10 @@ public class TestConsortium {
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
-        HashKey hash;
-        try {
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                                 ByteTransaction.newBuilder()
-                                                .setContent(ByteString.copyFromUtf8("Hello world"))
-                                                .build());
-        } catch (TimeoutException e) {
-            fail();
-            return;
-        }
+        Digest hash = client.submit(null, (h, t) -> txnProcessed.set(true),
+                                    ByteTransaction.newBuilder()
+                                                   .setContent(ByteString.copyFromUtf8("Hello world"))
+                                                   .build());
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -227,22 +215,17 @@ public class TestConsortium {
         Semaphore outstanding = new Semaphore(1000); // outstanding, unfinalized txns
         int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
-        ArrayList<HashKey> submitted = new ArrayList<>();
+        ArrayList<Digest> submitted = new ArrayList<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
             outstanding.acquire();
-            try {
-                AtomicReference<HashKey> pending = new AtomicReference<>();
-                pending.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(pending.get());
-                    submittedBunch.countDown();
-                }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-                submitted.add(pending.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
-            }
+            AtomicReference<Digest> pending = new AtomicReference<>();
+            pending.set(client.submit(null, (h, t) -> {
+                outstanding.release();
+                submitted.remove(pending.get());
+                submittedBunch.countDown();
+            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
+            submitted.add(pending.get());
         }
 
         System.out.println("Awaiting " + bunchCount + " transactions");
@@ -256,35 +239,36 @@ public class TestConsortium {
     public void testGaps() throws Exception {
         long nextBlock = 56L;
         List<CertifiedBlock> blocks = new ArrayList<>();
-        HashKey prev = HashKey.ORIGIN;
+        Digest prev = DigestAlgorithm.DEFAULT.getOrigin();
         for (int i = 0; i < 10; i++) {
             Block block = Block.newBuilder()
                                .setHeader(Header.newBuilder().setHeight(nextBlock).setPrevious(prev.toByteString()))
                                .build();
             nextBlock++;
             blocks.add(CertifiedBlock.newBuilder().setBlock(block).build());
-            prev = new HashKey(Conversion.hashOf(block.toByteString()));
+            prev = DigestAlgorithm.DEFAULT.digest(block.toByteString());
         }
         Map<Long, HashedBlock> cache = new HashMap<>();
-        assertEquals(0, CollaboratorContext.noGaps(blocks, cache).size());
+        assertEquals(0, CollaboratorContext.noGaps(DigestAlgorithm.DEFAULT, blocks, cache).size());
         ArrayList<CertifiedBlock> gapped = new ArrayList<>(blocks);
         gapped.remove(5);
-        assertEquals(1, CollaboratorContext.noGaps(gapped, cache).size());
-        assertEquals(0, CollaboratorContext.noGaps(blocks.subList(1, blocks.size()), cache).size());
+        assertEquals(1, CollaboratorContext.noGaps(DigestAlgorithm.DEFAULT, gapped, cache).size());
+        assertEquals(0, CollaboratorContext.noGaps(DigestAlgorithm.DEFAULT, blocks.subList(1, blocks.size()), cache)
+                                           .size());
         CertifiedBlock cb = blocks.get(5);
         cache.put(cb.getBlock().getHeader().getHeight(),
-                  new HashedBlock(new HashKey(Conversion.hashOf(cb.getBlock().toByteString())), cb.getBlock()));
-        assertEquals(0, CollaboratorContext.noGaps(gapped, cache).size());
+                  new HashedBlock(DigestAlgorithm.DEFAULT.digest(cb.getBlock().toByteString()), cb.getBlock()));
+        assertEquals(0, CollaboratorContext.noGaps(DigestAlgorithm.DEFAULT, gapped, cache).size());
     }
 
-    private void gatherConsortium(Context<Member> view, BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> consensus,
+    private void gatherConsortium(Context<Member> view,
+                                  BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus,
                                   Duration gossipDuration, ScheduledExecutorService scheduler,
                                   Messenger.Parameters msgParameters, TransactionExecutor executor) {
         members.stream()
                .map(m -> new Consortium(Parameters.newBuilder()
                                                   .setConsensus(consensus)
                                                   .setMember(m)
-                                                  .setSignature(() -> m.forSigning())
                                                   .setContext(view)
                                                   .setMsgParameters(msgParameters)
                                                   .setMaxBatchByteSize(1024 * 1024)

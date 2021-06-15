@@ -15,9 +15,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.BindableService;
 import io.grpc.util.MutableHandlerRegistry;
@@ -27,7 +28,7 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 abstract public class Router {
-    public class CommonCommunications<Client, Service> implements BiFunction<Member, Member, Client> {
+    public class CommonCommunications<Client, Service> implements BiFunction<Member, SigningMember, Client> {
         private final CreateClientCommunications<Client> createFunction;
         private final RoutableService<Service>           routing;
 
@@ -38,15 +39,15 @@ abstract public class Router {
         }
 
         @Override
-        public Client apply(Member to, Member from) {
+        public Client apply(Member to, SigningMember from) {
             return cache.borrow(to, from, createFunction);
         }
 
-        public void deregister(HashKey context) {
+        public void deregister(Digest context) {
             routing.unbind(context);
         }
 
-        public void register(HashKey context, Service service) {
+        public void register(Digest context, Service service) {
             routing.bind(context, service);
         }
     }
@@ -66,7 +67,7 @@ abstract public class Router {
         cache.close();
     }
 
-    public <Client, Service> CommonCommunications<Client, Service> create(Member member, HashKey context,
+    public <Client, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
                                                                           Service service,
                                                                           Function<RoutableService<Service>, BindableService> factory,
                                                                           CreateClientCommunications<Client> createFunction) {

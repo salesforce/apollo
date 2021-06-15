@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.utils.proto";
+option java_outer_classname = "ApolloUtilsProto";
+option objc_class_prefix = "Au";
+import "google/protobuf/any.proto";
+
+package utils;
+ 
+message Biff {
+        int32 m = 1;
+        int32 k = 2;
+        int32 seed = 3;
+        bytes bits = 4;
+        int32 type = 5;
+}

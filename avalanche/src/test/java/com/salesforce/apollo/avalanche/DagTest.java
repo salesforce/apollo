@@ -30,13 +30,13 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.Builder;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesforce.apollo.avalanche.Processor.NullProcessor;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -48,7 +48,7 @@ public class DagTest {
     private WorkingSet  workingSet;
     private Random      entropy;
     private DagEntry    root;
-    private HashKey     rootKey;
+    private Digest      rootKey;
 
     @BeforeAll
     public static void beforeClass() {
@@ -65,15 +65,15 @@ public class DagTest {
         return dag(EntryType.GENSIS, data, Collections.emptyList());
     }
 
-    public static DagEntry dag(byte[] data, List<HashKey> links) {
+    public static DagEntry dag(byte[] data, List<Digest> links) {
         return dag(EntryType.USER, data, links);
     }
 
-    public static DagEntry dag(EntryType type, byte[] data, List<HashKey> links) {
+    public static DagEntry dag(EntryType type, byte[] data, List<Digest> links) {
         Builder builder = DagEntry.newBuilder();
         builder.setDescription(type);
         builder.setData(Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFrom(data)).build()));
-        links.forEach(e -> builder.addLinks(e.toID()));
+        links.forEach(e -> builder.addLinks(e.toByteString()));
         return builder.build();
     }
 
@@ -95,15 +95,15 @@ public class DagTest {
         assertArrayEquals(root.getData().toByteArray(), testRoot.getData().toByteArray());
         assertEquals(0, testRoot.getLinksCount());
 
-        List<HashKey> ordered = new ArrayList<>();
+        List<Digest> ordered = new ArrayList<>();
         ordered.add(rootKey);
 
-        Map<HashKey, DagEntry> stored = new ConcurrentSkipListMap<>();
+        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
         stored.put(rootKey, root);
 
         for (int i = 0; i < 500; i++) {
             DagEntry entry = dag(EntryType.USER, String.format("DagEntry: %s", i).getBytes(), randomLinksTo(stored));
-            HashKey key = workingSet.insert(entry, 0);
+            Digest key = workingSet.insert(entry, 0);
             stored.put(key, entry);
             ordered.add(key);
         }
@@ -111,7 +111,7 @@ public class DagTest {
 
         assertEquals(501, workingSet.getUnfinalized().size());
 
-        for (HashKey key : ordered) {
+        for (Digest key : ordered) {
             assertEquals(1, workingSet.getConflictSet(key).getCardinality());
             DagEntry found = workingSet.getDagEntry(key);
             assertNotNull(found, "Not found: " + key);
@@ -125,11 +125,11 @@ public class DagTest {
         }
     }
 
-    private List<HashKey> randomLinksTo(Map<HashKey, DagEntry> stored) {
-        List<HashKey> links = new ArrayList<>();
-        Set<HashKey> keys = stored.keySet();
+    private List<Digest> randomLinksTo(Map<Digest, DagEntry> stored) {
+        List<Digest> links = new ArrayList<>();
+        Set<Digest> keys = stored.keySet();
         for (int i = 0; i < 5; i++) {
-            Iterator<HashKey> it = keys.iterator();
+            Iterator<Digest> it = keys.iterator();
             for (int j = 0; j < entropy.nextInt(keys.size()); j++) {
                 it.next();
             }

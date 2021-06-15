@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.avalanche;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static guru.nidi.graphviz.model.Factory.mutGraph;
 import static guru.nidi.graphviz.model.Factory.mutNode;
 
@@ -20,11 +22,11 @@ import java.util.TreeSet;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.DagEntry;
-import com.salesfoce.apollo.proto.ID;
 import com.salesforce.apollo.avalanche.WorkingSet.KnownNode;
 import com.salesforce.apollo.avalanche.WorkingSet.Node;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 import guru.nidi.graphviz.attribute.Color;
 import guru.nidi.graphviz.attribute.Label;
@@ -40,10 +42,10 @@ import guru.nidi.graphviz.model.MutableNode;
 public class DagViz {
 
     private static class KeyValue {
-        public final HashKey  key;
+        public final Digest   key;
         public final DagEntry value;
 
-        private KeyValue(HashKey key, DagEntry value) {
+        private KeyValue(Digest key, DagEntry value) {
             super();
             this.key = key;
             this.value = value;
@@ -51,35 +53,35 @@ public class DagViz {
     }
 
     private static class N {
-        private final List<HashKey> children;
-        private final HashKey       id;
-        private boolean             visited = false;
+        private final List<Digest> children;
+        private final Digest       id;
+        private boolean            visited = false;
 
-        private N(HashKey id, List<HashKey> children) {
+        private N(Digest id, List<Digest> children) {
             this.id = id;
             this.children = children;
         }
 
     }
 
-    public static void dumpClosure(List<HashKey> nodes, WorkingSet dag) {
+    public static void dumpClosure(List<Digest> nodes, WorkingSet dag) {
         nodes.stream().map(e -> new KeyValue(e, dag.getDagEntry(e))).filter(e -> e.value != null).forEach(n -> {
             System.out.println();
-            System.out.println(String.format("%s :", n.key.b64Encoded()));
+            System.out.println(String.format("%s :", qb64(n.key)));
             traverseClosure(n.value, dag, (key, node) -> {
-                System.out.println(String.format("   -> %s", key.b64Encoded()));
+                System.out.println(String.format("   -> %s", qb64(key)));
             });
         });
     }
 
-    public static void dumpClosures(List<HashKey> nodes, WorkingSet dag) {
+    public static void dumpClosures(List<Digest> nodes, WorkingSet dag) {
         dumpClosure(nodes, dag);
 
     }
 
-    public static void topoSortRecurse(N n, Map<HashKey, N> nodes, List<N> sorted) {
+    public static void topoSortRecurse(N n, Map<Digest, N> nodes, List<N> sorted) {
         n.visited = true;
-        for (HashKey c : n.children) {
+        for (Digest c : n.children) {
             N v = nodes.get(c);
             if (v == null) {
                 System.out.println("Invalid child: " + c + " from: " + n.id);
@@ -92,15 +94,15 @@ public class DagViz {
         sorted.add(0, n);
     }
 
-    public static void traverseClosure(DagEntry entry, WorkingSet dag, BiConsumer<HashKey, DagEntry> p) {
+    public static void traverseClosure(DagEntry entry, WorkingSet dag, BiConsumer<Digest, DagEntry> p) {
         List<DagEntry> stack = new ArrayList<>();
         stack.add(entry);
-        Set<HashKey> visited = new TreeSet<>();
+        Set<Digest> visited = new TreeSet<>();
 
         while (!stack.isEmpty()) {
             final DagEntry node = stack.remove(stack.size() - 1);
-            final List<ID> links = node.getLinksList() == null ? Collections.emptyList() : node.getLinksList();
-            for (HashKey e : links.stream().map(e -> new HashKey(e)).collect(Collectors.toList())) {
+            final List<ByteString> links = node.getLinksList() == null ? Collections.emptyList() : node.getLinksList();
+            for (Digest e : links.stream().map(e -> digest(e)).collect(Collectors.toList())) {
                 if (visited.add(e)) {
                     DagEntry child = dag.getDagEntry(e);
                     p.accept(e, child);
@@ -122,16 +124,14 @@ public class DagViz {
         for (N n : sorted) {
             DagEntry e = dag.getDagEntry(n.id);
             if (!(ignoreNoOp && e.getDescription() == null)) {
-                decorate(n.id, e,
-                         e.getLinksList() == null ? Collections.emptyList()
-                                 : e.getLinksList().stream().map(l -> new HashKey(l)).collect(Collectors.toList()),
-                         dag);
+                decorate(n.id, e, e.getLinksList() == null ? Collections.emptyList()
+                        : e.getLinksList().stream().map(l -> digest(l)).collect(Collectors.toList()), dag);
             }
         }
         System.out.println("decorated");
     }
 
-    private static MutableNode decorate(HashKey h, DagEntry entry, List<HashKey> links, WorkingSet dag) {
+    private static MutableNode decorate(Digest h, DagEntry entry, List<Digest> links, WorkingSet dag) {
         String name = h.toString();
         MutableNode parent;
         if (entry.getDescription() == null) {
@@ -162,10 +162,10 @@ public class DagViz {
     }
 
     public static List<N> topoSort(WorkingSet dag) {
-        Map<HashKey, N> nodes = new HashMap<>();
+        Map<Digest, N> nodes = new HashMap<>();
         dag.traverseAll((k, e) -> {
             nodes.put(k, new N(k, e.getLinksList() == null ? Collections.emptyList()
-                    : e.getLinksList().stream().map(id -> new HashKey(id)).collect(Collectors.toList())));
+                    : e.getLinksList().stream().map(id -> digest(id)).collect(Collectors.toList())));
         });
         List<N> sorted = new LinkedList<>();
         for (N n : nodes.values()) {

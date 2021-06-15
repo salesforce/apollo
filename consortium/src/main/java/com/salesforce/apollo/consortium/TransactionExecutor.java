@@ -10,17 +10,17 @@ import java.util.function.BiConsumer;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  *
  */
 public interface TransactionExecutor {
-    default void beginBlock(long height, HashKey hash) {
+    default void beginBlock(long height, Digest hash) {
     }
 
-    void execute(HashKey blockHash, ExecutedTransaction txn, BiConsumer<Object, Throwable> completion);
+    void execute(Digest blockHash, ExecutedTransaction txn, BiConsumer<? super Object, Throwable> completion);
 
     default void processGenesis(Any genesisData) {
     }

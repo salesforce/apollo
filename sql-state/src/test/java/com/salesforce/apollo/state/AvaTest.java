@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
+import static com.salesforce.apollo.state.Mutator.batch;
+import static com.salesforce.apollo.state.Mutator.batchOf;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.security.SecureRandom;
@@ -32,7 +32,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,7 +46,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesforce.apollo.avalanche.Avalanche;
 import com.salesforce.apollo.avalanche.AvalancheParameters;
@@ -60,19 +59,16 @@ import com.salesforce.apollo.consortium.Consortium;
 import com.salesforce.apollo.consortium.Parameters;
 import com.salesforce.apollo.consortium.ViewContext;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
-import com.salesforce.apollo.consortium.support.SigningUtils;
-import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.Messenger;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.RootCertificate;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -80,33 +76,30 @@ import io.github.olivierlemasle.ca.RootCertificate;
  */
 public class AvaTest {
 
-    private static final RootCertificate                   ca              = getCa();
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final Message                           GENESIS_DATA    = Helper.batch(Helper.batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
-    private static final HashKey                           GENESIS_VIEW_ID = new HashKey(
-            Conversion.hashOf("Give me food or give me slack or kill me".getBytes()));
-    private static final Duration                          gossipDuration  = Duration.ofMillis(10);
-
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final Message                          GENESIS_DATA    = batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))");
+    private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final Duration                         gossipDuration  = Duration.ofMillis(10);
 
     private final static int testCardinality = 25;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, testCardinality + 1)
+        certs = IntStream.range(0, testCardinality)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Utils.getMemberId(cert.getX509Certificate()), cert -> cert));
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
     private final Map<Member, Avalanche>       avas           = new ConcurrentHashMap<>();
     private File                               baseDir;
     private Builder                            builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private File                               checkpointDirBase;
-    private Map<HashKey, Router>               communications = new ConcurrentHashMap<>();
+    private Map<Digest, Router>                communications = new ConcurrentHashMap<>();
     private final Map<Member, Consortium>      consortium     = new ConcurrentHashMap<>();
     private SecureRandom                       entropy;
-    private List<Node>                         members;
+    private List<SigningMember>                members;
     private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
 
     @AfterEach
@@ -135,7 +128,9 @@ public class AvaTest {
         members = new ArrayList<>();
         for (CertificateWithPrivateKey cert : certs.values()) {
             if (members.size() < testCardinality) {
-                members.add(new Node(new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()), parameters));
+                members.add(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                        cert.getX509Certificate(), cert.getPrivateKey(), new Signer(0, cert.getPrivateKey()),
+                        cert.getX509Certificate().getPublicKey()));
             } else {
                 break;
             }
@@ -152,7 +147,7 @@ public class AvaTest {
     public void smoke() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
-        Context<Member> view = new Context<>(HashKey.ORIGIN.prefix(1), 5);
+        Context<Member> view = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 5);
         Messenger.Parameters msgParameters = Messenger.Parameters.newBuilder()
                                                                  .setFalsePositiveRate(0.001)
                                                                  .setBufferSize(1000)
@@ -199,18 +194,13 @@ public class AvaTest {
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
-        HashKey hash;
-        try {
-            hash = client.submit(null, (h, t) -> txnProcessed.set(true),
-                                 Helper.batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                              "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"));
-        } catch (TimeoutException e) {
-            fail();
-            return;
-        }
+        Mutator mutator = new Mutator(client);
+        Digest hash = mutator.execute(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                            "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                            "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                            "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                            "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
+                                      (h, t) -> txnProcessed.set(true));
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
 
@@ -223,7 +213,7 @@ public class AvaTest {
         Semaphore outstanding = new Semaphore(500); // outstanding, unfinalized txns
         int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
-        Set<HashKey> submitted = new HashSet<>();
+        Set<Digest> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
 
         AtomicInteger txnr = new AtomicInteger();
@@ -238,25 +228,21 @@ public class AvaTest {
             } catch (InterruptedException e1) {
                 throw new IllegalStateException(e1);
             }
-            try {
-                List<List<Object>> batch = new ArrayList<>();
-                for (int rep = 0; rep < 10; rep++) {
-                    for (int id = 1; id < 6; id++) {
-                        batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
-                    }
+            List<List<Object>> batch = new ArrayList<>();
+            for (int rep = 0; rep < 10; rep++) {
+                for (int id = 1; id < 6; id++) {
+                    batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
                 }
-                BatchUpdate update = Helper.batchOf("update books set qty = ? where id = ?", batch);
-                AtomicReference<HashKey> key = new AtomicReference<>();
-                key.set(client.submit(null, (h, t) -> {
-                    outstanding.release();
-                    submitted.remove(key.get());
-                    submittedBunch.countDown();
-                }, Helper.batch(update)));
-                submitted.add(key.get());
-            } catch (TimeoutException e) {
-                fail();
-                return;
             }
+            BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
+            AtomicReference<Digest> key = new AtomicReference<>();
+
+            key.set(mutator.execute(update, (h, t) -> {
+                outstanding.release();
+                submitted.remove(key.get());
+                submittedBunch.countDown();
+            }));
+            submitted.add(key.get());
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");
@@ -327,29 +313,26 @@ public class AvaTest {
             SqlStateMachine up = new SqlStateMachine(url, new Properties(),
                     new File(checkpointDirBase, m.getId().toString()), fj);
             updaters.put(m, up);
-            Consortium c = new Consortium(
-                    Parameters.newBuilder()
-                              .setConsensus(adapter.getConsensus())
-                              .setMember(m)
-                              .setSignature(() -> SigningUtils.forSigning(certs.get(m.getId()).getPrivateKey(),
-                                                                          entropy))
-                              .setContext(view)
-                              .setMsgParameters(msgParameters)
-                              .setMaxBatchByteSize(1024 * 1024 * 32)
-                              .setMaxBatchSize(1000)
-                              .setCommunications(communications.get(m.getId()))
-                              .setMaxBatchDelay(Duration.ofMillis(500))
-                              .setGossipDuration(gossipDuration)
-                              .setViewTimeout(Duration.ofMillis(500))
-                              .setJoinTimeout(Duration.ofSeconds(5))
-                              .setTransactonTimeout(Duration.ofSeconds(15))
-                              .setExecutor(up.getExecutor())
-                              .setScheduler(scheduler)
-                              .setGenesisData(GENESIS_DATA)
-                              .setGenesisViewId(GENESIS_VIEW_ID)
-                              .setCheckpointer(up.getCheckpointer())
-                              .setDeltaCheckpointBlocks(10)
-                              .build());
+            Consortium c = new Consortium(Parameters.newBuilder()
+                                                    .setConsensus(adapter.getConsensus())
+                                                    .setMember(m)
+                                                    .setContext(view)
+                                                    .setMsgParameters(msgParameters)
+                                                    .setMaxBatchByteSize(1024 * 1024 * 32)
+                                                    .setMaxBatchSize(1000)
+                                                    .setCommunications(communications.get(m.getId()))
+                                                    .setMaxBatchDelay(Duration.ofMillis(500))
+                                                    .setGossipDuration(gossipDuration)
+                                                    .setViewTimeout(Duration.ofMillis(500))
+                                                    .setJoinTimeout(Duration.ofSeconds(5))
+                                                    .setTransactonTimeout(Duration.ofSeconds(15))
+                                                    .setExecutor(up.getExecutor())
+                                                    .setScheduler(scheduler)
+                                                    .setGenesisData(GENESIS_DATA)
+                                                    .setGenesisViewId(GENESIS_VIEW_ID)
+                                                    .setCheckpointer(up.getCheckpointer())
+                                                    .setDeltaCheckpointBlocks(10)
+                                                    .build());
             adapter.setConsortium(c);
             adapters.put(m, adapter);
             return c;
@@ -357,10 +340,10 @@ public class AvaTest {
         return adapters;
     }
 
-    private HashKey genesis(Avalanche master) {
-        HashKey genesisKey = master.submitGenesis(ByteMessage.newBuilder()
-                                                             .setContents(ByteString.copyFromUtf8("Genesis"))
-                                                             .build());
+    private Digest genesis(Avalanche master) {
+        Digest genesisKey = master.submitGenesis(ByteMessage.newBuilder()
+                                                            .setContents(ByteString.copyFromUtf8("Genesis"))
+                                                            .build());
         assertNotNull(genesisKey);
         DagDao dao = new DagDao(master.getDag());
         boolean completed = Utils.waitForCondition(10_000, () -> dao.isFinalized(genesisKey));

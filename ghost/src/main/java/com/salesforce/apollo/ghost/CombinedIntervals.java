@@ -13,14 +13,14 @@ import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import com.salesfoce.apollo.proto.Interval;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesfoce.apollo.ghost.proto.Interval;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public class CombinedIntervals implements Predicate<HashKey> {
+public class CombinedIntervals implements Predicate<Digest> {
     private final List<KeyInterval> intervals = new ArrayList<>();
 
     public CombinedIntervals(List<KeyInterval> allIntervals) {
@@ -59,13 +59,16 @@ public class CombinedIntervals implements Predicate<HashKey> {
     }
 
     @Override
-    public boolean test(HashKey t) {
+    public boolean test(Digest t) {
         return intervals.stream().filter(i -> i.test(t)).findFirst().isPresent();
     }
 
     public List<Interval> toIntervals() {
         return intervals.stream()
-                        .map(e -> Interval.newBuilder().setStart(e.getBegin().toID()).setEnd(e.getEnd().toID()).build())
+                        .map(e -> Interval.newBuilder()
+                                          .setStart(e.getBegin().toByteString())
+                                          .setEnd(e.getEnd().toByteString())
+                                          .build())
                         .collect(Collectors.toList());
     }
 

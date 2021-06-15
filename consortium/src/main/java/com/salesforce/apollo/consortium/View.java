@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.consortium;
 
-import static com.salesforce.apollo.consortium.support.SigningUtils.generateKeyPair;
-import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
-
 import java.security.KeyPair;
 import java.time.Duration;
 import java.util.List;
@@ -28,11 +25,12 @@ import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.comms.LinearClient;
 import com.salesforce.apollo.consortium.comms.LinearServer;
 import com.salesforce.apollo.consortium.support.TickScheduler;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
 
 /**
  * @author hal.hildebrand
@@ -41,17 +39,19 @@ import com.salesforce.apollo.protocols.HashKey;
 public class View {
     private static final Logger log = LoggerFactory.getLogger(View.class);
 
-    private final AtomicReference<CommonCommunications<LinearClient, Service>>   comm                     = new AtomicReference<>();
-    private final AtomicReference<ViewContext>                                   context                  = new AtomicReference<>();
-    private final Function<HashKey, CommonCommunications<LinearClient, Service>> createClientComms;
-    private final AtomicReference<Messenger>                                     messenger                = new AtomicReference<>();
-    private final AtomicReference<ViewMember>                                    nextView                 = new AtomicReference<>();
-    private final AtomicReference<KeyPair>                                       nextViewConsensusKeyPair = new AtomicReference<>();
-    private final AtomicReference<MemberOrder>                                   order                    = new AtomicReference<>();
-    private final Parameters                                                     params;
-    private final BiConsumer<HashKey, List<Msg>>                                 process;
+    private final AtomicReference<CommonCommunications<LinearClient, Service>>  comm                     = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                  context                  = new AtomicReference<>();
+    private final Function<Digest, CommonCommunications<LinearClient, Service>> createClientComms;
+    private final AtomicReference<Messenger>                                    messenger                = new AtomicReference<>();
+    private final AtomicReference<ViewMember>                                   nextView                 = new AtomicReference<>();
+    private final AtomicReference<KeyPair>                                      nextViewConsensusKeyPair = new AtomicReference<>();
+    private final AtomicReference<MemberOrder>                                  order                    = new AtomicReference<>();
+    private final Parameters                                                    params;
+    private final BiConsumer<Digest, List<Msg>>                                 process;
+    private final Service                                                       service;
 
-    public View(Service service, Parameters parameters, BiConsumer<HashKey, List<Msg>> process) {
+    public View(Service service, Parameters parameters, BiConsumer<Digest, List<Msg>> process) {
+        this.service = service;
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, service,
                                                                        r -> new LinearServer(
                                                                                parameters.communications.getClientIdentityProvider(),
@@ -86,7 +86,7 @@ public class View {
         return nextViewConsensusKeyPair.get();
     }
 
-    public void joinMessageGroup(ViewContext newView, TickScheduler scheduler, BiConsumer<HashKey, List<Msg>> process) {
+    public void joinMessageGroup(ViewContext newView, TickScheduler scheduler, BiConsumer<Digest, List<Msg>> process) {
         log.debug("Joining message group: {} on: {}", newView.getId(), newView.getMember());
         Messenger nextMsgr = newView.createMessenger(params, params.dispatcher);
         messenger.set(nextMsgr);
@@ -97,10 +97,10 @@ public class View {
     public KeyPair nextViewConsensusKey() {
         KeyPair current = nextViewConsensusKeyPair.get();
 
-        KeyPair keyPair = generateKeyPair(2048, "RSA");
+        KeyPair keyPair = params.signatureAlgorithm.generateKeyPair();
         nextViewConsensusKeyPair.set(keyPair);
         byte[] encoded = keyPair.getPublic().getEncoded();
-        byte[] signed = sign(params.signature.get(), encoded);
+        JohnHancock signed = params.member.sign(encoded);
         if (signed == null) {
             log.error("Unable to generate and sign consensus key on: {}", params.member);
             return null;
@@ -108,12 +108,12 @@ public class View {
         nextView.set(ViewMember.newBuilder()
                                .setId(params.member.getId().toByteString())
                                .setConsensusKey(ByteString.copyFrom(encoded))
-                               .setSignature(ByteString.copyFrom(signed))
+                               .setSignature(signed.toByteString())
                                .build());
         if (log.isTraceEnabled()) {
             log.trace("Generating next view consensus key current: {} next: {} on: {}",
-                      current == null ? null : new HashKey(Conversion.hashOf(current.getPublic().getEncoded())),
-                      new HashKey(Conversion.hashOf(keyPair.getPublic().getEncoded())), params.member);
+                      current == null ? null : DigestAlgorithm.DEFAULT.digest(current.getPublic().getEncoded()),
+                      DigestAlgorithm.DEFAULT.digest(keyPair.getPublic().getEncoded()), params.member);
         }
         return current;
     }
@@ -144,7 +144,7 @@ public class View {
         currentMsgr.publish(message);
     }
 
-    public void resume(Service service) {
+    public void resume() {
         resume(service, params.gossipDuration, params.scheduler);
     }
 
@@ -155,8 +155,7 @@ public class View {
     /**
      * Ye Jesus Nut
      */
-    public void viewChange(ViewContext newView, TickScheduler scheduler, int currentRegent, Service service,
-                           boolean resume) {
+    public void viewChange(ViewContext newView, TickScheduler scheduler, int currentRegent, boolean resume) {
         pause();
 
         log.info("Installing new view: {} rings: {} ttl: {} on: {} regent: {} member: {} view member: {}",
@@ -173,7 +172,7 @@ public class View {
         }
 
         if (resume) {
-            resume(service);
+            resume();
         }
     }
 

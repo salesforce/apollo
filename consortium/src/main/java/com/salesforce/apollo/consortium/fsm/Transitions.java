@@ -25,8 +25,7 @@ import com.salesforce.apollo.consortium.Collaborator;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
-import com.salesforce.apollo.membership.Member;
-
+import com.salesforce.apollo.membership.Member; 
 /**
  * Transition interface for the Collaborator FSM model
  *

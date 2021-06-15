@@ -6,7 +6,8 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * @author hhildebrand
@@ -14,26 +15,26 @@ import com.salesforce.apollo.protocols.HashKey;
 public enum WellKnownDescriptions {
     BYTE_CONTENT {
         @Override
-        public HashKey toHash() {
+        public Digest toHash() {
             return UNCONSTRAINED_HASH;
         }
     },
     GENESIS {
 
         @Override
-        public HashKey toHash() {
+        public Digest toHash() {
             return GENESIS_HASH;
         }
     };
 
-    private final static HashKey GENESIS_HASH = new HashKey(new byte[32]);
-    private final static HashKey UNCONSTRAINED_HASH;
+    private final static Digest GENESIS_HASH = new Digest(DigestAlgorithm.DEFAULT, new byte[32]);
+    private final static Digest UNCONSTRAINED_HASH;
 
     static {
         byte[] bytes = new byte[32];
         bytes[31] = 1;
-        UNCONSTRAINED_HASH = new HashKey(bytes);
+        UNCONSTRAINED_HASH = new Digest(DigestAlgorithm.DEFAULT, bytes);
     }
 
-    abstract public HashKey toHash();
+    abstract public Digest toHash();
 }

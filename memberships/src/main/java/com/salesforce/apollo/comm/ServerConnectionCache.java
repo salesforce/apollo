@@ -26,8 +26,9 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.membership.SigningMember;
 
 import io.grpc.ManagedChannel;
 
@@ -122,13 +123,13 @@ public class ServerConnectionCache {
 
     public class ManagedServerConnection implements Comparable<ManagedServerConnection> {
         public final ManagedChannel channel;
-        public final HashKey        id;
+        public final Digest         id;
         private volatile int        borrowed   = 0;
         private final Instant       created    = Instant.now(clock);
         private volatile Instant    lastUsed   = Instant.now(clock);
         private volatile int        usageCount = 0;
 
-        public ManagedServerConnection(HashKey id, ManagedChannel channel) {
+        public ManagedServerConnection(Digest id, ManagedChannel channel) {
             this.id = id;
             this.channel = channel;
         }
@@ -202,7 +203,7 @@ public class ServerConnectionCache {
     }
 
     public static interface ServerConnectionFactory {
-        ManagedChannel connectTo(Member to, Member from);
+        ManagedChannel connectTo(Member to, SigningMember from);
     }
 
     private final static Logger log = LoggerFactory.getLogger(ServerConnectionCache.class);
@@ -211,7 +212,7 @@ public class ServerConnectionCache {
         return new Builder();
     }
 
-    private final Map<HashKey, ManagedServerConnection>  cache = new HashMap<>();
+    private final Map<Digest, ManagedServerConnection>   cache = new HashMap<>();
     private final Clock                                  clock;
     private final ServerConnectionFactory                factory;
     private final ReadWriteLock                          lock  = new ReentrantReadWriteLock(true);
@@ -229,7 +230,8 @@ public class ServerConnectionCache {
         this.metrics = metrics;
     }
 
-    public <T> void apply(Member to, Member from, Consumer<T> action, CreateClientCommunications<T> createFunction) {
+    public <T> void apply(Member to, SigningMember from, Consumer<T> action,
+                          CreateClientCommunications<T> createFunction) {
         T client = borrow(to, from, createFunction);
         if (client == null) {
             return;
@@ -242,7 +244,8 @@ public class ServerConnectionCache {
         }
     }
 
-    public <T, R> R apply(Member to, Member from, Function<T, R> action, CreateClientCommunications<T> createFunction) {
+    public <T, R> R apply(Member to, SigningMember from, Function<T, R> action,
+                          CreateClientCommunications<T> createFunction) {
         T client = borrow(to, from, createFunction);
         if (client == null) {
             return null;
@@ -256,7 +259,7 @@ public class ServerConnectionCache {
         }
     }
 
-    public <T> T borrow(Member to, Member from, CreateClientCommunications<T> createFunction) {
+    public <T> T borrow(Member to, SigningMember from, CreateClientCommunications<T> createFunction) {
         return lock(() -> {
             if (cache.size() >= target) {
                 log.debug("Cache target open connections exceeded: {}, opening from: {} to {}", target, from.getId(),

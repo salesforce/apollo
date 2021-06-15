@@ -19,7 +19,7 @@ import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.avalanche.Processor;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.consortium.Consortium;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
@@ -47,8 +47,8 @@ public class AvaAdapter implements Processor {
         return avalanche;
     }
 
-    public BiFunction<CertifiedBlock, CompletableFuture<?>, HashKey> getConsensus() {
-        return (cb, f) -> avalanche.submitTransaction(cb, new HashKey(cb.getBlock().getHeader().getPrevious()));
+    public BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> getConsensus() {
+        return (cb, f) -> avalanche.submitTransaction(cb, new Digest(cb.getBlock().getHeader().getPrevious()));
     }
 
     public Consortium getConsortium() {
@@ -68,13 +68,13 @@ public class AvaAdapter implements Processor {
     }
 
     @Override
-    public HashKey validate(HashKey key, DagEntry entry) {
+    public Digest validate(Digest key, DagEntry entry) {
         CertifiedBlock cb = certifiedBlock(entry);
         if (cb == null) {
             System.out.println("null from: " + key + " descr: " + entry.getDescription());
             return key;
         }
-        return new HashKey(cb.getBlock().getHeader().getPrevious());
+        return new Digest(cb.getBlock().getHeader().getPrevious());
     }
 
     private CertifiedBlock certifiedBlock(DagEntry entry) {

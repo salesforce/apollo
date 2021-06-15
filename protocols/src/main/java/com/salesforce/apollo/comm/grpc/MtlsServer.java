@@ -7,53 +7,31 @@
 package com.salesforce.apollo.comm.grpc;
 
 import java.io.IOException;
-import java.net.Socket;
 import java.net.SocketAddress;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.Principal;
 import java.security.PrivateKey;
 import java.security.Provider;
-import java.security.Security;
-import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.KeyManagerFactorySpi;
-import javax.net.ssl.ManagerFactoryParameters;
-import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.TrustManagerFactorySpi;
-import javax.net.ssl.X509ExtendedKeyManager;
-import javax.net.ssl.X509ExtendedTrustManager;
-
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.salesforce.apollo.protocols.CertificateValidator;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.ProviderUtils;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.crypto.ssl.NodeKeyManagerFactory;
+import com.salesforce.apollo.crypto.ssl.NodeTrustManagerFactory;
+import com.salesforce.apollo.crypto.ssl.TlsInterceptor;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
 
 import io.grpc.BindableService;
 import io.grpc.Context;
-import io.grpc.Contexts;
-import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerCall;
@@ -62,9 +40,15 @@ import io.grpc.ServerInterceptor;
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
 import io.grpc.netty.shaded.io.netty.channel.ChannelOption;
+import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
+import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
+import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
+import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolNames;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
+import io.grpc.netty.shaded.io.netty.handler.ssl.SslProvider;
 import io.grpc.util.MutableHandlerRegistry;
 
 /**
@@ -72,6 +56,8 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 public class MtlsServer implements ClientIdentity {
+    private static final Provider PROVIDER_BCJSSE = ProviderUtils.getProviderBCJSSE();
+
     /**
      * Currently grpc-java doesn't return compressed responses, even if the client
      * has sent a compressed payload. This turns on gzip compression for all
@@ -89,208 +75,26 @@ public class MtlsServer implements ClientIdentity {
         }
     }
 
-    public static class NodeKeyManagerFactory extends KeyManagerFactory {
-
-        public NodeKeyManagerFactory(String alias, X509Certificate certificate, PrivateKey privateKey) {
-            super(new NodeKeyManagerFactorySpi(alias, certificate, privateKey), PROVIDER, "Keys");
-        }
-
-    }
-
-    public static class NodeKeyManagerFactorySpi extends KeyManagerFactorySpi {
-
-        private final String          alias;
-        private final X509Certificate certificate;
-        private final PrivateKey      privateKey;
-
-        public NodeKeyManagerFactorySpi(String alias, X509Certificate certificate, PrivateKey privateKey) {
-            this.alias = alias;
-            this.certificate = certificate;
-            this.privateKey = privateKey;
-        }
-
-        @Override
-        protected KeyManager[] engineGetKeyManagers() {
-            return new KeyManager[] { new Keys(alias, certificate, privateKey) };
-        }
-
-        @Override
-        protected void engineInit(KeyStore ks, char[] password) throws KeyStoreException, NoSuchAlgorithmException,
-                                                                UnrecoverableKeyException {
-        }
-
-        @Override
-        protected void engineInit(ManagerFactoryParameters spec) throws InvalidAlgorithmParameterException {
-        }
-
-    }
-
-    public static class NodeTrustManagerFactory extends TrustManagerFactory {
-
-        public NodeTrustManagerFactory(CertificateValidator validator) {
-            super(new NodeTrustManagerFactorySpi(validator), PROVIDER, "Trust");
-        }
-
-    }
-
-    public static class NodeTrustManagerFactorySpi extends TrustManagerFactorySpi {
-
-        private final CertificateValidator validator;
-
-        public NodeTrustManagerFactorySpi(CertificateValidator validator) {
-            this.validator = validator;
-        }
-
-        @Override
-        protected TrustManager[] engineGetTrustManagers() {
-            return new TrustManager[] { new Trust(validator) };
-        }
-
-        @Override
-        protected void engineInit(KeyStore ks) throws KeyStoreException {
-        }
-
-        @Override
-        protected void engineInit(ManagerFactoryParameters spec) throws InvalidAlgorithmParameterException {
-        }
-
-    }
-
-    private static class Keys extends X509ExtendedKeyManager {
-        private final String          alias;
-        private final X509Certificate certificate;
-        private final PrivateKey      privateKey;
-
-        public Keys(String alias, X509Certificate certificate, PrivateKey privateKey) {
-            this.alias = alias;
-            this.certificate = certificate;
-            this.privateKey = privateKey;
-        }
-
-        @Override
-        public String chooseClientAlias(String[] keyType, Principal[] principals, Socket socket) {
-            return alias;
-        }
-
-        @Override
-        public String chooseEngineClientAlias(String[] keyType, Principal[] issuers, SSLEngine engine) {
-            return alias;
-        }
-
-        @Override
-        public String chooseEngineServerAlias(String keyType, Principal[] issuers, SSLEngine engine) {
-            return alias;
-        }
-
-        @Override
-        public String chooseServerAlias(String s, Principal[] principals, Socket socket) {
-            return alias;
-        }
-
-        @Override
-        public X509Certificate[] getCertificateChain(String s) {
-            return new X509Certificate[] { certificate };
-        }
-
-        @Override
-        public String[] getClientAliases(String keyType, Principal[] principals) {
-            return new String[] { alias };
-        }
-
-        @Override
-        public PrivateKey getPrivateKey(String alias) {
-            if (this.alias.equals(alias)) {
-                return privateKey;
-            }
-            return null;
-        }
-
-        @Override
-        public String[] getServerAliases(String s, Principal[] principals) {
-            return new String[] { alias };
-        }
-    }
-
-    private class TlsInterceptor implements ServerInterceptor {
-        @Override
-        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers,
-                                                                     ServerCallHandler<ReqT, RespT> next) {
-            SSLSession sslSession = call.getAttributes().get(Grpc.TRANSPORT_ATTR_SSL_SESSION);
-            if (sslSession == null) {
-                return next.startCall(call, headers);
-            }
-            return Contexts.interceptCall(Context.current().withValue(sslSessionContext, sslSession), call, headers,
-                                          next);
-        }
-    }
-
-    private static class Trust extends X509ExtendedTrustManager {
-        private final CertificateValidator validator;
-
-        public Trust(CertificateValidator validator) {
-            this.validator = validator;
-        }
-
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-            validator.validateClient(chain);
-        }
-
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType,
-                                       Socket socket) throws CertificateException {
-            validator.validateClient(chain);
-        }
-
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType,
-                                       SSLEngine engine) throws CertificateException {
-            validator.validateClient(chain);
-        }
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-            validator.validateServer(chain);
-        }
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType,
-                                       Socket socket) throws CertificateException {
-            validator.validateServer(chain);
-        }
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType,
-                                       SSLEngine arg2) throws CertificateException {
-            validator.validateServer(chain);
-        }
-
-        @Override
-        public X509Certificate[] getAcceptedIssuers() {
-            return new X509Certificate[0];
-        }
-
-    }
-
-    private static final List<String> CIPHERS  = new ArrayList<>();
-    private static final Provider     PROVIDER = new BouncyCastleProvider();
-    private static final String       TL_SV1_2 = "TLSv1.2";
-
-    static {
-        CIPHERS.add("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
-        Security.addProvider(PROVIDER);
-    }
+    public static final String TL_SV1_3 = "TLSv1.3";
 
     public static SslContext forClient(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forClient()
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
-                                                             privateKey));
+                                                             privateKey, PROVIDER_BCJSSE));
         GrpcSslContexts.configure(builder);
-        builder.protocols(TL_SV1_2)
-               .ciphers(CIPHERS)
-               .trustManager(new NodeTrustManagerFactory(validator))
-               .clientAuth(clientAuth);
+        builder.protocols(TL_SV1_3)
+               .sslProvider(SslProvider.JDK)
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
+               .clientAuth(clientAuth)
+               .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
+                       // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK
+                       // providers.
+                       SelectorFailureBehavior.NO_ADVERTISE,
+                       // ACCEPT is currently the only mode supported by both OpenSsl and JDK
+                       // providers.
+                       SelectedListenerFailureBehavior.ACCEPT, ApplicationProtocolNames.HTTP_2,
+                       ApplicationProtocolNames.HTTP_1_1));
         try {
             return builder.build();
         } catch (SSLException e) {
@@ -302,12 +106,20 @@ public class MtlsServer implements ClientIdentity {
     public static SslContext forServer(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forServer(new NodeKeyManagerFactory(alias, certificate,
-                privateKey));
+                privateKey, PROVIDER_BCJSSE));
         GrpcSslContexts.configure(builder);
-        builder.protocols(TL_SV1_2)
-               .ciphers(CIPHERS)
-               .trustManager(new NodeTrustManagerFactory(validator))
-               .clientAuth(clientAuth);
+        builder.protocols(TL_SV1_3)
+               .sslProvider(SslProvider.JDK)
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
+               .clientAuth(clientAuth)
+               .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
+                       // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK
+                       // providers.
+                       SelectorFailureBehavior.NO_ADVERTISE,
+                       // ACCEPT is currently the only mode supported by both OpenSsl and JDK
+                       // providers.
+                       SelectedListenerFailureBehavior.ACCEPT, ApplicationProtocolNames.HTTP_2,
+                       ApplicationProtocolNames.HTTP_1_1));
         try {
             return builder.build();
         } catch (SSLException e) {
@@ -316,27 +128,25 @@ public class MtlsServer implements ClientIdentity {
 
     }
 
-    private final LoadingCache<X509Certificate, HashKey> cachedMembership = CacheBuilder.newBuilder()
-                                                                                        .build(new CacheLoader<X509Certificate, HashKey>() {
+    private final LoadingCache<X509Certificate, Digest> cachedMembership;
+    private final TlsInterceptor                        interceptor;
+    private final MutableHandlerRegistry                registry;
+    private final Server                                server;
+    private final Context.Key<SSLSession>               sslSessionContext = Context.key("SSLSession");
 
-                                                                                                                                                                  @Override
-                                                                                                                                                                  public HashKey load(X509Certificate key) throws Exception {
-                                                                                                                                                                      return Utils.getMemberId(key);
-                                                                                                                                                                  }
-                                                                                                                                                              });
-    private final TlsInterceptor                         interceptor      = new TlsInterceptor();
-    private final MutableHandlerRegistry                 registry;
-    private final Server                                 server;
-
-    private final Context.Key<SSLSession> sslSessionContext = Context.key("SSLSession");
-
-    public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
-            PrivateKey privateKey, CertificateValidator validator, MutableHandlerRegistry registry, Executor executor) {
+    public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, ServerContextSupplier supplier,
+            CertificateValidator validator, MutableHandlerRegistry registry, Executor executor) {
         this.registry = registry;
-
+        interceptor = new TlsInterceptor(sslSessionContext);
+        cachedMembership = CacheBuilder.newBuilder().build(new CacheLoader<X509Certificate, Digest>() {
+            @Override
+            public Digest load(X509Certificate key) throws Exception {
+                return supplier.getMemberId(key);
+            }
+        });
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
-                                                       .sslContext(forServer(clientAuth, alias, certificate, privateKey,
-                                                                             validator))
+                                                       .sslContext(supplier.forServer(clientAuth, alias, validator,
+                                                                                      PROVIDER_BCJSSE, TL_SV1_3))
                                                        .fallbackHandlerRegistry(registry)
                                                        .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                        .intercept(interceptor)
@@ -370,7 +180,7 @@ public class MtlsServer implements ClientIdentity {
     }
 
     @Override
-    public HashKey getFrom() {
+    public Digest getFrom() {
         try {
             return cachedMembership.get(getCert());
         } catch (ExecutionException e) {

@@ -18,8 +18,8 @@ import java.util.zip.DeflaterOutputStream;
 import org.h2.jdbc.JdbcConnection;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 public class SmokeTest {
 
@@ -84,8 +84,8 @@ public class SmokeTest {
 
         assertEquals(chkpnt1zip.length(), chkpnt2zip.length());
 
-        HashKey hash1 = new HashKey(Conversion.hashOf(new FileInputStream(chkpnt1zip)));
-        HashKey hash2 = new HashKey(Conversion.hashOf(new FileInputStream(chkpnt2zip)));
+        Digest hash1 = DigestAlgorithm.DEFAULT.digest(new FileInputStream(chkpnt1zip));
+        Digest hash2 = DigestAlgorithm.DEFAULT.digest(new FileInputStream(chkpnt2zip));
 
         assertEquals(hash1, hash2);
     }

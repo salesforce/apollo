@@ -6,27 +6,28 @@
  */
 package com.salesforce.apollo.consortium;
 
-import static com.salesforce.apollo.consortium.support.SigningUtils.sign;
-import static com.salesforce.apollo.consortium.support.SigningUtils.validateGenesis;
-import static com.salesforce.apollo.consortium.support.SigningUtils.verify;
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.PublicKey;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.zip.DeflaterInputStream;
 import java.util.zip.InflaterInputStream;
@@ -76,17 +77,19 @@ import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
-import com.salesforce.apollo.consortium.support.SigningUtils;
 import com.salesforce.apollo.consortium.support.SubmittedTransaction;
 import com.salesforce.apollo.consortium.support.TickScheduler;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
-import com.salesforce.apollo.protocols.BbBackedInputStream;
-import com.salesforce.apollo.protocols.BloomFilter;
-import com.salesforce.apollo.protocols.Conversion;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.BbBackedInputStream;
+import com.salesforce.apollo.utils.BloomFilter;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * Consortium represents the group that owns a linear ledger of blocks. These
@@ -103,7 +106,7 @@ public class Consortium {
 
     public class BootstrappingService {
 
-        public CheckpointSegments fetch(CheckpointReplication request, HashKey from) {
+        public CheckpointSegments fetch(CheckpointReplication request, Digest from) {
             Member member = params.context.getMember(from);
             if (member == null) {
                 log.warn("Received checkpoint fetch from non member: {} on: {}", from, getMember());
@@ -112,7 +115,7 @@ public class Consortium {
             return Consortium.this.fetch(request);
         }
 
-        public Blocks fetchBlocks(BlockReplication rep, HashKey from) {
+        public Blocks fetchBlocks(BlockReplication rep, Digest from) {
             Member member = params.context.getMember(from);
             if (member == null) {
                 log.warn("Received fetchBlocks from non member: {} on: {}", from, getMember());
@@ -124,7 +127,7 @@ public class Consortium {
             return blocks.build();
         }
 
-        public Blocks fetchViewChain(BlockReplication rep, HashKey from) {
+        public Blocks fetchViewChain(BlockReplication rep, Digest from) {
             Member member = params.context.getMember(from);
             if (member == null) {
                 log.warn("Received fetchViewChain from non member: {} on: {}", from, getMember());
@@ -136,7 +139,7 @@ public class Consortium {
             return blocks.build();
         }
 
-        public Initial sync(Synchronize request, HashKey from) {
+        public Initial sync(Synchronize request, Digest from) {
             Member member = params.context.getMember(from);
             if (member == null) {
                 log.warn("Received sync from non member: {} on: {}", from, getMember());
@@ -145,17 +148,17 @@ public class Consortium {
             Initial.Builder initial = Initial.newBuilder();
             CertifiedBlock block = getGenesis().block;
             if (block != null) {
-                final HashedCertifiedBlock g = new HashedCertifiedBlock(block);
+                final HashedCertifiedBlock g = new HashedCertifiedBlock(params.digestAlgorithm, block);
                 initial.setGenesis(g.block);
                 HashedCertifiedBlock cp = getLastCheckpointBlock();
                 if (cp != null) {
                     long height = request.getHeight();
 
                     while (cp.height() > height) {
-                        cp = new HashedCertifiedBlock(
+                        cp = new HashedCertifiedBlock(params.digestAlgorithm,
                                 store.getCertifiedBlock(cp.block.getBlock().getHeader().getLastCheckpoint()));
                     }
-                    HashedCertifiedBlock lastView = new HashedCertifiedBlock(
+                    HashedCertifiedBlock lastView = new HashedCertifiedBlock(params.digestAlgorithm,
                             store.getCertifiedBlock(cp.block.getBlock().getHeader().getLastReconfig()));
 
                     initial.setCheckpoint(cp.block).setCheckpointView(lastView.block);
@@ -174,14 +177,14 @@ public class Consortium {
 
     public class Service {
 
-        public TransactionResult clientSubmit(SubmitTransaction request, HashKey from) {
+        public TransactionResult clientSubmit(SubmitTransaction request, Digest from) {
             Member member = params.context.getMember(from);
             if (member == null) {
                 log.warn("Received client transaction submission from non member: {} on: {}", from, getMember());
                 return TransactionResult.getDefaultInstance();
             }
-            EnqueuedTransaction enqueuedTransaction = new EnqueuedTransaction(hashOf(request.getTransaction()),
-                    request.getTransaction());
+            EnqueuedTransaction enqueuedTransaction = new EnqueuedTransaction(
+                    hashOf(params.digestAlgorithm, request.getTransaction()), request.getTransaction());
             if (enqueuedTransaction.transaction.getJoin()) {
                 if (view.getContext().getMember(from) == null) {
                     log.warn("Received join from non consortium member: {} on: {}", from, getMember());
@@ -196,7 +199,7 @@ public class Consortium {
             return TransactionResult.getDefaultInstance();
         }
 
-        public JoinResult join(Join request, HashKey fromID) {
+        public JoinResult join(Join request, Digest fromID) {
             Member from = view.getContext().getActiveMember(fromID);
             if (from == null) {
                 log.debug("Member not part of current view: {} on: {}", fromID, getMember());
@@ -209,22 +212,23 @@ public class Consortium {
                         return JoinResult.getDefaultInstance();
                     }
                     ViewMember member = request.getMember();
-                    byte[] encoded = member.getConsensusKey().toByteArray();
-                    if (!verify(from, member.getSignature().toByteArray(), encoded)) {
+                    ByteString encoded = member.getConsensusKey();
+
+                    if (!from.verify(signature(member.getSignature()), encoded)) {
                         log.debug("Could not verify consensus key from {} on {}", fromID, getMember());
                     }
-                    PublicKey consensusKey = SigningUtils.publicKeyOf(encoded);
+                    PublicKey consensusKey = publicKey(encoded);
                     if (consensusKey == null) {
                         log.debug("Could not deserialize consensus key from {} on {}", fromID, getMember());
                         return JoinResult.getDefaultInstance();
                     }
-                    byte[] signed = sign(params.signature.get(), encoded);
+                    JohnHancock signed = params.member.sign(encoded);
                     if (signed == null) {
                         log.debug("Could not sign consensus key from {} on {}", fromID, getMember());
                         return JoinResult.getDefaultInstance();
                     }
                     return JoinResult.newBuilder()
-                                     .setSignature(ByteString.copyFrom(signed))
+                                     .setSignature(signed.toByteString())
                                      .setNextView(view.getNextView())
                                      .build();
                 });
@@ -234,7 +238,7 @@ public class Consortium {
             }
         }
 
-        public void stopData(StopData stopData, HashKey from) {
+        public void stopData(StopData stopData, Digest from) {
             Member member = view.getContext().getMember(from);
             if (member == null) {
                 log.warn("Received StopData from non consortium member: {} on: {}", from, getMember());
@@ -253,10 +257,10 @@ public class Consortium {
     public static class TransactionSubmitFailure extends Exception {
         private static final long serialVersionUID = 1L;
 
-        public final HashKey key;
-        public final int     suceeded;
+        public final Digest key;
+        public final int    suceeded;
 
-        public TransactionSubmitFailure(String message, HashKey key, int succeeded) {
+        public TransactionSubmitFailure(String message, Digest key, int succeeded) {
             super(message);
             this.suceeded = succeeded;
             this.key = key;
@@ -321,14 +325,14 @@ public class Consortium {
         }
     }
 
-    public static HashKey hashOf(TransactionOrBuilder transaction) {
+    public static Digest hashOf(DigestAlgorithm algorithm, TransactionOrBuilder transaction) {
         List<ByteString> buffers = new ArrayList<>();
         buffers.add(transaction.getNonce());
         buffers.add(ByteString.copyFrom(transaction.getJoin() ? new byte[] { 1 } : new byte[] { 0 }));
         buffers.add(transaction.getSource());
         buffers.add(transaction.getTxn().toByteString());
 
-        return new HashKey(Conversion.hashOf(BbBackedInputStream.aggregate(buffers)));
+        return algorithm.digest(BbBackedInputStream.aggregate(buffers));
     }
 
     public static Block manifestBlock(byte[] data) {
@@ -356,13 +360,11 @@ public class Consortium {
     final CommonCommunications<BootstrapClient, BootstrappingService> bootstrapComm;
     final Parameters                                                  params;
     final TickScheduler                                               scheduler = new TickScheduler();
-    final Service                                                     service   = new Service();
     final Store                                                       store;
-    final Map<HashKey, SubmittedTransaction>                          submitted = new ConcurrentHashMap<>();
+    final Map<Digest, SubmittedTransaction>                           submitted = new ConcurrentHashMap<>();
     final Transitions                                                 transitions;
     final View                                                        view;
 
-    private final BootstrappingService                        bootstrappingService  = new BootstrappingService();
     private final Map<Long, CheckpointState>                  cachedCheckpoints     = new ConcurrentHashMap<>();
     private final AtomicReference<HashedCertifiedBlock>       current               = new AtomicReference<>();
     private final PriorityBlockingQueue<HashedCertifiedBlock> deferedBlocks         = new PriorityBlockingQueue<>(1024,
@@ -383,14 +385,14 @@ public class Consortium {
 
     public Consortium(Parameters parameters, MVStore s) {
         params = parameters;
-        store = new Store(s);
+        store = new Store(params.digestAlgorithm, s);
         view = new View(new Service(), parameters, (id, messages) -> process(id, messages));
         fsm = Fsm.construct(new CollaboratorContext(this), Transitions.class, CollaboratorFsm.INITIAL, true);
-        fsm.setName(getMember().getId().b64Encoded());
+        fsm.setName(getMember().getId().toString());
         transitions = fsm.getTransitions();
         view.nextViewConsensusKey();
         bootstrapComm = parameters.communications.create(parameters.member, parameters.context.getId(),
-                                                         bootstrappingService,
+                                                         new BootstrappingService(),
                                                          r -> new BoostrapServer(
                                                                  parameters.communications.getClientIdentityProvider(),
                                                                  null, r),
@@ -404,6 +406,10 @@ public class Consortium {
 
     public HashedCertifiedBlock getGenesis() {
         return genesis.get();
+    }
+
+    public Digest getId() {
+        return params.context.getId();
     }
 
     public long getLastCheckpoint() {
@@ -429,7 +435,7 @@ public class Consortium {
         return log;
     }
 
-    public Member getMember() {
+    public SigningMember getMember() {
         return params.member;
     }
 
@@ -456,7 +462,7 @@ public class Consortium {
         }
         log.info("Starting consortium on {}", getMember());
         transitions.start();
-        view.resume(service);
+        view.resume();
     }
 
     public void stop() {
@@ -470,9 +476,10 @@ public class Consortium {
         transitions.shutdown();
     }
 
-    public HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, BiConsumer<Object, Throwable> onCompletion,
-                          Message transaction) throws TimeoutException {
-        return submit(onSubmit, false, onCompletion, transaction);
+    @SuppressWarnings("unchecked")
+    public Digest submit(BiConsumer<Boolean, Throwable> onSubmit, BiConsumer<?, Throwable> onCompletion,
+                         Message transaction) {
+        return submit(onSubmit, false, (BiConsumer<Object, Throwable>) onCompletion, transaction);
     }
 
     void checkpoint(long height, CheckpointState checkpoint) {
@@ -568,22 +575,24 @@ public class Consortium {
             log.info("No state to restore from on: {}", getMember().getId());
             return;
         }
-        HashedCertifiedBlock g = new HashedCertifiedBlock(store.getCertifiedBlock(0));
+        HashedCertifiedBlock g = new HashedCertifiedBlock(params.digestAlgorithm, store.getCertifiedBlock(0));
         setGenesis(g);
         setCurrent(lastBlock);
         Header header = lastBlock.block.getBlock().getHeader();
-        HashedCertifiedBlock lastView = new HashedCertifiedBlock(store.getCertifiedBlock(header.getLastReconfig()));
+        HashedCertifiedBlock lastView = new HashedCertifiedBlock(params.digestAlgorithm,
+                store.getCertifiedBlock(header.getLastReconfig()));
         Reconfigure reconfigure = getReconfigureFrom(lastView.block.getBlock());
         setLastViewChange(lastView, reconfigure);
         getState().reconfigureView(lastView, reconfigure, lastView.height() == 0, false);
         CertifiedBlock lastCheckpoint = store.getCertifiedBlock(header.getLastCheckpoint());
         if (lastCheckpoint != null) {
-            setLastCheckpoint(new HashedCertifiedBlock(lastCheckpoint));
+            setLastCheckpoint(new HashedCertifiedBlock(params.digestAlgorithm, lastCheckpoint));
         }
 
         log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}", g.hash, lastView.hash,
-                 lastCheckpoint == null ? "<missing>" : new HashedCertifiedBlock(lastCheckpoint).hash, lastBlock.hash,
-                 getMember().getId());
+                 lastCheckpoint == null ? "<missing>"
+                         : new HashedCertifiedBlock(params.digestAlgorithm, lastCheckpoint).hash,
+                 lastBlock.hash, getMember().getId());
     }
 
     void setCurrent(HashedCertifiedBlock current) {
@@ -606,14 +615,14 @@ public class Consortium {
         log.info("Checkpoint in: {} blocks on: {}", view.getCheckpointBlocks(), getMember());
     }
 
-    HashKey submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,
-                   Message txn) throws TimeoutException {
+    Digest submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,
+                  Message txn) {
         if (view.getContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
         }
         EnqueuedTransaction transaction = build(join, txn);
-        submit(transaction, onSubmit, onCompletion);
+        submit(transaction, join, onSubmit, onCompletion);
         return transaction.hash;
     }
 
@@ -621,14 +630,14 @@ public class Consortium {
         if (!started.get()) {
             return;
         }
-        HashedCertifiedBlock hcb = new HashedCertifiedBlock(certifiedBlock);
+        HashedCertifiedBlock hcb = new HashedCertifiedBlock(params.digestAlgorithm, certifiedBlock);
         Block block = hcb.block.getBlock();
         log.debug("Processing block {} : {} height: {} on: {}", hcb.hash, block.getBody().getType(), hcb.height(),
                   getMember());
         final HashedCertifiedBlock previousBlock = getCurrent();
         Header header = block.getHeader();
         if (previousBlock != null) {
-            HashKey prev = new HashKey(header.getPrevious().toByteArray());
+            Digest prev = digest(header.getPrevious());
             long prevHeight = previousBlock.height();
             if (hcb.height() <= prevHeight) {
                 log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hcb.hash,
@@ -699,13 +708,13 @@ public class Consortium {
                                                  .setNonce(ByteString.copyFrom(nonce));
         builder.setTxn(Any.pack(transaction));
 
-        HashKey hash = hashOf(builder);
+        Digest hash = hashOf(params.digestAlgorithm, builder);
+        JohnHancock signature = params.member.sign(hash.toByteString());
 
-        byte[] signature = sign(params.signature.get(), hash.bytes());
         if (signature == null) {
             throw new IllegalStateException("Unable to sign transaction batch on: " + getMember());
         }
-        builder.setSignature(ByteString.copyFrom(signature));
+        builder.setSignature(signature.toByteString());
         return new EnqueuedTransaction(hash, builder.build());
     }
 
@@ -758,11 +767,11 @@ public class Consortium {
         return getCurrent() == next;
     }
 
-    private BiConsumer<HashKey, List<Msg>> process() {
+    private BiConsumer<Digest, List<Msg>> process() {
         return (id, messages) -> process(id, messages);
     }
 
-    private void process(HashKey contextId, List<Msg> messages) {
+    private void process(Digest contextId, List<Msg> messages) {
         if (!started.get()) {
             return;
         }
@@ -908,16 +917,17 @@ public class Consortium {
         action.action.run();
     }
 
-    private void submit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,
-                        BiConsumer<Object, Throwable> onCompletion) throws TimeoutException {
-        assert transaction.hash.equals(hashOf(transaction.transaction)) : "Hash does not match!";
+    private void submit(EnqueuedTransaction transaction, boolean join, BiConsumer<Boolean, Throwable> onSubmit,
+                        BiConsumer<Object, Throwable> onCompletion) {
+        assert transaction.hash.equals(hashOf(params.digestAlgorithm,
+                                              transaction.transaction)) : "Hash does not match!";
 
         submitted.put(transaction.hash, new SubmittedTransaction(transaction.transaction, onCompletion));
         SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
                                                           .setContext(view.getContext().getId().toByteString())
                                                           .setTransaction(transaction.transaction)
                                                           .build();
-        log.trace("Submitting txn: {} from: {}", transaction.hash, getMember());
+        log.trace("Submitting txn: {} {} from: {}", transaction.hash, join ? "Join" : "User", getMember());
         List<Member> group = view.getContext().streamRandomRing().collect(Collectors.toList());
         AtomicInteger pending = new AtomicInteger(group.size());
         AtomicInteger success = new AtomicInteger();
@@ -956,5 +966,37 @@ public class Consortium {
                 }, params.dispatcher);
             }
         });
+    }
+
+    private boolean validateGenesis(Digest hash, CertifiedBlock block, Reconfigure initialView, Context<Member> context,
+                                    int majority, Member node) {
+        Digest headerHash = params.digestAlgorithm.digest(block.getBlock().getHeader().toByteString());
+        Map<Digest, BiFunction<JohnHancock, Digest, Boolean>> validators = new HashMap<>();
+        initialView.getViewList().forEach(vm -> {
+            Digest memberID = new Digest(vm.getId());
+            Member member = context.getMember(memberID);
+            ByteString encoded = vm.getConsensusKey();
+
+            if (!member.verify(signature(vm.getSignature()), encoded)) {
+                log.warn("Could not validate consensus key for {}", memberID);
+            }
+            PublicKey cKey = publicKey(encoded);
+            if (cKey != null) {
+                validators.put(memberID,
+                               (signature, h) -> SignatureAlgorithm.lookup(cKey)
+                                                                   .verify(cKey, signature, h.toByteString()));
+            } else {
+                log.warn("Could not deserialize consensus key for {}", memberID);
+            }
+        });
+        long certifiedCount = block.getCertificationsList()
+                                   .parallelStream()
+                                   .filter(c -> validators.get(digest(c.getId()))
+                                                          .apply(signature(c.getSignature()), headerHash))
+                                   .count();
+
+        log.debug("Certified: {} required: {} provided: {} for genesis: {} on: {}", certifiedCount, majority,
+                  validators.size(), hash, node);
+        return certifiedCount >= majority;
     }
 }

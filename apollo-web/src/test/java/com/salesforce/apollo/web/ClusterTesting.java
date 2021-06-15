@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hhildebrand

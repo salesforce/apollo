@@ -6,20 +6,20 @@
  */
 package com.salesforce.apollo.ghost.communications;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+
 import java.util.stream.Collectors;
 
-import com.salesfoce.apollo.proto.ADagEntry;
-import com.salesfoce.apollo.proto.DagEntries;
-import com.salesfoce.apollo.proto.DagEntries.Builder;
-import com.salesfoce.apollo.proto.DagEntry;
-import com.salesfoce.apollo.proto.Get;
-import com.salesfoce.apollo.proto.GhostGrpc.GhostImplBase;
-import com.salesfoce.apollo.proto.Intervals;
-import com.salesfoce.apollo.proto.Null;
+import com.google.protobuf.Any;
+import com.google.protobuf.Empty;
+import com.salesfoce.apollo.ghost.proto.Entries;
+import com.salesfoce.apollo.ghost.proto.Entry;
+import com.salesfoce.apollo.ghost.proto.Get;
+import com.salesfoce.apollo.ghost.proto.GhostGrpc.GhostImplBase;
+import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.ghost.Ghost.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.stub.StreamObserver;
 
@@ -38,20 +38,20 @@ public class GhostServerCommunications extends GhostImplBase {
     }
 
     @Override
-    public void get(Get request, StreamObserver<DagEntry> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
-            responseObserver.onNext(s.get(new HashKey(request.getId())));
+    public void get(Get request, StreamObserver<Any> responseObserver) {
+        router.evaluate(responseObserver, digest(request.getContext()), s -> {
+            responseObserver.onNext(s.get(digest(request.getId())));
             responseObserver.onCompleted();
         });
     }
 
     @Override
-    public void intervals(Intervals request, StreamObserver<DagEntries> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
-            Builder builder = DagEntries.newBuilder();
+    public void intervals(Intervals request, StreamObserver<Entries> responseObserver) {
+        router.evaluate(responseObserver, digest(request.getContext()), s -> {
+            Entries.Builder builder = Entries.newBuilder();
             s.intervals(request.getIntervalsList(),
-                        request.getHaveList().stream().map(e -> new HashKey(e)).collect(Collectors.toList()))
-             .forEach(e -> builder.addEntries(e));
+                        request.getHaveList().stream().map(e -> digest(e)).collect(Collectors.toList()))
+             .forEach(e -> builder.addRecords(e));
             responseObserver.onNext(builder.build());
             responseObserver.onCompleted();
         });
@@ -59,10 +59,10 @@ public class GhostServerCommunications extends GhostImplBase {
     }
 
     @Override
-    public void put(ADagEntry request, StreamObserver<Null> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
-            s.put(request.getEntry());
-            responseObserver.onNext(Null.getDefaultInstance());
+    public void put(Entry request, StreamObserver<Empty> responseObserver) {
+        router.evaluate(responseObserver, digest(request.getContext()), s -> {
+            s.put(request.getValue());
+            responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
         });
     }

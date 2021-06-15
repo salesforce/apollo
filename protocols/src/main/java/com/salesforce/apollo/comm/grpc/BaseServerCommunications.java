@@ -6,13 +6,14 @@
  */
 package com.salesforce.apollo.comm.grpc;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+
 import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import com.salesfoce.apollo.proto.ID;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -23,8 +24,7 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public interface BaseServerCommunications<T> {
-    default void evaluate(StreamObserver<?> responseObserver, HashKey id, Consumer<T> c, T s,
-                          Map<HashKey, T> services) {
+    default void evaluate(StreamObserver<?> responseObserver, Digest id, Consumer<T> c, T s, Map<Digest, T> services) {
         T service = getService(id, s, services);
         if (service == null) {
             responseObserver.onError(new StatusRuntimeException(Status.UNKNOWN));
@@ -33,8 +33,8 @@ public interface BaseServerCommunications<T> {
         }
     }
 
-    default void evaluate(StreamObserver<?> responseObserver, ID id, Consumer<T> c, T s, Map<HashKey, T> services) {
-        evaluate(responseObserver, id.getItselfCount() == 0 ? null : new HashKey(id), c, s, services);
+    default void evaluate(StreamObserver<?> responseObserver, String id, Consumer<T> c, T s, Map<Digest, T> services) {
+        evaluate(responseObserver, digest(id), c, s, services);
     }
 
     default X509Certificate getCert() {
@@ -43,14 +43,14 @@ public interface BaseServerCommunications<T> {
 
     ClientIdentity getClientIdentity();
 
-    default HashKey getFrom() {
+    default Digest getFrom() {
         return getClientIdentity().getFrom();
     }
 
-    default T getService(HashKey context, T system, Map<HashKey, T> services) {
+    default T getService(Digest context, T system, Map<Digest, T> services) {
         return (context == null && system != null) ? system : services.get(context);
     }
 
-    void register(HashKey id, T service);
+    void register(Digest id, T service);
 
 }

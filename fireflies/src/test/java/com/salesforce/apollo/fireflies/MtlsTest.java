@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.View.getStandardEpProvider;
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getCa;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -28,7 +26,6 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
@@ -38,33 +35,45 @@ import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
-import com.salesforce.apollo.membership.CertWithKey;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.ProviderUtils;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Utils;
-
-import io.github.olivierlemasle.ca.CertificateWithPrivateKey;
-import io.github.olivierlemasle.ca.RootCertificate;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class MtlsTest {
+    static {
+        ProviderUtils.getProviderBCJSSE();
+    }
 
-    private static final RootCertificate                   ca             = getCa();
-    private static Map<HashKey, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters               parameters     = new FirefliesParameters(
-            ca.getX509Certificate());
-    private List<Router>                                   communications = new ArrayList<>();
-    private List<View>                                     views;
+    private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final FirefliesParameters              parameters;
+    private static final int                              CARDINALITY    = 100;
+    private List<Router>                                  communications = new ArrayList<>();
+    private List<View>                                    views;
+
+    static {
+        ProviderUtils.getProviderBC();
+        parameters = FirefliesParameters.newBuilder()
+                                        .setCardinality(CARDINALITY)
+                                        .setCertificateValidator(CertificateValidator.NONE)
+                                        .build();
+    }
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 101)
+        certs = IntStream.range(0, CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
 
@@ -80,7 +89,7 @@ public class MtlsTest {
         }
     }
 
-    @Test
+//    @Test
     public void smoke() throws Exception {
         Random entropy = new Random(0x666);
         MetricRegistry registry = new MetricRegistry();
@@ -89,8 +98,12 @@ public class MtlsTest {
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
                                   .parallelStream()
-                                  .map(cert -> new CertWithKey(cert.getX509Certificate(), cert.getPrivateKey()))
-                                  .map(cert -> new Node(cert, parameters))
+                                  .map(cert -> new Node(
+                                          new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                  cert.getX509Certificate(), cert.getPrivateKey(),
+                                                  new Signer(0, cert.getPrivateKey()),
+                                                  cert.getX509Certificate().getPublicKey()),
+                                          parameters))
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
@@ -107,11 +120,11 @@ public class MtlsTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry : registry);
-            EndpointProvider ep = getStandardEpProvider(node);
+            EndpointProvider ep = View.getStandardEpProvider(node);
             builder.setMetrics(metrics);
-            MtlsRouter comms = new MtlsRouter(builder, ep, Executors.newFixedThreadPool(3));
+            MtlsRouter comms = new MtlsRouter(builder, ep, node, Executors.newFixedThreadPool(3));
             communications.add(comms);
-            return new View(HashKey.ORIGIN, node, comms, metrics);
+            return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();

@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.avalanche.communications;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -18,8 +20,8 @@ import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.Avalanche.Service;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
 import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.protocols.HashKey;
 
 import io.grpc.stub.StreamObserver;
 
@@ -33,8 +35,7 @@ public class AvalancheServer extends AvalancheImplBase {
     private final AvalancheMetrics         metrics;
     private final RoutableService<Service> router;
 
-    public AvalancheServer(ClientIdentity identity, AvalancheMetrics metrics,
-            RoutableService<Service> router) {
+    public AvalancheServer(ClientIdentity identity, AvalancheMetrics metrics, RoutableService<Service> router) {
         this.identity = identity;
         this.metrics = metrics;
         this.router = router;
@@ -42,11 +43,11 @@ public class AvalancheServer extends AvalancheImplBase {
 
     @Override
     public void query(Query request, StreamObserver<QueryResult> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
+        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             QueryResult result = s.onQuery(request.getHashesList(), request.getTransactionsList(),
                                            request.getWantedList()
                                                   .stream()
-                                                  .map(e -> new HashKey(e))
+                                                  .map(e -> digest(e))
                                                   .collect(Collectors.toList()));
             responseObserver.onNext(result);
             responseObserver.onCompleted();
@@ -61,10 +62,10 @@ public class AvalancheServer extends AvalancheImplBase {
 
     @Override
     public void requestDag(DagNodes request, StreamObserver<SuppliedDagNodes> responseObserver) {
-        router.evaluate(responseObserver, request.getContext(), s -> {
+        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             List<ByteString> result = s.requestDAG(request.getEntriesList()
                                                           .stream()
-                                                          .map(e -> new HashKey(e))
+                                                          .map(e -> digest(e))
                                                           .collect(Collectors.toList()));
             SuppliedDagNodes dags = SuppliedDagNodes.newBuilder().addAllEntries(result).build();
             responseObserver.onNext(dags);

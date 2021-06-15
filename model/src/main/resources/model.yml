@@ -1,0 +1,68 @@
+databaseChangeLog:
+-  preConditions:
+   -  runningAs:
+         username: bootstrap
+-  changeSet:
+      id: 1
+      author: hhildebrand
+      changes:
+      -  createTable:
+            tableName: node
+            columns:
+            -  column:
+                  name: id
+                  type: BINARY(32)
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: parent
+                  type: BINARY(32)
+            -  column:
+                  name: certificate
+                  type: BINARY
+            -  column:
+                  name: management
+                  type: BINARY(32)
+      -  createTable:
+            tableName: databases
+            columns:
+            -  column:
+                  name: id
+                  type: BINARY(32)
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: version
+                  type: INT
+      -  createTable:
+            tableName: members
+            columns:
+            -  column:
+                  name: id
+                  type: BINARY(32)
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: version
+                  type: INT
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: stake
+                  type: INT
+            -  column:
+                  name: host
+                  type: VARCHAR
+            -  column:
+                  name: fireflies_port
+                  type: INT
+            -  column:
+                  name: certificate
+                  type: BINARY
+      -  addUniqueConstraint:
+            tableName: members
+            columnNames: id, version
+            constraintName: member_unique_id_version
+            deferrable: false
+            disabled: false
+            initiallyDeferred: false

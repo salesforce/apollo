@@ -34,12 +34,13 @@ import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
 import com.salesforce.apollo.consortium.Parameters;
 import com.salesforce.apollo.consortium.Store;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.protocols.BloomFilter;
 import com.salesforce.apollo.protocols.CountdownAction;
-import com.salesforce.apollo.protocols.HashKey;
-import com.salesforce.apollo.protocols.Pair;
-import com.salesforce.apollo.protocols.Utils;
+import com.salesforce.apollo.utils.BloomFilter;
+import com.salesforce.apollo.utils.Pair;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -68,12 +69,12 @@ public class Bootstrapper {
 
     private static final Logger log = LoggerFactory.getLogger(Bootstrapper.class);
 
-    private static HashKey randomCut() {
-        long[] cut = new long[HashKey.LONG_SIZE];
-        for (int i = 0; i < HashKey.LONG_SIZE; i++) {
+    private static Digest randomCut(DigestAlgorithm algo) {
+        long[] cut = new long[algo.longLength()];
+        for (int i = 0; i < cut.length; i++) {
             cut[i] = Utils.secureEntropy().nextLong();
         }
-        return new HashKey(cut);
+        return new Digest(algo, cut);
     }
 
     private final HashedCertifiedBlock                                        anchor;
@@ -99,7 +100,7 @@ public class Bootstrapper {
         CertifiedBlock g = store.getCertifiedBlock(0);
         store.put(anchor);
         if (g != null) {
-            genesis = new HashedCertifiedBlock(g);
+            genesis = new HashedCertifiedBlock(params.digestAlgorithm, g);
             log.info("Restore using genesis: {} on: {}", genesis.hash, params.member);
             lastCheckpoint = store.getLastBlock().block.getBlock().getHeader().getLastCheckpoint();
         } else {
@@ -113,27 +114,29 @@ public class Bootstrapper {
     }
 
     private void checkpointCompletion(int threshold, Initial mostRecent) {
-        checkpoint = new HashedCertifiedBlock(mostRecent.getCheckpoint());
+        checkpoint = new HashedCertifiedBlock(params.digestAlgorithm, mostRecent.getCheckpoint());
         store.put(checkpoint);
 
-        checkpointView = new HashedCertifiedBlock(mostRecent.getCheckpointView());
+        checkpointView = new HashedCertifiedBlock(params.digestAlgorithm, mostRecent.getCheckpointView());
         store.put(checkpointView);
         log.info("Checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash, params.member);
 
         CheckpointAssembler assembler = new CheckpointAssembler(checkpoint.height(),
                 CollaboratorContext.checkpointBody(checkpoint.block.getBlock()), params.member, store, comms,
-                params.context, threshold);
+                params.context, threshold, params.digestAlgorithm);
 
         // assemble the checkpoint
-        checkpointAssembled = assembler.assemble(params.scheduler, params.synchronizeDuration).whenComplete((cps, t) -> {
-            log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member);
-            checkpointState = cps;
-        });
+        checkpointAssembled = assembler.assemble(params.scheduler, params.synchronizeDuration)
+                                       .whenComplete((cps, t) -> {
+                                           log.info("Restored checkpoint: {} on: {}", checkpoint.height(),
+                                                    params.member);
+                                           checkpointState = cps;
+                                       });
         // reconstruct chain to genesis
         mostRecent.getViewChainList()
                   .stream()
                   .filter(cb -> cb.getBlock().getBody().getType() == BodyType.RECONFIGURE)
-                  .map(cb -> new HashedCertifiedBlock(cb))
+                  .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm, cb))
                   .forEach(reconfigure -> {
                       store.put(reconfigure);
                   });
@@ -181,7 +184,7 @@ public class Bootstrapper {
     }
 
     private void completeAnchor(long from, long to) {
-        List<Member> sample = params.context.successors(randomCut());
+        List<Member> sample = params.context.successors(randomCut(params.digestAlgorithm));
         completeAnchor(sample.iterator(), from, to);
     }
 
@@ -196,7 +199,7 @@ public class Bootstrapper {
                 log.debug("Anchor completion ({} to {}) from: {} on: {}", from, to, m.getId(), params.member.getId());
                 blocks.getBlocksList()
                       .stream()
-                      .map(cb -> new HashedCertifiedBlock(cb))
+                      .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm, cb))
                       .peek(cb -> log.trace("Adding anchor completion: {} block[{}] from: {} on: {}", cb.height(),
                                             cb.hash, m, params.member))
                       .forEach(cb -> store.put(cb));
@@ -250,7 +253,7 @@ public class Bootstrapper {
     }
 
     private void completeViewChain(long from, long to) {
-        List<Member> sample = params.context.successors(randomCut());
+        List<Member> sample = params.context.successors(randomCut(params.digestAlgorithm));
         completeViewChain(sample.iterator(), from, to);
     }
 
@@ -266,7 +269,7 @@ public class Bootstrapper {
                           params.member.getId());
                 blocks.getBlocksList()
                       .stream()
-                      .map(cb -> new HashedCertifiedBlock(cb))
+                      .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm, cb))
                       .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(),
                                             cb.hash, m, params.member))
                       .forEach(cb -> store.put(cb));
@@ -279,40 +282,41 @@ public class Bootstrapper {
         };
     }
 
-    private void computeGenesis(Map<HashKey, Initial> votes) {
+    private void computeGenesis(Map<Digest, Initial> votes) {
 
         log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(),
                  params.context.toleranceLevel() + 1, params.member);
         Multiset<HashedCertifiedBlock> tally = HashMultiset.create();
-        Map<HashKey, Initial> valid = votes.entrySet()
-                                           .stream()
-                                           .filter(e -> e.getValue().hasGenesis()) // Has a genesis
-                                           .filter(e -> genesis == null ? true : genesis.hash.equals(e.getKey())) // If
-                                                                                                                  // restoring
-                                                                                                                  // from
-                                                                                                                  // known
-                                                                                                                  // genesis...
-                                           .filter(e -> {
-                                               if (!e.getValue().hasCheckpoint() && lastCheckpoint <= 0) {
-                                                   return true;
-                                               }
-                                               if (!e.getValue().hasCheckpointView()) {
-                                                   return false; // if we have a checkpoint, we must have a view
-                                               }
+        Map<Digest, Initial> valid = votes.entrySet()
+                                          .stream()
+                                          .filter(e -> e.getValue().hasGenesis()) // Has a genesis
+                                          .filter(e -> genesis == null ? true : genesis.hash.equals(e.getKey())) // If
+                                                                                                                 // restoring
+                                                                                                                 // from
+                                                                                                                 // known
+                                                                                                                 // genesis...
+                                          .filter(e -> {
+                                              if (!e.getValue().hasCheckpoint() && lastCheckpoint <= 0) {
+                                                  return true;
+                                              }
+                                              if (!e.getValue().hasCheckpointView()) {
+                                                  return false; // if we have a checkpoint, we must have a view
+                                              }
 
-                                               long checkpointViewHeight = CollaboratorContext.height(e.getValue()
-                                                                                                       .getCheckpointView()
-                                                                                                       .getBlock());
-                                               long recordedCheckpointViewHeight = e.getValue()
-                                                                                    .getCheckpoint()
-                                                                                    .getBlock()
-                                                                                    .getHeader()
-                                                                                    .getLastReconfig();
-                                               // checkpoint's view should match
-                                               return checkpointViewHeight == recordedCheckpointViewHeight;
-                                           })
-                                           .peek(e -> tally.add(new HashedCertifiedBlock(e.getValue().getGenesis())))
-                                           .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
+                                              long checkpointViewHeight = CollaboratorContext.height(e.getValue()
+                                                                                                      .getCheckpointView()
+                                                                                                      .getBlock());
+                                              long recordedCheckpointViewHeight = e.getValue()
+                                                                                   .getCheckpoint()
+                                                                                   .getBlock()
+                                                                                   .getHeader()
+                                                                                   .getLastReconfig();
+                                              // checkpoint's view should match
+                                              return checkpointViewHeight == recordedCheckpointViewHeight;
+                                          })
+                                          .peek(e -> tally.add(new HashedCertifiedBlock(params.digestAlgorithm,
+                                                  e.getValue().getGenesis())))
+                                          .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
 
         int threshold = params.context.toleranceLevel();
         if (genesis == null) {
@@ -342,7 +346,8 @@ public class Bootstrapper {
         Initial mostRecent = valid.values()
                                   .stream()
                                   .filter(i -> i.hasGenesis())
-                                  .filter(i -> genesis.hash.equals(new HashedCertifiedBlock(i.getGenesis()).hash))
+                                  .filter(i -> genesis.hash.equals(new HashedCertifiedBlock(params.digestAlgorithm,
+                                          i.getGenesis()).hash))
                                   .filter(i -> i.hasCheckpoint())
                                   .filter(i -> i.getCheckpoint().getBlock().getBody().getType() == BodyType.CHECKPOINT)
                                   .filter(i -> lastCheckpoint >= 0 ? true
@@ -405,7 +410,7 @@ public class Bootstrapper {
         }
     }
 
-    private void initialize(List<Member> graphCut, Map<HashKey, Initial> votes, CountdownAction countdown) {
+    private void initialize(List<Member> graphCut, Map<Digest, Initial> votes, CountdownAction countdown) {
         final HashedCertifiedBlock established = genesis;
         if (sync.isDone() || established != null) {
             return;
@@ -433,7 +438,7 @@ public class Bootstrapper {
     }
 
     private Runnable initialize(Member m, List<Member> graphCut, ListenableFuture<Initial> future,
-                                Map<HashKey, Initial> votes, CountdownAction countdown) {
+                                Map<Digest, Initial> votes, CountdownAction countdown) {
         return () -> {
             try {
                 final HashedCertifiedBlock established = genesis;
@@ -444,7 +449,7 @@ public class Bootstrapper {
                 try {
                     Initial vote = future.get();
                     if (vote.hasGenesis()) {
-                        HashedCertifiedBlock gen = new HashedCertifiedBlock(vote.getGenesis());
+                        HashedCertifiedBlock gen = new HashedCertifiedBlock(params.digestAlgorithm, vote.getGenesis());
                         if (gen.height() != 0) {
                             log.error("Returned genesis: {} is not height 0 from: {} on: {}", gen.hash, m,
                                       params.member);
@@ -467,8 +472,8 @@ public class Bootstrapper {
     }
 
     private void sample() {
-        List<Member> sample = params.context.successors(randomCut());
-        HashMap<HashKey, Initial> votes = new HashMap<>();
+        List<Member> sample = params.context.successors(randomCut(params.digestAlgorithm));
+        HashMap<Digest, Initial> votes = new HashMap<>();
         CountdownAction countdown = new CountdownAction(() -> computeGenesis(votes), sample.size());
         initialize(sample, votes, countdown);
     }

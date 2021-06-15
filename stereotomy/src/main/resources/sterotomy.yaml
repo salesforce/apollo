@@ -1,0 +1,97 @@
+databaseChangeLog:
+-  preConditions:
+   -  runningAs:
+         username: stereotomy
+-  changeSet:
+      id: 1
+      author: hhildebrand
+      changes:
+      -  createTable:
+            tableName: key_state
+            columns:
+            -  column:
+                  name: sequence_number
+                  type: VARCHAR
+            -  column:
+                  name: identifier
+                  type: VARCHAR
+            -  column:
+                  name: digest
+                  type: VARCHAR
+            -  column:
+                  name: lastEvent
+                  type: VARCHAR
+            -  column:
+                  name: lastEstablishingEvent
+                  type: VARCHAR
+            -  column:
+                  name: delegating_identifier
+                  type: VARCHAR
+            -  column:
+                  name: keys
+                  type: ARRAY
+            -  column:
+                  name: next_key_configuration_digest
+                  type: VARCHAR
+            -  column:
+                  name: configuration_traits
+                  type: ARRAY
+            -  column:
+                  name: witnesses
+                  type: ARRAY
+            -  column:
+                  name: witness_threshold
+                  type: INT
+      -  createTable:
+            tableName: weightedThreshold
+            columns:
+            -  column:
+                  name: INDEX
+                  type: int
+            -  column:
+                  name: sequence_number
+                  type: VARCHAR
+            -  column:
+                  name: identifier
+                  type: VARCHAR
+            -  column:
+                  name: digest
+                  type: VARCHAR
+            -  column:
+                  name: weight
+                  type: INT
+      -  createTable:
+            tableName: members
+            columns:
+            -  column:
+                  name: id
+                  type: BINARY(32)
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: version
+                  type: INT
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: host
+                  type: VARCHAR
+            -  column:
+                  name: fireflies_port
+                  type: INT
+            -  column:
+                  name: certificate
+                  type: BINARY
+            -  column:
+                  name: certificate_hash
+                  type: BINARY(32)
+            -  column:
+                  name: signing_ca
+                  type: INT
+      -  addUniqueConstraint:
+            tableName: members
+            columnNames: id, version
+            constraintName: member_unique_id_version
+            deferrable: false
+            disabled: false
+            initiallyDeferred: false

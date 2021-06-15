@@ -12,6 +12,7 @@ import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Header;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * @author hal.hildebrand
@@ -43,7 +44,7 @@ public class TestChain {
     }
 
     public TestChain genesis() {
-        genesis = new HashedCertifiedBlock(
+        genesis = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
                 CertifiedBlock.newBuilder()
                               .setBlock(Block.newBuilder()
                                              .setHeader(Header.newBuilder()
@@ -101,30 +102,33 @@ public class TestChain {
     }
 
     private HashedCertifiedBlock checkpointBlock() {
-        lastBlock = new HashedCertifiedBlock(
+        lastBlock = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
                 CertifiedBlock.newBuilder()
-                              .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
-                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.CHECKPOINT, CollaboratorContext.checkpoint(null, 0)), lastView))
+                              .setBlock(CollaboratorContext.generateBlock(DigestAlgorithm.DEFAULT, checkpoint, lastBlock
+                                                                                                                        .height()
+                                      + 1, lastBlock.hash, CollaboratorContext.body(BodyType.CHECKPOINT, CollaboratorContext.checkpoint(DigestAlgorithm.DEFAULT, null, 0)), lastView))
                               .build());
         store.put(lastBlock);
         return lastBlock;
     }
 
     private HashedCertifiedBlock reconfigureBlock() {
-        lastBlock = new HashedCertifiedBlock(
+        lastBlock = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
                 CertifiedBlock.newBuilder()
-                              .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
-                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.RECONFIGURE, CollaboratorContext.checkpoint(null, 0)), lastView))
+                              .setBlock(CollaboratorContext.generateBlock(DigestAlgorithm.DEFAULT, checkpoint, lastBlock
+                                                                                                                        .height()
+                                      + 1, lastBlock.hash, CollaboratorContext.body(BodyType.RECONFIGURE, CollaboratorContext.checkpoint(DigestAlgorithm.DEFAULT, null, 0)), lastView))
                               .build());
         store.put(lastBlock);
         return lastBlock;
     }
 
     private HashedCertifiedBlock userBlock() {
-        HashedCertifiedBlock block = new HashedCertifiedBlock(
+        HashedCertifiedBlock block = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
                 CertifiedBlock.newBuilder()
-                              .setBlock(CollaboratorContext.generateBlock(checkpoint, lastBlock.height()
-                                      + 1, lastBlock.hash.bytes(), CollaboratorContext.body(BodyType.USER, CollaboratorContext.checkpoint(null, 0)), lastView))
+                              .setBlock(CollaboratorContext.generateBlock(DigestAlgorithm.DEFAULT, checkpoint, lastBlock
+                                                                                                                        .height()
+                                      + 1, lastBlock.hash, CollaboratorContext.body(BodyType.USER, CollaboratorContext.checkpoint(DigestAlgorithm.DEFAULT, null, 0)), lastView))
                               .build());
         store.put(block);
         lastBlock = block;
