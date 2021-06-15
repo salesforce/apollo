@@ -61,4 +61,9 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
     protected ByteString toByteString() {
         return event.toByteString();
     }
+
+    @Override
+    public String toString() {
+        return "InceptionEventImpl\n" + event + "\n";
+    }
 }

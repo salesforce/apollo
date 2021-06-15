@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.specification;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
@@ -16,7 +17,6 @@ import java.util.stream.Stream;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
 import com.salesforce.apollo.utils.Hex;
@@ -31,23 +31,17 @@ public class KeyConfigurationDigester {
         var st = signingThresholdRepresentation(signingThreshold);
         var digestAlgorithm = nextKeyDigests.get(0).getAlgorithm();
 
-        var digest = digestAlgorithm.digest(st).getBytes();// digest
+        var digest = digestAlgorithm.digest(st);// digest
+
         for (var d : nextKeyDigests) {
-            var keyDigest = d.getBytes();
-            for (var i = keyDigest.length - 1; i >= 0; i--) {
-                digest[i] = (byte) (digest[i] ^ keyDigest[i]);
-            }
+            digest = digest.xor(d);
         }
 
-        return new Digest(nextKeyDigests.get(0).getAlgorithm(), digest);
+        return digest;
     }
 
     public static Digest digest(SigningThreshold signingThreshold, List<PublicKey> nextKeys, DigestAlgorithm algo) {
-        var keyDigs = nextKeys.stream()
-                              .map(QualifiedBase64::qb64)
-                              .map(qb64 -> qb64.getBytes(UTF_8))
-                              .map(algo::digest)
-                              .collect(toList());
+        var keyDigs = nextKeys.stream().map(k -> bs(k)).map(algo::digest).collect(toList());
 
         return digest(signingThreshold, keyDigs);
     }

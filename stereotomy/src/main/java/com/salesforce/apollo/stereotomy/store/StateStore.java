@@ -170,6 +170,7 @@ public class StateStore {
 
     // Order by <stateOrdering>
     private final MVMap<String, Signatures> authentications;
+    private final DigestAlgorithm           digestAlgorithm;
     // Order by <stateOrdering>
     private final MVMap<String, Signatures> endorsements;
     // Order by <stateOrdering>
@@ -185,7 +186,8 @@ public class StateStore {
     // Order by <receiptOrdering>
     private final MVMap<String, Signatures> receipts;
 
-    public StateStore(MVStore store) {
+    public StateStore(DigestAlgorithm digestAlgorithm, MVStore store) {
+        this.digestAlgorithm = digestAlgorithm;
         ProtobuffDataType serializer = new ProtobuffDataType();
 
         authentications = store.openMap(AUTHENTICATIONS, new MVMap.Builder<String, Signatures>().valueType(serializer));
@@ -202,9 +204,9 @@ public class StateStore {
     public void append(KeyEvent event, KeyState newState) {
         String coordinates = coordinateOrdering(event.getCoordinates());
         events.put(coordinates, event);
-        String hash = qb64(event.hash(DigestAlgorithm.DEFAULT));
-        eventsByHash.put(hash, coordinates);
-        locationToHash.put(coordinates, hash);
+        String hashstring = qb64(newState.getDigest());
+        eventsByHash.put(hashstring, coordinates);
+        locationToHash.put(coordinates, hashstring);
         keyState.put(coordinates, newState);
         keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
         appendAttachments(event.getCoordinates(), event.getAuthentication(), event.getEndorsements(),
@@ -213,6 +215,10 @@ public class StateStore {
 
     public OptionalLong findLatestReceipt(Identifier forIdentifier, Identifier byIdentifier) {
         return OptionalLong.of(lastReceipt.get(receiptPrefix(forIdentifier, byIdentifier)));
+    }
+
+    public DigestAlgorithm getDigestAlgorithm() {
+        return digestAlgorithm;
     }
 
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {

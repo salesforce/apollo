@@ -21,7 +21,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import com.salesforce.apollo.stereotomy.Stereotomy;
@@ -46,7 +45,7 @@ import com.salesforce.apollo.utils.Hex;
 public class StereotomyTests {
 
     SecureRandom             secureRandom   = new SecureRandom(new byte[] { 6, 6, 6 });
-    final StateStore         testEventStore = new StateStore(MVStore.open(null));
+    final StateStore         testEventStore = new StateStore(DigestAlgorithm.DEFAULT, MVStore.open(null));
     final StereotomyKeyStore testKeyStore   = new InMemoryKeyStore();
 
     @BeforeAll
@@ -66,65 +65,68 @@ public class StereotomyTests {
     public void test_newPrivateIdentifier() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
-        ControllableIdentifier i = controller.newPrivateIdentifier();
+        ControllableIdentifier identifier = controller.newPrivateIdentifier();
 
         // identifier
-        assertTrue(i.getIdentifier() instanceof SelfAddressingIdentifier);
-        var sap = (SelfAddressingIdentifier) i.getIdentifier();
+        assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
+        var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("68470280607a80eb1f876f3958ed9efe7af05297aa3f01256554f69ab727b19f",
+        assertEquals("08b35ddf78c25271e9b18ac25814572b8359503a003f5ad71d95f5fd8e1e21e8",
                      Hex.hex(sap.getDigest().getBytes()));
 
-        assertEquals(1, ((Unweighted) i.getSigningThreshold()).getThreshold());
+        assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
 
         // keys
-        assertEquals(1, i.getKeys().size());
-        assertNotNull(i.getKeys().get(0));
+        assertEquals(1, identifier.getKeys().size());
+        assertNotNull(identifier.getKeys().get(0));
 
-        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) testEventStore.getKeyEvent(i.getLastEstablishmentEvent())
+        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) testEventStore.getKeyEvent(identifier.getLastEstablishmentEvent())
                                                                                        .get();
-        assertEquals(i.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
+        assertEquals(identifier.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
 
         var keyCoordinates = KeyCoordinates.of(lastEstablishmentEvent, 0);
         var keyStoreKeyPair = testKeyStore.getKey(keyCoordinates);
         assertTrue(keyStoreKeyPair.isPresent());
-        assertEquals(keyStoreKeyPair.get().getPublic(), i.getKeys().get(0));
+        assertEquals(keyStoreKeyPair.get().getPublic(), identifier.getKeys().get(0));
 
         // nextKeys
-        assertTrue(i.getNextKeyConfigurationDigest().isPresent());
+        assertTrue(identifier.getNextKeyConfigurationDigest().isPresent());
         var keyStoreNextKeyPair = testKeyStore.getNextKey(keyCoordinates);
         assertTrue(keyStoreNextKeyPair.isPresent());
         var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
                                                                List.of(keyStoreNextKeyPair.get().getPublic()),
-                                                               i.getNextKeyConfigurationDigest().get().getAlgorithm());
-        assertEquals(expectedNextKeys, i.getNextKeyConfigurationDigest().get());
+                                                               identifier.getNextKeyConfigurationDigest()
+                                                                         .get()
+                                                                         .getAlgorithm());
+        assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
 
         // witnesses
-        assertEquals(0, i.getWitnessThreshold());
-        assertEquals(0, i.getWitnesses().size());
+        assertEquals(0, identifier.getWitnessThreshold());
+        assertEquals(0, identifier.getWitnesses().size());
 
         // config
-        assertEquals(0, i.configurationTraits().size());
+        assertEquals(0, identifier.configurationTraits().size());
 
         // lastEstablishmentEvent
-        assertEquals(i.getIdentifier(), lastEstablishmentEvent.getIdentifier());
+        assertEquals(identifier.getIdentifier(), lastEstablishmentEvent.getIdentifier());
         assertEquals(0, lastEstablishmentEvent.getSequenceNumber());
-        assertEquals(Digest.NONE, digest(i.getDigest().toByteString()));
+        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT),
+                     digest(identifier.getDigest().toByteString()));
 
         // lastEvent
-        KeyEvent lastEvent = testEventStore.getKeyEvent(i.getLastEvent()).get();
-        assertEquals(i.getIdentifier(), lastEvent.getIdentifier());
+        KeyEvent lastEvent = testEventStore.getKeyEvent(identifier.getLastEvent()).get();
+        assertEquals(identifier.getIdentifier(), lastEvent.getIdentifier());
         assertEquals(0, lastEvent.getSequenceNumber());
         // TODO digest
 
         assertEquals(lastEvent, lastEstablishmentEvent);
 
         // delegation
-        assertFalse(i.getDelegatingIdentifier().isPresent());
-        assertFalse(i.isDelegated());
+        assertFalse(identifier.getDelegatingIdentifier().isPresent());
+        assertFalse(identifier.isDelegated());
     }
 
-//    @Test
+    @Test
     public void test_privateIdentifier_rotate() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 

@@ -56,8 +56,12 @@ public class KeyStateImpl implements KeyState {
     @Override
     public Optional<Identifier> getDelegatingIdentifier() {
         Identifier identifier = identifier(state.getDelegatingIdentifier());
-        return identifier.isNone() ? Optional.empty()
-                : Optional.of(identifier);
+        return identifier.isNone() ? Optional.empty() : Optional.of(identifier);
+    }
+
+    @Override
+    public Digest getDigest() {
+        return digest(state.getDigest());
     }
 
     @Override
@@ -101,6 +105,11 @@ public class KeyStateImpl implements KeyState {
     @Override
     public int getWitnessThreshold() {
         return state.getWitnessThreshold();
+    }
+
+    @Override
+    public String toString() {
+        return "KeyStateImpl\n" + state + "\n";
     }
 
 }

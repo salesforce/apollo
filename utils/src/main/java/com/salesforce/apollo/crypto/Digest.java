@@ -49,8 +49,20 @@ public class Digest implements Comparable<Digest> {
         return Arrays.equals(d1.getBytes(), d1.getAlgorithm().digest(bytes).getBytes());
     }
 
+    public static Digest normalized(DigestAlgorithm digestAlgorithm, byte[] bs) {
+        if (bs.length > digestAlgorithm.digestLength()) {
+            throw new IllegalArgumentException();
+        }
+        byte[] hash = new byte[digestAlgorithm.digestLength()];
+        for (int i = 0; i < bs.length; i++) {
+            hash[i] = bs[i];
+        }
+        return new Digest(digestAlgorithm, hash);
+    }
+
     private final DigestAlgorithm algorithm;
-    private final long[]          hash;
+
+    private final long[] hash;
 
     public Digest(byte code, long[] hash) {
         algorithm = DigestAlgorithm.fromDigestCode(code);
@@ -203,14 +215,16 @@ public class Digest implements Comparable<Digest> {
         return "[" + Hex.toHexString(getBytes()).substring(0, 12) + ":" + algorithm.digestCode() + "]";
     }
 
-    public static Digest normalized(DigestAlgorithm digestAlgorithm, byte[] bs) {
-        if (bs.length > digestAlgorithm.digestLength()) {
-            throw new IllegalArgumentException();
+    public Digest xor(Digest b) {
+        if (algorithm != b.algorithm) {
+            throw new IllegalArgumentException("Cannot xor digests of different algorithms");
         }
-        byte[] hash = new byte[digestAlgorithm.digestLength()];
-        for (int i = 0; i < bs.length; i++) {
-            hash[i] = bs[i];
+        long[] xord = new long[hash.length];
+        long[] bHash = b.hash;
+
+        for (int i = 0; i < hash.length; i++) {
+            xord[i] = hash[i] ^ bHash[i];
         }
-        return new Digest(digestAlgorithm, hash);
+        return new Digest(algorithm, xord);
     }
 }

@@ -43,6 +43,8 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
             }
             currentState = initialState((InceptionEvent) event);
             lastEstablishmentEvent = (EstablishmentEvent) event;
+        } else if (event instanceof EstablishmentEvent) {
+            lastEstablishmentEvent = (EstablishmentEvent) event;
         } else {
             lastEstablishmentEvent = (EstablishmentEvent) events.getKeyEvent(currentState.getLastEstablishmentEvent())
                                                                 .get();
@@ -93,6 +95,7 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
                                  Identifier delegatingPrefix) {
         return new KeyStateImpl(
                 StoredKeyState.newBuilder()
+                              .setDigest(event.hash(events.getDigestAlgorithm()).toByteString())
                               .addAllConfigurationTraits(configurationTraits.stream()
                                                                             .map(e -> e.name())
                                                                             .collect(Collectors.toList()))

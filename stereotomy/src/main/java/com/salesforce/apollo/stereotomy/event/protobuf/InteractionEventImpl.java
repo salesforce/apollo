@@ -39,6 +39,11 @@ public class InteractionEventImpl extends KeyEventImpl implements InteractionEve
     }
 
     @Override
+    public String toString() {
+        return "InteractionEventImpl\n" + event + "\n";
+    }
+
+    @Override
     protected ByteString toByteString() {
         return event.toByteString();
     }

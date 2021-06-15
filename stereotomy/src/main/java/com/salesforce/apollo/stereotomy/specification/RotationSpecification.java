@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.Stereotomy;
@@ -35,25 +36,22 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class RotationSpecification {
 
     public static class Builder implements Cloneable {
-        private Format                format                     = Format.PROTOBUF;
-        private final List<PublicKey> keys                       = new ArrayList<>();
-        private final List<Digest>    listOfNextKeyDigests       = new ArrayList<>();
-        private final List<PublicKey> listOfNextKeys             = new ArrayList<>();
-        private Digest                nextKeyConfigurationDigest = Digest.NONE;
-        // provide nextKeys + digest algo, nextKeyDigests + digest algo, or
-        // nextKeysDigest
-        private final DigestAlgorithm nextKeysAlgorithm = DigestAlgorithm.BLAKE3_256;
-        // next key configuration
-        private SigningThreshold nextSigningThreshold;
-        private Digest           priorEventDigest;
-        private final List<Seal> seals = new ArrayList<>();
-        private Signer           signer;
-        // key configuration
+        private DigestAlgorithm             digestAlgorithm            = DigestAlgorithm.DEFAULT;
+        private Format                      format                     = Format.PROTOBUF;
+        private final List<PublicKey>       keys                       = new ArrayList<>();
+        private final List<Digest>          listOfNextKeyDigests       = new ArrayList<>();
+        private final List<PublicKey>       listOfNextKeys             = new ArrayList<>();
+        private Digest                      nextKeyConfigurationDigest = Digest.NONE;
+        private final DigestAlgorithm       nextKeysAlgorithm          = DigestAlgorithm.BLAKE3_256;
+        private SigningThreshold            nextSigningThreshold;
+        private final List<Seal>            seals                      = new ArrayList<>();
+        private SignatureAlgorithm          signatureAlgorithm         = SignatureAlgorithm.DEFAULT;
+        private Signer                      signer;
         private SigningThreshold            signingThreshold;
         private KeyState                    state;
-        private Version                     version          = Stereotomy.currentVersion();
-        private final List<BasicIdentifier> witnesses        = new ArrayList<>();
-        private int                         witnessThreshold = 0;
+        private Version                     version                    = Stereotomy.currentVersion();
+        private final List<BasicIdentifier> witnesses                  = new ArrayList<>();
+        private int                         witnessThreshold           = 0;
 
         public Builder() {
         }
@@ -165,7 +163,7 @@ public class RotationSpecification {
 
             return new RotationSpecification(format, state.getIdentifier(),
                     state.getLastEvent().getSequenceNumber() + 1, state.getLastEvent(), signingThreshold, keys, signer,
-                    nextKeyConfigurationDigest, witnessThreshold, removed, added, seals, version, priorEventDigest);
+                    nextKeyConfigurationDigest, witnessThreshold, removed, added, seals, version, state.getDigest());
         }
 
         public Builder clone() {
@@ -176,6 +174,10 @@ public class RotationSpecification {
                 throw new IllegalStateException(e);
             }
             return clone;
+        }
+
+        public DigestAlgorithm getDigestAlgorithm() {
+            return digestAlgorithm;
         }
 
         public Format getFormat() {
@@ -206,12 +208,12 @@ public class RotationSpecification {
             return nextSigningThreshold;
         }
 
-        public Digest getPriorEventDigest() {
-            return priorEventDigest;
-        }
-
         public List<Seal> getSeals() {
             return seals;
+        }
+
+        public SignatureAlgorithm getSignatureAlgorithm() {
+            return signatureAlgorithm;
         }
 
         public Signer getSigner() {
@@ -264,6 +266,11 @@ public class RotationSpecification {
             return this;
         }
 
+        public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
+            this.digestAlgorithm = digestAlgorithm;
+            return this;
+        }
+
         public Builder setJson() {
             format = Format.JSON;
             return this;
@@ -303,8 +310,8 @@ public class RotationSpecification {
             return this;
         }
 
-        public Builder setPriorEventDigest(Digest priorEventDigest) {
-            this.priorEventDigest = priorEventDigest;
+        public Builder setSignatureAlgorithm(SignatureAlgorithm signatureAlgorithm) {
+            this.signatureAlgorithm = signatureAlgorithm;
             return this;
         }
 

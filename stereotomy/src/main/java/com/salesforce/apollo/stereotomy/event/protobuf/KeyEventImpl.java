@@ -33,6 +33,7 @@ import com.salesforce.apollo.utils.Pair;
  *
  */
 abstract public class KeyEventImpl implements KeyEvent {
+
     private static Map<Integer, JohnHancock> signaturesOf(Receipt receipt) {
         return receipt.getSignaturesMap()
                       .entrySet()

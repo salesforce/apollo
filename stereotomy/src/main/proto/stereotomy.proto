@@ -101,16 +101,17 @@ message EventCoordinates {
 
 message StoredKeyState {
     bytes identifier = 1;
-    EventCoordinates coordinates = 2;
-    EventCoordinates lastEvent = 3;
-    EventCoordinates lastEstablishmentEvent = 4;
-    bytes delegatingIdentifier = 5;
-    repeated bytes keys = 6;
-    bytes nextKeyConfigurationDigest = 7;
-    repeated string configurationTraits = 8;
-    SigningThreshold signingThreshold = 9;
-    repeated bytes witnesses = 10;
-    int32 witnessThreshold = 11;
+    bytes digest = 2;
+    EventCoordinates coordinates = 3;
+    EventCoordinates lastEvent = 4;
+    EventCoordinates lastEstablishmentEvent = 5;
+    bytes delegatingIdentifier = 6;
+    repeated bytes keys = 7;
+    bytes nextKeyConfigurationDigest = 8;
+    repeated string configurationTraits = 9;
+    SigningThreshold signingThreshold = 10;
+    repeated bytes witnesses = 11;
+    int32 witnessThreshold = 12;
 }
 
 message IdentifierSpec {

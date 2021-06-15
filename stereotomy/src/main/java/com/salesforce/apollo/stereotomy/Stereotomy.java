@@ -344,9 +344,8 @@ public class Stereotomy {
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
         ControllableIdentifierImpl identifier = new ControllableIdentifierImpl(state);
 
-        log.info("New Private Identifier: {} coordinates: {} cur key: {} next key: {}",
-                 shortQb64(identifier.getIdentifier()), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
-                 shortQb64(nextKeyPair.getPublic()));
+        log.info("New Private Identifier: {} coordinates: {} cur key: {} next key: {}", identifier.getIdentifier(),
+                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
         return identifier;
     }
 
@@ -409,6 +408,7 @@ public class Stereotomy {
                                      .orElseThrow(() -> new IllegalStateException("establishment event is missing"));
         EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing;
         var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
+        System.out.println("Current key coords: " + currentKeyCoordinates);
 
         ((InMemoryKeyStore) keyStore).printContents();
 
@@ -422,9 +422,6 @@ public class Stereotomy {
                                                           specification.getNextKeysAlgorithm());
         specification.setState(state)
                      .setKey(nextKeyPair.getPublic())
-                     .setPriorEventDigest(digest(events.getKeyEventHash(state.getCoordinates())
-                                                       .orElseThrow(() -> new IllegalStateException(
-                                                               "Hash for current key event is missing"))))
                      .setNextKeys(nextKeys)
                      .setSigner(0, nextKeyPair.getPrivate())
                      .addAllSeals(seals);
@@ -440,9 +437,9 @@ public class Stereotomy {
         keyStore.removeKey(currentKeyCoordinates);
         keyStore.removeNextKey(currentKeyCoordinates);
 
-        log.info("Rotated Identifier: {} coordinates: {} cur key: {} next key: {} old coordinates: {}",
-                 shortQb64(identifier), nextKeyCoordinates, shortQb64(nextKeyPair.getPublic()),
-                 shortQb64(newNextKeyPair.getPublic()), currentKeyCoordinates);
+        log.info("Rotated Identifier: {} coordinates: {} cur key: {} next key: {} old coordinates: {}", identifier,
+                 nextKeyCoordinates, shortQb64(nextKeyPair.getPublic()), shortQb64(newNextKeyPair.getPublic()),
+                 currentKeyCoordinates);
 
         return newState;
     }

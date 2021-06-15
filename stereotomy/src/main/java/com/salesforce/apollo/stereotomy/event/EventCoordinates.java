@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.shortQb64;
 import static java.util.Objects.requireNonNull;
 
 import java.util.Objects;
@@ -50,7 +48,7 @@ public class EventCoordinates {
     public static EventCoordinates of(KeyEvent event, DigestAlgorithm algorithm) {
         requireNonNull(event, "event");
         requireNonNull(algorithm, "algorithm");
-        var digest = algorithm.digest(event.getBytes());
+        var digest = event.hash(algorithm);
         return of(event, digest);
     }
 
@@ -111,6 +109,6 @@ public class EventCoordinates {
 
     @Override
     public String toString() {
-        return "[" + shortQb64(identifier) + ":" + this.sequenceNumber + ":" + shortQb64(this.getDigest()) + "]";
+        return "[" + identifier + ":" + this.sequenceNumber + ":" + this.getDigest() + "]";
     }
 };

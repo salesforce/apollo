@@ -35,9 +35,7 @@ public interface KeyState {
 
     Optional<Identifier> getDelegatingIdentifier();
 
-    default Digest getDigest() {
-        return this.getCoordinates().getDigest();
-    }
+    Digest getDigest();
 
     default Identifier getIdentifier() {
         return this.getCoordinates().getIdentifier();
