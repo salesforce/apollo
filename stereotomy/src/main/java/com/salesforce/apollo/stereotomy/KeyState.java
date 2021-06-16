@@ -13,6 +13,7 @@ import java.util.Set;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
@@ -27,11 +28,9 @@ public interface KeyState {
 
     Set<ConfigurationTrait> configurationTraits();
 
-    EventCoordinates getCoordinates();
+    <T> T convertTo(Format format);
 
-    default boolean isDelegated() {
-        return this.getDelegatingIdentifier().isPresent();
-    }
+    EventCoordinates getCoordinates();
 
     Optional<Identifier> getDelegatingIdentifier();
 
@@ -58,6 +57,10 @@ public interface KeyState {
     List<BasicIdentifier> getWitnesses();
 
     int getWitnessThreshold();
+
+    default boolean isDelegated() {
+        return this.getDelegatingIdentifier().isPresent();
+    }
 
     default boolean isTransferable() {
         return this.getCoordinates().getIdentifier().isTransferable()

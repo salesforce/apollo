@@ -70,6 +70,10 @@ public interface Identifier {
         };
     }
 
+    public static Identifier from(ByteString bs) {
+        return from(bs.asReadOnlyByteBuffer());
+    }
+
     public static Identifier identifier(IdentifierSpecification spec, ByteBuffer inceptionStatement) {
         var derivation = spec.getDerivation();
         if (derivation.isAssignableFrom(BasicIdentifier.class)) {

@@ -20,6 +20,7 @@ import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
@@ -44,6 +45,15 @@ public class KeyStateImpl implements KeyState {
                     .stream()
                     .map(s -> ConfigurationTrait.valueOf(s))
                     .collect(Collectors.toSet());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> T convertTo(Format format) {
+        if (format == Format.PROTOBUF) {
+            return (T) state;
+        }
+        throw new IllegalArgumentException("Cannot transform into format: " + format);
     }
 
     @Override

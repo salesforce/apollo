@@ -84,6 +84,6 @@ public class JohnHancock {
 
     @Override
     public String toString() {
-        return "Sig[algorithm[" + algorithm + ":" + Hex.toHexString(bytes).substring(0, 12);
+        return "Sig[" + Hex.toHexString(bytes).substring(0, 12) + ":" + algorithm.signatureCode() + "]";
     }
 }

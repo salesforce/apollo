@@ -27,6 +27,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -245,6 +246,11 @@ public class Stereotomy {
         @Override
         public EventSignature sign(KeyEvent event) {
             return Stereotomy.this.sign(getIdentifier(), event);
+        }
+
+        @Override
+        public <T> T convertTo(Format format) {
+            return state.convertTo(format);
         }
     }
 

@@ -6,8 +6,11 @@
  */
 package com.salesforce.apollo.stereotomy.service;
 
+import java.util.Optional;
+
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -16,9 +19,9 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface Resolver {
 
-    Any lookup(Identifier prefix);
-    
-    KeyState resolve(Identifier prefix);
-    
-    void bind(Identifier prefix, Any value);
+    Optional<Any> lookup(Identifier prefix);
+
+    Optional<KeyState> resolve(Identifier prefix);
+
+    void bind(Identifier prefix, Any value, JohnHancock signature);
 }

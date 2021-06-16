@@ -10,6 +10,6 @@ package com.salesforce.apollo.stereotomy.service;
  * @author hal.hildebrand
  *
  */
-public interface KeyEventPromulgator {
+public interface Controller {
 
 }

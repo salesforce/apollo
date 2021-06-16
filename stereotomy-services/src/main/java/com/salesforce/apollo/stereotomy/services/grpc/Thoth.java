@@ -6,11 +6,22 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+
+import java.util.Optional;
+
+import org.h2.mvstore.MVMap;
+import org.h2.mvstore.MVStore;
+
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState;
+import com.salesfoce.apollo.stereotomy.event.proto.Resolve;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.KeyEventLog;
+import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.service.Resolver;
 
@@ -20,29 +31,45 @@ import com.salesforce.apollo.stereotomy.service.Resolver;
  */
 public class Thoth implements Resolver {
 
-    private final Context<Member> context;
-    private final SigningMember   node;
+    public class ResolverService {
+        public Any lookup(Resolve query, Member from) {
+            return Thoth.this.lookup(Identifier.from(query.getIdentifier())).orElse(Any.getDefaultInstance());
+        }
 
-    public Thoth(Context<Member> context, SigningMember node) {
+        public com.salesfoce.apollo.stereotomy.event.proto.KeyState resolve(Resolve query, Member from) {
+            KeyState resolved = Thoth.this.resolve(Identifier.from(query.getIdentifier())).orElse(null);
+            return resolved == null ? com.salesfoce.apollo.stereotomy.event.proto.KeyState.getDefaultInstance()
+                    : resolved.convertTo(Format.PROTOBUF);
+        }
+    }
+
+    private final MVMap<byte[], byte[]> bindings;
+    private final Context<Member>       context;
+    private final KeyEventLog           kel;
+    private final String                MAP_TEMPLATE = "%s-thoth.bindgs";
+    private final SigningMember         node;
+
+    public Thoth(Context<Member> context, SigningMember node, KeyEventLog kel, MVStore store) {
         this.context = context;
         this.node = node;
+        this.kel = kel;
+        bindings = store.openMap(String.format(MAP_TEMPLATE, qb64(context.getId())));
     }
 
     @Override
-    public Any lookup(Identifier prefix) {
+    public void bind(Identifier prefix, Any value, JohnHancock signature) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public Optional<Any> lookup(Identifier prefix) {
         // TODO Auto-generated method stub
         return null;
     }
 
     @Override
-    public KeyState resolve(Identifier prefix) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public void bind(Identifier prefix, Any value) {
-        // TODO Auto-generated method stub
-
+    public Optional<KeyState> resolve(Identifier prefix) {
+        return kel.getKeyState(prefix);
     }
 }

@@ -5,18 +5,9 @@ option java_package = "com.salesfoce.apollo.stereotomy.event.proto";
 option java_outer_classname = "StereotomyProto";
 option objc_class_prefix = "Stereo";
 import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
 
 package stereotomy;
-
-service Resolver { 
-    rpc lookup (Resolve) returns (google.protobuf.Any) {}
-    rpc resolve (Resolve) returns (KeyState) {}
-}
-
-message Resolve {
-    bytes context = 1;
-    bytes identifier = 2;
-} 
 
 message Header {
     int64 sequenceNumber = 1;
@@ -141,4 +132,63 @@ message KeyState {
 
 message Signatures {
     map<int32, bytes> signatures = 1;
+}
+
+/** Services **/
+
+service Witness {
+    rpc testify(Statements) returns (Attachments) {}
+    rpc witness(Statements) returns (Attachments) {}
+}
+
+service KelGossip {
+    rpc events(Missing) returns (Events) {}
+}
+
+service KerlGossip {
+    rpc attachments(Missing) returns (Attachments) {}
+}
+
+service Resolver { 
+    rpc lookup (Resolve) returns (google.protobuf.Any) {}
+    rpc resolve (Resolve) returns (KeyState) {}
+    rpc bind(Binding) returns (google.protobuf.Empty) {}
+}
+
+message Statements {
+    bytes context = 1;
+    repeated KeyEvent events = 2;
+}
+
+message Missing {
+    bytes context = 1;
+    repeated bytes query = 2;
+}
+
+message Events {
+    repeated KeyEvent requested = 1;
+}
+
+message KeyEvent {
+    oneof event {
+        InceptionEvent inception = 1;
+        RotationEvent rotation = 2;
+        InteractionEvent interaction = 3;
+    }
+}
+
+message Attachments {
+    repeated AttachmentEvent requested = 1;
+}
+
+message Resolve {
+    bytes context = 1;
+    bytes identifier = 2;
+}
+
+message Binding {
+    bytes context = 1;
+    bytes identifier = 2;
+    google.protobuf.Any value = 3;
+    bytes signature = 4;
 }
