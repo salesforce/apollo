@@ -12,6 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.URL;
+import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.List;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.Stereotomy.ControllableIdentifier;
@@ -32,6 +35,9 @@ import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold.Unweighted;
+import com.salesforce.apollo.stereotomy.identifier.AutonomicIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.keys.InMemoryKeyStore;
 import com.salesforce.apollo.stereotomy.store.StateStore;
@@ -55,16 +61,18 @@ public class StereotomyTests {
     }
 
     @Test
-    public void newPublicIdentifier() {
+    public void newPublicIdentifier() throws Exception {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
-
-        ControllableIdentifier identifier = controller.newPublicIdentifier();
+        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair(secureRandom);
+        AutonomicIdentifier aid = new AutonomicIdentifier(new BasicIdentifier(keyPair.getPublic()),
+                new URL("http://foo.com/bar/baz/bozo").toURI());
+        ControllableIdentifier identifier = controller.newPublicIdentifier(aid);
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("3b4a44829d07f810a20d6dfacf2b4c17e6c11f8387a7b74a144a27b64735923d",
+        assertEquals("4f6712e816de14217724c10a052bd41da5bca91009d72d8e56fcd3aa3f4d400d",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
@@ -123,7 +131,7 @@ public class StereotomyTests {
     public void newPrivateIdentifier() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
-        ControllableIdentifier identifier = controller.newPrivateIdentifier();
+        ControllableIdentifier identifier = controller.newPrivateIdentifier(Identifier.NONE);
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -188,7 +196,7 @@ public class StereotomyTests {
     public void privateIdentifierRotate() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
-        var i = controller.newPrivateIdentifier();
+        var i = controller.newPrivateIdentifier(Identifier.NONE);
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(testEventStore.getKeyEvent(i.getLastEstablishmentEvent()).get());
@@ -202,7 +210,7 @@ public class StereotomyTests {
     public void privateIdentifierInteraction() {
         var controller = new Stereotomy(testKeyStore, testEventStore, secureRandom);
 
-        var i = controller.newPrivateIdentifier();
+        var i = controller.newPrivateIdentifier(Identifier.NONE);
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(testEventStore.getKeyEvent(i.getLastEstablishmentEvent()).get());

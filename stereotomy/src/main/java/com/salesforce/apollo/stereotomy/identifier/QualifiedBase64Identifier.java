@@ -51,16 +51,7 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
     }
 
     public static Identifier identifier(ByteBuffer buff) {
-        if (!buff.hasRemaining()) {
-            return Identifier.NONE;
-        }
-        return switch (buff.get()) {
-        case 0 -> Identifier.NONE;
-        case 1 -> new SelfAddressingIdentifier(buff);
-        case 2 -> new BasicIdentifier(buff);
-        case 3 -> new SelfSigningIdentifier(buff);
-        default -> throw new IllegalArgumentException("Unexpected value: " + buff.get());
-        };
+        return Identifier.from(buff);
     }
 
     public static Identifier identifier(ByteString bs) {

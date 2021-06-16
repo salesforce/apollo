@@ -8,6 +8,7 @@ package com.salesforce.apollo.stereotomy.identifier;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
@@ -70,6 +71,6 @@ public class BasicIdentifier implements Identifier {
 
     @Override
     public String toString() {
-        return "B[" + publicKey + "]";
+        return "B[" + shortQb64(publicKey) + "]";
     }
 }

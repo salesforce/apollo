@@ -70,7 +70,7 @@ public class Stereotomy {
 
     public interface EventFactory {
 
-        InceptionEvent inception(IdentifierSpecification specification);
+        InceptionEvent inception(Identifier identifier, IdentifierSpecification specification);
 
         KeyEvent interaction(InteractionSpecification specification);
 
@@ -293,12 +293,12 @@ public class Stereotomy {
         return null;
     }
 
-    public ControllableIdentifier newPrivateIdentifier() {
-        return newPrivateIdentifier(IdentifierSpecification.newBuilder());
+    public ControllableIdentifier newPrivateIdentifier(Identifier identifier) {
+        return newPrivateIdentifier(identifier, IdentifierSpecification.newBuilder());
 
     }
 
-    public ControllableIdentifier newPrivateIdentifier(IdentifierSpecification.Builder spec) {
+    public ControllableIdentifier newPrivateIdentifier(Identifier identifier, IdentifierSpecification.Builder spec) {
         IdentifierSpecification.Builder specification = spec.clone();
         KeyPair initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         KeyPair nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
@@ -309,7 +309,7 @@ public class Stereotomy {
                      .setNextKeys(nextKeys)
                      .setSigner(0, initialKeyPair.getPrivate());
 
-        InceptionEvent event = eventFactory.inception(specification.build());
+        InceptionEvent event = eventFactory.inception(identifier, specification.build());
         KeyState state = processor.apply(null, event);
         if (state == null) {
             throw new IllegalStateException("Invalid event produced");
@@ -319,18 +319,19 @@ public class Stereotomy {
 
         keyStore.storeKey(keyCoordinates, initialKeyPair);
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
-        ControllableIdentifierImpl identifier = new ControllableIdentifierImpl(state);
+        ControllableIdentifierImpl cid = new ControllableIdentifierImpl(state);
 
-        log.info("New Private Identifier: {} coordinates: {} cur key: {} next key: {}", identifier.getIdentifier(),
-                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
-        return identifier;
+        log.info("New Private Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}", identifier,
+                 cid.getIdentifier(), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
+                 shortQb64(nextKeyPair.getPublic()));
+        return cid;
     }
 
-    public ControllableIdentifier newPublicIdentifier(BasicIdentifier... witnesses) {
-        return newPublicIdentifier(IdentifierSpecification.newBuilder(), witnesses);
+    public ControllableIdentifier newPublicIdentifier(Identifier identifier, BasicIdentifier... witnesses) {
+        return newPublicIdentifier(identifier, IdentifierSpecification.newBuilder(), witnesses);
     }
 
-    public ControllableIdentifier newPublicIdentifier(IdentifierSpecification.Builder spec,
+    public ControllableIdentifier newPublicIdentifier(Identifier identifier, IdentifierSpecification.Builder spec,
                                                       BasicIdentifier... witnesses) {
         IdentifierSpecification.Builder specification = spec.clone();
 
@@ -345,7 +346,7 @@ public class Stereotomy {
                      .setSigner(0, initialKeyPair.getPrivate())
                      .build();
 
-        InceptionEvent event = this.eventFactory.inception(specification.build());
+        InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
         KeyState state = processor.apply(null, event);
         if (state == null) {
             throw new IllegalStateException("Invalid event produced");
@@ -355,11 +356,12 @@ public class Stereotomy {
 
         keyStore.storeKey(keyCoordinates, initialKeyPair);
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
-        ControllableIdentifierImpl identifier = new ControllableIdentifierImpl(state);
+        ControllableIdentifier cid = new ControllableIdentifierImpl(state);
 
-        log.info("New Public Identifier: {} coordinates: {} cur key: {} next key: {}", identifier.getIdentifier(),
-                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
-        return identifier;
+        log.info("New Public Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}", identifier,
+                 cid.getIdentifier(), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
+                 shortQb64(nextKeyPair.getPublic()));
+        return cid;
     }
 
     public void rotate(Identifier identifier) {

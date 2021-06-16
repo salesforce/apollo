@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy.identifier;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
+import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -54,7 +55,22 @@ public interface Identifier {
                                }
                            };
 
-    public static Identifier identifier(IdentifierSpecification spec, byte[] inceptionStatement) {
+    public static Identifier from(ByteBuffer buff) {
+        if (!buff.hasRemaining()) {
+            return Identifier.NONE;
+        }
+        return switch (buff.get()) {
+        case 0 -> Identifier.NONE;
+        case 1 -> new SelfAddressingIdentifier(buff);
+        case 2 -> new BasicIdentifier(buff);
+        case 3 -> new SelfSigningIdentifier(buff);
+        case 4 -> new AutonomicIdentifier(buff);
+        case 5 -> new HumanMeaningfulIdentifier(buff);
+        default -> throw new IllegalArgumentException("Unexpected value: " + buff.get());
+        };
+    }
+
+    public static Identifier identifier(IdentifierSpecification spec, ByteBuffer inceptionStatement) {
         var derivation = spec.getDerivation();
         if (derivation.isAssignableFrom(BasicIdentifier.class)) {
             return basic(spec.getKeys().get(0));
@@ -109,12 +125,12 @@ public interface Identifier {
         return Long.toString(event.getSequenceNumber()) + ':' + signer.getSequenceNumber() + '.';
     }
 
-    static SelfAddressingIdentifier selfAddressing(byte[] inceptionStatement, DigestAlgorithm digestAlgorithm) {
+    static SelfAddressingIdentifier selfAddressing(ByteBuffer inceptionStatement, DigestAlgorithm digestAlgorithm) {
         var digest = digestAlgorithm.digest(inceptionStatement);
         return new SelfAddressingIdentifier(digest);
     }
 
-    static SelfSigningIdentifier selfSigning(byte[] inceptionStatement, Signer signer) {
+    static SelfSigningIdentifier selfSigning(ByteBuffer inceptionStatement, Signer signer) {
         var signature = signer.sign(inceptionStatement);
         return new SelfSigningIdentifier(signature);
     }

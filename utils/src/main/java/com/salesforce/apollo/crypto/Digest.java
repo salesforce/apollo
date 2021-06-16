@@ -40,6 +40,10 @@ public class Digest implements Comparable<Digest> {
         return 0;
     }
 
+    public static Digest from(ByteBuffer buff) {
+        return new Digest(buff);
+    }
+
     public static Digest from(ByteString bs) {
         return new Digest(bs);
     }
