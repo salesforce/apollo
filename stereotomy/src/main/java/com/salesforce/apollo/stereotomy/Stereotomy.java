@@ -12,6 +12,7 @@ import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -299,9 +300,8 @@ public class Stereotomy {
 
     public ControllableIdentifier newPrivateIdentifier(IdentifierSpecification.Builder spec) {
         IdentifierSpecification.Builder specification = spec.clone();
-        SignatureAlgorithm signatureAllgorithm = specification.getSignatureAlgorithm();
-        KeyPair initialKeyPair = signatureAllgorithm.generateKeyPair(entropy);
-        KeyPair nextKeyPair = signatureAllgorithm.generateKeyPair(entropy);
+        KeyPair initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        KeyPair nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
                                                           specification.getIdentifierDigestAlgorithm());
 
@@ -327,23 +327,27 @@ public class Stereotomy {
     }
 
     public ControllableIdentifier newPublicIdentifier(BasicIdentifier... witnesses) {
-        return newPublicIdentifier(IdentifierSpecification.newBuilder());
+        return newPublicIdentifier(IdentifierSpecification.newBuilder(), witnesses);
     }
 
     public ControllableIdentifier newPublicIdentifier(IdentifierSpecification.Builder spec,
                                                       BasicIdentifier... witnesses) {
         IdentifierSpecification.Builder specification = spec.clone();
-        KeyPair initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
-        KeyPair nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
-        Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
-                                                          specification.getIdentifierDigestAlgorithm());
+
+        var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        var nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
+                                                       specification.getNextKeysAlgorithm());
+
         specification.setKey(initialKeyPair.getPublic())
                      .setNextKeys(nextKeys)
-                     .setSigner(0, initialKeyPair.getPrivate());
+                     .setWitnesses(Arrays.asList(witnesses))
+                     .setSigner(0, initialKeyPair.getPrivate())
+                     .build();
 
-        InceptionEvent event = eventFactory.inception(specification.build());
-        KeyState newState = processor.apply(null, event);
-        if (newState == null) {
+        InceptionEvent event = this.eventFactory.inception(specification.build());
+        KeyState state = processor.apply(null, event);
+        if (state == null) {
             throw new IllegalStateException("Invalid event produced");
         }
 
@@ -351,8 +355,11 @@ public class Stereotomy {
 
         keyStore.storeKey(keyCoordinates, initialKeyPair);
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
+        ControllableIdentifierImpl identifier = new ControllableIdentifierImpl(state);
 
-        return new ControllableIdentifierImpl(newState);
+        log.info("New Public Identifier: {} coordinates: {} cur key: {} next key: {}", identifier.getIdentifier(),
+                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
+        return identifier;
     }
 
     public void rotate(Identifier identifier) {
