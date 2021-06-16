@@ -12,8 +12,8 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
-import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.stereotomy.KeyEventLog;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
@@ -24,14 +24,13 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.store.KeyStateImpl;
-import com.salesforce.apollo.stereotomy.store.StateStore;
+import com.salesforce.apollo.stereotomy.mvlog.KeyStateImpl;
 
 public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyState> {
 
-    private final StateStore events;
+    private final KeyEventLog events;
 
-    public KeyStateProcessor(StateStore events) {
+    public KeyStateProcessor(KeyEventLog events) {
         this.events = events;
     }
 
@@ -94,7 +93,7 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
                                  KeyEvent event, EstablishmentEvent lastEstablishmentEvent,
                                  Identifier delegatingPrefix) {
         return new KeyStateImpl(
-                StoredKeyState.newBuilder()
+                com.salesfoce.apollo.stereotomy.event.proto.KeyState.newBuilder()
                               .setDigest(event.hash(events.getDigestAlgorithm()).toByteString())
                               .addAllConfigurationTraits(configurationTraits.stream()
                                                                             .map(e -> e.name())

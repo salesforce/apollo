@@ -31,6 +31,7 @@
 		<module>tron</module>
 		<module>stereotomy</module>
 		<module>utils</module>
+		<module>stereotomy-services</module>
 	</modules>
 
 	<properties>
@@ -187,6 +188,11 @@
 				<artifactId>stereotomy</artifactId>
 				<version>${project.version}</version>
 			</dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>stereotomy-services</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>utils</artifactId>

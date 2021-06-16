@@ -277,7 +277,7 @@ public class ProtobufEventFactory implements EventFactory {
     private InteractionSpec interactionSpec(InteractionSpecification specification) {
 
         Header header = Header.newBuilder()
-                              .setSequenceNumber(0)
+                              .setSequenceNumber(specification.getSequenceNumber())
                               .setPriorEventDigest((specification.getPriorEventDigest()).toByteString())
                               .setVersion(toVersion(specification.getVersion()))
                               .setIdentifier(specification.getIdentifier().toByteString())

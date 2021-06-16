@@ -15,12 +15,12 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.stereotomy.KeyEventLog;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
-import com.salesforce.apollo.stereotomy.store.StateStore;
 
 /**
  * @author hal.hildebrand
@@ -29,11 +29,15 @@ import com.salesforce.apollo.stereotomy.store.StateStore;
 public class Verifier {
     private static final Logger log = LoggerFactory.getLogger(Verifier.class);
 
-    private StateStore keyEventStore;
+    private final KeyEventLog kel;
+
+    public Verifier(KeyEventLog kel) {
+        this.kel = kel;
+    }
 
     public HashMap<Integer, JohnHancock> verifyAuthentication(KeyState state, KeyEvent event,
                                                               Map<Integer, JohnHancock> signatures) {
-        Optional<KeyEvent> lookup = keyEventStore.getKeyEvent(state.getLastEstablishmentEvent());
+        Optional<KeyEvent> lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());
         if (lookup.isEmpty()) {
             throw new MissingEstablishmentEventException(event, state.getLastEstablishmentEvent());
         }
@@ -101,7 +105,7 @@ public class Verifier {
         var verified = new HashMap<EventCoordinates, Map<Integer, JohnHancock>>();
         for (var kv : otherReceipts.entrySet()) {
             // TODO escrow or something
-            Optional<KeyState> keyState = this.keyEventStore.getKeyState(kv.getKey());
+            Optional<KeyState> keyState = this.kel.getKeyState(kv.getKey());
 
             if (keyState.isEmpty()) {
                 continue;

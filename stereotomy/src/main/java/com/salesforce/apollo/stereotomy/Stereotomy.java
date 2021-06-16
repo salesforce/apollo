@@ -37,14 +37,13 @@ import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.processing.KeyStateProcessor;
+import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.stereotomy.processing.MissingEstablishmentEventException;
 import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.specification.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.specification.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
 import com.salesforce.apollo.stereotomy.specification.RotationSpecification.Builder;
-import com.salesforce.apollo.stereotomy.store.StateStore;
 
 /**
  * @author hal.hildebrand
@@ -268,20 +267,21 @@ public class Stereotomy {
 
     private final SecureRandom       entropy;
     private final EventFactory       eventFactory;
-    private final StateStore         events;
+    private final KeyEventLog        events;
     private final StereotomyKeyStore keyStore;
-    private final KeyStateProcessor  processor;
+    private final KeyEventProcessor  processor;
 
-    public Stereotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy) {
-        this(keyStore, events, entropy, new ProtobufEventFactory());
+    public Stereotomy(StereotomyKeyStore keyStore, KeyEventLog kel, KeyEventReceiptLog kerl, SecureRandom entropy) {
+        this(keyStore, kel, kerl, entropy, new ProtobufEventFactory());
     }
 
-    public Stereotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy, EventFactory eventFactory) {
-        this(keyStore, events, entropy, eventFactory, new KeyStateProcessor(events));
+    public Stereotomy(StereotomyKeyStore keyStore, KeyEventLog kel, KeyEventReceiptLog kerl, SecureRandom entropy,
+            EventFactory eventFactory) {
+        this(keyStore, kel, entropy, eventFactory, new KeyEventProcessor(kel, kerl));
     }
 
-    public Stereotomy(StereotomyKeyStore keyStore, StateStore events, SecureRandom entropy, EventFactory eventFactory,
-            KeyStateProcessor processor) {
+    public Stereotomy(StereotomyKeyStore keyStore, KeyEventLog events, SecureRandom entropy, EventFactory eventFactory,
+            KeyEventProcessor processor) {
         this.keyStore = keyStore;
         this.entropy = entropy;
         this.processor = processor;
@@ -310,7 +310,7 @@ public class Stereotomy {
                      .setSigner(0, initialKeyPair.getPrivate());
 
         InceptionEvent event = eventFactory.inception(identifier, specification.build());
-        KeyState state = processor.apply(null, event);
+        KeyState state = processor.process(event);
         if (state == null) {
             throw new IllegalStateException("Invalid event produced");
         }
@@ -347,7 +347,7 @@ public class Stereotomy {
                      .build();
 
         InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
-        KeyState state = processor.apply(null, event);
+        KeyState state = processor.process(event);
         if (state == null) {
             throw new IllegalStateException("Invalid event produced");
         }
@@ -408,7 +408,7 @@ public class Stereotomy {
                      .addAllSeals(seals);
 
         RotationEvent event = eventFactory.rotation(specification.build());
-        KeyState newState = processor.apply(state, event);
+        KeyState newState = processor.process(state, event);
 
         KeyCoordinates nextKeyCoordinates = KeyCoordinates.of(event, 0);
 
@@ -453,7 +453,7 @@ public class Stereotomy {
         specification.setState(state).setSigner(0, keyPair.get().getPrivate()).setseals(seals);
 
         KeyEvent event = eventFactory.interaction(specification.build());
-        KeyState newKeyState = processor.apply(state, event);
+        KeyState newKeyState = processor.process(state, event);
         return newKeyState;
     }
 

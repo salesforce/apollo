@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.store;
+package com.salesforce.apollo.stereotomy.mvlog;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
@@ -17,7 +17,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
@@ -33,9 +32,9 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public class KeyStateImpl implements KeyState {
 
-    private final StoredKeyState state;
+    private final com.salesfoce.apollo.stereotomy.event.proto.KeyState state;
 
-    public KeyStateImpl(StoredKeyState state) {
+    public KeyStateImpl(com.salesfoce.apollo.stereotomy.event.proto.KeyState state) {
         this.state = state;
     }
 

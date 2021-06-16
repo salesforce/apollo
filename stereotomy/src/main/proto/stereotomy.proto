@@ -8,6 +8,16 @@ import "google/protobuf/any.proto";
 
 package stereotomy;
 
+service Resolver { 
+    rpc lookup (Resolve) returns (google.protobuf.Any) {}
+    rpc resolve (Resolve) returns (KeyState) {}
+}
+
+message Resolve {
+    bytes context = 1;
+    bytes identifier = 2;
+} 
+
 message Header {
     int64 sequenceNumber = 1;
     bytes identifier = 2;
@@ -114,7 +124,7 @@ message Version {
 }
 
 
-message StoredKeyState {
+message KeyState {
     bytes identifier = 1;
     bytes digest = 2;
     EventCoordinates coordinates = 3;

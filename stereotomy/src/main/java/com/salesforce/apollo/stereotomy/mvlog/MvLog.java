@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.store;
+package com.salesforce.apollo.stereotomy.mvlog;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.Identifier.coordinateOrdering;
@@ -31,10 +31,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
-import com.salesfoce.apollo.stereotomy.event.proto.StoredKeyState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.KeyEventLog;
+import com.salesforce.apollo.stereotomy.KeyEventReceiptLog;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
@@ -53,7 +54,7 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  * @author hal.hildebrand
  *
  */
-public class StateStore {
+public class MvLog implements KeyEventLog, KeyEventReceiptLog {
 
     private static class ProtobuffDataType implements DataType {
 
@@ -113,8 +114,8 @@ public class StateStore {
         }
 
         private Class<? extends AbstractMessage> classOf(Any any) {
-            if (any.is(StoredKeyState.class)) {
-                return StoredKeyState.class;
+            if (any.is(com.salesfoce.apollo.stereotomy.event.proto.KeyState.class)) {
+                return com.salesfoce.apollo.stereotomy.event.proto.KeyState.class;
             }
             if (any.is(Signatures.class)) {
                 return Signatures.class;
@@ -134,7 +135,7 @@ public class StateStore {
         private Object wrap(AbstractMessage msg) {
             return switch (msg.getClass().getSimpleName()) {
             case "StoredKeyState": {
-                yield new KeyStateImpl((StoredKeyState) msg);
+                yield new KeyStateImpl((com.salesfoce.apollo.stereotomy.event.proto.KeyState) msg);
             }
             case "Signatures": {
                 yield msg;
@@ -187,7 +188,7 @@ public class StateStore {
     // Order by <receiptOrdering>
     private final MVMap<String, Signatures> receipts;
 
-    public StateStore(DigestAlgorithm digestAlgorithm, MVStore store) {
+    public MvLog(DigestAlgorithm digestAlgorithm, MVStore store) {
         this.digestAlgorithm = digestAlgorithm;
         ProtobuffDataType serializer = new ProtobuffDataType();
 
@@ -202,12 +203,14 @@ public class StateStore {
         locationToHash = store.openMap(LOCATION_TO_HASH);
     }
 
+    @Override
     public void append(AttachmentEvent event, KeyState newState) {
         append((KeyEvent) event, newState);
         appendAttachments(event.getCoordinates(), event.getAuthentication(), event.getEndorsements(),
                           event.getReceipts());
     }
 
+    @Override
     public void append(KeyEvent event, KeyState newState) {
         String coordinates = coordinateOrdering(event.getCoordinates());
         events.put(coordinates, event);
@@ -218,37 +221,45 @@ public class StateStore {
         keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
     }
 
+    @Override
     public OptionalLong findLatestReceipt(Identifier forIdentifier, Identifier byIdentifier) {
         return OptionalLong.of(lastReceipt.get(receiptPrefix(forIdentifier, byIdentifier)));
     }
 
+    @Override
     public DigestAlgorithm getDigestAlgorithm() {
         return digestAlgorithm;
     }
 
+    @Override
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
         KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIdentifier(),
                 coordinates.getSequenceNumber(), coordinates.getPreviousEvent().getDigest())));
         return (keyEvent instanceof SealingEvent) ? Optional.of((SealingEvent) keyEvent) : Optional.empty();
     }
 
+    @Override
     public Optional<KeyEvent> getKeyEvent(Digest digest) {
         String coordinates = eventsByHash.get(qb64(digest));
         return coordinates == null ? Optional.empty() : Optional.of(events.get(coordinates));
     }
 
+    @Override
     public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
         return Optional.ofNullable(events.get(coordinateOrdering(coordinates)));
     }
 
+    @Override
     public Optional<String> getKeyEventHash(EventCoordinates coordinates) {
         return Optional.of(locationToHash.get(coordinateOrdering(coordinates)));
     }
 
+    @Override
     public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
         return Optional.ofNullable(keyState.get(coordinateOrdering(coordinates)));
     }
 
+    @Override
     public Optional<KeyState> getKeyState(Identifier identifier) {
         String stateHash = keyStateByIdentifier.get(qb64(identifier));
 

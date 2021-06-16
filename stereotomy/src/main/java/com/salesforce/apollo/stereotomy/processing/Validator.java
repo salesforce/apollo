@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.stereotomy.KeyEventLog;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
@@ -31,7 +32,6 @@ import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfSigningIdentifier;
 import com.salesforce.apollo.stereotomy.specification.KeyConfigurationDigester;
-import com.salesforce.apollo.stereotomy.store.StateStore;
 
 /**
  * @author hal.hildebrand
@@ -54,7 +54,93 @@ public class Validator {
         return true;
     }
 
-    private StateStore keyEventStore;
+    private final KeyEventLog kel;
+
+    public Validator(KeyEventLog kel) {
+        this.kel = kel;
+    }
+
+    public void validateKeyEventData(KeyState state, KeyEvent event) {
+        if (event instanceof EstablishmentEvent) {
+            var ee = (EstablishmentEvent) event;
+
+            this.validateKeyConfiguration(ee);
+
+            this.validate(ee.getIdentifier().isTransferable() || ee.getNextKeysDigest().isEmpty(),
+                          "non-transferable prefix must not have a next key configuration");
+
+            if (event instanceof InceptionEvent) {
+                var icp = (InceptionEvent) ee;
+
+                this.validate(icp.getSequenceNumber() == 0, "inception events must have a sequence number of 0");
+
+                this.validateIdentifier(icp);
+
+                this.validateInceptionWitnesses(icp);
+            } else if (event instanceof RotationEvent) {
+                var rot = (RotationEvent) ee;
+
+                this.validate(!(state.isDelegated()) || rot instanceof DelegatedRotationEvent,
+                              "delegated identifiers must use delegated rotation event type");
+
+                this.validate(rot.getSequenceNumber() > 0,
+                              "non-inception event must have a sequence number greater than 0 (s: %s)",
+                              rot.getSequenceNumber());
+
+                this.validate(event.getIdentifier().isTransferable(),
+                              "only transferable identifiers can have rotation events");
+
+                Optional<KeyEvent> lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());
+                if (lookup.isEmpty()) {
+                    throw new InvalidKeyEventException(String.format("previous establishment event does not exist"));
+                }
+                EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) lookup.get();
+                this.validate(lastEstablishmentEvent.getNextKeysDigest().isPresent(),
+                              "previous establishment event must have a next key configuration for rotation");
+
+                var nextKeyConfigurationDigest = lastEstablishmentEvent.getNextKeysDigest().get();
+                this.validate(KeyConfigurationDigester.matches(rot.getSigningThreshold(), rot.getKeys(),
+                                                               nextKeyConfigurationDigest),
+                              "digest of signing threshold and keys must match digest in previous establishment event");
+
+                this.validateRotationWitnesses(rot, state);
+            }
+
+            if (event instanceof DelegatedEstablishmentEvent) {
+                var dee = (DelegatedEstablishmentEvent) ee;
+                var delegatingEvent = this.kel.getKeyEvent(dee.getDelegatingEvent())
+                                                        .orElseThrow(() -> new MissingDelegatingEventException(event,
+                                                                dee.getDelegatingEvent()));
+
+                this.validate(this.containsSeal(delegatingEvent.getSeals(), dee),
+                              "delegated establishment event seal must contain be contained in referenced delegating event");
+            }
+        } else if (event instanceof InteractionEvent) {
+            var ixn = (InteractionEvent) event;
+
+            this.validate(ixn.getSequenceNumber() > 0,
+                          "non-inception event must have a sequence number greater than 0 (s: %s)",
+                          ixn.getSequenceNumber());
+
+            this.validate(!state.configurationTraits().contains(ConfigurationTrait.ESTABLISHMENT_EVENTS_ONLY),
+                          "interaction events only permitted when identifier is not configured for establishment events only");
+        }
+    }
+
+    private boolean containsSeal(List<Seal> seals, DelegatedEstablishmentEvent event) {
+        for (var s : seals) {
+            if (s instanceof Seal.CoordinatesSeal) {
+                var ecds = (Seal.CoordinatesSeal) s;
+                var digest = ecds.getEvent().getDigest();
+                if (ecds.getEvent().getIdentifier().equals(event.getIdentifier())
+                        && ecds.getEvent().getSequenceNumber() == event.getSequenceNumber()
+                        && event.hash(digest.getAlgorithm()).equals(digest)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
     private void validate(boolean valid, String message, Object... formatValues) {
         if (!valid) {
@@ -120,88 +206,6 @@ public class Validator {
             this.validate(ee.getKeys().size() == countOfWeights,
                           "weighted signing threshold must specify a weight for each key");
         }
-    }
-
-    public void validateKeyEventData(KeyState state, KeyEvent event) {
-        if (event instanceof EstablishmentEvent) {
-            var ee = (EstablishmentEvent) event;
-
-            this.validateKeyConfiguration(ee);
-
-            this.validate(ee.getIdentifier().isTransferable() || ee.getNextKeysDigest().isEmpty(),
-                          "non-transferable prefix must not have a next key configuration");
-
-            if (event instanceof InceptionEvent) {
-                var icp = (InceptionEvent) ee;
-
-                this.validate(icp.getSequenceNumber() == 0, "inception events must have a sequence number of 0");
-
-                this.validateIdentifier(icp);
-
-                this.validateInceptionWitnesses(icp);
-            } else if (event instanceof RotationEvent) {
-                var rot = (RotationEvent) ee;
-
-                this.validate(!(state.isDelegated()) || rot instanceof DelegatedRotationEvent,
-                              "delegated identifiers must use delegated rotation event type");
-
-                this.validate(rot.getSequenceNumber() > 0,
-                              "non-inception event must have a sequence number greater than 0 (s: %s)",
-                              rot.getSequenceNumber());
-
-                this.validate(event.getIdentifier().isTransferable(),
-                              "only transferable identifiers can have rotation events");
-
-                Optional<KeyEvent> lookup = keyEventStore.getKeyEvent(state.getLastEstablishmentEvent());
-                if (lookup.isEmpty()) {
-                    throw new InvalidKeyEventException(String.format("previous establishment event does not exist"));
-                }
-                EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) lookup.get();
-                this.validate(lastEstablishmentEvent.getNextKeysDigest().isPresent(),
-                              "previous establishment event must have a next key configuration for rotation");
-
-                var nextKeyConfigurationDigest = lastEstablishmentEvent.getNextKeysDigest().get();
-                this.validate(KeyConfigurationDigester.matches(rot.getSigningThreshold(), rot.getKeys(),
-                                                               nextKeyConfigurationDigest),
-                              "digest of signing threshold and keys must match digest in previous establishment event");
-
-                this.validateRotationWitnesses(rot, state);
-            }
-
-            if (event instanceof DelegatedEstablishmentEvent) {
-                var dee = (DelegatedEstablishmentEvent) ee;
-                var delegatingEvent = this.keyEventStore.getKeyEvent(dee.getDelegatingEvent())
-                                                        .orElseThrow(() -> new MissingDelegatingEventException(event,
-                                                                dee.getDelegatingEvent()));
-
-                this.validate(this.containsSeal(delegatingEvent.getSeals(), dee),
-                              "delegated establishment event seal must contain be contained in referenced delegating event");
-            }
-        } else if (event instanceof InteractionEvent) {
-            var ixn = (InteractionEvent) event;
-
-            this.validate(ixn.getSequenceNumber() > 0,
-                          "non-inception event must have a sequence number greater than 0 (s: %s)",
-                          ixn.getSequenceNumber());
-
-            this.validate(!state.configurationTraits().contains(ConfigurationTrait.ESTABLISHMENT_EVENTS_ONLY),
-                          "interaction events only permitted when identifier is not configured for establishment events only");
-        }
-    }
-
-    private boolean containsSeal(List<Seal> seals, DelegatedEstablishmentEvent event) {
-        for (var s : seals) {
-            if (s instanceof Seal.CoordinatesSeal) {
-                var ecds = (Seal.CoordinatesSeal) s;
-                var digest = ecds.getEvent().getDigest();
-                if (ecds.getEvent().getIdentifier().equals(event.getIdentifier())
-                        && ecds.getEvent().getSequenceNumber() == event.getSequenceNumber()
-                        && event.hash(digest.getAlgorithm()).equals(digest)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private void validateRotationWitnesses(RotationEvent rot, KeyState state) {
