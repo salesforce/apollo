@@ -19,7 +19,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -29,12 +28,6 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
  *
  */
 public class TestCertificates {
-
-    @BeforeAll
-    public static void beforeClass() {
-        // secp256k1 is considered "unsecure" so you have enable it like this:
-        System.setProperty("jdk.sunec.disableNative", "false");
-    }
 
     @Test
     public void selfSigned() throws Exception {
