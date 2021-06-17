@@ -102,7 +102,6 @@ message Version {
     int32 minor = 2;
 }
 
-
 message KeyState {
     bytes identifier = 1;
     bytes digest = 2;
@@ -126,15 +125,10 @@ message Signatures {
 
 service Witness {
     rpc testify(Statements) returns (Attachments) {}
-    rpc witness(Statements) returns (Attachments) {}
 }
 
-service KelGossip {
-    rpc events(Missing) returns (Events) {}
-}
-
-service KerlGossip {
-    rpc attachments(Missing) returns (Attachments) {}
+service KerlSource {
+    rpc query(KerlQuery) returns (KerlResults) {}
 }
 
 service Resolver { 
@@ -143,12 +137,20 @@ service Resolver {
     rpc bind(Binding) returns (google.protobuf.Empty) {}
 }
 
+service Validator {
+    rpc validate(KerlQuery) returns (Validations) {}
+}
+
+service DirectValidator {
+    rpc direct(Statements) returns (google.protobuf.Empty) {}
+}
+
 message Statements {
     bytes context = 1;
     repeated KeyEvent events = 2;
 }
 
-message Missing {
+message KerlQuery {
     bytes context = 1;
     repeated bytes query = 2;
 }
@@ -165,6 +167,15 @@ message KeyEvent {
     }
 }
 
+message Validations {
+    repeated Validation validations = 1;
+}
+
+message Validation {
+    bytes hash = 1;
+    bytes validateion = 2;
+}
+
 message Attachments {
     repeated AttachmentEvent requested = 1;
 }
@@ -179,4 +190,9 @@ message Binding {
     bytes identifier = 2;
     google.protobuf.Any value = 3;
     bytes signature = 4;
+}
+
+message KerlResults {
+    repeated KeyEvent events = 1;
+    repeated AttachmentEvent attachments = 2;
 }
