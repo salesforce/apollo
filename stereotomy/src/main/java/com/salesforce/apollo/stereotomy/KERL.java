@@ -8,7 +8,6 @@ package com.salesforce.apollo.stereotomy;
 
 import java.util.OptionalLong;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -16,8 +15,7 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  * @author hal.hildebrand
  *
  */
-public interface KeyEventReceiptLog {
-    DigestAlgorithm getDigestAlgorithm();
+public interface KERL extends KEL {
 
     OptionalLong findLatestReceipt(Identifier forIdentifier, Identifier byIdentifier);
 

@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import com.salesforce.apollo.stereotomy.KeyEventLog;
-import com.salesforce.apollo.stereotomy.KeyEventReceiptLog;
+import com.salesforce.apollo.stereotomy.KEL;
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.stereotomy.service.Controller;
 
@@ -17,13 +17,13 @@ import com.salesforce.apollo.stereotomy.service.Controller;
  */
 public class Promulgator implements Controller {
 
-    public Promulgator(KeyEventLog kel, KeyEventReceiptLog kerl, KeyEventProcessor processor) {
+    public Promulgator(KEL kel, KERL kerl, KeyEventProcessor processor) {
         this.kel = kel;
         this.kerl = kerl;
         this.processor = processor;
     }
 
-    private final KeyEventLog        kel;
-    private final KeyEventReceiptLog kerl;
+    private final KEL        kel;
+    private final KERL kerl;
     private final KeyEventProcessor  processor;
 }

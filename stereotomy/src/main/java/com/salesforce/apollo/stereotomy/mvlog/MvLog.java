@@ -34,8 +34,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.stereotomy.KeyEventLog;
-import com.salesforce.apollo.stereotomy.KeyEventReceiptLog;
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
@@ -54,7 +53,7 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  * @author hal.hildebrand
  *
  */
-public class MvLog implements KeyEventLog, KeyEventReceiptLog {
+public class MvLog implements KERL {
 
     private static class ProtobuffDataType implements DataType {
 

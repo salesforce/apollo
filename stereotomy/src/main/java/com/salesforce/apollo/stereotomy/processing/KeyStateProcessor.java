@@ -12,7 +12,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.stereotomy.KeyEventLog;
+import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
@@ -27,9 +27,9 @@ import com.salesforce.apollo.stereotomy.mvlog.KeyStateImpl;
 
 public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyState> {
 
-    private final KeyEventLog events;
+    private final KEL events;
 
-    public KeyStateProcessor(KeyEventLog events) {
+    public KeyStateProcessor(KEL events) {
         this.events = events;
     }
 

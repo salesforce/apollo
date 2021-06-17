@@ -19,7 +19,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.KeyEventLog;
+import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -45,11 +45,11 @@ public class Thoth implements Resolver {
 
     private final MVMap<byte[], byte[]> bindings;
     private final Context<Member>       context;
-    private final KeyEventLog           kel;
+    private final KEL           kel;
     private final String                MAP_TEMPLATE = "%s-thoth.bindgs";
     private final SigningMember         node;
 
-    public Thoth(Context<Member> context, SigningMember node, KeyEventLog kel, MVStore store) {
+    public Thoth(Context<Member> context, SigningMember node, KEL kel, MVStore store) {
         this.context = context;
         this.node = node;
         this.kel = kel;

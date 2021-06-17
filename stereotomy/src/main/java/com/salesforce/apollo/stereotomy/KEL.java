@@ -20,7 +20,7 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  * @author hal.hildebrand
  *
  */
-public interface KeyEventLog {
+public interface KEL {
 
     Optional<KeyState> getKeyState(Identifier identifier);
 

@@ -273,26 +273,25 @@ public class Stereotomy {
 
     private final SecureRandom       entropy;
     private final EventFactory       eventFactory;
-    private final KeyEventLog        events;
+    private final KERL               kerl;
     private final StereotomyKeyStore keyStore;
     private final KeyEventProcessor  processor;
 
-    public Stereotomy(StereotomyKeyStore keyStore, KeyEventLog kel, KeyEventReceiptLog kerl, SecureRandom entropy) {
-        this(keyStore, kel, kerl, entropy, new ProtobufEventFactory());
+    public Stereotomy(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy) {
+        this(keyStore, kerl, entropy, new ProtobufEventFactory());
     }
 
-    public Stereotomy(StereotomyKeyStore keyStore, KeyEventLog kel, KeyEventReceiptLog kerl, SecureRandom entropy,
-            EventFactory eventFactory) {
-        this(keyStore, kel, entropy, eventFactory, new KeyEventProcessor(kel, kerl));
+    public Stereotomy(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy, EventFactory eventFactory) {
+        this(keyStore, kerl, entropy, eventFactory, new KeyEventProcessor(kerl));
     }
 
-    public Stereotomy(StereotomyKeyStore keyStore, KeyEventLog events, SecureRandom entropy, EventFactory eventFactory,
+    public Stereotomy(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy, EventFactory eventFactory,
             KeyEventProcessor processor) {
         this.keyStore = keyStore;
         this.entropy = entropy;
         this.processor = processor;
         this.eventFactory = eventFactory;
-        this.events = events;
+        this.kerl = kerl;
     }
 
     public ControllableIdentifier newDelegatedIdentifier(Identifier delegator) {
@@ -385,17 +384,17 @@ public class Stereotomy {
     public KeyState rotate(Identifier identifier, List<Seal> seals, RotationSpecification.Builder spec) {
         RotationSpecification.Builder specification = spec.clone();
 
-        KeyState state = events.getKeyState(identifier)
-                               .orElseThrow(() -> new IllegalArgumentException(
-                                       "identifier key state not found in key store"));
+        KeyState state = kerl.getKeyState(identifier)
+                             .orElseThrow(() -> new IllegalArgumentException(
+                                     "identifier key state not found in key store"));
 
         // require single keys, nextKeys
         if (state.getNextKeyConfigurationDigest().isEmpty()) {
             throw new IllegalArgumentException("identifier cannot be rotated");
         }
 
-        var lastEstablishing = events.getKeyEvent(state.getLastEstablishmentEvent())
-                                     .orElseThrow(() -> new IllegalStateException("establishment event is missing"));
+        var lastEstablishing = kerl.getKeyEvent(state.getLastEstablishmentEvent())
+                                   .orElseThrow(() -> new IllegalStateException("establishment event is missing"));
         EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing;
         var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
 
@@ -437,16 +436,16 @@ public class Stereotomy {
 
     public KeyState seal(Identifier identifier, List<Seal> seals, InteractionSpecification.Builder spec) {
         InteractionSpecification.Builder specification = spec.clone();
-        KeyState state = events.getKeyState(identifier)
-                               .orElseThrow(() -> new IllegalArgumentException("identifier not found in event store"));
+        KeyState state = kerl.getKeyState(identifier)
+                             .orElseThrow(() -> new IllegalArgumentException("identifier not found in event store"));
 
         if (state == null) {
             throw new IllegalArgumentException("identifier not found in event store");
         }
 
-        Optional<KeyEvent> lastEstablishmentEvent = events.getKeyEvent(state.getLastEstablishmentEvent());
+        Optional<KeyEvent> lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
         if (lastEstablishmentEvent.isEmpty()) {
-            throw new MissingEstablishmentEventException(events.getKeyEvent(state.getCoordinates()).get(),
+            throw new MissingEstablishmentEventException(kerl.getKeyEvent(state.getCoordinates()).get(),
                     state.getLastEstablishmentEvent());
         }
         KeyCoordinates currentKeyCoordinates = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
@@ -464,11 +463,11 @@ public class Stereotomy {
     }
 
     public EventSignature sign(Identifier identifier, KeyEvent event) {
-        KeyState state = events.getKeyState(identifier)
-                               .orElseThrow(() -> new IllegalArgumentException("identifier not found in event store"));
-        var lastEstablishmentEvent = events.getKeyEvent(state.getLastEstablishmentEvent());
+        KeyState state = kerl.getKeyState(identifier)
+                             .orElseThrow(() -> new IllegalArgumentException("identifier not found in event store"));
+        var lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
         if (lastEstablishmentEvent.isEmpty()) {
-            throw new MissingEstablishmentEventException(events.getKeyEvent(state.getCoordinates()).get(),
+            throw new MissingEstablishmentEventException(kerl.getKeyEvent(state.getCoordinates()).get(),
                     state.getLastEstablishmentEvent());
         }
         KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);

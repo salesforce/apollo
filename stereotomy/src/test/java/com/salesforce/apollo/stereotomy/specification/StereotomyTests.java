@@ -62,7 +62,7 @@ public class StereotomyTests {
 
     @Test
     public void newPublicIdentifier() throws Exception {
-        var controller = new Stereotomy(ks, kel, kel, secureRandom);
+        var controller = new Stereotomy(ks, kel, secureRandom);
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair(secureRandom);
         AutonomicIdentifier aid = new AutonomicIdentifier(new BasicIdentifier(keyPair.getPublic()),
                 new URL("http://foo.com/bar/baz/bozo").toURI());
@@ -129,7 +129,7 @@ public class StereotomyTests {
 
     @Test
     public void newPrivateIdentifier() {
-        var controller = new Stereotomy(ks, kel, kel, secureRandom);
+        var controller = new Stereotomy(ks, kel, secureRandom);
 
         ControllableIdentifier identifier = controller.newPrivateIdentifier(Identifier.NONE);
 
@@ -194,7 +194,7 @@ public class StereotomyTests {
 
     @Test
     public void privateIdentifierRotate() {
-        var controller = new Stereotomy(ks, kel, kel, secureRandom);
+        var controller = new Stereotomy(ks, kel, secureRandom);
 
         var i = controller.newPrivateIdentifier(Identifier.NONE);
 
@@ -208,7 +208,7 @@ public class StereotomyTests {
 
     @Test
     public void privateIdentifierInteraction() {
-        var controller = new Stereotomy(ks, kel, kel, secureRandom);
+        var controller = new Stereotomy(ks, kel, secureRandom);
 
         var i = controller.newPrivateIdentifier(Identifier.NONE);
 

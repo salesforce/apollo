@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.stereotomy.KeyEventLog;
+import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
@@ -54,9 +54,9 @@ public class Validator {
         return true;
     }
 
-    private final KeyEventLog kel;
+    private final KEL kel;
 
-    public Validator(KeyEventLog kel) {
+    public Validator(KEL kel) {
         this.kel = kel;
     }
 
