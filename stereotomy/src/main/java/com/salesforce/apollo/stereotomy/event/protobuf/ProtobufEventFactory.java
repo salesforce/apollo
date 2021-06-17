@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.*;
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
@@ -42,27 +43,14 @@ import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
  *
  */
 public class ProtobufEventFactory implements EventFactory {
-
-    @SuppressWarnings("unused")
-    private static final String DELEGATED_INCEPTION_TYPE       = "dip";
-    @SuppressWarnings("unused")
-    private static final String DELEGATED_ROTATION_TYPE        = "drt";
-    private static final String INCEPTION_TYPE                 = "icp";
-    private static final String INTERACTION_TYPE               = "ixn";
-    @SuppressWarnings("unused")
-    private static final String RECEIPT_FROM_BASIC_TYPE        = "rct";
-    @SuppressWarnings("unused")
-    private static final String RECEIPT_FROM_TRANSFERABLE_TYPE = "vrc";
-    private static final String ROTATION_TYPE                  = "rot";
-
-    public static Seal sealOf(com.salesfoce.apollo.stereotomy.event.proto.Seal s) {
+    static Seal sealOf(com.salesfoce.apollo.stereotomy.event.proto.Seal s) {
         if (s.hasCoordinates()) {
             com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = s.getCoordinates();
             return new Seal.CoordinatesSeal() {
 
                 @Override
                 public com.salesforce.apollo.stereotomy.event.EventCoordinates getEvent() {
-                    return new com.salesforce.apollo.stereotomy.event.EventCoordinates(
+                    return new com.salesforce.apollo.stereotomy.event.EventCoordinates(coordinates.getIlk(),
                             identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
                             digest(coordinates.getDigest()));
                 }
@@ -102,8 +90,9 @@ public class ProtobufEventFactory implements EventFactory {
     }
 
     public static com.salesforce.apollo.stereotomy.event.EventCoordinates toCoordinates(EventCoordinates coordinates) {
-        return new com.salesforce.apollo.stereotomy.event.EventCoordinates(identifier(coordinates.getIdentifier()),
-                coordinates.getSequenceNumber(), digest(coordinates.getDigest()));
+        return new com.salesforce.apollo.stereotomy.event.EventCoordinates(coordinates.getIlk(),
+                identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
+                digest(coordinates.getDigest()));
     }
 
     public static SigningThreshold toSigningThreshold(com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold signingThreshold) {
@@ -258,7 +247,7 @@ public class ProtobufEventFactory implements EventFactory {
                            .setVersion(toVersion(specification.getVersion()))
                            .setPriorEventDigest(Digest.NONE.toByteString())
                            .setIdentifier(identifier.toByteString())
-                           .setEventType(INCEPTION_TYPE);
+                           .setIlk(INCEPTION_TYPE);
 
         return IdentifierSpec.newBuilder()
                              .setHeader(header)
@@ -281,7 +270,7 @@ public class ProtobufEventFactory implements EventFactory {
                               .setPriorEventDigest((specification.getPriorEventDigest()).toByteString())
                               .setVersion(toVersion(specification.getVersion()))
                               .setIdentifier(specification.getIdentifier().toByteString())
-                              .setEventType(INTERACTION_TYPE)
+                              .setIlk(INTERACTION_TYPE)
                               .build();
 
         return InteractionSpec.newBuilder()
@@ -308,7 +297,7 @@ public class ProtobufEventFactory implements EventFactory {
                            .setVersion(toVersion(specification.getVersion()))
                            .setPriorEventDigest(specification.getPriorEventDigest().toByteString())
                            .setIdentifier(identifier.toByteString())
-                           .setEventType(ROTATION_TYPE);
+                           .setIlk(ROTATION_TYPE);
 
         return RotationSpec.newBuilder()
                            .setHeader(header)

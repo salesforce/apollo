@@ -28,9 +28,10 @@ public class DelegatedRotationEventImpl extends RotationEventImpl implements Del
     public DelegatingEventCoordinates getDelegatingEvent() {
         EventCoordinates coordinates = getCoordinates();
         com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates delegated = event.getDelegatingEvent();
-        return new DelegatingEventCoordinates(coordinates.getIdentifier(), coordinates.getSequenceNumber(),
-                new EventCoordinates(identifier(delegated.getIdentifier()), delegated.getSequenceNumber(),
-                                     digest(delegated.getDigest())));
+        return new DelegatingEventCoordinates(coordinates.getIlk(), coordinates.getIdentifier(),
+                coordinates.getSequenceNumber(),
+                new EventCoordinates(delegated.getIlk(), identifier(delegated.getIdentifier()),
+                        delegated.getSequenceNumber(), digest(delegated.getDigest())));
 
     }
 

@@ -14,7 +14,7 @@ message Header {
     bytes identifier = 2;
     bytes priorEventDigest = 3;
     Version version = 4;
-    string eventType = 5;
+    string ilk = 5;
 }
 
 message EventCommon {
@@ -81,6 +81,7 @@ message EventCoordinates {
     int64 sequenceNumber = 1;
     bytes identifier = 2;
     bytes digest = 3;
+    string ilk = 4;
 }
 
 message Seal {

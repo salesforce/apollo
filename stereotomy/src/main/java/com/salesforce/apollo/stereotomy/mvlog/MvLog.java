@@ -233,7 +233,7 @@ public class MvLog implements KeyEventLog, KeyEventReceiptLog {
 
     @Override
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
-        KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIdentifier(),
+        KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIlk(), coordinates.getIdentifier(),
                 coordinates.getSequenceNumber(), coordinates.getPreviousEvent().getDigest())));
         return (keyEvent instanceof SealingEvent) ? Optional.of((SealingEvent) keyEvent) : Optional.empty();
     }

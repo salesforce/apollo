@@ -53,8 +53,8 @@ public class AttachmentEventImpl extends KeyEventImpl implements AttachmentEvent
         return event.getReceiptsList().stream().map(receipt -> {
             com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = receipt.getCoordinates();
             return new Pair<EventCoordinates, Map<Integer, JohnHancock>>(
-                    new EventCoordinates(identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
-                            digest(coordinates.getDigest())),
+                    new EventCoordinates(coordinates.getIlk(), identifier(coordinates.getIdentifier()),
+                            coordinates.getSequenceNumber(), digest(coordinates.getDigest())),
                     signaturesOf(receipt));
         }).collect(Collectors.toMap(e -> e.a, e -> e.b));
     }
