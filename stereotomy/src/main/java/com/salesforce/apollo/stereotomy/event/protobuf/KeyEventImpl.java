@@ -71,9 +71,7 @@ abstract public class KeyEventImpl implements KeyEvent {
 
     @Override
     public EventCoordinates getPrevious() {
-        com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates previous = common.getPrevious();
-        return new EventCoordinates(previous.getIlk(), identifier(previous.getIdentifier()),
-                previous.getSequenceNumber(), digest(previous.getDigest()));
+        return EventCoordinates.from(common.getPrevious());
     }
 
     @Override

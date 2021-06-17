@@ -108,9 +108,9 @@ public class Validator {
 
             if (event instanceof DelegatedEstablishmentEvent) {
                 var dee = (DelegatedEstablishmentEvent) ee;
-                var delegatingEvent = this.kel.getKeyEvent(dee.getDelegatingEvent())
-                                                        .orElseThrow(() -> new MissingDelegatingEventException(event,
-                                                                dee.getDelegatingEvent()));
+                var delegatingEvent = this.kel.getKeyEvent(dee.getDelegatingSeal().getCoordinates())
+                                              .orElseThrow(() -> new MissingDelegatingEventException(event,
+                                                      dee.getDelegatingSeal().getCoordinates()));
 
                 this.validate(this.containsSeal(delegatingEvent.getSeals(), dee),
                               "delegated establishment event seal must contain be contained in referenced delegating event");

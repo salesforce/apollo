@@ -6,9 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -50,13 +48,11 @@ public class AttachmentEventImpl extends KeyEventImpl implements AttachmentEvent
 
     @Override
     public Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts() {
-        return event.getReceiptsList().stream().map(receipt -> {
-            com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = receipt.getCoordinates();
-            return new Pair<EventCoordinates, Map<Integer, JohnHancock>>(
-                    new EventCoordinates(coordinates.getIlk(), identifier(coordinates.getIdentifier()),
-                            coordinates.getSequenceNumber(), digest(coordinates.getDigest())),
-                    signaturesOf(receipt));
-        }).collect(Collectors.toMap(e -> e.a, e -> e.b));
+        return event.getReceiptsList()
+                    .stream()
+                    .map(receipt -> new Pair<EventCoordinates, Map<Integer, JohnHancock>>(
+                            EventCoordinates.from(receipt.getCoordinates()), signaturesOf(receipt)))
+                    .collect(Collectors.toMap(e -> e.a, e -> e.b));
     }
 
     @Override

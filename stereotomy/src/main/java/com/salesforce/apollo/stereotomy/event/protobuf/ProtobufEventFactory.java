@@ -7,20 +7,16 @@
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.INCEPTION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.INTERACTION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.ROTATION_TYPE;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionSpec;
@@ -33,7 +29,6 @@ import com.salesforce.apollo.stereotomy.Stereotomy.EventFactory;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
-import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -46,26 +41,6 @@ import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
  *
  */
 public class ProtobufEventFactory implements EventFactory {
-    static Seal sealOf(ByteString bs) {
-        return Seal.from(bs);
-    }
-
-    public static ByteString sealOf(Seal s) {
-        return s.toByteSring();
-    }
-
-    public static EventCoordinates.Builder toCoordinates(com.salesforce.apollo.stereotomy.event.EventCoordinates coordinates) {
-        return EventCoordinates.newBuilder()
-                               .setDigest(coordinates.getDigest().toByteString())
-                               .setIdentifier(coordinates.getIdentifier().toByteString())
-                               .setSequenceNumber(coordinates.getSequenceNumber());
-    }
-
-    public static com.salesforce.apollo.stereotomy.event.EventCoordinates toCoordinates(EventCoordinates coordinates) {
-        return new com.salesforce.apollo.stereotomy.event.EventCoordinates(coordinates.getIlk(),
-                identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
-                digest(coordinates.getDigest()));
-    }
 
     public static SigningThreshold toSigningThreshold(com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold signingThreshold) {
         if (signingThreshold.getWeightsCount() == 0) {
@@ -167,7 +142,7 @@ public class ProtobufEventFactory implements EventFactory {
         }
 
         var common = EventCommon.newBuilder()
-                                .setPrevious(toCoordinates(specification.getPrevious()))
+                                .setPrevious(specification.getPrevious().toByteString())
                                 .setFormat(specification.getFormat().name())
                                 .putAllAuthentication(signatures.entrySet()
                                                                 .stream()
@@ -189,7 +164,7 @@ public class ProtobufEventFactory implements EventFactory {
         }
 
         var common = EventCommon.newBuilder()
-                                .setPrevious(toCoordinates(specification.getPrevious()))
+                                .setPrevious(specification.getPrevious().toByteString())
                                 .setFormat(specification.getFormat().name())
                                 .putAllAuthentication(signatures.entrySet()
                                                                 .stream()
@@ -249,7 +224,7 @@ public class ProtobufEventFactory implements EventFactory {
                               .setHeader(header)
                               .addAllSeals(specification.getSeals()
                                                         .stream()
-                                                        .map(e -> sealOf(e))
+                                                        .map(e -> e.toByteSring())
                                                         .collect(Collectors.toList()))
                               .build();
     }

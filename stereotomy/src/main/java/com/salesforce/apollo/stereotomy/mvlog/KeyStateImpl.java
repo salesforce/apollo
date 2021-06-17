@@ -58,9 +58,7 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public EventCoordinates getCoordinates() {
-        com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = state.getCoordinates();
-        return new EventCoordinates(coordinates.getIlk(), identifier(coordinates.getIdentifier()),
-                coordinates.getSequenceNumber(), digest(coordinates.getDigest()));
+        return EventCoordinates.from(state.getCoordinates());
     }
 
     @Override
@@ -81,12 +79,12 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public EventCoordinates getLastEstablishmentEvent() {
-        return ProtobufEventFactory.toCoordinates(state.getLastEstablishmentEvent());
+        return EventCoordinates.from(state.getLastEstablishmentEvent());
     }
 
     @Override
     public EventCoordinates getLastEvent() {
-        return ProtobufEventFactory.toCoordinates(state.getLastEvent());
+        return EventCoordinates.from(state.getLastEvent());
     }
 
     @Override

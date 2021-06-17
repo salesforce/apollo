@@ -142,12 +142,12 @@ public class MvLog implements KeyEventLog, KeyEventReceiptLog {
             }
             case "InceptionEvent": {
                 InceptionEvent event = (InceptionEvent) msg;
-                yield (event.hasDelegatingEvent()) ? new DelegatedInceptionEventImpl(event)
+                yield (event.getDelegatingSeal().isEmpty()) ? new DelegatedInceptionEventImpl(event)
                         : new InceptionEventImpl(event);
             }
             case "RotationEvent": {
                 RotationEvent event = (RotationEvent) msg;
-                yield (event.hasDelegatingEvent()) ? new DelegatedRotationEventImpl(event)
+                yield (event.getDelegatingSeal().isEmpty()) ? new DelegatedRotationEventImpl(event)
                         : new RotationEventImpl(event);
             }
             case "InteractionEvent": {
@@ -233,8 +233,9 @@ public class MvLog implements KeyEventLog, KeyEventReceiptLog {
 
     @Override
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
-        KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIlk(), coordinates.getIdentifier(),
-                coordinates.getSequenceNumber(), coordinates.getPreviousEvent().getDigest())));
+        KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIlk(),
+                coordinates.getIdentifier(), coordinates.getPreviousEvent().getDigest(),
+                coordinates.getSequenceNumber())));
         return (keyEvent instanceof SealingEvent) ? Optional.of((SealingEvent) keyEvent) : Optional.empty();
     }
 

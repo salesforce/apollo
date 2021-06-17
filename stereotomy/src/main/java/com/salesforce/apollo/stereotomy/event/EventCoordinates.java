@@ -27,12 +27,12 @@ public class EventCoordinates {
     public static EventCoordinates NONE = new EventCoordinates();
 
     public static EventCoordinates from(ByteBuffer buff) {
+        if (!buff.hasRemaining()) {
+            return NONE;
+        }
         byte[] ilk = new byte[3];
         buff.get(ilk);
-        Identifier identifier = Identifier.from(buff);
-        long sn = buff.getLong();
-        Digest digest = Digest.from(buff);
-        return new EventCoordinates(new String(ilk), identifier, sn, digest);
+        return new EventCoordinates(new String(ilk), Identifier.from(buff), Digest.from(buff), buff.getLong());
     }
 
     public static EventCoordinates from(ByteString bs) {
@@ -40,11 +40,11 @@ public class EventCoordinates {
     }
 
     public static EventCoordinates of(EventCoordinates event, Digest digest) {
-        return new EventCoordinates(event.getIlk(), event.getIdentifier(), event.getSequenceNumber(), digest);
+        return new EventCoordinates(event.getIlk(), event.getIdentifier(), digest, event.getSequenceNumber());
     }
 
     public static EventCoordinates of(Identifier identifier) {
-        return new EventCoordinates(INCEPTION_TYPE, identifier, 0, Digest.NONE);
+        return new EventCoordinates(INCEPTION_TYPE, identifier, Digest.NONE, 0);
     }
 
     public static EventCoordinates of(KeyEvent event) {
@@ -58,7 +58,7 @@ public class EventCoordinates {
     }
 
     public static EventCoordinates of(KeyEvent event, Digest digest) {
-        return new EventCoordinates(event.getIlk(), event.getIdentifier(), event.getSequenceNumber(), digest);
+        return new EventCoordinates(event.getIlk(), event.getIdentifier(), digest, event.getSequenceNumber());
     }
 
     public static EventCoordinates of(KeyEvent event, DigestAlgorithm algorithm) {
@@ -76,14 +76,14 @@ public class EventCoordinates {
     private final long sequenceNumber;
 
     public EventCoordinates(EventCoordinates event, Digest digest) {
-        this(event.getIlk(), event.getIdentifier(), event.getSequenceNumber(), digest);
+        this(event.getIlk(), event.getIdentifier(), digest, event.getSequenceNumber());
     }
 
     public EventCoordinates(String ilk, BasicIdentifier identifier) {
-        this(ilk, identifier, 0, Digest.NONE);
+        this(ilk, identifier, Digest.NONE, 0);
     }
 
-    public EventCoordinates(String ilk, Identifier identifier, long sequenceNumber, Digest digest) {
+    public EventCoordinates(String ilk, Identifier identifier, Digest digest, long sequenceNumber) {
         this.identifier = requireNonNull(identifier, "identifier");
         this.sequenceNumber = sequenceNumber;
         this.digest = requireNonNull(digest, "digest");

@@ -136,20 +136,18 @@ public interface Seal {
         long getSequenceNumber();
     }
 
-    static <T extends Seal> T from(ByteBuffer buff) {
+    static Seal from(ByteBuffer buff) {
         byte code = buff.get();
-        @SuppressWarnings("unchecked")
-        T seal = (T) switch (code) {
+        return switch (code) {
         case 1 -> CoordinatesSeal.construct(EventCoordinates.from(buff));
         case 2 -> DelegatingLocationSeal.construct(DelegatingEventCoordinates.from(buff));
         case 3 -> DigestSeal.construct(Digest.from(buff));
         case 4 -> EventSeal.construct(Identifier.from(buff), Digest.from(buff), buff.getLong());
         default -> throw new IllegalArgumentException("Unknown seal type: " + code);
         };
-        return seal;
     }
 
-    static <T extends Seal> T from(ByteString bs) {
+    static Seal from(ByteString bs) {
         return from(bs.asReadOnlyByteBuffer());
     }
 

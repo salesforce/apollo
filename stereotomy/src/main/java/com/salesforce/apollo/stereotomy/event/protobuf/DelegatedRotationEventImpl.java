@@ -6,13 +6,10 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
-
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
-import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.event.Seal.DelegatingLocationSeal;
 
 /**
  * @author hal.hildebrand
@@ -25,14 +22,7 @@ public class DelegatedRotationEventImpl extends RotationEventImpl implements Del
     }
 
     @Override
-    public DelegatingEventCoordinates getDelegatingEvent() {
-        EventCoordinates coordinates = getCoordinates();
-        com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates delegated = event.getDelegatingEvent();
-        return new DelegatingEventCoordinates(coordinates.getIlk(), coordinates.getIdentifier(),
-                coordinates.getSequenceNumber(),
-                new EventCoordinates(delegated.getIlk(), identifier(delegated.getIdentifier()),
-                        delegated.getSequenceNumber(), digest(delegated.getDigest())));
-
+    public DelegatingLocationSeal getDelegatingSeal() {
+        return (DelegatingLocationSeal) Seal.from(event.getDelegatingSeal());
     }
-
 }

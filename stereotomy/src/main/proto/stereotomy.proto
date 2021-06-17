@@ -20,7 +20,7 @@ message Header {
 message EventCommon {
     string format = 1;
     bytes configuration = 2;
-    EventCoordinates previous = 3;
+    bytes previous = 3;
     map<int32, bytes> authentication = 4;
 }
 
@@ -37,7 +37,7 @@ message InteractionSpec {
 message AttachmentEvent {
     Header header = 1;
     EventCommon common = 2;
-    EventCoordinates coordinates = 3;
+    bytes coordinates = 3;
     map<int32, bytes> endorsements = 5; 
     repeated Receipt receipts = 6;
 }
@@ -52,7 +52,7 @@ message Establishment {
 message RotationEvent {
     RotationSpec specification = 1; 
     EventCommon common = 2;
-    EventCoordinates delegatingEvent = 3;
+    bytes delegatingSeal = 3; // Delegated rotation event
 }
 
 message RotationSpec {
@@ -66,8 +66,9 @@ message RotationSpec {
 message InceptionEvent {
     IdentifierSpec specification = 1;
     EventCommon common = 2;
-    EventCoordinates delegatingEvent = 3;
+    bytes delegatingEvent = 3;
     bytes identifier = 4;
+    bytes delegatingSeal = 5; // Delegated inception event
 }
 
 message IdentifierSpec {
@@ -77,15 +78,8 @@ message IdentifierSpec {
     repeated string configuration = 4;
 }
 
-message EventCoordinates {
-    int64 sequenceNumber = 1;
-    bytes identifier = 2;
-    bytes digest = 3;
-    string ilk = 4;
-}
-
 message Receipt {
-    EventCoordinates coordinates = 1;
+    bytes coordinates = 1;
     map<int32, bytes> signatures = 2;
 }
 
@@ -112,9 +106,9 @@ message Version {
 message KeyState {
     bytes identifier = 1;
     bytes digest = 2;
-    EventCoordinates coordinates = 3;
-    EventCoordinates lastEvent = 4;
-    EventCoordinates lastEstablishmentEvent = 5;
+    bytes coordinates = 3;
+    bytes lastEvent = 4;
+    bytes lastEstablishmentEvent = 5;
     bytes delegatingIdentifier = 6;
     repeated bytes keys = 7;
     bytes nextKeyConfigurationDigest = 8;

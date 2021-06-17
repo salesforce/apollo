@@ -28,7 +28,7 @@ public interface KeyEvent {
     public static final String ROTATION_TYPE                  = "rot";
 
     default EventCoordinates getCoordinates() {
-        return new EventCoordinates(getIlk(), getIdentifier(), getSequenceNumber(), getPriorEventDigest());
+        return new EventCoordinates(getIlk(), getIdentifier(), getPriorEventDigest(), getSequenceNumber());
     }
 
     Digest getPriorEventDigest();

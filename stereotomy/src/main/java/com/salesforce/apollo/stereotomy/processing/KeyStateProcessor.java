@@ -1,7 +1,6 @@
 package com.salesforce.apollo.stereotomy.processing;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
-import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toCoordinates;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toSigningThreshold;
 import static java.util.Objects.requireNonNull;
 
@@ -78,12 +77,12 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
 
     private KeyState initialState(InceptionEvent event) {
         var delegatingPrefix = event instanceof DelegatedInceptionEvent
-                ? ((DelegatedEstablishmentEvent) event).getDelegatingEvent().getIdentifier()
+                ? ((DelegatedEstablishmentEvent) event).getDelegatingSeal().getCoordinates().getIdentifier()
                 : null;
 
         return newKeyState(event.getIdentifier(), event.getSigningThreshold(), event.getKeys(),
-                           event.getNextKeysDigest().orElse(null), event.getWitnessThreshold(),
-                           event.getWitnesses(), event.getConfigurationTraits(), event, event, delegatingPrefix);
+                           event.getNextKeysDigest().orElse(null), event.getWitnessThreshold(), event.getWitnesses(),
+                           event.getConfigurationTraits(), event, event, delegatingPrefix);
     }
 
     private KeyState newKeyState(Identifier identifier,
@@ -94,25 +93,32 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
                                  Identifier delegatingPrefix) {
         return new KeyStateImpl(
                 com.salesfoce.apollo.stereotomy.event.proto.KeyState.newBuilder()
-                              .setDigest(event.hash(events.getDigestAlgorithm()).toByteString())
-                              .addAllConfigurationTraits(configurationTraits.stream()
-                                                                            .map(e -> e.name())
-                                                                            .collect(Collectors.toList()))
-                              .setCoordinates(toCoordinates(event.getCoordinates()))
-                              .setDelegatingIdentifier(delegatingPrefix == null ? Digest.NONE.toByteString()
-                                      : delegatingPrefix.toByteString())
-                              .setIdentifier(identifier.toByteString())
-                              .addAllKeys(keys.stream().map(pk -> bs(pk)).collect(Collectors.toList()))
-                              .setLastEstablishmentEvent(toCoordinates(lastEstablishmentEvent.getCoordinates()))
-                              .setLastEvent(toCoordinates(event.getCoordinates()))
-                              .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? Digest.NONE.toByteString()
-                                      : nextKeyConfiguration.toByteString())
-                              .setSigningThreshold(toSigningThreshold(signingThreshold))
-                              .addAllWitnesses(witnesses.stream()
-                                                        .map(e -> e.toByteString())
-                                                        .collect(Collectors.toList()))
-                              .setWitnessThreshold(witnessThreshold)
-                              .build());
+                                                                    .setDigest(event.hash(events.getDigestAlgorithm())
+                                                                                    .toByteString())
+                                                                    .addAllConfigurationTraits(configurationTraits.stream()
+                                                                                                                  .map(e -> e.name())
+                                                                                                                  .collect(Collectors.toList()))
+                                                                    .setCoordinates(event.getCoordinates()
+                                                                                         .toByteString())
+                                                                    .setDelegatingIdentifier(delegatingPrefix == null
+                                                                            ? Digest.NONE.toByteString()
+                                                                            : delegatingPrefix.toByteString())
+                                                                    .setIdentifier(identifier.toByteString())
+                                                                    .addAllKeys(keys.stream()
+                                                                                    .map(pk -> bs(pk))
+                                                                                    .collect(Collectors.toList()))
+                                                                    .setLastEstablishmentEvent(lastEstablishmentEvent.getCoordinates()
+                                                                                                                     .toByteString())
+                                                                    .setLastEvent(event.getCoordinates().toByteString())
+                                                                    .setNextKeyConfigurationDigest(nextKeyConfiguration == null
+                                                                            ? Digest.NONE.toByteString()
+                                                                            : nextKeyConfiguration.toByteString())
+                                                                    .setSigningThreshold(toSigningThreshold(signingThreshold))
+                                                                    .addAllWitnesses(witnesses.stream()
+                                                                                              .map(e -> e.toByteString())
+                                                                                              .collect(Collectors.toList()))
+                                                                    .setWitnessThreshold(witnessThreshold)
+                                                                    .build());
     }
 
 }
