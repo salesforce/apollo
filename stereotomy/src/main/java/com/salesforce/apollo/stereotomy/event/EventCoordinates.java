@@ -6,11 +6,13 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import static com.salesforce.apollo.stereotomy.event.KeyEvent.*;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.INCEPTION_TYPE;
 import static java.util.Objects.requireNonNull;
 
+import java.nio.ByteBuffer;
 import java.util.Objects;
 
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
@@ -23,6 +25,19 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class EventCoordinates {
 
     public static EventCoordinates NONE = new EventCoordinates();
+
+    public static EventCoordinates from(ByteBuffer buff) {
+        byte[] ilk = new byte[3];
+        buff.get(ilk);
+        Identifier identifier = Identifier.from(buff);
+        long sn = buff.getLong();
+        Digest digest = Digest.from(buff);
+        return new EventCoordinates(new String(ilk), identifier, sn, digest);
+    }
+
+    public static EventCoordinates from(ByteString bs) {
+        return EventCoordinates.from(bs.asReadOnlyByteBuffer());
+    }
 
     public static EventCoordinates of(EventCoordinates event, Digest digest) {
         return new EventCoordinates(event.getIlk(), event.getIdentifier(), event.getSequenceNumber(), digest);
@@ -55,15 +70,17 @@ public class EventCoordinates {
 
     private final Digest     digest;
     private final Identifier identifier;
-    private final String     ilk;
-    private final long       sequenceNumber;
 
-    public EventCoordinates(String ilk, BasicIdentifier identifier) {
-        this(ilk, identifier, 0, Digest.NONE);
-    }
+    private final String ilk;
+
+    private final long sequenceNumber;
 
     public EventCoordinates(EventCoordinates event, Digest digest) {
         this(event.getIlk(), event.getIdentifier(), event.getSequenceNumber(), digest);
+    }
+
+    public EventCoordinates(String ilk, BasicIdentifier identifier) {
+        this(ilk, identifier, 0, Digest.NONE);
     }
 
     public EventCoordinates(String ilk, Identifier identifier, long sequenceNumber, Digest digest) {
@@ -101,6 +118,10 @@ public class EventCoordinates {
         return this.identifier;
     }
 
+    public String getIlk() {
+        return ilk;
+    }
+
     public long getSequenceNumber() {
         return this.sequenceNumber;
     }
@@ -110,12 +131,18 @@ public class EventCoordinates {
         return Objects.hash(digest, identifier, sequenceNumber);
     }
 
+    public ByteString toByteString() {
+        ByteBuffer sn = ByteBuffer.wrap(new byte[8]);
+        sn.putLong(sequenceNumber);
+        sn.flip();
+        return ByteString.copyFromUtf8(ilk)
+                         .concat(identifier.toByteString())
+                         .concat(digest.toByteString())
+                         .concat(ByteString.copyFrom(sn));
+    }
+
     @Override
     public String toString() {
         return "[" + identifier + ":" + this.sequenceNumber + ":" + this.getDigest() + ":" + ilk + "]";
-    }
-
-    public String getIlk() {
-        return ilk;
     }
 };

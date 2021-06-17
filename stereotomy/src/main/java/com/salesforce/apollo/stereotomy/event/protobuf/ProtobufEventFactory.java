@@ -6,15 +6,18 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.stereotomy.event.KeyEvent.*;
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.INCEPTION_TYPE;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.INTERACTION_TYPE;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.ROTATION_TYPE;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates;
@@ -43,43 +46,12 @@ import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
  *
  */
 public class ProtobufEventFactory implements EventFactory {
-    static Seal sealOf(com.salesfoce.apollo.stereotomy.event.proto.Seal s) {
-        if (s.hasCoordinates()) {
-            com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates coordinates = s.getCoordinates();
-            return new Seal.CoordinatesSeal() {
-
-                @Override
-                public com.salesforce.apollo.stereotomy.event.EventCoordinates getEvent() {
-                    return new com.salesforce.apollo.stereotomy.event.EventCoordinates(coordinates.getIlk(),
-                            identifier(coordinates.getIdentifier()), coordinates.getSequenceNumber(),
-                            digest(coordinates.getDigest()));
-                }
-            };
-        }
-
-        return new Seal.DigestSeal() {
-
-            @Override
-            public Digest getDigest() {
-                return digest(s.getDigest());
-            }
-
-        };
+    static Seal sealOf(ByteString bs) {
+        return Seal.from(bs);
     }
 
-    public static com.salesfoce.apollo.stereotomy.event.proto.Seal sealOf(Seal s) {
-        if (s instanceof Seal.CoordinatesSeal) {
-            return com.salesfoce.apollo.stereotomy.event.proto.Seal.newBuilder()
-                                                                   .setCoordinates(toCoordinates(((Seal.CoordinatesSeal) s).getEvent()))
-                                                                   .build();
-        } else if (s instanceof Seal.DigestSeal) {
-            return com.salesfoce.apollo.stereotomy.event.proto.Seal.newBuilder()
-                                                                   .setDigest(((Seal.DigestSeal) s).getDigest()
-                                                                                                   .toByteString())
-                                                                   .build();
-        } else {
-            throw new IllegalArgumentException("Unknown seal type: " + s.getClass().getSimpleName());
-        }
+    public static ByteString sealOf(Seal s) {
+        return s.toByteSring();
     }
 
     public static EventCoordinates.Builder toCoordinates(com.salesforce.apollo.stereotomy.event.EventCoordinates coordinates) {

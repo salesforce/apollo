@@ -31,7 +31,7 @@ message InteractionEvent {
 
 message InteractionSpec {
     Header header = 1;
-    repeated Seal seals = 2;
+    repeated bytes seals = 2;
 }
 
 message AttachmentEvent {
@@ -60,7 +60,7 @@ message RotationSpec {
     Establishment establishment = 2;
     repeated bytes witnessesRemoved = 3;
     repeated bytes witnessesAdded = 41;
-    repeated Seal seals = 5;
+    repeated bytes seals = 5;
 }
 
 message InceptionEvent {
@@ -82,13 +82,6 @@ message EventCoordinates {
     bytes identifier = 2;
     bytes digest = 3;
     string ilk = 4;
-}
-
-message Seal {
-    oneof type {
-        bytes digest = 1;
-        EventCoordinates coordinates = 2;
-    }
 }
 
 message Receipt {
