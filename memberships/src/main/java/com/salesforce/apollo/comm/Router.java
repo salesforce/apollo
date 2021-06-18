@@ -28,7 +28,7 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 abstract public class Router {
-    public class CommonCommunications<Client, Service> implements BiFunction<Member, SigningMember, Client> {
+    public class CommonCommunications<Client extends Link, Service> implements BiFunction<Member, SigningMember, Client> {
         private final CreateClientCommunications<Client> createFunction;
         private final RoutableService<Service>           routing;
 
@@ -67,7 +67,7 @@ abstract public class Router {
         cache.close();
     }
 
-    public <Client, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
+    public <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
                                                                           Service service,
                                                                           Function<RoutableService<Service>, BindableService> factory,
                                                                           CreateClientCommunications<Client> createFunction) {

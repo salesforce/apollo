@@ -19,7 +19,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.KEL;
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -29,6 +29,7 @@ import com.salesforce.apollo.stereotomy.service.Resolver;
  * @author hal.hildebrand
  *
  */
+@SuppressWarnings("unused")
 public class Thoth implements Resolver {
 
     public class ResolverService {
@@ -45,14 +46,14 @@ public class Thoth implements Resolver {
 
     private final MVMap<byte[], byte[]> bindings;
     private final Context<Member>       context;
-    private final KEL           kel;
+    private final KERL                  kerl;
     private final String                MAP_TEMPLATE = "%s-thoth.bindgs";
     private final SigningMember         node;
 
-    public Thoth(Context<Member> context, SigningMember node, KEL kel, MVStore store) {
+    public Thoth(Context<Member> context, SigningMember node, KERL kerl, MVStore store) {
         this.context = context;
         this.node = node;
-        this.kel = kel;
+        this.kerl = kerl;
         bindings = store.openMap(String.format(MAP_TEMPLATE, qb64(context.getId())));
     }
 
@@ -70,6 +71,6 @@ public class Thoth implements Resolver {
 
     @Override
     public Optional<KeyState> resolve(Identifier prefix) {
-        return kel.getKeyState(prefix);
+        return kerl.getKeyState(prefix);
     }
 }

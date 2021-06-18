@@ -5,7 +5,6 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.membership;
-
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.security.MessageDigest;
@@ -90,8 +89,7 @@ public class Context<T extends Member> {
     });
 
     public static final String SHA_256 = "sha-256";
-
-    private static final String CONTEXT_HASH_TEMPLATE = "%s-%s";
+ 
     private static final String RING_HASH_TEMPLATE    = "%s-%s-%s";
 
     /**
@@ -357,6 +355,28 @@ public class Context<T extends Member> {
         return predecessors;
     }
 
+    /**
+     * @return the predecessor on each ring for the provided key
+     */
+    public List<T> predecessors(T key) {
+        return predecessors(key, t -> true);
+    }
+
+    /**
+     * @return the predecessor on each ring for the provided key that pass the
+     *         provided predicate
+     */
+    public List<T> predecessors(T key, Predicate<T> test) {
+        List<T> predecessors = new ArrayList<>();
+        for (Ring<T> ring : rings) {
+            T predecessor = ring.predecessor(hashFor(key, ring.getIndex()), test);
+            if (predecessor != null) {
+                predecessors.add(predecessor);
+            }
+        }
+        return predecessors;
+    }
+
     public void register(MembershipListener<T> listener) {
         membershipListeners.add(listener);
     }
@@ -430,6 +450,28 @@ public class Context<T extends Member> {
     }
 
     /**
+     * @return the list of successors to the key on each ring
+     */
+    public List<T> successors(T key) {
+        return successors(key, t -> true);
+    }
+
+    /**
+     * @return the list of successor to the key on each ring that pass the provided
+     *         predicate test
+     */
+    public List<T> successors(T key, Predicate<T> test) {
+        List<T> successors = new ArrayList<>();
+        for (Ring<T> ring : rings) {
+            T successor = ring.successor(hashFor(key, ring.getIndex()), test);
+            if (successor != null) {
+                successors.add(successor);
+            }
+        }
+        return successors;
+    }
+
+    /**
      * The number of iterations until a given message has been distributed to all
      * members in the context, using the rings of the receiver as a gossip graph
      */
@@ -454,19 +496,17 @@ public class Context<T extends Member> {
         Digest[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
             Digest[] s = new Digest[rings.length];
             for (int ring = 0; ring < rings.length; ring++) {
-                s[ring] = m.getId()
-                           .getAlgorithm()
-                           .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(m.getId()), ring).getBytes());
+                s[ring] = contextHash(m.getId(), ring);
             }
             return s;
         });
         if (hSet == null) {
-            throw new IllegalArgumentException("T " + m.getId() + " is not part of this group " + id);
+            throw new IllegalArgumentException(m + " is not part of this group " + id);
         }
         return hSet[index];
     }
 
     private Digest contextHash(Digest key, int ring) {
-        return key.getAlgorithm().digest(String.format(CONTEXT_HASH_TEMPLATE, id, ring).getBytes());
+        return key.getAlgorithm().digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
     }
 }

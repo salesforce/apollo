@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy;
 import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 
+import java.io.InputStream;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
@@ -38,6 +39,7 @@ import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.stereotomy.processing.MissingEstablishmentEventException;
 import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
@@ -54,15 +56,13 @@ public class Stereotomy {
     public interface ControllableIdentifier extends KeyState {
         void rotate();
 
-        void rotate(List<Seal> of);
-
-        void rotate(List<Seal> seals, RotationSpecification.Builder spec);
+        void rotate(List<Seal> seals);
 
         void rotate(RotationSpecification.Builder spec);
 
-        void seal(List<Seal> seals);
+        void seal(InteractionSpecification.Builder spec);
 
-        void seal(List<Seal> seals, InteractionSpecification.Builder spec);
+        void seal(List<Seal> seals);
 
         EventSignature sign(KeyEvent event);
 
@@ -131,6 +131,11 @@ public class Stereotomy {
         @Override
         public Set<ConfigurationTrait> configurationTraits() {
             return state.configurationTraits();
+        }
+
+        @Override
+        public <T> T convertTo(Format format) {
+            return state.convertTo(format);
         }
 
         @Override
@@ -229,8 +234,8 @@ public class Stereotomy {
         }
 
         @Override
-        public void rotate(List<Seal> seals, Builder spec) {
-            Stereotomy.this.rotate(getIdentifier(), seals, spec);
+        public void seal(InteractionSpecification.Builder spec) {
+            Stereotomy.this.seal(getIdentifier(), spec);
         }
 
         @Override
@@ -239,19 +244,23 @@ public class Stereotomy {
         }
 
         @Override
-        public void seal(List<Seal> seals, InteractionSpecification.Builder spec) {
-            Stereotomy.this.seal(getIdentifier(), seals, spec);
-        }
-
-        @Override
         public EventSignature sign(KeyEvent event) {
             return Stereotomy.this.sign(getIdentifier(), event);
         }
+    }
+
+    private class LimitedStereotomy implements LimitedController {
 
         @Override
-        public <T> T convertTo(Format format) {
-            return state.convertTo(format);
+        public JohnHancock sign(SelfAddressingIdentifier identifier, InputStream message) {
+            return Stereotomy.this.sign(identifier, message);
         }
+
+        @Override
+        public boolean verify(Identifier identifier, JohnHancock signature, InputStream message) {
+            return Stereotomy.this.verify(identifier, message);
+        }
+
     }
 
     private static final Logger log = LoggerFactory.getLogger(Stereotomy.class);
@@ -275,6 +284,7 @@ public class Stereotomy {
     private final EventFactory       eventFactory;
     private final KERL               kerl;
     private final StereotomyKeyStore keyStore;
+    private final LimitedController  limitedController = new LimitedStereotomy();
     private final KeyEventProcessor  processor;
 
     public Stereotomy(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy) {
@@ -292,6 +302,10 @@ public class Stereotomy {
         this.processor = processor;
         this.eventFactory = eventFactory;
         this.kerl = kerl;
+    }
+
+    public LimitedController getLimitedController() {
+        return limitedController;
     }
 
     public ControllableIdentifier newDelegatedIdentifier(Identifier delegator) {
@@ -373,15 +387,12 @@ public class Stereotomy {
         rotate(identifier, RotationSpecification.newBuilder());
     }
 
-    public void rotate(Identifier identifier, Builder spec) {
-        rotate(identifier, Collections.emptyList(), spec);
-    }
-
     public KeyState rotate(Identifier identifier, List<Seal> seals) {
-        return rotate(identifier, seals, RotationSpecification.newBuilder());
+        Builder builder = RotationSpecification.newBuilder().addAllSeals(seals);
+        return rotate(identifier, builder);
     }
 
-    public KeyState rotate(Identifier identifier, List<Seal> seals, RotationSpecification.Builder spec) {
+    public KeyState rotate(Identifier identifier, RotationSpecification.Builder spec) {
         RotationSpecification.Builder specification = spec.clone();
 
         KeyState state = kerl.getKeyState(identifier)
@@ -409,8 +420,7 @@ public class Stereotomy {
         specification.setState(state)
                      .setKey(nextKeyPair.getPublic())
                      .setNextKeys(nextKeys)
-                     .setSigner(0, nextKeyPair.getPrivate())
-                     .addAllSeals(seals);
+                     .setSigner(0, nextKeyPair.getPrivate());
 
         RotationEvent event = eventFactory.rotation(specification.build());
         KeyState newState = processor.process(state, event);
@@ -430,11 +440,7 @@ public class Stereotomy {
         return newState;
     }
 
-    public void seal(Identifier identifier, List<Seal> seals) {
-        seal(identifier, seals, InteractionSpecification.newBuilder());
-    }
-
-    public KeyState seal(Identifier identifier, List<Seal> seals, InteractionSpecification.Builder spec) {
+    public KeyState seal(Identifier identifier, InteractionSpecification.Builder spec) {
         InteractionSpecification.Builder specification = spec.clone();
         KeyState state = kerl.getKeyState(identifier)
                              .orElseThrow(() -> new IllegalArgumentException("identifier not found in event store"));
@@ -455,11 +461,17 @@ public class Stereotomy {
             throw new IllegalArgumentException("key pair for identifier not found in keystore");
         }
 
-        specification.setState(state).setSigner(0, keyPair.get().getPrivate()).setseals(seals);
+        specification.setState(state).setSigner(0, keyPair.get().getPrivate());
 
         KeyEvent event = eventFactory.interaction(specification.build());
         KeyState newKeyState = processor.process(state, event);
         return newKeyState;
+    }
+
+    public void seal(Identifier identifier, List<Seal> seals) {
+        InteractionSpecification.Builder builder = InteractionSpecification.newBuilder();
+        builder.setseals(seals);
+        seal(identifier, builder);
     }
 
     public EventSignature sign(Identifier identifier, KeyEvent event) {
@@ -480,5 +492,15 @@ public class Stereotomy {
 
         return new EventSignature(event.getCoordinates(), lastEstablishmentEvent.get().getCoordinates(),
                 Map.of(0, signature));
+    }
+
+    public JohnHancock sign(SelfAddressingIdentifier identifier, InputStream message) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    public boolean verify(Identifier identifier, InputStream message) {
+        // TODO Auto-generated method stub
+        return false;
     }
 }

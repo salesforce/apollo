@@ -15,15 +15,14 @@ import com.salesforce.apollo.stereotomy.service.Controller;
  * @author hal.hildebrand
  *
  */
+@SuppressWarnings("unused")
 public class Promulgator implements Controller {
 
-    public Promulgator(KEL kel, KERL kerl, KeyEventProcessor processor) {
-        this.kel = kel;
+    public Promulgator(KERL kerl, KeyEventProcessor processor) {
         this.kerl = kerl;
         this.processor = processor;
     }
 
-    private final KEL        kel;
-    private final KERL kerl;
-    private final KeyEventProcessor  processor;
+    private final KERL              kerl;
+    private final KeyEventProcessor processor;
 }

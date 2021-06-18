@@ -37,6 +37,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Gossiper;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
@@ -179,8 +180,7 @@ public class Messenger {
     private final List<MessageHandler>                                         channelHandlers = new CopyOnWriteArrayList<>();
     private final CommonCommunications<MessagingClientCommunications, Service> comm;
     private final Context<Member>                                              context;
-    private final Executor                                                     executor;
-    private volatile int                                                       lastRing        = -1;
+    private final Gossiper<MessagingClientCommunications>                      gossiper;
     private final SigningMember                                                member;
     private final Parameters                                                   parameters;
     private final AtomicInteger                                                round           = new AtomicInteger();
@@ -198,7 +198,7 @@ public class Messenger {
                                           r -> new MessagingServerCommunications(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
                                           getCreate(parameters.metrics));
-        this.executor = executor;
+        gossiper = new Gossiper<>(this.context, member, this.comm, executor);
     }
 
     public void clearBuffer() {
@@ -216,78 +216,6 @@ public class Messenger {
 
     public int getRound() {
         return round.get();
-    }
-
-    public void oneRound(Duration duration, ScheduledExecutorService scheduler) {
-        if (!started.get()) {
-            return;
-        }
-        MessagingClientCommunications link = nextRing();
-        int ring = lastRing;
-        if (link == null) {
-            log.debug("No members to message gossip with on ring: {}", ring);
-            return;
-        }
-
-        executor.execute(() -> {
-            if (!started.get()) {
-                return;
-            }
-            int gossipRound = round.incrementAndGet();
-            log.trace("message gossiping[{}] from {} with {} on {}", gossipRound, member, link.getMember(), ring);
-            ListenableFuture<Messages> futureSailor;
-
-            try {
-                futureSailor = link.gossip(MessageBff.newBuilder()
-                                                     .setContext(context.getId().toByteString())
-                                                     .setRing(ring)
-                                                     .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextInt(),
-                                                                               parameters.falsePositiveRate)
-                                                                       .toBff()
-                                                                       .toByteString())
-                                                     .build());
-            } catch (Throwable e) {
-                log.debug("error gossiping with {}", link.getMember(), e);
-                return;
-            }
-            futureSailor.addListener(() -> {
-                try {
-                    Messages gossip;
-                    try {
-                        gossip = futureSailor.get();
-                    } catch (InterruptedException e) {
-                        log.debug("error gossiping with {}", link.getMember(), e);
-                        return;
-                    } catch (ExecutionException e) {
-                        log.debug("error gossiping with {}", link.getMember(), e.getCause());
-                        return;
-                    }
-                    process(gossip.getUpdatesList());
-                    Push.Builder pushBuilder = Push.newBuilder()
-                                                   .setContext(context.getId().toByteString())
-                                                   .setRing(ring);
-                    buffer.updatesFor(BloomFilter.from(gossip.getBff()), pushBuilder);
-                    try {
-                        link.update(pushBuilder.build());
-                    } catch (Throwable e) {
-                        log.debug("error updating {}", link.getMember(), e);
-                    }
-                } finally {
-                    link.release();
-                    if (started.get()) {
-                        roundListeners.forEach(l -> {
-                            try {
-                                l.accept(gossipRound);
-                            } catch (Throwable e) {
-                                log.error("error sending round() to listener: " + l, e);
-                            }
-                        });
-                        scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(),
-                                           TimeUnit.MILLISECONDS);
-                    }
-                }
-            }, executor);
-        });
     }
 
     public void publish(com.google.protobuf.Message message) {
@@ -336,40 +264,70 @@ public class Messenger {
         }
         log.info("Stopping Messenger[{}] for {}", context.getId(), member);
         buffer.clear();
-        lastRing = -1;
+        gossiper.stop();
         round.set(0);
         comm.deregister(context.getId());
     }
 
-    private MessagingClientCommunications linkFor(Integer ring) {
-        Member successor = context.ring(ring).successor(member);
-        if (successor == null) {
-            log.debug("No successor to node on ring: {} members: {}", ring, context.ring(ring).size());
+    private ListenableFuture<Messages> gossipRound(MessagingClientCommunications link, int ring) {
+        if (!started.get()) {
             return null;
         }
-        try {
-            return comm.apply(successor, member);
-        } catch (Throwable e) {
-            log.debug("error opening connection to {}: {}", successor.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
-        }
-        return null;
+        int gossipRound = round.incrementAndGet();
+        log.trace("message gossiping[{}] from {} with {} on {}", gossipRound, member, link.getMember(), ring);
+        return link.gossip(MessageBff.newBuilder()
+                                     .setContext(context.getId().toByteString())
+                                     .setRing(ring)
+                                     .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextInt(),
+                                                               parameters.falsePositiveRate)
+                                                       .toBff()
+                                                       .toByteString())
+                                     .build());
     }
 
-    private MessagingClientCommunications nextRing() {
-        MessagingClientCommunications link = null;
-        int last = lastRing;
-        int rings = context.getRingCount();
-        int current = (last + 1) % rings;
-        for (int i = 0; i < rings; i++) {
-            link = linkFor(current);
-            if (link != null) {
-                break;
+    private void handle(ListenableFuture<Messages> futureSailor, MessagingClientCommunications link, int ring,
+                        Duration duration, ScheduledExecutorService scheduler) {
+        try {
+            Messages gossip;
+            try {
+                gossip = futureSailor.get();
+            } catch (InterruptedException e) {
+                log.debug("error gossiping with {}", link.getMember(), e);
+                return;
+            } catch (ExecutionException e) {
+                log.debug("error gossiping with {}", link.getMember(), e.getCause());
+                return;
             }
-            current = (current + 1) % rings;
+            process(gossip.getUpdatesList());
+            Push.Builder pushBuilder = Push.newBuilder().setContext(context.getId().toByteString()).setRing(ring);
+            buffer.updatesFor(BloomFilter.from(gossip.getBff()), pushBuilder);
+            try {
+                link.update(pushBuilder.build());
+            } catch (Throwable e) {
+                log.debug("error updating {}", link.getMember(), e);
+            }
+        } finally {
+            if (started.get()) {
+                int gossipRound = round.get();
+                roundListeners.forEach(l -> {
+                    try {
+                        l.accept(gossipRound);
+                    } catch (Throwable e) {
+                        log.error("error sending round() to listener: " + l, e);
+                    }
+                });
+                scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
+            }
         }
-        lastRing = current;
-        return link;
+    }
+
+    private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
+        if (!started.get()) {
+            return;
+        }
+
+        gossiper.oneRound((link, ring) -> gossipRound(link, ring),
+                          (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler));
     }
 
     private void process(List<Message> updates) {

@@ -53,7 +53,7 @@ public class RingTest {
 
     private static Member createMember(int i) {
         byte[] hash = PROTO.clone();
-        hash[31] = (byte) i;
+        hash[0] = (byte) i;
         KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
         Date notBefore = Date.from(Instant.now());
         Date notAfter = Date.from(Instant.now().plusSeconds(10_000));

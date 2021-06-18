@@ -20,6 +20,7 @@ import com.salesfoce.apollo.fireflies.proto.Null;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesfoce.apollo.fireflies.proto.Update;
+import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
@@ -32,7 +33,7 @@ import com.salesforce.apollo.fireflies.Participant;
  * @author hal.hildebrand
  * @since 220
  */
-public class FfClient implements Fireflies {
+public class FfClient implements Fireflies, Link {
 
     public static CreateClientCommunications<FfClient> getCreate(FireflyMetrics metrics) {
         return (t, f, c) -> new FfClient(c, (Participant) t, metrics);
@@ -50,6 +51,11 @@ public class FfClient implements Fireflies {
         this.channel = channel;
         this.client = FirefliesGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
+    }
+
+    @Override
+    public void close() {
+        channel.release();
     }
 
     public Participant getMember() {
@@ -120,11 +126,7 @@ public class FfClient implements Fireflies {
     }
 
     public void release() {
-        channel.release();
-    }
-
-    public void start() {
-
+        close();
     }
 
     @Override

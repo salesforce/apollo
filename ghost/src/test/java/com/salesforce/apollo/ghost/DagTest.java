@@ -40,40 +40,36 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
 
 public class DagTest {
  
-    private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static Map<Digest, CertificateWithPrivateKey> certs; 
 
     @BeforeAll
     public static void beforeClass() {
         certs = IntStream.range(1, 101)
-                         .parallel()
-                         .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
-                                                   cert -> new CertificateWithPrivateKey(cert.getX509Certificate(),
-                                                           cert.getPrivateKey())));
-    }
+                .parallel()
+                .mapToObj(i -> getMember(i))
+                .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                          cert -> cert));
+}
 
-    private List<Node>               members;
-    private ScheduledExecutorService scheduler;
-    private List<X509Certificate>    seeds;
-    private List<View>               views;
+    private List<SigningMember>               members;
+    private ScheduledExecutorService scheduler; 
     private Random                   entropy;
     private final List<Router>       comms = new ArrayList<>();
 
     @AfterEach
-    public void after() {
-        views.forEach(e -> e.getService().stop());
-        views.clear();
+    public void after() { 
         comms.forEach(e -> e.close());
         comms.clear();
     }
@@ -81,28 +77,12 @@ public class DagTest {
     @BeforeEach
     public void before() {
         entropy = new Random(0x666);
-
-        seeds = new ArrayList<>();
+ 
         members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        assertEquals(certs.size(), members.size());
-
-        while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(20)).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
-            }
-        }
-
-        System.out.println("Seeds: " + seeds.stream().map(e -> Member.getMemberId(e)).collect(Collectors.toList()));
+        assertEquals(certs.size(), members.size()); 
+ 
         scheduler = Executors.newScheduledThreadPool(100);
 
-        ForkJoinPool executor = new ForkJoinPool();
-        views = members.stream().map(node -> {
-            Router comm = new LocalRouter(node, ServerConnectionCache.newBuilder(), executor);
-            comms.add(comm);
-            View view = new View(Digest.ORIGIN, node, comm, null);
-            return view;
-        }).collect(Collectors.toList());
     }
 
     // @Test
@@ -128,7 +108,7 @@ public class DagTest {
 
         List<Ghost> ghosties = testViews.stream()
                                         .map(view -> new Ghost(new GhostParameters(), communicatons.next(), view,
-                                                new MemoryStore()))
+                                                new MemoryStore(null)))
                                         .collect(Collectors.toList());
         ghosties.forEach(e -> e.getService().start());
         assertEquals(ghosties.size(),

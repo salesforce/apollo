@@ -29,11 +29,6 @@ public class KeyInterval implements Predicate<Digest> {
         this(new Digest(interval.getStart()), new Digest(interval.getEnd()));
     }
 
-    @Override
-    public boolean test(Digest t) {
-        return begin.compareTo(t) > 0 && end.compareTo(t) > 0;
-    }
-
     public Digest getBegin() {
         return begin;
     }
@@ -42,12 +37,17 @@ public class KeyInterval implements Predicate<Digest> {
         return end;
     }
 
+    @Override
+    public boolean test(Digest t) {
+        return begin.compareTo(t) > 0 && end.compareTo(t) > 0;
+    }
+
     public Interval toInterval() {
         return Interval.newBuilder().setStart(begin.toByteString()).setEnd(end.toByteString()).build();
     }
 
     @Override
     public String toString() {
-        return String.format("KeyInterval [begin=%s, end=%s]", begin, end);
+        return String.format("KeyInterval [%s, %s]", begin, end);
     }
 }

@@ -24,6 +24,7 @@ import com.salesfoce.apollo.proto.Query.Builder;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
+import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
@@ -34,7 +35,7 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  * @since 220
  */
-public class AvalancheClient implements Avalanche {
+public class AvalancheClient implements Avalanche, Link {
 
     public static CreateClientCommunications<AvalancheClient> getCreate(AvalancheMetrics metrics) {
         return (t, f, c) -> new AvalancheClient(c, t, metrics);
@@ -51,6 +52,11 @@ public class AvalancheClient implements Avalanche {
         this.member = member;
         this.client = AvalancheGrpc.newFutureStub(conn.channel).withCompression("gzip");
         this.metrics = metrics;
+    }
+
+    @Override
+    public void close() {
+        channel.release();
     }
 
     public Participant getMember() {
@@ -92,7 +98,7 @@ public class AvalancheClient implements Avalanche {
     }
 
     public void release() {
-        channel.release();
+        close();
     }
 
     @Override

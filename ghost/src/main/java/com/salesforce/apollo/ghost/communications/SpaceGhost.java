@@ -8,7 +8,9 @@ package com.salesforce.apollo.ghost.communications;
 
 import java.util.List;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
+import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Interval;
 import com.salesforce.apollo.crypto.Digest;
 
@@ -17,9 +19,9 @@ import com.salesforce.apollo.crypto.Digest;
  * @since 220
  */
 public interface SpaceGhost {
-    Any get(Digest key);
+    ListenableFuture<Any> get(Digest key);
 
-    List<Any> intervals(List<Interval> intervals, List<Digest> have);
+    ListenableFuture<Entries> intervals(List<Interval> intervals, List<Digest> have);
 
     void put(Any entry);
 }

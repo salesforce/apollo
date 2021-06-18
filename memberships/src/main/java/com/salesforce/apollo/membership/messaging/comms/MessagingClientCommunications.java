@@ -15,6 +15,7 @@ import com.salesfoce.apollo.messaging.proto.Messages;
 import com.salesfoce.apollo.messaging.proto.MessagingGrpc;
 import com.salesfoce.apollo.messaging.proto.MessagingGrpc.MessagingFutureStub;
 import com.salesfoce.apollo.messaging.proto.Push;
+import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -25,7 +26,7 @@ import com.salesforce.apollo.membership.messaging.MessagingMetrics;
  * @author hal.hildebrand
  * @since 220
  */
-public class MessagingClientCommunications implements Messaging {
+public class MessagingClientCommunications implements Messaging, Link {
 
     public static CreateClientCommunications<MessagingClientCommunications> getCreate(MessagingMetrics metrics) {
         return (t, f, c) -> new MessagingClientCommunications(c, t, metrics);
@@ -44,21 +45,13 @@ public class MessagingClientCommunications implements Messaging {
         this.metrics = metrics;
     }
 
-    public Member getMember() {
-        return member;
-    }
-
-    public void release() {
+    @Override
+    public void close() {
         channel.release();
     }
 
-    public void start() {
-
-    }
-
-    @Override
-    public String toString() {
-        return String.format("->[%s]", member);
+    public Member getMember() {
+        return member;
     }
 
     @Override
@@ -80,6 +73,15 @@ public class MessagingClientCommunications implements Messaging {
             }
         }, ForkJoinPool.commonPool());
         return result;
+    }
+
+    public void start() {
+
+    }
+
+    @Override
+    public String toString() {
+        return String.format("->[%s]", member);
     }
 
     @Override
