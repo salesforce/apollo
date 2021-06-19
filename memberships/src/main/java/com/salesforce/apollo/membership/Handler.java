@@ -14,5 +14,5 @@ import com.google.common.util.concurrent.ListenableFuture;
  */
 @FunctionalInterface
 public interface Handler<T, Comm> {
-    void handle(ListenableFuture<T> futureSailor, Comm communications, int ring);
+    boolean handle(ListenableFuture<T> futureSailor, Comm communications, int ring);
 }

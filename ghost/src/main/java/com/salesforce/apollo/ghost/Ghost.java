@@ -34,7 +34,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ghost.communications.GhostClientCommunications;
 import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Gossiper;
+import com.salesforce.apollo.membership.RingCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
@@ -137,8 +137,7 @@ public class Ghost {
 
     private final CommonCommunications<GhostClientCommunications, Service> communications;
     private final Context<Member>                                          context;
-    private final Gossiper<GhostClientCommunications>                      gossiper;
-    private final AtomicBoolean                                            joined  = new AtomicBoolean(false);
+    private final RingCommunications<GhostClientCommunications>                      gossiper; 
     private final SigningMember                                            member;
     private final GhostParameters                                          parameters;
     private final Service                                                  service = new Service();
@@ -151,7 +150,7 @@ public class Ghost {
         store = s;
         communications = c.create(member, context.getId(), service,
                                   r -> new GhostServerCommunications(c.getClientIdentityProvider(), r), getCreate());
-        gossiper = new Gossiper<>(context, member, communications, parameters.executor);
+        gossiper = new RingCommunications<>(context, member, communications, parameters.executor);
     }
 
     /**
@@ -161,9 +160,6 @@ public class Ghost {
      * @return the Any associated with ye key
      */
     public Any getDagEntry(Digest key) {
-        if (!joined()) {
-            throw new IllegalStateException("Node has not joined the cluster");
-        }
         CompletionService<Any> frist = new ExecutorCompletionService<>(parameters.executor);
         List<Future<Any>> futures = context.successors(key).stream().map(successor -> frist.submit(() -> {
             Any Any;
@@ -218,15 +214,7 @@ public class Ghost {
      */
     public Service getService() {
         return service;
-    }
-
-    /**
-     * 
-     * @return true if the node has joined the cluster, false otherwise
-     */
-    public boolean joined() {
-        return joined.get();
-    }
+    } 
 
     /**
      * Insert the Any into the Ghost DHT. Return when a majority of rings have
@@ -236,9 +224,6 @@ public class Ghost {
      * @return - the Digest of the Any
      */
     public Digest putDagEntry(Any Any) {
-        if (!joined()) {
-            throw new IllegalStateException("Node has not joined the cluster");
-        }
         Digest key = parameters.digestAlgorithm.digest(Any.toByteString());
         CompletionService<Boolean> frist = new ExecutorCompletionService<>(parameters.executor);
         List<Future<Boolean>> futures = context.successors(key).stream().map(successor -> frist.submit(() -> {
@@ -314,7 +299,7 @@ public class Ghost {
     private void oneRound(ScheduledExecutorService scheduler, Duration duration) {
         CombinedIntervals keyIntervals = keyIntervals();
         List<Digest> have = store.have(keyIntervals);
-        gossiper.oneRound((link, ring) -> link.intervals(keyIntervals.toIntervals(), have),
+        gossiper.execute((link, ring) -> link.intervals(keyIntervals.toIntervals(), have),
                           (futureSailor, link, ring) -> {
                               Entries entries;
                               try {

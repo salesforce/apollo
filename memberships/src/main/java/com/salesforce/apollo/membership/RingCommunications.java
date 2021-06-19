@@ -16,14 +16,15 @@ import org.slf4j.LoggerFactory;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class Gossiper<Comm extends Link> {
+public class RingCommunications<Comm extends Link> {
 
-    private final static Logger log = LoggerFactory.getLogger(Gossiper.class);
+    private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
 
     private final CommonCommunications<Comm, ?> comm;
     private final Context<Member>               context;
@@ -31,7 +32,7 @@ public class Gossiper<Comm extends Link> {
     private volatile int                        lastRing = -1;
     private final SigningMember                 member;
 
-    public Gossiper(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
+    public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
             Executor executor) {
         this.context = context;
         this.executor = executor;
@@ -39,23 +40,18 @@ public class Gossiper<Comm extends Link> {
         this.comm = comm;
     }
 
-    public <T> void oneRound(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler) {
-        oneRound(member, round, handler);
+    public <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler) {
+        try (Comm link = nextRing(null)) {
+            execute(round, handler, link);
+        } catch (IOException e) {
+            log.debug("Error closing");
+        }
     }
 
-    public <T> void oneRound(Member key, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                             Handler<T, Comm> handler) {
-        try (Comm link = nextRing(key)) {
-            if (link == null) {
-                handler.handle(null, link, lastRing);
-            } else {
-                ListenableFuture<T> futureSailor = round.apply(link, lastRing);
-                if (futureSailor == null) {
-                    handler.handle(null, link, lastRing);
-                } else {
-                    futureSailor.addListener(() -> handler.handle(futureSailor, link, lastRing), executor);
-                }
-            }
+    public <T> void execute(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
+                            Handler<T, Comm> handler) {
+        try (Comm link = nextRing(digest)) {
+            execute(round, handler, link);
         } catch (IOException e) {
             log.debug("Error closing");
         }
@@ -67,13 +63,28 @@ public class Gossiper<Comm extends Link> {
 
     @Override
     public String toString() {
-        return "Gossiper [" + context.getId() + ":" + member.getId() + ":" + lastRing + "]";
+        return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + lastRing + "]";
     }
 
-    private Comm linkFor(Member key, Integer ring) {
-        Member successor = context.ring(ring).successor(key);
+    private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler,
+                             Comm link) {
+        if (link == null) {
+            handler.handle(null, link, lastRing);
+        } else {
+            ListenableFuture<T> futureSailor = round.apply(link, lastRing);
+            if (futureSailor == null) {
+                handler.handle(null, link, lastRing);
+            } else {
+                futureSailor.addListener(() -> handler.handle(futureSailor, link, lastRing), executor);
+            }
+        }
+    }
+
+    private Comm linkFor(Digest digest, int r) {
+        Ring<Member> ring = context.ring(r);
+        Member successor = digest == null ? ring.successor(member) : ring.successor(digest);
         if (successor == null) {
-            log.debug("No successor to node on ring: {} members: {}", ring, context.ring(ring).size());
+            log.debug("No successor to: {} on ring: {} members: {}", digest, r, ring.size());
             return null;
         }
         try {
@@ -85,13 +96,13 @@ public class Gossiper<Comm extends Link> {
         return null;
     }
 
-    private Comm nextRing(Member key) {
+    private Comm nextRing(Digest digest) {
         Comm link = null;
         int last = lastRing;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
         for (int i = 0; i < rings; i++) {
-            link = linkFor(key, current);
+            link = linkFor(digest, current);
             if (link != null) {
                 break;
             }

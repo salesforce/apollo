@@ -37,7 +37,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Gossiper;
+import com.salesforce.apollo.membership.RingCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
@@ -185,7 +185,7 @@ public class Messenger {
     private final List<MessageHandler>                                         channelHandlers = new CopyOnWriteArrayList<>();
     private final CommonCommunications<MessagingClientCommunications, Service> comm;
     private final Context<Member>                                              context;
-    private final Gossiper<MessagingClientCommunications>                      gossiper;
+    private final RingCommunications<MessagingClientCommunications>                      gossiper;
     private final SigningMember                                                member;
     private final Parameters                                                   parameters;
     private final AtomicInteger                                                round           = new AtomicInteger();
@@ -203,7 +203,7 @@ public class Messenger {
                                           r -> new MessagingServerCommunications(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
                                           getCreate(parameters.metrics, executor));
-        gossiper = new Gossiper<>(this.context, member, this.comm, executor);
+        gossiper = new RingCommunications<>(this.context, member, this.comm, executor);
     }
 
     public void clearBuffer() {
@@ -290,18 +290,18 @@ public class Messenger {
                                      .build());
     }
 
-    private void handle(ListenableFuture<Messages> futureSailor, MessagingClientCommunications link, int ring,
-                        Duration duration, ScheduledExecutorService scheduler) {
+    private boolean handle(ListenableFuture<Messages> futureSailor, MessagingClientCommunications link, int ring,
+                           Duration duration, ScheduledExecutorService scheduler) {
         try {
             Messages gossip;
             try {
                 gossip = futureSailor.get();
             } catch (InterruptedException e) {
                 log.debug("error gossiping with {}", link.getMember(), e);
-                return;
+                return false;
             } catch (ExecutionException e) {
                 log.debug("error gossiping with {}", link.getMember(), e.getCause());
-                return;
+                return false;
             }
             process(gossip.getUpdatesList());
             Push.Builder pushBuilder = Push.newBuilder().setContext(context.getId().toByteString()).setRing(ring);
@@ -310,6 +310,7 @@ public class Messenger {
                 link.update(pushBuilder.build());
             } catch (Throwable e) {
                 log.debug("error updating {}", link.getMember(), e);
+                return false;
             }
         } finally {
             if (started.get()) {
@@ -324,6 +325,7 @@ public class Messenger {
                 scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
             }
         }
+        return true;
     }
 
     private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
@@ -331,7 +333,7 @@ public class Messenger {
             return;
         }
 
-        gossiper.oneRound((link, ring) -> gossipRound(link, ring),
+        gossiper.execute((link, ring) -> gossipRound(link, ring),
                           (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler));
     }
 
