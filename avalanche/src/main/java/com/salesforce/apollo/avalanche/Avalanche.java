@@ -197,7 +197,7 @@ public class Avalanche {
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new AvalancheServer(communications.getClientIdentityProvider(), metrics,
                                                   r),
-                                          AvalancheClient.getCreate(metrics));
+                                          AvalancheClient.getCreate(metrics, queryExecutor));
         MVMap.Builder<Digest, byte[]> builder = new MVMap.Builder<Digest, byte[]>().keyType(new DigestType());
 
         this.dag = new WorkingSet(processor, parameters,

@@ -32,6 +32,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
+import java.lang.Thread.UncaughtExceptionHandler;
 import java.lang.reflect.Field;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -52,7 +53,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.function.Supplier;
-import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
@@ -61,6 +61,8 @@ import java.util.zip.ZipOutputStream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.apache.commons.math3.random.MersenneTwister;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
@@ -369,6 +371,11 @@ public class Utils {
         }
         zos.finish();
         zos.flush();
+    }
+
+    public static BcX500NameDnImpl encode(Digest digest, String host, int port, PublicKey signingKey) {
+        return new BcX500NameDnImpl(
+                String.format("CN=%s, L=%s, UID=%s, DC=%s", host, port, qb64(digest), qb64(signingKey)));
     }
 
     /**
@@ -961,9 +968,9 @@ public class Utils {
             URL url = new URL(resource);
             return url;
         } catch (MalformedURLException e) {
-            Logger.getAnonymousLogger()
-                  .fine(String.format("The resource is not a valid URL: %s\n Trying to find a corresponding file",
-                                      resource));
+            LoggerFactory.getLogger(Utils.class)
+                         .trace(String.format("The resource is not a valid URL: %s\n Trying to find a corresponding file",
+                                              resource));
         }
         File configFile = new File(resource);
         if (!configFile.exists()) {
@@ -971,8 +978,9 @@ public class Utils {
                 throw new FileNotFoundException(String.format("resource does not exist as a file: %s", resource));
             }
         } else if (configFile.isDirectory()) {
-            Logger.getAnonymousLogger()
-                  .fine(String.format("resource is a directory: %s\n Trying to find corresponding resource", resource));
+            LoggerFactory.getLogger(Utils.class)
+                         .trace(String.format("resource is a directory: %s\n Trying to find corresponding resource",
+                                              resource));
         } else {
             return configFile.toURI().toURL();
         }
@@ -1019,6 +1027,12 @@ public class Utils {
         return props;
     }
 
+    public static UncaughtExceptionHandler uncaughtHandler(Logger log) {
+        return (thread, throwable) -> {
+            log.error("Uncaught exception on thread: {}", thread.getName(), throwable);
+        };
+    }
+
     public static boolean waitForCondition(int maxWaitTime, final int sleepTime, Supplier<Boolean> condition) {
         long endTime = System.currentTimeMillis() + maxWaitTime;
         while (System.currentTimeMillis() < endTime) {
@@ -1036,10 +1050,5 @@ public class Utils {
 
     public static boolean waitForCondition(int maxWaitTime, Supplier<Boolean> condition) {
         return waitForCondition(maxWaitTime, 100, condition);
-    }
-
-    public static BcX500NameDnImpl encode(Digest digest, String host, int port, PublicKey signingKey) {
-        return new BcX500NameDnImpl(
-                String.format("CN=%s, L=%s, UID=%s, DC=%s", host, port, qb64(digest), qb64(signingKey)));
     }
 }

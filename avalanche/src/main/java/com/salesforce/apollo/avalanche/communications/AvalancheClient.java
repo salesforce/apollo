@@ -11,7 +11,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executor;
 
 import org.apache.commons.math3.util.Pair;
 
@@ -37,8 +37,8 @@ import com.salesforce.apollo.membership.Member;
  */
 public class AvalancheClient implements Avalanche, Link {
 
-    public static CreateClientCommunications<AvalancheClient> getCreate(AvalancheMetrics metrics) {
-        return (t, f, c) -> new AvalancheClient(c, t, metrics);
+    public static CreateClientCommunications<AvalancheClient> getCreate(AvalancheMetrics metrics, Executor executor) {
+        return (t, f, c) -> new AvalancheClient(c, t, metrics, executor);
 
     }
 
@@ -46,12 +46,14 @@ public class AvalancheClient implements Avalanche, Link {
     private final AvalancheGrpc.AvalancheFutureStub client;
     private final Member                            member;
     private final AvalancheMetrics                  metrics;
+    private final Executor                          executor;
 
-    public AvalancheClient(ManagedServerConnection conn, Member member, AvalancheMetrics metrics) {
+    public AvalancheClient(ManagedServerConnection conn, Member member, AvalancheMetrics metrics, Executor executor) {
         this.channel = conn;
         this.member = member;
         this.client = AvalancheGrpc.newFutureStub(conn.channel).withCompression("gzip");
         this.metrics = metrics;
+        this.executor = executor;
     }
 
     @Override
@@ -88,7 +90,7 @@ public class AvalancheClient implements Avalanche, Link {
                     } catch (InterruptedException | ExecutionException e1) {
                         // ignored for metrics gathering
                     }
-                }, ForkJoinPool.commonPool());
+                }, executor);
 
             }
             return result;
@@ -120,7 +122,7 @@ public class AvalancheClient implements Avalanche, Link {
                     } catch (InterruptedException | ExecutionException e1) {
                         // ignored for metrics gathering
                     }
-                }, ForkJoinPool.commonPool());
+                }, executor);
             }
             return requested;
         } catch (Throwable e) {

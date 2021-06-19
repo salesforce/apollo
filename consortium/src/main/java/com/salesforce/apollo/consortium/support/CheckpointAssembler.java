@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
@@ -53,10 +53,11 @@ public class CheckpointAssembler {
     private final long                                                        height;
     private final SigningMember                                               member;
     private final MVMap<Integer, byte[]>                                      state;
+    private final Executor                                                    executor;
 
     public CheckpointAssembler(long height, Checkpoint checkpoint, SigningMember member, Store store,
             CommonCommunications<BootstrapClient, BootstrappingService> comms, Context<Member> context,
-            double falsePositiveRate, DigestAlgorithm digestAlgorithm) {
+            double falsePositiveRate, DigestAlgorithm digestAlgorithm, Executor executor) {
         this.height = height;
         this.member = member;
         this.checkpoint = checkpoint;
@@ -66,6 +67,7 @@ public class CheckpointAssembler {
         this.digestAlgorithm = digestAlgorithm;
         state = store.createCheckpoint(height);
         checkpoint.getSegmentsList().stream().map(bs -> new Digest(bs)).forEach(hash -> hashes.add(hash));
+        this.executor = executor;
     }
 
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
@@ -143,7 +145,7 @@ public class CheckpointAssembler {
 
             log.info("Checkpoint assembly gossip with: {} on: {}", m, member);
             ListenableFuture<CheckpointSegments> fetched = link.fetch(request);
-            fetched.addListener(gossip(link, fetched, s), ForkJoinPool.commonPool());
+            fetched.addListener(gossip(link, fetched, s), executor);
         } catch (Throwable e) {
             log.error("Error in scheduled checkpoint assembly gossip on: {}", member, e);
         }

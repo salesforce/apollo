@@ -7,7 +7,6 @@
 package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.nio.ByteBuffer;
 import java.security.Signature;
@@ -55,12 +54,11 @@ public class MessageBuffer {
     }
 
     static Digest idOf(DigestAlgorithm algorithm, int sequenceNumber, Digest from, Any content) {
-        byte[] bytes = qb64(from).getBytes();
-        ByteBuffer header = ByteBuffer.allocate(bytes.length + 4);
-        header.put(bytes);
+        ByteBuffer header = ByteBuffer.allocate(4);
         header.putInt(sequenceNumber);
         header.flip();
         List<ByteBuffer> buffers = new ArrayList<>();
+        buffers.add(from.toByteString().asReadOnlyByteBuffer());
         buffers.add(header);
         buffers.addAll(content.toByteString().asReadOnlyByteBufferList());
 

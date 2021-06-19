@@ -128,7 +128,7 @@ public class MemberOrderTest {
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
-                                           .limit(30)
+                                           .limit(100)
                                            .collect(Collectors.toList());
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size());
@@ -136,7 +136,7 @@ public class MemberOrderTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        ForkJoinPool executor = ForkJoinPool.commonPool();
+        ForkJoinPool executor = Router.createFjPool();
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
@@ -212,7 +212,7 @@ public class MemberOrderTest {
         members.forEach(m -> context.activate(m));
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        ForkJoinPool executor = ForkJoinPool.commonPool();
+        ForkJoinPool executor = Router.createFjPool();
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);

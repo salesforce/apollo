@@ -41,7 +41,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.Block;
@@ -95,6 +94,7 @@ public class TestConsortium {
     private Map<Digest, Router>           communications = new ConcurrentHashMap<>();
     private final Map<Member, Consortium> consortium     = new ConcurrentHashMap<>();
     private List<SigningMember>           members;
+    private ForkJoinPool                  dispatcher;
 
     @AfterEach
     public void after() {
@@ -102,6 +102,8 @@ public class TestConsortium {
         consortium.clear();
         communications.values().forEach(e -> e.close());
         communications.clear();
+        dispatcher.shutdown();
+        dispatcher = null;
     }
 
     @BeforeEach
@@ -125,10 +127,9 @@ public class TestConsortium {
         }
 
         assertEquals(testCardinality, members.size());
-
-        ForkJoinPool executor = ForkJoinPool.commonPool();
+        dispatcher = Router.createFjPool();
         members.forEach(node -> {
-            communications.put(node.getId(), new LocalRouter(node, builder, executor));
+            communications.put(node.getId(), new LocalRouter(node, builder, dispatcher));
         });
 
     }
@@ -195,14 +196,19 @@ public class TestConsortium {
         validateState(view, blueRibbon);
 
         processed.set(new CountDownLatch(testCardinality));
-        Consortium client = consortium.values().stream().filter(c -> !blueRibbon.contains(c)).findFirst().get();
+        Consortium client = consortium.values()
+                                      .stream()
+                                      .filter(c -> c.fsm.getCurrentState() == CollaboratorFsm.CLIENT)
+                                      .findFirst()
+                                      .get();
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
         Digest hash = client.submit(null, (h, t) -> txnProcessed.set(true),
                                     ByteTransaction.newBuilder()
                                                    .setContent(ByteString.copyFromUtf8("Hello world"))
-                                                   .build());
+                                                   .build(),
+                                    null);
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -215,17 +221,11 @@ public class TestConsortium {
         Semaphore outstanding = new Semaphore(1000); // outstanding, unfinalized txns
         int bunchCount = 10_000;
         System.out.println("Submitting bunch: " + bunchCount);
-        ArrayList<Digest> submitted = new ArrayList<>();
+        Set<Digest> submitted = new HashSet<>();
         CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+        final Duration timeout = Duration.ofSeconds(10);
         for (int i = 0; i < bunchCount; i++) {
-            outstanding.acquire();
-            AtomicReference<Digest> pending = new AtomicReference<>();
-            pending.set(client.submit(null, (h, t) -> {
-                outstanding.release();
-                submitted.remove(pending.get());
-                submittedBunch.countDown();
-            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-            submitted.add(pending.get());
+            MembershipTests.submit(client, outstanding, submitted, submittedBunch, timeout);
         }
 
         System.out.println("Awaiting " + bunchCount + " transactions");
@@ -268,6 +268,7 @@ public class TestConsortium {
         members.stream()
                .map(m -> new Consortium(Parameters.newBuilder()
                                                   .setConsensus(consensus)
+                                                  .setDispatcher(dispatcher)
                                                   .setMember(m)
                                                   .setContext(view)
                                                   .setMsgParameters(msgParameters)
@@ -310,12 +311,14 @@ public class TestConsortium {
                                              .stream()
                                              .filter(c -> !blueRibbon.contains(c))
                                              .map(c -> c.fsm.getCurrentState())
-                                             .filter(b -> b != CollaboratorFsm.CLIENT)
+                                             .filter(b -> b != CollaboratorFsm.CLIENT
+                                                     && b != CollaboratorFsm.JOINING_MEMBER)
                                              .count();
         Set<Transitions> failedMembers = consortium.values()
                                                    .stream()
                                                    .filter(c -> !blueRibbon.contains(c))
-                                                   .filter(c -> c.fsm.getCurrentState() != CollaboratorFsm.CLIENT)
+                                                   .filter(c -> c.fsm.getCurrentState() != CollaboratorFsm.CLIENT
+                                                           && c.fsm.getCurrentState() != CollaboratorFsm.JOINING_MEMBER)
                                                    .map(c -> c.fsm.getCurrentState())
                                                    .collect(Collectors.toSet());
         assertEquals(0, clientsInWrongState, "True clients gone bad: " + failedMembers);

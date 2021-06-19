@@ -8,6 +8,7 @@ package com.salesforce.apollo.comm;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ForkJoinPool;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -19,6 +20,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.BindableService;
 import io.grpc.util.MutableHandlerRegistry;
@@ -28,7 +30,8 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 abstract public class Router {
-    public class CommonCommunications<Client extends Link, Service> implements BiFunction<Member, SigningMember, Client> {
+    public class CommonCommunications<Client extends Link, Service>
+            implements BiFunction<Member, SigningMember, Client> {
         private final CreateClientCommunications<Client> createFunction;
         private final RoutableService<Service>           routing;
 
@@ -54,6 +57,15 @@ abstract public class Router {
 
     private final static Logger log = LoggerFactory.getLogger(Router.class);
 
+    public static ForkJoinPool createFjPool() {
+        return createFjPool(log);
+    }
+
+    public static ForkJoinPool createFjPool(Logger logger) {
+        return new ForkJoinPool(Runtime.getRuntime().availableProcessors(),
+                ForkJoinPool.defaultForkJoinWorkerThreadFactory, Utils.uncaughtHandler(logger), false);
+    }
+
     private final ServerConnectionCache             cache;
     private final MutableHandlerRegistry            registry;
     private final Map<Class<?>, RoutableService<?>> services = new ConcurrentHashMap<>();
@@ -68,9 +80,9 @@ abstract public class Router {
     }
 
     public <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
-                                                                          Service service,
-                                                                          Function<RoutableService<Service>, BindableService> factory,
-                                                                          CreateClientCommunications<Client> createFunction) {
+                                                                                       Service service,
+                                                                                       Function<RoutableService<Service>, BindableService> factory,
+                                                                                       CreateClientCommunications<Client> createFunction) {
         @SuppressWarnings("unchecked")
         RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(service.getClass(),
                                                                                                c -> {

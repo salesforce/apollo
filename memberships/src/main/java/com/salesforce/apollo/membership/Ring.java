@@ -32,17 +32,19 @@ import com.salesforce.apollo.crypto.Digest;
  * @since 220
  */
 public class Ring<T extends Member> implements Iterable<T> {
-    private final BiFunction<T, Integer, Digest>    hasher;
-    private final int                               index;
-    private final ConcurrentNavigableMap<Digest, T> ring = new ConcurrentSkipListMap<>();
+    private final BiFunction<Digest, Integer, Digest> digestHasher;
+    private final BiFunction<T, Integer, Digest>      hasher;
+    private final int                                 index;
+    private final ConcurrentNavigableMap<Digest, T>   ring = new ConcurrentSkipListMap<>();
 
     public Ring() {
-        this(0, (m, r) -> m.getId());
+        this(0, (m, r) -> m.getId(), (d, r) -> d);
     }
 
-    public Ring(int index, BiFunction<T, Integer, Digest> hasher) {
+    public Ring(int index, BiFunction<T, Integer, Digest> hasher, BiFunction<Digest, Integer, Digest> digestHasher) {
         this.index = index;
         this.hasher = hasher;
+        this.digestHasher = digestHasher;
     }
 
     /**
@@ -227,17 +229,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         is never evaluated.
      */
     public T predecessor(Digest location, Predicate<T> predicate) {
-        for (T member : ring.headMap(location, false).descendingMap().values()) {
-            if (predicate.test(member)) {
-                return member;
-            }
-        }
-        for (T member : ring.tailMap(location, false).descendingMap().values()) {
-            if (predicate.test(member)) {
-                return member;
-            }
-        }
-        return null;
+        return pred(digestHasher.apply(location, index), predicate);
     }
 
     /**
@@ -255,19 +247,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         is never evaluated.
      */
     public T predecessor(T m, Predicate<T> predicate) {
-        Digest itemHash = hash(m);
-
-        for (T member : ring.headMap(itemHash, false).descendingMap().values()) {
-            if (predicate.test(member)) {
-                return member;
-            }
-        }
-        for (T member : ring.tailMap(itemHash, false).descendingMap().values()) {
-            if (predicate.test(member)) {
-                return member;
-            }
-        }
-        return null;
+        return pred(hash(m), predicate);
     }
 
     /**
@@ -278,46 +258,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         predicate(item) evaluates to True.
      */
     public Iterable<T> predecessors(Digest location, Predicate<T> predicate) {
-        Iterator<T> tail = ring.tailMap(location, false).descendingMap().values().iterator();
-        Iterator<T> head = ring.headMap(location, false).descendingMap().values().iterator();
-
-        Iterator<T> iterator = new Iterator<T>() {
-            private T next = nextMember();
-
-            @Override
-            public boolean hasNext() {
-                return next != null;
-            }
-
-            @Override
-            public T next() {
-                if (next == null) {
-                    throw new NoSuchElementException();
-                }
-                T current = next;
-                next = nextMember();
-                return current;
-            }
-
-            private T nextMember() {
-                while (head.hasNext()) {
-                    T next = head.next();
-                    return predicate.test(next) ? null : next;
-                }
-                while (tail.hasNext()) {
-                    T next = tail.next();
-                    return predicate.test(next) ? null : next;
-                }
-                return null;
-            }
-        };
-        return new Iterable<T>() {
-
-            @Override
-            public Iterator<T> iterator() {
-                return iterator;
-            }
-        };
+        return preds(digestHasher.apply(location, index), predicate);
     }
 
     /**
@@ -328,7 +269,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         predicate(item) evaluates to True.
      */
     public Iterable<T> predecessors(T start, Predicate<T> predicate) {
-        return predecessors(hash(start), predicate);
+        return preds(hash(start), predicate);
     }
 
     /**
@@ -427,18 +368,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         never evaluated..
      */
     public T successor(Digest hash, Predicate<T> predicate) {
-
-        for (T member : ring.tailMap(hash, false).values()) {
-            if (predicate.test(member)) {
-                return member;
-            }
-        }
-        for (T member : ring.headMap(hash, false).values()) {
-            if (predicate.test(member)) {
-                return member;
-            }
-        }
-        return null;
+        return succ(digestHasher.apply(hash, index), predicate);
     }
 
     /**
@@ -456,7 +386,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         never evaluated..
      */
     public T successor(T m, Predicate<T> predicate) {
-        return successor(hash(m), predicate);
+        return succ(hash(m), predicate);
     }
 
     /**
@@ -467,8 +397,127 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         predicate(item) evaluates to True.
      */
     public Iterable<T> successors(Digest location, Predicate<T> predicate) {
-        Iterator<T> tail = ring.tailMap(location, false).values().iterator();
-        Iterator<T> head = ring.headMap(location, false).values().iterator();
+        return succs(digestHasher.apply(location, index), predicate);
+    }
+
+    /**
+     * @param start
+     * @param predicate
+     * @return an Iterable of all items counter-clock wise in the ring from (but
+     *         excluding) start item to (but excluding) the first item where
+     *         predicate(item) evaluates to True.
+     */
+    public Iterable<T> successors(T m, Predicate<T> predicate) {
+        return succs(hash(m), predicate);
+    }
+
+    @Override
+    public String toString() {
+        return "Ring[" + index + "] : " + ring.keySet();
+    }
+
+    /**
+     * @param member
+     * @return the iteratator to traverse the ring starting at the member
+     */
+    public Iterable<T> traverse(T member) {
+        Digest hash = hash(member);
+        Iterator<T> head = ring.headMap(hash, false).values().iterator();
+        Iterator<T> tail = ring.tailMap(hash, false).values().iterator();
+        return new Iterable<T>() {
+
+            @Override
+            public Iterator<T> iterator() {
+                return new Iterator<T>() {
+
+                    @Override
+                    public boolean hasNext() {
+                        return tail.hasNext() || head.hasNext();
+                    }
+
+                    @Override
+                    public T next() {
+                        return tail.hasNext() ? tail.next() : head.next();
+                    }
+                };
+            }
+        };
+    }
+
+    private T pred(Digest hash, Predicate<T> predicate) {
+        for (T member : ring.headMap(hash, false).descendingMap().values()) {
+            if (predicate.test(member)) {
+                return member;
+            }
+        }
+        for (T member : ring.tailMap(hash, false).descendingMap().values()) {
+            if (predicate.test(member)) {
+                return member;
+            }
+        }
+        return null;
+    }
+
+    private Iterable<T> preds(Digest hash, Predicate<T> predicate) {
+        Iterator<T> tail = ring.tailMap(hash, false).descendingMap().values().iterator();
+        Iterator<T> head = ring.headMap(hash, false).descendingMap().values().iterator();
+
+        Iterator<T> iterator = new Iterator<T>() {
+            private T next = nextMember();
+
+            @Override
+            public boolean hasNext() {
+                return next != null;
+            }
+
+            @Override
+            public T next() {
+                if (next == null) {
+                    throw new NoSuchElementException();
+                }
+                T current = next;
+                next = nextMember();
+                return current;
+            }
+
+            private T nextMember() {
+                while (head.hasNext()) {
+                    T next = head.next();
+                    return predicate.test(next) ? null : next;
+                }
+                while (tail.hasNext()) {
+                    T next = tail.next();
+                    return predicate.test(next) ? null : next;
+                }
+                return null;
+            }
+        };
+        return new Iterable<T>() {
+
+            @Override
+            public Iterator<T> iterator() {
+                return iterator;
+            }
+        };
+    }
+
+    private T succ(Digest hash, Predicate<T> predicate) {
+        for (T member : ring.tailMap(hash, false).values()) {
+            if (predicate.test(member)) {
+                return member;
+            }
+        }
+        for (T member : ring.headMap(hash, false).values()) {
+            if (predicate.test(member)) {
+                return member;
+            }
+        }
+        return null;
+    }
+
+    private Iterable<T> succs(Digest digest, Predicate<T> predicate) {
+        Iterator<T> tail = ring.tailMap(digest, false).values().iterator();
+        Iterator<T> head = ring.headMap(digest, false).values().iterator();
 
         Iterator<T> iterator = new Iterator<T>() {
             private T next = nextMember();
@@ -505,50 +554,6 @@ public class Ring<T extends Member> implements Iterable<T> {
             @Override
             public Iterator<T> iterator() {
                 return iterator;
-            }
-        };
-    }
-
-    /**
-     * @param start
-     * @param predicate
-     * @return an Iterable of all items counter-clock wise in the ring from (but
-     *         excluding) start item to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
-     */
-    public Iterable<T> successors(T m, Predicate<T> predicate) {
-        return successors(hash(m), predicate);
-    }
-
-    @Override
-    public String toString() {
-        return "Ring[" + index + "] : " + ring.keySet();
-    }
-
-    /**
-     * @param member
-     * @return the iteratator to traverse the ring starting at the member
-     */
-    public Iterable<T> traverse(T member) {
-        Digest hash = hash(member);
-        Iterator<T> head = ring.headMap(hash, false).values().iterator();
-        Iterator<T> tail = ring.tailMap(hash, false).values().iterator();
-        return new Iterable<T>() {
-
-            @Override
-            public Iterator<T> iterator() {
-                return new Iterator<T>() {
-
-                    @Override
-                    public boolean hasNext() {
-                        return tail.hasNext() || head.hasNext();
-                    }
-
-                    @Override
-                    public T next() {
-                        return tail.hasNext() ? tail.next() : head.next();
-                    }
-                };
             }
         };
     }

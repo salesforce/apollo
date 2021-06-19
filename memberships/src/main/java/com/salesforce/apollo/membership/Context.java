@@ -5,6 +5,7 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.membership;
+
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.security.MessageDigest;
@@ -18,7 +19,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -89,8 +89,8 @@ public class Context<T extends Member> {
     });
 
     public static final String SHA_256 = "sha-256";
- 
-    private static final String RING_HASH_TEMPLATE    = "%s-%s-%s";
+
+    private static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
     /**
      * @return the minimum t such that the probability of more than t out of 2t+1
@@ -122,7 +122,6 @@ public class Context<T extends Member> {
     }
 
     private final Map<Digest, T>               active              = new ConcurrentHashMap<>();
-    private BiFunction<T, Integer, Digest>     hasher              = (m, ring) -> hashFor(m, ring);
     private final Map<Digest, Digest[]>        hashes              = new ConcurrentHashMap<>();
     private final Digest                       id;
     private Logger                             log                 = LoggerFactory.getLogger(Context.class);
@@ -170,7 +169,7 @@ public class Context<T extends Member> {
         this.id = id;
         this.rings = new Ring[r];
         for (int i = 0; i < r; i++) {
-            rings[i] = new Ring<T>(i, hasher);
+            rings[i] = new Ring<T>(i, (m, ring) -> hashFor(m, ring), (d, ring) -> contextHash(d, ring));
         }
     }
 
@@ -347,7 +346,7 @@ public class Context<T extends Member> {
     public List<T> predecessors(Digest key, Predicate<T> test) {
         List<T> predecessors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            T predecessor = ring.predecessor(contextHash(key, ring.getIndex()), test);
+            T predecessor = ring.predecessor(key, test);
             if (predecessor != null) {
                 predecessors.add(predecessor);
             }
@@ -369,7 +368,7 @@ public class Context<T extends Member> {
     public List<T> predecessors(T key, Predicate<T> test) {
         List<T> predecessors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            T predecessor = ring.predecessor(hashFor(key, ring.getIndex()), test);
+            T predecessor = ring.predecessor(key, test);
             if (predecessor != null) {
                 predecessors.add(predecessor);
             }
@@ -441,7 +440,7 @@ public class Context<T extends Member> {
     public List<T> successors(Digest key, Predicate<T> test) {
         List<T> successors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            T successor = ring.successor(contextHash(key, ring.getIndex()), test);
+            T successor = ring.successor(key, test);
             if (successor != null) {
                 successors.add(successor);
             }
@@ -463,7 +462,7 @@ public class Context<T extends Member> {
     public List<T> successors(T key, Predicate<T> test) {
         List<T> successors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            T successor = ring.successor(hashFor(key, ring.getIndex()), test);
+            T successor = ring.successor(key, test);
             if (successor != null) {
                 successors.add(successor);
             }
@@ -492,6 +491,10 @@ public class Context<T extends Member> {
         return "Context [id=" + id + " " + ring(0) + "]";
     }
 
+    Digest contextHash(Digest key, int ring) {
+        return key.getAlgorithm().digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
+    }
+
     Digest hashFor(T m, int index) {
         Digest[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
             Digest[] s = new Digest[rings.length];
@@ -504,9 +507,5 @@ public class Context<T extends Member> {
             throw new IllegalArgumentException(m + " is not part of this group " + id);
         }
         return hSet[index];
-    }
-
-    private Digest contextHash(Digest key, int ring) {
-        return key.getAlgorithm().digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
     }
 }

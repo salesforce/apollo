@@ -164,6 +164,11 @@ public class Messenger {
         }
 
         public void update(Push push, Digest from) {
+            if (push.getRing() < 0 || push.getRing() >= context.getRingCount()) {
+                log.trace("Invalid inbound messages update on {}:{} from: {} on invalid ring: {}", context.getId(),
+                          member, from, push.getRing());
+                return;
+            }
             Member predecessor = context.ring(push.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.trace("Invalid inbound messages update on: {}:{} from: {} on ring: {} - not predecessor: {}",
@@ -197,7 +202,7 @@ public class Messenger {
         this.comm = communications.create(member, context.getId(), new Service(),
                                           r -> new MessagingServerCommunications(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
-                                          getCreate(parameters.metrics));
+                                          getCreate(parameters.metrics, executor));
         gossiper = new Gossiper<>(this.context, member, this.comm, executor);
     }
 

@@ -6,6 +6,9 @@
  */
 package com.salesforce.apollo.consortium.comms;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.consortium.proto.Join;
 import com.salesfoce.apollo.consortium.proto.JoinResult;
@@ -14,6 +17,7 @@ import com.salesfoce.apollo.consortium.proto.LinearServiceGrpc.LinearServiceFutu
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
+import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -22,7 +26,8 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public class LinearClient implements LinearService {
+public class LinearClient implements LinearService, Link {
+    private static Logger log = LoggerFactory.getLogger(LinearClient.class);
 
     public static CreateClientCommunications<LinearClient> getCreate(ConsortiumMetrics metrics) {
         return (t, f, c) -> new LinearClient(c, t, metrics);
@@ -44,7 +49,17 @@ public class LinearClient implements LinearService {
 
     @Override
     public ListenableFuture<TransactionResult> clientSubmit(SubmitTransaction txn) {
-        return client.submit(txn);
+        try {
+            return client.submit(txn);
+        } catch (Throwable e) {
+            log.error("Unable to submit", e);
+            return null;
+        }
+    }
+
+    @Override
+    public void close() {
+        channel.release();
     }
 
     public Member getMember() {
@@ -53,16 +68,26 @@ public class LinearClient implements LinearService {
 
     @Override
     public ListenableFuture<JoinResult> join(Join join) {
-        return client.join(join);
+        try {
+            return client.join(join);
+        } catch (Throwable e) {
+            log.error("Unable to join", e);
+            return null;
+        }
     }
 
     public void release() {
-        channel.release();
+        close();
     }
 
     @Override
     public void stopData(StopData stopData) {
-        client.stopData(stopData);
+        try {
+            client.stopData(stopData);
+        } catch (Throwable e) {
+            log.error("Unable to stop", e);
+            return;
+        }
     }
 
 }

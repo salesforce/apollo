@@ -15,7 +15,6 @@ import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -165,7 +164,7 @@ public class Ghost {
         if (!joined()) {
             throw new IllegalStateException("Node has not joined the cluster");
         }
-        CompletionService<Any> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
+        CompletionService<Any> frist = new ExecutorCompletionService<>(parameters.executor);
         List<Future<Any>> futures = context.successors(key).stream().map(successor -> frist.submit(() -> {
             Any Any;
             GhostClientCommunications connection = communications.apply(successor, member);
@@ -241,7 +240,7 @@ public class Ghost {
             throw new IllegalStateException("Node has not joined the cluster");
         }
         Digest key = parameters.digestAlgorithm.digest(Any.toByteString());
-        CompletionService<Boolean> frist = new ExecutorCompletionService<>(ForkJoinPool.commonPool());
+        CompletionService<Boolean> frist = new ExecutorCompletionService<>(parameters.executor);
         List<Future<Boolean>> futures = context.successors(key).stream().map(successor -> frist.submit(() -> {
             if (successor != null) {
                 GhostClientCommunications connection = communications.apply(successor, member);

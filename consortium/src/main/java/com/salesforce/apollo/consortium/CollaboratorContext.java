@@ -21,7 +21,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -82,6 +81,9 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.Utils;
+
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 /**
  * Context for the state machine. These are the leaf actions driven by the FSM.
@@ -248,10 +250,12 @@ public class CollaboratorContext implements Collaborator {
     public void awaitSynchronization() {
         HashedCertifiedBlock anchor = consortium.pollDefered();
         if (anchor != null) {
+            log.info("Recovering from anchor: {} on: {}", anchor.hash, getMember());
             recover(anchor);
             return;
         }
         Parameters params = consortium.params;
+        log.debug("No anchor to recover from on: {}", getMember());
         futureSynchronization = params.scheduler.schedule(() -> {
             futureSynchronization = null;
             consortium.transitions.synchronizationFailed();
@@ -376,7 +380,7 @@ public class CollaboratorContext implements Collaborator {
         Digest hash = new Digest(v.getHash());
         CertifiedBlock.Builder certifiedBlock = workingBlocks.get(hash);
         if (certifiedBlock == null) {
-            log.trace("No working block to validate: {} on: {}", hash, consortium.getMember());
+            log.trace("Delivering validate: {} no working block to validate on: {}", hash, consortium.getMember());
             return;
         }
         log.debug("Delivering validate: {} on: {}", hash, consortium.getMember());
@@ -523,15 +527,22 @@ public class CollaboratorContext implements Collaborator {
                 try {
                     votes.add(new Consortium.Result(c, futureSailor.get()));
                     succeeded = success.incrementAndGet();
+                    processSubmit(voteForMe, votes, pending, completed, succeeded);
                 } catch (InterruptedException e) {
                     log.trace("error submitting join txn to {} on: {}", c, getMember(), e);
                     succeeded = success.get();
                 } catch (ExecutionException e) {
                     succeeded = success.get();
-                    log.trace("error submitting join txn to {} on: {}", c, getMember(), e.getCause());
+                    if (e.getCause() instanceof StatusRuntimeException) {
+                        StatusRuntimeException se = (StatusRuntimeException) e.getCause();
+                        if (se.getStatus() == Status.NOT_FOUND) {
+                            log.trace("Unable to submit join txn, cannot find server: {} on: {}", c, getMember());
+                        }
+                    } else {
+                        log.trace("error submitting join txn to {} on: {}", c, getMember(), e.getCause());
+                    }
                 }
-                processSubmit(voteForMe, votes, pending, completed, succeeded);
-            }, ForkJoinPool.commonPool()); // TODO, put in passed executor
+            }, consortium.params.dispatcher); // TODO, put in passed executor
         });
     }
 
@@ -752,6 +763,7 @@ public class CollaboratorContext implements Collaborator {
         cancelTimers();
         cancelSynchronization();
         toOrder.clear();
+        consortium.submitted.values().forEach(e -> e.cancel());
         consortium.submitted.clear();
         consortium.setGenesis(next);
         consortium.transitions.genesisAccepted();
@@ -784,6 +796,9 @@ public class CollaboratorContext implements Collaborator {
             Digest hash = new Digest(txn.getHash());
             finalized(hash);
             SubmittedTransaction submitted = consortium.submitted.remove(hash);
+            if (submitted != null) {
+                submitted.cancel();
+            }
             exec.execute(next.hash, txn, submitted == null ? null : submitted.onCompletion);
         });
         accept(next);
@@ -1090,12 +1105,10 @@ public class CollaboratorContext implements Collaborator {
         reduceJoinTransactions();
         assert toOrder.size() >= consortium.view.getContext().majority() : "Whoops";
         log.debug("Generating genesis on {} join transactions: {}", consortium.getMember(), toOrder.size());
-        byte[] nextView = new byte[32];
-        Utils.secureEntropy().nextBytes(nextView);
         Parameters params = consortium.params;
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
                                                      .setCheckpointBlocks(params.deltaCheckpointBlocks)
-                                                     .setId(new Digest(digestAlgo(), nextView).toByteString())
+                                                     .setId(params.genesisViewId.toByteString())
                                                      .setTolerance(consortium.view.getContext().majority());
         toOrder.values().forEach(join -> {
             JoinTransaction txn;
@@ -1332,7 +1345,7 @@ public class CollaboratorContext implements Collaborator {
                 }
                 JoinTransaction joinTxn = txn.build();
 
-                Digest txnHash = consortium.submit(null, true, null, joinTxn);
+                Digest txnHash = consortium.submit(null, true, null, joinTxn, null);
                 log.debug("Successfully petitioned: {} to join view: {} on: {}", txnHash,
                           consortium.view.getContext().getId(), consortium.params.member);
             }

@@ -147,7 +147,7 @@ public class MessageTest {
         members.forEach(m -> context.activate(m));
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        ForkJoinPool executor = ForkJoinPool.commonPool();
+        ForkJoinPool executor = Router.createFjPool();
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
@@ -165,7 +165,7 @@ public class MessageTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = 30;
+        int rounds = 100;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch round = new CountDownLatch(messengers.size());
             for (Receiver receiver : receivers.values()) {

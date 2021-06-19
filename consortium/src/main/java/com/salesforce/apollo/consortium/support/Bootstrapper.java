@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -104,6 +103,7 @@ public class Bootstrapper {
             log.info("Restore using genesis: {} on: {}", genesis.hash, params.member);
             lastCheckpoint = store.getLastBlock().block.getBlock().getHeader().getLastCheckpoint();
         } else {
+            log.info("Restore using no prior state on: {}", params.member);
             lastCheckpoint = -1;
         }
     }
@@ -123,7 +123,7 @@ public class Bootstrapper {
 
         CheckpointAssembler assembler = new CheckpointAssembler(checkpoint.height(),
                 CollaboratorContext.checkpointBody(checkpoint.block.getBlock()), params.member, store, comms,
-                params.context, threshold, params.digestAlgorithm);
+                params.context, threshold, params.digestAlgorithm, params.dispatcher);
 
         // assemble the checkpoint
         checkpointAssembled = assembler.assemble(params.scheduler, params.synchronizeDuration)
@@ -175,7 +175,7 @@ public class Bootstrapper {
                       params.member.getId());
             try {
                 ListenableFuture<Blocks> future = link.fetchBlocks(replication);
-                future.addListener(completeAnchor(m, graphCut, future, from, to), ForkJoinPool.commonPool());
+                future.addListener(completeAnchor(m, graphCut, future, from, to), params.dispatcher);
             } finally {
                 link.release();
             }
@@ -244,7 +244,7 @@ public class Bootstrapper {
                       params.member.getId());
             try {
                 ListenableFuture<Blocks> future = link.fetchViewChain(replication);
-                future.addListener(completeViewChain(m, graphCut, future, from, to), ForkJoinPool.commonPool());
+                future.addListener(completeViewChain(m, graphCut, future, from, to), params.dispatcher);
             } finally {
                 link.release();
             }
@@ -431,7 +431,7 @@ public class Bootstrapper {
         log.debug("Attempting synchronization with: {} on: {}", m, params.member);
         try {
             ListenableFuture<Initial> future = link.sync(s);
-            future.addListener(initialize(m, graphCut, future, votes, countdown), ForkJoinPool.commonPool());
+            future.addListener(initialize(m, graphCut, future, votes, countdown), params.dispatcher);
         } finally {
             link.release();
         }
@@ -514,6 +514,7 @@ public class Bootstrapper {
         if (sync.isDone()) {
             return;
         }
+        log.info("Scheduling state sample on: {}", params.member);
         params.scheduler.schedule(() -> {
             try {
                 sample();

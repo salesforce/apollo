@@ -7,7 +7,7 @@
 package com.salesforce.apollo.fireflies.communications;
 
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executor;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -35,8 +35,8 @@ import com.salesforce.apollo.fireflies.Participant;
  */
 public class FfClient implements Fireflies, Link {
 
-    public static CreateClientCommunications<FfClient> getCreate(FireflyMetrics metrics) {
-        return (t, f, c) -> new FfClient(c, (Participant) t, metrics);
+    public static CreateClientCommunications<FfClient> getCreate(FireflyMetrics metrics, Executor executor) {
+        return (t, f, c) -> new FfClient(c, (Participant) t, metrics, executor);
 
     }
 
@@ -44,13 +44,15 @@ public class FfClient implements Fireflies, Link {
     private final FirefliesFutureStub     client;
     private final Participant             member;
     private final FireflyMetrics          metrics;
+    private final Executor                executor;
 
-    public FfClient(ManagedServerConnection channel, Participant member, FireflyMetrics metrics) {
+    public FfClient(ManagedServerConnection channel, Participant member, FireflyMetrics metrics, Executor executor) {
         this.member = member;
         assert !(member instanceof Node) : "whoops : " + member;
         this.channel = channel;
         this.client = FirefliesGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
+        this.executor = executor;
     }
 
     @Override
@@ -93,7 +95,7 @@ public class FfClient implements Fireflies, Link {
                     metrics.inboundBandwidth().mark(gossip.getSerializedSize());
                     metrics.gossipResponse().update(gossip.getSerializedSize());
                 }
-            }, ForkJoinPool.commonPool());
+            }, executor);
             return result;
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);

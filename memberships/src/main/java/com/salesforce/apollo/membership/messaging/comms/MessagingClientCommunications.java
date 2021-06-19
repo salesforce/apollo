@@ -7,7 +7,7 @@
 package com.salesforce.apollo.membership.messaging.comms;
 
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executor;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
@@ -28,21 +28,25 @@ import com.salesforce.apollo.membership.messaging.MessagingMetrics;
  */
 public class MessagingClientCommunications implements Messaging, Link {
 
-    public static CreateClientCommunications<MessagingClientCommunications> getCreate(MessagingMetrics metrics) {
-        return (t, f, c) -> new MessagingClientCommunications(c, t, metrics);
+    public static CreateClientCommunications<MessagingClientCommunications> getCreate(MessagingMetrics metrics,
+                                                                                      Executor exeucutor) {
+        return (t, f, c) -> new MessagingClientCommunications(c, t, metrics, exeucutor);
 
     }
 
     private final ManagedServerConnection channel;
     private final MessagingFutureStub     client;
+    private final Executor                executor;
     private final Member                  member;
     private final MessagingMetrics        metrics;
 
-    public MessagingClientCommunications(ManagedServerConnection channel, Member member, MessagingMetrics metrics) {
+    public MessagingClientCommunications(ManagedServerConnection channel, Member member, MessagingMetrics metrics,
+            Executor executor) {
         this.member = member;
         this.channel = channel;
         this.client = MessagingGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
+        this.executor = executor;
     }
 
     @Override
@@ -71,7 +75,7 @@ public class MessagingClientCommunications implements Messaging, Link {
                 metrics.outboundBandwidth().mark(request.getSerializedSize());
                 metrics.outboundGossipRate().mark();
             }
-        }, ForkJoinPool.commonPool());
+        }, executor);
         return result;
     }
 

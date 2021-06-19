@@ -17,6 +17,7 @@ import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.Sync;
 import com.salesfoce.apollo.consortium.proto.Transaction;
 import com.salesfoce.apollo.consortium.proto.Validate;
+import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Timers;
 import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
@@ -135,8 +136,9 @@ public enum EstablishView implements Transitions {
 
         @Override
         public Transitions deliverValidate(Validate validation) {
-            context().deliverValidate(validation);
-            context().totalOrderDeliver();
+            CollaboratorContext context = context();
+            context.deliverValidate(validation);
+            context.totalOrderDeliver();
             return null;
         }
 

@@ -8,11 +8,13 @@ package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.PublicKey;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,7 +22,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -146,10 +151,9 @@ public class Consortium {
                 return Initial.getDefaultInstance();
             }
             Initial.Builder initial = Initial.newBuilder();
-            CertifiedBlock block = getGenesis().block;
+            HashedCertifiedBlock block = getGenesis();
             if (block != null) {
-                final HashedCertifiedBlock g = new HashedCertifiedBlock(params.digestAlgorithm, block);
-                initial.setGenesis(g.block);
+                initial.setGenesis(block.block);
                 HashedCertifiedBlock cp = getLastCheckpointBlock();
                 if (cp != null) {
                     long height = request.getHeight();
@@ -163,10 +167,10 @@ public class Consortium {
 
                     initial.setCheckpoint(cp.block).setCheckpointView(lastView.block);
 
-                    log.debug("Returning sync: {} view: {} chkpt: {} to: {} on: {}", g.hash, lastView.hash, cp.hash,
+                    log.debug("Returning sync: {} view: {} chkpt: {} to: {} on: {}", block, lastView.hash, cp.hash,
                               from, getMember());
                 } else {
-                    log.debug("Returning sync: {} to: {} on: {}", g.hash, from, getMember());
+                    log.debug("Returning sync: {} to: {} on: {}", block.hash, from, getMember());
                 }
             } else {
                 log.debug("Returning null sync to: {} on: {}", from, getMember());
@@ -478,8 +482,8 @@ public class Consortium {
 
     @SuppressWarnings("unchecked")
     public Digest submit(BiConsumer<Boolean, Throwable> onSubmit, BiConsumer<?, Throwable> onCompletion,
-                         Message transaction) {
-        return submit(onSubmit, false, (BiConsumer<Object, Throwable>) onCompletion, transaction);
+                         Message transaction, Duration timeout) {
+        return submit(onSubmit, false, (BiConsumer<Object, Throwable>) onCompletion, transaction, timeout);
     }
 
     void checkpoint(long height, CheckpointState checkpoint) {
@@ -616,18 +620,19 @@ public class Consortium {
     }
 
     Digest submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,
-                  Message txn) {
+                  Message txn, Duration timeout) {
         if (view.getContext() == null) {
             throw new IllegalStateException(
                     "The current view is undefined, unable to process transactions on: " + getMember());
         }
         EnqueuedTransaction transaction = build(join, txn);
-        submit(transaction, join, onSubmit, onCompletion);
+        submit(transaction, join, onSubmit, onCompletion, timeout);
         return transaction.hash;
     }
 
     void synchronizedProcess(CertifiedBlock certifiedBlock, boolean processDeferred) {
         if (!started.get()) {
+            log.info("Not started on: {}", getMember());
             return;
         }
         HashedCertifiedBlock hcb = new HashedCertifiedBlock(params.digestAlgorithm, certifiedBlock);
@@ -662,8 +667,8 @@ public class Consortium {
         } else {
             if (block.getBody().getType() != BodyType.GENESIS) {
                 deferedBlocks.add(hcb);
-                log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}", getMember(),
-                          hcb.hash, 0, header.getHeight());
+                log.info("Deferring block on {}.  Block: {} height should be {} and block height is {}", getMember(),
+                         hcb.hash, 0, header.getHeight());
                 return;
             }
             Genesis body;
@@ -918,11 +923,13 @@ public class Consortium {
     }
 
     private void submit(EnqueuedTransaction transaction, boolean join, BiConsumer<Boolean, Throwable> onSubmit,
-                        BiConsumer<Object, Throwable> onCompletion) {
+                        BiConsumer<Object, Throwable> onCompletion, Duration timeout) {
         assert transaction.hash.equals(hashOf(params.digestAlgorithm,
                                               transaction.transaction)) : "Hash does not match!";
 
-        submitted.put(transaction.hash, new SubmittedTransaction(transaction.transaction, onCompletion));
+        Future<?> futureTimeout = timeout == null ? null
+                : params.scheduler.schedule(() -> timeout(transaction.hash), timeout.toMillis(), TimeUnit.MILLISECONDS);
+        submitted.put(transaction.hash, new SubmittedTransaction(transaction.transaction, onCompletion, futureTimeout));
         SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
                                                           .setContext(view.getContext().getId().toByteString())
                                                           .setTransaction(transaction.transaction)
@@ -968,6 +975,15 @@ public class Consortium {
         });
     }
 
+    private void timeout(Digest hash) {
+        SubmittedTransaction txn = submitted.remove(hash);
+        if (txn == null) {
+            return;
+        }
+        txn.cancel();
+        txn.onCompletion.accept(null, new TimeoutException("Timeout of transaction: " + qb64(hash)));
+    }
+
     private boolean validateGenesis(Digest hash, CertifiedBlock block, Reconfigure initialView, Context<Member> context,
                                     int majority, Member node) {
         Digest headerHash = params.digestAlgorithm.digest(block.getBlock().getHeader().toByteString());
@@ -998,5 +1014,9 @@ public class Consortium {
         log.debug("Certified: {} required: {} provided: {} for genesis: {} on: {}", certifiedCount, majority,
                   validators.size(), hash, node);
         return certifiedCount >= majority;
+    }
+
+    List<Digest> deferedBlocks() {
+        return deferedBlocks.stream().map(e -> e.hash).collect(Collectors.toList());
     }
 }

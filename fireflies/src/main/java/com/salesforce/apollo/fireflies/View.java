@@ -459,7 +459,7 @@ public class View {
         this.node = node;
         this.fjPool = fjPool;
         this.comm = communications.create(node, id, service, r -> new FfServer(service,
-                communications.getClientIdentityProvider(), metrics, r), getCreate(metrics));
+                communications.getClientIdentityProvider(), metrics, r), getCreate(metrics, fjPool));
         context = new Context<>(id, getParameters().rings);
         diameter = context.diameter(getParameters().cardinality);
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;

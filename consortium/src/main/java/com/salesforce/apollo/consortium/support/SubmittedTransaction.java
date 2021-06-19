@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.consortium.support;
 
+import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
 
 import com.salesfoce.apollo.consortium.proto.Transaction;
@@ -19,9 +20,17 @@ import com.salesfoce.apollo.consortium.proto.Transaction;
 public class SubmittedTransaction {
     public final BiConsumer<Object, Throwable> onCompletion;
     public final Transaction                   submitted;
+    public final Future<?>                     timeout;
 
-    public SubmittedTransaction(Transaction submitted, BiConsumer<Object, Throwable> onCompletion2) {
+    public SubmittedTransaction(Transaction submitted, BiConsumer<Object, Throwable> onCompletion, Future<?> timeout) {
         this.submitted = submitted;
-        this.onCompletion = onCompletion2;
+        this.onCompletion = onCompletion;
+        this.timeout = timeout;
+    }
+
+    public void cancel() {
+        if (timeout != null) {
+            timeout.cancel(true);
+        }
     }
 }

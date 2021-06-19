@@ -147,7 +147,7 @@ public class RingTest {
                                                                   m -> m.equals(members.get(members.size() - 3)))
                                               .collect(Collectors.toList());
         assertFalse(predecessors.isEmpty());
-        assertEquals(7, predecessors.size());
+        assertEquals(6, predecessors.size());
     }
 
     @Test
@@ -179,7 +179,7 @@ public class RingTest {
         Collection<Member> successors = ring.streamSuccessors(members.get(5), m -> m.equals(members.get(3)))
                                             .collect(Collectors.toList());
         assertFalse(successors.isEmpty());
-        assertEquals(7, successors.size());
+        assertEquals(9, successors.size());
     }
 
     @Test

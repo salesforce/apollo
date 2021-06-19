@@ -7,7 +7,6 @@
 package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
@@ -131,7 +130,7 @@ public class ViewContext implements MembershipListener<Member> {
 
     public ViewContext(DigestAlgorithm digestAlgorithm, Reconfigure view, Context<Member> baseContext,
             SigningMember member, KeyPair consensusKeyPair) {
-        this(digestAlgorithm, digest(view.getId()), baseContext, member, consensusKeyPair, view.getViewList());
+        this(digestAlgorithm, Digest.from(view.getId()), baseContext, member, consensusKeyPair, view.getViewList());
     }
 
     public void activeAll() {
