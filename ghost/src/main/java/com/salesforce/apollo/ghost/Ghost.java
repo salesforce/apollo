@@ -166,6 +166,10 @@ public class Ghost {
         }
 
         public Entries intervals(Intervals request, Digest from) {
+            if (from == null) {
+                log.info("Intervals gossip from unknown member on: {}", member);
+                return Entries.getDefaultInstance();
+            }
             Member m = context.getActiveMember(from);
             if (m == null) {
                 log.info("Intervals gossip from unknown member: {} on: {}", from, member);
@@ -177,6 +181,7 @@ public class Ghost {
                          predecessor, from, member);
                 return Entries.getDefaultInstance();
             }
+            log.trace("Intervals gossip from: {} on: {}", from, member);
             return store.entriesIn(new CombinedIntervals(
                     request.getIntervalsList().stream().map(e -> new KeyInterval(e)).collect(Collectors.toList())),
                                    parameters.maxEntries);
@@ -360,7 +365,7 @@ public class Ghost {
             return;
         }
         communications.register(context.getId(), service);
-//        gossip(scheduler, duration);
+        gossip(scheduler, duration);
     }
 
     public void stop() {
@@ -375,24 +380,37 @@ public class Ghost {
             return;
         }
         CombinedIntervals keyIntervals = keyIntervals();
+        log.trace("Starting one round of Ghost gossip on: {} intervals: {}", member, keyIntervals);
         store.populate(keyIntervals, parameters.fpr, Utils.secureEntropy());
-        gossiper.execute((link, ring) -> link.intervals(keyIntervals.toIntervals()), (futureSailor, link, ring) -> {
-            if (!started.get()) {
-                return;
-            }
-            if (futureSailor.isEmpty()) {
-                return;
-            }
-            try {
-                Entries entries = futureSailor.get().get();
-                store.add(entries.getRecordsList());
-            } catch (InterruptedException | ExecutionException e) {
-                log.debug("Error interval gossiping with {} : {}", link.getMember(), e.getCause());
-            }
-            if (started.get()) {
-                scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
-            }
-        });
+        ;
+        gossiper.execute((link,
+                          ring) -> link.intervals(Intervals.newBuilder()
+                                                           .setContext(context.getId().toByteString())
+                                                           .setRing(ring)
+                                                           .addAllIntervals(keyIntervals.toIntervals())
+                                                           .build()),
+                         (futureSailor, link, ring) -> {
+                             if (!started.get()) {
+                                 return;
+                             }
+                             if (futureSailor.isEmpty()) {
+                                 return;
+                             }
+                             try {
+                                 Entries entries = futureSailor.get().get();
+                                 if (entries.getRecordsCount() > 0) {
+                                     log.trace("Received one round of Ghost gossip from: {} on: {} entries: {}", member,
+                                              entries.getRecordsCount());
+                                 }
+                                 store.add(entries.getRecordsList());
+                             } catch (InterruptedException | ExecutionException e) {
+                                 log.debug("Error interval gossiping with {} : {}", link.getMember(), e.getCause());
+                             }
+                             if (started.get()) {
+                                 scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),
+                                                    TimeUnit.MILLISECONDS);
+                             }
+                         });
 
     }
 

@@ -6,14 +6,12 @@
  */
 package com.salesforce.apollo.ghost.communications;
 
-import java.util.List;
-
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
-import com.salesfoce.apollo.ghost.proto.Interval;
+import com.salesfoce.apollo.ghost.proto.Intervals;
 
 /**
  * @author hal.hildebrand
@@ -22,7 +20,7 @@ import com.salesfoce.apollo.ghost.proto.Interval;
 public interface SpaceGhost {
     ListenableFuture<Any> get(Get key);
 
-    ListenableFuture<Entries> intervals(List<Interval> intervals);
+    ListenableFuture<Entries> intervals(Intervals intervals);
 
     void put(Entry value);
 }

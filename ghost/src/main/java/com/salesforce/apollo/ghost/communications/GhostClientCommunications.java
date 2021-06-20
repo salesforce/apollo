@@ -6,15 +6,12 @@
  */
 package com.salesforce.apollo.ghost.communications;
 
-import java.util.List;
-
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.GhostGrpc;
-import com.salesfoce.apollo.ghost.proto.Interval;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
@@ -36,7 +33,6 @@ public class GhostClientCommunications implements SpaceGhost, Link {
     private final Member                    member;
 
     public GhostClientCommunications(ManagedServerConnection channel, Member member) {
-//        assert !(member instanceof Node) : "whoops : " + member + " is not to defined for instance of Node";
         this.member = member;
         this.channel = channel;
         this.client = GhostGrpc.newFutureStub(channel.channel);
@@ -57,10 +53,8 @@ public class GhostClientCommunications implements SpaceGhost, Link {
     }
 
     @Override
-    public ListenableFuture<Entries> intervals(List<Interval> intervals) {
-        Intervals.Builder builder = Intervals.newBuilder();
-        intervals.forEach(e -> builder.addIntervals(e));
-        return client.intervals(builder.build());
+    public ListenableFuture<Entries> intervals(Intervals intervals) {
+        return client.intervals(intervals);
     }
 
     @Override

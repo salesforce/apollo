@@ -49,7 +49,7 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 public class GhostTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static Duration                               gossipDelay     = Duration.ofMillis(10);
+    private static Duration                               gossipDelay     = Duration.ofMillis(500);
     private static final int                              testCardinality = 100;
 
     @BeforeAll
@@ -101,7 +101,7 @@ public class GhostTest {
 
         int rounds = 3;
         Map<Digest, Any> stored = new HashMap<>();
-        Duration timeout = Duration.ofSeconds(5);
+        Duration timeout = Duration.ofSeconds(500);
         for (int i = 0; i < rounds; i++) {
             for (Ghost ghost : ghosties) {
                 Any entry = Any.pack(ByteMessage.newBuilder()
