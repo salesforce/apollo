@@ -67,7 +67,7 @@ public class Bootstrapper {
 
     private static final Logger log = LoggerFactory.getLogger(Bootstrapper.class);
 
-    private static Digest randomCut(DigestAlgorithm algo) {
+    public static Digest randomCut(DigestAlgorithm algo) {
         long[] cut = new long[algo.longLength()];
         for (int i = 0; i < cut.length; i++) {
             cut[i] = Utils.secureEntropy().nextLong();

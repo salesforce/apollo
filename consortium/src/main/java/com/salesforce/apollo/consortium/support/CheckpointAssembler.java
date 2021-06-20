@@ -6,9 +6,12 @@
  */
 package com.salesforce.apollo.consortium.support;
 
+import static com.salesforce.apollo.consortium.support.Bootstrapper.randomCut;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -24,6 +27,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
+import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
 import com.salesforce.apollo.consortium.Store;
@@ -48,12 +52,12 @@ public class CheckpointAssembler {
     private final CommonCommunications<BootstrapClient, BootstrappingService> comms;
     private final Context<Member>                                             context;
     private final DigestAlgorithm                                             digestAlgorithm;
+    private final Executor                                                    executor;
     private final double                                                      fpr;
     private final List<Digest>                                                hashes    = new ArrayList<>();
     private final long                                                        height;
     private final SigningMember                                               member;
     private final MVMap<Integer, byte[]>                                      state;
-    private final Executor                                                    executor;
 
     public CheckpointAssembler(long height, Checkpoint checkpoint, SigningMember member, Store store,
             CommonCommunications<BootstrapClient, BootstrappingService> comms, Context<Member> context,
@@ -95,60 +99,42 @@ public class CheckpointAssembler {
         return request.build();
     }
 
-    private Runnable gossip(BootstrapClient link, ListenableFuture<CheckpointSegments> futureSailor,
-                            Runnable scheduler) {
-        return () -> {
-            link.release();
+    private ListenableFuture<CheckpointSegments> gossip(BootstrapClient link) {
+        log.info("Checkpoint assembly gossip with: {} on: {}", link.getMember(), member);
+        return link.fetch(buildRequest());
+    }
 
-            try {
-                if (process(futureSailor.get())) {
-                    CheckpointState cs = new CheckpointState(checkpoint, state);
-                    log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                             member);
-                    assembled.complete(cs);
-                    return;
-                }
-            } catch (InterruptedException e) {
-                log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member, e);
-            } catch (ExecutionException e) {
-                log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member, e.getCause());
+    private boolean gossip(Optional<ListenableFuture<CheckpointSegments>> futureSailor) {
+        if (futureSailor.isEmpty()) {
+            return true;
+        }
+        try {
+            if (process(futureSailor.get().get())) {
+                CheckpointState cs = new CheckpointState(checkpoint, state);
+                log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
+                assembled.complete(cs);
+                return false;
             }
-            scheduler.run();
-        };
+        } catch (InterruptedException e) {
+            log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member, e);
+        } catch (ExecutionException e) {
+            log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member, e.getCause());
+        }
+        return true;
     }
 
     private void gossip(ScheduledExecutorService scheduler, Duration duration) {
         if (assembled.isDone()) {
             return;
         }
-        Runnable s = () -> scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),
-                                              TimeUnit.MILLISECONDS);
-        try {
-            List<Member> sample = context.sample(1, Utils.bitStreamEntropy(), member.getId());
-            if (sample.size() < 1) {
-                log.trace("No member sample for checkpoint assembly on: {}", member);
-                s.run();
-            }
-            CheckpointReplication request = buildRequest();
-            if (request == null) {
-                log.trace("No member sample for checkpoint assembly on: {}", member);
-                s.run();
-                return;
-            }
-            Member m = sample.get(0);
-            BootstrapClient link = comms.apply(m, member);
-            if (link == null) {
-                log.trace("No link for: {} on: {}", m, member);
-                s.run();
-                return;
-            }
+        log.info("Scheduling assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
+                 member);
+        RingCommunications<BootstrapClient> ringer = new RingCommunications<>(context, member, comms, executor);
+        ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
+                       (tally, futureSailor, link, ring) -> gossip(futureSailor),
+                       () -> scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),
+                                                TimeUnit.MILLISECONDS));
 
-            log.info("Checkpoint assembly gossip with: {} on: {}", m, member);
-            ListenableFuture<CheckpointSegments> fetched = link.fetch(request);
-            fetched.addListener(gossip(link, fetched, s), executor);
-        } catch (Throwable e) {
-            log.error("Error in scheduled checkpoint assembly gossip on: {}", member, e);
-        }
     }
 
     private boolean process(CheckpointSegments segments) {
