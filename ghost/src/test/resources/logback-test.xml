@@ -12,19 +12,14 @@
   %msg%n
             </Pattern>
         </encoder>
-    </appender>  
+    </appender>   
 
-    <logger name="com.salesforce.apollo.fireflies" level="WARN"
+    <logger name="com.salesforce.apollo.comm" level="WARN"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.comm" level="INFO"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
-    <logger name="com.salesforce.apollo.ghost" level="TRACE"
+    <logger name="com.salesforce.apollo.ghost" level="INFO"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

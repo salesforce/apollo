@@ -11,17 +11,18 @@ import java.util.List;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.ghost.proto.Entries;
+import com.salesfoce.apollo.ghost.proto.Entry;
+import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Interval;
-import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public interface SpaceGhost {
-    ListenableFuture<Any> get(Digest key);
+    ListenableFuture<Any> get(Get key);
 
     ListenableFuture<Entries> intervals(List<Interval> intervals);
 
-    void put(Any entry);
+    void put(Entry value);
 }

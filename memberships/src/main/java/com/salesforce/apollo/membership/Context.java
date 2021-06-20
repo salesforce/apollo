@@ -215,7 +215,7 @@ public class Context<T extends Member> {
     public int cardinality() {
         return active.size() + offline.size();
     }
-    
+
     public void clear() {
         for (Ring<T> ring : rings) {
             ring.clear();
@@ -306,7 +306,7 @@ public class Context<T extends Member> {
     }
 
     public int majority() {
-        return cardinality() - toleranceLevel();
+        return getRingCount() - toleranceLevel();
     }
 
     /**

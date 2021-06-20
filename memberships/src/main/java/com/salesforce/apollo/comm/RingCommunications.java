@@ -71,7 +71,14 @@ public class RingCommunications<Comm extends Link> {
     public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                             PredicateHandler<T, Comm> handler, Runnable onMajority, Runnable failedMajority) {
         AtomicInteger tally = new AtomicInteger(0);
-        Runnable proceed = () -> iterate(digest, round, handler, onMajority, failedMajority);
+        internalIterate(digest, round, handler, onMajority, failedMajority, tally);
+
+    }
+
+    <T> void internalIterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
+                             PredicateHandler<T, Comm> handler, Runnable onMajority, Runnable failedMajority,
+                             AtomicInteger tally) {
+        Runnable proceed = () -> internalIterate(digest, round, handler, onMajority, failedMajority, tally);
         try (Comm link = nextRing(digest)) {
             int ringCount = context.getRingCount();
             boolean finalIteration = lastRing % ringCount >= ringCount - 1;
@@ -80,26 +87,33 @@ public class RingCommunications<Comm extends Link> {
                 proceed(allow, tally, majority, finalIteration, onMajority, failedMajority, proceed);
             };
             if (link == null) {
+                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), lastRing,
+                          member);
                 allowed.accept(handler.handle(tally, Optional.empty(), link, lastRing));
                 return;
             }
+            log.trace("Iteration on: {} ring: {} to: {} on: {}", context.getId(), lastRing, link.getMember(), member);
             ListenableFuture<T> futureSailor = round.apply(link, lastRing);
             if (futureSailor == null) {
+                log.trace("No asynchronous response for: {} on: {} ring: {} from: {} on: {}", digest, context.getId(),
+                          lastRing, link.getMember(), member);
                 allowed.accept(handler.handle(tally, Optional.empty(), link, lastRing));
                 return;
             }
             futureSailor.addListener(() -> {
+                log.trace("Response of: {} on: {} ring: {} from: {} on: {}", digest, context.getId(), lastRing,
+                          link.getMember(), member);
                 allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, lastRing) && !finalIteration);
             }, executor);
         } catch (IOException e) {
             log.debug("Error closing");
         }
-
     }
 
     void proceed(Boolean allow, AtomicInteger tally, int majority, boolean finalIteration, Runnable onMajority,
                  Runnable failedMajority, Runnable proceed) {
         if (finalIteration) {
+            log.trace("Final iteration of: {} tally: {} on: {}", context.getId(), tally.get(), member);
             if (failedMajority != null) {
                 if (tally.get() < majority) {
                     failedMajority.run();
@@ -111,7 +125,10 @@ public class RingCommunications<Comm extends Link> {
                 }
             }
         } else if (allow) {
+            log.trace("Proceeding for: {} tally: {} on: {}", context.getId(), tally.get(), member);
             proceed.run();
+        } else {
+            log.trace("Termination of: {} tally: {} on: {}", context.getId(), tally.get(), member);
         }
     }
 
@@ -150,7 +167,7 @@ public class RingCommunications<Comm extends Link> {
         try {
             return comm.apply(successor, member);
         } catch (Throwable e) {
-            log.debug("error opening connection to {}: {}", successor.getId(),
+            log.trace("error opening connection to {}: {}", successor.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
         }
         return null;

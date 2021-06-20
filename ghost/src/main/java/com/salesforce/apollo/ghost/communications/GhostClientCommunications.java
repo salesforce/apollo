@@ -19,8 +19,6 @@ import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -30,7 +28,7 @@ import com.salesforce.apollo.membership.Member;
 public class GhostClientCommunications implements SpaceGhost, Link {
 
     public static CreateClientCommunications<GhostClientCommunications> getCreate() {
-        return (t, f, c) -> new GhostClientCommunications(c, (Participant) t);
+        return (t, f, c) -> new GhostClientCommunications(c, t);
     }
 
     private final ManagedServerConnection   channel;
@@ -50,8 +48,8 @@ public class GhostClientCommunications implements SpaceGhost, Link {
     }
 
     @Override
-    public ListenableFuture<Any> get(Digest entry) {
-        return client.get(Get.newBuilder().setId(entry.toByteString()).build());
+    public ListenableFuture<Any> get(Get key) {
+        return client.get(key);
     }
 
     public Member getMember() {
@@ -66,8 +64,8 @@ public class GhostClientCommunications implements SpaceGhost, Link {
     }
 
     @Override
-    public void put(Any any) {
-        client.put(Entry.newBuilder().setValue(any).build());
+    public void put(Entry value) {
+        client.put(value);
     }
 
     public void release() {

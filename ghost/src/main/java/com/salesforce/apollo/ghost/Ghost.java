@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -28,6 +29,8 @@ import org.slf4j.LoggerFactory;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.ghost.proto.Entries;
+import com.salesfoce.apollo.ghost.proto.Entry;
+import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router;
@@ -41,6 +44,9 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
+
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 /**
  * Spaaaaaaaaaaaace Ghooooooooossssssstttttt.
@@ -88,10 +94,69 @@ import com.salesforce.apollo.utils.Utils;
 public class Ghost {
 
     public static class GhostParameters {
-        public DigestAlgorithm digestAlgorithm = DigestAlgorithm.DEFAULT;
-        public Executor        executor;
-        public double          fpr;
-        public int             maxEntries      = 100;
+        public static class Builder {
+            private DigestAlgorithm digestAlgorithm = DigestAlgorithm.DEFAULT;
+            private Executor        executor        = ForkJoinPool.commonPool();
+            private double          fpr;
+            private int             maxEntries      = 100;
+
+            public GhostParameters build() {
+                return new GhostParameters(digestAlgorithm, executor, fpr, maxEntries);
+            }
+
+            public DigestAlgorithm getDigestAlgorithm() {
+                return digestAlgorithm;
+            }
+
+            public Executor getExecutor() {
+                return executor;
+            }
+
+            public double getFpr() {
+                return fpr;
+            }
+
+            public int getMaxEntries() {
+                return maxEntries;
+            }
+
+            public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
+                this.digestAlgorithm = digestAlgorithm;
+                return this;
+            }
+
+            public Builder setExecutor(Executor executor) {
+                this.executor = executor;
+                return this;
+            }
+
+            public Builder setFpr(double fpr) {
+                this.fpr = fpr;
+                return this;
+            }
+
+            public Builder setMaxEntries(int maxEntries) {
+                this.maxEntries = maxEntries;
+                return this;
+            }
+        }
+
+        public static Builder newBuilder() {
+            return new Builder();
+        }
+
+        public final DigestAlgorithm digestAlgorithm;
+        public final Executor        executor;
+        public final double          fpr;
+
+        public final int maxEntries;
+
+        public GhostParameters(DigestAlgorithm digestAlgorithm, Executor executor, double fpr, int maxEntries) {
+            this.digestAlgorithm = digestAlgorithm;
+            this.executor = executor;
+            this.fpr = fpr;
+            this.maxEntries = maxEntries;
+        }
     }
 
     public class Service {
@@ -123,18 +188,29 @@ public class Ghost {
         }
     }
 
-    public static final int     JOIN_MESSAGE_CHANNEL = 3;
-    private static final Logger log                  = LoggerFactory.getLogger(Ghost.class);
+    public static final int JOIN_MESSAGE_CHANNEL = 3;
 
+    private static final Logger                                            log = LoggerFactory.getLogger(Ghost.class);
     private final CommonCommunications<GhostClientCommunications, Service> communications;
-    private final Context<Member>                                          context;
-    private final RingCommunications<GhostClientCommunications>            gossiper;
-    private final SigningMember                                            member;
-    private final GhostParameters                                          parameters;
-    private final Service                                                  service = new Service();
-    private final AtomicBoolean                                            started = new AtomicBoolean();
 
-    private final Store store;
+    private final Context<Member>                               context;
+    private final RingCommunications<GhostClientCommunications> gossiper;
+    private final SigningMember                                 member;
+    private final GhostParameters                               parameters;
+    private final Service                                       service = new Service();
+    private final AtomicBoolean                                 started = new AtomicBoolean();
+    private final Store                                         store;
+
+    public Ghost(CommonCommunications<GhostClientCommunications, Service> communications, Context<Member> context,
+            RingCommunications<GhostClientCommunications> gossiper, SigningMember member, GhostParameters parameters,
+            Store store) {
+        this.communications = communications;
+        this.context = context;
+        this.gossiper = gossiper;
+        this.member = member;
+        this.parameters = parameters;
+        this.store = store;
+    }
 
     public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, Store s) {
         this.member = member;
@@ -153,11 +229,13 @@ public class Ghost {
      * @return the value associated with ye key
      */
     public Any get(Digest key, Duration timeout) throws TimeoutException {
+        log.trace("Starting Get {}   on: {}", key, member);
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         CompletableFuture<Any> result = new CompletableFuture<>();
+        Get get = Get.newBuilder().setContext(context.getId().toByteString()).setId(key.toByteString()).build();
         new RingCommunications<>(context, member, communications,
-                parameters.executor).iterate(key, (link, r) -> link.get(key), (tally, futureSailor, link, r) -> {
+                parameters.executor).iterate(key, (link, r) -> link.get(get), (tally, futureSailor, link, r) -> {
                     if (futureSailor.isEmpty()) {
                         return !isTimedOut.get();
                     }
@@ -165,16 +243,27 @@ public class Ghost {
                     try {
                         value = futureSailor.get().get();
                     } catch (InterruptedException e) {
-                        log.info("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
+                        log.trace("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
                         return !isTimedOut.get();
                     } catch (ExecutionException e) {
-                        log.info("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+                        Throwable t = e.getCause();
+                        if (t instanceof StatusRuntimeException) {
+                            StatusRuntimeException sre = (StatusRuntimeException) t;
+                            if (sre.getStatus() == Status.NOT_FOUND) {
+                                log.trace("Error fetching: {} server not found: {} on: {}", key, link.getMember(),
+                                          member);
+                                return !isTimedOut.get();
+                            }
+                        }
+                        log.trace("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
                         return !isTimedOut.get();
                     }
                     if (value != null) {
+                        log.trace("Get: {} from: {}  on: {}", key, link.getMember(), member);
                         result.complete(value);
                         return false;
                     } else {
+                        log.trace("Failed get: {} from: {}  on: {}", key, link.getMember(), member);
                         return !isTimedOut.get();
                     }
                 });
@@ -189,6 +278,10 @@ public class Ghost {
             t.initCause(e);
             throw t;
         }
+    }
+
+    public Member getMember() {
+        return member;
     }
 
     /**
@@ -208,11 +301,14 @@ public class Ghost {
      */
     public Digest put(Any value, Duration timeout) throws TimeoutException {
         Digest key = parameters.digestAlgorithm.digest(value.toByteString());
+        log.trace("Starting Put {}   on: {}", key, member);
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        Entry entry = Entry.newBuilder().setContext(context.getId().toByteString()).setValue(value).build();
         new RingCommunications<>(context, member, communications, parameters.executor).iterate(key, (link, r) -> {
-            link.put(value);
+            link.put(entry);
+            log.trace("Put {} to: {} on: {}", key, link.getMember(), member);
             SettableFuture<Boolean> f = SettableFuture.create();
             f.set(true);
             return f;
@@ -223,19 +319,27 @@ public class Ghost {
             try {
                 futureSailor.get().get();
             } catch (InterruptedException e) {
-                log.info("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
+                log.debug("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
                 return !isTimedOut.get();
             } catch (ExecutionException e) {
-                log.info("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+                log.debug("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
                 return !isTimedOut.get();
             }
+            log.trace("Inc put {} on: {}", key, member);
             tally.incrementAndGet();
             return !isTimedOut.get();
-        }, () -> majority.complete(true), () -> majority.complete(false));
+        }, () -> {
+            majority.complete(true);
+            log.trace("Majority put {} on: {}", key, member);
+        }, () -> {
+            majority.complete(false);
+            log.trace("Failed majority put: {}  on: {}", key, member);
+        });
 
         try {
             Boolean completed = majority.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (completed != null && completed) {
+                log.info("Successful put: {}  on: {}", key, member);
                 return key;
             } else {
                 throw new TimeoutException("Partial or complete failure to store: " + key);
@@ -256,7 +360,7 @@ public class Ghost {
             return;
         }
         communications.register(context.getId(), service);
-        gossip(scheduler, duration);
+//        gossip(scheduler, duration);
     }
 
     public void stop() {
@@ -310,9 +414,5 @@ public class Ghost {
             }
         }
         return new CombinedIntervals(intervals);
-    }
-
-    public Member getMember() {
-        return member;
     }
 }

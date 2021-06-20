@@ -7,8 +7,8 @@ Apollo requires the JDK 15+.
 Apollo also requires [Maven](https://maven.apache.org/) 3.6.3 and above.  
 
 ## Protocols
-* Compact, self contained Crypto and Utility module - Self describing Digests,Signatures - self certifying, to boot
-* Stereotomy - Decentralized Identifier based foundation, based on [Key Event Receipt Protocol](https://github.com/decentralized-identity/keri) (KERI).  Self certifying identifiers, etc.
+* Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers 
+* Stereotomy - Decentralized Identifier based foundation, based on [Key Event Receipt Protocol](https://github.com/decentralized-identity/keri) (KERI).
 * MTLS network communication - Local communication simulation supported for trivial multiprocess simulation testing
 * Group based protocol routing - multiple protocol instances per process
 * [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications
@@ -55,6 +55,5 @@ Currently, the system is in heavy devlopment, due to integration of fundamental 
  * apollo-web
  * func-testing
  * model
- * ghost
 
 Most are legacy and will change drastically as the underlying model is developed, so elided until that time.

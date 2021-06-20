@@ -84,6 +84,7 @@ public class GhostTest {
                                            .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0, testCardinality);
+        members.forEach(e -> context.activate(e));
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
@@ -93,7 +94,8 @@ public class GhostTest {
             LocalRouter comms = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
             comms.start();
-            return new Ghost(member, new GhostParameters(), comms, context, new MemoryStore(DigestAlgorithm.DEFAULT));
+            return new Ghost(member, GhostParameters.newBuilder().build(), comms, context,
+                    new MemoryStore(DigestAlgorithm.DEFAULT));
         }).collect(Collectors.toList());
         ghosties.forEach(e -> e.start(scheduler, gossipDelay));
 
@@ -112,7 +114,6 @@ public class GhostTest {
             }
         }
 
-        Thread.sleep(3000);
         for (Entry<Digest, Any> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
                 Any found = ghost.get(entry.getKey(), timeout);
