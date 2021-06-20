@@ -147,7 +147,7 @@ public class RingTest {
                                                                   m -> m.equals(members.get(members.size() - 3)))
                                               .collect(Collectors.toList());
         assertFalse(predecessors.isEmpty());
-        assertEquals(6, predecessors.size());
+        assertEquals(7, predecessors.size());
     }
 
     @Test
