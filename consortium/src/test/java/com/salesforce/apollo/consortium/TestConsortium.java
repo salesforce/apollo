@@ -9,6 +9,7 @@ package com.salesforce.apollo.consortium;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -31,6 +32,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -144,15 +146,32 @@ public class TestConsortium {
                                                                  .setBufferSize(1000)
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
+        AtomicInteger cLabel = new AtomicInteger();
+        Executor blockPool = Executors.newFixedThreadPool(15, r -> {
+            Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
         Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
-                cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
-                    m.process(c);
-                    processed.get().countDown();
-                }));
+                cPipeline.execute(() -> {
+                    CountDownLatch executed = new CountDownLatch(testCardinality);
+                    consortium.values().forEach(m -> {
+                        blockPool.execute(() -> {
+                            m.process(c);
+                            executed.countDown();
+                            processed.get().countDown();
+                        });
+                    });
+                    try {
+                        executed.await();
+                    } catch (InterruptedException e) {
+                        fail("Interrupted consensus", e);
+                    }
+                });
             }
             return hash;
         };
@@ -204,11 +223,17 @@ public class TestConsortium {
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
         System.out.println("Submitting transaction");
-        Digest hash = client.submit(null, (h, t) -> txnProcessed.set(true),
+        Digest hash = client.submit((h, t) -> {
+            if (t != null) {
+                t.printStackTrace();
+            } else {
+                System.out.println("Transaction accepted: " + h + ", awaiting processing");
+            }
+        }, (h, t) -> txnProcessed.set(true),
                                     ByteTransaction.newBuilder()
                                                    .setContent(ByteString.copyFromUtf8("Hello world"))
                                                    .build(),
-                                    null);
+                                    Duration.ofSeconds(20));
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");

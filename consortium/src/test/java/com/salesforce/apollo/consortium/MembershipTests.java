@@ -84,7 +84,7 @@ public class MembershipTests {
                                                    cert -> cert));
     }
 
-    public static void submit(Consortium client, Semaphore outstanding, Set<Digest> submitted,
+    public static Digest submit(Consortium client, Semaphore outstanding, Set<Digest> submitted,
                               final CountDownLatch submittedBunch, Duration timeout) throws InterruptedException {
         outstanding.tryAcquire(10_000, TimeUnit.SECONDS);
         AtomicReference<Digest> pending = new AtomicReference<>();
@@ -103,6 +103,7 @@ public class MembershipTests {
             }
         }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build()), timeout));
         submitted.add(pending.get());
+        return pending.get();
     }
 
     private Map<Digest, Router>           communications = new ConcurrentHashMap<>();
