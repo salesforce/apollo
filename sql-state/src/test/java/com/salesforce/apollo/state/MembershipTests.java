@@ -86,6 +86,7 @@ public class MembershipTests {
     private static final Message                          GENESIS_DATA    = batch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
     private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private final static int                              MAX_CARDINALITY = 11;
+    private static final Duration                         timeout         = Duration.ofSeconds(20);
 
     @BeforeAll
     public static void beforeClass() {
@@ -101,10 +102,10 @@ public class MembershipTests {
     private File                               checkpointDirBase;
     private Map<Digest, Router>                communications = new ConcurrentHashMap<>();
     private final Map<Member, Consortium>      consortium     = new ConcurrentHashMap<>();
-    private List<SigningMember>                members;
-    private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
     private Context<Member>                    context;
+    private List<SigningMember>                members;
     private ScheduledExecutorService           scheduler;
+    private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
 
     @AfterEach
     public void after() {
@@ -231,7 +232,7 @@ public class MembershipTests {
                                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
-                                           (h, t) -> txnProcessed.set(true));
+                                           (h, t) -> txnProcessed.set(true), timeout);
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -276,7 +277,7 @@ public class MembershipTests {
                 outstanding.release();
                 submitted.remove(key.get());
                 submittedBunch.countDown();
-            }));
+            }, timeout));
             submitted.add(key.get());
         }));
 
@@ -314,7 +315,7 @@ public class MembershipTests {
                 outstanding.release();
                 submitted.remove(key.get());
                 remaining.countDown();
-            }));
+            }, timeout));
             submitted.add(key.get());
         }));
 
@@ -432,7 +433,7 @@ public class MembershipTests {
                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
-                                       (h, t) -> txnProcessed.set(true));
+                                       (h, t) -> txnProcessed.set(true), timeout);
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -477,7 +478,7 @@ public class MembershipTests {
                 outstanding.release();
                 submitted.remove(key.get());
                 submittedBunch.countDown();
-            }));
+            }, timeout));
             submitted.add(key.get());
         }));
 
@@ -515,7 +516,7 @@ public class MembershipTests {
                 outstanding.release();
                 submitted.remove(key.get());
                 remaining.countDown();
-            }));
+            }, timeout));
             submitted.add(key.get());
         }));
 

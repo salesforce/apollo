@@ -86,6 +86,7 @@ public class ConsortiumTest {
     private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private static final Duration                         gossipDuration  = Duration.ofMillis(10);
     private final static int                              testCardinality = 5;
+    private static final Duration                         timeout         = Duration.ofSeconds(20);
 
     @BeforeAll
     public static void beforeClass() {
@@ -238,7 +239,7 @@ public class ConsortiumTest {
                                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
-                                           (h, t) -> txnProcessed.set(true));
+                                           (h, t) -> txnProcessed.set(true), timeout);
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -283,7 +284,7 @@ public class ConsortiumTest {
                 outstanding.release();
                 submitted.remove(key.get());
                 submittedBunch.countDown();
-            }));
+            }, timeout));
             submitted.add(key.get());
         }));
 

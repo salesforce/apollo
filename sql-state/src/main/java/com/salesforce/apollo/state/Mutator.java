@@ -17,6 +17,7 @@ import java.sql.SQLException;
 import java.sql.SQLType;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -118,12 +119,12 @@ public class Mutator {
             return new Completion<>();
         }
 
-        public Digest submit() {
-            return node.submit(null, (r, t) -> process(r, t), build());
+        public Digest submit(Duration timeout) {
+            return node.submit(null, (r, t) -> process(r, t), build(), timeout);
         }
 
-        public Digest submit(BiConsumer<Boolean, Throwable> onSubmit) {
-            return node.submit(onSubmit, (r, t) -> process(r, t), build());
+        public Digest submit(BiConsumer<Boolean, Throwable> onSubmit, Duration timeout) {
+            return node.submit(onSubmit, (r, t) -> process(r, t), build(), timeout);
         }
 
         private Message build() {
@@ -395,68 +396,68 @@ public class Mutator {
         return new BatchBuilder(node);
     }
 
-    public Digest execute(Batch batch) {
-        return node.submit(null, null, batch);
+    public Digest execute(Batch batch, Duration timeout) {
+        return node.submit(null, null, batch, timeout);
     }
 
-    public Digest execute(Batch batch, BiConsumer<int[], Throwable> processor) {
-        return node.submit(null, processor, batch);
+    public Digest execute(Batch batch, BiConsumer<int[], Throwable> processor, Duration timeout) {
+        return node.submit(null, processor, batch, timeout);
     }
 
-    public Digest execute(Batch batch, BiConsumer<int[], Throwable> processor,
-                          BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, batch);
+    public Digest execute(Batch batch, BiConsumer<int[], Throwable> processor, BiConsumer<Boolean, Throwable> onSubmit,
+                          Duration timeout) {
+        return node.submit(onSubmit, processor, batch, timeout);
     }
 
-    public Digest execute(BatchUpdate batchUpdate) {
-        return node.submit(null, null, batchUpdate);
+    public Digest execute(BatchUpdate batchUpdate, Duration timeout) {
+        return node.submit(null, null, batchUpdate, timeout);
     }
 
-    public Digest execute(BatchUpdate batchUpdate, BiConsumer<int[], Throwable> processor) {
-        return node.submit(null, processor, batchUpdate);
+    public Digest execute(BatchUpdate batchUpdate, BiConsumer<int[], Throwable> processor, Duration timeout) {
+        return node.submit(null, processor, batchUpdate, timeout);
     }
 
     public Digest execute(BatchUpdate batchUpdate, BiConsumer<int[], Throwable> processor,
-                          BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, batchUpdate);
+                          BiConsumer<Boolean, Throwable> onSubmit, Duration timeout) {
+        return node.submit(onSubmit, processor, batchUpdate, timeout);
     }
 
-    public <T> Digest execute(Call call) {
-        return node.submit(null, null, call);
+    public <T> Digest execute(Call call, Duration timeout) {
+        return node.submit(null, null, call, timeout);
     }
 
-    public Digest execute(Call call, BiConsumer<CallResult, Throwable> processor) {
-        return node.submit(null, processor, call);
+    public Digest execute(Call call, BiConsumer<CallResult, Throwable> processor, Duration timeout) {
+        return node.submit(null, processor, call, timeout);
     }
 
     public Digest execute(Call call, BiConsumer<CallResult, Throwable> processor,
-                          BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, call);
+                          BiConsumer<Boolean, Throwable> onSubmit, Duration timeout) {
+        return node.submit(onSubmit, processor, call, timeout);
     }
 
-    public Digest execute(Script script) {
-        return node.submit(null, null, script);
+    public Digest execute(Script script, Duration timeout) {
+        return node.submit(null, null, script, timeout);
     }
 
-    public <T> Digest execute(Script script, BiConsumer<T, Throwable> processor) {
-        return node.submit(null, processor, script);
+    public <T> Digest execute(Script script, BiConsumer<T, Throwable> processor, Duration timeout) {
+        return node.submit(null, processor, script, timeout);
     }
 
     public <T> Digest execute(Script script, BiConsumer<T, Throwable> processor,
-                              BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, script);
+                              BiConsumer<Boolean, Throwable> onSubmit, Duration timeout) {
+        return node.submit(onSubmit, processor, script, timeout);
     }
 
-    public Digest execute(Statement statement) {
-        return node.submit(null, null, statement);
+    public Digest execute(Statement statement, Duration timeout) {
+        return node.submit(null, null, statement, timeout);
     }
 
-    public Digest execute(Statement statement, BiConsumer<List<ResultSet>, Throwable> processor) {
-        return node.submit(null, processor, statement);
+    public Digest execute(Statement statement, BiConsumer<List<ResultSet>, Throwable> processor, Duration timeout) {
+        return node.submit(null, processor, statement, timeout);
     }
 
     public Digest execute(Statement statement, BiConsumer<List<ResultSet>, Throwable> processor,
-                          BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, statement);
+                          BiConsumer<Boolean, Throwable> onSubmit, Duration timeout) {
+        return node.submit(onSubmit, processor, statement, timeout);
     }
 }
