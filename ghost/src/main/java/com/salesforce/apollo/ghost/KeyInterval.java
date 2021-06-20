@@ -10,31 +10,50 @@ import java.util.function.Predicate;
 
 import com.salesfoce.apollo.ghost.proto.Interval;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.utils.BloomFilter;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class KeyInterval implements Predicate<Digest> {
-    private final Digest begin;
-    private final Digest end;
+    private final Digest        begin;
+    private BloomFilter<Digest> bff;
+    private final Digest        end;
 
     public KeyInterval(Digest begin, Digest end) {
-        assert begin.compareTo(end) < 0 : begin + " >= " + end;
-        this.begin = begin;
-        this.end = end;
+        this(begin, end, null);
     }
 
     public KeyInterval(Interval interval) {
-        this(new Digest(interval.getStart()), new Digest(interval.getEnd()));
+        this(new Digest(interval.getStart()), new Digest(interval.getEnd()), BloomFilter.from(interval.getBiff()));
+    }
+
+    private KeyInterval(Digest begin, Digest end, BloomFilter<Digest> bff) {
+        assert begin.compareTo(end) < 0 : begin + " >= " + end;
+        this.begin = begin;
+        this.end = end;
+        this.bff = bff;
+    }
+
+    public boolean contains(Digest e) {
+        return bff.contains(e);
     }
 
     public Digest getBegin() {
         return begin;
     }
 
+    public BloomFilter<Digest> getBff() {
+        return bff;
+    }
+
     public Digest getEnd() {
         return end;
+    }
+
+    public void setBff(BloomFilter<Digest> bff) {
+        this.bff = bff;
     }
 
     @Override

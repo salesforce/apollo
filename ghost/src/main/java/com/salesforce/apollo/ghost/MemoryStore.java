@@ -6,17 +6,19 @@
  */
 package com.salesforce.apollo.ghost;
 
-import java.util.ArrayList;
+import java.security.SecureRandom;
 import java.util.List;
-import java.util.Set;
+import java.util.NavigableSet;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.Any;
+import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.utils.BloomFilter;
+import com.salesforce.apollo.utils.BloomFilter.DigestBloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -25,35 +27,32 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 public class MemoryStore implements Store {
 
     private final ConcurrentNavigableMap<Digest, Any> data = new ConcurrentSkipListMap<>();
-    private final DigestAlgorithm digestAlgorithm;
+    private final DigestAlgorithm                     digestAlgorithm;
 
     public MemoryStore(DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
     }
 
     @Override
-    public void add(List<Any> entries, List<Digest> total) {
+    public void add(List<Any> entries) {
         entries.forEach(e -> {
             var key = digestAlgorithm.digest(e.toByteString());
             data.put(key, e);
-            total.add(key);
         });
     }
 
     @Override
-    public List<Any> entriesIn(CombinedIntervals combined, List<Digest> have) { // TODO refactor using IBLT or
-                                                                                // such
-        Set<Digest> canHas = new ConcurrentSkipListSet<>();
-        have.forEach(e -> canHas.add(e)); // really expensive
-        List<Any> entries = new ArrayList<>(); // TODO batching. we do need stinking batches for realistic scale
-        combined.getIntervals().forEach(i -> {
+    public Entries entriesIn(CombinedIntervals combined, int maxEntries) {
+        Entries.Builder builder = Entries.newBuilder();
+        combined.getIntervals().forEach(interval -> {
             data.keySet()
-                .subSet(i.getBegin(), true, i.getEnd(), false)
+                .subSet(interval.getBegin(), true, interval.getEnd(), false)
                 .stream()
-                .filter(e -> !canHas.contains(e))
-                .forEach(e -> entries.add(data.get(e)));
+                .filter(e -> !interval.contains(e))
+                .limit(maxEntries)
+                .forEach(e -> builder.addRecords(data.get(e)));
         });
-        return entries;
+        return builder.build();
     }
 
     @Override
@@ -77,6 +76,16 @@ public class MemoryStore implements Store {
     @Override
     public List<Digest> keySet() {
         return data.keySet().stream().collect(Collectors.toList());
+    }
+
+    @Override
+    public void populate(CombinedIntervals keyIntervals, double fpr, SecureRandom entropy) {
+        keyIntervals.getIntervals().forEach(interval -> {
+            NavigableSet<Digest> subSet = data.keySet().subSet(interval.getBegin(), true, interval.getEnd(), false);
+            BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size() * 2, fpr);
+            subSet.forEach(h -> bff.add(h));
+            interval.setBff(bff);
+        });
     }
 
     @Override

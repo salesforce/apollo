@@ -21,7 +21,7 @@ import com.salesforce.apollo.crypto.Digest;
 public interface SpaceGhost {
     ListenableFuture<Any> get(Digest key);
 
-    ListenableFuture<Entries> intervals(List<Interval> intervals, List<Digest> have);
+    ListenableFuture<Entries> intervals(List<Interval> intervals);
 
     void put(Any entry);
 }

@@ -4,19 +4,25 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.membership;
+package com.salesforce.apollo.comm;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.membership.SigningMember;
 
 /**
  * @author hal.hildebrand
@@ -57,7 +63,59 @@ public class RingCommunications<Comm extends Link> {
         }
     }
 
-    public void stop() {
+    public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
+                            PredicateHandler<T, Comm> handler) {
+        iterate(digest, round, handler, null, null);
+    }
+
+    public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
+                            PredicateHandler<T, Comm> handler, Runnable onMajority, Runnable failedMajority) {
+        AtomicInteger tally = new AtomicInteger(0);
+        Runnable proceed = () -> iterate(digest, round, handler, onMajority, failedMajority);
+        try (Comm link = nextRing(digest)) {
+            int ringCount = context.getRingCount();
+            boolean finalIteration = lastRing % ringCount >= ringCount - 1;
+            int majority = context.majority();
+            Consumer<Boolean> allowed = allow -> {
+                proceed(allow, tally, majority, finalIteration, onMajority, failedMajority, proceed);
+            };
+            if (link == null) {
+                allowed.accept(handler.handle(tally, Optional.empty(), link, lastRing));
+                return;
+            }
+            ListenableFuture<T> futureSailor = round.apply(link, lastRing);
+            if (futureSailor == null) {
+                allowed.accept(handler.handle(tally, Optional.empty(), link, lastRing));
+                return;
+            }
+            futureSailor.addListener(() -> {
+                allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, lastRing) && !finalIteration);
+            }, executor);
+        } catch (IOException e) {
+            log.debug("Error closing");
+        }
+
+    }
+
+    void proceed(Boolean allow, AtomicInteger tally, int majority, boolean finalIteration, Runnable onMajority,
+                 Runnable failedMajority, Runnable proceed) {
+        if (finalIteration) {
+            if (failedMajority != null) {
+                if (tally.get() < majority) {
+                    failedMajority.run();
+                }
+            }
+            if (onMajority != null) {
+                if (tally.get() >= majority) {
+                    onMajority.run();
+                }
+            }
+        } else if (allow) {
+            proceed.run();
+        }
+    }
+
+    public void reset() {
         lastRing = -1;
     }
 
@@ -69,13 +127,15 @@ public class RingCommunications<Comm extends Link> {
     private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler,
                              Comm link) {
         if (link == null) {
-            handler.handle(null, link, lastRing);
+            handler.handle(Optional.empty(), link, lastRing);
         } else {
             ListenableFuture<T> futureSailor = round.apply(link, lastRing);
             if (futureSailor == null) {
-                handler.handle(null, link, lastRing);
+                handler.handle(Optional.empty(), link, lastRing);
             } else {
-                futureSailor.addListener(() -> handler.handle(futureSailor, link, lastRing), executor);
+                futureSailor.addListener(() -> {
+                    handler.handle(Optional.of(futureSailor), link, lastRing);
+                }, executor);
             }
         }
     }

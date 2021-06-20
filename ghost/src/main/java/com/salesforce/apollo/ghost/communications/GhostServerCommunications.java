@@ -8,8 +8,6 @@ package com.salesforce.apollo.ghost.communications;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 
-import java.util.stream.Collectors;
-
 import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Entries;
@@ -28,7 +26,6 @@ import io.grpc.stub.StreamObserver;
  * @since 220
  */
 public class GhostServerCommunications extends GhostImplBase {
-    @SuppressWarnings("unused")
     private final ClientIdentity           identity;
     private final RoutableService<Service> router;
 
@@ -48,11 +45,7 @@ public class GhostServerCommunications extends GhostImplBase {
     @Override
     public void intervals(Intervals request, StreamObserver<Entries> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            Entries.Builder builder = Entries.newBuilder();
-            s.intervals(request.getIntervalsList(),
-                        request.getHaveList().stream().map(e -> digest(e)).collect(Collectors.toList()))
-             .forEach(e -> builder.addRecords(e));
-            responseObserver.onNext(builder.build());
+            responseObserver.onNext(s.intervals(request, identity.getFrom()));
             responseObserver.onCompleted();
         });
 

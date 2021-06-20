@@ -59,7 +59,7 @@ public class GhostClientCommunications implements SpaceGhost, Link {
     }
 
     @Override
-    public ListenableFuture<Entries> intervals(List<Interval> intervals, List<Digest> have) {
+    public ListenableFuture<Entries> intervals(List<Interval> intervals) {
         Intervals.Builder builder = Intervals.newBuilder();
         intervals.forEach(e -> builder.addIntervals(e));
         return client.intervals(builder.build());

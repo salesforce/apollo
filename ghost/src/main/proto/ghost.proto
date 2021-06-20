@@ -9,10 +9,6 @@ import "google/protobuf/empty.proto";
 
 package ghost; 
 
-service TestIt {
-    rpc ping ( google.protobuf.Any ) returns (google.protobuf.Any) {}
-}
-
 service Ghost {
 
     rpc get ( Get ) returns (google.protobuf.Any) {}
@@ -32,8 +28,8 @@ message Entries {
 
 message Intervals {
     bytes context = 1;
-    repeated Interval intervals = 2;
-    repeated bytes have = 3;
+    int32 ring = 2;
+    repeated Interval intervals = 3;
 }
 
 message Get {
@@ -44,4 +40,5 @@ message Get {
 message Interval {
         bytes start = 1;
         bytes end = 2;
+        bytes biff = 3;
 }
