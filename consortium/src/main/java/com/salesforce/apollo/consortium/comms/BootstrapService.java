@@ -13,12 +13,13 @@ import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.Initial;
 import com.salesfoce.apollo.consortium.proto.Synchronize;
+import com.salesforce.apollo.comm.Link;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface BootstrapService {
+public interface BootstrapService extends Link {
 
     ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request);
 

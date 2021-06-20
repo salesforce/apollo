@@ -10,6 +10,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -56,7 +57,6 @@ import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.cert.CaValidator;
-import com.salesforce.apollo.fireflies.communications.FfClient;
 import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -185,7 +185,7 @@ public class View {
             if (!started.get()) {
                 return;
             }
-            FfClient link = nextRing();
+            Fireflies link = nextRing();
 
             if (link == null) {
                 log.debug("No members to gossip with on ring: {}", lastRing);
@@ -218,7 +218,7 @@ public class View {
                 return;
             }
 
-            FfClient link = linkFor(successor);
+            Fireflies link = linkFor(successor);
             if (link == null) {
                 log.info("Accusing: {} on: {}", successor.getId(), ring);
                 accuseOn(successor, ring);
@@ -345,8 +345,8 @@ public class View {
         /**
          * @return the next ClientCommunications in the next ring
          */
-        FfClient nextRing() {
-            FfClient link = null;
+        Fireflies nextRing() {
+            Fireflies link = null;
             int last = lastRing;
             int current = (last + 1) % getParameters().rings;
             for (int i = 0; i < getParameters().rings; i++) {
@@ -399,7 +399,7 @@ public class View {
     /**
      * Communications with other members
      */
-    private final CommonCommunications<FfClient, Service> comm;
+    private final CommonCommunications<Fireflies, Service> comm;
 
     /**
      * View context
@@ -458,8 +458,33 @@ public class View {
         this.metrics = metrics;
         this.node = node;
         this.fjPool = fjPool;
+        Fireflies localLoopback = new Fireflies() {
+
+            @Override
+            public void close() throws IOException {
+            }
+
+            @Override
+            public Member getMember() {
+                return node;
+            }
+
+            @Override
+            public void update(Digest context, int ring, Update update) {
+            }
+
+            @Override
+            public int ping(Digest context, int ping) {
+                return 1;
+            }
+
+            @Override
+            public ListenableFuture<Gossip> gossip(Digest context, Note note, int ring, Digests digests) {
+                return null;
+            }
+        };
         this.comm = communications.create(node, id, service, r -> new FfServer(service,
-                communications.getClientIdentityProvider(), metrics, r), getCreate(metrics, fjPool));
+                communications.getClientIdentityProvider(), metrics, r), getCreate(metrics, fjPool), localLoopback);
         context = new Context<>(id, getParameters().rings);
         diameter = context.diameter(getParameters().cardinality);
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
@@ -888,11 +913,14 @@ public class View {
      * @param completion
      * @throws Exception
      */
-    void gossip(int ring, FfClient link, Runnable completion) {
-        Participant member = link.getMember();
+    void gossip(int ring, Fireflies link, Runnable completion) {
+        Participant member = (Participant) link.getMember();
         NoteWrapper n = node.getNote();
         if (n == null) {
-            link.release();
+            try {
+                link.close();
+            } catch (IOException e) {
+            }
             completion.run();
             return;
         }
@@ -905,7 +933,10 @@ public class View {
                 gossip = futureSailor.get();
             } catch (Throwable e) {
                 log.debug("Exception gossiping with {}", link.getMember(), e);
-                link.release();
+                try {
+                    link.close();
+                } catch (IOException e1) {
+                }
                 if (completion != null) {
                     completion.run();
                 }
@@ -918,7 +949,10 @@ public class View {
                           gossip.getAccusations().getUpdatesCount());
             }
             if (gossip.getRedirect()) {
-                link.release();
+                try {
+                    link.close();
+                } catch (IOException e) {
+                }
                 redirect(member, gossip, ring);
                 if (completion != null) {
                     completion.run();
@@ -928,7 +962,10 @@ public class View {
                 if (!isEmpty(update)) {
                     link.update(context.getId(), ring, update);
                 }
-                link.release();
+                try {
+                    link.close();
+                } catch (IOException e) {
+                }
                 if (completion != null) {
                     completion.run();
                 }
@@ -975,7 +1012,7 @@ public class View {
      * @return the communication link for this ring, based on current membership
      *         state
      */
-    FfClient linkFor(Integer ring) {
+    Fireflies linkFor(Integer ring) {
         Participant successor = context.ring(ring).successor(node, m -> !m.isFailed());
         if (successor == null) {
             log.debug("No successor to node on ring: {} members: {}", ring, context.ring(ring).size());
@@ -1017,16 +1054,19 @@ public class View {
      * @param link     - the ClientCommunications link to check
      * @param lastRing - the ring for this link
      */
-    void monitor(FfClient link, int lastRing) {
+    void monitor(Fireflies link, int lastRing) {
         try {
             link.ping(context.getId(), 200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
         } catch (Exception e) {
             log.debug("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(),
                       e.getCause().getMessage());
-            accuseOn(link.getMember(), lastRing);
+            accuseOn((Participant) link.getMember(), lastRing);
         } finally {
-            link.release();
+            try {
+                link.close();
+            } catch (IOException e) {
+            }
         }
     }
 
@@ -1317,7 +1357,7 @@ public class View {
         return builder.build();
     }
 
-    private FfClient linkFor(Participant m) {
+    private Fireflies linkFor(Participant m) {
         try {
             return comm.apply(m, node);
         } catch (Throwable e) {

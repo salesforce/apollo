@@ -12,12 +12,13 @@ import com.salesfoce.apollo.consortium.proto.JoinResult;
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
+import com.salesforce.apollo.comm.Link;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface LinearService {
+public interface LinearService extends Link {
 
     ListenableFuture<TransactionResult> clientSubmit(SubmitTransaction request);
 

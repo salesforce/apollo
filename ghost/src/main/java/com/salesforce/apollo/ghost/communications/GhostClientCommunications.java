@@ -13,7 +13,6 @@ import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.GhostGrpc;
 import com.salesfoce.apollo.ghost.proto.Intervals;
-import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -22,9 +21,9 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  * @since 220
  */
-public class GhostClientCommunications implements SpaceGhost, Link {
+public class GhostClientCommunications implements SpaceGhost {
 
-    public static CreateClientCommunications<GhostClientCommunications> getCreate() {
+    public static CreateClientCommunications<SpaceGhost> getCreate() {
         return (t, f, c) -> new GhostClientCommunications(c, t);
     }
 

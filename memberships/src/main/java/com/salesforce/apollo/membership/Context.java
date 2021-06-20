@@ -169,7 +169,7 @@ public class Context<T extends Member> {
         this.id = id;
         this.rings = new Ring[r];
         for (int i = 0; i < r; i++) {
-            rings[i] = new Ring<T>(i, (m, ring) -> hashFor(m, ring), (d, ring) -> contextHash(d, ring));
+            rings[i] = new Ring<T>(i, (m, ring) -> hashFor(m, ring));
         }
     }
 
@@ -495,15 +495,13 @@ public class Context<T extends Member> {
         return "Context [id=" + id + " " + ring(0) + "]";
     }
 
-    Digest contextHash(Digest key, int ring) {
-        return key.getAlgorithm().digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
-    }
-
     Digest hashFor(T m, int index) {
         Digest[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
             Digest[] s = new Digest[rings.length];
             for (int ring = 0; ring < rings.length; ring++) {
-                s[ring] = contextHash(m.getId(), ring);
+                Digest key = m.getId();
+                s[ring] = key.getAlgorithm()
+                             .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
             }
             return s;
         });

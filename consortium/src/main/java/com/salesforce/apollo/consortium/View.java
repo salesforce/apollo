@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.consortium;
 
+import java.io.IOException;
 import java.security.KeyPair;
 import java.time.Duration;
 import java.util.List;
@@ -17,17 +18,25 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
+import com.salesfoce.apollo.consortium.proto.Join;
+import com.salesfoce.apollo.consortium.proto.JoinResult;
+import com.salesfoce.apollo.consortium.proto.StopData;
+import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
+import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.comms.LinearClient;
 import com.salesforce.apollo.consortium.comms.LinearServer;
+import com.salesforce.apollo.consortium.comms.LinearService;
 import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
@@ -39,24 +48,49 @@ import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 public class View {
     private static final Logger log = LoggerFactory.getLogger(View.class);
 
-    private final AtomicReference<CommonCommunications<LinearClient, Service>>  comm                     = new AtomicReference<>();
-    private final AtomicReference<ViewContext>                                  context                  = new AtomicReference<>();
-    private final Function<Digest, CommonCommunications<LinearClient, Service>> createClientComms;
-    private final AtomicReference<Messenger>                                    messenger                = new AtomicReference<>();
-    private final AtomicReference<ViewMember>                                   nextView                 = new AtomicReference<>();
-    private final AtomicReference<KeyPair>                                      nextViewConsensusKeyPair = new AtomicReference<>();
-    private final AtomicReference<MemberOrder>                                  order                    = new AtomicReference<>();
-    private final Parameters                                                    params;
-    private final BiConsumer<Digest, List<Msg>>                                 process;
-    private final Service                                                       service;
+    private final AtomicReference<CommonCommunications<LinearService, Service>>  comm                     = new AtomicReference<>();
+    private final AtomicReference<ViewContext>                                   context                  = new AtomicReference<>();
+    private final Function<Digest, CommonCommunications<LinearService, Service>> createClientComms;
+    private final AtomicReference<Messenger>                                     messenger                = new AtomicReference<>();
+    private final AtomicReference<ViewMember>                                    nextView                 = new AtomicReference<>();
+    private final AtomicReference<KeyPair>                                       nextViewConsensusKeyPair = new AtomicReference<>();
+    private final AtomicReference<MemberOrder>                                   order                    = new AtomicReference<>();
+    private final Parameters                                                     params;
+    private final BiConsumer<Digest, List<Msg>>                                  process;
+    private final Service                                                        service;
 
     public View(Service service, Parameters parameters, BiConsumer<Digest, List<Msg>> process) {
         this.service = service;
+        LinearService localLoopback = new LinearService() {
+
+            @Override
+            public void close() throws IOException {
+            }
+
+            @Override
+            public Member getMember() {
+                return parameters.member;
+            }
+
+            @Override
+            public void stopData(StopData stopData) {
+            }
+
+            @Override
+            public ListenableFuture<JoinResult> join(Join join) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<TransactionResult> clientSubmit(SubmitTransaction request) {
+                return null;
+            }
+        };
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, service,
                                                                        r -> new LinearServer(
                                                                                parameters.communications.getClientIdentityProvider(),
                                                                                null, r),
-                                                                       LinearClient.getCreate(null));
+                                                                       LinearClient.getCreate(null), localLoopback);
         this.params = parameters;
         this.process = process;
     }
@@ -70,7 +104,7 @@ public class View {
         nextViewConsensusKeyPair.set(null);
     }
 
-    public CommonCommunications<LinearClient, Service> getComm() {
+    public CommonCommunications<LinearService, Service> getComm() {
         return comm.get();
     }
 
@@ -119,7 +153,7 @@ public class View {
     }
 
     public void pause() {
-        CommonCommunications<LinearClient, Service> currentComm = comm.get();
+        CommonCommunications<LinearService, Service> currentComm = comm.get();
         if (currentComm != null) {
             ViewContext current = context.get();
             assert current != null : "No current view, but comm exists!";
@@ -177,7 +211,7 @@ public class View {
     }
 
     private void resume(Service service, Duration gossipDuration, ScheduledExecutorService scheduler) {
-        CommonCommunications<LinearClient, Service> currentComm = getComm();
+        CommonCommunications<LinearService, Service> currentComm = getComm();
         if (currentComm != null) {
             ViewContext current = getContext();
             assert current != null : "No current view, but comm exists!";

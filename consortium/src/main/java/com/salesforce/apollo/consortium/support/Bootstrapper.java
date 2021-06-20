@@ -30,10 +30,10 @@ import com.salesfoce.apollo.consortium.proto.Synchronize;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.CollaboratorContext;
-import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
+import com.salesforce.apollo.consortium.Consortium.Bootstrapping;
 import com.salesforce.apollo.consortium.Parameters;
 import com.salesforce.apollo.consortium.Store;
-import com.salesforce.apollo.consortium.comms.BootstrapClient;
+import com.salesforce.apollo.consortium.comms.BootstrapService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.BloomFilter;
@@ -75,22 +75,22 @@ public class Bootstrapper {
         return new Digest(algo, cut);
     }
 
-    private final HashedCertifiedBlock                                        anchor;
-    private final CompletableFuture<Boolean>                                  anchorSynchronized    = new CompletableFuture<>();
-    private HashedCertifiedBlock                                              checkpoint;
-    private CompletableFuture<CheckpointState>                                checkpointAssembled;
-    private CheckpointState                                                   checkpointState;
-    private HashedCertifiedBlock                                              checkpointView;
-    private final CommonCommunications<BootstrapClient, BootstrappingService> comms;
-    private volatile HashedCertifiedBlock                                     genesis;
-    private final long                                                        lastCheckpoint;
-    private final Parameters                                                  params;
-    private final Store                                                       store;
-    private final CompletableFuture<SynchronizedState>                        sync                  = new CompletableFuture<>();
-    private final CompletableFuture<Boolean>                                  viewChainSynchronized = new CompletableFuture<>();
+    private final HashedCertifiedBlock                                  anchor;
+    private final CompletableFuture<Boolean>                            anchorSynchronized    = new CompletableFuture<>();
+    private HashedCertifiedBlock                                        checkpoint;
+    private CompletableFuture<CheckpointState>                          checkpointAssembled;
+    private CheckpointState                                             checkpointState;
+    private HashedCertifiedBlock                                        checkpointView;
+    private final CommonCommunications<BootstrapService, Bootstrapping> comms;
+    private volatile HashedCertifiedBlock                               genesis;
+    private final long                                                  lastCheckpoint;
+    private final Parameters                                            params;
+    private final Store                                                 store;
+    private final CompletableFuture<SynchronizedState>                  sync                  = new CompletableFuture<>();
+    private final CompletableFuture<Boolean>                            viewChainSynchronized = new CompletableFuture<>();
 
     public Bootstrapper(HashedCertifiedBlock anchor, Parameters params, Store store,
-            CommonCommunications<BootstrapClient, BootstrappingService> bootstrapComm) {
+            CommonCommunications<BootstrapService, Bootstrapping> bootstrapComm) {
         this.anchor = anchor;
         this.params = params;
         this.store = store;
@@ -120,7 +120,7 @@ public class Bootstrapper {
                                            () -> scheduleAnchorCompletion(start, end));
     }
 
-    private ListenableFuture<Blocks> anchor(BootstrapClient link, AtomicLong start, long end) {
+    private ListenableFuture<Blocks> anchor(BootstrapService link, AtomicLong start, long end) {
         log.debug("Attempting Anchor completion ({} to {}) with: {} on: {}", start, end, link.getMember().getId(),
                   params.member.getId());
         int seed = Utils.bitStreamEntropy().nextInt();
@@ -169,7 +169,7 @@ public class Bootstrapper {
     }
 
     private boolean completeAnchor(Optional<ListenableFuture<Blocks>> futureSailor, AtomicLong start, long end,
-                                   BootstrapClient link) {
+                                   BootstrapService link) {
         if (sync.isDone() || anchorSynchronized.isDone() || futureSailor.isEmpty()) {
             return false;
         }
@@ -204,7 +204,7 @@ public class Bootstrapper {
                                            () -> scheduleViewChainCompletion(start, end));
     }
 
-    private ListenableFuture<Blocks> completeViewChain(BootstrapClient link, AtomicLong start, long end) {
+    private ListenableFuture<Blocks> completeViewChain(BootstrapService link, AtomicLong start, long end) {
         log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", start.get(), end,
                   link.getMember().getId(), params.member.getId());
         int seed = Utils.bitStreamEntropy().nextInt();
@@ -223,7 +223,7 @@ public class Bootstrapper {
     }
 
     private boolean completeViewChain(Optional<ListenableFuture<Blocks>> futureSailor, AtomicLong start, long end,
-                                      BootstrapClient link) {
+                                      BootstrapService link) {
         if (sync.isDone() || anchorSynchronized.isDone() || futureSailor.isEmpty()) {
             return false;
         }
@@ -422,7 +422,7 @@ public class Bootstrapper {
     }
 
     private boolean synchronize(Optional<ListenableFuture<Initial>> futureSailor, HashMap<Digest, Initial> votes,
-                                BootstrapClient link) {
+                                BootstrapService link) {
         final HashedCertifiedBlock established = genesis;
         if (sync.isDone() || established != null || futureSailor.isEmpty()) {
             return false;
@@ -447,7 +447,7 @@ public class Bootstrapper {
         return true;
     }
 
-    private ListenableFuture<Initial> synchronize(Synchronize s, BootstrapClient link) {
+    private ListenableFuture<Initial> synchronize(Synchronize s, BootstrapService link) {
         log.debug("Attempting synchronization with: {} on: {}", link.getMember(), params.member);
         return link.sync(s);
     }

@@ -14,7 +14,7 @@ import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.Initial;
 import com.salesfoce.apollo.consortium.proto.Synchronize;
 import com.salesforce.apollo.comm.RoutableService;
-import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
+import com.salesforce.apollo.consortium.Consortium.Bootstrapping;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
@@ -25,13 +25,12 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class BoostrapServer extends BoostrapImplBase {
-    private ClientIdentity                              identity;
+    private ClientIdentity                       identity;
     @SuppressWarnings("unused")
-    private final ConsortiumMetrics                     metrics;
-    private final RoutableService<BootstrappingService> router;
+    private final ConsortiumMetrics              metrics;
+    private final RoutableService<Bootstrapping> router;
 
-    public BoostrapServer(ClientIdentity identity, ConsortiumMetrics metrics,
-            RoutableService<BootstrappingService> router) {
+    public BoostrapServer(ClientIdentity identity, ConsortiumMetrics metrics, RoutableService<Bootstrapping> router) {
         this.metrics = metrics;
         this.identity = identity;
         this.router = router;

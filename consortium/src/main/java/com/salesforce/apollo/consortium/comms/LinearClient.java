@@ -17,7 +17,6 @@ import com.salesfoce.apollo.consortium.proto.LinearServiceGrpc.LinearServiceFutu
 import com.salesfoce.apollo.consortium.proto.StopData;
 import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
-import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -26,10 +25,10 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public class LinearClient implements LinearService, Link {
+public class LinearClient implements LinearService {
     private static Logger log = LoggerFactory.getLogger(LinearClient.class);
 
-    public static CreateClientCommunications<LinearClient> getCreate(ConsortiumMetrics metrics) {
+    public static CreateClientCommunications<LinearService> getCreate(ConsortiumMetrics metrics) {
         return (t, f, c) -> new LinearClient(c, t, metrics);
 
     }

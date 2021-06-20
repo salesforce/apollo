@@ -15,13 +15,14 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
+import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public interface Avalanche {
+public interface AvalancheService extends Link {
 
     ListenableFuture<QueryResult> query(Digest context, List<Pair<Digest, ByteString>> transactions,
                                         Collection<Digest> wanted);

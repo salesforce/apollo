@@ -10,6 +10,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -42,7 +43,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
-import com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications;
 import com.salesforce.apollo.membership.messaging.comms.MessagingServerCommunications;
 import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
@@ -182,16 +182,16 @@ public class Messenger {
 
     private static final Logger log = LoggerFactory.getLogger(Messenger.class);
 
-    private final MessageBuffer                                                buffer;
-    private final List<MessageHandler>                                         channelHandlers = new CopyOnWriteArrayList<>();
-    private final CommonCommunications<MessagingClientCommunications, Service> comm;
-    private final Context<Member>                                              context;
-    private final RingCommunications<MessagingClientCommunications>            gossiper;
-    private final SigningMember                                                member;
-    private final Parameters                                                   parameters;
-    private final AtomicInteger                                                round           = new AtomicInteger();
-    private final List<Consumer<Integer>>                                      roundListeners  = new CopyOnWriteArrayList<>();
-    private final AtomicBoolean                                                started         = new AtomicBoolean();
+    private final MessageBuffer                            buffer;
+    private final List<MessageHandler>                     channelHandlers = new CopyOnWriteArrayList<>();
+    private final CommonCommunications<Messaging, Service> comm;
+    private final Context<Member>                          context;
+    private final RingCommunications<Messaging>            gossiper;
+    private final SigningMember                            member;
+    private final Parameters                               parameters;
+    private final AtomicInteger                            round           = new AtomicInteger();
+    private final List<Consumer<Integer>>                  roundListeners  = new CopyOnWriteArrayList<>();
+    private final AtomicBoolean                            started         = new AtomicBoolean();
 
     @SuppressWarnings("unchecked")
     public Messenger(SigningMember member, Context<? extends Member> context, Router communications,
@@ -200,10 +200,30 @@ public class Messenger {
         this.parameters = parameters;
         this.context = (Context<Member>) context;
         this.buffer = new MessageBuffer(parameters.digestAlgorithm, parameters.bufferSize, context.timeToLive());
+        Messaging localLoopback = new Messaging() {
+
+            @Override
+            public void update(Push push) {
+            }
+
+            @Override
+            public ListenableFuture<Messages> gossip(MessageBff bff) {
+                return null;
+            }
+
+            @Override
+            public Member getMember() {
+                return member;
+            }
+
+            @Override
+            public void close() throws IOException {
+            }
+        };
         this.comm = communications.create(member, context.getId(), new Service(),
                                           r -> new MessagingServerCommunications(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
-                                          getCreate(parameters.metrics, executor));
+                                          getCreate(parameters.metrics, executor), localLoopback);
         gossiper = new RingCommunications<>(this.context, member, this.comm, executor);
     }
 
@@ -275,7 +295,7 @@ public class Messenger {
         comm.deregister(context.getId());
     }
 
-    private ListenableFuture<Messages> gossipRound(MessagingClientCommunications link, int ring) {
+    private ListenableFuture<Messages> gossipRound(Messaging link, int ring) {
         if (!started.get()) {
             return null;
         }
@@ -291,8 +311,8 @@ public class Messenger {
                                      .build());
     }
 
-    private void handle(Optional<ListenableFuture<Messages>> futureSailor, MessagingClientCommunications link, int ring,
-                        Duration duration, ScheduledExecutorService scheduler) {
+    private void handle(Optional<ListenableFuture<Messages>> futureSailor, Messaging link, int ring, Duration duration,
+                        ScheduledExecutorService scheduler) {
         try {
             if (futureSailor.isEmpty()) {
                 return;

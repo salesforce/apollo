@@ -28,9 +28,10 @@ import com.salesforce.apollo.membership.messaging.MessagingMetrics;
  */
 public class MessagingClientCommunications implements Messaging, Link {
 
-    public static CreateClientCommunications<MessagingClientCommunications> getCreate(MessagingMetrics metrics,
-                                                                                      Executor exeucutor) {
-        return (t, f, c) -> new MessagingClientCommunications(c, t, metrics, exeucutor);
+    public static CreateClientCommunications<Messaging> getCreate(MessagingMetrics metrics, Executor exeucutor) {
+        return (t, f, c) -> {
+            return new MessagingClientCommunications(c, t, metrics, exeucutor);
+        };
 
     }
 

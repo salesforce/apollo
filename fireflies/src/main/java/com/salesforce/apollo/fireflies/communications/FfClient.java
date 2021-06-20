@@ -20,7 +20,6 @@ import com.salesfoce.apollo.fireflies.proto.Null;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesfoce.apollo.fireflies.proto.Update;
-import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
@@ -33,9 +32,9 @@ import com.salesforce.apollo.fireflies.Participant;
  * @author hal.hildebrand
  * @since 220
  */
-public class FfClient implements Fireflies, Link {
+public class FfClient implements Fireflies {
 
-    public static CreateClientCommunications<FfClient> getCreate(FireflyMetrics metrics, Executor executor) {
+    public static CreateClientCommunications<Fireflies> getCreate(FireflyMetrics metrics, Executor executor) {
         return (t, f, c) -> new FfClient(c, (Participant) t, metrics, executor);
 
     }

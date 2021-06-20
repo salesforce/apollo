@@ -32,19 +32,17 @@ import com.salesforce.apollo.crypto.Digest;
  * @since 220
  */
 public class Ring<T extends Member> implements Iterable<T> {
-    private final BiFunction<Digest, Integer, Digest> digestHasher;
-    private final BiFunction<T, Integer, Digest>      hasher;
-    private final int                                 index;
-    private final ConcurrentNavigableMap<Digest, T>   ring = new ConcurrentSkipListMap<>();
+    private final BiFunction<T, Integer, Digest>    hasher;
+    private final int                               index;
+    private final ConcurrentNavigableMap<Digest, T> ring = new ConcurrentSkipListMap<>();
 
     public Ring() {
-        this(0, (m, r) -> m.getId(), (d, r) -> d);
+        this(0, (m, r) -> m.getId());
     }
 
-    public Ring(int index, BiFunction<T, Integer, Digest> hasher, BiFunction<Digest, Integer, Digest> digestHasher) {
+    public Ring(int index, BiFunction<T, Integer, Digest> hasher) {
         this.index = index;
         this.hasher = hasher;
-        this.digestHasher = digestHasher;
     }
 
     /**
@@ -229,7 +227,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         is never evaluated.
      */
     public T predecessor(Digest location, Predicate<T> predicate) {
-        return pred(digestHasher.apply(location, index), predicate);
+        return pred(location, predicate);
     }
 
     /**
@@ -250,6 +248,10 @@ public class Ring<T extends Member> implements Iterable<T> {
         return pred(hash(m), predicate);
     }
 
+    public Iterable<T> predecessors(Digest location) {
+        return predecessors(location, m -> true);
+    }
+
     /**
      * @param location
      * @param predicate
@@ -258,7 +260,11 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         predicate(item) evaluates to True.
      */
     public Iterable<T> predecessors(Digest location, Predicate<T> predicate) {
-        return preds(digestHasher.apply(location, index), predicate);
+        return preds(location, predicate);
+    }
+
+    public Iterable<T> predecessors(T start) {
+        return predecessors(start, m -> true);
     }
 
     /**
@@ -368,7 +374,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         never evaluated..
      */
     public T successor(Digest hash, Predicate<T> predicate) {
-        return succ(digestHasher.apply(hash, index), predicate);
+        return succ(hash, predicate);
     }
 
     /**
@@ -389,6 +395,10 @@ public class Ring<T extends Member> implements Iterable<T> {
         return succ(hash(m), predicate);
     }
 
+    public Iterable<T> successors(Digest location) {
+        return successors(location, m -> true);
+    }
+
     /**
      * @param start
      * @param predicate
@@ -397,7 +407,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         predicate(item) evaluates to True.
      */
     public Iterable<T> successors(Digest location, Predicate<T> predicate) {
-        return succs(digestHasher.apply(location, index), predicate);
+        return succs(location, predicate);
     }
 
     /**

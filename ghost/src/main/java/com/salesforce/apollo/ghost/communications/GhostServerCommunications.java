@@ -37,7 +37,7 @@ public class GhostServerCommunications extends GhostImplBase {
     @Override
     public void get(Get request, StreamObserver<Any> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            responseObserver.onNext(s.get(digest(request.getId())));
+            responseObserver.onNext(s.get(request));
             responseObserver.onCompleted();
         });
     }
@@ -54,7 +54,7 @@ public class GhostServerCommunications extends GhostImplBase {
     @Override
     public void put(Entry request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            s.put(request.getValue());
+            s.put(request);
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
         });

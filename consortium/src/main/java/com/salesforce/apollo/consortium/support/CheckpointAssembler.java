@@ -29,9 +29,9 @@ import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
+import com.salesforce.apollo.consortium.Consortium.Bootstrapping;
 import com.salesforce.apollo.consortium.Store;
-import com.salesforce.apollo.consortium.comms.BootstrapClient;
+import com.salesforce.apollo.consortium.comms.BootstrapService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
@@ -47,20 +47,20 @@ import com.salesforce.apollo.utils.Utils;
 public class CheckpointAssembler {
     private static final Logger log = LoggerFactory.getLogger(CheckpointAssembler.class);
 
-    private final CompletableFuture<CheckpointState>                          assembled = new CompletableFuture<>();
-    private final Checkpoint                                                  checkpoint;
-    private final CommonCommunications<BootstrapClient, BootstrappingService> comms;
-    private final Context<Member>                                             context;
-    private final DigestAlgorithm                                             digestAlgorithm;
-    private final Executor                                                    executor;
-    private final double                                                      fpr;
-    private final List<Digest>                                                hashes    = new ArrayList<>();
-    private final long                                                        height;
-    private final SigningMember                                               member;
-    private final MVMap<Integer, byte[]>                                      state;
+    private final CompletableFuture<CheckpointState>                    assembled = new CompletableFuture<>();
+    private final Checkpoint                                            checkpoint;
+    private final CommonCommunications<BootstrapService, Bootstrapping> comms;
+    private final Context<Member>                                       context;
+    private final DigestAlgorithm                                       digestAlgorithm;
+    private final Executor                                              executor;
+    private final double                                                fpr;
+    private final List<Digest>                                          hashes    = new ArrayList<>();
+    private final long                                                  height;
+    private final SigningMember                                         member;
+    private final MVMap<Integer, byte[]>                                state;
 
     public CheckpointAssembler(long height, Checkpoint checkpoint, SigningMember member, Store store,
-            CommonCommunications<BootstrapClient, BootstrappingService> comms, Context<Member> context,
+            CommonCommunications<BootstrapService, Bootstrapping> comms, Context<Member> context,
             double falsePositiveRate, DigestAlgorithm digestAlgorithm, Executor executor) {
         this.height = height;
         this.member = member;
@@ -99,7 +99,7 @@ public class CheckpointAssembler {
         return request.build();
     }
 
-    private ListenableFuture<CheckpointSegments> gossip(BootstrapClient link) {
+    private ListenableFuture<CheckpointSegments> gossip(BootstrapService link) {
         log.info("Checkpoint assembly gossip with: {} on: {}", link.getMember(), member);
         return link.fetch(buildRequest());
     }
@@ -129,7 +129,7 @@ public class CheckpointAssembler {
         }
         log.info("Scheduling assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
                  member);
-        RingCommunications<BootstrapClient> ringer = new RingCommunications<>(context, member, comms, executor);
+        RingCommunications<BootstrapService> ringer = new RingCommunications<>(context, member, comms, executor);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),
                        () -> scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),

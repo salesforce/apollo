@@ -35,7 +35,7 @@ public class AvalancheParameters {
     }
 
     /**
-     * Core parameters to the Avalanche protocol
+     * Core parameters to the AvalancheService protocol
      */
     public CoreParameters core                     = new CoreParameters();
     /**

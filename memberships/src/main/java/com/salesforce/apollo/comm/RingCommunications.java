@@ -29,17 +29,40 @@ import com.salesforce.apollo.membership.SigningMember;
  *
  */
 public class RingCommunications<Comm extends Link> {
+    public enum Direction {
+        PREDECESSOR {
+            @Override
+            public Member retrieve(Ring<Member> ring, Digest hash, Member member) {
+                return hash == null ? ring.predecessor(member) : ring.predecessor(hash);
+            }
+        },
+        SUCCESSOR {
+            @Override
+            public Member retrieve(Ring<Member> ring, Digest hash, Member member) {
+                return hash == null ? ring.successor(member) : ring.successor(hash);
+            }
+        };
+
+        public abstract Member retrieve(Ring<Member> ring, Digest hash, Member member);
+    }
 
     private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
 
     private final CommonCommunications<Comm, ?> comm;
     private final Context<Member>               context;
+    private final Direction                     direction;
     private final Executor                      executor;
     private volatile int                        lastRing = -1;
     private final SigningMember                 member;
 
     public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
             Executor executor) {
+        this(Direction.SUCCESSOR, context, member, comm, executor);
+    }
+
+    public RingCommunications(Direction direction, Context<Member> context, SigningMember member,
+            CommonCommunications<Comm, ?> comm, Executor executor) {
+        this.direction = direction;
         this.context = context;
         this.executor = executor;
         this.member = member;
@@ -78,6 +101,15 @@ public class RingCommunications<Comm extends Link> {
         AtomicInteger tally = new AtomicInteger(0);
         internalIterate(digest, round, handler, onMajority, failedMajority, tally, onComplete);
 
+    }
+
+    public void reset() {
+        lastRing = -1;
+    }
+
+    @Override
+    public String toString() {
+        return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + lastRing + "]";
     }
 
     <T> void internalIterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
@@ -140,15 +172,6 @@ public class RingCommunications<Comm extends Link> {
         }
     }
 
-    public void reset() {
-        lastRing = -1;
-    }
-
-    @Override
-    public String toString() {
-        return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + lastRing + "]";
-    }
-
     private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler,
                              Comm link) {
         if (link == null) {
@@ -167,7 +190,7 @@ public class RingCommunications<Comm extends Link> {
 
     private Comm linkFor(Digest digest, int r) {
         Ring<Member> ring = context.ring(r);
-        Member successor = digest == null ? ring.successor(member) : ring.successor(digest);
+        Member successor = direction.retrieve(ring, digest, member);
         if (successor == null) {
             log.debug("No successor to: {} on ring: {} members: {}", digest, r, ring.size());
             return null;

@@ -33,17 +33,19 @@ abstract public class Router {
     public class CommonCommunications<Client extends Link, Service>
             implements BiFunction<Member, SigningMember, Client> {
         private final CreateClientCommunications<Client> createFunction;
+        private final Client                             localLoopback;
         private final RoutableService<Service>           routing;
 
-        public CommonCommunications(RoutableService<Service> routing,
-                CreateClientCommunications<Client> createFunction) {
+        public CommonCommunications(RoutableService<Service> routing, CreateClientCommunications<Client> createFunction,
+                Client localLoopback) {
             this.routing = routing;
             this.createFunction = createFunction;
+            this.localLoopback = localLoopback;
         }
 
         @Override
         public Client apply(Member to, SigningMember from) {
-            return cache.borrow(to, from, createFunction);
+            return to.equals(from) ? localLoopback : cache.borrow(to, from, createFunction);
         }
 
         public void deregister(Digest context) {
@@ -82,7 +84,8 @@ abstract public class Router {
     public <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
                                                                                        Service service,
                                                                                        Function<RoutableService<Service>, BindableService> factory,
-                                                                                       CreateClientCommunications<Client> createFunction) {
+                                                                                       CreateClientCommunications<Client> createFunction,
+                                                                                       Client localLoopback) {
         @SuppressWarnings("unchecked")
         RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(service.getClass(),
                                                                                                c -> {
@@ -93,7 +96,7 @@ abstract public class Router {
                                                                                                });
         routing.bind(context, service);
         log.info("Communications created for: " + member.getId());
-        return new CommonCommunications<Client, Service>(routing, createFunction);
+        return new CommonCommunications<Client, Service>(routing, createFunction, localLoopback);
     }
 
     abstract public ClientIdentity getClientIdentityProvider();

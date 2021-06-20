@@ -11,13 +11,14 @@ import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.Update;
+import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface Fireflies {
+public interface Fireflies extends Link {
 
     ListenableFuture<Gossip> gossip(Digest context, Note note, int ring, Digests digests);
 

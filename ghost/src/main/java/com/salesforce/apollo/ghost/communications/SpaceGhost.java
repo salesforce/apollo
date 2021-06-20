@@ -12,12 +12,13 @@ import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
+import com.salesforce.apollo.comm.Link;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
-public interface SpaceGhost {
+public interface SpaceGhost extends Link {
     ListenableFuture<Any> get(Get key);
 
     ListenableFuture<Entries> intervals(Intervals intervals);

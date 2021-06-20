@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.avalanche;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -51,6 +52,7 @@ import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.communications.AvalancheClient;
 import com.salesforce.apollo.avalanche.communications.AvalancheServer;
+import com.salesforce.apollo.avalanche.communications.AvalancheService;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -62,7 +64,7 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
 
 /**
- * Implementation of the Avalanche consensus protocol.
+ * Implementation of the AvalancheService consensus protocol.
  * 
  * @author hal.hildebrand
  * @since 220
@@ -169,22 +171,22 @@ public class Avalanche {
     private final static Logger log                = LoggerFactory.getLogger(Avalanche.class);
     private final static String STORE_MAP_TEMPLATE = "%s-%s-blocks";
 
-    private final CommonCommunications<AvalancheClient, Service> comm;
-    private final Context<? extends Member>                      context;
-    private final WorkingSet                                     dag;
-    private final int                                            invalidThreshold;
-    private final AvalancheMetrics                               metrics;
-    private final SigningMember                                  node;
-    private final AvalancheParameters                            parameters;
-    private final BlockingDeque<Digest>                          parentSample = new LinkedBlockingDeque<>();
-    private final Processor                                      processor;
-    private final Executor                                       queryExecutor;
-    private volatile ScheduledFuture<?>                          queryFuture;
-    private final AtomicLong                                     queryRounds  = new AtomicLong();
-    private final int                                            required;
-    private final AtomicBoolean                                  running      = new AtomicBoolean();
-    private volatile ScheduledFuture<?>                          scheduledNoOpsCull;
-    private final Service                                        service      = new Service();
+    private final CommonCommunications<AvalancheService, Service> comm;
+    private final Context<? extends Member>                       context;
+    private final WorkingSet                                      dag;
+    private final int                                             invalidThreshold;
+    private final AvalancheMetrics                                metrics;
+    private final SigningMember                                   node;
+    private final AvalancheParameters                             parameters;
+    private final BlockingDeque<Digest>                           parentSample = new LinkedBlockingDeque<>();
+    private final Processor                                       processor;
+    private final Executor                                        queryExecutor;
+    private volatile ScheduledFuture<?>                           queryFuture;
+    private final AtomicLong                                      queryRounds  = new AtomicLong();
+    private final int                                             required;
+    private final AtomicBoolean                                   running      = new AtomicBoolean();
+    private volatile ScheduledFuture<?>                           scheduledNoOpsCull;
+    private final Service                                         service      = new Service();
 
     public Avalanche(SigningMember node, Context<? extends Member> context, Router communications,
             AvalancheParameters p, AvalancheMetrics metrics, Processor processor, MVStore store,
@@ -194,10 +196,34 @@ public class Avalanche {
         this.node = node;
         this.context = context;
         this.queryExecutor = queryExecutor;
+        AvalancheService localLoopback = new AvalancheService() {
+
+            @Override
+            public void close() throws IOException {
+                // TODO Auto-generated method stub
+
+            }
+
+            @Override
+            public Member getMember() {
+                return getNode();
+            }
+
+            @Override
+            public ListenableFuture<SuppliedDagNodes> requestDAG(Digest context, Collection<Digest> want) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<QueryResult> query(Digest context, List<Pair<Digest, ByteString>> transactions,
+                                                       Collection<Digest> wanted) {
+                return null;
+            }
+        };
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new AvalancheServer(communications.getClientIdentityProvider(), metrics,
                                                   r),
-                                          AvalancheClient.getCreate(metrics, queryExecutor));
+                                          AvalancheClient.getCreate(metrics, queryExecutor), localLoopback);
         MVMap.Builder<Digest, byte[]> builder = new MVMap.Builder<Digest, byte[]>().keyType(new DigestType());
 
         this.dag = new WorkingSet(processor, parameters,
@@ -358,7 +384,7 @@ public class Avalanche {
             return;
         }
         Member member = new ArrayList<Member>(sample).get(Utils.bitStreamEntropy().nextInt(sample.size()));
-        AvalancheClient connection = comm.apply(member, getNode());
+        AvalancheService connection = comm.apply(member, getNode());
         if (connection == null) {
             log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
         }
@@ -368,7 +394,10 @@ public class Avalanche {
             try {
                 suppliedDagNodes = entries.get();
             } catch (Exception e) {
-                connection.release();
+                try {
+                    connection.close();
+                } catch (IOException e1) {
+                }
                 log.trace("Error requesting DAG {} for {}", member, wanted.size(), e);
                 return;
             }
@@ -385,7 +414,10 @@ public class Avalanche {
                     metrics.getSatisfiedRate().mark(suppliedDagNodes.getEntriesList().size());
                 }
             } finally {
-                connection.release();
+                try {
+                    connection.close();
+                } catch (IOException e) {
+                }
             }
         }, queryExecutor);
     }
@@ -463,7 +495,7 @@ public class Avalanche {
     private void query(Member member, List<Pair<Digest, ByteString>> query, AtomicInteger[] invalid,
                        AtomicInteger[] votes, CompletableFuture<List<Boolean>> futureSailor, AtomicInteger completed,
                        List<Boolean> queryResults, Collection<Digest> want, Member wanted) {
-        AvalancheClient connection = comm.apply(member, getNode());
+        AvalancheService connection = comm.apply(member, getNode());
         if (connection == null) {
             log.info("No connection querying {} for {} queries", member, query.size());
             for (int j = 0; j < query.size(); j++) {
@@ -603,7 +635,7 @@ public class Avalanche {
                     }), period.toMillis(), TimeUnit.MILLISECONDS);
                 }) == 0);
             } catch (Throwable t) {
-                log.error("Error performing Avalanche batch round", t);
+                log.error("Error performing AvalancheService batch round", t);
             }
         });
     }

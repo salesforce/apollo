@@ -10,12 +10,13 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.Messages;
 import com.salesfoce.apollo.messaging.proto.Push;
+import com.salesforce.apollo.comm.Link;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface Messaging {
+public interface Messaging extends Link {
 
     ListenableFuture<Messages> gossip(MessageBff bff);
 

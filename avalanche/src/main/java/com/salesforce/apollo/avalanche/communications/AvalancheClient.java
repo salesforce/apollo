@@ -24,7 +24,6 @@ import com.salesfoce.apollo.proto.Query.Builder;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
 import com.salesforce.apollo.avalanche.AvalancheMetrics;
-import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
@@ -35,9 +34,9 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  * @since 220
  */
-public class AvalancheClient implements Avalanche, Link {
+public class AvalancheClient implements AvalancheService {
 
-    public static CreateClientCommunications<AvalancheClient> getCreate(AvalancheMetrics metrics, Executor executor) {
+    public static CreateClientCommunications<AvalancheService> getCreate(AvalancheMetrics metrics, Executor executor) {
         return (t, f, c) -> new AvalancheClient(c, t, metrics, executor);
 
     }

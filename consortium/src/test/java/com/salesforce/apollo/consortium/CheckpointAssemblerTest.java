@@ -48,8 +48,9 @@ import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.Slice;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
+import com.salesforce.apollo.consortium.Consortium.Bootstrapping;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
+import com.salesforce.apollo.consortium.comms.BootstrapService;
 import com.salesforce.apollo.consortium.support.CheckpointAssembler;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
@@ -156,7 +157,7 @@ public class CheckpointAssemblerTest {
             }
         });
         @SuppressWarnings("unchecked")
-        CommonCommunications<BootstrapClient, BootstrappingService> comm = mock(CommonCommunications.class);
+        CommonCommunications<BootstrapService, Bootstrapping> comm = mock(CommonCommunications.class);
         when(comm.apply(any(), any())).thenReturn(client);
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());

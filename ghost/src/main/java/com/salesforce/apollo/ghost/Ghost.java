@@ -8,10 +8,12 @@ package com.salesforce.apollo.ghost;
 
 import static com.salesforce.apollo.ghost.communications.GhostClientCommunications.getCreate;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -20,12 +22,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.ghost.proto.Entries;
@@ -33,12 +37,13 @@ import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesforce.apollo.comm.RingCommunications;
+import com.salesforce.apollo.comm.RingCommunications.Direction;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.ghost.communications.GhostClientCommunications;
 import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
+import com.salesforce.apollo.ghost.communications.SpaceGhost;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
@@ -161,8 +166,8 @@ public class Ghost {
 
     public class Service {
 
-        public Any get(Digest key) {
-            return store.get(key);
+        public Any get(Get get) {
+            return store.get(Digest.from(get.getId()));
         }
 
         public Entries intervals(Intervals request, Digest from) {
@@ -175,10 +180,10 @@ public class Ghost {
                 log.info("Intervals gossip from unknown member: {} on: {}", from, member);
                 return Entries.getDefaultInstance();
             }
-            Member predecessor = context.ring(request.getRing()).predecessor(member);
-            if (!predecessor.equals(m)) {
+            Member successor = context.ring(request.getRing()).successor(member);
+            if (!successor.equals(m)) {
                 log.info("Invalid intervals gossip on ring: {} expecting: {} from: {} on: {}", request.getRing(),
-                         predecessor, from, member);
+                         successor, from, member);
                 return Entries.getDefaultInstance();
             }
             log.trace("Intervals gossip from: {} on: {}", from, member);
@@ -187,44 +192,62 @@ public class Ghost {
                                    parameters.maxEntries);
         }
 
-        public Void put(Any value) {
+        public void put(Entry entry) {
+            Any value = entry.getValue();
             store.put(parameters.digestAlgorithm.digest(value.toByteString()), value);
-            return null;
         }
     }
 
     public static final int JOIN_MESSAGE_CHANNEL = 3;
 
-    private static final Logger                                            log = LoggerFactory.getLogger(Ghost.class);
-    private final CommonCommunications<GhostClientCommunications, Service> communications;
-
-    private final Context<Member>                               context;
-    private final RingCommunications<GhostClientCommunications> gossiper;
-    private final SigningMember                                 member;
-    private final GhostParameters                               parameters;
-    private final Service                                       service = new Service();
-    private final AtomicBoolean                                 started = new AtomicBoolean();
-    private final Store                                         store;
-
-    public Ghost(CommonCommunications<GhostClientCommunications, Service> communications, Context<Member> context,
-            RingCommunications<GhostClientCommunications> gossiper, SigningMember member, GhostParameters parameters,
-            Store store) {
-        this.communications = communications;
-        this.context = context;
-        this.gossiper = gossiper;
-        this.member = member;
-        this.parameters = parameters;
-        this.store = store;
-    }
+    private static final Logger                             log     = LoggerFactory.getLogger(Ghost.class);
+    private final CommonCommunications<SpaceGhost, Service> communications;
+    private final Context<Member>                           context;
+    private final RingCommunications<SpaceGhost>            gossiper;
+    private final SigningMember                             member;
+    private final GhostParameters                           parameters;
+    private final Service                                   service = new Service();
+    private final AtomicBoolean                             started = new AtomicBoolean();
+    private final Store                                     store;
 
     public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, Store s) {
         this.member = member;
         parameters = p;
         this.context = context;
         store = s;
+        SpaceGhost localLoopback = new SpaceGhost() {
+
+            @Override
+            public void close() throws IOException {
+            }
+
+            @Override
+            public ListenableFuture<Any> get(Get key) {
+                SettableFuture<Any> f = SettableFuture.create();
+                f.set(service.get(key));
+                return f;
+            }
+
+            @Override
+            public Member getMember() {
+                return member;
+            }
+
+            @Override
+            public ListenableFuture<Entries> intervals(Intervals intervals) {
+                return null;
+            }
+
+            @Override
+            public void put(Entry value) {
+                service.put(value);
+            }
+        };
         communications = c.create(member, context.getId(), service,
-                                  r -> new GhostServerCommunications(c.getClientIdentityProvider(), r), getCreate());
-        gossiper = new RingCommunications<>(context, member, communications, parameters.executor);
+                                  r -> new GhostServerCommunications(c.getClientIdentityProvider(), r), getCreate(),
+                                  localLoopback);
+        gossiper = new RingCommunications<>(Direction.PREDECESSOR, context, member, communications,
+                parameters.executor);
     }
 
     /**
@@ -240,38 +263,9 @@ public class Ghost {
         CompletableFuture<Any> result = new CompletableFuture<>();
         Get get = Get.newBuilder().setContext(context.getId().toByteString()).setId(key.toByteString()).build();
         new RingCommunications<>(context, member, communications,
-                parameters.executor).iterate(key, (link, r) -> link.get(get), (tally, futureSailor, link, r) -> {
-                    if (futureSailor.isEmpty()) {
-                        return !isTimedOut.get();
-                    }
-                    Any value;
-                    try {
-                        value = futureSailor.get().get();
-                    } catch (InterruptedException e) {
-                        log.trace("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
-                        return !isTimedOut.get();
-                    } catch (ExecutionException e) {
-                        Throwable t = e.getCause();
-                        if (t instanceof StatusRuntimeException) {
-                            StatusRuntimeException sre = (StatusRuntimeException) t;
-                            if (sre.getStatus() == Status.NOT_FOUND) {
-                                log.trace("Error fetching: {} server not found: {} on: {}", key, link.getMember(),
-                                          member);
-                                return !isTimedOut.get();
-                            }
-                        }
-                        log.trace("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
-                        return !isTimedOut.get();
-                    }
-                    if (value != null) {
-                        log.trace("Get: {} from: {}  on: {}", key, link.getMember(), member);
-                        result.complete(value);
-                        return false;
-                    } else {
-                        log.trace("Failed get: {} from: {}  on: {}", key, link.getMember(), member);
-                        return !isTimedOut.get();
-                    }
-                });
+                parameters.executor).iterate(key, (link, r) -> link.get(get),
+                                             (tally, futureSailor, link, r) -> get(futureSailor, key, result,
+                                                                                   isTimedOut, link));
         try {
             return result.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
@@ -296,6 +290,28 @@ public class Ghost {
         return service;
     }
 
+    public CombinedIntervals keyIntervals() {
+        List<KeyInterval> intervals = new ArrayList<>();
+        for (int i = 0; i < context.getRingCount(); i++) {
+            Ring<Member> ring = context.ring(i);
+            Member predecessor = ring.predecessor(member);
+            if (predecessor == null) {
+                continue;
+            }
+
+            Digest begin = ring.hash(predecessor);
+            Digest end = ring.hash(member);
+
+            if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
+                intervals.add(new KeyInterval(end, parameters.digestAlgorithm.getLast()));
+                intervals.add(new KeyInterval(parameters.digestAlgorithm.getOrigin(), begin));
+            } else {
+                intervals.add(new KeyInterval(begin, end));
+            }
+        }
+        return new CombinedIntervals(intervals);
+    }
+
     /**
      * Insert the value into the Ghost DHT. Return when a majority of rings have
      * stored the value
@@ -307,39 +323,18 @@ public class Ghost {
     public Digest put(Any value, Duration timeout) throws TimeoutException {
         Digest key = parameters.digestAlgorithm.digest(value.toByteString());
         log.trace("Starting Put {}   on: {}", key, member);
+
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         Entry entry = Entry.newBuilder().setContext(context.getId().toByteString()).setValue(value).build();
-        new RingCommunications<>(context, member, communications, parameters.executor).iterate(key, (link, r) -> {
-            link.put(entry);
-            log.trace("Put {} to: {} on: {}", key, link.getMember(), member);
-            SettableFuture<Boolean> f = SettableFuture.create();
-            f.set(true);
-            return f;
-        }, (tally, futureSailor, link, r) -> {
-            if (futureSailor.isEmpty()) {
-                return !isTimedOut.get();
-            }
-            try {
-                futureSailor.get().get();
-            } catch (InterruptedException e) {
-                log.debug("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
-                return !isTimedOut.get();
-            } catch (ExecutionException e) {
-                log.debug("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
-                return !isTimedOut.get();
-            }
-            log.trace("Inc put {} on: {}", key, member);
-            tally.incrementAndGet();
-            return !isTimedOut.get();
-        }, () -> {
-            majority.complete(true);
-            log.trace("Majority put {} on: {}", key, member);
-        }, () -> {
-            majority.complete(false);
-            log.trace("Failed majority put: {}  on: {}", key, member);
-        });
+
+        new RingCommunications<>(Direction.SUCCESSOR, context, member, communications,
+                parameters.executor).iterate(key, () -> majorityComplete(key, majority),
+                                             (link, r) -> put(link, key, entry), () -> failedMajority(key, majority),
+                                             (tally, futureSailor, link, r) -> put(futureSailor, isTimedOut, key, tally,
+                                                                                   link),
+                                             null);
 
         try {
             Boolean completed = majority.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -375,62 +370,116 @@ public class Ghost {
         communications.deregister(context.getId());
     }
 
+    private void failedMajority(Digest key, CompletableFuture<Boolean> majority) {
+        majority.complete(false);
+        log.trace("Failed majority put: {}  on: {}", key, member);
+    }
+
+    private boolean get(Optional<ListenableFuture<Any>> futureSailor, Digest key, CompletableFuture<Any> result,
+                        Supplier<Boolean> isTimedOut, SpaceGhost link) {
+        if (futureSailor.isEmpty()) {
+            return !isTimedOut.get();
+        }
+        Any value;
+        try {
+            value = futureSailor.get().get();
+        } catch (InterruptedException e) {
+            log.trace("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
+            return !isTimedOut.get();
+        } catch (ExecutionException e) {
+            Throwable t = e.getCause();
+            if (t instanceof StatusRuntimeException) {
+                StatusRuntimeException sre = (StatusRuntimeException) t;
+                if (sre.getStatus() == Status.NOT_FOUND) {
+                    log.trace("Error fetching: {} server not found: {} on: {}", key, link.getMember(), member);
+                    return !isTimedOut.get();
+                }
+            }
+            log.trace("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+            return !isTimedOut.get();
+        }
+        if (value != null) {
+            log.trace("Get: {} from: {}  on: {}", key, link.getMember(), member);
+            result.complete(value);
+            return false;
+        } else {
+            log.trace("Failed get: {} from: {}  on: {}", key, link.getMember(), member);
+            return !isTimedOut.get();
+        }
+    }
+
+    private void gossip(Optional<ListenableFuture<Entries>> futureSailor, SpaceGhost link,
+                        ScheduledExecutorService scheduler, Duration duration) {
+        if (!started.get()) {
+            return;
+        }
+        if (futureSailor.isEmpty()) {
+            return;
+        }
+        try {
+            Entries entries = futureSailor.get().get();
+            if (entries.getRecordsCount() > 0) {
+                log.info("Received: {} entries in Ghost gossip from: {} on: {}", entries.getRecordsCount(),
+                         link.getMember(), member);
+            }
+            store.add(entries.getRecordsList());
+        } catch (InterruptedException | ExecutionException e) {
+            log.debug("Error interval gossiping with {} : {}", link.getMember(), e.getCause());
+        }
+        if (started.get()) {
+            scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
+        }
+    }
+
     private void gossip(ScheduledExecutorService scheduler, Duration duration) {
         if (!started.get()) {
             return;
         }
-        CombinedIntervals keyIntervals = keyIntervals();
-        log.trace("Starting one round of Ghost gossip on: {} intervals: {}", member, keyIntervals);
-        store.populate(keyIntervals, parameters.fpr, Utils.secureEntropy());
-        ;
-        gossiper.execute((link,
-                          ring) -> link.intervals(Intervals.newBuilder()
-                                                           .setContext(context.getId().toByteString())
-                                                           .setRing(ring)
-                                                           .addAllIntervals(keyIntervals.toIntervals())
-                                                           .build()),
-                         (futureSailor, link, ring) -> {
-                             if (!started.get()) {
-                                 return;
-                             }
-                             if (futureSailor.isEmpty()) {
-                                 return;
-                             }
-                             try {
-                                 Entries entries = futureSailor.get().get();
-                                 if (entries.getRecordsCount() > 0) {
-                                     log.trace("Received one round of Ghost gossip from: {} on: {} entries: {}", member,
-                                              entries.getRecordsCount());
-                                 }
-                                 store.add(entries.getRecordsList());
-                             } catch (InterruptedException | ExecutionException e) {
-                                 log.debug("Error interval gossiping with {} : {}", link.getMember(), e.getCause());
-                             }
-                             if (started.get()) {
-                                 scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),
-                                                    TimeUnit.MILLISECONDS);
-                             }
-                         });
+        gossiper.execute((link, ring) -> gossip(link, ring),
+                         (futureSailor, link, ring) -> gossip(futureSailor, link, scheduler, duration));
 
     }
 
-    private CombinedIntervals keyIntervals() {
-        List<KeyInterval> intervals = new ArrayList<>();
-        for (int i = 0; i < context.getRingCount(); i++) {
-            Ring<Member> ring = context.ring(i);
-            Member predecessor = ring.predecessor(member);
-            if (predecessor == null) {
-                continue;
-            }
-            Digest begin = predecessor.getId();
-            Digest end = member.getId();
-            if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
-                intervals.add(new KeyInterval(end, parameters.digestAlgorithm.getLast()));
-                intervals.add(new KeyInterval(parameters.digestAlgorithm.getOrigin(), begin));
-            } else {
-                intervals.add(new KeyInterval(begin, end));
-            }
+    private ListenableFuture<Entries> gossip(SpaceGhost link, Integer ring) {
+        CombinedIntervals keyIntervals = keyIntervals();
+        log.trace("Starting one round of Ghost gossip on: {} intervals: {}", member, keyIntervals);
+        store.populate(keyIntervals, parameters.fpr, Utils.secureEntropy());
+        return link.intervals(Intervals.newBuilder()
+                                       .setContext(context.getId().toByteString())
+                                       .setRing(ring)
+                                       .addAllIntervals(keyIntervals.toIntervals())
+                                       .build());
+    }
+
+    private void majorityComplete(Digest key, CompletableFuture<Boolean> majority) {
+        majority.complete(true);
+        log.trace("Majority put {} on: {}", key, member);
+    }
+
+    private boolean put(Optional<ListenableFuture<Boolean>> futureSailor, Supplier<Boolean> isTimedOut, Digest key,
+                        AtomicInteger tally, SpaceGhost link) {
+        if (futureSailor.isEmpty()) {
+            return !isTimedOut.get();
         }
-        return new CombinedIntervals(intervals);
+        try {
+            futureSailor.get().get();
+        } catch (InterruptedException e) {
+            log.debug("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
+            return !isTimedOut.get();
+        } catch (ExecutionException e) {
+            log.debug("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+            return !isTimedOut.get();
+        }
+        log.trace("Inc put {} on: {}", key, member);
+        tally.incrementAndGet();
+        return !isTimedOut.get();
+    }
+
+    private ListenableFuture<Boolean> put(SpaceGhost link, Digest key, Entry entry) {
+        link.put(entry);
+        log.trace("Put {} to: {} on: {}", key, link.getMember(), member);
+        SettableFuture<Boolean> f = SettableFuture.create();
+        f.set(true);
+        return f;
     }
 }

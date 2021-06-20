@@ -32,8 +32,9 @@ import com.salesfoce.apollo.consortium.proto.Blocks;
 import com.salesfoce.apollo.consortium.proto.Initial;
 import com.salesfoce.apollo.consortium.proto.Initial.Builder;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
+import com.salesforce.apollo.consortium.Consortium.Bootstrapping;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
+import com.salesforce.apollo.consortium.comms.BootstrapService;
 import com.salesforce.apollo.consortium.support.Bootstrapper;
 import com.salesforce.apollo.consortium.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
@@ -111,7 +112,7 @@ public class BootstrapperTest {
         SigningMember member = members.get(0);
 
         @SuppressWarnings("unchecked")
-        CommonCommunications<BootstrapClient, BootstrappingService> comms = mock(CommonCommunications.class);
+        CommonCommunications<BootstrapService, Bootstrapping> comms = mock(CommonCommunications.class);
         when(comms.apply(any(), same(member))).thenAnswer(invoke -> {
             Member to = invoke.getArgumentAt(0, Member.class);
             return mockClient(to, bootstrapStore, testChain);

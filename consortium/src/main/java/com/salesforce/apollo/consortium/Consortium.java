@@ -76,7 +76,8 @@ import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.comms.BoostrapServer;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
-import com.salesforce.apollo.consortium.comms.LinearClient;
+import com.salesforce.apollo.consortium.comms.BootstrapService;
+import com.salesforce.apollo.consortium.comms.LinearService;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.CheckpointState;
@@ -109,7 +110,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class Consortium {
 
-    public class BootstrappingService {
+    public class Bootstrapping {
 
         public CheckpointSegments fetch(CheckpointReplication request, Digest from) {
             Member member = params.context.getMember(from);
@@ -361,13 +362,13 @@ public class Consortium {
 
     public final Fsm<CollaboratorContext, Transitions> fsm;
 
-    final CommonCommunications<BootstrapClient, BootstrappingService> bootstrapComm;
-    final Parameters                                                  params;
-    final TickScheduler                                               scheduler = new TickScheduler();
-    final Store                                                       store;
-    final Map<Digest, SubmittedTransaction>                           submitted = new ConcurrentHashMap<>();
-    final Transitions                                                 transitions;
-    final View                                                        view;
+    final CommonCommunications<BootstrapService, Bootstrapping> bootstrapComm;
+    final Parameters                                                   params;
+    final TickScheduler                                                scheduler = new TickScheduler();
+    final Store                                                        store;
+    final Map<Digest, SubmittedTransaction>                            submitted = new ConcurrentHashMap<>();
+    final Transitions                                                  transitions;
+    final View                                                         view;
 
     private final Map<Long, CheckpointState>                  cachedCheckpoints     = new ConcurrentHashMap<>();
     private final AtomicReference<HashedCertifiedBlock>       current               = new AtomicReference<>();
@@ -395,12 +396,43 @@ public class Consortium {
         fsm.setName(getMember().getId().toString());
         transitions = fsm.getTransitions();
         view.nextViewConsensusKey();
+        BootstrapService localLoopback = new BootstrapService() {
+
+            @Override
+            public void close() throws IOException {
+            }
+
+            @Override
+            public Member getMember() {
+                return params.member;
+            }
+
+            @Override
+            public ListenableFuture<Initial> sync(Synchronize sync) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<Blocks> fetchViewChain(BlockReplication replication) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<Blocks> fetchBlocks(BlockReplication replication) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
+                return null;
+            }
+        };
         bootstrapComm = parameters.communications.create(parameters.member, parameters.context.getId(),
-                                                         new BootstrappingService(),
+                                                         new Bootstrapping(),
                                                          r -> new BoostrapServer(
                                                                  parameters.communications.getClientIdentityProvider(),
                                                                  null, r),
-                                                         BootstrapClient.getCreate(null));
+                                                         BootstrapClient.getCreate(null), localLoopback);
         restore();
     }
 
@@ -510,7 +542,7 @@ public class Consortium {
         view.joinMessageGroup(newView, scheduler, process());
     }
 
-    LinearClient linkFor(Member m) {
+    LinearService linkFor(Member m) {
         try {
             return view.getComm().apply(m, params.member);
         } catch (Throwable e) {
@@ -946,7 +978,7 @@ public class Consortium {
                 pending.decrementAndGet();
                 processSubmit(transaction, onSubmit, pending, completed, success.incrementAndGet());
             } else {
-                LinearClient link = linkFor(c);
+                LinearService link = linkFor(c);
                 if (link == null) {
                     log.debug("Cannot get link for {}", c.getId());
                     pending.decrementAndGet();

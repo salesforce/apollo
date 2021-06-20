@@ -66,7 +66,7 @@ import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.consortium.Consortium.Result;
 import com.salesforce.apollo.consortium.Consortium.Timers;
-import com.salesforce.apollo.consortium.comms.LinearClient;
+import com.salesforce.apollo.consortium.comms.LinearService;
 import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.Bootstrapper;
 import com.salesforce.apollo.consortium.support.Bootstrapper.SynchronizedState;
@@ -433,7 +433,7 @@ public class CollaboratorContext implements Collaborator {
             consortium.transitions.synchronizingLeader();
             consortium.transitions.deliverStopData(stopData, consortium.getMember());
         } else {
-            LinearClient link = consortium.linkFor(leader);
+            LinearService link = consortium.linkFor(leader);
             if (link == null) {
                 log.warn("Cannot get link to leader: {} on: {}", leader, consortium.getMember());
             } else {
@@ -445,7 +445,10 @@ public class CollaboratorContext implements Collaborator {
                     log.warn("Error sending stop data: {} to: {} on: {}", regency.currentRegent(), leader,
                              consortium.getMember());
                 } finally {
-                    link.release();
+                    try {
+                        link.close();
+                    } catch (IOException e) {
+                    }
                 }
             }
         }
@@ -512,7 +515,7 @@ public class CollaboratorContext implements Collaborator {
             if (getMember().equals(c)) {
                 return;
             }
-            LinearClient link = consortium.linkFor(c);
+            LinearService link = consortium.linkFor(c);
             if (link == null) {
                 log.debug("Cannot get link for {}", c.getId());
                 pending.decrementAndGet();
