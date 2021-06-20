@@ -65,26 +65,31 @@ public class RingCommunications<Comm extends Link> {
 
     public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                             PredicateHandler<T, Comm> handler) {
-        iterate(digest, round, handler, null, null);
+        iterate(digest, null, round, null, handler, null);
     }
 
     public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                            PredicateHandler<T, Comm> handler, Runnable onMajority, Runnable failedMajority) {
+                            PredicateHandler<T, Comm> handler, Runnable onComplete) {
+        iterate(digest, null, round, null, handler, onComplete);
+    }
+
+    public <T> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<T>> round,
+                            Runnable failedMajority, PredicateHandler<T, Comm> handler, Runnable onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
-        internalIterate(digest, round, handler, onMajority, failedMajority, tally);
+        internalIterate(digest, round, handler, onMajority, failedMajority, tally, onComplete);
 
     }
 
     <T> void internalIterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                              PredicateHandler<T, Comm> handler, Runnable onMajority, Runnable failedMajority,
-                             AtomicInteger tally) {
-        Runnable proceed = () -> internalIterate(digest, round, handler, onMajority, failedMajority, tally);
+                             AtomicInteger tally, Runnable onComplete) {
+        Runnable proceed = () -> internalIterate(digest, round, handler, onMajority, failedMajority, tally, onComplete);
         try (Comm link = nextRing(digest)) {
             int ringCount = context.getRingCount();
             boolean finalIteration = lastRing % ringCount >= ringCount - 1;
             int majority = context.majority();
             Consumer<Boolean> allowed = allow -> {
-                proceed(allow, tally, majority, finalIteration, onMajority, failedMajority, proceed);
+                proceed(allow, tally, majority, finalIteration, onMajority, failedMajority, proceed, onComplete);
             };
             if (link == null) {
                 log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), lastRing,
@@ -111,7 +116,7 @@ public class RingCommunications<Comm extends Link> {
     }
 
     void proceed(Boolean allow, AtomicInteger tally, int majority, boolean finalIteration, Runnable onMajority,
-                 Runnable failedMajority, Runnable proceed) {
+                 Runnable failedMajority, Runnable proceed, Runnable onComplete) {
         if (finalIteration) {
             log.trace("Final iteration of: {} tally: {} on: {}", context.getId(), tally.get(), member);
             if (failedMajority != null) {
@@ -123,6 +128,9 @@ public class RingCommunications<Comm extends Link> {
                 if (tally.get() >= majority) {
                     onMajority.run();
                 }
+            }
+            if (onComplete != null) {
+                onComplete.run();
             }
         } else if (allow) {
             log.trace("Proceeding for: {} tally: {} on: {}", context.getId(), tally.get(), member);

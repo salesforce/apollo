@@ -9,6 +9,7 @@ package com.salesforce.apollo.consortium;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -24,10 +25,7 @@ import java.util.stream.IntStream;
 import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.consortium.proto.BlockReplication;
 import com.salesfoce.apollo.consortium.proto.Blocks;
@@ -54,9 +52,9 @@ import com.salesforce.apollo.utils.BloomFilter;
  *
  */
 public class BootstrapperTest {
-    private static Map<Digest, CertificateWithPrivateKey> certs;
-
     private static final int CARDINALITY = 10;
+
+    private static Map<Digest, CertificateWithPrivateKey> certs;
 
     @BeforeAll
     public static void beforeClass() {
@@ -111,48 +109,13 @@ public class BootstrapperTest {
         bootstrapStore.validateViewChain(testChain.getSynchronizeView().height());
 
         SigningMember member = members.get(0);
-        BootstrapClient client = mock(BootstrapClient.class);
-
-        when(client.sync(any())).then(new Answer<>() {
-            @Override
-            public ListenableFuture<Initial> answer(InvocationOnMock invocation) throws Throwable {
-                SettableFuture<Initial> futureSailor = SettableFuture.create();
-                Builder initial = Initial.newBuilder()
-                                         .setCheckpoint(testChain.getSynchronizeCheckpoint().block)
-                                         .setCheckpointView(testChain.getSynchronizeView().block)
-                                         .setGenesis(testChain.getGenesis().block);
-                futureSailor.set(initial.build());
-                return futureSailor;
-            }
-        });
-        when(client.fetchViewChain(any())).then(new Answer<>() {
-            @Override
-            public ListenableFuture<Blocks> answer(InvocationOnMock invocation) throws Throwable {
-                SettableFuture<Blocks> futureSailor = SettableFuture.create();
-                BlockReplication rep = invocation.getArgumentAt(0, BlockReplication.class);
-                BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
-                Blocks.Builder blocks = Blocks.newBuilder();
-                bootstrapStore.fetchViewChain(bff, blocks, 1, rep.getFrom(), rep.getTo());
-                futureSailor.set(blocks.build());
-                return futureSailor;
-            }
-        });
-        when(client.fetchBlocks(any())).then(new Answer<>() {
-            @Override
-            public ListenableFuture<Blocks> answer(InvocationOnMock invocation) throws Throwable {
-                SettableFuture<Blocks> futureSailor = SettableFuture.create();
-                BlockReplication rep = invocation.getArgumentAt(0, BlockReplication.class);
-                BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
-                Blocks.Builder blocks = Blocks.newBuilder();
-                bootstrapStore.fetchBlocks(bff, blocks, 5, rep.getFrom(), rep.getTo());
-                futureSailor.set(blocks.build());
-                return futureSailor;
-            }
-        });
 
         @SuppressWarnings("unchecked")
         CommonCommunications<BootstrapClient, BootstrappingService> comms = mock(CommonCommunications.class);
-        when(comms.apply(any(), any())).thenReturn(client);
+        when(comms.apply(any(), same(member))).thenAnswer(invoke -> {
+            Member to = invoke.getArgumentAt(0, Member.class);
+            return mockClient(to, bootstrapStore, testChain);
+        });
         Store store = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
         Bootstrapper boot = new Bootstrapper(testChain.getAnchor(),
@@ -161,7 +124,7 @@ public class BootstrapperTest {
                                                                                                            .build())
                           .setContext(context)
                           .setMember(member)
-                          .setSynchonrizeDuration(Duration.ofMillis(100))
+                          .setSynchonrizeDuration(Duration.ofMillis(1000))
                           .setScheduler(Executors.newSingleThreadScheduledExecutor())
                           .build(),
                 store, comms);
@@ -173,6 +136,40 @@ public class BootstrapperTest {
         assertNotNull(state.checkpoint);
         assertNotNull(state.lastCheckpoint);
         assertNotNull(state.lastView);
+    }
+
+    private BootstrapClient mockClient(Member to, Store bootstrapStore, TestChain testChain) {
+        BootstrapClient client = mock(BootstrapClient.class);
+        when(client.getMember()).thenReturn(to);
+
+        when(client.sync(any())).then(invocation -> {
+            SettableFuture<Initial> futureSailor = SettableFuture.create();
+            Builder initial = Initial.newBuilder()
+                                     .setCheckpoint(testChain.getSynchronizeCheckpoint().block)
+                                     .setCheckpointView(testChain.getSynchronizeView().block)
+                                     .setGenesis(testChain.getGenesis().block);
+            futureSailor.set(initial.build());
+            return futureSailor;
+        });
+        when(client.fetchViewChain(any())).then(invocation -> {
+            SettableFuture<Blocks> futureSailor = SettableFuture.create();
+            BlockReplication rep = invocation.getArgumentAt(0, BlockReplication.class);
+            BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+            Blocks.Builder blocks = Blocks.newBuilder();
+            bootstrapStore.fetchViewChain(bff, blocks, 1, rep.getFrom(), rep.getTo());
+            futureSailor.set(blocks.build());
+            return futureSailor;
+        });
+        when(client.fetchBlocks(any())).then(invocation -> {
+            SettableFuture<Blocks> futureSailor = SettableFuture.create();
+            BlockReplication rep = invocation.getArgumentAt(0, BlockReplication.class);
+            BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+            Blocks.Builder blocks = Blocks.newBuilder();
+            bootstrapStore.fetchBlocks(bff, blocks, 5, rep.getFrom(), rep.getTo());
+            futureSailor.set(blocks.build());
+            return futureSailor;
+        });
+        return client;
     }
 
 }

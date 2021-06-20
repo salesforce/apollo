@@ -25,7 +25,7 @@
         <appender-ref ref="STDOUT" />
     </logger> 
     
-    <logger name="com.salesforce.apollo.consortium.support" level="info"
+    <logger name="com.salesforce.apollo.consortium.support" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
@@ -36,6 +36,11 @@
     </logger>
     
     <logger name="com.salesforce.apollo.membership.messaging" level="WARN"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    
+    <logger name="com.salesforce.apollo.membership.messaging.RingCommunications" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

@@ -100,12 +100,14 @@ abstract public class Hash<T> {
             h1 ^= mixK1(0);
             length += 2;
             h2 ^= mixK2(i.longValue());
+            length += CHUNK_SIZE / 4;
         }
 
         protected void process(Long l) {
             h1 ^= mixK1(l.longValue());
             length += 4;
             h2 ^= mixK2(0);
+            length += CHUNK_SIZE / 2;
         }
 
         abstract void processIt(T it);
