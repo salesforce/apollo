@@ -7,21 +7,15 @@
 package com.salesforce.apollo.ghost;
 
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -41,35 +35,35 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 
 public class DagTest {
- 
-    private static Map<Digest, CertificateWithPrivateKey> certs; 
+
+    private static final int                              testCardinality = 100;
+    private static Map<Digest, CertificateWithPrivateKey> certs;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 101)
-                .parallel()
-                .mapToObj(i -> getMember(i))
-                .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
-                                          cert -> cert));
-}
+        certs = IntStream.range(0, testCardinality)
+                         .parallel()
+                         .mapToObj(i -> getMember(i))
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
+    }
 
-    private List<SigningMember>               members;
-    private ScheduledExecutorService scheduler; 
+    private List<SigningMember>      members;
+    private ScheduledExecutorService scheduler;
     private Random                   entropy;
     private final List<Router>       comms = new ArrayList<>();
 
     @AfterEach
-    public void after() { 
+    public void after() {
         comms.forEach(e -> e.close());
         comms.clear();
     }
@@ -77,134 +71,114 @@ public class DagTest {
     @BeforeEach
     public void before() {
         entropy = new Random(0x666);
- 
-        members = certs.values().parallelStream().map(cert -> new Node(cert, parameters)).collect(Collectors.toList());
-        assertEquals(certs.size(), members.size()); 
- 
+
+        members = certs.values()
+                       .parallelStream()
+                       .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                               cert.getX509Certificate(), cert.getPrivateKey(), new Signer(0, cert.getPrivateKey()),
+                               cert.getX509Certificate().getPublicKey()))
+                       .collect(Collectors.toList());
+        assertEquals(certs.size(), members.size());
+
         scheduler = Executors.newScheduledThreadPool(100);
 
     }
 
+    private static Duration gossipDelay = Duration.ofMillis(500);
+
     // @Test
-    public void smoke() {
+    public void smoke() throws Exception {
         long then = System.currentTimeMillis();
 
-        List<View> testViews = new ArrayList<>();
+        Duration timeout = Duration.ofSeconds(20);
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0, testCardinality);
+        members.forEach(e -> context.activate(e));
 
-        for (int i = 0; i < 50; i++) {
-            testViews.add(views.get(i));
-        }
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds, scheduler));
+        ForkJoinPool executor = new ForkJoinPool();
 
-        assertTrue(Utils.waitForCondition(30_000, 3_000, () -> {
-            return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
-        }), "view did not stabilize");
+        List<Ghost> ghosties = members.stream().map(member -> {
+            LocalRouter c = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(30), executor);
+            comms.add(c);
+            c.start();
+            return new Ghost(member, GhostParameters.newBuilder().build(), c, context,
+                    new MemoryStore(DigestAlgorithm.DEFAULT));
+        }).collect(Collectors.toList());
 
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + testViews.size() + " members");
+        ghosties.forEach(e -> e.start(scheduler, gossipDelay));
 
-        Iterator<Router> communicatons = comms.iterator();
+        Map<Digest, Any> stored = new ConcurrentSkipListMap<>();
 
-        List<Ghost> ghosties = testViews.stream()
-                                        .map(view -> new Ghost(new GhostParameters(), communicatons.next(), view,
-                                                new MemoryStore(null)))
-                                        .collect(Collectors.toList());
-        ghosties.forEach(e -> e.getService().start());
-        assertEquals(ghosties.size(),
-                     ghosties.parallelStream()
-                             .map(g -> Utils.waitForCondition(15_000, () -> g.joined()))
-                             .filter(e -> e)
-                             .count(),
-                     "Not all nodes joined the cluster");
+        Any r = Any.pack(ByteMessage.newBuilder()
+                                    .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
+                                                                                       ghosties.get(0)
+                                                                                               .getMember()
+                                                                                               .getId(),
+                                                                                       0)))
+                                    .build());
 
-        Map<Digest, DagEntry> stored = new ConcurrentSkipListMap<>();
-
-        Builder builder = DagEntry.newBuilder()
-                                  .setData(Any.pack(ByteMessage.newBuilder()
-                                                               .setContents(ByteString.copyFromUtf8("root node"))
-                                                               .build()));
-        DagEntry root = builder.build();
-        stored.put(ghosties.get(0).putDagEntry(root), root);
+        stored.put(ghosties.get(0).put(r, timeout), r);
 
         int rounds = 10;
 
         for (int i = 0; i < rounds; i++) {
             for (Ghost ghost : ghosties) {
-                Builder b = DagEntry.newBuilder()
-                                    .setData(Any.pack(ByteMessage.newBuilder()
-                                                                 .setContents(ByteString.copyFromUtf8("root node"))
-                                                                 .build()));
-                b.setData(Any.pack(ByteMessage.newBuilder()
-                                              .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
-                                                                                                 ghost.getNode()
-                                                                                                      .getId(),
-                                                                                                 i)))
-                                              .build()));
-                randomLinksTo(stored).forEach(e -> b.addLinks(e.toID()));
 
-                DagEntry entry = builder.build();
-                stored.put(ghost.putDagEntry(entry), entry);
+                Any entry = Any.pack(ByteMessage.newBuilder()
+                                                .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
+                                                                                                   ghosties.get(i)
+                                                                                                           .getMember()
+                                                                                                           .getId(),
+                                                                                                   i)))
+                                                .build());
+                stored.put(ghost.put(entry, timeout), entry);
             }
         }
 
-        for (Entry<Digest, DagEntry> entry : stored.entrySet()) {
+        for (Entry<Digest, Any> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
-                DagEntry found = ghost.getDagEntry(entry.getKey());
+                Any found = ghost.get(entry.getKey(), timeout);
                 assertNotNull(found);
-                assertArrayEquals(entry.getValue().getData().toByteArray(), found.getData().toByteArray());
+                assertEquals(entry.getValue(), found);
             }
         }
-        int start = testViews.size();
 
-        int add = 25;
-        for (int i = 0; i < add; i++) {
-            View view = views.get(i + start);
-            testViews.add(view);
-            ghosties.add(new Ghost(new GhostParameters(), communicatons.next(), view, new MemoryStore()));
-        }
-
-        then = System.currentTimeMillis();
-        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds, scheduler));
-        ghosties.forEach(e -> e.getService().start());
-        assertEquals(ghosties.size(),
-                     ghosties.parallelStream()
-                             .map(g -> Utils.waitForCondition(240_000, () -> g.joined()))
-                             .filter(e -> e)
-                             .count(),
-                     "Not all nodes joined the cluster");
-
-        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
-            return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
-        }), "view did not stabilize");
-
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + testViews.size() + " members");
-
-        for (Entry<Digest, DagEntry> entry : stored.entrySet()) {
-            for (Ghost ghost : ghosties) {
-                DagEntry found = ghost.getDagEntry(entry.getKey());
-                assertNotNull(found, ghost.getNode() + " not found: " + entry.getKey());
-                assertArrayEquals(entry.getValue().getData().toByteArray(), found.getData().toByteArray());
-                if (entry.getValue().getLinksList() == null) {
-                    assertNull(found.getLinksList());
-                } else {
-                    assertEquals(entry.getValue().getLinksList().size(), found.getLinksList().size());
-                }
-            }
-        }
-    }
-
-    private List<Digest> randomLinksTo(Map<Digest, DagEntry> stored) {
-        List<Digest> links = new ArrayList<>();
-        Set<Digest> keys = stored.keySet();
-        for (int i = 0; i < entropy.nextInt(10); i++) {
-            Iterator<Digest> it = keys.iterator();
-            for (int j = 0; j < entropy.nextInt(keys.size()); j++) {
-                it.next();
-            }
-            links.add(it.next());
-        }
-        return links;
+//        int add = 25;
+//        for (int i = 0; i < add; i++) {
+//            View view = views.get(i + start);
+//            testViews.add(view);
+//            ghosties.add(new Ghost(new GhostParameters(), communicatons.next(), view, new MemoryStore()));
+//        }
+//
+//        then = System.currentTimeMillis();
+//        testViews.forEach(e -> e.getService().start(Duration.ofMillis(1000), seeds, scheduler));
+//        ghosties.forEach(e -> e.getService().start());
+//        assertEquals(ghosties.size(),
+//                     ghosties.parallelStream()
+//                             .map(g -> Utils.waitForCondition(240_000, () -> g.joined()))
+//                             .filter(e -> e)
+//                             .count(),
+//                     "Not all nodes joined the cluster");
+//
+//        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
+//            return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
+//        }), "view did not stabilize");
+//
+//        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+//                + testViews.size() + " members");
+//
+//        for (Entry<Digest, DagEntry> entry : stored.entrySet()) {
+//            for (Ghost ghost : ghosties) {
+//                DagEntry found = ghost.getDagEntry(entry.getKey());
+//                assertNotNull(found, ghost.getNode() + " not found: " + entry.getKey());
+//                assertArrayEquals(entry.getValue().getData().toByteArray(), found.getData().toByteArray());
+//                if (entry.getValue().getLinksList() == null) {
+//                    assertNull(found.getLinksList());
+//                } else {
+//                    assertEquals(entry.getValue().getLinksList().size(), found.getLinksList().size());
+//                }
+//            }
+//        }
     }
 }
