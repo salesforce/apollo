@@ -170,8 +170,11 @@ public class Bootstrapper {
 
     private boolean completeAnchor(Optional<ListenableFuture<Blocks>> futureSailor, AtomicLong start, long end,
                                    BootstrapService link) {
-        if (sync.isDone() || anchorSynchronized.isDone() || futureSailor.isEmpty()) {
+        if (sync.isDone() || anchorSynchronized.isDone()) {
             return false;
+        }
+        if (futureSailor.isEmpty()) {
+            return true;
         }
         try {
             Blocks blocks = futureSailor.get().get();
@@ -224,8 +227,11 @@ public class Bootstrapper {
 
     private boolean completeViewChain(Optional<ListenableFuture<Blocks>> futureSailor, AtomicLong start, long end,
                                       BootstrapService link) {
-        if (sync.isDone() || anchorSynchronized.isDone() || futureSailor.isEmpty()) {
+        if (sync.isDone() || anchorSynchronized.isDone()) {
             return false;
+        }
+        if (futureSailor.isEmpty()) {
+            return true;
         }
 
         try {
@@ -424,8 +430,11 @@ public class Bootstrapper {
     private boolean synchronize(Optional<ListenableFuture<Initial>> futureSailor, HashMap<Digest, Initial> votes,
                                 BootstrapService link) {
         final HashedCertifiedBlock established = genesis;
-        if (sync.isDone() || established != null || futureSailor.isEmpty()) {
+        if (sync.isDone() || established != null) {
             return false;
+        }
+        if (futureSailor.isEmpty()) {
+            return true;
         }
         try {
             Initial vote = futureSailor.get().get();

@@ -116,31 +116,31 @@ public class RingCommunications<Comm extends Link> {
                              PredicateHandler<T, Comm> handler, Runnable onMajority, Runnable failedMajority,
                              AtomicInteger tally, Runnable onComplete) {
         Runnable proceed = () -> internalIterate(digest, round, handler, onMajority, failedMajority, tally, onComplete);
+        final int current = lastRing;
         try (Comm link = nextRing(digest)) {
             int ringCount = context.getRingCount();
-            boolean finalIteration = lastRing % ringCount >= ringCount - 1;
+            boolean finalIteration = current % ringCount >= ringCount - 1;
             int majority = context.majority();
-            Consumer<Boolean> allowed = allow -> {
-                proceed(allow, tally, majority, finalIteration, onMajority, failedMajority, proceed, onComplete);
-            };
+            Consumer<Boolean> allowed = allow -> proceed(allow, tally, majority, finalIteration, onMajority,
+                                                         failedMajority, proceed, onComplete);
             if (link == null) {
-                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), lastRing,
+                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
                           member);
-                allowed.accept(handler.handle(tally, Optional.empty(), link, lastRing));
+                allowed.accept(handler.handle(tally, Optional.empty(), link, current));
                 return;
             }
-            log.trace("Iteration on: {} ring: {} to: {} on: {}", context.getId(), lastRing, link.getMember(), member);
-            ListenableFuture<T> futureSailor = round.apply(link, lastRing);
+            log.trace("Iteration on: {} ring: {} to: {} on: {}", context.getId(), current, link.getMember(), member);
+            ListenableFuture<T> futureSailor = round.apply(link, current);
             if (futureSailor == null) {
                 log.trace("No asynchronous response for: {} on: {} ring: {} from: {} on: {}", digest, context.getId(),
-                          lastRing, link.getMember(), member);
-                allowed.accept(handler.handle(tally, Optional.empty(), link, lastRing));
+                          current, link.getMember(), member);
+                allowed.accept(handler.handle(tally, Optional.empty(), link, current));
                 return;
             }
             futureSailor.addListener(() -> {
-                log.trace("Response of: {} on: {} ring: {} from: {} on: {}", digest, context.getId(), lastRing,
+                log.trace("Response of: {} on: {} ring: {} from: {} on: {}", digest, context.getId(), current,
                           link.getMember(), member);
-                allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, lastRing) && !finalIteration);
+                allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, current) && !finalIteration);
             }, executor);
         } catch (IOException e) {
             log.debug("Error closing");
@@ -162,6 +162,7 @@ public class RingCommunications<Comm extends Link> {
                 }
             }
             if (onComplete != null) {
+                log.trace("Completing iteration for: {} tally: {} on: {}", context.getId(), tally.get(), member);
                 onComplete.run();
             }
         } else if (allow) {
@@ -174,15 +175,16 @@ public class RingCommunications<Comm extends Link> {
 
     private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler,
                              Comm link) {
+        final int current = lastRing;
         if (link == null) {
-            handler.handle(Optional.empty(), link, lastRing);
+            handler.handle(Optional.empty(), link, current);
         } else {
-            ListenableFuture<T> futureSailor = round.apply(link, lastRing);
+            ListenableFuture<T> futureSailor = round.apply(link, current);
             if (futureSailor == null) {
-                handler.handle(Optional.empty(), link, lastRing);
+                handler.handle(Optional.empty(), link, current);
             } else {
                 futureSailor.addListener(() -> {
-                    handler.handle(Optional.of(futureSailor), link, lastRing);
+                    handler.handle(Optional.of(futureSailor), link, current);
                 }, executor);
             }
         }
@@ -206,7 +208,7 @@ public class RingCommunications<Comm extends Link> {
 
     private Comm nextRing(Digest digest) {
         Comm link = null;
-        int last = lastRing;
+        final int last = lastRing;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
         for (int i = 0; i < rings; i++) {

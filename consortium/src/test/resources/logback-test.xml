@@ -40,7 +40,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
     
-    <logger name="com.salesforce.apollo.membership.messaging.RingCommunications" level="trace"
+    <logger name="com.salesforce.apollo.comm.RingCommunications" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
