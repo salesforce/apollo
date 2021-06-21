@@ -73,7 +73,7 @@ public class RingCommunications<Comm extends Link> {
         try (Comm link = nextRing(null)) {
             execute(round, handler, link);
         } catch (IOException e) {
-            log.debug("Error closing");
+            log.debug("Error closing", e);
         }
     }
 
@@ -82,7 +82,7 @@ public class RingCommunications<Comm extends Link> {
         try (Comm link = nextRing(digest)) {
             execute(round, handler, link);
         } catch (IOException e) {
-            log.debug("Error closing");
+            log.debug("Error closing", e);
         }
     }
 
@@ -99,7 +99,7 @@ public class RingCommunications<Comm extends Link> {
     public <T> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                             Runnable failedMajority, PredicateHandler<T, Comm> handler, Runnable onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
-        internalIterate(digest, round, handler, onMajority, failedMajority, tally, onComplete);
+        executor.execute(() -> internalIterate(digest, round, handler, onMajority, failedMajority, tally, onComplete));
 
     }
 
@@ -143,7 +143,7 @@ public class RingCommunications<Comm extends Link> {
                 allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, current) && !finalIteration);
             }, executor);
         } catch (IOException e) {
-            log.debug("Error closing");
+            log.debug("Error closing", e);
         }
     }
 
@@ -167,7 +167,7 @@ public class RingCommunications<Comm extends Link> {
             }
         } else if (allow) {
             log.trace("Proceeding for: {} tally: {} on: {}", context.getId(), tally.get(), member);
-            proceed.run();
+            executor.execute(proceed);
         } else {
             log.trace("Termination of: {} tally: {} on: {}", context.getId(), tally.get(), member);
         }
