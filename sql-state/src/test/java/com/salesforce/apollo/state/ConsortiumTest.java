@@ -164,7 +164,7 @@ public class ConsortiumTest {
         Executor cPipeline = Executors.newSingleThreadExecutor();
 
         AtomicInteger cLabel = new AtomicInteger();
-        Executor blockPool = Executors.newFixedThreadPool(15, r -> {
+        Executor blockPool = Executors.newFixedThreadPool(testCardinality, r -> {
             Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
             t.setDaemon(true);
             return t;

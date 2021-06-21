@@ -72,6 +72,7 @@ import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.Hash.DigestHasher;
 
 /**
@@ -144,71 +145,20 @@ public class SqlStateMachine {
             }
             Any tx = t.getTransaction().getTxn();
             Digest txnHash = new Digest(t.getHash());
-            SecureRandom prev = secureRandom.get();
-            secureRandom.set(entropy.get());
-            try {
-                Object results;
-                if (tx.is(BatchedTransaction.class)) {
-                    results = executeBatchTransaction(t, tx);
-                } else if (tx.is(Batch.class)) {
-                    results = executeBatch(blockHash, tx, txnHash);
-                } else if (tx.is(BatchUpdate.class)) {
-                    results = executeBatchUpdate(blockHash, tx, txnHash);
-                } else if (tx.is(Statement.class)) {
-                    results = executeStatement(blockHash, tx, txnHash);
-                } else if (tx.is(Script.class)) {
-                    results = executeScript(blockHash, tx, txnHash);
-                } else {
-                    throw new IllegalStateException("unknown statement type");
-                }
-                complete(completion, results);
-            } catch (JdbcSQLNonTransientConnectionException e) {
-                // ignore
-            } catch (Exception e) {
-                rollback();
-                exception(completion, e);
-            } finally {
-                secureRandom.set(prev);
-                commit();
-            }
-
+            SqlStateMachine.this.execute(txnHash, tx, blockHash, completion);
         }
 
         @Override
         public void processGenesis(Any genesisData) {
             initializeEvents();
-            if (!genesisData.is(BatchedTransaction.class)) {
-                log.info("Unknown genesis data type: {}", genesisData.getTypeUrl());
-                return;
-            }
-            BatchedTransaction txns;
-            try {
-                txns = genesisData.unpack(BatchedTransaction.class);
-            } catch (InvalidProtocolBufferException e1) {
-                log.info("Error unpacking batched transaction genesis");
-                return;
-            }
-            for (Txn txn : txns.getTransactionsList()) {
-                try {
-                    if (txn.hasStatement()) {
-                        acceptPreparedStatement(txn.getStatement());
-                    } else if (txn.hasBatch()) {
-                        acceptBatch(txn.getBatch());
-                    } else if (txn.hasCall()) {
-                        acceptCall(txn.getCall());
-                    } else if (txn.hasBatchUpdate()) {
-                        acceptBatchUpdate(txn.getBatchUpdate());
-                    } else {
-                        log.error("Unknown transaction type");
-                        return;
-                    }
-                } catch (SQLException e) {
-                    log.error("Unable to process transaction", e);
-                    rollback();
-                    return;
+            Digest digest = DigestAlgorithm.DEFAULT.digest(genesisData.toByteString());
+            SqlStateMachine.this.execute(digest, genesisData, Digest.NONE, (r, t) -> {
+                if (t != null) {
+                    log.warn("Error processing genesis data: {}", digest);
+                } else {
+                    log.info("Successfully processed genesis data: {}", digest);
                 }
-            }
-            commit();
+            });
         }
 
     }
@@ -714,7 +664,37 @@ public class SqlStateMachine {
         }
     }
 
-    private Object execute(ExecutedTransaction t, Txn txn) throws Exception {
+    private void execute(Digest txnHash, Any tx, Digest blockHash, BiConsumer<Object, Throwable> completion) {
+        SecureRandom prev = SqlStateMachine.secureRandom.get();
+        SqlStateMachine.secureRandom.set(SqlStateMachine.this.entropy.get());
+        try {
+            Object results;
+            if (tx.is(BatchedTransaction.class)) {
+                results = SqlStateMachine.this.executeBatchTransaction(blockHash, tx, txnHash);
+            } else if (tx.is(Batch.class)) {
+                results = SqlStateMachine.this.executeBatch(blockHash, tx, txnHash);
+            } else if (tx.is(BatchUpdate.class)) {
+                results = SqlStateMachine.this.executeBatchUpdate(blockHash, tx, txnHash);
+            } else if (tx.is(Statement.class)) {
+                results = SqlStateMachine.this.executeStatement(blockHash, tx, txnHash);
+            } else if (tx.is(Script.class)) {
+                results = SqlStateMachine.this.executeScript(blockHash, tx, txnHash);
+            } else {
+                throw new IllegalStateException("unknown statement type");
+            }
+            SqlStateMachine.this.complete(completion, results);
+        } catch (JdbcSQLNonTransientConnectionException e) {
+            // ignore
+        } catch (Exception e) {
+            SqlStateMachine.this.rollback();
+            SqlStateMachine.this.exception(completion, e);
+        } finally {
+            SqlStateMachine.secureRandom.set(prev);
+            SqlStateMachine.this.commit();
+        }
+    }
+
+    private Object execute(Digest blockHash, Txn txn, Digest txnHash) throws Exception {
         try {
             if (txn.hasStatement()) {
                 return acceptPreparedStatement(txn.getStatement());
@@ -725,7 +705,7 @@ public class SqlStateMachine {
             } else if (txn.hasBatchUpdate()) {
                 return acceptBatchUpdate(txn.getBatchUpdate());
             } else {
-                log.error("Unknown transaction type: {}", t.getHash());
+                log.error("Unknown transaction type: {}", txnHash);
                 return null;
             }
         } catch (Throwable th) {
@@ -738,24 +718,24 @@ public class SqlStateMachine {
         try {
             batch = tx.unpack(Batch.class);
         } catch (InvalidProtocolBufferException e) {
-            log.warn("Cannot deserialize batch: {} of block: {}", txnHash, blockHash);
+            log.warn("Cannot deserialize batch: {} of transaction: {}", txnHash, blockHash);
             throw e;
         }
         return acceptBatch(batch);
     }
 
-    private List<Object> executeBatchTransaction(ExecutedTransaction t, Any tx) throws Exception {
+    private List<Object> executeBatchTransaction(Digest blockHash, Any tx, Digest txnHash) throws Exception {
         BatchedTransaction txns;
         try {
             txns = tx.unpack(BatchedTransaction.class);
         } catch (InvalidProtocolBufferException e) {
-            log.error("Error deserializing transaction: {}  ", t.getHash());
+            log.error("Error deserializing transaction: {}  ", txnHash);
             throw e;
         }
         List<Object> results = new ArrayList<Object>();
         for (int i = 0; i < txns.getTransactionsCount(); i++) {
             try {
-                results.add(SqlStateMachine.this.execute(t, txns.getTransactions(i)));
+                results.add(SqlStateMachine.this.execute(blockHash, txns.getTransactions(i), txnHash));
             } catch (Throwable e) {
                 throw new Mutator.BatchedTransactionException(i, e);
             }
@@ -768,7 +748,7 @@ public class SqlStateMachine {
         try {
             batch = tx.unpack(BatchUpdate.class);
         } catch (InvalidProtocolBufferException e) {
-            log.warn("Cannot deserialize batch update: {} of block: {}", txnHash, blockHash);
+            log.warn("Cannot deserialize batch update: {} of transaction: {}", txnHash, blockHash);
             throw e;
         }
         return acceptBatchUpdate(batch);
@@ -779,7 +759,7 @@ public class SqlStateMachine {
         try {
             script = tx.unpack(Script.class);
         } catch (InvalidProtocolBufferException e) {
-            log.warn("Cannot deserialize Script {} of block: {}", txnHash, blockHash);
+            log.warn("Cannot deserialize Script {} of transaction: {}", txnHash, blockHash);
             throw e;
         }
         return acceptScript(txnHash, script);
@@ -790,7 +770,7 @@ public class SqlStateMachine {
         try {
             statement = tx.unpack(Statement.class);
         } catch (InvalidProtocolBufferException e) {
-            log.warn("Cannot deserialize Statement {} of block: {}", txnHash, blockHash);
+            log.warn("Cannot deserialize Statement {} of transaction: {}", txnHash, blockHash);
             throw e;
         }
         return acceptPreparedStatement(statement);
