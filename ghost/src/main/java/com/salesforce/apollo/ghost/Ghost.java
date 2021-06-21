@@ -371,7 +371,8 @@ public class Ghost {
     }
 
     private void failedMajority(Digest key, CompletableFuture<Boolean> majority) {
-        majority.complete(false);
+        majority.completeExceptionally(new TimeoutException(
+                String.format("Failed majority put: %s  on: %s", key, member)));
         log.trace("Failed majority put: {}  on: {}", key, member);
     }
 

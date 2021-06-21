@@ -14,7 +14,7 @@
         </encoder>
     </appender>   
 
-    <logger name="com.salesforce.apollo.comm" level="WARN"
+    <logger name="com.salesforce.apollo.comm.RingCommunications" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -24,7 +24,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <root level="info">
+    <root level="warn">
         <appender-ref ref="STDOUT" />
     </root>
 
