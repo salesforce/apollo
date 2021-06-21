@@ -13,6 +13,7 @@ import java.security.Signature;
 import java.security.SignatureException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -67,7 +68,7 @@ public class MessageBuffer {
 
     private static Queue<Entry<Digest, Message>> findNHighest(Collection<Entry<Digest, Message>> msgs, int n) {
         Queue<Entry<Digest, Message>> nthHighest = new PriorityQueue<Entry<Digest, Message>>(
-                (a, b) -> Integer.compare(a.getValue().getAge(), b.getValue().getAge()));
+                Collections.reverseOrder((a, b) -> Integer.compare(a.getValue().getAge(), b.getValue().getAge())));
 
         for (Entry<Digest, Message> each : msgs) {
             nthHighest.add(each);
@@ -116,7 +117,7 @@ public class MessageBuffer {
      */
     public List<Message> merge(List<Message> updates, BiPredicate<Digest, Message> validator) {
         try {
-            return updates.parallelStream()
+            return updates.stream()
                           .filter(message -> merge(digest(message.getKey()), message, validator))
                           .collect(Collectors.toList());
         } finally {
@@ -214,7 +215,9 @@ public class MessageBuffer {
              .stream()
              .filter(e -> e.getValue().getAge() > tooOld)
              .peek(e -> log.trace("removing aged: {}:{}", e.getKey(), e.getValue().getAge()))
-             .forEach(e -> state.remove(e.getKey()));
+             .map(e -> e.getKey())
+             .collect(Collectors.toList())
+             .forEach(e -> state.remove(e));
     }
 
     private void removeOutOfDate() {

@@ -214,7 +214,7 @@ public class SwarmTest {
 
         seeds = new ArrayList<>();
         members = certs.values()
-                       .parallelStream()
+                       .stream()
                        .map(cert -> new Node(
                                new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                        cert.getX509Certificate(), cert.getPrivateKey(),

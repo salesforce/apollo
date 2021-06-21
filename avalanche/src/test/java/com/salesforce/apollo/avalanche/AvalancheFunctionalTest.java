@@ -185,7 +185,7 @@ abstract public class AvalancheFunctionalTest {
                                                          .map(a -> new Transactioneer(a, target, latch))
                                                          .collect(Collectors.toList());
 
-        transactioneers.parallelStream().forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, scheduler));
+        transactioneers.stream().forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, scheduler));
 
         boolean finalized = latch.await(360, TimeUnit.SECONDS);
 

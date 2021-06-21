@@ -107,8 +107,8 @@ public class MessageTest {
     private static Map<Digest, CertificateWithPrivateKey> certs;
 
     private static final Parameters parameters = Parameters.newBuilder()
-                                                           .setFalsePositiveRate(0.25)
-                                                           .setBufferSize(500)
+                                                           .setFalsePositiveRate(0.125)
+                                                           .setBufferSize(1500)
                                                            .build();
 
     @BeforeAll
@@ -135,7 +135,7 @@ public class MessageTest {
     @Test
     public void broadcast() throws Exception {
         List<SigningMember> members = certs.values()
-                                           .parallelStream()
+                                           .stream()
                                            .map(cert -> new SigningMemberImpl(
                                                    Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
@@ -178,7 +178,7 @@ public class MessageTest {
             buf.put(rand);
             buf.flip();
             assert buf.remaining() > 0;
-            messengers.parallelStream().forEach(view -> {
+            messengers.stream().forEach(view -> {
                 ByteString packed = ByteString.copyFrom(buf.array());
                 assertEquals(36, packed.size());
                 view.publish(ByteMessage.newBuilder().setContents(packed).build(), true);

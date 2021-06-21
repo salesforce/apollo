@@ -186,7 +186,7 @@ public class MembershipTests {
             return hash;
         };
 
-        gatherConsortium(Duration.ofMillis(50), processed, consensus);
+        gatherConsortium(Duration.ofMillis(10), processed, consensus);
 
         Set<Consortium> blueRibbon = new HashSet<>();
         ViewContext.viewFor(GENESIS_VIEW_ID, context).allMembers().forEach(e -> {
@@ -341,7 +341,7 @@ public class MembershipTests {
 
         long lastBlock = blueRibbon.stream().mapToLong(c -> c.getCurrrent().height()).findFirst().getAsLong();
 
-        completed = Utils.waitForCondition(10_000, () -> {
+        completed = Utils.waitForCondition(10_000, 1_000, () -> {
             return testSubject.getCurrrent().height() == lastBlock;
         });
 
@@ -398,7 +398,7 @@ public class MembershipTests {
             return hash;
         };
 
-        gatherConsortium(Duration.ofMillis(150), processed, consensus);
+        gatherConsortium(Duration.ofMillis(10), processed, consensus);
 
         Set<Consortium> blueRibbon = new HashSet<>();
         ViewContext.viewFor(GENESIS_VIEW_ID, context).allMembers().forEach(e -> {

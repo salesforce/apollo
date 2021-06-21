@@ -1038,7 +1038,7 @@ public class Consortium {
             }
         });
         long certifiedCount = block.getCertificationsList()
-                                   .parallelStream()
+                                   .stream()
                                    .filter(c -> validators.get(digest(c.getId()))
                                                           .apply(signature(c.getSignature()), headerHash))
                                    .count();

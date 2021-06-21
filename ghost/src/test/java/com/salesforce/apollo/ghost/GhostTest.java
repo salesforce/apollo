@@ -75,7 +75,7 @@ public class GhostTest {
     @Test
     public void smoke() throws Exception {
         List<SigningMember> members = certs.values()
-                                           .parallelStream()
+                                           .stream()
                                            .map(cert -> new SigningMemberImpl(
                                                    Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert.getX509Certificate(), cert.getPrivateKey(),

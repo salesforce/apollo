@@ -228,7 +228,7 @@ public class Context<T extends Member> {
      * with FF parameters, with the rings forming random graph connections segments.
      */
     public int diameter() {
-        return (cardinality());
+        return diameter(cardinality());
     }
 
     /**
@@ -480,7 +480,7 @@ public class Context<T extends Member> {
      * members in the context, using the rings of the receiver as a gossip graph
      */
     public int timeToLive() {
-        return (toleranceLevel() * diameter()) + 1;
+        return (rings.length * diameter()) + 1;
     }
 
     /**

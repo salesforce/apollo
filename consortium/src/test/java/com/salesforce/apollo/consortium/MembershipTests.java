@@ -276,7 +276,7 @@ public class MembershipTests {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
                 cPipeline.execute(() -> {
-                    CountDownLatch executed = new CountDownLatch(CARDINALITY);
+                    CountDownLatch executed = new CountDownLatch(consortium.size());
                     consortium.values().forEach(m -> {
                         blockPool.execute(() -> {
                             m.process(c);
@@ -342,13 +342,13 @@ public class MembershipTests {
         assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount() + " : " + submitted);
         System.out.println("Completed additional " + bunchCount + " transactions");
 
-        testSubject.start();
         communications.get(testSubject.getMember().getId()).start();
+        testSubject.start();
 
         assertTrue(Utils.waitForCondition(2_000,
                                           () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
 
-        Thread.sleep(1_000);
+        Thread.sleep(2_000);
         bunchCount = 100;
         for (int i = 0; i < bunchCount; i++) {
             submit(client, outstanding, submitted, submittedBunch, timeout);

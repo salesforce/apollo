@@ -87,7 +87,7 @@ public class FunctionalTest {
 
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
-                                  .parallelStream()
+                                  .stream()
                                   .map(cert -> new Node(
                                           new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                   cert.getX509Certificate(), cert.getPrivateKey(),
@@ -107,7 +107,7 @@ public class FunctionalTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         ExecutorService serverThreads = new ForkJoinPool();
-        views = members.parallelStream().map(node -> {
+        views = members.stream().map(node -> {
             Router comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics),
                     serverThreads);
             comms.start();

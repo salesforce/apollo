@@ -43,6 +43,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 
+@SuppressWarnings("unused")
 public class DagTest {
 
     private static final int                              testCardinality = 100;
@@ -73,7 +74,7 @@ public class DagTest {
         entropy = new Random(0x666);
 
         members = certs.values()
-                       .parallelStream()
+                       .stream()
                        .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                cert.getX509Certificate(), cert.getPrivateKey(), new Signer(0, cert.getPrivateKey()),
                                cert.getX509Certificate().getPublicKey()))
