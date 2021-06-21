@@ -100,6 +100,10 @@ public class CheckpointAssembler {
     }
 
     private ListenableFuture<CheckpointSegments> gossip(BootstrapService link) {
+        if (member.equals(link.getMember())) {
+            log.info("Ignoring loopback checkpoint assembly gossip on: {}", link.getMember(), member);
+            return null;
+        }
         log.info("Checkpoint assembly gossip with: {} on: {}", link.getMember(), member);
         return link.fetch(buildRequest());
     }

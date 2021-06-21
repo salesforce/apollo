@@ -426,7 +426,8 @@ public class Context<T extends Member> {
      * @return a random sample set of the view's live members. May be limited by the
      *         number of active members.
      */
-    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest excluded) {
+    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
+        Member excluded = getMember(exc);
         return rings[entropy.nextInt(rings.length)].stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
     }
 

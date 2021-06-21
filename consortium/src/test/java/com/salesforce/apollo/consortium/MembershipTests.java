@@ -85,7 +85,7 @@ public class MembershipTests {
     }
 
     public static Digest submit(Consortium client, Semaphore outstanding, Set<Digest> submitted,
-                              final CountDownLatch submittedBunch, Duration timeout) throws InterruptedException {
+                                final CountDownLatch submittedBunch, Duration timeout) throws InterruptedException {
         outstanding.tryAcquire(10_000, TimeUnit.SECONDS);
         AtomicReference<Digest> pending = new AtomicReference<>();
         pending.set(client.submit((b, t) -> {
@@ -153,7 +153,7 @@ public class MembershipTests {
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicInteger cLabel = new AtomicInteger();
-        Executor blockPool = Executors.newFixedThreadPool(15, r -> {
+        Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
             Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
             t.setDaemon(true);
             return t;
@@ -265,7 +265,7 @@ public class MembershipTests {
                                                                  .build();
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicInteger cLabel = new AtomicInteger();
-        Executor blockPool = Executors.newFixedThreadPool(15, r -> {
+        Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
             Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
             t.setDaemon(true);
             return t;

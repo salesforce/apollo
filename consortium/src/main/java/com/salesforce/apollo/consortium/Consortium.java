@@ -363,12 +363,12 @@ public class Consortium {
     public final Fsm<CollaboratorContext, Transitions> fsm;
 
     final CommonCommunications<BootstrapService, Bootstrapping> bootstrapComm;
-    final Parameters                                                   params;
-    final TickScheduler                                                scheduler = new TickScheduler();
-    final Store                                                        store;
-    final Map<Digest, SubmittedTransaction>                            submitted = new ConcurrentHashMap<>();
-    final Transitions                                                  transitions;
-    final View                                                         view;
+    final Parameters                                            params;
+    final TickScheduler                                         scheduler = new TickScheduler();
+    final Store                                                 store;
+    final Map<Digest, SubmittedTransaction>                     submitted = new ConcurrentHashMap<>();
+    final Transitions                                           transitions;
+    final View                                                  view;
 
     private final Map<Long, CheckpointState>                  cachedCheckpoints     = new ConcurrentHashMap<>();
     private final AtomicReference<HashedCertifiedBlock>       current               = new AtomicReference<>();
@@ -513,7 +513,7 @@ public class Consortium {
     }
 
     @SuppressWarnings("unchecked")
-    public Digest submit(BiConsumer<Boolean, Throwable> onSubmit, BiConsumer<?, Throwable> onCompletion,
+    public Digest submit(BiConsumer<Digest, Throwable> onSubmit, BiConsumer<?, Throwable> onCompletion,
                          Message transaction, Duration timeout) {
         return submit(onSubmit, false, (BiConsumer<Object, Throwable>) onCompletion, transaction, timeout);
     }
@@ -651,7 +651,7 @@ public class Consortium {
         log.info("Checkpoint in: {} blocks on: {}", view.getCheckpointBlocks(), getMember());
     }
 
-    Digest submit(BiConsumer<Boolean, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,
+    Digest submit(BiConsumer<Digest, Throwable> onSubmit, boolean join, BiConsumer<Object, Throwable> onCompletion,
                   Message txn, Duration timeout) {
         if (view.getContext() == null) {
             throw new IllegalStateException(
@@ -891,7 +891,7 @@ public class Consortium {
         }
     }
 
-    private void processSubmit(EnqueuedTransaction transaction, BiConsumer<Boolean, Throwable> onSubmit,
+    private void processSubmit(EnqueuedTransaction transaction, BiConsumer<Digest, Throwable> onSubmit,
                                AtomicInteger pending, AtomicBoolean completed, int succeeded) {
         int remaining = pending.decrementAndGet();
         if (completed.get()) {
@@ -900,7 +900,7 @@ public class Consortium {
         int majority = view.getContext().majority();
         if (succeeded >= majority) {
             if (onSubmit != null && completed.compareAndSet(false, true)) {
-                onSubmit.accept(true, null);
+                onSubmit.accept(transaction.hash, null);
             }
         } else {
             if (remaining + succeeded < majority) {
@@ -954,7 +954,7 @@ public class Consortium {
         action.action.run();
     }
 
-    private void submit(EnqueuedTransaction transaction, boolean join, BiConsumer<Boolean, Throwable> onSubmit,
+    private void submit(EnqueuedTransaction transaction, boolean join, BiConsumer<Digest, Throwable> onSubmit,
                         BiConsumer<Object, Throwable> onCompletion, Duration timeout) {
         assert transaction.hash.equals(hashOf(params.digestAlgorithm,
                                               transaction.transaction)) : "Hash does not match!";

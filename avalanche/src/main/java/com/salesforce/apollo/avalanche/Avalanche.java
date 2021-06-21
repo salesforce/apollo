@@ -486,6 +486,9 @@ public class Avalanche {
         List<Boolean> queryResults = new ArrayList<>();
         for (int i = 0; i < sample.size(); i++) {
             Member member = sample.get(i);
+            if (node.equals(member)) {
+                System.out.println("wtf");
+            }
             queryExecutor.execute(() -> query(member, query, invalid, votes, futureSailor, completed, queryResults,
                                               want, wanted));
         }
@@ -549,7 +552,6 @@ public class Avalanche {
      */
     private int query(Runnable reschedule) {
         List<? extends Member> sample = context.sample(parameters.core.k, Utils.bitStreamEntropy(), node.getId());
-
         if (sample.isEmpty()) {
             reschedule.run();
             return 0;
@@ -558,6 +560,9 @@ public class Avalanche {
             log.trace("not enough members in sample: {} < {}", sample.size(), parameters.core.k);
             reschedule.run();
             return 0;
+        }
+        if (sample.contains(node)) {
+            System.out.println("WTF");
         }
         queryRounds.incrementAndGet();
         Timer.Context timer = metrics == null ? null : metrics.getQueryTimer().time();

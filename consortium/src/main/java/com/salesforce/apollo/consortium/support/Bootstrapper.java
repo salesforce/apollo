@@ -448,6 +448,10 @@ public class Bootstrapper {
     }
 
     private ListenableFuture<Initial> synchronize(Synchronize s, BootstrapService link) {
+        if (params.member.equals(link.getMember())) {
+            log.trace("Ignoring self sampling on: {}", link.getMember(), params.member);
+            return null;
+        }
         log.debug("Attempting synchronization with: {} on: {}", link.getMember(), params.member);
         return link.sync(s);
     }

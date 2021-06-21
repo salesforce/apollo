@@ -32,6 +32,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -238,12 +239,17 @@ public class AvaTest {
             BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
             AtomicReference<Digest> key = new AtomicReference<>();
 
-            key.set(mutator.execute(update, (h, t) -> {
+            try {
+                key.set(mutator.execute(update, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(key.get());
+                    submittedBunch.countDown();
+                }, timeout));
+                submitted.add(key.get());
+            } catch (TimeoutException e1) {
                 outstanding.release();
-                submitted.remove(key.get());
                 submittedBunch.countDown();
-            }, timeout));
-            submitted.add(key.get());
+            }
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");

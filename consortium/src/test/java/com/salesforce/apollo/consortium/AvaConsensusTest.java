@@ -75,7 +75,7 @@ public class AvaConsensusTest {
                                                                                        .build();
     private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private static final Duration                         gossipDuration  = Duration.ofMillis(10);
-    private final static int                              testCardinality = 5;
+    private final static int                              testCardinality = 10;
 
     @BeforeAll
     public static void beforeClass() {

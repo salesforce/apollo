@@ -38,6 +38,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -280,11 +281,16 @@ public class ConsortiumTest {
                                      .stream()
                                      .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                      .get(0);
-            key.set(new Mutator(c).execute(update, (h, t) -> {
+            try {
+                key.set(new Mutator(c).execute(update, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(key.get());
+                    submittedBunch.countDown();
+                }, timeout));
+            } catch (TimeoutException e1) {
                 outstanding.release();
-                submitted.remove(key.get());
                 submittedBunch.countDown();
-            }, timeout));
+            }
             submitted.add(key.get());
         }));
 
