@@ -290,9 +290,9 @@ public class MembershipTests {
 
         testSubject.start();
         communications.get(testSubject.getMember().getId()).start();
-
-        Utils.waitForCondition(2_000, () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING);
-        Thread.sleep(1);
+        assertTrue(Utils.waitForCondition(2_000,
+                                          () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
+        Thread.sleep(1_000);
 
         bunchCount = 150;
         System.out.println("Submitting batches: " + bunchCount);
@@ -501,9 +501,9 @@ public class MembershipTests {
 
         testSubject.start();
         communications.get(testSubject.getMember().getId()).start();
-
-        Utils.waitForCondition(2_000, () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING);
-        Thread.sleep(1);
+        assertTrue(Utils.waitForCondition(2_000,
+                                          () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
+        Thread.sleep(1_000);
 
         bunchCount = 150;
         System.out.println("Submitting batches: " + bunchCount);

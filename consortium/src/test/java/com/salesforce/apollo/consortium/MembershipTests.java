@@ -233,10 +233,10 @@ public class MembershipTests {
 
         testSubject.start();
         communications.get(testSubject.getMember().getId()).start();
-
         assertTrue(Utils.waitForCondition(2_000,
                                           () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
-
+        Thread.sleep(1_000);
+        
         bunchCount = 100;
         submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
@@ -348,6 +348,7 @@ public class MembershipTests {
         assertTrue(Utils.waitForCondition(2_000,
                                           () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
 
+        Thread.sleep(1_000);
         bunchCount = 100;
         for (int i = 0; i < bunchCount; i++) {
             submit(client, outstanding, submitted, submittedBunch, timeout);

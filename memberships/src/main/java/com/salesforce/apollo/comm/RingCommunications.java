@@ -7,6 +7,9 @@
 package com.salesforce.apollo.comm;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -52,8 +55,9 @@ public class RingCommunications<Comm extends Link> {
     private final Context<Member>               context;
     private final Direction                     direction;
     private final Executor                      executor;
-    private volatile int                        lastRing = -1;
+    private volatile int                        lastRingIndex = -1;
     private final SigningMember                 member;
+    private final List<Integer>                 traversalOrder;
 
     public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
             Executor executor) {
@@ -67,6 +71,10 @@ public class RingCommunications<Comm extends Link> {
         this.executor = executor;
         this.member = member;
         this.comm = comm;
+        traversalOrder = new ArrayList<>();
+        for (int i = 0; i < context.getRingCount(); i++) {
+            traversalOrder.add(i);
+        }
     }
 
     public <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler) {
@@ -104,20 +112,20 @@ public class RingCommunications<Comm extends Link> {
     }
 
     public void reset() {
-        lastRing = -1;
+        setLastRingIndex(-1);
     }
 
     @Override
     public String toString() {
-        return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + lastRing + "]";
+        return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + getLastRing() + "]";
     }
 
     <T> void internalIterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                              PredicateHandler<T, Comm> handler, Runnable onMajority, Runnable failedMajority,
                              AtomicInteger tally, Runnable onComplete) {
         Runnable proceed = () -> internalIterate(digest, round, handler, onMajority, failedMajority, tally, onComplete);
-        final int current = lastRing;
         try (Comm link = nextRing(digest)) {
+            final int current = getLastRing();
             int ringCount = context.getRingCount();
             boolean finalIteration = current % ringCount >= ringCount - 1;
             int majority = context.majority();
@@ -175,7 +183,7 @@ public class RingCommunications<Comm extends Link> {
 
     private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler,
                              Comm link) {
-        final int current = lastRing;
+        final int current = getLastRing();
         if (link == null) {
             handler.handle(Optional.empty(), link, current);
         } else {
@@ -190,7 +198,12 @@ public class RingCommunications<Comm extends Link> {
         }
     }
 
-    private Comm linkFor(Digest digest, int r) {
+    private int getLastRing() {
+        return traversalOrder.get(lastRingIndex);
+    }
+
+    private Comm linkFor(Digest digest, int index) {
+        int r = traversalOrder.get(index);
         Ring<Member> ring = context.ring(r);
         Member successor = direction.retrieve(ring, digest, member);
         if (successor == null) {
@@ -208,17 +221,24 @@ public class RingCommunications<Comm extends Link> {
 
     private Comm nextRing(Digest digest) {
         Comm link = null;
-        final int last = lastRing;
+        final int last = lastRingIndex;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
         for (int i = 0; i < rings; i++) {
+            if (current == 0) {
+                Collections.shuffle(traversalOrder);
+            }
             link = linkFor(digest, current);
             if (link != null) {
                 break;
             }
             current = (current + 1) % rings;
         }
-        lastRing = current;
+        lastRingIndex = current;
         return link;
+    }
+
+    private void setLastRingIndex(int lastRing) {
+        this.lastRingIndex = lastRing;
     }
 }
