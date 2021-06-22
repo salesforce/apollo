@@ -180,10 +180,10 @@ public class Ghost {
                 log.info("Intervals gossip from unknown member: {} on: {}", from, member);
                 return Entries.getDefaultInstance();
             }
-            Member successor = context.ring(request.getRing()).successor(member);
-            if (!successor.equals(m)) {
+            Member predecessor = context.ring(request.getRing()).predecessor(member);
+            if (!predecessor.equals(m)) {
                 log.info("Invalid intervals gossip on ring: {} expecting: {} from: {} on: {}", request.getRing(),
-                         successor, from, member);
+                         predecessor, from, member);
                 return Entries.getDefaultInstance();
             }
             log.trace("Intervals gossip from: {} on: {}", from, member);
@@ -246,8 +246,7 @@ public class Ghost {
         communications = c.create(member, context.getId(), service,
                                   r -> new GhostServerCommunications(c.getClientIdentityProvider(), r), getCreate(),
                                   localLoopback);
-        gossiper = new RingCommunications<>(Direction.PREDECESSOR, context, member, communications,
-                parameters.executor);
+        gossiper = new RingCommunications<>(context, member, communications, parameters.executor);
     }
 
     /**
@@ -339,7 +338,7 @@ public class Ghost {
         try {
             Boolean completed = majority.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (completed != null && completed) {
-                log.info("Successful put: {}  on: {}", key, member);
+                log.debug("Successful put: {}  on: {}", key, member);
                 return key;
             } else {
                 throw new TimeoutException("Partial or complete failure to store: " + key);
@@ -373,7 +372,7 @@ public class Ghost {
     private void failedMajority(Digest key, CompletableFuture<Boolean> majority) {
         majority.completeExceptionally(new TimeoutException(
                 String.format("Failed majority put: %s  on: %s", key, member)));
-        log.trace("Failed majority put: {}  on: {}", key, member);
+        log.info("Failed majority put: {}  on: {}", key, member);
     }
 
     private boolean get(Optional<ListenableFuture<Any>> futureSailor, Digest key, CompletableFuture<Any> result,
@@ -443,7 +442,8 @@ public class Ghost {
 
     private ListenableFuture<Entries> gossip(SpaceGhost link, Integer ring) {
         CombinedIntervals keyIntervals = keyIntervals();
-        log.trace("Starting one round of Ghost gossip on: {} intervals: {}", member, keyIntervals);
+        log.trace("Ghost gossip on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(), member,
+                  keyIntervals);
         store.populate(keyIntervals, parameters.fpr, Utils.secureEntropy());
         return link.intervals(Intervals.newBuilder()
                                        .setContext(context.getId().toByteString())
@@ -454,7 +454,7 @@ public class Ghost {
 
     private void majorityComplete(Digest key, CompletableFuture<Boolean> majority) {
         majority.complete(true);
-        log.trace("Majority put {} on: {}", key, member);
+        log.debug("Majority put {} on: {}", key, member);
     }
 
     private boolean put(Optional<ListenableFuture<Boolean>> futureSailor, Supplier<Boolean> isTimedOut, Digest key,

@@ -67,6 +67,6 @@ public class KeyInterval implements Predicate<Digest> {
 
     @Override
     public String toString() {
-        return String.format("KeyInterval [%s, %s]", begin, end);
+        return String.format("[%s, %s]", begin, end);
     }
 }

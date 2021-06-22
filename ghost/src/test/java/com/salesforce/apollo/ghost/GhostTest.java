@@ -121,5 +121,7 @@ public class GhostTest {
                 assertEquals(entry.getValue(), found);
             }
         }
+        
+        System.out.println("done");
     }
 }
