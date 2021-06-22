@@ -16,12 +16,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -53,7 +51,7 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 public class GhostTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static Duration                               gossipDelay     = Duration.ofMillis(500);
+    private static Duration                               gossipDelay     = Duration.ofMillis(10_000);
     private static final int                              testCardinality = 100;
 
     @BeforeAll
@@ -102,48 +100,44 @@ public class GhostTest {
         }).collect(Collectors.toList());
         ghosties.forEach(e -> e.start(scheduler, gossipDelay));
 
-        int msgs = 10_000;
+        int msgs = 10;
         Map<Digest, Any> stored = new HashMap<>();
-        Duration timeout = Duration.ofSeconds(500);
-        Executor parallel = Executors.newFixedThreadPool(ghosties.size());
-
+        Duration timeout = Duration.ofSeconds(1);
+        AtomicInteger count = new AtomicInteger();
         for (int i = 0; i < msgs; i++) {
             int index = i;
-            Semaphore extent = new Semaphore(ghosties.size());
             for (Ghost ghost : ghosties) {
-                parallel.execute(() -> {
-                    try {
-                        extent.acquire();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
+                Any entry = Any.pack(ByteMessage.newBuilder()
+                                                .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
+                                                                                                   ghost.getMember()
+                                                                                                        .getId(),
+                                                                                                   index)))
+                                                .build());
+                Digest put = ghost.put(entry, timeout);
+                stored.put(put, entry);
+                if (count.incrementAndGet() % 100 == 0) {
+                    System.out.print('.');
+                    if (count.get() % 8000 == 0) {
+                        System.out.println();
                     }
-                    try {
-                        Any entry = Any.pack(ByteMessage.newBuilder()
-                                                        .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
-                                                                                                           ghost.getMember()
-                                                                                                                .getId(),
-                                                                                                           index)))
-                                                        .build());
-                        Digest put;
-                        try {
-                            put = ghost.put(entry, timeout);
-                            stored.put(put, entry);
-                        } catch (TimeoutException e) {
-                            e.printStackTrace();
-                        }
-                    } finally {
-                        extent.release();
-                    }
-                });
+                }
             }
         }
+        System.out.println();
         System.out.println("Finished " + msgs * members.size() + " random puts, performing gets");
 
+        count.set(0);
         for (Entry<Digest, Any> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
                 Any found = ghost.get(entry.getKey(), timeout);
                 assertNotNull(found);
                 assertEquals(entry.getValue(), found);
+                if (count.incrementAndGet() % 100 == 0) {
+                    System.out.print('.');
+                    if (count.get() % 8000 == 0) {
+                        System.out.println();
+                    }
+                }
             }
         }
 

@@ -40,6 +40,7 @@ import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Direction;
+import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -270,7 +271,7 @@ public class Ghost {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         CompletableFuture<Any> result = new CompletableFuture<>();
         Get get = Get.newBuilder().setContext(context.getId().toByteString()).setId(key.toByteString()).build();
-        new RingCommunications<>(context, member, communications,
+        new RingIterator<>(context, member, communications,
                 parameters.executor).iterate(key, (link, r) -> link.get(get),
                                              (tally, futureSailor, link, r) -> get(futureSailor, key, result,
                                                                                    isTimedOut, link));
@@ -337,7 +338,7 @@ public class Ghost {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         Entry entry = Entry.newBuilder().setContext(context.getId().toByteString()).setValue(value).build();
 
-        new RingCommunications<>(Direction.SUCCESSOR, context, member, communications,
+        new RingIterator<>(Direction.SUCCESSOR, context, member, communications,
                 parameters.executor).iterate(key, () -> majorityComplete(key, majority),
                                              (link, r) -> put(link, key, entry), () -> failedMajority(key, majority),
                                              (tally, futureSailor, link, r) -> put(futureSailor, isTimedOut, key, tally,

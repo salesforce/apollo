@@ -27,7 +27,7 @@ import com.salesfoce.apollo.consortium.proto.BodyType;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Initial;
 import com.salesfoce.apollo.consortium.proto.Synchronize;
-import com.salesforce.apollo.comm.RingCommunications;
+import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.CollaboratorContext;
 import com.salesforce.apollo.consortium.Consortium.Bootstrapping;
@@ -113,7 +113,7 @@ public class Bootstrapper {
     }
 
     private void anchor(AtomicLong start, long end) {
-        new RingCommunications<>(params.context, params.member, comms,
+        new RingIterator<>(params.context, params.member, comms,
                 params.dispatcher).iterate(randomCut(params.digestAlgorithm), (link, ring) -> anchor(link, start, end),
                                            (tally, futureSailor, link, ring) -> completeAnchor(futureSailor, start, end,
                                                                                                link),
@@ -199,7 +199,7 @@ public class Bootstrapper {
     }
 
     private void completeViewChain(AtomicLong start, long end) {
-        new RingCommunications<>(params.context, params.member, comms,
+        new RingIterator<>(params.context, params.member, comms,
                 params.dispatcher).iterate(randomCut(params.digestAlgorithm),
                                            (link, ring) -> completeViewChain(link, start, end),
                                            (tally, futureSailor, link, ring) -> completeViewChain(futureSailor, start,
@@ -374,7 +374,7 @@ public class Bootstrapper {
                                    .setContext(params.context.getId().toByteString())
                                    .setHeight(anchor.height())
                                    .build();
-        new RingCommunications<>(params.context, params.member, comms,
+        new RingIterator<>(params.context, params.member, comms,
                 params.dispatcher).iterate(randomCut(params.digestAlgorithm), (link, ring) -> synchronize(s, link),
                                            (tally, futureSailor, link, ring) -> synchronize(futureSailor, votes, link),
                                            () -> computeGenesis(votes, () -> scheduleSample()));

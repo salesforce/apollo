@@ -14,7 +14,7 @@
         </encoder>
     </appender>   
 
-    <logger name="com.salesforce.apollo.comm.RingCommunications" level="info"
+    <logger name="com.salesforce.apollo.comm.RingIterator" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

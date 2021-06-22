@@ -12,9 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,13 +49,13 @@ public class RingCommunications<Comm extends Link> {
 
     private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
 
-    private final CommonCommunications<Comm, ?> comm;
-    private final Context<Member>               context;
-    private final Direction                     direction;
-    private final Executor                      executor;
-    private volatile int                        lastRingIndex = -1;
-    private final SigningMember                 member;
-    private final List<Integer>                 traversalOrder;
+    final CommonCommunications<Comm, ?> comm;
+    final Context<Member>               context;
+    final Direction                     direction;
+    final Executor                      executor;
+    volatile int                        lastRingIndex = -1;
+    final SigningMember                 member;
+    final List<Integer>                 traversalOrder;
 
     public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
             Executor executor) {
@@ -94,23 +92,6 @@ public class RingCommunications<Comm extends Link> {
         }
     }
 
-    public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                            PredicateHandler<T, Comm> handler) {
-        iterate(digest, null, round, null, handler, null);
-    }
-
-    public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                            PredicateHandler<T, Comm> handler, Runnable onComplete) {
-        iterate(digest, null, round, null, handler, onComplete);
-    }
-
-    public <T> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                            Runnable failedMajority, PredicateHandler<T, Comm> handler, Runnable onComplete) {
-        AtomicInteger tally = new AtomicInteger(0);
-        executor.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally));
-
-    }
-
     public void reset() {
         setLastRingIndex(-1);
     }
@@ -120,70 +101,23 @@ public class RingCommunications<Comm extends Link> {
         return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + getLastRing() + "]";
     }
 
-    <T> void internalIterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                             Runnable failedMajority, PredicateHandler<T, Comm> handler, Runnable onComplete,
-                             AtomicInteger tally) {
-        Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
-        try (Comm link = nextRing(digest)) {
-            final int current = lastRingIndex;
-            int ringCount = context.getRingCount();
-            boolean finalIteration = current % ringCount >= ringCount - 1;
-            int majority = context.majority();
-            Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, majority, failedMajority, tally,
-                                                         proceed, finalIteration, onComplete);
-            if (link == null) {
-                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
-                          member);
-                allowed.accept(handler.handle(tally, Optional.empty(), link, current));
-                return;
+    Comm nextRing(Digest digest) {
+        Comm link = null;
+        final int last = lastRingIndex;
+        int rings = context.getRingCount();
+        int current = (last + 1) % rings;
+        for (int i = 0; i < rings; i++) {
+            if (current == 0) {
+                Collections.shuffle(traversalOrder);
             }
-            log.trace("Iteration on: {} ring: {} to: {} on: {}", context.getId(), current, link.getMember(), member);
-            ListenableFuture<T> futureSailor = round.apply(link, current);
-            if (futureSailor == null) {
-                log.trace("No asynchronous response for: {} on: {} ring: {} from: {} on: {}", digest, context.getId(),
-                          current, link.getMember(), member);
-                allowed.accept(handler.handle(tally, Optional.empty(), link, current));
-                return;
+            link = linkFor(digest, current);
+            if (link != null) {
+                break;
             }
-            futureSailor.addListener(() -> {
-                log.trace("Response of: {} on: {} ring: {} from: {} on: {}", digest, context.getId(), current,
-                          link.getMember(), member);
-                allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, current) && !finalIteration);
-            }, executor);
-        } catch (IOException e) {
-            log.debug("Error closing", e);
+            current = (current + 1) % rings;
         }
-    }
-
-    void proceed(Digest key, Boolean allow, Runnable onMajority, int majority, Runnable failedMajority,
-                 AtomicInteger tally, Runnable proceed, boolean finalIteration, Runnable onComplete) {
-        if (finalIteration) {
-            log.trace("Final iteration of: {} for: {} tally: {} on: {}", context.getId(), tally.get(), member);
-            if (failedMajority != null) {
-                if (tally.get() < majority) {
-                    log.info("Failed to obtain majority of: {} for: {} tally: {} required: {} on: {}", key,
-                             context.getId(), tally.get(), majority, member);
-                    failedMajority.run();
-                }
-            }
-            if (onMajority != null) {
-                if (tally.get() >= majority) {
-                    log.info("Obtained majority of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
-                             member);
-                    onMajority.run();
-                }
-            }
-            if (onComplete != null) {
-                log.trace("Completing iteration of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
-                          member);
-                onComplete.run();
-            }
-        } else if (allow) {
-            log.trace("Proceeding on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
-            executor.execute(proceed);
-        } else {
-            log.trace("Termination on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
-        }
+        lastRingIndex = current;
+        return link;
     }
 
     private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler,
@@ -222,25 +156,6 @@ public class RingCommunications<Comm extends Link> {
                       (e.getCause() != null ? e.getCause() : e).getMessage());
         }
         return null;
-    }
-
-    private Comm nextRing(Digest digest) {
-        Comm link = null;
-        final int last = lastRingIndex;
-        int rings = context.getRingCount();
-        int current = (last + 1) % rings;
-        for (int i = 0; i < rings; i++) {
-            if (current == 0) {
-                Collections.shuffle(traversalOrder);
-            }
-            link = linkFor(digest, current);
-            if (link != null) {
-                break;
-            }
-            current = (current + 1) % rings;
-        }
-        lastRingIndex = current;
-        return link;
     }
 
     private void setLastRingIndex(int lastRing) {

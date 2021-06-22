@@ -27,7 +27,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
-import com.salesforce.apollo.comm.RingCommunications;
+import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Bootstrapping;
 import com.salesforce.apollo.consortium.Store;
@@ -133,7 +133,7 @@ public class CheckpointAssembler {
         }
         log.info("Scheduling assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
                  member);
-        RingCommunications<BootstrapService> ringer = new RingCommunications<>(context, member, comms, executor);
+        RingIterator<BootstrapService> ringer = new RingIterator<>(context, member, comms, executor);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),
                        () -> scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),
