@@ -56,7 +56,7 @@ abstract public class KeyEventImpl implements KeyEvent {
 
     @Override
     public Format getFormat() {
-        return Format.valueOf(common.getFormat());
+        return Format.valueOf(header.getVersion().getFormat());
     }
 
     @Override

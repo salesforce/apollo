@@ -143,7 +143,6 @@ public class ProtobufEventFactory implements EventFactory {
 
         var common = EventCommon.newBuilder()
                                 .setPrevious(specification.getPrevious().toByteString())
-                                .setFormat(specification.getFormat().name())
                                 .putAllAuthentication(signatures.entrySet()
                                                                 .stream()
                                                                 .collect(Collectors.toMap(e -> e.getKey(),
@@ -165,7 +164,6 @@ public class ProtobufEventFactory implements EventFactory {
 
         var common = EventCommon.newBuilder()
                                 .setPrevious(specification.getPrevious().toByteString())
-                                .setFormat(specification.getFormat().name())
                                 .putAllAuthentication(signatures.entrySet()
                                                                 .stream()
                                                                 .collect(Collectors.toMap(e -> e.getKey(),
@@ -215,7 +213,8 @@ public class ProtobufEventFactory implements EventFactory {
         Header header = Header.newBuilder()
                               .setSequenceNumber(specification.getSequenceNumber())
                               .setPriorEventDigest((specification.getPriorEventDigest()).toByteString())
-                              .setVersion(toVersion(specification.getVersion()))
+                              .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
+                                                                                                       .name()))
                               .setIdentifier(specification.getIdentifier().toByteString())
                               .setIlk(INTERACTION_TYPE)
                               .build();
@@ -241,7 +240,8 @@ public class ProtobufEventFactory implements EventFactory {
                                          .setWitnessThreshold(specification.getWitnessThreshold());
         var header = Header.newBuilder()
                            .setSequenceNumber(specification.getSequenceNumber())
-                           .setVersion(toVersion(specification.getVersion()))
+                           .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
+                                                                                                    .name()))
                            .setPriorEventDigest(specification.getPriorEventDigest().toByteString())
                            .setIdentifier(identifier.toByteString())
                            .setIlk(ROTATION_TYPE);

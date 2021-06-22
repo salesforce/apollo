@@ -18,7 +18,6 @@ message Header {
 }
 
 message EventCommon {
-    string format = 1;
     bytes configuration = 2;
     bytes previous = 3;
     map<int32, bytes> authentication = 4;
@@ -98,8 +97,9 @@ message SigningThreshold {
 }
 
 message Version {
-    int32 major = 1;
-    int32 minor = 2;
+    string format = 1;
+    int32 major = 2;
+    int32 minor = 3;
 }
 
 message KeyState {
