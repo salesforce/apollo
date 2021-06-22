@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
 public class IdentifierSpecificationTests {
 

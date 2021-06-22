@@ -14,9 +14,27 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>stereotomy</artifactId>
 		</dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>memberships</artifactId>
-        </dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>ghost</artifactId>
+		</dependency>
+
+		<!-- Test only deps below this line -->
+
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-classic</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 </project>

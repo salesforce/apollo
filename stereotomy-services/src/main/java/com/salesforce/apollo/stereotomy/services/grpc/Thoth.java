@@ -6,16 +6,12 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
 import java.util.Optional;
-
-import org.h2.mvstore.MVMap;
-import org.h2.mvstore.MVStore;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.stereotomy.event.proto.Resolve;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.ghost.Ghost;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -44,17 +40,16 @@ public class Thoth implements Resolver {
         }
     }
 
-    private final MVMap<byte[], byte[]> bindings;
-    private final Context<Member>       context;
-    private final KERL                  kerl;
-    private final String                MAP_TEMPLATE = "%s-thoth.bindgs";
-    private final SigningMember         node;
+    private final Ghost           ghost;
+    private final Context<Member> context;
+    private final KERL            kerl;
+    private final SigningMember   node;
 
-    public Thoth(Context<Member> context, SigningMember node, KERL kerl, MVStore store) {
+    public Thoth(Context<Member> context, SigningMember node, KERL kerl, Ghost ghost) {
         this.context = context;
         this.node = node;
         this.kerl = kerl;
-        bindings = store.openMap(String.format(MAP_TEMPLATE, qb64(context.getId())));
+        this.ghost = ghost;
     }
 
     @Override

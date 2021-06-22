@@ -40,13 +40,13 @@ import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification.Builder;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.stereotomy.processing.MissingEstablishmentEventException;
-import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
-import com.salesforce.apollo.stereotomy.specification.InteractionSpecification;
-import com.salesforce.apollo.stereotomy.specification.KeyConfigurationDigester;
-import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
-import com.salesforce.apollo.stereotomy.specification.RotationSpecification.Builder;
 
 /**
  * @author hal.hildebrand
@@ -70,7 +70,7 @@ public class Stereotomy {
 
     public interface EventFactory {
 
-        InceptionEvent inception(Identifier identifier, IdentifierSpecification specification);
+        InceptionEvent inception(IdentifierSpecification specification);
 
         KeyEvent interaction(InteractionSpecification specification);
 
@@ -313,11 +313,11 @@ public class Stereotomy {
     }
 
     public ControllableIdentifier newPrivateIdentifier(Identifier identifier) {
-        return newPrivateIdentifier(identifier, IdentifierSpecification.newBuilder());
+        return newPrivateIdentifier(IdentifierSpecification.newBuilder());
 
     }
 
-    public ControllableIdentifier newPrivateIdentifier(Identifier identifier, IdentifierSpecification.Builder spec) {
+    public ControllableIdentifier newPrivateIdentifier(IdentifierSpecification.Builder spec) {
         IdentifierSpecification.Builder specification = spec.clone();
         KeyPair initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         KeyPair nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
@@ -328,7 +328,7 @@ public class Stereotomy {
                      .setNextKeys(nextKeys)
                      .setSigner(0, initialKeyPair.getPrivate());
 
-        InceptionEvent event = eventFactory.inception(identifier, specification.build());
+        InceptionEvent event = eventFactory.inception(specification.build());
         KeyState state = processor.process(event);
         if (state == null) {
             throw new IllegalStateException("Invalid event produced");
@@ -340,17 +340,16 @@ public class Stereotomy {
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
         ControllableIdentifierImpl cid = new ControllableIdentifierImpl(state);
 
-        log.info("New Private Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}", identifier,
-                 cid.getIdentifier(), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
-                 shortQb64(nextKeyPair.getPublic()));
+        log.info("New Private Identifier prefix: {} coordinates: {} cur key: {} next key: {}", cid.getIdentifier(),
+                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
         return cid;
     }
 
-    public ControllableIdentifier newPublicIdentifier(Identifier identifier, BasicIdentifier... witnesses) {
-        return newPublicIdentifier(identifier, IdentifierSpecification.newBuilder(), witnesses);
+    public ControllableIdentifier newPublicIdentifier(BasicIdentifier... witnesses) {
+        return newPublicIdentifier(IdentifierSpecification.newBuilder(), witnesses);
     }
 
-    public ControllableIdentifier newPublicIdentifier(Identifier identifier, IdentifierSpecification.Builder spec,
+    public ControllableIdentifier newPublicIdentifier(IdentifierSpecification.Builder spec,
                                                       BasicIdentifier... witnesses) {
         IdentifierSpecification.Builder specification = spec.clone();
 
@@ -365,7 +364,7 @@ public class Stereotomy {
                      .setSigner(0, initialKeyPair.getPrivate())
                      .build();
 
-        InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
+        InceptionEvent event = this.eventFactory.inception(specification.build());
         KeyState state = processor.process(event);
         if (state == null) {
             throw new IllegalStateException("Invalid event produced");
@@ -377,9 +376,8 @@ public class Stereotomy {
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
         ControllableIdentifier cid = new ControllableIdentifierImpl(state);
 
-        log.info("New Public Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}", identifier,
-                 cid.getIdentifier(), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
-                 shortQb64(nextKeyPair.getPublic()));
+        log.info("New Public Identifier prefix: {} coordinates: {} cur key: {} next key: {}", cid.getIdentifier(),
+                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
         return cid;
     }
 

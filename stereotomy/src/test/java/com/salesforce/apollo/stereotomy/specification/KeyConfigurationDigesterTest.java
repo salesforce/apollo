@@ -3,7 +3,7 @@ package com.salesforce.apollo.stereotomy.specification;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.group;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.weighted;
-import static com.salesforce.apollo.stereotomy.specification.KeyConfigurationDigester.signingThresholdRepresentation;
+import static com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester.signingThresholdRepresentation;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 

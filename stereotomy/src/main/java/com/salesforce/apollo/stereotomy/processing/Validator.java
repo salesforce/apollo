@@ -31,7 +31,7 @@ import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfSigningIdentifier;
-import com.salesforce.apollo.stereotomy.specification.KeyConfigurationDigester;
+import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
 
 /**
  * @author hal.hildebrand

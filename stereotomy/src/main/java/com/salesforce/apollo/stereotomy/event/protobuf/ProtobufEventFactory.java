@@ -32,9 +32,9 @@ import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
-import com.salesforce.apollo.stereotomy.specification.InteractionSpecification;
-import com.salesforce.apollo.stereotomy.specification.RotationSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 /**
  * @author hal.hildebrand
@@ -114,8 +114,8 @@ public class ProtobufEventFactory implements EventFactory {
     }
 
     @Override
-    public InceptionEvent inception(Identifier identifier, IdentifierSpecification specification) {
-        var inceptionStatement = identifierSpec(identifier, specification);
+    public InceptionEvent inception(IdentifierSpecification specification) {
+        var inceptionStatement = identifierSpec(null, specification);
 
         var prefix = Identifier.identifier(specification, inceptionStatement.toByteString().asReadOnlyByteBuffer());
         var bs = identifierSpec(prefix, specification).toByteString();
@@ -193,8 +193,10 @@ public class ProtobufEventFactory implements EventFactory {
                            .setSequenceNumber(0)
                            .setVersion(toVersion(specification.getVersion()))
                            .setPriorEventDigest(Digest.NONE.toByteString())
-                           .setIdentifier(identifier.toByteString())
                            .setIlk(INCEPTION_TYPE);
+        if (identifier != null) {
+            header.setIdentifier(identifier.toByteString());
+        }
 
         return IdentifierSpec.newBuilder()
                              .setHeader(header)

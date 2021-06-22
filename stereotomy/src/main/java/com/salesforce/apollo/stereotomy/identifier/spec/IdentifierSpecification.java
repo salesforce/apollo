@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.specification;
+package com.salesforce.apollo.stereotomy.identifier.spec;
 
 import static java.util.Objects.requireNonNull;
 
+import java.nio.ByteBuffer;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.ArrayList;
@@ -236,6 +237,11 @@ public class IdentifierSpecification {
             return witnessThreshold;
         }
 
+        public Builder setBasic() {
+            derivation = BasicIdentifier.class;
+            return this;
+        }
+
         public Builder setConfigurationTraits(ConfigurationTrait... configurationTraits) {
             Collections.addAll(this.configurationTraits, configurationTraits);
             return this;
@@ -294,6 +300,11 @@ public class IdentifierSpecification {
 
         public Builder setNextSigningThreshold(SigningThreshold nextSigningThreshold) {
             nextSigningThreshold = requireNonNull(nextSigningThreshold);
+            return this;
+        }
+
+        public Builder setSelfAddressing() {
+            derivation = SelfAddressingIdentifier.class;
             return this;
         }
 
@@ -370,21 +381,12 @@ public class IdentifierSpecification {
         return new BasicIdentifier(key);
     }
 
-    public static Builder newBuilder() {
-        return new Builder();
+    public static Identifier identifier(IdentifierSpecification spec, byte[] inceptionStatement) {
+        return Identifier.identifier(spec, ByteBuffer.wrap(inceptionStatement));
     }
 
-    public static Identifier identifier(IdentifierSpecification spec, byte[] inceptionStatement) {
-        var derivation = spec.getDerivation();
-        if (derivation.isAssignableFrom(BasicIdentifier.class)) {
-            return basic(spec.getKeys().get(0));
-        } else if (derivation.isAssignableFrom(SelfAddressingIdentifier.class)) {
-            return selfAddressing(inceptionStatement, spec.getIdentifierDigestAlgorithm());
-        } else if (derivation.isAssignableFrom(SelfSigningIdentifier.class)) {
-            return selfSigning(inceptionStatement, spec.getSigner());
-        } else {
-            throw new IllegalArgumentException("unknown prefix type: " + derivation.getCanonicalName());
-        }
+    public static Builder newBuilder() {
+        return new Builder();
     }
 
     public static SelfAddressingIdentifier selfAddressing(byte[] inceptionStatement, DigestAlgorithm digestAlgorithm) {

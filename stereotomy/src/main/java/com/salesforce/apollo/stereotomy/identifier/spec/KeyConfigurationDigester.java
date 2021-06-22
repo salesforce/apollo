@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.specification;
+package com.salesforce.apollo.stereotomy.identifier.spec;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -50,7 +50,7 @@ public class KeyConfigurationDigester {
         return digest(signingThreshold, nextKeys, in.getAlgorithm()).equals(in);
     }
 
-    static byte[] signingThresholdRepresentation(SigningThreshold threshold) {
+    public static byte[] signingThresholdRepresentation(SigningThreshold threshold) {
         if (threshold instanceof SigningThreshold.Unweighted) {
             return Hex.hexNoPad(((SigningThreshold.Unweighted) threshold).getThreshold()).getBytes(UTF_8);
         } else if (threshold instanceof SigningThreshold.Weighted) {
@@ -63,7 +63,7 @@ public class KeyConfigurationDigester {
         }
     }
 
-    static String weight(Weight w) {
+    public static String weight(Weight w) {
         if (w.denominator().isEmpty()) {
             return "" + w.numerator();
         }
