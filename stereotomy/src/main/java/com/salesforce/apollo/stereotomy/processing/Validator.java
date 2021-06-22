@@ -37,9 +37,9 @@ import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester
  * @author hal.hildebrand
  *
  */
-public class Validator {
+public interface Validator {
 
-    private static <T> boolean distinct(Collection<T> items) {
+    static <T> boolean distinct(Collection<T> items) {
         if (items instanceof Set) {
             return true;
         }
@@ -54,13 +54,7 @@ public class Validator {
         return true;
     }
 
-    private final KEL kel;
-
-    public Validator(KEL kel) {
-        this.kel = kel;
-    }
-
-    public void validateKeyEventData(KeyState state, KeyEvent event) {
+    default void validateKeyEventData(KeyState state, KeyEvent event, KEL kel) {
         if (event instanceof EstablishmentEvent) {
             var ee = (EstablishmentEvent) event;
 
@@ -108,9 +102,9 @@ public class Validator {
 
             if (event instanceof DelegatedEstablishmentEvent) {
                 var dee = (DelegatedEstablishmentEvent) ee;
-                var delegatingEvent = this.kel.getKeyEvent(dee.getDelegatingSeal().getCoordinates())
-                                              .orElseThrow(() -> new MissingDelegatingEventException(event,
-                                                      dee.getDelegatingSeal().getCoordinates()));
+                var delegatingEvent = kel.getKeyEvent(dee.getDelegatingSeal().getCoordinates())
+                                         .orElseThrow(() -> new MissingDelegatingEventException(event,
+                                                 dee.getDelegatingSeal().getCoordinates()));
 
                 this.validate(this.containsSeal(delegatingEvent.getSeals(), dee),
                               "delegated establishment event seal must contain be contained in referenced delegating event");
