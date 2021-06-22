@@ -8,6 +8,7 @@ package com.salesforce.apollo.ghost.communications;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
@@ -23,5 +24,5 @@ public interface SpaceGhost extends Link {
 
     ListenableFuture<Entries> intervals(Intervals intervals);
 
-    void put(Entry value);
+    ListenableFuture<Empty> put(Entry value);
 }

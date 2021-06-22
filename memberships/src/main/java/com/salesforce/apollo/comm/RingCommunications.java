@@ -129,8 +129,8 @@ public class RingCommunications<Comm extends Link> {
             int ringCount = context.getRingCount();
             boolean finalIteration = current % ringCount >= ringCount - 1;
             int majority = context.majority();
-            Consumer<Boolean> allowed = allow -> proceed(allow, onMajority, majority, failedMajority, tally, proceed,
-                                                         finalIteration, onComplete);
+            Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, majority, failedMajority, tally,
+                                                         proceed, finalIteration, onComplete);
             if (link == null) {
                 log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
                           member);
@@ -155,29 +155,34 @@ public class RingCommunications<Comm extends Link> {
         }
     }
 
-    void proceed(Boolean allow, Runnable onMajority, int majority, Runnable failedMajority, AtomicInteger tally,
-                 Runnable proceed, boolean finalIteration, Runnable onComplete) {
+    void proceed(Digest key, Boolean allow, Runnable onMajority, int majority, Runnable failedMajority,
+                 AtomicInteger tally, Runnable proceed, boolean finalIteration, Runnable onComplete) {
         if (finalIteration) {
-            log.trace("Final iteration of: {} tally: {} on: {}", context.getId(), tally.get(), member);
+            log.trace("Final iteration of: {} for: {} tally: {} on: {}", context.getId(), tally.get(), member);
             if (failedMajority != null) {
                 if (tally.get() < majority) {
+                    log.info("Failed to obtain majority of: {} for: {} tally: {} required: {} on: {}", key,
+                             context.getId(), tally.get(), majority, member);
                     failedMajority.run();
                 }
             }
             if (onMajority != null) {
                 if (tally.get() >= majority) {
+                    log.info("Obtained majority of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
+                             member);
                     onMajority.run();
                 }
             }
             if (onComplete != null) {
-                log.trace("Completing iteration for: {} tally: {} on: {}", context.getId(), tally.get(), member);
+                log.trace("Completing iteration of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
+                          member);
                 onComplete.run();
             }
         } else if (allow) {
-            log.trace("Proceeding for: {} tally: {} on: {}", context.getId(), tally.get(), member);
+            log.trace("Proceeding on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
             executor.execute(proceed);
         } else {
-            log.trace("Termination of: {} tally: {} on: {}", context.getId(), tally.get(), member);
+            log.trace("Termination on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
         }
     }
 

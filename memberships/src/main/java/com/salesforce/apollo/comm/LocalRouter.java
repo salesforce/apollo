@@ -59,7 +59,8 @@ public class LocalRouter extends Router {
                 @Override
                 public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
                                                                            CallOptions callOptions, Channel next) {
-                    return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
+                    ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
+                    return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                         @Override
                         public void start(Listener<RespT> responseListener, Metadata headers) {
                             headers.put(AUTHORIZATION_METADATA_KEY, qb64(from.getId()));

@@ -6,16 +6,16 @@
  */
 package com.salesforce.apollo.ghost;
 
+import static com.google.protobuf.ByteString.copyFromUtf8;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
+import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -31,7 +31,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -50,11 +49,11 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
  * @author hal.hildebrand
  * @since 220
  */
-public class GhostTest {
+public class PerfTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static Duration                               gossipDelay     = Duration.ofMillis(500);
-    private static final int                              testCardinality = 100;
+    private static Duration                               gossipDelay     = Duration.ofMillis(10_000);
+    private static final int                              testCardinality = 10;
 
     @BeforeAll
     public static void beforeClass() {
@@ -77,7 +76,7 @@ public class GhostTest {
     }
 
     @Test
-    public void smoke() throws Exception {
+    public void puts() throws Exception {
         List<SigningMember> members = certs.values()
                                            .stream()
                                            .map(cert -> new SigningMemberImpl(
@@ -87,22 +86,23 @@ public class GhostTest {
                                                    cert.getX509Certificate().getPublicKey()))
                                            .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.1, testCardinality);
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.2, testCardinality);
+        System.out.println("Redundancy: " + context.getRingCount());
         members.forEach(e -> context.activate(e));
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         ForkJoinPool executor = new ForkJoinPool();
 
         List<Ghost> ghosties = members.stream().map(member -> {
-            LocalRouter comms = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(30), executor);
+            LocalRouter comms = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(1000), executor);
             communications.add(comms);
             comms.start();
             return new Ghost(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null));
         }).collect(Collectors.toList());
         ghosties.forEach(e -> e.start(scheduler, gossipDelay));
 
-        int msgs = 10_000;
+        int msgs = 1_000_000;
         Map<Digest, Any> stored = new HashMap<>();
         Duration timeout = Duration.ofSeconds(500);
         Executor parallel = Executors.newFixedThreadPool(ghosties.size());
@@ -119,10 +119,9 @@ public class GhostTest {
                     }
                     try {
                         Any entry = Any.pack(ByteMessage.newBuilder()
-                                                        .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
-                                                                                                           ghost.getMember()
-                                                                                                                .getId(),
-                                                                                                           index)))
+                                                        .setContents(copyFromUtf8(format("Member: %s round: %s",
+                                                                                         ghost.getMember().getId(),
+                                                                                         index)))
                                                         .build());
                         Digest put;
                         try {
@@ -137,16 +136,6 @@ public class GhostTest {
                 });
             }
         }
-        System.out.println("Finished " + msgs * members.size() + " random puts, performing gets");
-
-        for (Entry<Digest, Any> entry : stored.entrySet()) {
-            for (Ghost ghost : ghosties) {
-                Any found = ghost.get(entry.getKey(), timeout);
-                assertNotNull(found);
-                assertEquals(entry.getValue(), found);
-            }
-        }
-
-        System.out.println("done");
+        System.out.println("Finished " + msgs * members.size() + " random puts");
     }
 }

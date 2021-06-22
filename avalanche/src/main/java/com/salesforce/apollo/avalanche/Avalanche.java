@@ -7,7 +7,6 @@
 package com.salesforce.apollo.avalanche;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -33,8 +32,6 @@ import java.util.stream.Collectors;
 import org.apache.commons.math3.util.Pair;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
-import org.h2.mvstore.WriteBuffer;
-import org.h2.mvstore.type.DataType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +58,7 @@ import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.DigestType;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -69,48 +67,7 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  * @since 220
  */
-public class Avalanche {
-
-    public static class DigestType implements DataType {
-
-        @Override
-        public int compare(Object a, Object b) {
-            return ((Digest) a).compareTo(((Digest) b));
-        }
-
-        @Override
-        public int getMemory(Object obj) {
-            return ((Digest) obj).getAlgorithm().digestLength() + 1;
-        }
-
-        @Override
-        public Digest read(ByteBuffer buff) {
-            return new Digest(buff);
-        }
-
-        @Override
-        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                obj[i] = read(buff);
-            }
-        }
-
-        @Override
-        public void write(WriteBuffer buff, Object obj) {
-            Digest digest = (Digest) obj;
-            buff.put(digest.getAlgorithm().digestCode());
-            for (long l : digest.getLongs()) {
-                buff.putLong(l);
-            }
-        }
-
-        @Override
-        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                write(buff, obj[i]);
-            }
-        }
-    }
+public class Avalanche { 
 
     public static class Finalized {
         public final DagEntry entry;

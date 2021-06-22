@@ -8,6 +8,7 @@ package com.salesforce.apollo.ghost.communications;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
@@ -57,8 +58,8 @@ public class GhostClientCommunications implements SpaceGhost {
     }
 
     @Override
-    public void put(Entry value) {
-        client.put(value);
+    public ListenableFuture<Empty> put(Entry value) {
+        return client.put(value);
     }
 
     public void release() {

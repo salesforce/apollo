@@ -19,17 +19,11 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public interface Store {
 
-    public Entries entriesIn(CombinedIntervals combinedIntervals, int maxEntries);
-
-    public List<Digest> have(CombinedIntervals keyIntervals);
-
-    public List<Digest> keySet();
+    public Entries entriesIn(CombinedIntervals combinedIntervals, int maxEntries); 
 
     void add(List<Any> entries);
 
-    Any get(Digest key);
-
-    List<Any> getUpdates(List<Digest> want);
+    Any get(Digest key); 
 
     void populate(CombinedIntervals keyIntervals, double fpr, SecureRandom entropy);
 

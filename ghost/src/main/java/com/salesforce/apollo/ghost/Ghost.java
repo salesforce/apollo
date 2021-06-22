@@ -26,12 +26,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Any;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
@@ -102,7 +104,7 @@ public class Ghost {
         public static class Builder {
             private DigestAlgorithm digestAlgorithm = DigestAlgorithm.DEFAULT;
             private Executor        executor        = ForkJoinPool.commonPool();
-            private double          fpr;
+            private double          fpr             = 0.00125;
             private int             maxEntries      = 100;
 
             public GhostParameters build() {
@@ -210,6 +212,10 @@ public class Ghost {
     private final AtomicBoolean                             started = new AtomicBoolean();
     private final Store                                     store;
 
+    public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, MVStore store) {
+        this(member, p, c, context, new GhostStore(context.getId(), p.digestAlgorithm, store));
+    }
+
     public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, Store s) {
         this.member = member;
         parameters = p;
@@ -239,8 +245,11 @@ public class Ghost {
             }
 
             @Override
-            public void put(Entry value) {
+            public ListenableFuture<Empty> put(Entry value) {
                 service.put(value);
+                SettableFuture<Empty> f = SettableFuture.create();
+                f.set(Empty.getDefaultInstance());
+                return f;
             }
         };
         communications = c.create(member, context.getId(), service,
@@ -457,7 +466,7 @@ public class Ghost {
         log.debug("Majority put {} on: {}", key, member);
     }
 
-    private boolean put(Optional<ListenableFuture<Boolean>> futureSailor, Supplier<Boolean> isTimedOut, Digest key,
+    private boolean put(Optional<ListenableFuture<Empty>> futureSailor, Supplier<Boolean> isTimedOut, Digest key,
                         AtomicInteger tally, SpaceGhost link) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
@@ -465,10 +474,17 @@ public class Ghost {
         try {
             futureSailor.get().get();
         } catch (InterruptedException e) {
-            log.debug("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
+            log.warn("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
             return !isTimedOut.get();
         } catch (ExecutionException e) {
-            log.debug("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+            if (e.getCause() instanceof StatusRuntimeException) {
+                StatusRuntimeException sre = (StatusRuntimeException) e.getCause();
+                if (sre.getStatus() == Status.UNAVAILABLE) {
+                    log.trace("Server unavailable fetching: {} from: {} on: {}", key, link.getMember(), member);
+                }
+            } else {
+                log.warn("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+            }
             return !isTimedOut.get();
         }
         log.trace("Inc put {} on: {}", key, member);
@@ -476,11 +492,8 @@ public class Ghost {
         return !isTimedOut.get();
     }
 
-    private ListenableFuture<Boolean> put(SpaceGhost link, Digest key, Entry entry) {
-        link.put(entry);
+    private ListenableFuture<Empty> put(SpaceGhost link, Digest key, Entry entry) {
         log.trace("Put {} to: {} on: {}", key, link.getMember(), member);
-        SettableFuture<Boolean> f = SettableFuture.create();
-        f.set(true);
-        return f;
+        return link.put(entry);
     }
 }

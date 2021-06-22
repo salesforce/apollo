@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.NavigableSet;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.stream.Collectors;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.ghost.proto.Entries;
@@ -61,28 +60,10 @@ public class MemoryStore implements Store {
     }
 
     @Override
-    public List<Any> getUpdates(List<Digest> want) {
-        return want.stream().map(e -> data.get(e)).filter(e -> e != null).collect(Collectors.toList());
-    }
-
-    @Override
-    public List<Digest> have(CombinedIntervals keyIntervals) {
-        return keyIntervals.getIntervals()
-                           .stream()
-                           .flatMap(i -> data.keySet().subSet(i.getBegin(), true, i.getEnd(), false).stream())
-                           .collect(Collectors.toList());
-    }
-
-    @Override
-    public List<Digest> keySet() {
-        return data.keySet().stream().collect(Collectors.toList());
-    }
-
-    @Override
     public void populate(CombinedIntervals keyIntervals, double fpr, SecureRandom entropy) {
         keyIntervals.getIntervals().forEach(interval -> {
             NavigableSet<Digest> subSet = data.keySet().subSet(interval.getBegin(), true, interval.getEnd(), false);
-            BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size() * 2, fpr);
+            BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size(), fpr);
             subSet.forEach(h -> bff.add(h));
             interval.setBff(bff);
         });

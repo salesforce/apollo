@@ -11,7 +11,6 @@ import static com.salesforce.apollo.consortium.CollaboratorContext.height;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
@@ -27,8 +26,6 @@ import java.util.stream.StreamSupport;
 import org.h2.mvstore.Cursor;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
-import org.h2.mvstore.WriteBuffer;
-import org.h2.mvstore.type.DataType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +43,7 @@ import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.BloomFilter;
+import com.salesforce.apollo.utils.DigestType;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2
@@ -54,47 +52,6 @@ import com.salesforce.apollo.utils.BloomFilter;
  *
  */
 public class Store {
-
-    public static class DigestType implements DataType {
-
-        @Override
-        public int compare(Object a, Object b) {
-            return ((Digest) a).compareTo(((Digest) b));
-        }
-
-        @Override
-        public int getMemory(Object obj) {
-            return ((Digest) obj).getAlgorithm().digestLength() + 1;
-        }
-
-        @Override
-        public Digest read(ByteBuffer buff) {
-            return new Digest(buff);
-        }
-
-        @Override
-        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                obj[i] = read(buff);
-            }
-        }
-
-        @Override
-        public void write(WriteBuffer buff, Object obj) {
-            Digest digest = (Digest) obj;
-            buff.put(digest.getAlgorithm().digestCode());
-            for (long l : digest.getLongs()) {
-                buff.putLong(l);
-            }
-        }
-
-        @Override
-        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                write(buff, obj[i]);
-            }
-        }
-    }
 
     private static final String BLOCKS              = "BLOCKS";
     private static final String CERTIFICATIONS      = "CERTIFICATIONS";

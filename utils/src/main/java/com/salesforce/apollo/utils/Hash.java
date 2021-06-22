@@ -268,18 +268,15 @@ abstract public class Hash<T> {
         return true;
     }
 
-    public boolean put(T key, BitSet bits) {
+    public void put(T key, BitSet bits) {
         Hasher<T> hasher = newHasher(key);
-
-        boolean bitsChanged = false;
+ 
         long combinedHash = hasher.h1;
         for (int i = 0; i < k; i++) {
-            int index = ((int) (combinedHash & Integer.MAX_VALUE)) % m;
-            bitsChanged |= bits.get(index);
+            int index = ((int) (combinedHash & Integer.MAX_VALUE)) % m; 
             bits.set(index);
             combinedHash += hasher.h2;
         }
-        return bitsChanged;
     }
 
     abstract Hasher<T> newHasher(T key);
