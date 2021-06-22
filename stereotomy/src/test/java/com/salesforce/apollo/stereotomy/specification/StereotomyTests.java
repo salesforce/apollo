@@ -67,13 +67,13 @@ public class StereotomyTests {
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair(secureRandom);
         AutonomicIdentifier aid = new AutonomicIdentifier(new BasicIdentifier(keyPair.getPublic()),
                 new URL("http://foo.com/bar/baz/bozo").toURI());
-        ControllableIdentifier identifier = controller.newPublicIdentifier();
+        ControllableIdentifier identifier = controller.newIdentifier(aid);
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("e886cbb6a89551c32fb95cead6ea5153502cafba79869b44557064a21cb89a1a",
+        assertEquals("4f6712e816de14217724c10a052bd41da5bca91009d72d8e56fcd3aa3f4d400d",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
@@ -138,7 +138,7 @@ public class StereotomyTests {
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("87b58e07be88ffd799fe407581ba69490a8d576f866116d15232b8548fa7c882",
+        assertEquals("3b4a44829d07f810a20d6dfacf2b4c17e6c11f8387a7b74a144a27b64735923d",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());

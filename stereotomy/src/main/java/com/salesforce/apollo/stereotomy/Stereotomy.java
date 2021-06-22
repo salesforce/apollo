@@ -70,7 +70,7 @@ public class Stereotomy {
 
     public interface EventFactory {
 
-        InceptionEvent inception(IdentifierSpecification specification);
+        InceptionEvent inception(Identifier identifier, IdentifierSpecification specification);
 
         KeyEvent interaction(InteractionSpecification specification);
 
@@ -313,43 +313,15 @@ public class Stereotomy {
     }
 
     public ControllableIdentifier newPrivateIdentifier(Identifier identifier) {
-        return newPrivateIdentifier(IdentifierSpecification.newBuilder());
+        return newPublicIdentifier(identifier, IdentifierSpecification.newBuilder());
 
     }
 
-    public ControllableIdentifier newPrivateIdentifier(IdentifierSpecification.Builder spec) {
-        IdentifierSpecification.Builder specification = spec.clone();
-        KeyPair initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
-        KeyPair nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
-        Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
-                                                          specification.getIdentifierDigestAlgorithm());
-
-        specification.setKey(initialKeyPair.getPublic())
-                     .setNextKeys(nextKeys)
-                     .setSigner(0, initialKeyPair.getPrivate());
-
-        InceptionEvent event = eventFactory.inception(specification.build());
-        KeyState state = processor.process(event);
-        if (state == null) {
-            throw new IllegalStateException("Invalid event produced");
-        }
-
-        KeyCoordinates keyCoordinates = KeyCoordinates.of(event, 0);
-
-        keyStore.storeKey(keyCoordinates, initialKeyPair);
-        keyStore.storeNextKey(keyCoordinates, nextKeyPair);
-        ControllableIdentifierImpl cid = new ControllableIdentifierImpl(state);
-
-        log.info("New Private Identifier prefix: {} coordinates: {} cur key: {} next key: {}", cid.getIdentifier(),
-                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
-        return cid;
+    public ControllableIdentifier newIdentifier(Identifier identifier, BasicIdentifier... witnesses) {
+        return newPublicIdentifier(identifier, IdentifierSpecification.newBuilder(), witnesses);
     }
 
-    public ControllableIdentifier newPublicIdentifier(BasicIdentifier... witnesses) {
-        return newPublicIdentifier(IdentifierSpecification.newBuilder(), witnesses);
-    }
-
-    public ControllableIdentifier newPublicIdentifier(IdentifierSpecification.Builder spec,
+    public ControllableIdentifier newPublicIdentifier(Identifier identifier, IdentifierSpecification.Builder spec,
                                                       BasicIdentifier... witnesses) {
         IdentifierSpecification.Builder specification = spec.clone();
 
@@ -364,7 +336,7 @@ public class Stereotomy {
                      .setSigner(0, initialKeyPair.getPrivate())
                      .build();
 
-        InceptionEvent event = this.eventFactory.inception(specification.build());
+        InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
         KeyState state = processor.process(event);
         if (state == null) {
             throw new IllegalStateException("Invalid event produced");
@@ -376,8 +348,9 @@ public class Stereotomy {
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
         ControllableIdentifier cid = new ControllableIdentifierImpl(state);
 
-        log.info("New Public Identifier prefix: {} coordinates: {} cur key: {} next key: {}", cid.getIdentifier(),
-                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
+        log.info("New {} Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}", witnesses.length == 0 ? "Private" : "Public", identifier,
+                 cid.getIdentifier(), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
+                 shortQb64(nextKeyPair.getPublic()));
         return cid;
     }
 

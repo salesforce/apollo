@@ -114,8 +114,8 @@ public class ProtobufEventFactory implements EventFactory {
     }
 
     @Override
-    public InceptionEvent inception(IdentifierSpecification specification) {
-        var inceptionStatement = identifierSpec(null, specification);
+    public InceptionEvent inception(Identifier identifier, IdentifierSpecification specification) {
+        var inceptionStatement = identifierSpec(identifier, specification);
 
         var prefix = Identifier.identifier(specification, inceptionStatement.toByteString().asReadOnlyByteBuffer());
         var bs = identifierSpec(prefix, specification).toByteString();
@@ -193,10 +193,8 @@ public class ProtobufEventFactory implements EventFactory {
                            .setSequenceNumber(0)
                            .setVersion(toVersion(specification.getVersion()))
                            .setPriorEventDigest(Digest.NONE.toByteString())
+                           .setIdentifier(identifier.toByteString())
                            .setIlk(INCEPTION_TYPE);
-        if (identifier != null) {
-            header.setIdentifier(identifier.toByteString());
-        }
 
         return IdentifierSpec.newBuilder()
                              .setHeader(header)
