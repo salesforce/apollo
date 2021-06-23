@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.ghost.proto.Binding;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -64,23 +65,8 @@ public class GhostStore implements Store {
     public Entries entriesIn(CombinedIntervals combined, int maxEntries) {
         Entries.Builder builder = Entries.newBuilder();
         for (KeyInterval interval : combined.getIntervals()) {
-            Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(immutable.getRootPage(), interval.getBegin(),
-                    interval.getEnd());
-            while (cursor.hasNext()) {
-                Digest key = cursor.next();
-                if (!interval.contains(key)) {
-                    Any parsed;
-                    try {
-                        parsed = Any.parseFrom(immutable.get(key));
-                        builder.addRecords(parsed);
-                    } catch (InvalidProtocolBufferException e) {
-                        log.debug("Unable to deserialize: {}", key);
-                    }
-                    if (builder.getRecordsCount() >= maxEntries) {
-                        break;
-                    }
-                }
-            }
+            immutableEntriesIn(maxEntries, builder, interval);
+            mutableEntriesIn(maxEntries, builder, interval);
         }
         return builder.build();
     }
@@ -110,12 +96,8 @@ public class GhostStore implements Store {
     @Override
     public void populate(CombinedIntervals combined, double fpr, SecureRandom entropy) {
         combined.getIntervals().forEach(interval -> {
-            List<Digest> subSet = new ArrayList<>();
-            new Cursor<Digest, byte[]>(immutable.getRootPage(), interval.getBegin(),
-                    interval.getEnd()).forEachRemaining(key -> subSet.add(key));
-            BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size(), fpr);
-            subSet.forEach(h -> bff.add(h));
-            interval.setBff(bff);
+            interval.setImmutableBff(populateImmutable(fpr, entropy, interval));
+            interval.setMutableBff(populateMutable(fpr, entropy, interval));
         });
     }
 
@@ -134,6 +116,64 @@ public class GhostStore implements Store {
     @Override
     public void remove(Digest key) {
         mutable.remove(key);
+    }
+
+    private void immutableEntriesIn(int maxEntries, Entries.Builder builder, KeyInterval interval) {
+        Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(immutable.getRootPage(), interval.getBegin(),
+                interval.getEnd());
+        while (cursor.hasNext()) {
+            Digest key = cursor.next();
+            if (!interval.mutableContains(key)) {
+                Any parsed;
+                try {
+                    parsed = Any.parseFrom(immutable.get(key));
+                    builder.addImmutable(parsed);
+                } catch (InvalidProtocolBufferException e) {
+                    log.debug("Unable to deserialize immutable: {}", key);
+                }
+                if (builder.getImmutableCount() >= maxEntries) {
+                    break;
+                }
+            }
+        }
+    }
+
+    private void mutableEntriesIn(int maxEntries, Entries.Builder builder, KeyInterval interval) {
+        Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(mutable.getRootPage(), interval.getBegin(),
+                interval.getEnd());
+        while (cursor.hasNext()) {
+            Digest key = cursor.next();
+            if (!interval.mutableContains(key)) {
+                Any parsed;
+                try {
+                    parsed = Any.parseFrom(mutable.get(key));
+                    builder.addMutable(Binding.newBuilder().setKey(key.toByteString()).setValue(parsed));
+                } catch (InvalidProtocolBufferException e) {
+                    log.debug("Unable to deserialize mutable: {}", key);
+                }
+                if (builder.getImmutableCount() >= maxEntries) {
+                    break;
+                }
+            }
+        }
+    }
+
+    private BloomFilter<Digest> populateImmutable(double fpr, SecureRandom entropy, KeyInterval interval) {
+        List<Digest> subSet = new ArrayList<>();
+        new Cursor<Digest, byte[]>(immutable.getRootPage(), interval.getBegin(),
+                interval.getEnd()).forEachRemaining(key -> subSet.add(key));
+        BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size(), fpr);
+        subSet.forEach(h -> bff.add(h));
+        return bff;
+    }
+
+    private BloomFilter<Digest> populateMutable(double fpr, SecureRandom entropy, KeyInterval interval) {
+        List<Digest> subSet = new ArrayList<>();
+        new Cursor<Digest, byte[]>(mutable.getRootPage(), interval.getBegin(),
+                interval.getEnd()).forEachRemaining(key -> subSet.add(key));
+        BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size(), fpr);
+        subSet.forEach(h -> bff.add(h));
+        return bff;
     }
 
 }

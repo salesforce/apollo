@@ -18,42 +18,57 @@ import com.salesforce.apollo.utils.BloomFilter;
  */
 public class KeyInterval implements Predicate<Digest> {
     private final Digest        begin;
-    private BloomFilter<Digest> bff;
     private final Digest        end;
+    private BloomFilter<Digest> immutableBff;
+    private BloomFilter<Digest> mutableBff;
 
     public KeyInterval(Digest begin, Digest end) {
-        this(begin, end, null);
+        this(begin, null, end, null);
     }
 
     public KeyInterval(Interval interval) {
-        this(new Digest(interval.getStart()), new Digest(interval.getEnd()), BloomFilter.from(interval.getBiff()));
+        this(new Digest(interval.getStart()), BloomFilter.from(interval.getMutableBff()), new Digest(interval.getEnd()),
+                BloomFilter.from(interval.getImmutableBff()));
     }
 
-    private KeyInterval(Digest begin, Digest end, BloomFilter<Digest> bff) {
+    private KeyInterval(Digest begin, BloomFilter<Digest> mutableBff, Digest end, BloomFilter<Digest> immutableBff) {
         assert begin.compareTo(end) < 0 : begin + " >= " + end;
         this.begin = begin;
         this.end = end;
-        this.bff = bff;
-    }
-
-    public boolean contains(Digest e) {
-        return bff.contains(e);
+        this.immutableBff = immutableBff;
+        this.mutableBff = mutableBff;
     }
 
     public Digest getBegin() {
         return begin;
     }
 
-    public BloomFilter<Digest> getBff() {
-        return bff;
-    }
-
     public Digest getEnd() {
         return end;
     }
 
-    public void setBff(BloomFilter<Digest> bff) {
-        this.bff = bff;
+    public BloomFilter<Digest> getImmutableBff() {
+        return immutableBff;
+    }
+
+    public BloomFilter<Digest> getMutableBff() {
+        return immutableBff;
+    }
+
+    public boolean immutableContains(Digest e) {
+        return immutableBff.contains(e);
+    }
+
+    public boolean mutableContains(Digest e) {
+        return mutableBff.contains(e);
+    }
+
+    public void setImmutableBff(BloomFilter<Digest> immutableBff) {
+        this.immutableBff = immutableBff;
+    }
+
+    public void setMutableBff(BloomFilter<Digest> mutableBff) {
+        this.mutableBff = mutableBff;
     }
 
     @Override

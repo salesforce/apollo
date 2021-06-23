@@ -35,6 +35,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Bind;
+import com.salesfoce.apollo.ghost.proto.Binding;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
@@ -171,7 +172,8 @@ public class Ghost {
 
     public class Service {
 
-        public void bind(Bind binding) {
+        public void bind(Bind bind) {
+            Binding binding = bind.getBinding();
             Any value = binding.getValue();
             Digest key = Digest.from(binding.getKey());
             store.bind(key, value);
@@ -187,17 +189,17 @@ public class Ghost {
 
         public Entries intervals(Intervals request, Digest from) {
             if (from == null) {
-                log.info("Intervals gossip from unknown member on: {}", member);
+                log.warn("Intervals gossip from unknown member on: {}", member);
                 return Entries.getDefaultInstance();
             }
             Member m = context.getActiveMember(from);
             if (m == null) {
-                log.info("Intervals gossip from unknown member: {} on: {}", from, member);
+                log.warn("Intervals gossip from unknown member: {} on: {}", from, member);
                 return Entries.getDefaultInstance();
             }
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (!predecessor.equals(m)) {
-                log.info("Invalid intervals gossip on ring: {} expecting: {} from: {} on: {}", request.getRing(),
+                log.warn("Invalid intervals gossip on ring: {} expecting: {} from: {} on: {}", request.getRing(),
                          predecessor, from, member);
                 return Entries.getDefaultInstance();
             }
@@ -281,7 +283,7 @@ public class Ghost {
         try {
             Boolean completed = majority.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (completed != null && completed) {
-                log.debug("Successful bind: {}  on: {}", hash, member);
+                log.trace("Successful bind: {}  on: {}", hash, member);
                 return;
             } else {
                 throw new TimeoutException("Partial or complete failure to bind: " + hash);
@@ -424,7 +426,7 @@ public class Ghost {
         try {
             Boolean completed = majority.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (completed != null && completed) {
-                log.debug("Successful put: {}  on: {}", key, member);
+                log.trace("Successful put: {}  on: {}", key, member);
                 return key;
             } else {
                 throw new TimeoutException("Partial or complete failure to store: " + key);
@@ -485,8 +487,7 @@ public class Ghost {
         log.trace("Bind {} to: {} on: {}", key, link.getMember(), member);
         return link.bind(Bind.newBuilder()
                              .setContext(context.getId().toByteString())
-                             .setKey(key.toByteString())
-                             .setValue(value)
+                             .setBinding(Binding.newBuilder().setKey(key.toByteString()).setValue(value))
                              .build());
     }
 
@@ -511,7 +512,7 @@ public class Ghost {
         try {
             value = futureSailor.get().get();
         } catch (InterruptedException e) {
-            log.trace("Error get: {} from: {} on: {}", key, link.getMember(), member, e);
+            log.debug("Error get: {} from: {} on: {}", key, link.getMember(), member, e);
             return !isTimedOut.get();
         } catch (ExecutionException e) {
             Throwable t = e.getCause();
@@ -522,7 +523,7 @@ public class Ghost {
                     return !isTimedOut.get();
                 }
             }
-            log.trace("Error get: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+            log.debug("Error get: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
             return !isTimedOut.get();
         }
         if (value != null || (value != null && value.equals(Any.getDefaultInstance()))) {
@@ -530,7 +531,7 @@ public class Ghost {
             result.complete(value);
             return false;
         } else {
-            log.trace("Failed get: {} from: {}  on: {}", key, link.getMember(), member);
+            log.debug("Failed get: {} from: {}  on: {}", key, link.getMember(), member);
             return !isTimedOut.get();
         }
     }
@@ -545,11 +546,14 @@ public class Ghost {
         }
         try {
             Entries entries = futureSailor.get().get();
-            if (entries.getRecordsCount() > 0) {
-                log.info("Received: {} entries in Ghost gossip from: {} on: {}", entries.getRecordsCount(),
-                         link.getMember(), member);
+            if (entries.getImmutableCount() > 0 || entries.getMutableCount() > 0) {
+                log.info("Received: {} immutable and {} mutable entries in Ghost gossip from: {} on: {}",
+                         entries.getImmutableCount(), entries.getMutableCount(), link.getMember(), member);
+            } else if (log.isDebugEnabled()) {
+                log.debug("Received: {} immutable and {} mutable entries in Ghost gossip from: {} on: {}",
+                         entries.getImmutableCount(), entries.getMutableCount(), link.getMember(), member);
             }
-            store.add(entries.getRecordsList());
+            store.add(entries.getImmutableList());
         } catch (InterruptedException | ExecutionException e) {
             log.debug("Error interval gossiping with {} : {}", link.getMember(), e.getCause());
         }
@@ -588,7 +592,7 @@ public class Ghost {
         try {
             value = futureSailor.get().get();
         } catch (InterruptedException e) {
-            log.trace("Error lookup: {} from: {} on: {}", key, link.getMember(), member, e);
+            log.debug("Error lookup: {} from: {} on: {}", key, link.getMember(), member, e);
             return !isTimedOut.get();
         } catch (ExecutionException e) {
             Throwable t = e.getCause();
@@ -599,7 +603,7 @@ public class Ghost {
                     return !isTimedOut.get();
                 }
             }
-            log.trace("Error lookup: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+            log.debug("Error lookup: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
             return !isTimedOut.get();
         }
         if (value != null || (value != null && value.equals(Any.getDefaultInstance()))) {
@@ -613,7 +617,7 @@ public class Ghost {
             }
             return true;
         } else {
-            log.trace("Failed lookup: {} from: {}  on: {}", key, link.getMember(), member);
+            log.debug("Failed lookup: {} from: {}  on: {}", key, link.getMember(), member);
             return !isTimedOut.get();
         }
     }

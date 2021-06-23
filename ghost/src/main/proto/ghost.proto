@@ -28,7 +28,8 @@ message Entry {
 }
 
 message Entries {
-    repeated google.protobuf.Any records = 1;
+    repeated google.protobuf.Any immutable = 1;
+    repeated Binding mutable =  2;
 }
 
 message Get {
@@ -43,8 +44,12 @@ message Lookup {
 
 message Bind {
     bytes context = 1;
-    bytes key = 2;
-    google.protobuf.Any value = 3;
+    Binding binding = 2;
+}
+
+message Binding {
+    bytes key = 1;
+    google.protobuf.Any value = 2;
 }
 
 message Intervals {
@@ -56,5 +61,6 @@ message Intervals {
 message Interval {
         bytes start = 1;
         bytes end = 2;
-        bytes biff = 3;
+        bytes immutableBff = 3;
+        bytes mutableBff = 4;
 }

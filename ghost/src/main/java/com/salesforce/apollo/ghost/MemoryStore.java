@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 import com.google.protobuf.Any;
+import com.salesfoce.apollo.ghost.proto.Binding;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -53,9 +54,17 @@ public class MemoryStore implements Store {
             immutable.keySet()
                      .subSet(interval.getBegin(), true, interval.getEnd(), false)
                      .stream()
-                     .filter(e -> !interval.contains(e))
+                     .filter(e -> !interval.immutableContains(e))
                      .limit(maxEntries)
-                     .forEach(e -> builder.addRecords(immutable.get(e)));
+                     .forEach(e -> builder.addImmutable(immutable.get(e)));
+            mutable.keySet()
+                   .subSet(interval.getBegin(), true, interval.getEnd(), false)
+                   .stream()
+                   .filter(e -> !interval.mutableContains(e))
+                   .limit(maxEntries)
+                   .forEach(e -> builder.addMutable(Binding.newBuilder()
+                                                           .setKey(e.toByteString())
+                                                           .setValue(mutable.get(e))));
         });
         return builder.build();
     }
@@ -73,11 +82,18 @@ public class MemoryStore implements Store {
     @Override
     public void populate(CombinedIntervals keyIntervals, double fpr, SecureRandom entropy) {
         keyIntervals.getIntervals().forEach(interval -> {
-            NavigableSet<Digest> subSet = immutable.keySet()
-                                                   .subSet(interval.getBegin(), true, interval.getEnd(), false);
-            BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size(), fpr);
-            subSet.forEach(h -> bff.add(h));
-            interval.setBff(bff);
+            NavigableSet<Digest> immutableSubset = immutable.keySet()
+                                                            .subSet(interval.getBegin(), true, interval.getEnd(),
+                                                                    false);
+            BloomFilter<Digest> immutableBff = new DigestBloomFilter(entropy.nextInt(), immutableSubset.size(), fpr);
+            immutableSubset.forEach(h -> immutableBff.add(h));
+            interval.setImmutableBff(immutableBff);
+
+            NavigableSet<Digest> mutableSubset = mutable.keySet()
+                                                        .subSet(interval.getBegin(), true, interval.getEnd(), false);
+            BloomFilter<Digest> mutableBff = new DigestBloomFilter(entropy.nextInt(), mutableSubset.size(), fpr);
+            mutableSubset.forEach(h -> mutableBff.add(h));
+            interval.setMutableBff(mutableBff);
         });
     }
 
