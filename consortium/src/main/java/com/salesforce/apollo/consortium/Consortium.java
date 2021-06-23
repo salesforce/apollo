@@ -396,37 +396,7 @@ public class Consortium {
         fsm.setName(getMember().getId().toString());
         transitions = fsm.getTransitions();
         view.nextViewConsensusKey();
-        BootstrapService localLoopback = new BootstrapService() {
-
-            @Override
-            public void close() throws IOException {
-            }
-
-            @Override
-            public Member getMember() {
-                return params.member;
-            }
-
-            @Override
-            public ListenableFuture<Initial> sync(Synchronize sync) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<Blocks> fetchViewChain(BlockReplication replication) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<Blocks> fetchBlocks(BlockReplication replication) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
-                return null;
-            }
-        };
+        BootstrapService localLoopback = BootstrapService.getLocalLoopback(params.member);
         bootstrapComm = parameters.communications.create(parameters.member, parameters.context.getId(),
                                                          new Bootstrapping(),
                                                          r -> new BoostrapServer(

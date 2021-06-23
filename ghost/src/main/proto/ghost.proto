@@ -11,8 +11,13 @@ package ghost;
 
 service Ghost {
 
-    rpc get ( Get ) returns (google.protobuf.Any) {}
-    rpc put ( Entry ) returns (google.protobuf.Empty) {}
+    rpc get (Get) returns (google.protobuf.Any) {}
+    rpc put (Entry) returns (google.protobuf.Empty) {}
+    rpc purge (Get) returns (google.protobuf.Empty) {}
+    
+    rpc lookup (Lookup) returns (google.protobuf.Any) {}
+    rpc bind (Bind) returns (google.protobuf.Empty) {}
+    rpc remove (Lookup) returns (google.protobuf.Empty) {}
 
     rpc intervals (Intervals) returns (Entries) {} 
 }
@@ -26,16 +31,27 @@ message Entries {
     repeated google.protobuf.Any records = 1;
 }
 
+message Get {
+    bytes context = 1;
+    bytes id = 2;
+}
+
+message Lookup {
+    bytes context = 1;
+    string key = 2;
+}
+
+message Bind {
+    bytes context = 1;
+    string key = 2;
+    google.protobuf.Any value = 3;
+}
+
 message Intervals {
     bytes context = 1;
     int32 ring = 2;
     repeated Interval intervals = 3;
 }
-
-message Get {
-    bytes context = 1;
-    bytes id = 2;
-} 
 
 message Interval {
         bytes start = 1;

@@ -14,6 +14,8 @@ import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.GhostGrpc;
 import com.salesfoce.apollo.ghost.proto.Intervals;
+import com.salesfoce.apollo.ghost.proto.Lookup;
+import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -69,6 +71,30 @@ public class GhostClientCommunications implements SpaceGhost {
     @Override
     public String toString() {
         return String.format("->[%s]", member);
+    }
+
+    @Override
+    public ListenableFuture<Empty> bind(Binding binding) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public ListenableFuture<Any> lookup(Lookup query) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public ListenableFuture<Empty> purge(Get key) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public ListenableFuture<Empty> remove(Lookup query) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
 }

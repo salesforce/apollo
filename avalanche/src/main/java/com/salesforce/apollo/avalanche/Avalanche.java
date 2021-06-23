@@ -153,30 +153,7 @@ public class Avalanche {
         this.node = node;
         this.context = context;
         this.queryExecutor = queryExecutor;
-        AvalancheService localLoopback = new AvalancheService() {
-
-            @Override
-            public void close() throws IOException {
-                // TODO Auto-generated method stub
-
-            }
-
-            @Override
-            public Member getMember() {
-                return getNode();
-            }
-
-            @Override
-            public ListenableFuture<SuppliedDagNodes> requestDAG(Digest context, Collection<Digest> want) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<QueryResult> query(Digest context, List<Pair<Digest, ByteString>> transactions,
-                                                       Collection<Digest> wanted) {
-                return null;
-            }
-        };
+        AvalancheService localLoopback = AvalancheService.getLocalLoopback(node);
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new AvalancheServer(communications.getClientIdentityProvider(), metrics,
                                                   r),

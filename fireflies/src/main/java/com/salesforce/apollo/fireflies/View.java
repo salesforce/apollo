@@ -458,33 +458,10 @@ public class View {
         this.metrics = metrics;
         this.node = node;
         this.fjPool = fjPool;
-        Fireflies localLoopback = new Fireflies() {
-
-            @Override
-            public void close() throws IOException {
-            }
-
-            @Override
-            public Member getMember() {
-                return node;
-            }
-
-            @Override
-            public void update(Digest context, int ring, Update update) {
-            }
-
-            @Override
-            public int ping(Digest context, int ping) {
-                return 1;
-            }
-
-            @Override
-            public ListenableFuture<Gossip> gossip(Digest context, Note note, int ring, Digests digests) {
-                return null;
-            }
-        };
-        this.comm = communications.create(node, id, service, r -> new FfServer(service,
-                communications.getClientIdentityProvider(), metrics, r), getCreate(metrics, fjPool), localLoopback);
+        this.comm = communications.create(node, id, service,
+                                          r -> new FfServer(service, communications.getClientIdentityProvider(),
+                                                  metrics, r),
+                                          getCreate(metrics, fjPool), Fireflies.getLocalLoopback(node));
         context = new Context<>(id, getParameters().rings);
         diameter = context.diameter(getParameters().cardinality);
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;

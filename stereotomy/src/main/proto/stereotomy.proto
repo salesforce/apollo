@@ -6,6 +6,7 @@ option java_outer_classname = "StereotomyProto";
 option objc_class_prefix = "Stereo";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
 
 package stereotomy;
 
@@ -132,7 +133,7 @@ service KerlSource {
 }
 
 service Resolver { 
-    rpc lookup (Resolve) returns (google.protobuf.Any) {}
+    rpc lookup (Resolve) returns (Bound) {}
     rpc resolve (Resolve) returns (KeyState) {}
     rpc bind(Binding) returns (google.protobuf.Empty) {}
 }
@@ -183,13 +184,20 @@ message Attachments {
 message Resolve {
     bytes context = 1;
     bytes identifier = 2;
+    google.protobuf.Duration timeout = 3;
 }
 
 message Binding {
     bytes context = 1;
-    bytes identifier = 2;
-    google.protobuf.Any value = 3;
-    bytes signature = 4;
+    Bound binding = 2;
+    google.protobuf.Duration timeout = 3;
+}
+
+message Bound {
+    bytes prefix = 1;
+    google.protobuf.Any value = 2;
+    bytes signature = 3;
+    bool timeout = 4;
 }
 
 message KerlResults {

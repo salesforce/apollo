@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.consortium;
 
-import java.io.IOException;
 import java.security.KeyPair;
 import java.time.Duration;
 import java.util.List;
@@ -18,14 +17,8 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.consortium.proto.Join;
-import com.salesfoce.apollo.consortium.proto.JoinResult;
-import com.salesfoce.apollo.consortium.proto.StopData;
-import com.salesfoce.apollo.consortium.proto.SubmitTransaction;
-import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
@@ -36,7 +29,6 @@ import com.salesforce.apollo.consortium.support.TickScheduler;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.MemberOrder;
 import com.salesforce.apollo.membership.messaging.Messenger;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
@@ -61,36 +53,12 @@ public class View {
 
     public View(Service service, Parameters parameters, BiConsumer<Digest, List<Msg>> process) {
         this.service = service;
-        LinearService localLoopback = new LinearService() {
-
-            @Override
-            public void close() throws IOException {
-            }
-
-            @Override
-            public Member getMember() {
-                return parameters.member;
-            }
-
-            @Override
-            public void stopData(StopData stopData) {
-            }
-
-            @Override
-            public ListenableFuture<JoinResult> join(Join join) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<TransactionResult> clientSubmit(SubmitTransaction request) {
-                return null;
-            }
-        };
         this.createClientComms = k -> parameters.communications.create(parameters.member, k, service,
                                                                        r -> new LinearServer(
                                                                                parameters.communications.getClientIdentityProvider(),
                                                                                null, r),
-                                                                       LinearClient.getCreate(null), localLoopback);
+                                                                       LinearClient.getCreate(null),
+                                                                       LinearService.getLocalLoopback(parameters.member));
         this.params = parameters;
         this.process = process;
     }

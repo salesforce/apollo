@@ -6,9 +6,12 @@
  */
 package com.salesforce.apollo.stereotomy.service;
 
+import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 
 import com.google.protobuf.Any;
+import com.salesfoce.apollo.stereotomy.event.proto.Bound;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -19,9 +22,9 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface Resolver {
 
-    Optional<Any> lookup(Identifier prefix);
+    Optional<Bound> lookup(Identifier prefix, Duration timeout) throws TimeoutException;
 
-    Optional<KeyState> resolve(Identifier prefix);
+    Optional<KeyState> resolve(Identifier prefix, Duration timeout) throws TimeoutException;
 
-    void bind(Identifier prefix, Any value, JohnHancock signature);
+    void bind(Identifier prefix, Any value, JohnHancock signature, Duration timeout) throws TimeoutException;
 }

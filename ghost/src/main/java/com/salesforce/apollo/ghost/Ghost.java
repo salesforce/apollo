@@ -8,7 +8,6 @@ package com.salesforce.apollo.ghost;
 
 import static com.salesforce.apollo.ghost.communications.GhostClientCommunications.getCreate;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,13 +30,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
+import com.salesfoce.apollo.ghost.proto.Lookup;
+import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Direction;
 import com.salesforce.apollo.comm.RingIterator;
@@ -169,6 +169,10 @@ public class Ghost {
 
     public class Service {
 
+        public void bind(Binding binding) {
+            // TODO
+        }
+
         public Any get(Get get) {
             return store.get(Digest.from(get.getId()));
         }
@@ -195,9 +199,22 @@ public class Ghost {
                                    parameters.maxEntries);
         }
 
+        public Any lookup(Lookup query) {
+            // TODO
+            return null;
+        }
+
+        public void purge(Get get) {
+            // TODO
+        }
+
         public void put(Entry entry) {
             Any value = entry.getValue();
             store.put(parameters.digestAlgorithm.digest(value.toByteString()), value);
+        }
+
+        public void remove(Lookup query) {
+            // TODO
         }
     }
 
@@ -222,41 +239,18 @@ public class Ghost {
         parameters = p;
         this.context = context;
         store = s;
-        SpaceGhost localLoopback = new SpaceGhost() {
-
-            @Override
-            public void close() throws IOException {
-            }
-
-            @Override
-            public ListenableFuture<Any> get(Get key) {
-                SettableFuture<Any> f = SettableFuture.create();
-                f.set(service.get(key));
-                return f;
-            }
-
-            @Override
-            public Member getMember() {
-                return member;
-            }
-
-            @Override
-            public ListenableFuture<Entries> intervals(Intervals intervals) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<Empty> put(Entry value) {
-                service.put(value);
-                SettableFuture<Empty> f = SettableFuture.create();
-                f.set(Empty.getDefaultInstance());
-                return f;
-            }
-        };
         communications = c.create(member, context.getId(), service,
                                   r -> new GhostServerCommunications(c.getClientIdentityProvider(), r), getCreate(),
-                                  localLoopback);
+                                  SpaceGhost.localLoopbackFor(member, service));
         gossiper = new RingCommunications<>(context, member, communications, parameters.executor);
+    }
+
+    /**
+     * Bind the value with the key. This is an updatable operation with different
+     * values for the same key.
+     */
+    public void bind(String key, Any value, Duration timeout) throws TimeoutException {
+
     }
 
     /**
@@ -319,6 +313,13 @@ public class Ghost {
             }
         }
         return new CombinedIntervals(intervals);
+    }
+
+    /**
+     * Lookup the current value associated with the key
+     */
+    public Any lookup(String key, Duration timeout) throws TimeoutException {
+        return null;
     }
 
     /**

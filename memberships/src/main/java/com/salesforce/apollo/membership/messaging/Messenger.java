@@ -9,7 +9,6 @@ package com.salesforce.apollo.membership.messaging;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -200,30 +199,10 @@ public class Messenger {
         this.parameters = parameters;
         this.context = (Context<Member>) context;
         this.buffer = new MessageBuffer(parameters.digestAlgorithm, parameters.bufferSize, context.timeToLive());
-        Messaging localLoopback = new Messaging() {
-
-            @Override
-            public void update(Push push) {
-            }
-
-            @Override
-            public ListenableFuture<Messages> gossip(MessageBff bff) {
-                return null;
-            }
-
-            @Override
-            public Member getMember() {
-                return member;
-            }
-
-            @Override
-            public void close() throws IOException {
-            }
-        };
         this.comm = communications.create(member, context.getId(), new Service(),
                                           r -> new MessagingServerCommunications(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
-                                          getCreate(parameters.metrics, executor), localLoopback);
+                                          getCreate(parameters.metrics, executor), Messaging.getLocalLoopback(member));
         gossiper = new RingCommunications<>(this.context, member, this.comm, executor);
     }
 
