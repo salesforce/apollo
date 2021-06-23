@@ -10,6 +10,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
@@ -23,6 +24,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -47,6 +49,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification.Builder;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.stereotomy.processing.MissingEstablishmentEventException;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand
@@ -63,6 +66,20 @@ public class Stereotomy {
         void seal(InteractionSpecification.Builder spec);
 
         void seal(List<Seal> seals);
+
+        default JohnHancock sign(byte[]... buffs) {
+            return sign(BbBackedInputStream.aggregate(buffs));
+        }
+
+        default JohnHancock sign(ByteBuffer... buffs) {
+            return sign(BbBackedInputStream.aggregate(buffs));
+        }
+
+        default JohnHancock sign(ByteString... buffs) {
+            return sign(BbBackedInputStream.aggregate(buffs));
+        }
+
+        JohnHancock sign(InputStream is);
 
         EventSignature sign(KeyEvent event);
 
@@ -110,6 +127,8 @@ public class Stereotomy {
         Optional<KeyPair> getKey(KeyCoordinates keyCoordinates);
 
         Optional<KeyPair> getNextKey(KeyCoordinates keyCoordinates);
+
+        Optional<PublicKey> getPublicKey(KeyCoordinates keyCoordinates);
 
         Optional<KeyPair> removeKey(KeyCoordinates keyCoordinates);
 
@@ -244,6 +263,11 @@ public class Stereotomy {
         }
 
         @Override
+        public JohnHancock sign(InputStream is) {
+            return Stereotomy.this.sign(getIdentifier(), is);
+        }
+
+        @Override
         public EventSignature sign(KeyEvent event) {
             return Stereotomy.this.sign(getIdentifier(), event);
         }
@@ -254,11 +278,6 @@ public class Stereotomy {
         @Override
         public JohnHancock sign(SelfAddressingIdentifier identifier, InputStream message) {
             return Stereotomy.this.sign(identifier, message);
-        }
-
-        @Override
-        public boolean verify(Identifier identifier, JohnHancock signature, InputStream message) {
-            return Stereotomy.this.verify(identifier, message);
         }
 
     }
@@ -280,7 +299,8 @@ public class Stereotomy {
         };
     }
 
-    private final SecureRandom       entropy;
+    private final SecureRandom entropy;
+
     private final EventFactory       eventFactory;
     private final KERL               kerl;
     private final StereotomyKeyStore keyStore;
@@ -312,17 +332,12 @@ public class Stereotomy {
         return null;
     }
 
-    public ControllableIdentifier newPrivateIdentifier(Identifier identifier) {
-        return newPublicIdentifier(identifier, IdentifierSpecification.newBuilder());
-
-    }
-
     public ControllableIdentifier newIdentifier(Identifier identifier, BasicIdentifier... witnesses) {
-        return newPublicIdentifier(identifier, IdentifierSpecification.newBuilder(), witnesses);
+        return newIdentifier(identifier, IdentifierSpecification.newBuilder(), witnesses);
     }
 
-    public ControllableIdentifier newPublicIdentifier(Identifier identifier, IdentifierSpecification.Builder spec,
-                                                      BasicIdentifier... witnesses) {
+    public ControllableIdentifier newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec,
+                                                BasicIdentifier... witnesses) {
         IdentifierSpecification.Builder specification = spec.clone();
 
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
@@ -348,9 +363,9 @@ public class Stereotomy {
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
         ControllableIdentifier cid = new ControllableIdentifierImpl(state);
 
-        log.info("New {} Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}", witnesses.length == 0 ? "Private" : "Public", identifier,
-                 cid.getIdentifier(), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
-                 shortQb64(nextKeyPair.getPublic()));
+        log.info("New {} Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}",
+                 witnesses.length == 0 ? "Private" : "Public", identifier, cid.getIdentifier(), keyCoordinates,
+                 shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
         return cid;
     }
 
@@ -414,10 +429,10 @@ public class Stereotomy {
     public KeyState seal(Identifier identifier, InteractionSpecification.Builder spec) {
         InteractionSpecification.Builder specification = spec.clone();
         KeyState state = kerl.getKeyState(identifier)
-                             .orElseThrow(() -> new IllegalArgumentException("identifier not found in event store"));
+                             .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KEL"));
 
         if (state == null) {
-            throw new IllegalArgumentException("identifier not found in event store");
+            throw new IllegalArgumentException("Identifier not found in KEL");
         }
 
         Optional<KeyEvent> lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
@@ -429,7 +444,7 @@ public class Stereotomy {
         Optional<KeyPair> keyPair = keyStore.getKey(currentKeyCoordinates);
 
         if (keyPair.isEmpty()) {
-            throw new IllegalArgumentException("key pair for identifier not found in keystore");
+            throw new IllegalArgumentException("Key pair for identifier not found in keystore");
         }
 
         specification.setState(state).setSigner(0, keyPair.get().getPrivate());
@@ -445,9 +460,9 @@ public class Stereotomy {
         seal(identifier, builder);
     }
 
-    public EventSignature sign(Identifier identifier, KeyEvent event) {
+    public JohnHancock sign(Identifier identifier, InputStream message) {
         KeyState state = kerl.getKeyState(identifier)
-                             .orElseThrow(() -> new IllegalArgumentException("identifier not found in event store"));
+                             .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KEL"));
         var lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
         if (lastEstablishmentEvent.isEmpty()) {
             throw new MissingEstablishmentEventException(kerl.getKeyEvent(state.getCoordinates()).get(),
@@ -456,22 +471,29 @@ public class Stereotomy {
         KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
         KeyPair keyPair = keyStore.getKey(keyCoords)
                                   .orElseThrow(() -> new IllegalArgumentException(
-                                          "key pair not found for prefix: " + identifier));
+                                          "Key pair not found for prefix: " + identifier));
+
+        var ops = SignatureAlgorithm.lookup(keyPair.getPrivate());
+        return ops.sign(keyPair.getPrivate(), message);
+    }
+
+    public EventSignature sign(Identifier identifier, KeyEvent event) {
+        KeyState state = kerl.getKeyState(identifier)
+                             .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KEL"));
+        var lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
+        if (lastEstablishmentEvent.isEmpty()) {
+            throw new MissingEstablishmentEventException(kerl.getKeyEvent(state.getCoordinates()).get(),
+                    state.getLastEstablishmentEvent());
+        }
+        KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
+        KeyPair keyPair = keyStore.getKey(keyCoords)
+                                  .orElseThrow(() -> new IllegalArgumentException(
+                                          "Key pair not found for prefix: " + identifier));
 
         var ops = SignatureAlgorithm.lookup(keyPair.getPrivate());
         var signature = ops.sign(keyPair.getPrivate(), event.getBytes());
 
         return new EventSignature(event.getCoordinates(), lastEstablishmentEvent.get().getCoordinates(),
                 Map.of(0, signature));
-    }
-
-    public JohnHancock sign(SelfAddressingIdentifier identifier, InputStream message) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    public boolean verify(Identifier identifier, InputStream message) {
-        // TODO Auto-generated method stub
-        return false;
     }
 }

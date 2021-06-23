@@ -45,6 +45,8 @@ public interface SigningMember extends Member, ServerContextSupplier, ClientCont
 
     JohnHancock sign(InputStream message);
 
-    JohnHancock sign(List<ByteBuffer> buffers);
+    default JohnHancock sign(List<ByteBuffer> buffers) {
+        return sign(BbBackedInputStream.aggregate(buffers));
+    }
 
 }

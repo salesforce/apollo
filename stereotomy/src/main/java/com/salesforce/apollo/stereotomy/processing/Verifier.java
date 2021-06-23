@@ -112,5 +112,4 @@ public interface Verifier {
 
         return verified;
     }
-
 }

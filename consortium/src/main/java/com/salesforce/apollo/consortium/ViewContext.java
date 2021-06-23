@@ -40,6 +40,7 @@ import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger;
+import com.salesforce.apollo.stereotomy.Stereotomy.ControllableIdentifier;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -218,6 +219,11 @@ public class ViewContext implements MembershipListener<Member> {
 
     public int getRingCount() {
         return context.getRingCount();
+    }
+
+    public ControllableIdentifier getIdentifier() {
+        // TODO
+        return null;
     }
 
     public ViewMember getView() {

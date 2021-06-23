@@ -8,6 +8,8 @@ package com.salesforce.apollo.stereotomy.processing;
 
 import static java.util.Collections.disjoint;
 
+import java.io.InputStream;
+import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -15,8 +17,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.KEL;
+import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
@@ -29,6 +36,7 @@ import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfSigningIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
@@ -38,6 +46,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester
  *
  */
 public interface Validator {
+    static final Logger log = LoggerFactory.getLogger(Validator.class);
 
     static <T> boolean distinct(Collection<T> items) {
         if (items instanceof Set) {
@@ -52,6 +61,33 @@ public interface Validator {
         }
 
         return true;
+    }
+
+    default boolean validate(Identifier identifier, JohnHancock signature, InputStream message, KEL kel) {
+        KeyState currentState = kel.getKeyState(identifier).orElse(null);
+        if (currentState == null) {
+            log.debug("Identifier: {} not found in KeyState", identifier);
+            return false;
+        }
+        for (KeyEvent lee = kel.getKeyEvent(currentState.getLastEstablishmentEvent())
+                               .orElse(null); lee != null; lee = kel.getKeyEvent(lee.getPrevious()).orElse(null)) {
+            var lastEstablishment = (EstablishmentEvent) lee;
+            lastEstablishment.getKeys();
+
+            KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lee, 0);
+            PublicKey keyPair = lastEstablishment.getKeys().get(0);
+            if (keyPair == null) {
+                log.debug("Key pair: {} not found for prefix: {}", keyCoords, identifier);
+                return false;
+            }
+
+            var ops = SignatureAlgorithm.lookup(keyPair);
+            if (ops.verify(keyPair, signature, message)) {
+                return true;
+            }
+        }
+        log.debug("Unable to traverse establistment event chain for: {}", identifier);
+        return false;
     }
 
     default void validateKeyEventData(KeyState state, KeyEvent event, KEL kel) {

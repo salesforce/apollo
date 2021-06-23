@@ -7,12 +7,10 @@
 package com.salesforce.apollo.membership.impl;
 
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
-import java.util.List;
 
 import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.crypto.Digest;
@@ -66,10 +64,5 @@ public class SigningMemberImpl extends MemberImpl implements SigningMember {
     @Override
     public JohnHancock sign(InputStream message) {
         return signer.sign(message);
-    }
-
-    @Override
-    public JohnHancock sign(List<ByteBuffer> buffers) {
-        return signer.sign(buffers);
     }
 }

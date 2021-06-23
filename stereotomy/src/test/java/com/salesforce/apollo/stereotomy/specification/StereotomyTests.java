@@ -50,9 +50,9 @@ import com.salesforce.apollo.utils.Hex;
  */
 public class StereotomyTests {
 
-    SecureRandom             secureRandom = new SecureRandom(new byte[] { 6, 6, 6 });
     final MvLog              kel          = new MvLog(DigestAlgorithm.DEFAULT, MVStore.open(null));
     final StereotomyKeyStore ks           = new InMemoryKeyStore();
+    SecureRandom             secureRandom = new SecureRandom(new byte[] { 6, 6, 6 });
 
     @BeforeEach
     public void beforeEachTest() throws NoSuchAlgorithmException {
@@ -62,7 +62,103 @@ public class StereotomyTests {
     }
 
     @Test
-    public void newPublicIdentifier() throws Exception {
+    public void identifierInteraction() {
+        var controller = new Stereotomy(ks, kel, secureRandom);
+
+        var i = controller.newIdentifier(Identifier.NONE);
+
+        var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
+        var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
+        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
+                            CoordinatesSeal.construct(event));
+
+        i.rotate();
+        i.seal(List.of());
+        i.rotate(seals);
+        i.seal(seals);
+    }
+
+    @Test
+    public void identifierRotate() {
+        var controller = new Stereotomy(ks, kel, secureRandom);
+
+        var i = controller.newIdentifier(Identifier.NONE);
+
+        var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
+        var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
+
+        i.rotate(List.of(DigestSeal.construct(digest), DigestSeal.construct(digest), CoordinatesSeal.construct(event)));
+
+        i.rotate();
+    }
+
+    @Test
+    public void newIdentifier() {
+        var controller = new Stereotomy(ks, kel, secureRandom);
+
+        ControllableIdentifier identifier = controller.newIdentifier(Identifier.NONE);
+
+        // identifier
+        assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
+        var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
+        assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
+        assertEquals("e487c77ac46853494396e7186988a65c36b630d213a446b6015bab70890076e9",
+                     Hex.hex(sap.getDigest().getBytes()));
+
+        assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
+
+        // keys
+        assertEquals(1, identifier.getKeys().size());
+        assertNotNull(identifier.getKeys().get(0));
+
+        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kel.getKeyEvent(identifier.getLastEstablishmentEvent())
+                                                                            .get();
+        assertEquals(identifier.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
+
+        var keyCoordinates = KeyCoordinates.of(lastEstablishmentEvent, 0);
+        var keyStoreKeyPair = ks.getKey(keyCoordinates);
+        assertTrue(keyStoreKeyPair.isPresent());
+        assertEquals(keyStoreKeyPair.get().getPublic(), identifier.getKeys().get(0));
+
+        // nextKeys
+        assertTrue(identifier.getNextKeyConfigurationDigest().isPresent());
+        var keyStoreNextKeyPair = ks.getNextKey(keyCoordinates);
+        assertTrue(keyStoreNextKeyPair.isPresent());
+        var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
+                                                               List.of(keyStoreNextKeyPair.get().getPublic()),
+                                                               identifier.getNextKeyConfigurationDigest()
+                                                                         .get()
+                                                                         .getAlgorithm());
+        assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
+
+        // witnesses
+        assertEquals(0, identifier.getWitnessThreshold());
+        assertEquals(0, identifier.getWitnesses().size());
+
+        // config
+        assertEquals(0, identifier.configurationTraits().size());
+
+        // lastEstablishmentEvent
+        assertEquals(identifier.getIdentifier(), lastEstablishmentEvent.getIdentifier());
+        assertEquals(0, lastEstablishmentEvent.getSequenceNumber());
+        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT),
+                     digest(identifier.getDigest().toByteString()));
+
+        // lastEvent
+        KeyEvent lastEvent = kel.getKeyEvent(identifier.getLastEvent()).get();
+        assertEquals(identifier.getIdentifier(), lastEvent.getIdentifier());
+        assertEquals(0, lastEvent.getSequenceNumber());
+        // TODO digest
+
+        assertEquals(lastEvent, lastEstablishmentEvent);
+
+        // delegation
+        assertFalse(identifier.getDelegatingIdentifier().isPresent());
+        assertFalse(identifier.isDelegated());
+    }
+
+    @Test
+    public void newIdentifierFromIdentifier() throws Exception {
         var controller = new Stereotomy(ks, kel, secureRandom);
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair(secureRandom);
         AutonomicIdentifier aid = new AutonomicIdentifier(new BasicIdentifier(keyPair.getPublic()),
@@ -126,102 +222,6 @@ public class StereotomyTests {
         // delegation
         assertFalse(identifier.getDelegatingIdentifier().isPresent());
         assertFalse(identifier.isDelegated());
-    }
-
-    @Test
-    public void newPrivateIdentifier() {
-        var controller = new Stereotomy(ks, kel, secureRandom);
-
-        ControllableIdentifier identifier = controller.newPrivateIdentifier(Identifier.NONE);
-
-        // identifier
-        assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
-        var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
-        assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("e487c77ac46853494396e7186988a65c36b630d213a446b6015bab70890076e9",
-                     Hex.hex(sap.getDigest().getBytes()));
-
-        assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
-
-        // keys
-        assertEquals(1, identifier.getKeys().size());
-        assertNotNull(identifier.getKeys().get(0));
-
-        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kel.getKeyEvent(identifier.getLastEstablishmentEvent())
-                                                                            .get();
-        assertEquals(identifier.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
-
-        var keyCoordinates = KeyCoordinates.of(lastEstablishmentEvent, 0);
-        var keyStoreKeyPair = ks.getKey(keyCoordinates);
-        assertTrue(keyStoreKeyPair.isPresent());
-        assertEquals(keyStoreKeyPair.get().getPublic(), identifier.getKeys().get(0));
-
-        // nextKeys
-        assertTrue(identifier.getNextKeyConfigurationDigest().isPresent());
-        var keyStoreNextKeyPair = ks.getNextKey(keyCoordinates);
-        assertTrue(keyStoreNextKeyPair.isPresent());
-        var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
-                                                               List.of(keyStoreNextKeyPair.get().getPublic()),
-                                                               identifier.getNextKeyConfigurationDigest()
-                                                                         .get()
-                                                                         .getAlgorithm());
-        assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
-
-        // witnesses
-        assertEquals(0, identifier.getWitnessThreshold());
-        assertEquals(0, identifier.getWitnesses().size());
-
-        // config
-        assertEquals(0, identifier.configurationTraits().size());
-
-        // lastEstablishmentEvent
-        assertEquals(identifier.getIdentifier(), lastEstablishmentEvent.getIdentifier());
-        assertEquals(0, lastEstablishmentEvent.getSequenceNumber());
-        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT),
-                     digest(identifier.getDigest().toByteString()));
-
-        // lastEvent
-        KeyEvent lastEvent = kel.getKeyEvent(identifier.getLastEvent()).get();
-        assertEquals(identifier.getIdentifier(), lastEvent.getIdentifier());
-        assertEquals(0, lastEvent.getSequenceNumber());
-        // TODO digest
-
-        assertEquals(lastEvent, lastEstablishmentEvent);
-
-        // delegation
-        assertFalse(identifier.getDelegatingIdentifier().isPresent());
-        assertFalse(identifier.isDelegated());
-    }
-
-    @Test
-    public void privateIdentifierRotate() {
-        var controller = new Stereotomy(ks, kel, secureRandom);
-
-        var i = controller.newPrivateIdentifier(Identifier.NONE);
-
-        var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
-
-        i.rotate(List.of(DigestSeal.construct(digest), DigestSeal.construct(digest), CoordinatesSeal.construct(event)));
-
-        i.rotate();
-    }
-
-    @Test
-    public void privateIdentifierInteraction() {
-        var controller = new Stereotomy(ks, kel, secureRandom);
-
-        var i = controller.newPrivateIdentifier(Identifier.NONE);
-
-        var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
-        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                            CoordinatesSeal.construct(event));
-
-        i.rotate();
-        i.seal(List.of());
-        i.rotate(seals);
-        i.seal(seals);
     }
 
 }
