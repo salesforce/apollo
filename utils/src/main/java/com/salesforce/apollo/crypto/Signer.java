@@ -11,8 +11,10 @@ import static java.util.Objects.requireNonNull;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.PrivateKey;
+import java.util.List;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand
@@ -37,12 +39,12 @@ public class Signer {
         return keyIndex;
     }
 
-    public JohnHancock sign(ByteBuffer... buffs) {
-        return algorithm.sign(privateKey, buffs);
-    }
-
     public JohnHancock sign(byte[]... bytes) {
         return algorithm.sign(privateKey, bytes);
+    }
+
+    public JohnHancock sign(ByteBuffer... buffs) {
+        return algorithm.sign(privateKey, buffs);
     }
 
     public JohnHancock sign(ByteString... message) {
@@ -53,4 +55,7 @@ public class Signer {
         return algorithm.sign(privateKey, message);
     }
 
+    public JohnHancock sign(List<ByteBuffer> buffers) {
+        return algorithm.sign(privateKey, BbBackedInputStream.aggregate(buffers));
+    }
 }

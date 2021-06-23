@@ -9,8 +9,6 @@ package com.salesforce.apollo.membership.messaging;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 
 import java.nio.ByteBuffer;
-import java.security.Signature;
-import java.security.SignatureException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -35,6 +33,7 @@ import com.salesfoce.apollo.messaging.proto.Push;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.BloomFilter;
 
@@ -45,25 +44,25 @@ import com.salesforce.apollo.utils.BloomFilter;
 public class MessageBuffer {
     private final static Logger log = LoggerFactory.getLogger(MessageBuffer.class);
 
-    public static byte[] sign(Digest hash, Signature signature) {
-        try {
-            signature.update(hash.getBytes());
-            return signature.sign();
-        } catch (SignatureException e) {
-            throw new IllegalStateException("Unable to sign message content", e);
-        }
+    public static JohnHancock signatureOf(SigningMember from, int sequenceNumber, Any content) {
+        List<ByteBuffer> buffers = forSigning(from, sequenceNumber, content);
+        return from.sign(buffers);
     }
 
-    static Digest idOf(DigestAlgorithm algorithm, int sequenceNumber, Digest from, Any content) {
+    private static List<ByteBuffer> forSigning(Member from, int sequenceNumber, Any content) {
         ByteBuffer header = ByteBuffer.allocate(4);
         header.putInt(sequenceNumber);
         header.flip();
         List<ByteBuffer> buffers = new ArrayList<>();
-        buffers.add(from.toByteString().asReadOnlyByteBuffer());
+        buffers.add(from.getId().toByteString().asReadOnlyByteBuffer());
         buffers.add(header);
         buffers.addAll(content.toByteString().asReadOnlyByteBufferList());
+        return buffers;
+    }
 
-        return algorithm.digest(buffers);
+    public static boolean validate(JohnHancock sig, Member from, int sequenceNumber, Any content) {
+        List<ByteBuffer> buffers = forSigning(from, sequenceNumber, content);
+        return from.verify(sig, buffers);
     }
 
     private static Queue<Entry<Digest, Message>> findNHighest(Collection<Entry<Digest, Message>> msgs, int n) {
@@ -149,9 +148,9 @@ public class MessageBuffer {
      */
     public Message publish(Any msg, SigningMember from) {
         int sequenceNumber = lastSequenceNumber.getAndIncrement();
-        Digest id = idOf(digestAlgorithm, sequenceNumber, from.getId(), msg);
-        Message update = state.computeIfAbsent(id, k -> createUpdate(msg, sequenceNumber, from.getId(),
-                                                                     from.sign(k.toByteString()), k));
+        JohnHancock sig = signatureOf(from, sequenceNumber, msg);
+        Digest id = digestAlgorithm.digest(sig.toByteString());
+        Message update = state.computeIfAbsent(id, k -> createUpdate(msg, sequenceNumber, from.getId(), sig, k));
         gc();
         log.trace("broadcasting: {}:{} on: {}", id, sequenceNumber, from);
         return update;
@@ -167,10 +166,6 @@ public class MessageBuffer {
              .map(entry -> entry.getValue())
              .forEach(e -> builder.addUpdates(e));
         purgeTheAged();
-    }
-
-    Digest idOf(int sequenceNumber, Digest from, Any content) {
-        return idOf(digestAlgorithm, sequenceNumber, from, content);
     }
 
     private Message createUpdate(Any msg, int sequenceNumber, Digest from, JohnHancock signature, Digest hash) {

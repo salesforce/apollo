@@ -7,7 +7,6 @@
 package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
 import java.io.IOException;
@@ -39,6 +38,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -401,8 +401,13 @@ public class Messenger {
             log.debug("Non existent member: " + from);
             return false;
         }
-        Digest calculated = buffer.idOf(message.getSequenceNumber(), from, message.getContent());
-        if (!calculated.equals(hash) || !member.verify(signature(message.getSignature()), hash.toByteString())) {
+        JohnHancock sig = JohnHancock.from(message.getSignature());
+        if (!MessageBuffer.validate(sig, member, message.getSequenceNumber(), message.getContent())) {
+            log.error("Did not validate message {} from {}", message, from);
+            return false;
+        }
+        Digest calculated = parameters.digestAlgorithm.digest(sig.toByteString());
+        if (!calculated.equals(hash)) {
             log.error("Did not validate message {} from {}", message, from);
             return false;
         }

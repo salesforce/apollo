@@ -14,6 +14,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
+import java.util.List;
 import java.util.Map;
 
 import com.google.protobuf.ByteString;
@@ -84,11 +85,11 @@ public interface Member extends Comparable<Member> {
      */
     Digest getId();
 
-    int hashCode();
-
     default SelfAddressingIdentifier getIdentifier() {
         return new SelfAddressingIdentifier(getId());
     }
+
+    int hashCode();
 
     /**
      * Verify the signature with the member's signing key
@@ -106,5 +107,9 @@ public interface Member extends Comparable<Member> {
     }
 
     boolean verify(JohnHancock signature, InputStream message);
+
+    default boolean verify(JohnHancock sig, List<ByteBuffer> buffers) {
+        return verify(sig, BbBackedInputStream.aggregate(buffers));
+    }
 
 }

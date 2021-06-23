@@ -7,8 +7,10 @@
 package com.salesforce.apollo.membership.impl;
 
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.security.Provider;
 import java.security.cert.X509Certificate;
+import java.util.List;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -78,6 +80,12 @@ public class StereotomyMember implements SigningMember {
     @Override
     public JohnHancock sign(InputStream message) {
         return controller.sign(identifier, message);
+    }
+
+    @Override
+    public JohnHancock sign(List<ByteBuffer> buffers) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
 }
