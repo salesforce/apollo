@@ -25,8 +25,9 @@ import com.salesforce.apollo.utils.BloomFilter.DigestBloomFilter;
  */
 public class MemoryStore implements Store {
 
-    private final ConcurrentNavigableMap<Digest, Any> data = new ConcurrentSkipListMap<>();
     private final DigestAlgorithm                     digestAlgorithm;
+    private final ConcurrentNavigableMap<Digest, Any> immutable = new ConcurrentSkipListMap<>();
+    private final ConcurrentNavigableMap<Digest, Any> mutable   = new ConcurrentSkipListMap<>();
 
     public MemoryStore(DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
@@ -36,33 +37,44 @@ public class MemoryStore implements Store {
     public void add(List<Any> entries) {
         entries.forEach(e -> {
             var key = digestAlgorithm.digest(e.toByteString());
-            data.put(key, e);
+            immutable.put(key, e);
         });
+    }
+
+    @Override
+    public void bind(Digest key, Any value) {
+        mutable.putIfAbsent(key, value);
     }
 
     @Override
     public Entries entriesIn(CombinedIntervals combined, int maxEntries) {
         Entries.Builder builder = Entries.newBuilder();
         combined.getIntervals().forEach(interval -> {
-            data.keySet()
-                .subSet(interval.getBegin(), true, interval.getEnd(), false)
-                .stream()
-                .filter(e -> !interval.contains(e))
-                .limit(maxEntries)
-                .forEach(e -> builder.addRecords(data.get(e)));
+            immutable.keySet()
+                     .subSet(interval.getBegin(), true, interval.getEnd(), false)
+                     .stream()
+                     .filter(e -> !interval.contains(e))
+                     .limit(maxEntries)
+                     .forEach(e -> builder.addRecords(immutable.get(e)));
         });
         return builder.build();
     }
 
     @Override
     public Any get(Digest key) {
-        return data.get(key);
+        return immutable.get(key);
+    }
+
+    @Override
+    public Any lookup(Digest key) {
+        return mutable.get(key);
     }
 
     @Override
     public void populate(CombinedIntervals keyIntervals, double fpr, SecureRandom entropy) {
         keyIntervals.getIntervals().forEach(interval -> {
-            NavigableSet<Digest> subSet = data.keySet().subSet(interval.getBegin(), true, interval.getEnd(), false);
+            NavigableSet<Digest> subSet = immutable.keySet()
+                                                   .subSet(interval.getBegin(), true, interval.getEnd(), false);
             BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size(), fpr);
             subSet.forEach(h -> bff.add(h));
             interval.setBff(bff);
@@ -70,7 +82,17 @@ public class MemoryStore implements Store {
     }
 
     @Override
+    public void purge(Digest key) {
+        immutable.remove(key);
+    }
+
+    @Override
     public void put(Digest key, Any value) {
-        data.putIfAbsent(key, value);
+        immutable.putIfAbsent(key, value);
+    }
+
+    @Override
+    public void remove(Digest key) {
+        mutable.remove(key);
     }
 }

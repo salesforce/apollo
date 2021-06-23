@@ -10,11 +10,13 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
+import com.salesfoce.apollo.ghost.proto.Bind;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.GhostGrpc.GhostImplBase;
 import com.salesfoce.apollo.ghost.proto.Intervals;
+import com.salesfoce.apollo.ghost.proto.Lookup;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.ghost.Ghost.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -55,6 +57,41 @@ public class GhostServerCommunications extends GhostImplBase {
     public void put(Entry request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
             s.put(request);
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
+        });
+    }
+
+    @Override
+    public void purge(Get request, StreamObserver<Empty> responseObserver) {
+        router.evaluate(responseObserver, digest(request.getContext()), s -> {
+            s.purge(request);
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
+        });
+    }
+
+    @Override
+    public void lookup(Lookup request, StreamObserver<Any> responseObserver) {
+        router.evaluate(responseObserver, digest(request.getContext()), s -> {
+            responseObserver.onNext(s.lookup(request));
+            responseObserver.onCompleted();
+        });
+    }
+
+    @Override
+    public void bind(Bind request, StreamObserver<Empty> responseObserver) {
+        router.evaluate(responseObserver, digest(request.getContext()), s -> {
+            s.bind(request);
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
+        });
+    }
+
+    @Override
+    public void remove(Lookup request, StreamObserver<Empty> responseObserver) {
+        router.evaluate(responseObserver, digest(request.getContext()), s -> {
+            s.remove(request);
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
         });

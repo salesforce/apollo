@@ -101,17 +101,17 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
             if (tally.get() >= majority) {
                 majoritySucceed = true;
                 log.debug("Obtained majority of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
-                         member);
+                          member);
                 onMajority.run();
             }
         }
-        if (finalIteration) {
+        if (finalIteration && allow) {
             log.trace("Final iteration of: {} for: {} tally: {} on: {}", context.getId(), tally.get(), member);
             if (failedMajority != null && !majorityFailed) {
                 if (tally.get() < majority) {
                     majorityFailed = true;
                     log.debug("Failed to obtain majority of: {} for: {} tally: {} required: {} on: {}", key,
-                             context.getId(), tally.get(), majority, member);
+                              context.getId(), tally.get(), majority, member);
                     failedMajority.run();
                 }
             }

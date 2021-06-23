@@ -38,12 +38,12 @@ message Get {
 
 message Lookup {
     bytes context = 1;
-    string key = 2;
+    bytes key = 2;
 }
 
 message Bind {
     bytes context = 1;
-    string key = 2;
+    bytes key = 2;
     google.protobuf.Any value = 3;
 }
 

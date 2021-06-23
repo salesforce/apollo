@@ -12,12 +12,12 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
+import com.salesfoce.apollo.ghost.proto.Bind;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
-import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.ghost.Ghost.Service;
 import com.salesforce.apollo.membership.Member;
@@ -31,7 +31,7 @@ public interface SpaceGhost extends Link {
         return new SpaceGhost() {
 
             @Override
-            public ListenableFuture<Empty> bind(Binding binding) {
+            public ListenableFuture<Empty> bind(Bind binding) {
                 service.bind(binding);
                 SettableFuture<Empty> f = SettableFuture.create();
                 f.set(Empty.getDefaultInstance());
@@ -95,7 +95,7 @@ public interface SpaceGhost extends Link {
         };
     }
 
-    ListenableFuture<Empty> bind(Binding binding);
+    ListenableFuture<Empty> bind(Bind binding);
 
     ListenableFuture<Any> get(Get key);
 

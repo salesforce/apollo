@@ -75,7 +75,78 @@ public class GhostTest {
     }
 
     @Test
-    public void smoke() throws Exception {
+    public void lookupBind() throws Exception {
+        List<SigningMember> members = certs.values()
+                                           .stream()
+                                           .map(cert -> new SigningMemberImpl(
+                                                   Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert.getX509Certificate(), cert.getPrivateKey(),
+                                                   new Signer(0, cert.getPrivateKey()),
+                                                   cert.getX509Certificate().getPublicKey()))
+                                           .collect(Collectors.toList());
+        assertEquals(certs.size(), members.size());
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.1, testCardinality);
+        members.forEach(e -> context.activate(e));
+
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
+
+        ForkJoinPool executor = new ForkJoinPool();
+
+        List<Ghost> ghosties = members.stream().map(member -> {
+            LocalRouter comms = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(30), executor);
+            communications.add(comms);
+            comms.start();
+            return new Ghost(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null));
+        }).collect(Collectors.toList());
+        ghosties.forEach(e -> e.start(scheduler, gossipDelay));
+
+        int msgs = 10;
+        Map<String, Any> stored = new HashMap<>();
+        Duration timeout = Duration.ofSeconds(1);
+        AtomicInteger count = new AtomicInteger();
+        for (int i = 0; i < msgs; i++) {
+            int index = i;
+            for (Ghost ghost : ghosties) {
+                String key = "prefix - " + i + " - " + ghost.getMember().getId();
+                Any entry = Any.pack(ByteMessage.newBuilder()
+                                                .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
+                                                                                                   ghost.getMember()
+                                                                                                        .getId(),
+                                                                                                   index)))
+                                                .build());
+                ghost.bind(key, entry, timeout);
+                stored.put(key, entry);
+                if (count.incrementAndGet() % 100 == 0) {
+                    System.out.print('.');
+                    if (count.get() % 8000 == 0) {
+                        System.out.println();
+                    }
+                }
+            }
+        }
+        System.out.println();
+        System.out.println("Finished " + msgs * members.size() + " random puts, performing gets");
+
+        count.set(0);
+        for (Entry<String, Any> entry : stored.entrySet()) {
+            for (Ghost ghost : ghosties) {
+                Any found = ghost.lookup(entry.getKey(), timeout);
+                assertNotNull(found);
+                assertEquals(entry.getValue(), found);
+                if (count.incrementAndGet() % 100 == 0) {
+                    System.out.print('.');
+                    if (count.get() % 8000 == 0) {
+                        System.out.println();
+                    }
+                }
+            }
+        }
+
+        System.out.println("done");
+    }
+
+    @Test
+    public void putGet() throws Exception {
         List<SigningMember> members = certs.values()
                                            .stream()
                                            .map(cert -> new SigningMemberImpl(

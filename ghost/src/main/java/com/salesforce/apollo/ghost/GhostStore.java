@@ -22,26 +22,28 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.BloomFilter.DigestBloomFilter;
-import com.salesforce.apollo.utils.DigestType;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class GhostStore implements Store {
-    private final Logger        log             = org.slf4j.LoggerFactory.getLogger(GhostStore.class);
-    private final static String MV_MAP_TEMPLATE = "%s-GhostStore";
+    private final static String   IMMUTABLE_MAP_TEMPLATE = "%s.immutable.ghostStore";
+    private final static String   MUTABLE_MAP_TEMPLATE   = "%s.mutable.ghostStore";
+    private final DigestAlgorithm digestAlgorithm;
 
-    private final MVMap<Digest, byte[]> data;
-    private final DigestAlgorithm       digestAlgorithm;
+    private final MVMap<Digest, byte[]> immutable;
+    private final Logger                log = org.slf4j.LoggerFactory.getLogger(GhostStore.class);
+    private final MVMap<Digest, byte[]> mutable;
 
     public GhostStore(Digest id, DigestAlgorithm digestAlgorithm, MVStore store) {
-        this(digestAlgorithm, store.openMap(String.format(MV_MAP_TEMPLATE, id),
-                                            new MVMap.Builder<Digest, byte[]>().keyType(new DigestType())));
+        this(store.openMap(String.format(MUTABLE_MAP_TEMPLATE, id)), digestAlgorithm,
+                store.openMap(String.format(IMMUTABLE_MAP_TEMPLATE, id)));
     }
 
-    public GhostStore(DigestAlgorithm digestAlgorithm, MVMap<Digest, byte[]> data) {
-        this.data = data;
+    public GhostStore(MVMap<Digest, byte[]> mutable, DigestAlgorithm digestAlgorithm, MVMap<Digest, byte[]> immutable) {
+        this.immutable = immutable;
+        this.mutable = mutable;
         this.digestAlgorithm = digestAlgorithm;
     }
 
@@ -49,22 +51,27 @@ public class GhostStore implements Store {
     public void add(List<Any> entries) {
         entries.forEach(e -> {
             var key = digestAlgorithm.digest(e.toByteString());
-            data.put(key, e.toByteArray());
+            immutable.put(key, e.toByteArray());
         });
+    }
+
+    @Override
+    public void bind(Digest key, Any value) {
+        mutable.put(key, value.toByteArray());
     }
 
     @Override
     public Entries entriesIn(CombinedIntervals combined, int maxEntries) {
         Entries.Builder builder = Entries.newBuilder();
         for (KeyInterval interval : combined.getIntervals()) {
-            Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(data.getRootPage(), interval.getBegin(),
+            Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(immutable.getRootPage(), interval.getBegin(),
                     interval.getEnd());
             while (cursor.hasNext()) {
                 Digest key = cursor.next();
                 if (!interval.contains(key)) {
                     Any parsed;
                     try {
-                        parsed = Any.parseFrom(data.get(key));
+                        parsed = Any.parseFrom(immutable.get(key));
                         builder.addRecords(parsed);
                     } catch (InvalidProtocolBufferException e) {
                         log.debug("Unable to deserialize: {}", key);
@@ -80,12 +87,23 @@ public class GhostStore implements Store {
 
     @Override
     public Any get(Digest key) {
-        byte[] value = data.get(key);
+        byte[] value = immutable.get(key);
         try {
             return value == null ? null : Any.parseFrom(value);
         } catch (InvalidProtocolBufferException e) {
             log.debug("Unable to deserialize: {}", key);
-            throw new IllegalStateException("Unable to deserialize value for key: " + key);
+            throw new IllegalStateException("Unable to deserialize immutable value for key: " + key);
+        }
+    }
+
+    @Override
+    public Any lookup(Digest key) {
+        byte[] value = mutable.get(key);
+        try {
+            return value == null ? null : Any.parseFrom(value);
+        } catch (InvalidProtocolBufferException e) {
+            log.debug("Unable to deserialize: {}", key);
+            throw new IllegalStateException("Unable to deserialize mutable value for key: " + key);
         }
     }
 
@@ -93,7 +111,7 @@ public class GhostStore implements Store {
     public void populate(CombinedIntervals combined, double fpr, SecureRandom entropy) {
         combined.getIntervals().forEach(interval -> {
             List<Digest> subSet = new ArrayList<>();
-            new Cursor<Digest, byte[]>(data.getRootPage(), interval.getBegin(),
+            new Cursor<Digest, byte[]>(immutable.getRootPage(), interval.getBegin(),
                     interval.getEnd()).forEachRemaining(key -> subSet.add(key));
             BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size(), fpr);
             subSet.forEach(h -> bff.add(h));
@@ -102,8 +120,20 @@ public class GhostStore implements Store {
     }
 
     @Override
+    public void purge(Digest key) {
+        immutable.remove(key);
+    }
+
+    @Override
     public void put(Digest key, Any value) {
-        data.putIfAbsent(key, value.toByteArray());
+        if (immutable.get(key) == null) {
+            immutable.putIfAbsent(key, value.toByteArray());
+        }
+    }
+
+    @Override
+    public void remove(Digest key) {
+        mutable.remove(key);
     }
 
 }

@@ -29,17 +29,18 @@ import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.HashMultiset;
+import com.google.common.collect.Multiset;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
+import com.salesfoce.apollo.ghost.proto.Bind;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
-import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesforce.apollo.comm.RingCommunications;
-import com.salesforce.apollo.comm.RingCommunications.Direction;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
@@ -170,12 +171,18 @@ public class Ghost {
 
     public class Service {
 
-        public void bind(Binding binding) {
-            // TODO
+        public void bind(Bind binding) {
+            Any value = binding.getValue();
+            Digest key = Digest.from(binding.getKey());
+            store.bind(key, value);
+            log.trace("Bind: {} on: {}", key, member);
         }
 
         public Any get(Get get) {
-            return store.get(Digest.from(get.getId()));
+            Digest key = Digest.from(get.getId());
+            Any value = store.get(key);
+            log.trace("Get: {} non NULL: {} on: {}", key, value != null, member);
+            return value;
         }
 
         public Entries intervals(Intervals request, Digest from) {
@@ -201,21 +208,27 @@ public class Ghost {
         }
 
         public Any lookup(Lookup query) {
-            // TODO
-            return null;
+            Any value = store.lookup(Digest.from(query.getKey()));
+            log.trace("Lookup: {} non NULL: {} on: {}", query.getKey(), value != null, member);
+            return value;
         }
 
         public void purge(Get get) {
-            // TODO
+            Digest key = parameters.digestAlgorithm.digest(get.getId());
+            store.purge(key);
+            log.trace("Purge: {} on: {}", key, member);
         }
 
         public void put(Entry entry) {
             Any value = entry.getValue();
-            store.put(parameters.digestAlgorithm.digest(value.toByteString()), value);
+            Digest key = parameters.digestAlgorithm.digest(value.toByteString());
+            store.put(key, value);
+            log.trace("Put: {} on: {}", key, member);
         }
 
         public void remove(Lookup query) {
-            // TODO
+            store.remove(Digest.from(query.getKey()));
+            log.trace("Remove: {} on: {}", query.getKey(), member);
         }
     }
 
@@ -251,7 +264,37 @@ public class Ghost {
      * values for the same key.
      */
     public void bind(String key, Any value, Duration timeout) throws TimeoutException {
+        Digest hash = parameters.digestAlgorithm.digest(key);
+        log.trace("Starting Put {}   on: {}", key, member);
 
+        CompletableFuture<Boolean> majority = new CompletableFuture<>();
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+
+        new RingIterator<>(context, member, communications,
+                parameters.executor).iterate(hash, () -> majorityComplete(key, majority),
+                                             (link, r) -> bind(link, hash, value), () -> failedMajority(key, majority),
+                                             (tally, futureSailor, link, r) -> bind(futureSailor, isTimedOut, key,
+                                                                                    tally, link),
+                                             null);
+
+        try {
+            Boolean completed = majority.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (completed != null && completed) {
+                log.debug("Successful bind: {}  on: {}", hash, member);
+                return;
+            } else {
+                throw new TimeoutException("Partial or complete failure to bind: " + hash);
+            }
+        } catch (InterruptedException e) {
+            TimeoutException timeoutException = new TimeoutException("Interrupted");
+            timeoutException.initCause(e);
+            throw timeoutException;
+        } catch (ExecutionException e) {
+            TimeoutException timeoutException = new TimeoutException("Error");
+            timeoutException.initCause(e);
+            throw timeoutException;
+        }
     }
 
     /**
@@ -320,7 +363,38 @@ public class Ghost {
      * Lookup the current value associated with the key
      */
     public Any lookup(String key, Duration timeout) throws TimeoutException {
-        return null;
+        log.trace("Starting Lookup {}   on: {}", key, member);
+        Digest hash = parameters.digestAlgorithm.digest(key);
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        CompletableFuture<Any> result = new CompletableFuture<>();
+        Lookup lookup = Lookup.newBuilder()
+                              .setContext(context.getId().toByteString())
+                              .setKey(hash.toByteString())
+                              .build();
+        Multiset<Any> votes = HashMultiset.create();
+
+        new RingIterator<>(context, member, communications,
+                parameters.executor).iterate(hash, (link, r) -> link.lookup(lookup),
+                                             (tally, futureSailor, link, r) -> lookup(futureSailor, key, votes, result,
+                                                                                      isTimedOut, link),
+                                             () -> result.completeExceptionally(new TimeoutException(
+                                                     "Failed to acheieve majority aggrement for: " + key + " on: "
+                                                             + context.getId() + " votes: "
+                                                             + votes.stream()
+                                                                    .map(a -> votes.count(a))
+                                                                    .collect(Collectors.toList()))));
+        try {
+            return result.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException t = new TimeoutException("Interrupted");
+            t.initCause(e);
+            throw t;
+        } catch (ExecutionException e) {
+            TimeoutException t = new TimeoutException("Execution error: " + e.getLocalizedMessage());
+            t.initCause(e);
+            throw t;
+        }
     }
 
     /**
@@ -340,7 +414,7 @@ public class Ghost {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         Entry entry = Entry.newBuilder().setContext(context.getId().toByteString()).setValue(value).build();
 
-        new RingIterator<>(Direction.SUCCESSOR, context, member, communications,
+        new RingIterator<>(context, member, communications,
                 parameters.executor).iterate(key, () -> majorityComplete(key, majority),
                                              (link, r) -> put(link, key, entry), () -> failedMajority(key, majority),
                                              (tally, futureSailor, link, r) -> put(futureSailor, isTimedOut, key, tally,
@@ -381,10 +455,51 @@ public class Ghost {
         communications.deregister(context.getId());
     }
 
+    private boolean bind(Optional<ListenableFuture<Empty>> futureSailor, Supplier<Boolean> isTimedOut, String key,
+                         AtomicInteger tally, SpaceGhost link) {
+        if (futureSailor.isEmpty()) {
+            return !isTimedOut.get();
+        }
+        try {
+            futureSailor.get().get();
+        } catch (InterruptedException e) {
+            log.warn("Error binding: {} from: {} on: {}", key, link.getMember(), member, e);
+            return !isTimedOut.get();
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof StatusRuntimeException) {
+                StatusRuntimeException sre = (StatusRuntimeException) e.getCause();
+                if (sre.getStatus() == Status.UNAVAILABLE) {
+                    log.trace("Server unavailable binding: {} from: {} on: {}", key, link.getMember(), member);
+                }
+            } else {
+                log.warn("Error binding: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+            }
+            return !isTimedOut.get();
+        }
+        var t = tally.incrementAndGet();
+        log.trace("Inc bind {} tally: {} on: {}", key, t, member);
+        return !isTimedOut.get();
+    }
+
+    private ListenableFuture<Empty> bind(SpaceGhost link, Digest key, Any value) {
+        log.trace("Bind {} to: {} on: {}", key, link.getMember(), member);
+        return link.bind(Bind.newBuilder()
+                             .setContext(context.getId().toByteString())
+                             .setKey(key.toByteString())
+                             .setValue(value)
+                             .build());
+    }
+
     private void failedMajority(Digest key, CompletableFuture<Boolean> majority) {
         majority.completeExceptionally(new TimeoutException(
                 String.format("Failed majority put: %s  on: %s", key, member)));
         log.info("Failed majority put: {}  on: {}", key, member);
+    }
+
+    private void failedMajority(String key, CompletableFuture<Boolean> majority) {
+        majority.completeExceptionally(new TimeoutException(
+                String.format("Failed majority bind: %s  on: %s", key, member)));
+        log.info("Failed majority bind: {}  on: {}", key, member);
     }
 
     private boolean get(Optional<ListenableFuture<Any>> futureSailor, Digest key, CompletableFuture<Any> result,
@@ -396,21 +511,21 @@ public class Ghost {
         try {
             value = futureSailor.get().get();
         } catch (InterruptedException e) {
-            log.trace("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
+            log.trace("Error get: {} from: {} on: {}", key, link.getMember(), member, e);
             return !isTimedOut.get();
         } catch (ExecutionException e) {
             Throwable t = e.getCause();
             if (t instanceof StatusRuntimeException) {
                 StatusRuntimeException sre = (StatusRuntimeException) t;
                 if (sre.getStatus() == Status.NOT_FOUND) {
-                    log.trace("Error fetching: {} server not found: {} on: {}", key, link.getMember(), member);
+                    log.trace("Error get: {} server not found: {} on: {}", key, link.getMember(), member);
                     return !isTimedOut.get();
                 }
             }
-            log.trace("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+            log.trace("Error get: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
             return !isTimedOut.get();
         }
-        if (value != null) {
+        if (value != null || (value != null && value.equals(Any.getDefaultInstance()))) {
             log.trace("Get: {} from: {}  on: {}", key, link.getMember(), member);
             result.complete(value);
             return false;
@@ -464,9 +579,53 @@ public class Ghost {
                                        .build());
     }
 
+    private boolean lookup(Optional<ListenableFuture<Any>> futureSailor, String key, Multiset<Any> votes,
+                           CompletableFuture<Any> result, Supplier<Boolean> isTimedOut, SpaceGhost link) {
+        if (futureSailor.isEmpty()) {
+            return !isTimedOut.get();
+        }
+        Any value;
+        try {
+            value = futureSailor.get().get();
+        } catch (InterruptedException e) {
+            log.trace("Error lookup: {} from: {} on: {}", key, link.getMember(), member, e);
+            return !isTimedOut.get();
+        } catch (ExecutionException e) {
+            Throwable t = e.getCause();
+            if (t instanceof StatusRuntimeException) {
+                StatusRuntimeException sre = (StatusRuntimeException) t;
+                if (sre.getStatus() == Status.NOT_FOUND) {
+                    log.trace("Error lookup: {} server not found: {} on: {}", key, link.getMember(), member);
+                    return !isTimedOut.get();
+                }
+            }
+            log.trace("Error lookup: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+            return !isTimedOut.get();
+        }
+        if (value != null || (value != null && value.equals(Any.getDefaultInstance()))) {
+            log.trace("Lookup: {} from: {}  on: {}", key, link.getMember(), member);
+            votes.add(value);
+            for (Any vote : votes) {
+                if (votes.count(vote) > context.majority()) {
+                    result.complete(vote);
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            log.trace("Failed lookup: {} from: {}  on: {}", key, link.getMember(), member);
+            return !isTimedOut.get();
+        }
+    }
+
     private void majorityComplete(Digest key, CompletableFuture<Boolean> majority) {
         majority.complete(true);
-        log.debug("Majority put {} on: {}", key, member);
+        log.debug("Majority put: {} on: {}", key, member);
+    }
+
+    private void majorityComplete(String key, CompletableFuture<Boolean> majority) {
+        majority.complete(true);
+        log.debug("Majority bind: {} on: {}", key, member);
     }
 
     private boolean put(Optional<ListenableFuture<Empty>> futureSailor, Supplier<Boolean> isTimedOut, Digest key,
@@ -477,16 +636,16 @@ public class Ghost {
         try {
             futureSailor.get().get();
         } catch (InterruptedException e) {
-            log.warn("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e);
+            log.warn("Error put: {} from: {} on: {}", key, link.getMember(), member, e);
             return !isTimedOut.get();
         } catch (ExecutionException e) {
             if (e.getCause() instanceof StatusRuntimeException) {
                 StatusRuntimeException sre = (StatusRuntimeException) e.getCause();
                 if (sre.getStatus() == Status.UNAVAILABLE) {
-                    log.trace("Server unavailable fetching: {} from: {} on: {}", key, link.getMember(), member);
+                    log.trace("Server unavailable put: {} from: {} on: {}", key, link.getMember(), member);
                 }
             } else {
-                log.warn("Error fetching: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
+                log.warn("Error put: {} from: {} on: {}", key, link.getMember(), member, e.getCause());
             }
             return !isTimedOut.get();
         }
