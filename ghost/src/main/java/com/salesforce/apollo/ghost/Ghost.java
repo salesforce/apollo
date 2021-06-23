@@ -62,15 +62,16 @@ import io.grpc.StatusRuntimeException;
  * A distributed, content addresssable hash table. Keys of this DHT are the hash
  * of the content's bytes.
  * <p>
- * Builds on the Fireflies membership gossip service (and swiss army knife) to
- * implement a one hop imutable DHT. Stored content is only addressible by the
- * hash of the content. Thus, content is immutable (although we allow deletes,
- * because GC).
+ * Builds on the membership gossip service (and swiss army knife) to implement a
+ * one hop imutable DHT with eventually consistent mutable bindings. Stored
+ * content is only addressible by the hash of the content. Thus, content is
+ * immutable (although we allow deletes, because GC). Mutable bindings are
+ * eventually consistent
  * <p>
- * Ghost reuses the t+1 rings of the Fireflies context as the redundant storage
- * rings for content. The hash keys of the content map to each ring differently,
- * and so each Ghost instance stores t+1 intervals - perhaps overlapping - of
- * the current content set of the system wide DHT.
+ * Ghost reuses the t+1 rings of the Memberships context as the redundant
+ * storage rings for content. The hash keys of the content map to each ring
+ * differently, and so each Ghost instance stores t+1 intervals - perhaps
+ * overlapping - of the current content set of the system wide DHT.
  * <p>
  * Content is stored redundantly on t+1 rings and Ghost emits n (where n <= t+1)
  * parallel communications for key lookup. If the key is stored, the first
@@ -78,23 +79,23 @@ import io.grpc.StatusRuntimeException;
  * is returned. If the key is not present, the client only waits for the
  * indicated timeout, rather than the sum of timeouts from t+1 serial queries.
  * <p>
- * Content storage operations must complete a majority of writes out of t+1
- * rings to return without error. As the key of any content is its hash, content
- * is immutable, so any put() operation may be retried, as put() is idempotent.
- * Note that idempotent push() does not mean zero overhead for redundant pushes.
- * There still will be communication overhead of at least the majority of ghost
- * nodes on the various rings.
+ * Immutable ontent storage operations must complete a majority of writes out of
+ * t+1 rings to return without error. As the key of any immutable content is its
+ * hash, content is immutable, so any put() operation may be retried, as put()
+ * is idempotent. Note that idempotent push() does not mean zero overhead for
+ * redundant pushes. There still will be communication overhead of at least the
+ * majority of ghost nodes on the various rings.
  * <p>
  * To compensate for the wild, wild west of dynamic membership, Ghost gossips
- * with its n successors on each of the t+1 rings of the Fireflies context.
- * Because all content is stored redundantly, all lookups for validated,
- * previously stored content will be available whp, assuming non catastrophic
- * loss/gain in membership. The reuse of the t+1 rings of the underlying FF
- * context for storage redundancy sets the upper bounds on the "catastrophic"
- * cardinality and allows Ghost to update the storage for dynamic rebalancing
- * during membership changes. As long as at least 1 of the t+1 members remain as
- * the storage node during the context membership change on a querying node, the
- * DHT will return the result.
+ * with its n successors on each of the t+1 rings of the context. Because all
+ * content is stored redundantly, all lookups for validated, previously stored
+ * content will be available whp, assuming non catastrophic loss/gain in
+ * membership. The reuse of the t+1 rings of the underlying context for storage
+ * redundancy sets the upper bounds on the "catastrophic" cardinality and allows
+ * Ghost to update the storage for dynamic rebalancing during membership
+ * changes. As long as at least 1 of the t+1 members remain as the storage node
+ * for a given content hash key during the context membership change on a
+ * querying node, the DHT will return the result.
  * 
  * @author hal.hildebrand
  * @since 220
