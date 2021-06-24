@@ -64,13 +64,13 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
                                      BiFunction<Comm, Integer, ListenableFuture<T>> round, Runnable failedMajority,
                                      PredicateHandler<T, Comm> handler, Runnable onComplete, AtomicInteger tally) {
         Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
+        final int current = lastRingIndex;
+        int ringCount = context.getRingCount();
+        boolean finalIteration = current % ringCount >= ringCount - 1;
+        int majority = context.majority();
+        Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, majority, failedMajority, tally,
+                                                     proceed, finalIteration, onComplete);
         try (Comm link = nextRing(digest)) {
-            final int current = lastRingIndex;
-            int ringCount = context.getRingCount();
-            boolean finalIteration = current % ringCount >= ringCount - 1;
-            int majority = context.majority();
-            Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, majority, failedMajority, tally,
-                                                         proceed, finalIteration, onComplete);
             if (link == null) {
                 log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
                           member);
@@ -97,6 +97,8 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
 
     private void proceed(Digest key, Boolean allow, Runnable onMajority, int majority, Runnable failedMajority,
                          AtomicInteger tally, Runnable proceed, boolean finalIteration, Runnable onComplete) {
+        log.trace("Determining continuation of: {} for: {} tally: {} majority: {} final itr: {} allow: {} on: {}", key,
+                  context.getId(), tally.get(), majority, finalIteration, allow, member);
         if (onMajority != null && !majoritySucceed) {
             if (tally.get() >= majority) {
                 majoritySucceed = true;

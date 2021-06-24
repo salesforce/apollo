@@ -139,7 +139,7 @@ public class DagTest {
 
         for (Entry<Digest, Any> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
-                Any found = ghost.get(entry.getKey(), timeout);
+                Any found = ghost.get(entry.getKey(), timeout).get();
                 assertNotNull(found);
                 assertEquals(entry.getValue(), found);
             }

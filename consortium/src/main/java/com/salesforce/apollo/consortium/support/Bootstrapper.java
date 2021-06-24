@@ -256,8 +256,7 @@ public class Bootstrapper {
         return true;
     }
 
-    private void computeGenesis(Map<Digest, Initial> votes, Runnable scheduleSample) {
-
+    private void computeGenesis(Map<Digest, Initial> votes) {
         log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(),
                  params.context.toleranceLevel() + 1, params.member);
         Multiset<HashedCertifiedBlock> tally = HashMultiset.create();
@@ -308,7 +307,7 @@ public class Bootstrapper {
 
             if (winner == null) {
                 log.info("No winner on: {}", params.member);
-                scheduleSample.run();
+                scheduleSample();
                 return;
             }
 
@@ -431,9 +430,12 @@ public class Bootstrapper {
                                 BootstrapService link) {
         final HashedCertifiedBlock established = genesis;
         if (sync.isDone() || established != null) {
+            log.trace("Terminating synchronization early isDone: {} genesis: {} cancelled: {} on: {}", sync.isDone(),
+                      established == null ? null : established.hash, link.getMember(), params.member);
             return false;
         }
         if (futureSailor.isEmpty()) {
+            log.trace("Empty response from: {} on: {}", link.getMember(), params.member);
             return true;
         }
         try {
@@ -445,14 +447,15 @@ public class Bootstrapper {
                               params.member);
                 }
                 votes.put(link.getMember().getId(), vote);
-                log.debug("Synchronization vote: {} from: {} recorded on: {}", gen.hash, link.getMember(),
-                          params.member);
+                log.debug("Synchronization vote: {} count: {} from: {} recorded on: {}", gen.hash, votes.size(),
+                          link.getMember(), params.member);
             }
         } catch (InterruptedException e) {
-            log.debug("Error counting vote from: {} on: {}", link.getMember(), params.member.getId());
+            log.warn("Error counting vote from: {} on: {}", link.getMember(), params.member.getId());
         } catch (ExecutionException e) {
-            log.debug("Error counting vote from: {} on: {}", link.getMember(), params.member.getId());
+            log.warn("Error counting vote from: {} on: {}", link.getMember(), params.member.getId());
         }
+        log.trace("Continuing, processed sync response from: {} on: {}", link.getMember(), params.member);
         return true;
     }
 

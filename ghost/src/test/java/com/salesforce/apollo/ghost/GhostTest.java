@@ -130,7 +130,7 @@ public class GhostTest {
         count.set(0);
         for (Entry<String, Any> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
-                Any found = ghost.lookup(entry.getKey(), timeout);
+                Any found = ghost.lookup(entry.getKey(), timeout).get();
                 assertNotNull(found);
                 assertEquals(entry.getValue(), found);
                 if (count.incrementAndGet() % 100 == 0) {
@@ -200,7 +200,7 @@ public class GhostTest {
         count.set(0);
         for (Entry<Digest, Any> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
-                Any found = ghost.get(entry.getKey(), timeout);
+                Any found = ghost.get(entry.getKey(), timeout).get();
                 assertNotNull(found);
                 assertEquals(entry.getValue(), found);
                 if (count.incrementAndGet() % 100 == 0) {

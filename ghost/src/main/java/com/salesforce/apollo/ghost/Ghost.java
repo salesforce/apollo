@@ -305,7 +305,7 @@ public class Ghost {
      * @param key
      * @return the value associated with ye key
      */
-    public Any get(Digest key, Duration timeout) throws TimeoutException {
+    public Optional<Any> get(Digest key, Duration timeout) throws TimeoutException {
         log.trace("Starting Get {}   on: {}", key, member);
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -316,7 +316,7 @@ public class Ghost {
                                              (tally, futureSailor, link, r) -> get(futureSailor, key, result,
                                                                                    isTimedOut, link));
         try {
-            return result.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            return Optional.ofNullable(result.get(timeout.toMillis(), TimeUnit.MILLISECONDS));
         } catch (InterruptedException e) {
             TimeoutException t = new TimeoutException("Interrupted");
             t.initCause(e);
@@ -364,7 +364,7 @@ public class Ghost {
     /**
      * Lookup the current value associated with the key
      */
-    public Any lookup(String key, Duration timeout) throws TimeoutException {
+    public Optional<Any> lookup(String key, Duration timeout) throws TimeoutException {
         log.trace("Starting Lookup {}   on: {}", key, member);
         Digest hash = parameters.digestAlgorithm.digest(key);
         Instant timedOut = Instant.now().plus(timeout);
@@ -387,7 +387,7 @@ public class Ghost {
                                                                     .map(a -> votes.count(a))
                                                                     .collect(Collectors.toList()))));
         try {
-            return result.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            return Optional.ofNullable(result.get(timeout.toMillis(), TimeUnit.MILLISECONDS));
         } catch (InterruptedException e) {
             TimeoutException t = new TimeoutException("Interrupted");
             t.initCause(e);
@@ -551,7 +551,7 @@ public class Ghost {
                          entries.getImmutableCount(), entries.getMutableCount(), link.getMember(), member);
             } else if (log.isDebugEnabled()) {
                 log.debug("Received: {} immutable and {} mutable entries in Ghost gossip from: {} on: {}",
-                         entries.getImmutableCount(), entries.getMutableCount(), link.getMember(), member);
+                          entries.getImmutableCount(), entries.getMutableCount(), link.getMember(), member);
             }
             store.add(entries.getImmutableList());
         } catch (InterruptedException | ExecutionException e) {

@@ -15,3 +15,10 @@ message Biff {
         bytes bits = 4;
         int32 type = 5;
 }
+
+message Boxed {
+    oneof boxed {
+        string s = 1;
+        bytes b = 2; 
+    }
+}

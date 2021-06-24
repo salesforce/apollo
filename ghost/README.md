@@ -14,3 +14,11 @@ content) and maps this to each of the underlying Context rings, using them as a 
 
 ## Status
 Back under active development as this is required for Sterotomy resolver services in Apollo.
+
+Currently Ghost uses the same type of Bloom filter replication as other services across Apollo.  However, the intervals covered by members  in Ghost can contain quite liarge set cardinalities become extremely large.  Worse, we
+don't know the relative set sizes for the intervals between gossiping members.  For example member A, with no content in the interval [0, 1000000000000] gossips with member B who has 40,000 elements. This would be the case
+when bootstrapping a joining member, for example (although this is mitigated by using persistent store for the node). Unlike other gossiping services in Apollo, there is no ordering we can use to validate the potential membership
+across the interval than that interval.  If we break large intervales (e.g. three members on a ring each claim 1/3 of a 32 byte hash space) into "managable" sizes, it'd take forever, but even if there's some smart way, because these
+intervals are sparsely populated - by definition because of their size - it's impossible to tell where the content "is" within the interval.
+
+Consequently, the gossiping functionality of Ghost is still under active development.
