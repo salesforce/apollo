@@ -2,7 +2,7 @@
 The Apollo project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication layer.  The consensus layer is supplied by Avalanche, a **GREEN** - i.e. non POW - and quiescent consensus protocol.  An IPFS-esque DAG based DHT is provided in addition to DAG ledger state.
 
 ## Requirements
-Apollo requires the JDK 15+.
+Apollo requires the JDK 16+.
 
 Apollo also requires [Maven](https://maven.apache.org/) 3.6.3 and above.  
 
@@ -35,7 +35,7 @@ Note that Apollo is very much a _work in progress_.  It is by no means a full fe
 
 
 ## Requirements
-Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.6.3+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using Java 15.
+Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.6.3+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using Java 16.
 
 Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html).  This means that the various modules of Apollo are built and versioned as a whole, rather than being seperated out into individual repositories.  This also means that modules refer to other modules within the project as dependencies, and consequently must be built in the correct order.  Note that Maven does this by default, so there should be no issues.  However, it does mean that you can't simply cd into a module and build it without building its dependencies first.
 
