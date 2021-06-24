@@ -20,7 +20,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
     
-    <logger name="com.salesforce.apollo.comm.RingIterator" level="trace"
+    <logger name="com.salesforce.apollo.comm.RingIterator" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -30,7 +30,7 @@
         <appender-ref ref="STDOUT" />
     </logger> 
     
-    <logger name="com.salesforce.apollo.consortium.support" level="trace"
+    <logger name="com.salesforce.apollo.consortium.support" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

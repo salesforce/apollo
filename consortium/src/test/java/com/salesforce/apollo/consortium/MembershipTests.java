@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -151,6 +152,8 @@ public class MembershipTests {
                                                                  .setFalsePositiveRate(0.25)
                                                                  .setBufferSize(500)
                                                                  .build();
+
+        List<CertifiedBlock> blocks = new ArrayList<>();
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicInteger cLabel = new AtomicInteger();
         Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
@@ -163,6 +166,7 @@ public class MembershipTests {
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
+                blocks.add(c);
                 cPipeline.execute(() -> {
                     CountDownLatch executed = new CountDownLatch(CARDINALITY);
                     consortium.values().forEach(m -> {
@@ -233,10 +237,8 @@ public class MembershipTests {
 
         testSubject.start();
         communications.get(testSubject.getMember().getId()).start();
-        assertTrue(Utils.waitForCondition(2_000,
-                                          () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
-        Thread.sleep(1_000);
-        
+        testSubject.process(blocks.get(blocks.size() - 1));
+
         bunchCount = 100;
         submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
@@ -263,6 +265,7 @@ public class MembershipTests {
                                                                  .setFalsePositiveRate(0.000001)
                                                                  .setBufferSize(1500)
                                                                  .build();
+        List<CertifiedBlock> blocks = new ArrayList<>();
         Executor cPipeline = Executors.newSingleThreadExecutor();
         AtomicInteger cLabel = new AtomicInteger();
         Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
@@ -275,6 +278,7 @@ public class MembershipTests {
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
+                blocks.add(c);
                 cPipeline.execute(() -> {
                     CountDownLatch executed = new CountDownLatch(consortium.size());
                     consortium.values().forEach(m -> {
@@ -348,7 +352,7 @@ public class MembershipTests {
         assertTrue(Utils.waitForCondition(2_000,
                                           () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
 
-        Thread.sleep(2_000);
+        testSubject.process(blocks.get(blocks.size() - 1));
         bunchCount = 100;
         for (int i = 0; i < bunchCount; i++) {
             submit(client, outstanding, submitted, submittedBunch, timeout);

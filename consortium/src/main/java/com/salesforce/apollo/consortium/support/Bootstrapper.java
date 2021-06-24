@@ -376,7 +376,7 @@ public class Bootstrapper {
         new RingIterator<>(params.context, params.member, comms,
                 params.dispatcher).iterate(randomCut(params.digestAlgorithm), (link, ring) -> synchronize(s, link),
                                            (tally, futureSailor, link, ring) -> synchronize(futureSailor, votes, link),
-                                           () -> computeGenesis(votes, () -> scheduleSample()));
+                                           () -> computeGenesis(votes));
     }
 
     private void scheduleAnchorCompletion(AtomicLong start, long anchorTo) {

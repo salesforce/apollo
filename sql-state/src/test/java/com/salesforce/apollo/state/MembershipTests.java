@@ -156,6 +156,7 @@ public class MembershipTests {
     public void testCheckpointBootstrap() throws Exception {
         Executor cPipeline = Executors.newSingleThreadExecutor();
 
+        List<CertifiedBlock> blocks = new ArrayList<>();
         AtomicInteger cLabel = new AtomicInteger();
         Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
             Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
@@ -167,6 +168,7 @@ public class MembershipTests {
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
+                blocks.add(c);
                 cPipeline.execute(() -> {
                     CountDownLatch executed = new CountDownLatch(CARDINALITY);
                     consortium.values().forEach(m -> {
@@ -292,7 +294,7 @@ public class MembershipTests {
         communications.get(testSubject.getMember().getId()).start();
         assertTrue(Utils.waitForCondition(2_000,
                                           () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
-        Thread.sleep(1_000);
+        testSubject.process(blocks.get(blocks.size() - 1));
 
         bunchCount = 150;
         System.out.println("Submitting batches: " + bunchCount);
@@ -368,6 +370,7 @@ public class MembershipTests {
     public void testGenesisBootstrap() throws Exception {
         Executor cPipeline = Executors.newSingleThreadExecutor();
 
+        List<CertifiedBlock> blocks = new ArrayList<>();
         AtomicInteger cLabel = new AtomicInteger();
         Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
             Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
@@ -379,6 +382,7 @@ public class MembershipTests {
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
+                blocks.add(c);
                 cPipeline.execute(() -> {
                     CountDownLatch executed = new CountDownLatch(CARDINALITY);
                     consortium.values().forEach(m -> {
@@ -503,7 +507,7 @@ public class MembershipTests {
         communications.get(testSubject.getMember().getId()).start();
         assertTrue(Utils.waitForCondition(2_000,
                                           () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
-        Thread.sleep(1_000);
+        testSubject.process(blocks.get(blocks.size() - 1));
 
         bunchCount = 150;
         System.out.println("Submitting batches: " + bunchCount);

@@ -114,7 +114,7 @@ public class BootstrapperTest {
         @SuppressWarnings("unchecked")
         CommonCommunications<BootstrapService, Bootstrapping> comms = mock(CommonCommunications.class);
         when(comms.apply(any(), same(member))).thenAnswer(invoke -> {
-            Member to = invoke.getArgumentAt(0, Member.class);
+            Member to = invoke.getArgument(0, Member.class);
             return mockClient(to, bootstrapStore, testChain);
         });
         Store store = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
@@ -154,7 +154,7 @@ public class BootstrapperTest {
         });
         when(client.fetchViewChain(any())).then(invocation -> {
             SettableFuture<Blocks> futureSailor = SettableFuture.create();
-            BlockReplication rep = invocation.getArgumentAt(0, BlockReplication.class);
+            BlockReplication rep = invocation.getArgument(0, BlockReplication.class);
             BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
             Blocks.Builder blocks = Blocks.newBuilder();
             bootstrapStore.fetchViewChain(bff, blocks, 1, rep.getFrom(), rep.getTo());
@@ -163,7 +163,7 @@ public class BootstrapperTest {
         });
         when(client.fetchBlocks(any())).then(invocation -> {
             SettableFuture<Blocks> futureSailor = SettableFuture.create();
-            BlockReplication rep = invocation.getArgumentAt(0, BlockReplication.class);
+            BlockReplication rep = invocation.getArgument(0, BlockReplication.class);
             BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
             Blocks.Builder blocks = Blocks.newBuilder();
             bootstrapStore.fetchBlocks(bff, blocks, 5, rep.getFrom(), rep.getTo());

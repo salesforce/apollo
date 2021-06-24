@@ -68,13 +68,15 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
         int ringCount = context.getRingCount();
         boolean finalIteration = current % ringCount >= ringCount - 1;
         int majority = context.majority();
+
         Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, majority, failedMajority, tally,
                                                      proceed, finalIteration, onComplete);
         try (Comm link = nextRing(digest)) {
             if (link == null) {
                 log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
                           member);
-                allowed.accept(handler.handle(tally, Optional.empty(), link, current));
+                final boolean allow = handler.handle(tally, Optional.empty(), link, current);
+                allowed.accept(allow);
                 return;
             }
             log.trace("Iteration on: {} ring: {} to: {} on: {}", context.getId(), current, link.getMember(), member);
@@ -82,20 +84,19 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
             if (futureSailor == null) {
                 log.trace("No asynchronous response for: {} on: {} ring: {} from: {} on: {}", digest, context.getId(),
                           current, link.getMember(), member);
-                allowed.accept(handler.handle(tally, Optional.empty(), link, current));
+                final boolean allow = handler.handle(tally, Optional.empty(), link, current);
+                allowed.accept(allow);
                 return;
             }
             futureSailor.addListener(() -> {
-                log.trace("Response of: {} on: {} ring: {} from: {} on: {}", digest, context.getId(), current,
-                          link.getMember(), member);
-                allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, current) && !finalIteration);
+                allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, current));
             }, executor);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
     }
 
-    private void proceed(Digest key, Boolean allow, Runnable onMajority, int majority, Runnable failedMajority,
+    private void proceed(Digest key, final boolean allow, Runnable onMajority, int majority, Runnable failedMajority,
                          AtomicInteger tally, Runnable proceed, boolean finalIteration, Runnable onComplete) {
         log.trace("Determining continuation of: {} for: {} tally: {} majority: {} final itr: {} allow: {} on: {}", key,
                   context.getId(), tally.get(), majority, finalIteration, allow, member);
