@@ -96,16 +96,16 @@ abstract public class Hash<T> {
             makeHash();
         }
 
-        protected void process(Integer i) {
+        protected void process(int i) {
             h1 ^= mixK1(0);
             length += 2;
-            h2 ^= mixK2(i.longValue());
+            h2 ^= mixK2(i);
             length += CHUNK_SIZE / 4;
             makeHash();
         }
 
-        protected void process(Long l) {
-            h1 ^= mixK1(l.longValue());
+        protected void process(long l) {
+            h1 ^= mixK1(l);
             length += 4;
             h2 ^= mixK2(0);
             length += CHUNK_SIZE / 2;
