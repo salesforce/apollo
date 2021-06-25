@@ -101,6 +101,7 @@ abstract public class Hash<T> {
             length += 2;
             h2 ^= mixK2(i.longValue());
             length += CHUNK_SIZE / 4;
+            makeHash();
         }
 
         protected void process(Long l) {
@@ -108,6 +109,7 @@ abstract public class Hash<T> {
             length += 4;
             h2 ^= mixK2(0);
             length += CHUNK_SIZE / 2;
+            makeHash();
         }
 
         abstract void processIt(T it);
@@ -270,10 +272,10 @@ abstract public class Hash<T> {
 
     public void put(T key, BitSet bits) {
         Hasher<T> hasher = newHasher(key);
- 
+
         long combinedHash = hasher.h1;
         for (int i = 0; i < k; i++) {
-            int index = ((int) (combinedHash & Integer.MAX_VALUE)) % m; 
+            int index = ((int) (combinedHash & Integer.MAX_VALUE)) % m;
             bits.set(index);
             combinedHash += hasher.h2;
         }
