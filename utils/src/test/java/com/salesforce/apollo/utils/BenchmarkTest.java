@@ -5,20 +5,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.utils.IBF.Decode;
 import com.salesforce.apollo.utils.IBF.IntIBF;
 
 public class BenchmarkTest {
 
-    static final int TEST_SIZE = 1000000;// Number of elements to test
+    static final int TEST_SIZE = 10_000_000;// Number of elements to test
     static final int DIFF_SIZE = 10;
 
     public static void printStat(long start, long end) {
-        double diff = (end - start) / 1000.0;
+        double diff = (end - start) / 1_000.0;
         System.out.println(diff + "s, " + (TEST_SIZE / diff) + " elements/s");
     }
 
@@ -55,9 +55,9 @@ public class BenchmarkTest {
         }
 
         // strataEstimator
-        int seed =   31;
-        StrataEstimator se1 = new StrataEstimator(seed, i -> IntIBF.smear(i));
-        StrataEstimator se2 = new StrataEstimator(seed, i -> IntIBF.smear(i));
+        int seed = entropy.nextInt();
+        StrataEstimator se1 = new StrataEstimator(seed);
+        StrataEstimator se2 = new StrataEstimator(seed);
 
         System.out.println("=========benchmark start==========");
         System.out.print("StrataEstimator.encode(): ");
@@ -113,7 +113,7 @@ public class BenchmarkTest {
         // decode the result of the subtract operation
         System.out.print("ibf.decode()");
         long start_decode = System.currentTimeMillis();
-        Pair<List<Integer>, List<Integer>> decodeResult = b1.decode(res);
+        Decode<Integer> decodeResult = b1.decode(res);
         long end_decode = System.currentTimeMillis();
         printStat(start_decode, end_decode);
 
@@ -121,17 +121,18 @@ public class BenchmarkTest {
 
         // judge whether or not the result of the decode is right
         assertNotNull(decodeResult, "No decode result");
-        assertEquals(DIFF_SIZE, decodeResult.a.size(), "Incorrect differences add size");
-        assertEquals(DIFF_SIZE, decodeResult.b.size(), "Incorrect differences remove size");
-        Collections.sort(decodeResult.a);
-        Collections.sort(decodeResult.b);
+        assertEquals(DIFF_SIZE, decodeResult.added().size(), "Incorrect differences added");
+        assertEquals(DIFF_SIZE, decodeResult.missing().size(), "Incorrect differences missing");
+        Collections.sort(decodeResult.added());
+        Collections.sort(decodeResult.missing());
         Arrays.sort(s1_diff);
         Arrays.sort(s2_diff);
         for (int i = 0; i < DIFF_SIZE; i++) {
-            String str = s1_diff[i] + ":" + decodeResult.a.get(i) + "," + s2_diff[i] + ":" + decodeResult.b.get(i);
+            String str = s1_diff[i] + ":" + decodeResult.added().get(i) + "," + s2_diff[i] + ":"
+                    + decodeResult.missing().get(i);
             printInfo(str);
-            assertEquals(s1_diff[i], decodeResult.a.get(i), "S1 diff does not match decode result");
-            assertEquals(s2_diff[i], decodeResult.b.get(i), "S2 diff does not match decode result");
+            assertEquals(s1_diff[i], decodeResult.added().get(i), "S1 diff does not match decode added result");
+            assertEquals(s2_diff[i], decodeResult.missing().get(i), "S2 diff does not match decode missing result");
         }
         printInfo("decode success");
     }

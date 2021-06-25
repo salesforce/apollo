@@ -18,11 +18,13 @@ import java.util.Random;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.utils.IBF.Decode;
+
 /**
  * @author hal.hildebrand
  *
  */
-public class IBFTest {
+public class IntIBFTest {
 
     private Random       r;
     private IBF<Integer> ibf;
@@ -30,7 +32,7 @@ public class IBFTest {
     @BeforeEach
     public void before() {
         r = new Random(0x1638);
-        ibf = new IBF.IntIBF(2000, r.nextInt(), 3);
+        ibf = new IBF.IntIBF(2000, 19932631, 3);
     }
 
     @Test
@@ -61,7 +63,7 @@ public class IBFTest {
     @Test
     public void decode() throws Exception {
 
-        int seed1 = r.nextInt(); 
+        int seed1 = r.nextInt();
         IBF<Integer> b1 = new IBF.IntIBF(100, seed1, 3);
         IBF<Integer> b2 = new IBF.IntIBF(100, seed1, 3);
 
@@ -89,22 +91,22 @@ public class IBFTest {
         Arrays.sort(b2sb1);
 
         IBF<Integer> res = b1.subtract(b2);
-        Pair<List<Integer>, List<Integer>> diff = b1.decode(res);
+        Decode<Integer> diff = b1.decode(res);
         assertNotNull(diff);
-        assertEquals(diff.a.size(), b1sb2.length, "error b1sb2");
-        assertEquals(diff.b.size(), b2sb1.length, "error b2sb1");
+        assertEquals(b1sb2.length, diff.added().size(), "invalid added");
+        assertEquals(b2sb1.length, diff.missing().size(), "invalid missing");
 
-        Collections.sort(diff.a);
-        Collections.sort(diff.b);
+        Collections.sort(diff.added());
+        Collections.sort(diff.missing());
 
         System.out.println("===========");
 
-        for (int i = 0; i < diff.a.size(); i++) {
-            System.out.println(b1sb2[i] + "," + diff.a.get(i));
+        for (int i = 0; i < diff.added().size(); i++) {
+            System.out.println(b1sb2[i] + "," + diff.added().get(i));
         }
         System.out.println("..........");
-        for (int i = 0; i < diff.b.size(); i++) {
-            System.out.println(b2sb1[i] + "," + diff.b.get(i));
+        for (int i = 0; i < diff.missing().size(); i++) {
+            System.out.println(b2sb1[i] + "," + diff.missing().get(i));
         }
 
     }

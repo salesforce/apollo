@@ -6,8 +6,6 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.utils.IBF.IntIBF;
-
 public class StrataEstimatorTest {
 
     @Test
@@ -36,8 +34,8 @@ public class StrataEstimatorTest {
         }
 
         int seed = r.nextInt();
-        StrataEstimator se1 = new StrataEstimator(seed, i -> IntIBF.smear(i));
-        StrataEstimator se2 = new StrataEstimator(seed, i -> IntIBF.smear(i));
+        StrataEstimator se1 = new StrataEstimator(seed);
+        StrataEstimator se2 = new StrataEstimator(seed);
         se1.encode(s1);
         se2.encode(s2);
         assertEquals(expectedDiffs * 2, se1.decode(se2));
