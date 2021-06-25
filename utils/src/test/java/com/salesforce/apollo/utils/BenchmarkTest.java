@@ -1,5 +1,8 @@
 package com.salesforce.apollo.utils;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -26,7 +29,7 @@ public class BenchmarkTest {
     @Test
     public void bench() {
 
-        final Random r = new Random();
+        final Random entropy = new Random(0x1638);
 
         // Generate elements first
         int s1[] = new int[TEST_SIZE];
@@ -34,25 +37,25 @@ public class BenchmarkTest {
         int s1_diff[] = new int[DIFF_SIZE];
         int s2_diff[] = new int[DIFF_SIZE];
         for (int i = 0; i < TEST_SIZE - DIFF_SIZE; i++) {
-            int val = r.nextInt(100000);
+            int val = entropy.nextInt(100000);
             s1[i] = val;
             s2[i] = val;
         }
 
         for (int i = TEST_SIZE - DIFF_SIZE; i < TEST_SIZE; i++) {
-            int val = r.nextInt(100000);
+            int val = entropy.nextInt(100000);
             s1[i] = val;
             s1_diff[i - (TEST_SIZE - DIFF_SIZE)] = val;
         }
 
         for (int i = TEST_SIZE - DIFF_SIZE; i < TEST_SIZE; i++) {
-            int val = r.nextInt(100000);
+            int val = entropy.nextInt(100000);
             s2[i] = val;
             s2_diff[i - (TEST_SIZE - DIFF_SIZE)] = val;
         }
 
         // strataEstimator
-        int seed = r.nextInt();
+        int seed =   31;
         StrataEstimator se1 = new StrataEstimator(seed, i -> IntIBF.smear(i));
         StrataEstimator se2 = new StrataEstimator(seed, i -> IntIBF.smear(i));
 
@@ -117,22 +120,18 @@ public class BenchmarkTest {
         System.out.println("=========benchmark end==========");
 
         // judge whether or not the result of the decode is right
-        if (decodeResult == null || decodeResult.a.size() != DIFF_SIZE || decodeResult.b.size() != DIFF_SIZE) {
-            System.out.println("decode error");
-            return;
-        } else {
-            Collections.sort(decodeResult.a);
-            Collections.sort(decodeResult.b);
-            Arrays.sort(s1_diff);
-            Arrays.sort(s2_diff);
-            for (int i = 0; i < DIFF_SIZE; i++) {
-                String str = s1_diff[i] + ":" + decodeResult.a.get(i) + "," + s2_diff[i] + ":" + decodeResult.b.get(i);
-                printInfo(str);
-                if (s1_diff[i] != decodeResult.a.get(i) || s2_diff[i] != decodeResult.b.get(i)) {
-                    System.out.println("decode error");
-                    return;
-                }
-            }
+        assertNotNull(decodeResult, "No decode result");
+        assertEquals(DIFF_SIZE, decodeResult.a.size(), "Incorrect differences add size");
+        assertEquals(DIFF_SIZE, decodeResult.b.size(), "Incorrect differences remove size");
+        Collections.sort(decodeResult.a);
+        Collections.sort(decodeResult.b);
+        Arrays.sort(s1_diff);
+        Arrays.sort(s2_diff);
+        for (int i = 0; i < DIFF_SIZE; i++) {
+            String str = s1_diff[i] + ":" + decodeResult.a.get(i) + "," + s2_diff[i] + ":" + decodeResult.b.get(i);
+            printInfo(str);
+            assertEquals(s1_diff[i], decodeResult.a.get(i), "S1 diff does not match decode result");
+            assertEquals(s2_diff[i], decodeResult.b.get(i), "S2 diff does not match decode result");
         }
         printInfo("decode success");
     }

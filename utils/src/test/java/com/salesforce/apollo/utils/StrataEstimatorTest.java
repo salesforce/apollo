@@ -1,5 +1,7 @@
 package com.salesforce.apollo.utils;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
@@ -38,7 +40,7 @@ public class StrataEstimatorTest {
         StrataEstimator se2 = new StrataEstimator(seed, i -> IntIBF.smear(i));
         se1.encode(s1);
         se2.encode(s2);
-        assert (expectedDiffs * 2 == se1.decode(se2));
+        assertEquals(expectedDiffs * 2, se1.decode(se2));
 
     }
 
