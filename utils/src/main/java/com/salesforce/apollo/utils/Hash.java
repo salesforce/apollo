@@ -1,116 +1,136 @@
 /*
- * Copyright (c) 2020, salesforce.com, inc.
+ * Copyright (c) 2021, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.utils;
 
-import java.util.BitSet;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.utils.IBF.IntIBF;
 
 /**
  * @author hal.hildebrand
  *
  */
-abstract public class Hash<T> {
+public abstract class Hash<M> {
+    abstract public static class Hasher<M> {
+        public static class DigestHasher extends Hasher<Digest> {
 
-    abstract public static class Hasher<T> {
+            public DigestHasher(Digest key, long seed) {
+                super(key, seed);
+            }
+
+            public long getH1() {
+                return h1;
+            }
+
+            @Override
+            protected void processIt(Digest key) {
+                process(key);
+            }
+
+        }
+
+        public static class IntHasher extends Hasher<Integer> {
+
+            public IntHasher(Integer key, long seed) {
+                super(key, seed);
+            }
+
+            @Override
+            protected void processIt(Integer key) {
+                process(key);
+            }
+
+        }
+
+        public static class LongHasher extends Hasher<Long> {
+
+            public LongHasher(Long key, long seed) {
+                super(key, seed);
+            }
+
+            @Override
+            protected void processIt(Long key) {
+                process(key);
+            }
+
+        }
 
         private static final long C1         = 0x87c37b91114253d5L;
         private static final long C2         = 0x4cf5ad432745937fL;
         private static final long CHUNK_SIZE = 16;
 
-        private static long fmix64(long k) {
-            k ^= k >>> 33;
-            k *= 0xff51afd7ed558ccdL;
-            k ^= k >>> 33;
-            k *= 0xc4ceb9fe1a85ec53L;
-            k ^= k >>> 33;
-            return k;
-        }
-
-        private static long mixK1(long k1) {
-            k1 *= C1;
-            k1 = Long.rotateLeft(k1, 31);
-            k1 *= C2;
-            return k1;
-        }
-
-        private static long mixK2(long k2) {
-            k2 *= C2;
-            k2 = Long.rotateLeft(k2, 33);
-            k2 *= C1;
-            return k2;
-        }
-
         long h1;
         long h2;
         int  length;
 
-        public Hasher(T key, int seed) {
+        Hasher(M key, long seed) {
             this.h1 = seed;
             this.h2 = seed;
             processIt(key);
-        }
-
-        public Hasher(T key, long seed) {
-            this.h1 = seed;
-            this.h2 = seed;
-            processIt(key);
-        }
-
-        public long getH1() {
-            return h1;
-        }
-
-        public long getH2() {
-            return h2;
-        }
-
-        protected void process(Digest key) {
-            long[] hash = key.getLongs();
-            switch (key.getAlgorithm().digestLength()) {
-            case 64: {
-                bmix64(hash[0], hash[1]);
-                length += CHUNK_SIZE;
-                bmix64(hash[2], hash[3]);
-                length += CHUNK_SIZE;
-                bmix64(hash[4], hash[5]);
-                length += CHUNK_SIZE;
-                bmix64(hash[6], hash[7]);
-                length += CHUNK_SIZE;
-                break;
-            }
-            case 32: {
-                bmix64(hash[0], hash[1]);
-                length += CHUNK_SIZE;
-                bmix64(hash[2], hash[3]);
-                length += CHUNK_SIZE;
-                break;
-            }
-            default:
-                throw new IllegalArgumentException("Unknown digest length");
-            }
             makeHash();
         }
 
-        protected void process(int i) {
+        public int identityHash() {
+            process(207);
+            makeHash();
+            return (int) (h1 & Integer.MAX_VALUE);
+        }
+
+        public void process(int k, Consumer<Integer> processor, int m) {
+            process(k, hash -> {
+                processor.accept(hash);
+                return true;
+            }, m);
+        }
+
+        public boolean process(int k, Function<Integer, Boolean> processor, int m) {
+            long combinedHash = h1;
+            int[] locations = new int[k];
+            int index = 0;
+            while (index < k) {
+                int location = (IntIBF.smear((int) combinedHash & Integer.MAX_VALUE) % m);
+                if (!contains(locations, location)) {
+                    if (!processor.apply(location)) {
+                        return false;
+                    }
+                    locations[index] = location;
+                    index++;
+                }
+                combinedHash += h2;
+            }
+            return true;
+        }
+
+        void process(Digest key) {
+            long[] hash = key.getLongs();
+            for (int i = 0; i < hash.length / 2; i += 2) {
+                bmix64(hash[i], hash[i + 1]);
+                length += CHUNK_SIZE;
+            }
+            if ((hash.length & 1) != 0) {
+                process(hash[hash.length - 1]);
+            }
+        }
+
+        void process(int i) {
             h1 ^= mixK1(0);
             h2 ^= mixK2(i);
-            length += 4;
-            makeHash();
+            length += CHUNK_SIZE / 4;
         }
 
-        protected void process(long l) {
+        void process(long l) {
             h1 ^= mixK1(l);
             h2 ^= mixK2(0);
-            length += 8;
-            makeHash();
+            length += CHUNK_SIZE / 2;
         }
 
-        abstract void processIt(T it);
+        abstract void processIt(M key);
 
         private void bmix64(long k1, long k2) {
             h1 ^= mixK1(k1);
@@ -126,7 +146,25 @@ abstract public class Hash<T> {
             h2 = h2 * 5 + 0x38495ab5;
         }
 
-        private Hasher<T> makeHash() {
+        private boolean contains(int[] locations, int location) {
+            for (int i = 0; i < locations.length; i++) {
+                if (locations[i] == location) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private long fmix64(long k) {
+            k ^= k >>> 33;
+            k *= 0xff51afd7ed558ccdL;
+            k ^= k >>> 33;
+            k *= 0xc4ceb9fe1a85ec53L;
+            k ^= k >>> 33;
+            return k;
+        }
+
+        private void makeHash() {
             h1 ^= length;
             h2 ^= length;
 
@@ -138,60 +176,21 @@ abstract public class Hash<T> {
 
             h1 += h2;
             h2 += h1;
-            return this;
         }
 
-    }
-
-    public static class DigestHasher extends Hasher<Digest> {
-
-        public DigestHasher(Digest key, int seed) {
-            super(key, seed);
+        private long mixK1(long k1) {
+            k1 *= C1;
+            k1 = Long.rotateLeft(k1, 31);
+            k1 *= C2;
+            return k1;
         }
 
-        public DigestHasher(Digest key, long seed) {
-            super(key, seed);
+        private long mixK2(long k2) {
+            k2 *= C2;
+            k2 = Long.rotateLeft(k2, 33);
+            k2 *= C1;
+            return k2;
         }
-
-        @Override
-        protected void processIt(Digest key) {
-            process(key);
-        }
-
-    }
-
-    public static class IntHasher extends Hasher<Integer> {
-
-        public IntHasher(Integer key, int seed) {
-            super(key, seed);
-        }
-
-        public IntHasher(Integer key, long seed) {
-            super(key, seed);
-        }
-
-        @Override
-        protected void processIt(Integer key) {
-            process(key);
-        }
-
-    }
-
-    public static class LongHasher extends Hasher<Long> {
-
-        public LongHasher(Long key, int seed) {
-            super(key, seed);
-        }
-
-        public LongHasher(Long key, long seed) {
-            super(key, seed);
-        }
-
-        @Override
-        protected void processIt(Long key) {
-            process(key);
-        }
-
     }
 
     /**
@@ -232,9 +231,9 @@ abstract public class Hash<T> {
     protected final int seed;
 
     public Hash(int seed, int m, int k) {
-        this.m = m;
-        this.k = k;
         this.seed = seed;
+        this.k = k;
+        this.m = m;
     }
 
     public Hash(int seed, long n, double p) {
@@ -255,30 +254,17 @@ abstract public class Hash<T> {
         return seed;
     }
 
-    public boolean mightContain(T key, BitSet bits) {
-        Hasher<T> hasher = newHasher(key);
-
-        long combinedHash = hasher.h1;
-        for (int i = 0; i < k; i++) {
-            if (!bits.get(((int) (combinedHash & Integer.MAX_VALUE)) % m)) {
-                return false;
-            }
-            combinedHash += hasher.h2;
-        }
-        return true;
+    public int identityHash(M key) {
+        return newHasher(key).identityHash();
     }
 
-    public void put(T key, BitSet bits) {
-        Hasher<T> hasher = newHasher(key);
-
-        long combinedHash = hasher.h1;
-        for (int i = 0; i < k; i++) {
-            int index = ((int) (combinedHash & Integer.MAX_VALUE)) % m;
-            bits.set(index);
-            combinedHash += hasher.h2;
-        }
+    public void process(M key, Consumer<Integer> processor) {
+        newHasher(key).process(k, processor, m);
     }
 
-    abstract Hasher<T> newHasher(T key);
+    public boolean process(M key, Function<Integer, Boolean> processor) {
+        return newHasher(key).process(k, processor, m);
+    }
 
+    abstract Hasher<M> newHasher(M key);
 }

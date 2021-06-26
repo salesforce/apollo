@@ -12,6 +12,9 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.utils.Hash.Hasher.DigestHasher;
+import com.salesforce.apollo.utils.Hash.Hasher.IntHasher;
+import com.salesforce.apollo.utils.Hash.Hasher.LongHasher;
 
 /**
  * @author hal.hildebrand
@@ -143,8 +146,7 @@ abstract public class BloomFilter<T> {
         return -m / ((double) k) * Math.log(1 - oneBits / ((double) m));
     }
 
-    private final BitSet bits;
-
+    private final BitSet  bits;
     private final Hash<T> h;
 
     private BloomFilter(Hash<T> h) {
@@ -157,7 +159,9 @@ abstract public class BloomFilter<T> {
     }
 
     public void add(T element) {
-        h.put(element, bits);
+        h.process(element, hash -> {
+            bits.set(hash);
+        });
     }
 
     public void clear() {
@@ -165,7 +169,9 @@ abstract public class BloomFilter<T> {
     }
 
     public boolean contains(T element) {
-        return h.mightContain(element, bits);
+        return h.process(element, hash -> {
+            return bits.get(hash);
+        });
     }
 
     /**
