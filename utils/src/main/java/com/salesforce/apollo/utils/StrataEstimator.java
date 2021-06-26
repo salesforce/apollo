@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2021, salesforce.com, inc.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
 package com.salesforce.apollo.utils;
 
 import java.util.Collection;
@@ -10,6 +16,15 @@ import com.salesforce.apollo.utils.IBF.DigestIBF;
 import com.salesforce.apollo.utils.IBF.IntIBF;
 import com.salesforce.apollo.utils.IBF.LongIBF;
 
+/**
+ * A difference estimator based on Invertible Bloom Filters. Provides an
+ * estimate of the expected cadinality of differences between two gossiping
+ * parters replicating state
+ * 
+ * @author hal.hildebrand
+ *
+ * @param <T>
+ */
 public abstract class StrataEstimator<T> {
 
     public static class DigestStrataEstimator extends StrataEstimator<Digest> {

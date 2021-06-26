@@ -19,6 +19,8 @@ import com.salesforce.apollo.utils.Hash.Hasher.IntHasher;
 import com.salesforce.apollo.utils.Hash.Hasher.LongHasher;
 
 /**
+ * Invertible Bloom Filter. Optimized for use in efficient set reconciliation.
+ * 
  * @author hal.hildebrand
  *
  */
