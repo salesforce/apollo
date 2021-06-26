@@ -10,13 +10,13 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.utils.IBF.IntIBF;
 
 /**
  * @author hal.hildebrand
  *
  */
 public abstract class Hash<M> {
+
     abstract public static class Hasher<M> {
         public static class DigestHasher extends Hasher<Digest> {
 
@@ -94,7 +94,7 @@ public abstract class Hash<M> {
             int[] locations = new int[k];
             int index = 0;
             while (index < k) {
-                int location = (IntIBF.smear((int) combinedHash & Integer.MAX_VALUE) % m);
+                int location = (int) ((combinedHash & Long.MAX_VALUE) % m);
                 if (!contains(locations, location)) {
                     if (!processor.apply(location)) {
                         return false;

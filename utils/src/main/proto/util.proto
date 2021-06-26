@@ -12,13 +12,11 @@ message Biff {
         int32 m = 1;
         int32 k = 2;
         int64 seed = 3;
-        bytes bits = 4;
-        int32 type = 5;
+        int32 type = 4;
+        repeated int64 bits = 5;
 }
 
-message Boxed {
-    oneof boxed {
-        string s = 1;
-        bytes b = 2; 
-    }
+message Digest {
+    int32 type = 1;
+    repeated int64 hash = 2;
 }

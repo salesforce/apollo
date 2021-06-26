@@ -35,13 +35,13 @@ abstract public class BloomFilter<T> {
             });
         }
 
-        public DigestBloomFilter(long seed, int m, int k, ByteString bits) {
+        public DigestBloomFilter(long seed, int m, int k, long[] bytes) {
             super(new Hash<Digest>(seed, m, k) {
                 @Override
                 Hasher<Digest> newHasher(Digest key) {
                     return new DigestHasher(key, seed);
                 }
-            }, BitSet.valueOf(bits.toByteArray()));
+            }, BitSet.valueOf(bytes));
         }
 
         @Override
@@ -62,13 +62,13 @@ abstract public class BloomFilter<T> {
             });
         }
 
-        public IntBloomFilter(long seed, int m, int k, ByteString bits) {
+        public IntBloomFilter(long seed, int m, int k, long[] bits) {
             super(new Hash<Integer>(seed, m, k) {
                 @Override
                 Hasher<Integer> newHasher(Integer key) {
                     return new IntHasher(key, seed);
                 }
-            }, BitSet.valueOf(bits.toByteArray()));
+            }, BitSet.valueOf(bits));
         }
 
         @Override
@@ -88,13 +88,13 @@ abstract public class BloomFilter<T> {
             });
         }
 
-        public LongBloomFilter(long seed, int m, int k, ByteString bits) {
+        public LongBloomFilter(long seed, int m, int k, long[] bits) {
             super(new Hash<Long>(seed, m, k) {
                 @Override
                 Hasher<Long> newHasher(Long key) {
                     return new LongHasher(key, seed);
                 }
-            }, BitSet.valueOf(bits.toByteArray()));
+            }, BitSet.valueOf(bits));
         }
 
         @Override
@@ -119,7 +119,7 @@ abstract public class BloomFilter<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <Q> BloomFilter<Q> create(long seed, int m, int k, ByteString bits, int type) {
+    public static <Q> BloomFilter<Q> create(long seed, int m, int k, long[] bits, int type) {
         switch (type) {
         case 0:
             return (BloomFilter<Q>) new DigestBloomFilter(seed, m, k, bits);
@@ -133,7 +133,12 @@ abstract public class BloomFilter<T> {
     }
 
     public static <Q> BloomFilter<Q> from(Biff bff) {
-        return create(bff.getSeed(), bff.getM(), bff.getK(), bff.getBits(), bff.getType());
+        long[] bits = new long[bff.getBitsCount()];
+        int i = 0;
+        for (long l : bff.getBitsList()) {
+            bits[i++] = l;
+        }
+        return create(bff.getSeed(), bff.getM(), bff.getK(), bits, bff.getType());
     }
 
     public static <Q> BloomFilter<Q> from(ByteString encoded) {
@@ -188,13 +193,12 @@ abstract public class BloomFilter<T> {
     }
 
     public Biff toBff() {
-        return Biff.newBuilder()
-                   .setSeed(h.getSeed())
-                   .setM(h.getM())
-                   .setK(h.getK())
-                   .setBits(ByteString.copyFrom(bits.toByteArray()))
-                   .setType(getType())
-                   .build();
+        Biff.Builder builder = Biff.newBuilder().setSeed(h.getSeed()).setM(h.getM()).setK(h.getK()).setType(getType());
+
+        for (long l : bits.toLongArray()) {
+            builder.addBits(l);
+        }
+        return builder.build();
     }
 
     protected abstract int getType();
