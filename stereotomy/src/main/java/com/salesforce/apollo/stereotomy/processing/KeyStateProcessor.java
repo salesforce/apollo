@@ -33,6 +33,7 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
         this.events = events;
     }
 
+    @Override
     public KeyState apply(KeyState currentState, KeyEvent event) {
         EstablishmentEvent lastEstablishmentEvent;
         if (event instanceof InceptionEvent) {

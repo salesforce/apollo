@@ -60,6 +60,7 @@ public class AvalancheClient implements AvalancheService {
         channel.release();
     }
 
+    @Override
     public Participant getMember() {
         return (Participant) member;
     }

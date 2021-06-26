@@ -64,9 +64,7 @@ public class MemberImpl implements Member {
     public boolean equals(Object obj) {
         if (this == obj)
             return true;
-        if (obj == null)
-            return false;
-        if (!(obj instanceof Member))
+        if ((obj == null) || !(obj instanceof Member))
             return false;
         return id.equals(((Member) obj).getId());
     }

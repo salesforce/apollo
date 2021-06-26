@@ -103,8 +103,8 @@ import com.salesforce.apollo.utils.Utils;
  * function based on the last block's hash of the view change, and the cut
  * across the receiver's context's rings to determine member subset.
  * <p>
- * 
- * 
+ *
+ *
  * @author hal.hildebrand
  *
  */

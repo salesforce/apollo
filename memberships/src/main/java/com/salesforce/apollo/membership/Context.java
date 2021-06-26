@@ -110,7 +110,7 @@ public class Context<T extends Member> {
         if (epsilon > 1.0 || epsilon <= 0.0) {
             throw new IllegalArgumentException("epsilon must be > 0 and <= 1 : " + epsilon);
         }
-        double e = epsilon / (double) cardinality;
+        double e = epsilon / cardinality;
         for (int t = 1; t <= cardinality; t++) {
             double pf = 1.0 - Util.binomialc(t, 2 * t + 1, pByz);
             if (e >= pf) {
@@ -246,9 +246,7 @@ public class Context<T extends Member> {
     public boolean equals(Object obj) {
         if (this == obj)
             return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
+        if ((obj == null) || (getClass() != obj.getClass()))
             return false;
         Context<?> other = (Context<?>) obj;
         if (id == null) {

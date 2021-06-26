@@ -47,7 +47,7 @@ import com.salesforce.apollo.utils.DigestType;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2
- * 
+ *
  * @author hal.hildebrand
  *
  */
@@ -88,7 +88,7 @@ public class Store {
     }
 
     public Iterator<Long> blocksFrom(long from, long to, int max) {
-        return new Iterator<Long>() {
+        return new Iterator<>() {
             Long next;
             int  remaining = max;
 
@@ -358,7 +358,7 @@ public class Store {
     }
 
     public Iterator<Long> viewChainFrom(long from, long to) {
-        return new Iterator<Long>() {
+        return new Iterator<>() {
             Long next;
             {
                 next = viewChain.get(from);

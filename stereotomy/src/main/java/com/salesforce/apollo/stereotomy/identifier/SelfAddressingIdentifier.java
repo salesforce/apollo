@@ -5,7 +5,8 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.stereotomy.identifier;
-import static com.salesforce.apollo.crypto.QualifiedBase64.*;
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+
 import java.nio.ByteBuffer;
 import java.util.Objects;
 

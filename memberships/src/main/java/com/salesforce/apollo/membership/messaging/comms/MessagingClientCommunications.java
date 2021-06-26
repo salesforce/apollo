@@ -55,6 +55,7 @@ public class MessagingClientCommunications implements Messaging, Link {
         channel.release();
     }
 
+    @Override
     public Member getMember() {
         return member;
     }

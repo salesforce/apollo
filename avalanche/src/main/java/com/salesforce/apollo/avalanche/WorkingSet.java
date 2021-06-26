@@ -54,7 +54,7 @@ import com.salesforce.apollo.membership.ReservoirSampler;
 
 /**
  * Manages the unfinalized, working set of the Apollo DAG.
- * 
+ *
  * @author hhildebrand
  *
  */
@@ -75,11 +75,7 @@ public class WorkingSet {
         }
 
         public void topologicalSort(Map<Digest, DagInsert> set, Set<DagInsert> visited, List<DagInsert> stack) {
-            if (!visited.add(this)) {
-                return;
-            }
-
-            if (dagEntry.getLinksList() == null) {
+            if (!visited.add(this) || (dagEntry.getLinksList() == null)) {
                 return;
             }
 
@@ -385,8 +381,7 @@ public class WorkingSet {
                     }
                 }
             });
-            for (int i = 0; i < traversed.size(); i++) {
-                Node node = traversed.get(i);
+            for (Node node : traversed) {
                 write(() -> node.excise());
                 if (!node.isUnknown()) {
                     finalized.put(key, node.getEntry().toByteArray());
@@ -444,8 +439,8 @@ public class WorkingSet {
                 }
                 return true;
             } finally {
-                for (int i = 0; i < traversed.size(); i++) {
-                    traversed.get(i).unmark();
+                for (Node element : traversed) {
+                    element.unmark();
                 }
             }
         }
@@ -538,7 +533,7 @@ public class WorkingSet {
 
         /**
          * Mark the receiver.
-         * 
+         *
          * @return true if the receiver was unmarked, false if previously marked.
          */
         public boolean mark() {
@@ -1146,10 +1141,7 @@ public class WorkingSet {
 
     boolean insert(Digest key, DagEntry entry, boolean noOp, long discovered, Digest cs) {
         Node existing = read(() -> unfinalized.get(key));
-        if (existing != null && !existing.isUnknown()) {
-            return true;
-        }
-        if (existing == null && finalized.containsKey(key)) {
+        if ((existing != null && !existing.isUnknown()) || (existing == null && finalized.containsKey(key))) {
             return true;
         }
 

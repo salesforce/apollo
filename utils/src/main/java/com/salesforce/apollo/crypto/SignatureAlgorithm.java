@@ -159,6 +159,7 @@ public enum SignatureAlgorithm {
             return 33;
         }
 
+        @Override
         public JohnHancock sign(PrivateKey privateKey, InputStream is) {
             try {
                 var sig = Signature.getInstance(this.signatureInstanceName(), ProviderUtils.getProviderBC());

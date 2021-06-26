@@ -37,16 +37,6 @@ public class ProviderUtils {
         return PROVIDER_JSSE;
     }
 
-    private static void setup() {
-        if (!initialized.compareAndSet(false, true)) {
-            return;
-        }
-        setupHighPriority(false);
-        for (Provider p : Security.getProviders()) {
-            System.out.println(p);
-        }
-    }
-
     static Provider createProviderBC() {
         return new BouncyCastleProvider();
     }
@@ -167,5 +157,15 @@ public class ProviderUtils {
         }
 
         setup(false, false, fips);
+    }
+
+    private static void setup() {
+        if (!initialized.compareAndSet(false, true)) {
+            return;
+        }
+        setupHighPriority(false);
+        for (Provider p : Security.getProviders()) {
+            System.out.println(p);
+        }
     }
 }

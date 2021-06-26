@@ -300,7 +300,7 @@ public class Bootstrapper {
                 int count = tally.count(cb);
                 if (count > threshold) {
                     if (winner == null || count > winner.b) {
-                        winner = new Pair<HashedCertifiedBlock, Integer>(cb, count);
+                        winner = new Pair<>(cb, count);
                     }
                 }
             }

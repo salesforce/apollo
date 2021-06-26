@@ -146,10 +146,12 @@ public enum DigestAlgorithm {
             return new Digest(this, EMPTY);
         }
 
+        @Override
         public byte[] hashOf(byte[] bytes, int len) {
             return EMPTY;
         }
 
+        @Override
         public byte[] hashOf(InputStream is) {
             return EMPTY;
         }

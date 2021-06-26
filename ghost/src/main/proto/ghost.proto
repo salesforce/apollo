@@ -50,6 +50,7 @@ message Bind {
 message Binding {
     bytes key = 1;
     google.protobuf.Any value = 2;
+    int64 version = 3;
 }
 
 message Intervals {
@@ -63,4 +64,11 @@ message Interval {
         bytes end = 2;
         bytes immutableBff = 3;
         bytes mutableBff = 4;
+}
+
+message StoredBinding {
+    int64 version = 1;
+    bytes hash = 2;
+    string key = 3;
+    google.protobuf.Any value = 4;
 }

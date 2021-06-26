@@ -45,6 +45,7 @@ public class HashedCertifiedBlock {
         return CollaboratorContext.height(block);
     }
 
+    @Override
     public String toString() {
         return "cb[" + hash.toString() + "]";
     }

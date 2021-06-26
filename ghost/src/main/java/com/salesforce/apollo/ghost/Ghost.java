@@ -538,10 +538,7 @@ public class Ghost {
 
     private void gossip(Optional<ListenableFuture<Entries>> futureSailor, SpaceGhost link,
                         ScheduledExecutorService scheduler, Duration duration) {
-        if (!started.get()) {
-            return;
-        }
-        if (futureSailor.isEmpty()) {
+        if (!started.get() || futureSailor.isEmpty()) {
             return;
         }
         try {

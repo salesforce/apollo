@@ -52,7 +52,7 @@ public class InMemoryKeyStore implements StereotomyKeyStore {
         System.out.println("====== IDENTIFIER KEY STORE ======");
         System.out.println("KEYS:");
 
-        Comparator<KeyCoordinates> keyIdentifierComparator = comparing(k -> ((KeyCoordinates) k).getEstablishmentEvent()
+        Comparator<KeyCoordinates> keyIdentifierComparator = comparing(k -> k.getEstablishmentEvent()
                                                                                                 .getIdentifier()
                                                                                                 .toString());
         var keySequenceNumberComparator = comparing(k -> ((KeyCoordinates) k).getEstablishmentEvent()

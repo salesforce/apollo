@@ -13,7 +13,7 @@ import com.salesforce.apollo.membership.Context;
 
 /**
  * Parameters defining the operation of Fireflies
- * 
+ *
  * @author hal.hildebrand
  * @since 220
  */

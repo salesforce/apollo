@@ -166,6 +166,7 @@ public class RotationSpecification {
                     nextKeyConfigurationDigest, witnessThreshold, removed, added, seals, version, state.getDigest());
         }
 
+        @Override
         public Builder clone() {
             Builder clone;
             try {

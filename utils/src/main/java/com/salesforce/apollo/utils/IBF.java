@@ -28,14 +28,8 @@ abstract public class IBF<KeyType> implements Cloneable {
     public static class DigestIBF extends IBF<Digest> {
         private final long[] keySum;
 
-        public DigestIBF(Hash<Digest> h, DigestAlgorithm digestAlgorithm) {
-            super(h);
-            keySum = new long[h.m * digestAlgorithm.longLength()];
-        }
-
-        private DigestIBF(Hash<Digest> h, int expandedLength) {
-            super(h);
-            keySum = new long[expandedLength];
+        public DigestIBF(DigestAlgorithm d, long seed, int m) {
+            this(d, seed, m, DEFAULT_K);
         }
 
         public DigestIBF(DigestAlgorithm d, long seed, int m, int k) {
@@ -47,8 +41,14 @@ abstract public class IBF<KeyType> implements Cloneable {
             }, d);
         }
 
-        public DigestIBF(DigestAlgorithm d, long seed, int m) {
-            this(d, seed, m, DEFAULT_K);
+        public DigestIBF(Hash<Digest> h, DigestAlgorithm digestAlgorithm) {
+            super(h);
+            keySum = new long[h.m * digestAlgorithm.longLength()];
+        }
+
+        private DigestIBF(Hash<Digest> h, int expandedLength) {
+            super(h);
+            keySum = new long[expandedLength];
         }
 
         @Override
@@ -145,6 +145,10 @@ abstract public class IBF<KeyType> implements Cloneable {
             keySum = new long[h.m];
         }
 
+        public LongIBF(long seed, int m) {
+            this(seed, m, DEFAULT_K);
+        }
+
         /**
          * @param i
          * @param nextInt
@@ -157,10 +161,6 @@ abstract public class IBF<KeyType> implements Cloneable {
                     return new LongHasher(key, seed);
                 }
             });
-        }
-
-        public LongIBF(long seed, int m) {
-            this(seed, m, DEFAULT_K);
         }
 
         @Override

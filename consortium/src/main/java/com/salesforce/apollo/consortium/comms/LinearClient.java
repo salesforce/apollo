@@ -61,6 +61,7 @@ public class LinearClient implements LinearService {
         channel.release();
     }
 
+    @Override
     public Member getMember() {
         return member;
     }

@@ -21,9 +21,9 @@ import com.salesforce.apollo.consortium.support.EnqueuedTransaction;
 import com.salesforce.apollo.membership.Member;
 
 /**
- * 
+ *
  * FSM for generating checkpoints
- * 
+ *
  * @author hal.hildebrand
  *
  */

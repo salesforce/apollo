@@ -18,7 +18,7 @@ import com.salesforce.apollo.avalanche.WorkingSet.Node;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
- * 
+ *
  * @author hhildebrand
  *
  */

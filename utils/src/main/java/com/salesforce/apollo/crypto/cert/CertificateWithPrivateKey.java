@@ -16,12 +16,12 @@ import java.security.cert.X509Certificate;
 public class CertificateWithPrivateKey {
     private final X509Certificate cert;
 
+    private final PrivateKey privateKey;
+
     public CertificateWithPrivateKey(X509Certificate cert, PrivateKey privateKey) {
         this.cert = cert;
         this.privateKey = privateKey;
     }
-
-    private final PrivateKey privateKey;
 
     public PrivateKey getPrivateKey() {
         return privateKey;

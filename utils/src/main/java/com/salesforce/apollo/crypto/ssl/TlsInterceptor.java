@@ -9,13 +9,13 @@ package com.salesforce.apollo.crypto.ssl;
 import javax.net.ssl.SSLSession;
 
 import io.grpc.Context;
+import io.grpc.Context.Key;
 import io.grpc.Contexts;
 import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
-import io.grpc.Context.Key;
 
 public class TlsInterceptor implements ServerInterceptor {
     private final Key<SSLSession> sslSessionContext;

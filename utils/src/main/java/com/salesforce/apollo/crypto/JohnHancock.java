@@ -30,14 +30,14 @@ public class JohnHancock {
     final byte[]                     bytes;
     private final SignatureAlgorithm algorithm;
 
-    public JohnHancock(ByteString bs) {
-        this(bs.asReadOnlyByteBuffer());
-    }
-
     public JohnHancock(ByteBuffer buff) {
         this.algorithm = SignatureAlgorithm.fromSignatureCode(buff.get());
         bytes = new byte[algorithm.signatureLength()];
         buff.get(bytes);
+    }
+
+    public JohnHancock(ByteString bs) {
+        this(bs.asReadOnlyByteBuffer());
     }
 
     public JohnHancock(SignatureAlgorithm algorithm, byte[] bytes) {

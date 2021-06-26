@@ -343,8 +343,8 @@ public class TransactionsTest {
                 dag.tryFinalize(ordered.get(i));
             }
 
-            for (int i = 0; i < ordered.size(); i++) {
-                assertFalse(dag.isFinalized(ordered.get(i)));
+            for (Digest element : ordered) {
+                assertFalse(dag.isFinalized(element));
             }
 
             dag.prefer(ordered.get(ordered.size() - 1));

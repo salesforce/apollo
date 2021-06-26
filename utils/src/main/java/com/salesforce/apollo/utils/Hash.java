@@ -230,16 +230,16 @@ public abstract class Hash<M> {
     protected final int  m;
     protected final long seed;
 
-    public Hash(long seed, int m, int k) {
-        this.seed = seed;
-        this.k = k;
-        this.m = m;
-    }
-
     public Hash(long seed, int n, double p) {
         m = optimalM(n, p);
         k = optimalK(n, m);
         this.seed = seed;
+    }
+
+    public Hash(long seed, int m, int k) {
+        this.seed = seed;
+        this.k = k;
+        this.m = m;
     }
 
     public int getK() {

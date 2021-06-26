@@ -1145,7 +1145,7 @@ public class CollaboratorContext implements Collaborator {
         }
         toOrder.values().forEach(e -> e.cancel());
         toOrder.clear();
-        Block block = generateBlock(params.digestAlgorithm, consortium.getLastCheckpointBlock(), (long) 0,
+        Block block = generateBlock(params.digestAlgorithm, consortium.getLastCheckpointBlock(), 0,
                                     params.genesisViewId,
                                     body(BodyType.GENESIS,
                                          Genesis.newBuilder()
@@ -1191,7 +1191,7 @@ public class CollaboratorContext implements Collaborator {
 
     /**
      * generate ye next block.
-     * 
+     *
      * @return true if another block "should" be generated (i.e. enough backed up
      *         txns, etc), false if we should schedule the next flush
      */

@@ -63,11 +63,11 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * Implementation of the AvalancheService consensus protocol.
- * 
+ *
  * @author hal.hildebrand
  * @since 220
  */
-public class Avalanche { 
+public class Avalanche {
 
     public static class Finalized {
         public final DagEntry entry;
@@ -234,7 +234,7 @@ public class Avalanche {
 
     /**
      * Submit a transaction to the group.
-     * 
+     *
      * @param data - the transaction content
      * @return the Digest of the transaction, null if invalid
      */
@@ -244,7 +244,7 @@ public class Avalanche {
 
     /**
      * Submit a transaction to the group.
-     * 
+     *
      * @param data        - the transaction content
      * @param conflictSet - the conflict set key for this transaction
      * @return the Digest of the transaction, null if invalid
@@ -418,8 +418,7 @@ public class Avalanche {
         Member wanted = new ArrayList<Member>(sample).get(Utils.bitStreamEntropy().nextInt(sample.size()));
         AtomicInteger completed = new AtomicInteger(sample.size());
         List<Boolean> queryResults = new ArrayList<>();
-        for (int i = 0; i < sample.size(); i++) {
-            Member member = sample.get(i);
+        for (Member member : sample) {
             if (node.equals(member)) {
                 System.out.println("wtf");
             }

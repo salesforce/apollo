@@ -75,7 +75,7 @@ import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
  * garbage collection. It's all very complicated. These complications and many
  * others are detailed in the wonderful
  * <a href= "https://ymsir.com/papers/fireflies-tocs.pdf">Fireflies paper</a>.
- * 
+ *
  * @author hal.hildebrand
  * @since 220
  */
@@ -97,9 +97,7 @@ public class View {
         public boolean equals(Object obj) {
             if (this == obj)
                 return true;
-            if (obj == null)
-                return false;
-            if (getClass() != obj.getClass())
+            if ((obj == null) || (getClass() != obj.getClass()))
                 return false;
             AccTag other = (AccTag) obj;
             if (id == null) {
@@ -178,7 +176,7 @@ public class View {
         /**
          * Perform ye one ring round of gossip. Gossip is performed per ring, requiring
          * 2 * tolerance + 1 gossip rounds across all rings.
-         * 
+         *
          * @param completion TODO
          */
         public void gossip(Runnable completion) {
@@ -232,7 +230,7 @@ public class View {
          * inbound gossip digest. Respond with the Gossip that represents the digests
          * newer or not known in this view, as well as updates from this node based on
          * out of date information in the supplied digests.
-         * 
+         *
          * @param ring        - the index of the gossip ring the inbound member is
          *                    gossiping from
          * @param digests     - the inbound gossip
@@ -332,7 +330,7 @@ public class View {
         /**
          * The third and final message in the anti-entropy protocol. Process the inbound
          * update from another member.
-         * 
+         *
          * @param ring
          * @param update
          * @param from
@@ -384,12 +382,12 @@ public class View {
     /**
      * Check the validity of a mask. A mask is valid if the following conditions are
      * satisfied:
-     * 
+     *
      * <pre>
      * - The mask is of length 2t+1
      * - the mask has exactly t + 1 enabled elements.
      * </pre>
-     * 
+     *
      * @param mask
      * @return
      */
@@ -566,7 +564,7 @@ public class View {
     /**
      * Accuse the member on the list of rings. If the member has disabled the ring
      * in its mask, do not issue the accusation
-     * 
+     *
      * @param member
      * @param ring
      */
@@ -584,7 +582,7 @@ public class View {
 
     /**
      * Add an inbound accusation to the view.
-     * 
+     *
      * @param accusation
      */
     void add(AccusationWrapper accusation) {
@@ -625,7 +623,7 @@ public class View {
 
     /**
      * Add an accusation into the view,
-     * 
+     *
      * @param accusation
      * @param accuser
      * @param accused
@@ -660,7 +658,7 @@ public class View {
 
     /**
      * Add a new inbound certificate
-     * 
+     *
      * @param cert
      * @return the added member or the real member associated with this certificate
      */
@@ -679,7 +677,7 @@ public class View {
 
     /**
      * add an inbound note to the view
-     * 
+     *
      * @param note
      */
     boolean add(NoteWrapper note) {
@@ -726,7 +724,7 @@ public class View {
 
     /**
      * Add a new member to the view
-     * 
+     *
      * @param member
      */
     Participant add(Participant member) {
@@ -744,7 +742,7 @@ public class View {
 
     /**
      * add an inbound member certificate to the view
-     * 
+     *
      * @param cert
      */
     void add(X509Certificate cert) {
@@ -757,7 +755,7 @@ public class View {
      * gossip protocol of Fireflies provides redirects to what actual members
      * believe the view should be gossiping with, and so new members quickly
      * converge on a common, valid view of the membership
-     * 
+     *
      * @param seed
      */
     void addSeed(Participant seed) {
@@ -776,7 +774,7 @@ public class View {
     /**
      * deserialize the DER encoded certificate. Validate it is signed by the pinned
      * CA certificate trusted.
-     * 
+     *
      * @param encoded
      * @return the deserialized certificate, or null if invalid or not correctly
      *         signed.
@@ -803,13 +801,13 @@ public class View {
     /**
      * <pre>
      * The member goes from an accused to not accused state. As such,
-     * it may invalidate other accusations. 
+     * it may invalidate other accusations.
      * Let m_j be m's first live successor on ring r.
      * All accusations for members q between m and m_j:
-     *   If q between accuser and accused: invalidate accusation.  
+     *   If q between accuser and accused: invalidate accusation.
      *   If accused now is cleared, rerun for this member.
      * </pre>
-     * 
+     *
      * @param m
      */
     void checkInvalidations(Participant m) {
@@ -875,7 +873,7 @@ public class View {
 
     /**
      * for testing
-     * 
+     *
      * @return
      */
     Map<Digest, FutureRebutal> getPendingRebutals() {
@@ -884,7 +882,7 @@ public class View {
 
     /**
      * Gossip with the member
-     * 
+     *
      * @param ring       - the index of the gossip ring the gossip is originating
      *                   from in this view
      * @param link       - the outbound communications to the paired member
@@ -954,7 +952,7 @@ public class View {
     /**
      * If member currently is accused on ring, keep the new accusation only if it is
      * from a closer predecessor.
-     * 
+     *
      * @param q
      * @param ring
      * @param check
@@ -1028,7 +1026,7 @@ public class View {
      * fundamental to a good quality mesh. But on the off chance there's an overlap
      * in the rings, we need to only monitor each link only once, or it skews the
      * failure detection with the short interval.
-     * 
+     *
      * @param link     - the ClientCommunications link to check
      * @param lastRing - the ring for this link
      */
@@ -1051,7 +1049,7 @@ public class View {
     /**
      * Drive one round of the View. This involves a round of gossip() and a round of
      * monitor().
-     * 
+     *
      * @param scheduler
      * @param d
      */
@@ -1101,7 +1099,7 @@ public class View {
      * the list of digests the view requires, as well as proposed updates based on
      * the inbound digets that the view has more recent information. Do not forward
      * accusations from crashed members
-     * 
+     *
      * @param digests
      * @param p
      * @param seed
@@ -1145,7 +1143,7 @@ public class View {
      * the view's state and the digests of the gossip. Update the reply with the
      * list of digests the view requires, as well as proposed updates based on the
      * inbound digets that the view has more recent information
-     * 
+     *
      * @param from
      * @param digests
      * @param p
@@ -1171,7 +1169,7 @@ public class View {
     /**
      * Process the updates of the supplied juicy gossip. This is the Jesus Nut of
      * state change driving the view.
-     * 
+     *
      * @param gossip
      */
     void processUpdates(Gossip gossip) {
@@ -1182,7 +1180,7 @@ public class View {
     /**
      * Process the updates of the supplied juicy gossip. This is the Jesus Nut of
      * state change driving the view.
-     * 
+     *
      * @param certificatUpdates
      * @param noteUpdates
      * @param accusationUpdates
@@ -1209,7 +1207,7 @@ public class View {
 
     /**
      * recover a member from the failed state
-     * 
+     *
      * @param member
      */
     void recover(Participant member) {
@@ -1224,7 +1222,7 @@ public class View {
 
     /**
      * Redirect the member to the successor from this view's perspective
-     * 
+     *
      * @param member
      * @param ring
      * @param successor
@@ -1255,7 +1253,7 @@ public class View {
     /**
      * Process the gossip response, providing the updates requested by the the other
      * member and processing the updates provided by the other member
-     * 
+     *
      * @param gossip
      * @return the Update based on the processing of the reply from the other member
      */
@@ -1266,7 +1264,7 @@ public class View {
 
     /**
      * Initiate a timer to track the accussed member
-     * 
+     *
      * @param m
      */
     void startRebutalTimer(Participant m) {
@@ -1288,7 +1286,7 @@ public class View {
 
     /**
      * Update the member with a new certificate
-     * 
+     *
      * @param member
      * @param cert
      */
@@ -1300,7 +1298,7 @@ public class View {
     /**
      * Process the gossip reply. Return the gossip with the updates determined from
      * the inbound digests.
-     * 
+     *
      * @param gossip
      * @return
      */

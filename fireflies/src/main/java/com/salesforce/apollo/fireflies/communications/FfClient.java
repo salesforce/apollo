@@ -59,6 +59,7 @@ public class FfClient implements Fireflies {
         channel.release();
     }
 
+    @Override
     public Participant getMember() {
         return member;
     }

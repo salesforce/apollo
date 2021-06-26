@@ -44,6 +44,7 @@ public class InteractionSpecification {
                     state.getDigest());
         }
 
+        @Override
         public Builder clone() {
             Builder clone;
             try {

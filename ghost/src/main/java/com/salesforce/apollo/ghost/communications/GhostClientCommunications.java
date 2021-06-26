@@ -55,6 +55,7 @@ public class GhostClientCommunications implements SpaceGhost {
         return client.get(key);
     }
 
+    @Override
     public Member getMember() {
         return member;
     }

@@ -54,8 +54,8 @@ public class ViewContext implements MembershipListener<Member> {
      * Answer the live successors of the hash on the base context view
      */
     public static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        Context<Member> newView = new Context<Member>(hash, baseContext.getRingCount());
-        Set<Member> successors = new HashSet<Member>();
+        Context<Member> newView = new Context<>(hash, baseContext.getRingCount());
+        Set<Member> successors = new HashSet<>();
         baseContext.successors(hash, m -> {
             if (successors.size() == baseContext.getRingCount()) {
                 return false;

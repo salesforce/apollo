@@ -35,7 +35,7 @@ import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 
 /**
  * The representation of the "current" member - the subject - of a View.
- * 
+ *
  * @author hal.hildebrand
  * @since 220
  */
@@ -43,7 +43,7 @@ public class Node extends Participant implements SigningMember {
 
     /**
      * Create a mask of length 2t+1 with t randomly disabled rings
-     * 
+     *
      * @param toleranceLevel - t
      * @return the mask
      */
@@ -75,11 +75,13 @@ public class Node extends Participant implements SigningMember {
         this.parameters = p;
     }
 
+    @Override
     public SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
                                 String tlsVersion) {
         return wrapped.forClient(clientAuth, alias, validator, provider, tlsVersion);
     }
 
+    @Override
     public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
                                 String tlsVersion) {
         return wrapped.forServer(clientAuth, alias, validator, provider, tlsVersion);
@@ -177,7 +179,7 @@ public class Node extends Participant implements SigningMember {
 
     /**
      * Generate a new note using the new epoch
-     * 
+     *
      * @param newEpoch
      */
     void nextNote(long newEpoch) {

@@ -14,7 +14,7 @@ import com.salesforce.apollo.crypto.Digest;
 
 /**
  * Restricted API on the DAG
- * 
+ *
  * @author hhildebrand
  */
 public class DagDao {

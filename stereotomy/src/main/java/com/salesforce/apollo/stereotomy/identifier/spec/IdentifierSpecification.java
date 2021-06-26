@@ -159,6 +159,7 @@ public class IdentifierSpecification {
                     selfAddressingDigestAlgorithm, signatureAlgorithm);
         }
 
+        @Override
         public Builder clone() {
             Builder clone;
             try {

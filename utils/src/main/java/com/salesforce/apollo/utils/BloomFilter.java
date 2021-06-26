@@ -17,20 +17,14 @@ import com.salesforce.apollo.utils.Hash.Hasher.IntHasher;
 import com.salesforce.apollo.utils.Hash.Hasher.LongHasher;
 
 /**
+ * Simplified Bloom filter for multiple types, with setable seeds and other
+ * parameters.
+ * 
  * @author hal.hildebrand
  *
  */
 abstract public class BloomFilter<T> {
     public static class DigestBloomFilter extends BloomFilter<Digest> {
-
-        public DigestBloomFilter(long seed, int m, int k, ByteString bits) {
-            super(new Hash<Digest>(seed, m, k) {
-                @Override
-                Hasher<Digest> newHasher(Digest key) {
-                    return new DigestHasher(key, seed);
-                }
-            }, BitSet.valueOf(bits.toByteArray()));
-        }
 
         public DigestBloomFilter(long seed, int n, double p) {
             super(new Hash<Digest>(seed, n, p) {
@@ -39,6 +33,15 @@ abstract public class BloomFilter<T> {
                     return new DigestHasher(key, seed);
                 }
             });
+        }
+
+        public DigestBloomFilter(long seed, int m, int k, ByteString bits) {
+            super(new Hash<Digest>(seed, m, k) {
+                @Override
+                Hasher<Digest> newHasher(Digest key) {
+                    return new DigestHasher(key, seed);
+                }
+            }, BitSet.valueOf(bits.toByteArray()));
         }
 
         @Override
@@ -50,15 +53,6 @@ abstract public class BloomFilter<T> {
 
     public static class IntBloomFilter extends BloomFilter<Integer> {
 
-        public IntBloomFilter(long seed, int m, int k, ByteString bits) {
-            super(new Hash<Integer>(seed, m, k) {
-                @Override
-                Hasher<Integer> newHasher(Integer key) {
-                    return new IntHasher(key, seed);
-                }
-            }, BitSet.valueOf(bits.toByteArray()));
-        }
-
         public IntBloomFilter(long seed, int n, double p) {
             super(new Hash<Integer>(seed, n, p) {
                 @Override
@@ -66,6 +60,15 @@ abstract public class BloomFilter<T> {
                     return new IntHasher(key, seed);
                 }
             });
+        }
+
+        public IntBloomFilter(long seed, int m, int k, ByteString bits) {
+            super(new Hash<Integer>(seed, m, k) {
+                @Override
+                Hasher<Integer> newHasher(Integer key) {
+                    return new IntHasher(key, seed);
+                }
+            }, BitSet.valueOf(bits.toByteArray()));
         }
 
         @Override
@@ -76,15 +79,6 @@ abstract public class BloomFilter<T> {
     }
 
     public static class LongBloomFilter extends BloomFilter<Long> {
-        public LongBloomFilter(long seed, int m, int k, ByteString bits) {
-            super(new Hash<Long>(seed, m, k) {
-                @Override
-                Hasher<Long> newHasher(Long key) {
-                    return new LongHasher(key, seed);
-                }
-            }, BitSet.valueOf(bits.toByteArray()));
-        }
-
         public LongBloomFilter(long seed, int n, double p) {
             super(new Hash<Long>(seed, n, p) {
                 @Override
@@ -94,25 +88,20 @@ abstract public class BloomFilter<T> {
             });
         }
 
+        public LongBloomFilter(long seed, int m, int k, ByteString bits) {
+            super(new Hash<Long>(seed, m, k) {
+                @Override
+                Hasher<Long> newHasher(Long key) {
+                    return new LongHasher(key, seed);
+                }
+            }, BitSet.valueOf(bits.toByteArray()));
+        }
+
         @Override
         protected int getType() {
             return 2;
         }
 
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <Q> BloomFilter<Q> create(long seed, int m, int k, ByteString bits, int type) {
-        switch (type) {
-        case 0:
-            return (BloomFilter<Q>) new DigestBloomFilter(seed, m, k, bits);
-        case 1:
-            return (BloomFilter<Q>) new IntBloomFilter(seed, m, k, bits);
-        case 2:
-            return (BloomFilter<Q>) new LongBloomFilter(seed, m, k, bits);
-        default:
-            throw new IllegalArgumentException("Invalid type: " + type);
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -124,6 +113,20 @@ abstract public class BloomFilter<T> {
             return (BloomFilter<Q>) new IntBloomFilter(seed, n, p);
         case 2:
             return (BloomFilter<Q>) new LongBloomFilter(seed, n, p);
+        default:
+            throw new IllegalArgumentException("Invalid type: " + type);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <Q> BloomFilter<Q> create(long seed, int m, int k, ByteString bits, int type) {
+        switch (type) {
+        case 0:
+            return (BloomFilter<Q>) new DigestBloomFilter(seed, m, k, bits);
+        case 1:
+            return (BloomFilter<Q>) new IntBloomFilter(seed, m, k, bits);
+        case 2:
+            return (BloomFilter<Q>) new LongBloomFilter(seed, m, k, bits);
         default:
             throw new IllegalArgumentException("Invalid type: " + type);
         }

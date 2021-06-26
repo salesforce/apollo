@@ -11,17 +11,17 @@ package com.salesforce.apollo.avalanche;
  *
  */
 public class TransactionRejected extends Exception {
- 
+
     public TransactionRejected(String message, Throwable cause) {
-        super(message, cause); 
+        super(message, cause);
     }
 
     public TransactionRejected(String message) {
-        super(message); 
+        super(message);
     }
 
     public TransactionRejected(Throwable cause) {
-        super(cause); 
+        super(cause);
     }
 
     private static final long serialVersionUID = 1L;

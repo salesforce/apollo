@@ -70,9 +70,11 @@ public interface Member extends Comparable<Member> {
         return new InetSocketAddress(hostName, port);
     }
 
+    @Override
     int compareTo(Member o);
 
     // The id of a member uniquely identifies it
+    @Override
     boolean equals(Object obj);
 
     /**
@@ -89,6 +91,7 @@ public interface Member extends Comparable<Member> {
         return new SelfAddressingIdentifier(getId());
     }
 
+    @Override
     int hashCode();
 
     /**
