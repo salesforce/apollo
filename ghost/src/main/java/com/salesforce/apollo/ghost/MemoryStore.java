@@ -63,7 +63,7 @@ public class MemoryStore implements Store {
                    .filter(e -> !interval.mutableContains(e))
                    .limit(maxEntries)
                    .forEach(e -> builder.addMutable(Binding.newBuilder()
-                                                           .setKey(e.toByteString())
+                                                           .setKey(e.toDigeste())
                                                            .setValue(mutable.get(e))));
         });
         return builder.build();

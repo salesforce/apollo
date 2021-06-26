@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
 
 import java.time.Duration;
@@ -281,7 +280,7 @@ public class Messenger {
         int gossipRound = round.incrementAndGet();
         log.trace("message gossiping[{}] from {} with {} on {}", gossipRound, member, link.getMember(), ring);
         return link.gossip(MessageBff.newBuilder()
-                                     .setContext(context.getId().toByteString())
+                                     .setContext(context.getId().toDigeste())
                                      .setRing(ring)
                                      .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextInt(),
                                                                parameters.falsePositiveRate)
@@ -306,7 +305,7 @@ public class Messenger {
                 return;
             }
             process(gossip.getUpdatesList());
-            Push.Builder pushBuilder = Push.newBuilder().setContext(context.getId().toByteString()).setRing(ring);
+            Push.Builder pushBuilder = Push.newBuilder().setContext(context.getId().toDigeste()).setRing(ring);
             buffer.updatesFor(BloomFilter.from(gossip.getBff()), pushBuilder);
             try {
                 link.update(pushBuilder.build());
@@ -342,7 +341,7 @@ public class Messenger {
             return;
         }
         List<Msg> newMessages = buffer.merge(updates, (hash, message) -> validate(hash, message)).stream().map(m -> {
-            Digest id = digest(m.getSource());
+            Digest id = new Digest(m.getSource());
             if (member.getId().equals(id)) {
                 log.trace("Ignoriing message from self");
                 return null;
@@ -373,7 +372,7 @@ public class Messenger {
     }
 
     private boolean validate(Digest hash, Message message) {
-        Digest from = digest(message.getSource());
+        Digest from = new Digest(message.getSource());
         Member member = context.getMember(from);
         if (member == null) {
             log.debug("Non existent member: " + from);

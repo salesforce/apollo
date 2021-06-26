@@ -12,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.crypto.JohnHancock;
 
 /**
@@ -65,6 +66,11 @@ public class SelfSigningIdentifier implements Identifier {
     @Override
     public ByteString toByteString() {
         return IDENTIFIER.concat(signature.toByteString());
+    }
+
+    @Override
+    public Ident toIdent() {
+        return Ident.newBuilder().setSelfSigning(signature.toSig()).build();
     }
 
     @Override

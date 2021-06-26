@@ -231,8 +231,8 @@ public enum DigestAlgorithm {
         Arrays.fill(LAST_32, (byte) 255);
     }
 
-    public static DigestAlgorithm fromDigestCode(byte code) {
-        return switch (code) {
+    public static DigestAlgorithm fromDigestCode(int i) {
+        return switch (i) {
         case 0:
             yield NONE;
         case 1:
@@ -254,7 +254,7 @@ public enum DigestAlgorithm {
         case 9:
             yield SHA3_512;
         default:
-            throw new IllegalArgumentException("Unknown digest code: " + code);
+            throw new IllegalArgumentException("Unknown digest code: " + i);
         };
     }
 

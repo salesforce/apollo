@@ -73,6 +73,7 @@ import com.salesfoce.apollo.consortium.proto.TransactionOrBuilder;
 import com.salesfoce.apollo.consortium.proto.TransactionResult;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
+import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.comms.BoostrapServer;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
@@ -217,9 +218,9 @@ public class Consortium {
                         return JoinResult.getDefaultInstance();
                     }
                     ViewMember member = request.getMember();
-                    ByteString encoded = member.getConsensusKey();
+                    PubKey encoded = member.getConsensusKey();
 
-                    if (!from.verify(signature(member.getSignature()), encoded)) {
+                    if (!from.verify(signature(member.getSignature()), encoded.toByteString())) {
                         log.debug("Could not verify consensus key from {} on {}", fromID, getMember());
                     }
                     PublicKey consensusKey = publicKey(encoded);
@@ -227,15 +228,12 @@ public class Consortium {
                         log.debug("Could not deserialize consensus key from {} on {}", fromID, getMember());
                         return JoinResult.getDefaultInstance();
                     }
-                    JohnHancock signed = params.member.sign(encoded);
+                    JohnHancock signed = params.member.sign(encoded.toByteString());
                     if (signed == null) {
                         log.debug("Could not sign consensus key from {} on {}", fromID, getMember());
                         return JoinResult.getDefaultInstance();
                     }
-                    return JoinResult.newBuilder()
-                                     .setSignature(signed.toByteString())
-                                     .setNextView(view.getNextView())
-                                     .build();
+                    return JoinResult.newBuilder().setSignature(signed.toSig()).setNextView(view.getNextView()).build();
                 });
             } catch (Exception e) {
                 log.error("Error voting for: {} on: {}", from, getMember(), e);
@@ -332,9 +330,9 @@ public class Consortium {
 
     public static Digest hashOf(DigestAlgorithm algorithm, TransactionOrBuilder transaction) {
         List<ByteString> buffers = new ArrayList<>();
-        buffers.add(transaction.getNonce());
+        buffers.add(transaction.getNonce().toByteString());
         buffers.add(ByteString.copyFrom(transaction.getJoin() ? new byte[] { 1 } : new byte[] { 0 }));
-        buffers.add(transaction.getSource());
+        buffers.add(transaction.getSource().toByteString());
         buffers.add(transaction.getTxn().toByteString());
 
         return algorithm.digest(BbBackedInputStream.aggregate(buffers));
@@ -711,8 +709,8 @@ public class Consortium {
 
         Transaction.Builder builder = Transaction.newBuilder()
                                                  .setJoin(join)
-                                                 .setSource(params.member.getId().toByteString())
-                                                 .setNonce(ByteString.copyFrom(nonce));
+                                                 .setSource(params.member.getId().toDigeste())
+                                                 .setNonce(new Digest(params.digestAlgorithm, nonce).toDigeste());
         builder.setTxn(Any.pack(transaction));
 
         Digest hash = hashOf(params.digestAlgorithm, builder);
@@ -721,7 +719,7 @@ public class Consortium {
         if (signature == null) {
             throw new IllegalStateException("Unable to sign transaction batch on: " + getMember());
         }
-        builder.setSignature(signature.toByteString());
+        builder.setSignature(signature.toSig());
         return new EnqueuedTransaction(hash, builder.build());
     }
 
@@ -933,7 +931,7 @@ public class Consortium {
                 : params.scheduler.schedule(() -> timeout(transaction.hash), timeout.toMillis(), TimeUnit.MILLISECONDS);
         submitted.put(transaction.hash, new SubmittedTransaction(transaction.transaction, onCompletion, futureTimeout));
         SubmitTransaction submittedTxn = SubmitTransaction.newBuilder()
-                                                          .setContext(view.getContext().getId().toByteString())
+                                                          .setContext(view.getContext().getId().toDigeste())
                                                           .setTransaction(transaction.transaction)
                                                           .build();
         log.trace("Submitting txn: {} {} from: {}", transaction.hash, join ? "Join" : "User", getMember());
@@ -993,9 +991,9 @@ public class Consortium {
         initialView.getViewList().forEach(vm -> {
             Digest memberID = new Digest(vm.getId());
             Member member = context.getMember(memberID);
-            ByteString encoded = vm.getConsensusKey();
+            PubKey encoded = vm.getConsensusKey();
 
-            if (!member.verify(signature(vm.getSignature()), encoded)) {
+            if (!member.verify(signature(vm.getSignature()), encoded.toByteString())) {
                 log.warn("Could not validate consensus key for {}", memberID);
             }
             PublicKey cKey = publicKey(encoded);

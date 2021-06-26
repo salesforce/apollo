@@ -16,7 +16,17 @@ message Biff {
         repeated int64 bits = 5;
 }
 
-message Digest {
+message Digeste {
     int32 type = 1;
     repeated int64 hash = 2;
+}
+
+message Sig {
+    int32 code = 1;
+    bytes signature = 2;
+}
+
+message PubKey {
+    int32 code = 1;
+    bytes encoded = 2;
 }

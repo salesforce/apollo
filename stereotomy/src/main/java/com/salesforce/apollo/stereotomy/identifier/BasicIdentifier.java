@@ -15,6 +15,8 @@ import java.security.PublicKey;
 import java.util.Objects;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesfoce.apollo.utils.proto.PubKey;
 
 /**
  * @author hal.hildebrand
@@ -27,6 +29,10 @@ public class BasicIdentifier implements Identifier {
 
     public BasicIdentifier(ByteBuffer buff) {
         this(publicKey(buff));
+    }
+
+    public BasicIdentifier(PubKey pk) {
+        this(publicKey(pk));
     }
 
     public BasicIdentifier(PublicKey publicKey) {
@@ -66,11 +72,16 @@ public class BasicIdentifier implements Identifier {
 
     @Override
     public ByteString toByteString() {
-        return IDENTIFIER.concat(bs(publicKey));
+        return IDENTIFIER.concat(bs(publicKey).toByteString());
     }
 
     @Override
     public String toString() {
         return "B[" + shortQb64(publicKey) + "]";
+    }
+
+    @Override
+    public Ident toIdent() {
+        return Ident.newBuilder().setBasic(bs(publicKey)).build();
     }
 }

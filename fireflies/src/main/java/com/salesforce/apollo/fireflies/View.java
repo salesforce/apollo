@@ -760,7 +760,7 @@ public class View {
      */
     void addSeed(Participant seed) {
         Note seedNote = Note.newBuilder()
-                            .setId(seed.getId().toByteString())
+                            .setId(seed.getId().toDigeste())
                             .setEpoch(-1)
                             .setMask(ByteString.copyFrom(Node.createInitialMask(getParameters().toleranceLevel,
                                                                                 Utils.secureEntropy())
@@ -831,11 +831,9 @@ public class View {
     Digests commonDigests() {
         int seed = Utils.secureEntropy().nextInt();
         return Digests.newBuilder()
-                      .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff()
-                                                                                                  .toByteString())
-                      .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff().toByteString())
-                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff()
-                                                                                                    .toByteString())
+                      .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff())
                       .build();
     }
 
@@ -1132,7 +1130,7 @@ public class View {
             .map(m -> m.getEncodedCertificate())
             .filter(cert -> cert != null)
             .forEach(cert -> builder.addUpdates(cert));
-        builder.setBff(getCertificatesBff(seed, p).toBff().toByteString());
+        builder.setBff(getCertificatesBff(seed, p).toBff());
         CertificateGossip gossip = builder.build();
         log.trace("process certificates produced updates: {}", gossip.getUpdatesCount());
         return gossip;
@@ -1160,7 +1158,7 @@ public class View {
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
-        builder.setBff(getNotesBff(seed, p).toBff().toByteString());
+        builder.setBff(getNotesBff(seed, p).toBff());
         NoteGossip gossip = builder.build();
         log.trace("process notes produded updates: {}", gossip.getUpdatesCount());
         return gossip;

@@ -11,6 +11,8 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.AID;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 
 /**
  * @author hal.hildebrand
@@ -73,6 +75,13 @@ public class AutonomicIdentifier implements Identifier {
     public ByteString toByteString() {
         byte[] encoded = uri.toASCIIString().getBytes();
         return IDENTIFIER.concat(prefix.toByteString()).concat(ByteString.copyFrom(encoded));
+    }
+
+    @Override
+    public Ident toIdent() {
+        return Ident.newBuilder()
+                    .setAutonomous(AID.newBuilder().setPrefix(prefix.toIdent()).setUrl(uri.toASCIIString()))
+                    .build();
     }
 
     @Override

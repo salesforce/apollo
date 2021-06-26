@@ -10,27 +10,33 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class HumanMeaningfulIdentifier implements Identifier {
+public class LID implements Identifier {
     private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 5 });
 
     private final Identifier aid;
     private final String     lid;
 
-    public HumanMeaningfulIdentifier(ByteBuffer buff) {
+    public LID(ByteBuffer buff) {
         this.aid = Identifier.from(buff);
         byte[] encoded = new byte[buff.remaining()];
         buff.get(encoded);
         this.lid = new String(encoded);
     }
 
-    public HumanMeaningfulIdentifier(Identifier aid, String lid) {
+    public LID(Identifier aid, String lid) {
         this.aid = aid;
         this.lid = lid;
+    }
+
+    @Override
+    public Ident toIdent() {
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -38,10 +44,10 @@ public class HumanMeaningfulIdentifier implements Identifier {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof HumanMeaningfulIdentifier)) {
+        if (!(obj instanceof LID)) {
             return false;
         }
-        HumanMeaningfulIdentifier other = (HumanMeaningfulIdentifier) obj;
+        LID other = (LID) obj;
         return Objects.equals(aid, other.aid) && Objects.equals(lid, other.lid);
     }
 

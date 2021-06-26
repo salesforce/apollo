@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
+import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.consortium.Consortium.Service;
 import com.salesforce.apollo.consortium.comms.LinearClient;
@@ -108,9 +109,11 @@ public class View {
             return null;
         }
         nextView.set(ViewMember.newBuilder()
-                               .setId(params.member.getId().toByteString())
-                               .setConsensusKey(ByteString.copyFrom(encoded))
-                               .setSignature(signed.toByteString())
+                               .setId(params.member.getId().toDigeste())
+                               .setConsensusKey(PubKey.newBuilder()
+                                                      .setCode(signed.getAlgorithm().signatureCode())
+                                                      .setEncoded(ByteString.copyFrom(encoded)))
+                               .setSignature(signed.toSig())
                                .build());
         if (log.isTraceEnabled()) {
             log.trace("Generating next view consensus key current: {} next: {} on: {}",

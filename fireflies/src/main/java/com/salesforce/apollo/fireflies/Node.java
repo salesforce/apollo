@@ -116,8 +116,8 @@ public class Node extends Participant implements SigningMember {
         Builder builder = Accusation.newBuilder();
         Accusation accusation = builder.setEpoch(m.getEpoch())
                                        .setRingNumber(ringNumber)
-                                       .setAccuser(getId().toByteString())
-                                       .setAccused(m.getId().toByteString())
+                                       .setAccuser(getId().toDigeste())
+                                       .setAccused(m.getId().toDigeste())
                                        .setSignature(sign(builder))
                                        .build();
         return new AccusationWrapper(hashAlgorithm.digest(accusation.toByteString()), accusation);
@@ -184,7 +184,7 @@ public class Node extends Participant implements SigningMember {
      */
     void nextNote(long newEpoch) {
         Note.Builder builder = Note.newBuilder();
-        Note n = builder.setId(getId().toByteString())
+        Note n = builder.setId(getId().toDigeste())
                         .setEpoch(newEpoch)
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .setSignature(sign(builder))

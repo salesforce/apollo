@@ -25,6 +25,7 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class LinearServer extends LinearServiceImplBase {
+    @SuppressWarnings("unused")
     private ClientIdentity                 identity;
     @SuppressWarnings("unused")
     private final ConsortiumMetrics        metrics;
@@ -38,44 +39,41 @@ public class LinearServer extends LinearServiceImplBase {
 
     @Override
     public void join(Join request, StreamObserver<JoinResult> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new Digest(request.getContext()),
-                        s -> {
-                            Digest from = identity.getFrom();
-                            if (from == null) {
-                                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                                return;
-                            }
-                            responseObserver.onNext(s.join(request, from));
-                            responseObserver.onCompleted();
-                        });
+        router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
+            Digest from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
+            }
+            responseObserver.onNext(s.join(request, from));
+            responseObserver.onCompleted();
+        });
     }
 
     @Override
     public void stopData(StopData request, StreamObserver<Empty> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new Digest(request.getContext()),
-                        s -> {
-                            Digest from = identity.getFrom();
-                            if (from == null) {
-                                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                                return;
-                            }
-                            responseObserver.onNext(Empty.getDefaultInstance());
-                            responseObserver.onCompleted();
-                            s.stopData(request, from);
-                        });
+        router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
+            Digest from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
+            }
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
+            s.stopData(request, from);
+        });
     }
 
     @Override
     public void submit(SubmitTransaction request, StreamObserver<TransactionResult> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new Digest(request.getContext()),
-                        s -> {
-                            Digest from = identity.getFrom();
-                            if (from == null) {
-                                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                                return;
-                            }
-                            responseObserver.onNext(s.clientSubmit(request, from));
-                            responseObserver.onCompleted();
-                        });
+        router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
+            Digest from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
+            }
+            responseObserver.onNext(s.clientSubmit(request, from));
+            responseObserver.onCompleted();
+        });
     }
 }

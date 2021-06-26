@@ -130,8 +130,8 @@ public class Bootstrapper {
         start.set(store.firstGap(start.get(), end));
         store.blocksFrom(start.get(), end, params.maxSyncBlocks).forEachRemaining(h -> blocksBff.add(h));
         BlockReplication replication = BlockReplication.newBuilder()
-                                                       .setContext(params.context.getId().toByteString())
-                                                       .setBlocksBff(blocksBff.toBff().toByteString())
+                                                       .setContext(params.context.getId().toDigeste())
+                                                       .setBlocksBff(blocksBff.toBff())
                                                        .setFrom(start.get())
                                                        .setTo(end)
                                                        .build();
@@ -216,8 +216,8 @@ public class Bootstrapper {
         start.set(store.lastViewChainFrom(start.get()));
         store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
         BlockReplication replication = BlockReplication.newBuilder()
-                                                       .setContext(params.context.getId().toByteString())
-                                                       .setBlocksBff(blocksBff.toBff().toByteString())
+                                                       .setContext(params.context.getId().toDigeste())
+                                                       .setBlocksBff(blocksBff.toBff())
                                                        .setFrom(start.get())
                                                        .setTo(end)
                                                        .build();
@@ -370,7 +370,7 @@ public class Bootstrapper {
     private void sample() {
         HashMap<Digest, Initial> votes = new HashMap<>();
         Synchronize s = Synchronize.newBuilder()
-                                   .setContext(params.context.getId().toByteString())
+                                   .setContext(params.context.getId().toDigeste())
                                    .setHeight(anchor.height())
                                    .build();
         new RingIterator<>(params.context, params.member, comms,

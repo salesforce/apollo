@@ -41,7 +41,7 @@ public class KeyConfigurationDigester {
     }
 
     public static Digest digest(SigningThreshold signingThreshold, List<PublicKey> nextKeys, DigestAlgorithm algo) {
-        var keyDigs = nextKeys.stream().map(k -> bs(k)).map(algo::digest).collect(toList());
+        var keyDigs = nextKeys.stream().map(k -> bs(k).toByteString()).map(algo::digest).collect(toList());
 
         return digest(signingThreshold, keyDigs);
     }

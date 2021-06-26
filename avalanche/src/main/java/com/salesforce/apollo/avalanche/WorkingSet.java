@@ -47,6 +47,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
+import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -896,7 +897,7 @@ public class WorkingSet {
         return entries.stream().map(entry -> insert(entry, discovered)).collect(Collectors.toList());
     }
 
-    public List<Digest> insertSerialized(List<ByteString> list, List<ByteString> transactions, long discovered) {
+    public List<Digest> insertSerialized(List<Digeste> list, List<ByteString> transactions, long discovered) {
         List<Digest> keys = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
             Digest key = digest(list.get(i));

@@ -216,7 +216,7 @@ public class Ghost {
         }
 
         public void purge(Get get) {
-            Digest key = parameters.digestAlgorithm.digest(get.getId());
+            Digest key = new Digest(get.getId());
             store.purge(key);
             log.trace("Purge: {} on: {}", key, member);
         }
@@ -310,7 +310,7 @@ public class Ghost {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         CompletableFuture<Any> result = new CompletableFuture<>();
-        Get get = Get.newBuilder().setContext(context.getId().toByteString()).setId(key.toByteString()).build();
+        Get get = Get.newBuilder().setContext(context.getId().toDigeste()).setId(key.toDigeste()).build();
         new RingIterator<>(context, member, communications,
                 parameters.executor).iterate(key, (link, r) -> link.get(get),
                                              (tally, futureSailor, link, r) -> get(futureSailor, key, result,
@@ -370,10 +370,7 @@ public class Ghost {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         CompletableFuture<Any> result = new CompletableFuture<>();
-        Lookup lookup = Lookup.newBuilder()
-                              .setContext(context.getId().toByteString())
-                              .setKey(hash.toByteString())
-                              .build();
+        Lookup lookup = Lookup.newBuilder().setContext(context.getId().toDigeste()).setKey(hash.toDigeste()).build();
         Multiset<Any> votes = HashMultiset.create();
 
         new RingIterator<>(context, member, communications,
@@ -414,7 +411,7 @@ public class Ghost {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        Entry entry = Entry.newBuilder().setContext(context.getId().toByteString()).setValue(value).build();
+        Entry entry = Entry.newBuilder().setContext(context.getId().toDigeste()).setValue(value).build();
 
         new RingIterator<>(context, member, communications,
                 parameters.executor).iterate(key, () -> majorityComplete(key, majority),
@@ -486,8 +483,8 @@ public class Ghost {
     private ListenableFuture<Empty> bind(SpaceGhost link, Digest key, Any value) {
         log.trace("Bind {} to: {} on: {}", key, link.getMember(), member);
         return link.bind(Bind.newBuilder()
-                             .setContext(context.getId().toByteString())
-                             .setBinding(Binding.newBuilder().setKey(key.toByteString()).setValue(value))
+                             .setContext(context.getId().toDigeste())
+                             .setBinding(Binding.newBuilder().setKey(key.toDigeste()).setValue(value))
                              .build());
     }
 
@@ -574,7 +571,7 @@ public class Ghost {
                   keyIntervals);
         store.populate(keyIntervals, parameters.fpr, Utils.secureEntropy());
         return link.intervals(Intervals.newBuilder()
-                                       .setContext(context.getId().toByteString())
+                                       .setContext(context.getId().toDigeste())
                                        .setRing(ring)
                                        .addAllIntervals(keyIntervals.toIntervals())
                                        .build());

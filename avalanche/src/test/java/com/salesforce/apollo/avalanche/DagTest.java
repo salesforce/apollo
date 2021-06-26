@@ -73,7 +73,7 @@ public class DagTest {
         Builder builder = DagEntry.newBuilder();
         builder.setDescription(type);
         builder.setData(Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFrom(data)).build()));
-        links.forEach(e -> builder.addLinks(e.toByteString()));
+        links.forEach(e -> builder.addLinks(e.toDigeste()));
         return builder.build();
     }
 

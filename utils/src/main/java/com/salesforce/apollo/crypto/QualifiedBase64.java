@@ -20,6 +20,9 @@ import java.util.Arrays;
 import java.util.Base64;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 public class QualifiedBase64 {
@@ -89,15 +92,12 @@ public class QualifiedBase64 {
         return bits / 6 + (bits % 6 != 0 ? 1 : 0);
     }
 
-    public static ByteString bs(PublicKey publicKey) {
-        var stdAlgo = SignatureAlgorithm.lookup(publicKey);
-        try {
-            ByteString bs = ByteString.readFrom(BbBackedInputStream.aggregate(new byte[] { stdAlgo.signatureCode() },
-                                                                              stdAlgo.encode(publicKey)));
-            return bs;
-        } catch (IOException e) {
-            throw new IllegalArgumentException("cannot encode public key", e);
-        }
+    public static PubKey bs(PublicKey publicKey) {
+        SignatureAlgorithm algo = SignatureAlgorithm.lookup(publicKey);
+        return PubKey.newBuilder()
+                     .setCode(algo.signatureCode())
+                     .setEncoded(ByteString.copyFrom(algo.encode(publicKey)))
+                     .build();
     }
 
     public static Digest digest(ByteBuffer buff) {
@@ -109,6 +109,10 @@ public class QualifiedBase64 {
 
     public static Digest digest(ByteString bs) {
         return digest(bs.asReadOnlyByteBuffer());
+    }
+
+    public static Digest digest(Digeste d) {
+        return new Digest(d);
     }
 
     public static Digest digest(String qb64) {
@@ -160,6 +164,12 @@ public class QualifiedBase64 {
         case ED_25519 -> "B";
         case ED_448 -> "1AAC";
         };
+    }
+
+    public static PublicKey publicKey(PubKey pk) {
+        var algo = SignatureAlgorithm.fromSignatureCode(pk.getCode());
+        var bytes = pk.getEncoded().toByteArray();
+        return algo.publicKey(bytes);
     }
 
     public static PublicKey publicKey(ByteBuffer buff) {
@@ -248,6 +258,10 @@ public class QualifiedBase64 {
 
     public static JohnHancock signature(ByteString bs) {
         return new JohnHancock(bs);
+    }
+
+    public static JohnHancock signature(Sig s) {
+        return new JohnHancock(s);
     }
 
     public static JohnHancock signature(String qb64) {

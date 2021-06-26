@@ -112,13 +112,13 @@ public class CollaboratorContext implements Collaborator {
         Checkpoint.Builder builder = Checkpoint.newBuilder()
                                                .setByteSize(length)
                                                .setSegmentSize(blockSize)
-                                               .setStateHash(stateHash.toByteString());
+                                               .setStateHash(stateHash.toDigeste());
         if (state != null) {
             byte[] buff = new byte[blockSize];
             try (FileInputStream fis = new FileInputStream(state)) {
                 for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
                     ByteString segment = ByteString.copyFrom(buff, 0, read);
-                    builder.addSegments(algo.digest(segment).toByteString());
+                    builder.addSegments(algo.digest(segment).toDigeste());
                 }
             } catch (IOException e) {
                 log.error("Invalid checkpoint!", e);
@@ -162,14 +162,14 @@ public class CollaboratorContext implements Collaborator {
         Block block = Block.newBuilder()
                            .setHeader(Header.newBuilder()
                                             .setTimestamp(timestamp)
-                                            .setNonce(ByteString.copyFrom(nonce))
+                                            .setNonce(new Digest(algo, nonce).toDigeste())
                                             .setLastCheckpoint(checkpointHeight)
-                                            .setLastCheckpointHash(checkpointHash.toByteString())
+                                            .setLastCheckpointHash(checkpointHash.toDigeste())
                                             .setLastReconfig(viewChangeHeight)
-                                            .setLastReconfigHash(viewChangeHash.toByteString())
-                                            .setPrevious(curr.toByteString())
+                                            .setLastReconfigHash(viewChangeHash.toDigeste())
+                                            .setPrevious(curr.toDigeste())
                                             .setHeight(height)
-                                            .setBodyHash(algo.digest(body.toByteString()).toByteString())
+                                            .setBodyHash(algo.digest(body.toByteString()).toDigeste())
                                             .build())
                            .setBody(body)
                            .build();
@@ -292,7 +292,7 @@ public class CollaboratorContext implements Collaborator {
                  consortium.getMember());
         toOrder.values().forEach(t -> t.cancel());
         Stop.Builder data = Stop.newBuilder()
-                                .setContext(consortium.view.getContext().getId().toByteString())
+                                .setContext(consortium.view.getContext().getId().toDigeste())
                                 .setNextRegent(regency.nextRegent());
         transactions.forEach(eqt -> data.addTransactions(eqt.transaction));
         Stop stop = data.build();
@@ -503,7 +503,7 @@ public class CollaboratorContext implements Collaborator {
         Join voteForMe = Join.newBuilder()
                              .setMember(consortium.getCurrent() == null ? consortium.view.getContext().getView()
                                      : consortium.view.getNextView())
-                             .setContext(consortium.view.getContext().getId().toByteString())
+                             .setContext(consortium.view.getContext().getId().toDigeste())
                              .build();
 
         List<Member> group = consortium.view.getContext().streamRandomRing().collect(Collectors.toList());
@@ -870,7 +870,7 @@ public class CollaboratorContext implements Collaborator {
             log.debug("Have no valid log on: {} gaps: {}", consortium.getMember(), gaps);
         }
         StopData.Builder builder = StopData.newBuilder().setCurrentRegent(currentRegent);
-        builder.setContext(consortium.view.getContext().getId().toByteString());
+        builder.setContext(consortium.view.getContext().getId().toDigeste());
         decided.entrySet().forEach(e -> {
             builder.addBlocks(e.getValue());
         });
@@ -904,7 +904,7 @@ public class CollaboratorContext implements Collaborator {
         }
         return Sync.newBuilder()
                    .setCurrentRegent(elected)
-                   .setContext(consortium.view.getContext().getId().toByteString())
+                   .setContext(consortium.view.getContext().getId().toDigeste())
                    .addAllBlocks(blocks)
                    .build();
     }
@@ -1111,7 +1111,7 @@ public class CollaboratorContext implements Collaborator {
         Parameters params = consortium.params;
         Reconfigure.Builder genesisView = Reconfigure.newBuilder()
                                                      .setCheckpointBlocks(params.deltaCheckpointBlocks)
-                                                     .setId(params.genesisViewId.toByteString())
+                                                     .setId(params.genesisViewId.toDigeste())
                                                      .setTolerance(consortium.view.getContext().majority());
         toOrder.values().forEach(join -> {
             JoinTransaction txn;
@@ -1125,7 +1125,7 @@ public class CollaboratorContext implements Collaborator {
             }
             processed.add(join.hash);
             genesisView.addTransactions(ExecutedTransaction.newBuilder()
-                                                           .setHash(join.hash.toByteString())
+                                                           .setHash(join.hash.toDigeste())
                                                            .setTransaction(join.transaction)
                                                            .build());
             genesisView.addView(txn.getMember());
@@ -1138,7 +1138,7 @@ public class CollaboratorContext implements Collaborator {
                 b.append("view member: ");
                 b.append(new Digest(vm.getId()));
                 b.append(" key: ");
-                b.append(digestAlgo().digest(vm.getConsensusKey()));
+                b.append(digestAlgo().digest(vm.getConsensusKey().toByteString()));
                 b.append("\n");
             }
             log.trace("genesis view {}", b.toString());
@@ -1214,7 +1214,7 @@ public class CollaboratorContext implements Collaborator {
 
         batch.forEach(eqt -> {
             user.addTransactions(ExecutedTransaction.newBuilder()
-                                                    .setHash(eqt.hash.toByteString())
+                                                    .setHash(eqt.hash.toDigeste())
                                                     .setTransaction(eqt.transaction));
             processed.add(eqt.hash);
         });
@@ -1343,7 +1343,7 @@ public class CollaboratorContext implements Collaborator {
                 JoinTransaction.Builder txn = JoinTransaction.newBuilder().setMember(voteForMe.getMember());
                 for (Result vote : votes) {
                     txn.addCertification(Certification.newBuilder()
-                                                      .setId(vote.member.getId().toByteString())
+                                                      .setId(vote.member.getId().toDigeste())
                                                       .setSignature(vote.vote.getSignature()));
                 }
                 JoinTransaction joinTxn = txn.build();

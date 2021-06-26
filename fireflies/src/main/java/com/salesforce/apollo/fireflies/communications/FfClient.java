@@ -72,7 +72,7 @@ public class FfClient implements Fireflies {
         }
         try {
             SayWhat sw = SayWhat.newBuilder()
-                                .setContext(context.toByteString())
+                                .setContext(context.toDigeste())
                                 .setNote(note)
                                 .setRing(ring)
                                 .setGossip(digests)
@@ -113,7 +113,7 @@ public class FfClient implements Fireflies {
             timer = metrics.outboundPingTimer().time();
         }
         try {
-            client.ping(Null.newBuilder().setContext(context.toByteString()).build());
+            client.ping(Null.newBuilder().setContext(context.toDigeste()).build());
             if (metrics != null) {
                 metrics.outboundPingRate().mark();
             }
@@ -143,7 +143,7 @@ public class FfClient implements Fireflies {
             timer = metrics.outboundUpdateTimer().time();
         }
         try {
-            State state = State.newBuilder().setContext(context.toByteString()).setRing(ring).setUpdate(update).build();
+            State state = State.newBuilder().setContext(context.toDigeste()).setRing(ring).setUpdate(update).build();
             client.update(state);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(state.getSerializedSize());

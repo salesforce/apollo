@@ -121,14 +121,12 @@ public class ProtobufEventFactory implements EventFactory {
         var bs = identifierSpec(prefix, specification).toByteString();
         var signature = specification.getSigner().sign(bs);
 
-        var common = EventCommon.newBuilder().putAllAuthentication(Map.of(0, signature.toByteString()));
+        var common = EventCommon.newBuilder().putAllAuthentication(Map.of(0, signature.toSig()));
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
 
-        return new InceptionEventImpl(builder.setIdentifier(prefix.toByteString())
-                                             .setCommon(common)
-                                             .setSpecification(inceptionStatement)
-                                             .build());
+        return new InceptionEventImpl(
+                builder.setIdentifier(prefix.toIdent()).setCommon(common).setSpecification(inceptionStatement).build());
     }
 
     @Override
@@ -146,8 +144,7 @@ public class ProtobufEventFactory implements EventFactory {
                                 .putAllAuthentication(signatures.entrySet()
                                                                 .stream()
                                                                 .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                          e -> e.getValue()
-                                                                                                .toByteString())));
+                                                                                          e -> e.getValue().toSig())));
         com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
         return new InteractionEventImpl(builder.setSpecification(ispec).setCommon(common).build());
     }
@@ -167,8 +164,7 @@ public class ProtobufEventFactory implements EventFactory {
                                 .putAllAuthentication(signatures.entrySet()
                                                                 .stream()
                                                                 .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                          e -> e.getValue()
-                                                                                                .toByteString())));
+                                                                                          e -> e.getValue().toSig())));
         com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
         return new RotationEventImpl(builder.setSpecification(rotationSpec).setCommon(common).build());
     }
@@ -185,13 +181,13 @@ public class ProtobufEventFactory implements EventFactory {
                                                                   .map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
-                                                 : specification.getNextKeys()).toByteString())
+                                                 : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
         var header = Header.newBuilder()
                            .setSequenceNumber(0)
                            .setVersion(toVersion(specification.getVersion()))
-                           .setPriorEventDigest(Digest.NONE.toByteString())
-                           .setIdentifier(identifier.toByteString())
+                           .setPriorEventDigest(Digest.NONE.toDigeste())
+                           .setIdentifier(identifier.toIdent())
                            .setIlk(INCEPTION_TYPE);
 
         return IdentifierSpec.newBuilder()
@@ -199,7 +195,7 @@ public class ProtobufEventFactory implements EventFactory {
                              .setEstablishment(establishment)
                              .addAllWitnesses(specification.getWitnesses()
                                                            .stream()
-                                                           .map(i -> i.toByteString())
+                                                           .map(i -> i.toIdent())
                                                            .collect(Collectors.toList()))
                              .addAllConfiguration(specification.getConfigurationTraits()
                                                                .stream()
@@ -212,10 +208,10 @@ public class ProtobufEventFactory implements EventFactory {
 
         Header header = Header.newBuilder()
                               .setSequenceNumber(specification.getSequenceNumber())
-                              .setPriorEventDigest((specification.getPriorEventDigest()).toByteString())
+                              .setPriorEventDigest((specification.getPriorEventDigest()).toDigeste())
                               .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                        .name()))
-                              .setIdentifier(specification.getIdentifier().toByteString())
+                              .setIdentifier(specification.getIdentifier().toIdent())
                               .setIlk(INTERACTION_TYPE)
                               .build();
 
@@ -236,14 +232,14 @@ public class ProtobufEventFactory implements EventFactory {
                                                                   .map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
-                                                 : specification.getNextKeys()).toByteString())
+                                                 : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
         var header = Header.newBuilder()
                            .setSequenceNumber(specification.getSequenceNumber())
                            .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                     .name()))
-                           .setPriorEventDigest(specification.getPriorEventDigest().toByteString())
-                           .setIdentifier(identifier.toByteString())
+                           .setPriorEventDigest(specification.getPriorEventDigest().toDigeste())
+                           .setIdentifier(identifier.toIdent())
                            .setIlk(ROTATION_TYPE);
 
         return RotationSpec.newBuilder()
@@ -251,11 +247,11 @@ public class ProtobufEventFactory implements EventFactory {
                            .setEstablishment(establishment)
                            .addAllWitnessesAdded(specification.getAddedWitnesses()
                                                               .stream()
-                                                              .map(i -> i.toByteString())
+                                                              .map(i -> i.toIdent())
                                                               .collect(Collectors.toList()))
                            .addAllWitnessesRemoved(specification.getRemovedWitnesses()
                                                                 .stream()
-                                                                .map(i -> i.toByteString())
+                                                                .map(i -> i.toIdent())
                                                                 .collect(Collectors.toList()))
                            .build();
     }

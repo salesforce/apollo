@@ -267,7 +267,7 @@ public class TestConsortium {
         Digest prev = DigestAlgorithm.DEFAULT.getOrigin();
         for (int i = 0; i < 10; i++) {
             Block block = Block.newBuilder()
-                               .setHeader(Header.newBuilder().setHeight(nextBlock).setPrevious(prev.toByteString()))
+                               .setHeader(Header.newBuilder().setHeight(nextBlock).setPrevious(prev.toDigeste()))
                                .build();
             nextBlock++;
             blocks.add(CertifiedBlock.newBuilder().setBlock(block).build());

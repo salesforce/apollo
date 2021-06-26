@@ -6,7 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.identifier;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.nio.ByteBuffer;
@@ -15,6 +17,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -27,34 +30,40 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
  *
  */
 public interface Identifier {
-    final ByteString EMPTY = ByteString.copyFrom(new byte[] { 0 });
-    Identifier       NONE  = new Identifier() {
+    final ByteString          EMPTY      = ByteString.copyFrom(new byte[] { 0 });
+    Identifier                NONE       = new Identifier() {
 
-                               @Override
-                               public byte identifierCode() {
-                                   return 0;
-                               }
+                                             @Override
+                                             public byte identifierCode() {
+                                                 return 0;
+                                             }
 
-                               @Override
-                               public boolean isNone() {
-                                   return true;
-                               }
+                                             @Override
+                                             public boolean isNone() {
+                                                 return true;
+                                             }
 
-                               @Override
-                               public boolean isTransferable() {
-                                   return false;
-                               }
+                                             @Override
+                                             public boolean isTransferable() {
+                                                 return false;
+                                             }
 
-                               @Override
-                               public ByteString toByteString() {
-                                   return EMPTY;
-                               }
+                                             @Override
+                                             public ByteString toByteString() {
+                                                 return EMPTY;
+                                             }
 
-                               @Override
-                            public String toString() {
-                                   return "Identifier<NONE>";
-                               }
-                           };
+                                             @Override
+                                             public Ident toIdent() {
+                                                 return NONE_IDENT;
+                                             }
+
+                                             @Override
+                                             public String toString() {
+                                                 return "Identifier<NONE>";
+                                             }
+                                         };
+    public static final Ident NONE_IDENT = Ident.newBuilder().setNONE(true).build();
 
     public static Identifier from(ByteBuffer buff) {
         if (!buff.hasRemaining()) {
@@ -66,13 +75,26 @@ public interface Identifier {
         case 2 -> new BasicIdentifier(buff);
         case 3 -> new SelfSigningIdentifier(buff);
         case 4 -> new AutonomicIdentifier(buff);
-        case 5 -> new HumanMeaningfulIdentifier(buff);
+        case 5 -> new LID(buff);
         default -> throw new IllegalArgumentException("Unexpected value: " + buff.get());
         };
     }
 
     public static Identifier from(ByteString bs) {
         return from(bs.asReadOnlyByteBuffer());
+    }
+
+    public static Identifier from(Ident identifier) {
+        if (identifier.hasBasic()) {
+            return new BasicIdentifier(identifier.getBasic());
+        }
+        if (identifier.hasSelfAddressing()) {
+            return new SelfAddressingIdentifier(digest(identifier.getSelfAddressing()));
+        }
+        if (identifier.hasSelfSigning()) {
+            return new SelfSigningIdentifier(signature(identifier.getSelfSigning()));
+        }
+        return Identifier.NONE;
     }
 
     public static Identifier identifier(IdentifierSpecification spec, ByteBuffer inceptionStatement) {
@@ -145,7 +167,7 @@ public interface Identifier {
                          .putAllSignatures(signatures.entrySet()
                                                      .stream()
                                                      .collect(Collectors.toMap(e -> e.getKey(),
-                                                                               e -> e.getValue().toByteString())))
+                                                                               e -> e.getValue().toSig())))
                          .build();
     }
 
@@ -164,4 +186,6 @@ public interface Identifier {
     boolean isTransferable();
 
     ByteString toByteString();
+
+    Ident toIdent();
 }

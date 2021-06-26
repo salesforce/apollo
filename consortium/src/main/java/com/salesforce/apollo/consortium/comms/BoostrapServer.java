@@ -25,6 +25,7 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class BoostrapServer extends BoostrapImplBase {
+    @SuppressWarnings("unused")
     private ClientIdentity                       identity;
     @SuppressWarnings("unused")
     private final ConsortiumMetrics              metrics;
@@ -38,42 +39,38 @@ public class BoostrapServer extends BoostrapImplBase {
 
     @Override
     public void fetch(CheckpointReplication request, StreamObserver<CheckpointSegments> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new Digest(request.getContext()),
-                        s -> {
-                            Digest from = identity.getFrom();
-                            if (from == null) {
-                                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                                return;
-                            }
-                            responseObserver.onNext(s.fetch(request, from));
-                            responseObserver.onCompleted();
-                        });
+        router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
+            Digest from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
+            }
+            responseObserver.onNext(s.fetch(request, from));
+            responseObserver.onCompleted();
+        });
     }
 
     @Override
     public void fetchBlocks(BlockReplication request, StreamObserver<Blocks> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new Digest(request.getContext()),
-                        s -> {
-                            responseObserver.onNext(s.fetchBlocks(request, identity.getFrom()));
-                            responseObserver.onCompleted();
-                        });
+        router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
+            responseObserver.onNext(s.fetchBlocks(request, identity.getFrom()));
+            responseObserver.onCompleted();
+        });
     }
 
     @Override
     public void sync(Synchronize request, StreamObserver<Initial> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new Digest(request.getContext()),
-                        s -> {
-                            responseObserver.onNext(s.sync(request, identity.getFrom()));
-                            responseObserver.onCompleted();
-                        });
+        router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
+            responseObserver.onNext(s.sync(request, identity.getFrom()));
+            responseObserver.onCompleted();
+        });
     }
 
     @Override
     public void fetchViewChain(BlockReplication request, StreamObserver<Blocks> responseObserver) {
-        router.evaluate(responseObserver, request.getContext().isEmpty() ? null : new Digest(request.getContext()),
-                        s -> {
-                            responseObserver.onNext(s.fetchViewChain(request, identity.getFrom()));
-                            responseObserver.onCompleted();
-                        });
+        router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
+            responseObserver.onNext(s.fetchViewChain(request, identity.getFrom()));
+            responseObserver.onCompleted();
+        });
     }
 }

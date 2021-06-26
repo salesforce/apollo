@@ -7,6 +7,7 @@ option objc_class_prefix = "Cp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "util.proto";
 
 package apollo.consortium;
 
@@ -17,17 +18,17 @@ service LinearService {
 }
 
 message Join {
-    bytes context = 1;
+    utils.Digeste context = 1;
     ViewMember member = 2;
 }
 
 message JoinResult {
-    bytes signature = 2;
-    ViewMember nextView = 3;
+    utils.Sig signature = 1;
+    ViewMember nextView = 2;
 }
 
 message SubmitTransaction {
-    bytes context = 1;
+    utils.Digeste context = 1;
     Transaction transaction = 2;
 }
 
@@ -40,7 +41,7 @@ message CertifiedBlock {
 }
 
 message Block {
-    bytes headerHash = 1;
+    utils.Digeste headerHash = 1;
     Header header = 2;
     Body body = 3;
 }
@@ -50,11 +51,11 @@ message Header {
     int64 lastCheckpoint = 2;
     int64 lastReconfig = 3;
     google.protobuf.Timestamp timestamp = 4;
-    bytes lastCheckpointHash = 5;
-    bytes lastReconfigHash = 6;
-    bytes nonce = 7;
-    bytes previous = 8;
-    bytes bodyHash = 9;
+    utils.Digeste lastCheckpointHash = 5;
+    utils.Digeste lastReconfigHash = 6;
+    utils.Digeste nonce = 7;
+    utils.Digeste previous = 8;
+    utils.Digeste bodyHash = 9;
 }
 
 message Body {
@@ -63,8 +64,8 @@ message Body {
 }
 
 message Certification {
-    bytes id = 1;
-    bytes signature = 2;
+    utils.Digeste id = 1;
+    utils.Sig signature = 2;
 }
 
 message Certifications {
@@ -88,7 +89,7 @@ message User {
 }
 
 message Reconfigure {
-    bytes id = 1;
+    utils.Digeste id = 1;
     int32 checkpointBlocks = 2;
     int32 tolerance = 3;
     repeated ViewMember view = 4;
@@ -105,16 +106,16 @@ message JoinTransaction {
 }
 
 message ViewMember {
-    bytes id = 1;
-    bytes consensusKey = 2;
-    bytes signature = 3;
+    utils.Digeste id = 1;
+    utils.PubKey consensusKey = 2;
+    utils.Sig signature = 3;
 }
 
 message Checkpoint { 
     int64 byteSize = 1;
     int32 segmentSize = 2;
-    bytes stateHash = 3;
-    repeated bytes segments = 4;
+    utils.Digeste stateHash = 3;
+    repeated utils.Digeste segments = 4;
 }
 
 message CheckpointProcessing {
@@ -123,44 +124,44 @@ message CheckpointProcessing {
 
 message Transaction {
     bool join = 1;
-    bytes source = 2;
-    bytes nonce = 3;
-    bytes signature = 4;
+    utils.Digeste source = 2;
+    utils.Digeste nonce = 3;
+    utils.Sig signature = 4;
     google.protobuf.Any txn = 5;
 }
 
 message ExecutedTransaction {
-    bytes hash = 1;
+    utils.Digeste hash = 1;
     Transaction transaction = 2;
 }
 
 message Validate {
-    bytes context = 1;
-    bytes id = 2;
-    bytes hash = 3;
-    bytes signature = 4;
+    utils.Digeste context = 1;
+    utils.Digeste id = 2;
+    utils.Digeste hash = 3;
+    utils.Sig signature = 4;
 }
 
 message Stop { 
     int32 nextRegent = 1;
-    bytes context = 2;
+    utils.Digeste context = 2;
     repeated Transaction transactions = 3;
 }
 
 message StopData {
-    bytes context = 1;
+    utils.Digeste context = 1;
     int32 currentRegent = 2;
     repeated CertifiedBlock blocks = 3;
 }
 
 message Sync {
-    bytes context = 1;
+    utils.Digeste context = 1;
     int32 currentRegent = 2; 
     repeated CertifiedBlock blocks = 3;
 } 
 
 message ReplicateTransactions {
-    bytes context = 1;
+    utils.Digeste context = 1;
     repeated Transaction transactions = 2;
 }
 
@@ -174,8 +175,8 @@ service Boostrap {
 }
 
 message Synchronize {
-    bytes context = 1;
-    bytes from = 2;
+    utils.Digeste context = 1;
+    utils.Digeste from = 2;
     int64 height = 3;
 }
 
@@ -187,10 +188,10 @@ message Initial {
 }
 
 message BlockReplication {
-    bytes context = 1;
+    utils.Digeste context = 1;
     int64 from = 2;
     int64 to = 3;
-    bytes blocksBff = 4;
+    utils.Biff blocksBff = 4;
 }
 
 message Blocks {
@@ -198,14 +199,14 @@ message Blocks {
 }
 
 message CheckpointReplication {
-    bytes context = 1;
+    utils.Digeste context = 1;
     int64 checkpoint = 2;
     bytes checkpointSegments = 3;
 }
 
 message CheckpointSegments {
     repeated Slice segments = 1;
-    repeated bytes blocks = 2;
+    repeated utils.Digeste blocks = 2;
 }
 
 message Slice {

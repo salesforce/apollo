@@ -14,6 +14,7 @@ import java.util.Objects;
 import org.bouncycastle.util.encoders.Hex;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -27,7 +28,12 @@ public class JohnHancock {
         return new JohnHancock(bs);
     }
 
-    final byte[]                     bytes;
+    public static JohnHancock from(Sig signature) {
+        return new JohnHancock(signature);
+    }
+
+    final byte[] bytes;
+
     private final SignatureAlgorithm algorithm;
 
     public JohnHancock(ByteBuffer buff) {
@@ -38,6 +44,11 @@ public class JohnHancock {
 
     public JohnHancock(ByteString bs) {
         this(bs.asReadOnlyByteBuffer());
+    }
+
+    public JohnHancock(Sig sig) {
+        this.algorithm = SignatureAlgorithm.fromSignatureCode(sig.getCode());
+        bytes = sig.getSignature().toByteArray();
     }
 
     public JohnHancock(SignatureAlgorithm algorithm, byte[] bytes) {
@@ -78,8 +89,12 @@ public class JohnHancock {
         try {
             return ByteString.readFrom(BbBackedInputStream.aggregate(new byte[] { algorithm.signatureCode() }, bytes));
         } catch (IOException e) {
-            throw new IllegalStateException("Cannot serialize to ByteString", e);
+            throw new IllegalStateException("Cannot deserialize to ByteString", e);
         }
+    }
+
+    public Sig toSig() {
+        return Sig.newBuilder().setCode(algorithm.signatureCode()).setSignature(ByteString.copyFrom(bytes)).build();
     }
 
     @Override

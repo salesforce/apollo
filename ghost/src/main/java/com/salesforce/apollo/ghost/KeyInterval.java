@@ -77,7 +77,7 @@ public class KeyInterval implements Predicate<Digest> {
     }
 
     public Interval toInterval() {
-        return Interval.newBuilder().setStart(begin.toByteString()).setEnd(end.toByteString()).build();
+        return Interval.newBuilder().setStart(begin.toDigeste()).setEnd(end.toDigeste()).build();
     }
 
     @Override

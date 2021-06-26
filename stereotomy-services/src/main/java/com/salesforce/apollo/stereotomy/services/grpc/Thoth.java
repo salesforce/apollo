@@ -20,7 +20,6 @@ import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.Bound;
 import com.salesfoce.apollo.stereotomy.event.proto.Resolve;
-import com.salesfoce.apollo.utils.proto.Boxed;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.ghost.Ghost;
@@ -96,7 +95,7 @@ public class Thoth implements Resolver {
         }
         String prefixKey = qb64(prefix);
         ghost.bind(prefixKey, Any.pack(keystate.convertTo(Format.PROTOBUF)), timeout);
-        ghost.bind(eventCoordinatesKey(keystate), Any.pack(Boxed.newBuilder().setS(prefixKey).build()), timeout);
+//        ghost.bind(eventCoordinatesKey(keystate), Any.pack(Boxed.newBuilder().setS(prefixKey).build()), timeout);
     }
 
     private String eventCoordinatesKey(KeyState keystate) {

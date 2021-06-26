@@ -16,24 +16,24 @@ service Messaging {
 }
 
 message MessageBff {
-    bytes context = 1; 
+    utils.Digeste context = 1; 
     int32 ring = 3;
     utils.Biff digests = 4;
 }
 
 message Push {
-    bytes context = 1;
+    utils.Digeste context = 1;
     int32 ring = 2;
     repeated  Message updates = 3;
 }
 
 message Message {
-    bytes source = 1;
+    utils.Digeste source = 1;
     int32 sequenceNumber = 2;
     int32 age = 3;
     int32 channel = 4;
-    bytes signature = 5;
-    bytes key = 6;
+    utils.Sig signature = 5;
+    utils.Digeste key = 6;
     google.protobuf.Any content = 7;
 }
 

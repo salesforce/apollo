@@ -6,6 +6,7 @@ option java_outer_classname = "GhostProto";
 option objc_class_prefix = "Gp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
+import "util.proto";
 
 package ghost; 
 
@@ -23,7 +24,7 @@ service Ghost {
 }
 
 message Entry {
-    bytes context = 1;
+    utils.Digeste context = 1;
     google.protobuf.Any value = 2;
 }
 
@@ -33,42 +34,42 @@ message Entries {
 }
 
 message Get {
-    bytes context = 1;
-    bytes id = 2;
+    utils.Digeste context = 1;
+    utils.Digeste id = 2;
 }
 
 message Lookup {
-    bytes context = 1;
-    bytes key = 2;
+    utils.Digeste context = 1;
+    utils.Digeste key = 2;
 }
 
 message Bind {
-    bytes context = 1;
+    utils.Digeste context = 1;
     Binding binding = 2;
 }
 
 message Binding {
-    bytes key = 1;
+    utils.Digeste key = 1;
     google.protobuf.Any value = 2;
     int64 version = 3;
 }
 
 message Intervals {
-    bytes context = 1;
+    utils.Digeste context = 1;
     int32 ring = 2;
     repeated Interval intervals = 3;
 }
 
 message Interval {
-        bytes start = 1;
-        bytes end = 2;
-        bytes immutableBff = 3;
-        bytes mutableBff = 4;
+        utils.Digeste start = 1;
+        utils.Digeste end = 2;
+        utils.Biff immutableBff = 3;
+        utils.Biff mutableBff = 4;
 }
 
 message StoredBinding {
     int64 version = 1;
-    bytes hash = 2;
+    utils.Digeste hash = 2;
     string key = 3;
     google.protobuf.Any value = 4;
 }

@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -117,7 +115,7 @@ public class MessageBuffer {
     public List<Message> merge(List<Message> updates, BiPredicate<Digest, Message> validator) {
         try {
             return updates.stream()
-                          .filter(message -> merge(digest(message.getKey()), message, validator))
+                          .filter(message -> merge(new Digest(message.getKey()), message, validator))
                           .collect(Collectors.toList());
         } finally {
             gc();
@@ -170,11 +168,11 @@ public class MessageBuffer {
 
     private Message createUpdate(Any msg, int sequenceNumber, Digest from, JohnHancock signature, Digest hash) {
         return Message.newBuilder()
-                      .setSource(from.toByteString())
+                      .setSource(from.toDigeste())
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
-                      .setKey(hash.toByteString())
-                      .setSignature(signature.toByteString())
+                      .setKey(hash.toDigeste())
+                      .setSignature(signature.toSig())
                       .setContent(msg)
                       .build();
     }

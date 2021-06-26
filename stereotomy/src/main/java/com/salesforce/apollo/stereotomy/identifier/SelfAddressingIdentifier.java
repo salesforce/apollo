@@ -5,12 +5,14 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.stereotomy.identifier;
+
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -18,14 +20,14 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public class SelfAddressingIdentifier implements Identifier {
- 
-    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] {1});
-    private final Digest digest;
+
+    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 1 });
+    private final Digest            digest;
 
     public SelfAddressingIdentifier(Digest digest) {
         this.digest = digest;
     }
- 
+
     public SelfAddressingIdentifier(ByteBuffer buff) {
         this(digest(buff));
     }
@@ -44,6 +46,11 @@ public class SelfAddressingIdentifier implements Identifier {
 
     public Digest getDigest() {
         return digest;
+    }
+
+    @Override
+    public Ident toIdent() {
+        return Ident.newBuilder().setSelfAddressing(digest.toDigeste()).build();
     }
 
     @Override
@@ -67,7 +74,7 @@ public class SelfAddressingIdentifier implements Identifier {
     }
 
     @Override
-    public ByteString toByteString() { 
+    public ByteString toByteString() {
         return IDENTIFIER.concat(digest.toByteString());
     }
 }

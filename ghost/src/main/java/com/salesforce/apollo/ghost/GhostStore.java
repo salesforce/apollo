@@ -147,7 +147,7 @@ public class GhostStore implements Store {
                 Any parsed;
                 try {
                     parsed = Any.parseFrom(mutable.get(key));
-                    builder.addMutable(Binding.newBuilder().setKey(key.toByteString()).setValue(parsed));
+                    builder.addMutable(Binding.newBuilder().setKey(key.toDigeste()).setValue(parsed));
                 } catch (InvalidProtocolBufferException e) {
                     log.debug("Unable to deserialize mutable: {}", key);
                 }

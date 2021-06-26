@@ -95,7 +95,7 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
         return new KeyStateImpl(
                 com.salesfoce.apollo.stereotomy.event.proto.KeyState.newBuilder()
                                                                     .setDigest(event.hash(events.getDigestAlgorithm())
-                                                                                    .toByteString())
+                                                                                    .toDigeste())
                                                                     .addAllConfigurationTraits(configurationTraits.stream()
                                                                                                                   .map(e -> e.name())
                                                                                                                   .collect(Collectors.toList()))
@@ -104,7 +104,7 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
                                                                     .setDelegatingIdentifier(delegatingPrefix == null
                                                                             ? Digest.NONE.toByteString()
                                                                             : delegatingPrefix.toByteString())
-                                                                    .setIdentifier(identifier.toByteString())
+                                                                    .setIdentifier(identifier.toIdent())
                                                                     .addAllKeys(keys.stream()
                                                                                     .map(pk -> bs(pk))
                                                                                     .collect(Collectors.toList()))
@@ -112,11 +112,11 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
                                                                                                                      .toByteString())
                                                                     .setLastEvent(event.getCoordinates().toByteString())
                                                                     .setNextKeyConfigurationDigest(nextKeyConfiguration == null
-                                                                            ? Digest.NONE.toByteString()
-                                                                            : nextKeyConfiguration.toByteString())
+                                                                            ? Digest.NONE.toDigeste()
+                                                                            : nextKeyConfiguration.toDigeste())
                                                                     .setSigningThreshold(toSigningThreshold(signingThreshold))
                                                                     .addAllWitnesses(witnesses.stream()
-                                                                                              .map(e -> e.toByteString())
+                                                                                              .map(e -> e.toIdent())
                                                                                               .collect(Collectors.toList()))
                                                                     .setWitnessThreshold(witnessThreshold)
                                                                     .build());

@@ -24,12 +24,12 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
+import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -182,9 +182,9 @@ public class ViewContext implements MembershipListener<Member> {
             return null;
         }
         Validate validation = Validate.newBuilder()
-                                      .setId(member.getId().toByteString())
-                                      .setHash(hash.toByteString())
-                                      .setSignature(signature.toByteString())
+                                      .setId(member.getId().toDigeste())
+                                      .setHash(hash.toDigeste())
+                                      .setSignature(signature.toSig())
                                       .build();
         return validation;
     }
@@ -227,16 +227,16 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public ViewMember getView() {
-        ByteString encoded = bs(consensusKeyPair.getPublic());
-        JohnHancock signed = member.sign(encoded);
+        PubKey encoded = bs(consensusKeyPair.getPublic());
+        JohnHancock signed = member.sign(encoded.toByteString());
         if (signed == null) {
             log.error("Unable to generate and sign consensus key on: {}", member);
             return null;
         }
         return ViewMember.newBuilder()
-                         .setId(member.getId().toByteString())
+                         .setId(member.getId().toDigeste())
                          .setConsensusKey(encoded)
-                         .setSignature(signed.toByteString())
+                         .setSignature(signed.toSig())
                          .build();
     }
 

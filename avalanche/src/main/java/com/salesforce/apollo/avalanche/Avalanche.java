@@ -46,6 +46,7 @@ import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.QueryResult.Vote;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
+import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.communications.AvalancheClient;
 import com.salesforce.apollo.avalanche.communications.AvalancheServer;
@@ -81,7 +82,7 @@ public class Avalanche {
 
     public class Service {
 
-        public QueryResult onQuery(List<ByteString> list, List<ByteString> txns, List<Digest> wanted) {
+        public QueryResult onQuery(List<Digeste> list, List<ByteString> txns, List<Digest> wanted) {
             if (!running.get()) {
                 ArrayList<Vote> results = new ArrayList<>();
                 for (int i = 0; i < txns.size(); i++) {
@@ -298,7 +299,7 @@ public class Avalanche {
                                                .setData(Any.pack(ByteMessage.newBuilder()
                                                                             .setContents(ByteString.copyFrom(dummy))
                                                                             .build()));
-            parents.forEach(e -> builder.addLinks(e.toByteString()));
+            parents.forEach(e -> builder.addLinks(e.toDigeste()));
             DagEntry dagEntry = builder.build();
             assert dagEntry.getLinksCount() > 0 : "Whoopsie";
             dag.insert(dagEntry, System.currentTimeMillis());
@@ -340,7 +341,7 @@ public class Avalanche {
                 dag.insertSerialized(suppliedDagNodes.getEntriesList()
                                                      .stream()
                                                      .map(e -> DigestAlgorithm.DEFAULT.digest(e))
-                                                     .map(e -> e.toByteString())
+                                                     .map(e -> e.toDigeste())
                                                      .collect(Collectors.toList()),
                                      suppliedDagNodes.getEntriesList(), System.currentTimeMillis());
                 if (metrics != null) {
@@ -373,7 +374,7 @@ public class Avalanche {
         dag.insertSerialized(result.getWantedList()
                                    .stream()
                                    .map(e -> DigestAlgorithm.DEFAULT.digest(e))
-                                   .map(e -> e.toByteString())
+                                   .map(e -> e.toDigeste())
                                    .collect(Collectors.toList()),
                              result.getWantedList(), System.currentTimeMillis());
         if (want.size() > 0 && metrics != null && m == wanted) {
@@ -607,7 +608,7 @@ public class Avalanche {
         try {
 
             DagEntry.Builder builder = DagEntry.newBuilder().setDescription(type).setData(Any.pack(data));
-            parents.stream().map(e -> e.toByteString()).forEach(e -> builder.addLinks(e));
+            parents.stream().map(e -> e.toDigeste()).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
 
             Digest key = dag.insert(dagEntry, conflictSet, System.currentTimeMillis());

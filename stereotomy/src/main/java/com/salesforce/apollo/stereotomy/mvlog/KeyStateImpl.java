@@ -16,7 +16,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
@@ -89,9 +88,8 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public Optional<Digest> getNextKeyConfigurationDigest() {
-        ByteString nextKeyConfigurationDigest = state.getNextKeyConfigurationDigest();
-        return nextKeyConfigurationDigest.isEmpty() ? Optional.empty()
-                : Optional.of(digest(nextKeyConfigurationDigest));
+        return state.hasNextKeyConfigurationDigest() ? Optional.of(digest(state.getNextKeyConfigurationDigest()))
+                : Optional.empty();
     }
 
     @Override

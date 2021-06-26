@@ -7,21 +7,37 @@ option objc_class_prefix = "Stereo";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/duration.proto";
+import "util.proto";
 
 package stereotomy;
 
+message Ident {
+    oneof type {
+        utils.PubKey basic = 1;
+        utils.Digeste selfAddressing = 2;
+        utils.Sig selfSigning = 3;
+        AID autonomous = 4;
+        bool NONE = 5;
+    }
+}
+
+message AID {
+    Ident prefix = 1;
+    string url = 2;
+}
+
 message Header {
     int64 sequenceNumber = 1;
-    bytes identifier = 2;
-    bytes priorEventDigest = 3;
+    Ident identifier = 2;
+    utils.Digeste priorEventDigest = 3;
     Version version = 4;
     string ilk = 5;
 }
 
 message EventCommon {
-    bytes configuration = 2;
+    utils.Digeste configuration = 2;
     bytes previous = 3;
-    map<int32, bytes> authentication = 4;
+    map<int32, utils.Sig> authentication = 4;
 }
 
 message InteractionEvent {
@@ -38,14 +54,14 @@ message AttachmentEvent {
     Header header = 1;
     EventCommon common = 2;
     bytes coordinates = 3;
-    map<int32, bytes> endorsements = 5; 
+    map<int32, utils.Sig> endorsements = 5; 
     repeated Receipt receipts = 6;
 }
 
 message Establishment {
     SigningThreshold signingThreshold = 1;
-    repeated bytes keys = 2;
-    bytes nextKeysDigest = 3;
+    repeated utils.PubKey keys = 2;
+    utils.Digeste nextKeysDigest = 3;
     int32 witnessThreshold = 4;
 }
 
@@ -58,8 +74,8 @@ message RotationEvent {
 message RotationSpec {
     Header header = 1;
     Establishment establishment = 2;
-    repeated bytes witnessesRemoved = 3;
-    repeated bytes witnessesAdded = 41;
+    repeated Ident witnessesRemoved = 3;
+    repeated Ident witnessesAdded = 41;
     repeated bytes seals = 5;
 }
 
@@ -67,20 +83,20 @@ message InceptionEvent {
     IdentifierSpec specification = 1;
     EventCommon common = 2;
     bytes delegatingEvent = 3;
-    bytes identifier = 4;
+    Ident identifier = 4;
     bytes delegatingSeal = 5; // Delegated inception event
 }
 
 message IdentifierSpec {
     Header header = 1;
     Establishment establishment = 2;
-    repeated bytes witnesses = 3;
+    repeated Ident witnesses = 3;
     repeated string configuration = 4;
 }
 
 message Receipt {
     bytes coordinates = 1;
-    map<int32, bytes> signatures = 2;
+    map<int32, utils.Sig> signatures = 2;
 }
 
 message Weight {
@@ -104,22 +120,22 @@ message Version {
 }
 
 message KeyState {
-    bytes identifier = 1;
-    bytes digest = 2;
+    Ident identifier = 1;
+    utils.Digeste digest = 2;
     bytes coordinates = 3;
     bytes lastEvent = 4;
     bytes lastEstablishmentEvent = 5;
     bytes delegatingIdentifier = 6;
-    repeated bytes keys = 7;
-    bytes nextKeyConfigurationDigest = 8;
+    repeated utils.PubKey keys = 7;
+    utils.Digeste nextKeyConfigurationDigest = 8;
     repeated string configurationTraits = 9;
     SigningThreshold signingThreshold = 10;
-    repeated bytes witnesses = 11;
+    repeated Ident witnesses = 11;
     int32 witnessThreshold = 12;
 }
 
 message Signatures {
-    map<int32, bytes> signatures = 1;
+    map<int32, utils.Sig> signatures = 1;
 }
 
 /** Services **/
@@ -147,12 +163,12 @@ service DirectValidator {
 }
 
 message Statements {
-    bytes context = 1;
+    utils.Digeste context = 1;
     repeated KeyEvent events = 2;
 }
 
 message KerlQuery {
-    bytes context = 1;
+    utils.Digeste context = 1;
     repeated bytes query = 2;
 }
 
@@ -173,8 +189,8 @@ message Validations {
 }
 
 message Validation {
-    bytes hash = 1;
-    bytes validateion = 2;
+    utils.Digeste hash = 1;
+    bytes validation = 2;
 }
 
 message Attachments {
@@ -182,13 +198,13 @@ message Attachments {
 }
 
 message Resolve {
-    bytes context = 1;
+    utils.Digeste context = 1;
     bytes identifier = 2;
     google.protobuf.Duration timeout = 3;
 }
 
 message Binding {
-    bytes context = 1;
+    utils.Digeste context = 1;
     Bound binding = 2;
     google.protobuf.Duration timeout = 3;
 }

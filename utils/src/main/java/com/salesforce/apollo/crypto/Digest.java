@@ -11,6 +11,8 @@ import java.nio.ByteBuffer;
 import org.bouncycastle.util.encoders.Hex;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.utils.proto.Digeste.Builder;
 
 /**
  * A computed digest
@@ -46,6 +48,10 @@ public class Digest implements Comparable<Digest> {
 
     public static Digest from(ByteString bs) {
         return new Digest(bs);
+    }
+
+    public static Digest from(Digeste d) {
+        return new Digest(d);
     }
 
     public static Digest normalized(DigestAlgorithm digestAlgorithm, byte[] bs) {
@@ -103,6 +109,15 @@ public class Digest implements Comparable<Digest> {
         }
         algorithm = algo;
         this.hash = hash;
+    }
+
+    public Digest(Digeste d) {
+        algorithm = DigestAlgorithm.fromDigestCode(d.getType());
+        hash = new long[d.getHashCount()];
+        int i = 0;
+        for (long l : d.getHashList()) {
+            hash[i++] = l;
+        }
     }
 
     @Override
@@ -207,6 +222,14 @@ public class Digest implements Comparable<Digest> {
         }
         buffer.flip();
         return ByteString.copyFrom(buffer);
+    }
+
+    public Digeste toDigeste() {
+        Builder builder = Digeste.newBuilder().setType(algorithm.digestCode());
+        for (long l : hash) {
+            builder.addHash(l);
+        }
+        return builder.build();
     }
 
     @Override

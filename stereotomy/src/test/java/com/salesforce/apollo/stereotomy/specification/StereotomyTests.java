@@ -102,7 +102,7 @@ public class StereotomyTests {
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("e487c77ac46853494396e7186988a65c36b630d213a446b6015bab70890076e9",
+        assertEquals("01e28d0ca3bab3be802a204bab5210128a6d4f716ace78b646519442823c22f8",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
@@ -169,7 +169,7 @@ public class StereotomyTests {
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("b5397da815320844533f9ae93a03c3bbcbafd615832663ed9dab1abdb907d260",
+        assertEquals("7136f1524a1640f495179856f04446e1ea62cdd5342c55974a6880b1d36575c9",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
