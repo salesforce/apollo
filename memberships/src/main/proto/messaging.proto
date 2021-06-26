@@ -6,8 +6,9 @@ option java_outer_classname = "MessagingProto";
 option objc_class_prefix = "Mp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
+import "util.proto";
 
-package apollo;
+package messaging;
 
 service Messaging {
     rpc gossip (MessageBff) returns (Messages) {}
@@ -17,7 +18,7 @@ service Messaging {
 message MessageBff {
     bytes context = 1; 
     int32 ring = 3;
-    bytes digests = 4;
+    utils.Biff digests = 4;
 }
 
 message Push {
@@ -41,6 +42,6 @@ message ByteMessage {
 }
 
 message Messages {
-    bytes bff = 1;
+    utils.Biff  bff = 1;
     repeated  Message updates = 2;
 }

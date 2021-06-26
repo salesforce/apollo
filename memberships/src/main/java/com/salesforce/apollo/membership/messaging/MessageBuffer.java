@@ -131,7 +131,7 @@ public class MessageBuffer {
                 builder.addUpdates(entry.getValue());
             }
         });
-        builder.setBff(getBff(seed, p).toBff().toByteString());
+        builder.setBff(getBff(seed, p).toBff());
         Messages gossip = builder.build();
         log.trace("updates: {}", gossip.getUpdatesCount());
         return gossip;

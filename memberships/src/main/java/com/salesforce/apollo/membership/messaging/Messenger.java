@@ -285,8 +285,7 @@ public class Messenger {
                                      .setRing(ring)
                                      .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextInt(),
                                                                parameters.falsePositiveRate)
-                                                       .toBff()
-                                                       .toByteString())
+                                                       .toBff())
                                      .build());
     }
 
