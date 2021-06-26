@@ -56,7 +56,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.cert.CaValidator;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -377,7 +377,8 @@ public class View {
     }
 
     public static EndpointProvider getStandardEpProvider(Node node) {
-        return new StandardEpProvider(Member.portsFrom(node.getCertificate()), ClientAuth.REQUIRE, CaValidator.NONE);
+        return new StandardEpProvider(Member.portsFrom(node.getCertificate()), ClientAuth.REQUIRE,
+                CertificateValidator.NONE);
     }
 
     /**
@@ -792,7 +793,7 @@ public class View {
         try {
             getParameters().certificateValidator.validateClient(new X509Certificate[] { certificate });
         } catch (CertificateException e) {
-            log.warn("Invalid cert: {}", certificate.getSubjectDN(), e);
+            log.warn("Invalid cert: {}", certificate.getSubjectX500Principal(), e);
             return null;
         }
 
