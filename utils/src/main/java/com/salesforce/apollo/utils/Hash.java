@@ -226,17 +226,17 @@ public abstract class Hash<M> {
         return Math.max(8, (int) (-n * Math.log(p) / (Math.log(2) * Math.log(2))));
     }
 
-    protected final int k;
-    protected final int m;
-    protected final int seed;
+    protected final int  k;
+    protected final int  m;
+    protected final long seed;
 
-    public Hash(int seed, int m, int k) {
+    public Hash(long seed, int m, int k) {
         this.seed = seed;
         this.k = k;
         this.m = m;
     }
 
-    public Hash(int seed, long n, double p) {
+    public Hash(long seed, int n, double p) {
         m = optimalM(n, p);
         k = optimalK(n, m);
         this.seed = seed;
@@ -250,7 +250,7 @@ public abstract class Hash<M> {
         return m;
     }
 
-    public int getSeed() {
+    public long getSeed() {
         return seed;
     }
 

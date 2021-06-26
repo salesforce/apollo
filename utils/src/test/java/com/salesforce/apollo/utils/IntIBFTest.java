@@ -32,7 +32,7 @@ public class IntIBFTest {
     @BeforeEach
     public void before() {
         r = new Random(0x1638);
-        ibf = new IBF.IntIBF(2000, 19932631, 3);
+        ibf = new IBF.IntIBF(r.nextInt(), 100, 3);
     }
 
     @Test
@@ -53,7 +53,7 @@ public class IntIBFTest {
         int val = r.nextInt(9999);
         ibf.add(val);
         int count = 0;
-        for (int cell = 0; cell < ibf.cells(); cell++) {
+        for (int cell = 0; cell < ibf.getM(); cell++) {
             if (ibf.isPure(cell))
                 count++;
         }
@@ -64,8 +64,8 @@ public class IntIBFTest {
     public void decode() throws Exception {
 
         int seed1 = r.nextInt();
-        IBF<Integer> b1 = new IBF.IntIBF(100, seed1, 3);
-        IBF<Integer> b2 = new IBF.IntIBF(100, seed1, 3);
+        IBF<Integer> b1 = new IBF.IntIBF(seed1, 100, 3);
+        IBF<Integer> b2 = new IBF.IntIBF(seed1, 100, 3);
 
         for (int i = 0; i < 50000; i++) {
             int val = r.nextInt(99999999);

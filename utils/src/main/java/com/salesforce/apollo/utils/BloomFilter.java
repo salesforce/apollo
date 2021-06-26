@@ -23,7 +23,7 @@ import com.salesforce.apollo.utils.Hash.Hasher.LongHasher;
 abstract public class BloomFilter<T> {
     public static class DigestBloomFilter extends BloomFilter<Digest> {
 
-        public DigestBloomFilter(int seed, int m, int k, ByteString bits) {
+        public DigestBloomFilter(long seed, int m, int k, ByteString bits) {
             super(new Hash<Digest>(seed, m, k) {
                 @Override
                 Hasher<Digest> newHasher(Digest key) {
@@ -32,7 +32,7 @@ abstract public class BloomFilter<T> {
             }, BitSet.valueOf(bits.toByteArray()));
         }
 
-        public DigestBloomFilter(int seed, long n, double p) {
+        public DigestBloomFilter(long seed, int n, double p) {
             super(new Hash<Digest>(seed, n, p) {
                 @Override
                 Hasher<Digest> newHasher(Digest key) {
@@ -50,7 +50,7 @@ abstract public class BloomFilter<T> {
 
     public static class IntBloomFilter extends BloomFilter<Integer> {
 
-        public IntBloomFilter(int seed, int m, int k, ByteString bits) {
+        public IntBloomFilter(long seed, int m, int k, ByteString bits) {
             super(new Hash<Integer>(seed, m, k) {
                 @Override
                 Hasher<Integer> newHasher(Integer key) {
@@ -59,7 +59,7 @@ abstract public class BloomFilter<T> {
             }, BitSet.valueOf(bits.toByteArray()));
         }
 
-        public IntBloomFilter(int seed, long n, double p) {
+        public IntBloomFilter(long seed, int n, double p) {
             super(new Hash<Integer>(seed, n, p) {
                 @Override
                 Hasher<Integer> newHasher(Integer key) {
@@ -76,7 +76,7 @@ abstract public class BloomFilter<T> {
     }
 
     public static class LongBloomFilter extends BloomFilter<Long> {
-        public LongBloomFilter(int seed, int m, int k, ByteString bits) {
+        public LongBloomFilter(long seed, int m, int k, ByteString bits) {
             super(new Hash<Long>(seed, m, k) {
                 @Override
                 Hasher<Long> newHasher(Long key) {
@@ -85,7 +85,7 @@ abstract public class BloomFilter<T> {
             }, BitSet.valueOf(bits.toByteArray()));
         }
 
-        public LongBloomFilter(int seed, long n, double p) {
+        public LongBloomFilter(long seed, int n, double p) {
             super(new Hash<Long>(seed, n, p) {
                 @Override
                 Hasher<Long> newHasher(Long key) {
@@ -102,7 +102,7 @@ abstract public class BloomFilter<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <Q> BloomFilter<Q> create(int seed, int m, int k, ByteString bits, int type) {
+    public static <Q> BloomFilter<Q> create(long seed, int m, int k, ByteString bits, int type) {
         switch (type) {
         case 0:
             return (BloomFilter<Q>) new DigestBloomFilter(seed, m, k, bits);
@@ -116,7 +116,7 @@ abstract public class BloomFilter<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <Q> BloomFilter<Q> create(int seed, long n, double p, int type) {
+    public static <Q> BloomFilter<Q> create(long seed, int n, double p, int type) {
         switch (type) {
         case 0:
             return (BloomFilter<Q>) new DigestBloomFilter(seed, n, p);

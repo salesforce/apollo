@@ -32,7 +32,7 @@ public class LongIBFTest {
     @BeforeEach
     public void before() {
         r = new Random(0x1638);
-        ibf = new IBF.LongIBF(2000, r.nextInt(), 3);
+        ibf = new IBF.LongIBF(r.nextInt(), 2000, 3);
     }
 
     @Test
@@ -53,7 +53,7 @@ public class LongIBFTest {
         long val = r.nextInt(9999);
         ibf.add(val);
         int count = 0;
-        for (int cell = 0; cell < ibf.cells(); cell++) {
+        for (int cell = 0; cell < ibf.getM(); cell++) {
             if (ibf.isPure(cell))
                 count++;
         }
@@ -64,8 +64,8 @@ public class LongIBFTest {
     public void decode() throws Exception {
 
         int seed1 = 31;
-        IBF<Long> b1 = new IBF.LongIBF(200, seed1, 3);
-        IBF<Long> b2 = new IBF.LongIBF(200, seed1, 3);
+        IBF<Long> b1 = new IBF.LongIBF(seed1, 200, 3);
+        IBF<Long> b2 = new IBF.LongIBF(seed1, 200, 3);
 
         for (int i = 0; i < 50000; i++) {
             long val = r.nextInt(99999999);
