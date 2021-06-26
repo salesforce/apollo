@@ -140,7 +140,7 @@ public class ProtobufEventFactory implements EventFactory {
         }
 
         var common = EventCommon.newBuilder()
-                                .setPrevious(specification.getPrevious().toByteString())
+                                .setPrevious(specification.getPrevious().toEventCoords())
                                 .putAllAuthentication(signatures.entrySet()
                                                                 .stream()
                                                                 .collect(Collectors.toMap(e -> e.getKey(),
@@ -160,7 +160,7 @@ public class ProtobufEventFactory implements EventFactory {
         }
 
         var common = EventCommon.newBuilder()
-                                .setPrevious(specification.getPrevious().toByteString())
+                                .setPrevious(specification.getPrevious().toEventCoords())
                                 .putAllAuthentication(signatures.entrySet()
                                                                 .stream()
                                                                 .collect(Collectors.toMap(e -> e.getKey(),
@@ -219,7 +219,7 @@ public class ProtobufEventFactory implements EventFactory {
                               .setHeader(header)
                               .addAllSeals(specification.getSeals()
                                                         .stream()
-                                                        .map(e -> e.toByteSring())
+                                                        .map(e -> e.toSealed())
                                                         .collect(Collectors.toList()))
                               .build();
     }

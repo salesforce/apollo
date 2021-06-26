@@ -95,7 +95,7 @@ public class CheckpointAssembler {
         CheckpointReplication.Builder request = CheckpointReplication.newBuilder()
                                                                      .setContext(context.getId().toDigeste())
                                                                      .setCheckpoint(height);
-        request.setCheckpointSegments(segmentsBff.toBff().toByteString());
+        request.setCheckpointSegments(segmentsBff.toBff());
         return request.build();
     }
 

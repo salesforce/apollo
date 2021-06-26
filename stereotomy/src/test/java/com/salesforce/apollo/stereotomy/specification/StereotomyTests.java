@@ -141,8 +141,7 @@ public class StereotomyTests {
         // lastEstablishmentEvent
         assertEquals(identifier.getIdentifier(), lastEstablishmentEvent.getIdentifier());
         assertEquals(0, lastEstablishmentEvent.getSequenceNumber());
-        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT),
-                     digest(identifier.getDigest().toByteString()));
+        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent
         KeyEvent lastEvent = kel.getKeyEvent(identifier.getLastEvent()).get();
@@ -208,8 +207,7 @@ public class StereotomyTests {
         // lastEstablishmentEvent
         assertEquals(identifier.getIdentifier(), lastEstablishmentEvent.getIdentifier());
         assertEquals(0, lastEstablishmentEvent.getSequenceNumber());
-        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT),
-                     digest(identifier.getDigest().toByteString()));
+        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent
         KeyEvent lastEvent = kel.getKeyEvent(identifier.getLastEvent()).get();

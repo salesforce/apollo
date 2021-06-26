@@ -45,25 +45,25 @@ message Accusation {
     utils.Digeste accuser = 3;
     utils.Digeste accused = 4;
     bytes content = 5;
-    bytes signature = 6;
+    utils.Sig signature = 6;
 }
 
 message Note {
     int64 epoch = 1;
     utils.Digeste id = 2;
     bytes mask = 3;
-    bytes signature = 4;
+    utils.Sig signature = 4;
 }
 
 message AccusationGossip {
-    bytes bff = 1;
+    utils.Biff bff = 1;
     repeated Accusation updates = 2;
 } 
 
 message EncodedCertificate {
     utils.Digeste id = 1;
     int64 epoch = 2;
-    string hash = 3;
+    utils.Digeste hash = 3;
     bytes content = 4; 
 }
 

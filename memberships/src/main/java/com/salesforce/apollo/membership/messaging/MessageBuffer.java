@@ -52,7 +52,7 @@ public class MessageBuffer {
         header.putInt(sequenceNumber);
         header.flip();
         List<ByteBuffer> buffers = new ArrayList<>();
-        buffers.add(from.getId().toByteString().asReadOnlyByteBuffer());
+        buffers.add(from.getId().toDigeste().toByteString().asReadOnlyByteBuffer());
         buffers.add(header);
         buffers.addAll(content.toByteString().asReadOnlyByteBufferList());
         return buffers;

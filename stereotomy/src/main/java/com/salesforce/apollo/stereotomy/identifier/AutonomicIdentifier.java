@@ -7,10 +7,8 @@
 package com.salesforce.apollo.stereotomy.identifier;
 
 import java.net.URI;
-import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.AID;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 
@@ -19,17 +17,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
  *
  */
 public class AutonomicIdentifier implements Identifier {
-    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 4 });
 
     private final Identifier prefix;
     private final URI        uri;
-
-    public AutonomicIdentifier(ByteBuffer buff) {
-        this.prefix = Identifier.from(buff);
-        byte[] encoded = new byte[buff.remaining()];
-        buff.get(encoded);
-        this.uri = URI.create(new String(encoded));
-    }
 
     public AutonomicIdentifier(Identifier prefix, URI uri) {
         this.prefix = prefix;
@@ -69,12 +59,6 @@ public class AutonomicIdentifier implements Identifier {
     @Override
     public boolean isTransferable() {
         return prefix.isTransferable();
-    }
-
-    @Override
-    public ByteString toByteString() {
-        byte[] encoded = uri.toASCIIString().getBytes();
-        return IDENTIFIER.concat(prefix.toByteString()).concat(ByteString.copyFrom(encoded));
     }
 
     @Override

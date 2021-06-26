@@ -1,28 +1,21 @@
 package com.salesforce.apollo.stereotomy.event;
 
-import java.nio.ByteBuffer;
-
-import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.DelegatingEventCoords;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 public class DelegatingEventCoordinates {
-    public static DelegatingEventCoordinates from(ByteBuffer buff) {
-        byte[] ilk = new byte[3];
-        buff.get(ilk);
-        Identifier identifier = Identifier.from(buff);
-        long sn = buff.getLong();
-        EventCoordinates coordinates = EventCoordinates.from(buff);
-        return new DelegatingEventCoordinates(new String(ilk), identifier, sn, coordinates);
-    }
-
-    public static EventCoordinates from(ByteString bs) {
-        return EventCoordinates.from(bs.asReadOnlyByteBuffer());
-    }
 
     private final Identifier       identifier;
     private final String           ilk;
     private final EventCoordinates previousEvent;
     private final long             sequenceNumber;
+
+    public DelegatingEventCoordinates(DelegatingEventCoords coordinates) {
+        identifier = Identifier.from(coordinates.getIdentifier());
+        sequenceNumber = coordinates.getSequenceNumber();
+        previousEvent = new EventCoordinates(coordinates.getPrevious());
+        ilk = coordinates.getIlk();
+    }
 
     public DelegatingEventCoordinates(String ilk, Identifier identifier, long sequenceNumber,
             EventCoordinates previousEvent) {
@@ -48,14 +41,13 @@ public class DelegatingEventCoordinates {
         return sequenceNumber;
     }
 
-    public ByteString toByteString() {
-        ByteBuffer sn = ByteBuffer.wrap(new byte[8]);
-        sn.putLong(sequenceNumber);
-        sn.flip();
-        return ByteString.copyFromUtf8(ilk)
-                         .concat(identifier.toByteString())
-                         .concat(previousEvent.toByteString())
-                         .concat(ByteString.copyFrom(sn));
+    public DelegatingEventCoords toCoords() {
+        return DelegatingEventCoords.newBuilder()
+                                    .setIdentifier(identifier.toIdent())
+                                    .setSequenceNumber(sequenceNumber)
+                                    .setPrevious(previousEvent.toEventCoords())
+                                    .setIlk(ilk)
+                                    .build();
     }
 
 }

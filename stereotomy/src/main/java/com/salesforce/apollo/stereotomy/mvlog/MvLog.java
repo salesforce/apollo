@@ -141,12 +141,12 @@ public class MvLog implements KERL {
             }
             case "InceptionEvent": {
                 InceptionEvent event = (InceptionEvent) msg;
-                yield (event.getDelegatingSeal().isEmpty()) ? new DelegatedInceptionEventImpl(event)
+                yield (event.hasDelegatingEvent()) ? new DelegatedInceptionEventImpl(event)
                         : new InceptionEventImpl(event);
             }
             case "RotationEvent": {
                 RotationEvent event = (RotationEvent) msg;
-                yield (event.getDelegatingSeal().isEmpty()) ? new DelegatedRotationEventImpl(event)
+                yield (event.hasDelegatingSeal()) ? new DelegatedRotationEventImpl(event)
                         : new RotationEventImpl(event);
             }
             case "InteractionEvent": {

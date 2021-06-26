@@ -13,8 +13,6 @@ import static com.salesforce.apollo.crypto.SignatureAlgorithm.EC_SECP256K1;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Base64;
@@ -23,7 +21,6 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesfoce.apollo.utils.proto.Sig;
-import com.salesforce.apollo.utils.BbBackedInputStream;
 
 public class QualifiedBase64 {
 
@@ -100,17 +97,6 @@ public class QualifiedBase64 {
                      .build();
     }
 
-    public static Digest digest(ByteBuffer buff) {
-        if (!buff.hasRemaining()) {
-            return Digest.NONE;
-        }
-        return new Digest(buff);
-    }
-
-    public static Digest digest(ByteString bs) {
-        return digest(bs.asReadOnlyByteBuffer());
-    }
-
     public static Digest digest(Digeste d) {
         return new Digest(d);
     }
@@ -170,17 +156,6 @@ public class QualifiedBase64 {
         var algo = SignatureAlgorithm.fromSignatureCode(pk.getCode());
         var bytes = pk.getEncoded().toByteArray();
         return algo.publicKey(bytes);
-    }
-
-    public static PublicKey publicKey(ByteBuffer buff) {
-        var algo = SignatureAlgorithm.fromSignatureCode(buff.get());
-        var bytes = new byte[buff.remaining()];
-        buff.get(bytes);
-        return algo.publicKey(bytes);
-    }
-
-    public static PublicKey publicKey(ByteString bs) {
-        return publicKey(bs.asReadOnlyByteBuffer());
     }
 
     public static PublicKey publicKey(String qb64) {
@@ -250,14 +225,6 @@ public class QualifiedBase64 {
 
     public static String shortQb64(PublicKey publicKey) {
         return qb64(publicKey).substring(0, SHORTENED_LENGTH);
-    }
-
-    public static JohnHancock signature(ByteBuffer buff) {
-        return new JohnHancock(buff);
-    }
-
-    public static JohnHancock signature(ByteString bs) {
-        return new JohnHancock(bs);
     }
 
     public static JohnHancock signature(Sig s) {

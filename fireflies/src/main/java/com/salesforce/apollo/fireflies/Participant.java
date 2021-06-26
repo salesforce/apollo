@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
 import java.io.InputStream;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
@@ -217,7 +215,7 @@ public class Participant implements Member {
                 : EncodedCertificate.newBuilder()
                                     .setId(getId().toDigeste())
                                     .setEpoch(current.getEpoch())
-                                    .setHash(qb64(certificateHash))
+                                    .setHash(certificateHash.toDigeste())
                                     .setContent(ByteString.copyFrom(derEncodedCertificate))
                                     .build();
     }

@@ -20,9 +20,6 @@ import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.lookup;
 
-import java.nio.ByteBuffer;
-
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -49,14 +46,6 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
         case "B" -> SignatureAlgorithm.ED_448;
         default -> throw new IllegalArgumentException("unknown code: " + code);
         };
-    }
-
-    public static Identifier identifier(ByteBuffer buff) {
-        return Identifier.from(buff);
-    }
-
-    public static Identifier identifier(ByteString bs) {
-        return identifier(bs.asReadOnlyByteBuffer());
     }
 
     public static Identifier identifier(Ident identifier) {

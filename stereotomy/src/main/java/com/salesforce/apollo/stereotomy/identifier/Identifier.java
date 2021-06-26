@@ -49,11 +49,6 @@ public interface Identifier {
                                              }
 
                                              @Override
-                                             public ByteString toByteString() {
-                                                 return EMPTY;
-                                             }
-
-                                             @Override
                                              public Ident toIdent() {
                                                  return NONE_IDENT;
                                              }
@@ -64,25 +59,6 @@ public interface Identifier {
                                              }
                                          };
     public static final Ident NONE_IDENT = Ident.newBuilder().setNONE(true).build();
-
-    public static Identifier from(ByteBuffer buff) {
-        if (!buff.hasRemaining()) {
-            return Identifier.NONE;
-        }
-        return switch (buff.get()) {
-        case 0 -> Identifier.NONE;
-        case 1 -> new SelfAddressingIdentifier(buff);
-        case 2 -> new BasicIdentifier(buff);
-        case 3 -> new SelfSigningIdentifier(buff);
-        case 4 -> new AutonomicIdentifier(buff);
-        case 5 -> new LID(buff);
-        default -> throw new IllegalArgumentException("Unexpected value: " + buff.get());
-        };
-    }
-
-    public static Identifier from(ByteString bs) {
-        return from(bs.asReadOnlyByteBuffer());
-    }
 
     public static Identifier from(Ident identifier) {
         if (identifier.hasBasic()) {
@@ -184,8 +160,6 @@ public interface Identifier {
     }
 
     boolean isTransferable();
-
-    ByteString toByteString();
 
     Ident toIdent();
 }

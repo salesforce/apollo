@@ -714,7 +714,7 @@ public class Consortium {
         builder.setTxn(Any.pack(transaction));
 
         Digest hash = hashOf(params.digestAlgorithm, builder);
-        JohnHancock signature = params.member.sign(hash.toByteString());
+        JohnHancock signature = params.member.sign(hash.toDigeste().toByteString());
 
         if (signature == null) {
             throw new IllegalStateException("Unable to sign transaction batch on: " + getMember());
@@ -1000,7 +1000,8 @@ public class Consortium {
             if (cKey != null) {
                 validators.put(memberID,
                                (signature, h) -> SignatureAlgorithm.lookup(cKey)
-                                                                   .verify(cKey, signature, h.toByteString()));
+                                                                   .verify(cKey, signature,
+                                                                           h.toDigeste().toByteString()));
             } else {
                 log.warn("Could not deserialize consensus key for {}", memberID);
             }

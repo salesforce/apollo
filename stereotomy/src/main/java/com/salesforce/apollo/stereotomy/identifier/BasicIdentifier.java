@@ -10,11 +10,9 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 
-import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.util.Objects;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.utils.proto.PubKey;
 
@@ -23,13 +21,7 @@ import com.salesfoce.apollo.utils.proto.PubKey;
  *
  */
 public class BasicIdentifier implements Identifier {
-
-    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 2 });
-    private final PublicKey         publicKey;
-
-    public BasicIdentifier(ByteBuffer buff) {
-        this(publicKey(buff));
-    }
+    private final PublicKey publicKey;
 
     public BasicIdentifier(PubKey pk) {
         this(publicKey(pk));
@@ -68,11 +60,6 @@ public class BasicIdentifier implements Identifier {
     @Override
     public boolean isTransferable() {
         return false;
-    }
-
-    @Override
-    public ByteString toByteString() {
-        return IDENTIFIER.concat(bs(publicKey).toByteString());
     }
 
     @Override

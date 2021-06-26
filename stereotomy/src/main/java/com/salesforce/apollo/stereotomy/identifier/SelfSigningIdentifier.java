@@ -6,12 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.identifier;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
-
-import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.crypto.JohnHancock;
 
@@ -20,13 +16,8 @@ import com.salesforce.apollo.crypto.JohnHancock;
  *
  */
 public class SelfSigningIdentifier implements Identifier {
-    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 3 });
 
     private final JohnHancock signature;
-
-    public SelfSigningIdentifier(ByteBuffer buff) {
-        this(signature(buff));
-    }
 
     public SelfSigningIdentifier(JohnHancock signature) {
         this.signature = signature;
@@ -61,11 +52,6 @@ public class SelfSigningIdentifier implements Identifier {
     @Override
     public boolean isTransferable() {
         return true;
-    }
-
-    @Override
-    public ByteString toByteString() {
-        return IDENTIFIER.concat(signature.toByteString());
     }
 
     @Override

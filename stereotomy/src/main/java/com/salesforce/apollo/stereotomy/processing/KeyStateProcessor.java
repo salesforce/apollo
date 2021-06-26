@@ -100,17 +100,18 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
                                                                                                                   .map(e -> e.name())
                                                                                                                   .collect(Collectors.toList()))
                                                                     .setCoordinates(event.getCoordinates()
-                                                                                         .toByteString())
+                                                                                         .toEventCoords())
                                                                     .setDelegatingIdentifier(delegatingPrefix == null
-                                                                            ? Digest.NONE.toByteString()
-                                                                            : delegatingPrefix.toByteString())
+                                                                            ? Identifier.NONE_IDENT
+                                                                            : delegatingPrefix.toIdent())
                                                                     .setIdentifier(identifier.toIdent())
                                                                     .addAllKeys(keys.stream()
                                                                                     .map(pk -> bs(pk))
                                                                                     .collect(Collectors.toList()))
                                                                     .setLastEstablishmentEvent(lastEstablishmentEvent.getCoordinates()
-                                                                                                                     .toByteString())
-                                                                    .setLastEvent(event.getCoordinates().toByteString())
+                                                                                                                     .toEventCoords())
+                                                                    .setLastEvent(event.getCoordinates()
+                                                                                       .toEventCoords())
                                                                     .setNextKeyConfigurationDigest(nextKeyConfiguration == null
                                                                             ? Digest.NONE.toDigeste()
                                                                             : nextKeyConfiguration.toDigeste())

@@ -8,8 +8,6 @@ package com.salesforce.apollo.utils;
 
 import java.util.BitSet;
 
-import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.utils.Hash.Hasher.DigestHasher;
@@ -139,14 +137,6 @@ abstract public class BloomFilter<T> {
             bits[i++] = l;
         }
         return create(bff.getSeed(), bff.getM(), bff.getK(), bits, bff.getType());
-    }
-
-    public static <Q> BloomFilter<Q> from(ByteString encoded) {
-        try {
-            return from(Biff.parseFrom(encoded));
-        } catch (InvalidProtocolBufferException e) {
-            throw new IllegalStateException("invalid bloom filter serialization", e);
-        }
     }
 
     private static double population(BitSet bitSet, int k, int m) {

@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import java.nio.ByteBuffer;
-
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.EventLoc;
+import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -34,8 +34,8 @@ public interface Seal {
                 }
 
                 @Override
-                public ByteString toByteSring() {
-                    return IDENTIFIER.concat(coordinates.toByteString());
+                public Sealed toSealed() {
+                    return Sealed.newBuilder().setEventCoordinates(coordinates.toEventCoords()).build();
                 }
             };
         }
@@ -60,8 +60,8 @@ public interface Seal {
                 }
 
                 @Override
-                public ByteString toByteSring() {
-                    return IDENTIFIER.concat(coordinates.toByteString());
+                public Sealed toSealed() {
+                    return Sealed.newBuilder().setDelegatingLocation(coordinates.toCoords()).build();
                 }
             };
         }
@@ -87,8 +87,8 @@ public interface Seal {
                 }
 
                 @Override
-                public ByteString toByteSring() {
-                    return IDENTIFIER.concat(digest.toByteString());
+                public Sealed toSealed() {
+                    return Sealed.newBuilder().setDigest(digest.toDigeste()).build();
                 }
             };
         }
@@ -123,8 +123,13 @@ public interface Seal {
                 }
 
                 @Override
-                public ByteString toByteSring() {
-                    return IDENTIFIER.concat(digest.toByteString());
+                public Sealed toSealed() {
+                    return Sealed.newBuilder()
+                                 .setEvent(EventLoc.newBuilder()
+                                                   .setIdentifier(prefix.toIdent())
+                                                   .setSequenceNumber(sequenceNumber))
+                                 .setDigest(digest.toDigeste())
+                                 .build();
                 }
             };
         }
@@ -136,22 +141,25 @@ public interface Seal {
         long getSequenceNumber();
     }
 
-    static Seal from(ByteBuffer buff) {
-        byte code = buff.get();
-        return switch (code) {
-        case 1 -> CoordinatesSeal.construct(EventCoordinates.from(buff));
-        case 2 -> DelegatingLocationSeal.construct(DelegatingEventCoordinates.from(buff));
-        case 3 -> DigestSeal.construct(Digest.from(buff));
-        case 4 -> EventSeal.construct(Identifier.from(buff), Digest.from(buff), buff.getLong());
-        default -> throw new IllegalArgumentException("Unknown seal type: " + code);
-        };
-    }
-
-    static Seal from(ByteString bs) {
-        return from(bs.asReadOnlyByteBuffer());
+    static Seal from(Sealed s) {
+        if (s.hasEventCoordinates()) {
+            return CoordinatesSeal.construct(new EventCoordinates(s.getEventCoordinates()));
+        }
+        if (s.hasDelegatingLocation()) {
+            return DelegatingLocationSeal.construct(new DelegatingEventCoordinates(s.getDelegatingLocation()));
+        }
+        if (s.hasDigest()) {
+            return DigestSeal.construct(Digest.from(s.getDigest()));
+        }
+        if (s.hasEvent()) {
+            EventLoc event = s.getEvent();
+            return EventSeal.construct(Identifier.from(event.getIdentifier()), new Digest(event.getDigest()),
+                                       event.getSequenceNumber());
+        }
+        throw new IllegalArgumentException("Unknown seal type");
     }
 
     byte sealCode();
 
-    ByteString toByteSring();
+    Sealed toSealed();
 }

@@ -20,6 +20,40 @@ message Ident {
         bool NONE = 5;
     }
 }
+message EventCoords {
+    Ident identifier = 1;
+    int64 sequenceNumber = 2;
+    string ilk = 3;
+    utils.Digeste digest = 4;
+}
+
+message EventLoc {
+    Ident identifier = 1;
+    int64 sequenceNumber = 2;
+    utils.Digeste digest = 3;
+}
+
+message DelegatingEventCoords {
+    Ident identifier = 1;
+    int64 sequenceNumber = 2;
+    EventCoords previous = 3;
+    string ilk = 4;
+}
+
+message KeyCoords {
+    EventCoords establishment = 1;
+    int32 keyIndex = 2;
+}
+
+message Sealed {
+    oneof type {
+        EventCoords eventCoordinates = 1;
+        DelegatingEventCoords delegatingLocation = 2;
+        utils.Digeste digest = 3;
+        EventLoc event = 4;
+        bytes bits = 5;
+    }
+}
 
 message AID {
     Ident prefix = 1;
@@ -36,7 +70,7 @@ message Header {
 
 message EventCommon {
     utils.Digeste configuration = 2;
-    bytes previous = 3;
+    EventCoords previous = 3;
     map<int32, utils.Sig> authentication = 4;
 }
 
@@ -47,13 +81,13 @@ message InteractionEvent {
 
 message InteractionSpec {
     Header header = 1;
-    repeated bytes seals = 2;
+    repeated Sealed seals = 2;
 }
 
 message AttachmentEvent {
     Header header = 1;
     EventCommon common = 2;
-    bytes coordinates = 3;
+    EventCoords coordinates = 3;
     map<int32, utils.Sig> endorsements = 5; 
     repeated Receipt receipts = 6;
 }
@@ -68,7 +102,7 @@ message Establishment {
 message RotationEvent {
     RotationSpec specification = 1; 
     EventCommon common = 2;
-    bytes delegatingSeal = 3; // Delegated rotation event
+    Sealed delegatingSeal = 3; // Delegated rotation event
 }
 
 message RotationSpec {
@@ -76,15 +110,15 @@ message RotationSpec {
     Establishment establishment = 2;
     repeated Ident witnessesRemoved = 3;
     repeated Ident witnessesAdded = 41;
-    repeated bytes seals = 5;
+    repeated Sealed seals = 5;
 }
 
 message InceptionEvent {
     IdentifierSpec specification = 1;
     EventCommon common = 2;
-    bytes delegatingEvent = 3;
+    DelegatingEventCoords delegatingEvent = 3;
     Ident identifier = 4;
-    bytes delegatingSeal = 5; // Delegated inception event
+    Sealed delegatingSeal = 5; // Delegated inception event
 }
 
 message IdentifierSpec {
@@ -95,7 +129,7 @@ message IdentifierSpec {
 }
 
 message Receipt {
-    bytes coordinates = 1;
+    EventCoords coordinates = 1;
     map<int32, utils.Sig> signatures = 2;
 }
 
@@ -122,10 +156,10 @@ message Version {
 message KeyState {
     Ident identifier = 1;
     utils.Digeste digest = 2;
-    bytes coordinates = 3;
-    bytes lastEvent = 4;
-    bytes lastEstablishmentEvent = 5;
-    bytes delegatingIdentifier = 6;
+    EventCoords coordinates = 3;
+    EventCoords lastEvent = 4;
+    EventCoords lastEstablishmentEvent = 5;
+    Ident delegatingIdentifier = 6;
     repeated utils.PubKey keys = 7;
     utils.Digeste nextKeyConfigurationDigest = 8;
     repeated string configurationTraits = 9;
@@ -199,7 +233,7 @@ message Attachments {
 
 message Resolve {
     utils.Digeste context = 1;
-    bytes identifier = 2;
+    Ident identifier = 2;
     google.protobuf.Duration timeout = 3;
 }
 
@@ -210,9 +244,9 @@ message Binding {
 }
 
 message Bound {
-    bytes prefix = 1;
+    Ident prefix = 1;
     google.protobuf.Any value = 2;
-    bytes signature = 3;
+    utils.Sig signature = 3;
     bool timeout = 4;
 }
 

@@ -167,6 +167,7 @@ public class ViewContext implements MembershipListener<Member> {
         JohnHancock signature = new Signer(
                 0, consensusKeyPair.getPrivate())
                                                  .sign(digestAlgorithm.digest(block.getHeader().toByteString())
+                                                                      .toDigeste()
                                                                       .toByteString());
 
         if (log.isTraceEnabled()) {
@@ -290,7 +291,8 @@ public class ViewContext implements MembershipListener<Member> {
         SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.lookup(key);
 
         Digest headerHash = digestAlgorithm.digest(block.getHeader().toByteString());
-        boolean verified = signatureAlgorithm.verify(key, signature(v.getSignature()), headerHash.toByteString());
+        boolean verified = signatureAlgorithm.verify(key, signature(v.getSignature()),
+                                                     headerHash.toDigeste().toByteString());
         if (!verified) {
             log.error("Error validating block signature of {} did not match", memberID);
         }

@@ -6,10 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.identifier;
 
-import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 
 /**
@@ -17,17 +15,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
  *
  */
 public class LID implements Identifier {
-    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 5 });
 
     private final Identifier aid;
     private final String     lid;
-
-    public LID(ByteBuffer buff) {
-        this.aid = Identifier.from(buff);
-        byte[] encoded = new byte[buff.remaining()];
-        buff.get(encoded);
-        this.lid = new String(encoded);
-    }
 
     public LID(Identifier aid, String lid) {
         this.aid = aid;
@@ -72,12 +62,6 @@ public class LID implements Identifier {
     @Override
     public boolean isTransferable() {
         return aid.isTransferable();
-    }
-
-    @Override
-    public ByteString toByteString() {
-        byte[] encoded = lid.getBytes();
-        return IDENTIFIER.concat(aid.toByteString()).concat(ByteString.copyFrom(encoded));
     }
 
     @Override

@@ -201,7 +201,7 @@ message Blocks {
 message CheckpointReplication {
     utils.Digeste context = 1;
     int64 checkpoint = 2;
-    bytes checkpointSegments = 3;
+    utils.Biff checkpointSegments = 3;
 }
 
 message CheckpointSegments {

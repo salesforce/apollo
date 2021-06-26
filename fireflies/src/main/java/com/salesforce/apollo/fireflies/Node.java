@@ -24,6 +24,7 @@ import com.salesfoce.apollo.fireflies.proto.Accusation.Builder;
 import com.salesfoce.apollo.fireflies.proto.AccusationOrBuilder;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteOrBuilder;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.SigningMember;
@@ -192,11 +193,11 @@ public class Node extends Participant implements SigningMember {
         note = new NoteWrapper(parameters.hashAlgorithm.digest(n.toByteString()), n);
     }
 
-    private ByteString sign(AccusationOrBuilder builder) {
-        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toByteString();
+    private Sig sign(AccusationOrBuilder builder) {
+        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toSig();
     }
 
-    private ByteString sign(NoteOrBuilder builder) {
-        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toByteString();
+    private Sig sign(NoteOrBuilder builder) {
+        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toSig();
     }
 }

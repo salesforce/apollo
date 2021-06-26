@@ -8,10 +8,9 @@ package com.salesforce.apollo.stereotomy;
 
 import static java.util.Objects.requireNonNull;
 
-import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyCoords;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
@@ -29,8 +28,11 @@ public class KeyCoordinates {
     private final EventCoordinates establishmentEvent;
     private final int              keyIndex;
 
-    public KeyCoordinates(ByteBuffer buff) {
-        this(EventCoordinates.from(buff), buff.getInt());
+    public KeyCoords toKeyCoords() {
+        return KeyCoords.newBuilder()
+                        .setEstablishment(establishmentEvent.toEventCoords())
+                        .setKeyIndex(keyIndex)
+                        .build();
     }
 
     public KeyCoordinates(EventCoordinates establishmentEvent, int keyIndex) {
@@ -40,6 +42,11 @@ public class KeyCoordinates {
 
         this.establishmentEvent = requireNonNull(establishmentEvent, "establishmentEvent");
         this.keyIndex = keyIndex;
+    }
+
+    public KeyCoordinates(KeyCoords coordinates) {
+        establishmentEvent = new EventCoordinates(coordinates.getEstablishment());
+        keyIndex = coordinates.getKeyIndex();
     }
 
     @Override
@@ -65,13 +72,6 @@ public class KeyCoordinates {
     @Override
     public int hashCode() {
         return Objects.hash(establishmentEvent, keyIndex);
-    }
-
-    public ByteString toByteString() {
-        ByteBuffer ki = ByteBuffer.allocate(2);
-        ki.putInt(keyIndex);
-        ki.flip();
-        return establishmentEvent.toByteString().concat(ByteString.copyFrom(ki));
     }
 
     @Override

@@ -1112,7 +1112,7 @@ public class View {
                .flatMap(m -> m.getAccusations())
                .filter(a -> !bff.contains(a.getHash()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
-        builder.setBff(getAccusationsBff(seed, p).toBff().toByteString());
+        builder.setBff(getAccusationsBff(seed, p).toBff());
         AccusationGossip gossip = builder.build();
         log.trace("process accusations produded updates: {}", gossip.getUpdatesCount());
         return gossip;

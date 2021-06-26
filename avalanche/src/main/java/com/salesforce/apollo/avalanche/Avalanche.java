@@ -54,7 +54,6 @@ import com.salesforce.apollo.avalanche.communications.AvalancheService;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -340,7 +339,7 @@ public class Avalanche {
             try {
                 dag.insertSerialized(suppliedDagNodes.getEntriesList()
                                                      .stream()
-                                                     .map(e -> DigestAlgorithm.DEFAULT.digest(e))
+                                                     .map(e -> parameters.digestAlgorithm.digest(e))
                                                      .map(e -> e.toDigeste())
                                                      .collect(Collectors.toList()),
                                      suppliedDagNodes.getEntriesList(), System.currentTimeMillis());
@@ -373,7 +372,7 @@ public class Avalanche {
         log.trace("queried: {} for: {} result: {}", m, query.size(), result.getResultList().size());
         dag.insertSerialized(result.getWantedList()
                                    .stream()
-                                   .map(e -> DigestAlgorithm.DEFAULT.digest(e))
+                                   .map(e -> parameters.digestAlgorithm.digest(e))
                                    .map(e -> e.toDigeste())
                                    .collect(Collectors.toList()),
                              result.getWantedList(), System.currentTimeMillis());
