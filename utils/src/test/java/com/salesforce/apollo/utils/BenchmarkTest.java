@@ -3,19 +3,24 @@ package com.salesforce.apollo.utils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.utils.IBF.Decode;
 import com.salesforce.apollo.utils.IBF.IntIBF;
+import com.salesforce.apollo.utils.StrataEstimator.IntStrataEstimator;
 
 public class BenchmarkTest {
 
-    static final int TEST_SIZE = 10_000_000;// Number of elements to test
-    static final int DIFF_SIZE = 10;
+    static final int TEST_SIZE    = 1_000_000;         // Number of elements to test
+    static final int SAMPLE_RANGE = Integer.MAX_VALUE; // range of sampled ints
+    static final int DIFF_SIZE    = 10;
 
     public static void printStat(long start, long end) {
         double diff = (end - start) / 1_000.0;
@@ -32,32 +37,33 @@ public class BenchmarkTest {
         final Random entropy = new Random(0x1638);
 
         // Generate elements first
-        int s1[] = new int[TEST_SIZE];
-        int s2[] = new int[TEST_SIZE];
-        int s1_diff[] = new int[DIFF_SIZE];
-        int s2_diff[] = new int[DIFF_SIZE];
-        for (int i = 0; i < TEST_SIZE - DIFF_SIZE; i++) {
-            int val = entropy.nextInt(100000);
-            s1[i] = val;
-            s2[i] = val;
+        Set<Integer> s1 = new HashSet<>();
+        Set<Integer> s2 = new HashSet<>();
+        List<Integer> s1_diff = new ArrayList<>();
+        List<Integer> s2_diff = new ArrayList<>();
+        while (s1.size() < TEST_SIZE - DIFF_SIZE) {
+            int val = entropy.nextInt(SAMPLE_RANGE);
+            s1.add(val);
+            s2.add(val);
         }
 
-        for (int i = TEST_SIZE - DIFF_SIZE; i < TEST_SIZE; i++) {
-            int val = entropy.nextInt(100000);
-            s1[i] = val;
-            s1_diff[i - (TEST_SIZE - DIFF_SIZE)] = val;
+        while (s1.size() < TEST_SIZE) {
+            int val = entropy.nextInt(SAMPLE_RANGE);
+            if (s1.add(val)) {
+                s1_diff.add(val);
+            }
         }
 
-        for (int i = TEST_SIZE - DIFF_SIZE; i < TEST_SIZE; i++) {
-            int val = entropy.nextInt(100000);
-            s2[i] = val;
-            s2_diff[i - (TEST_SIZE - DIFF_SIZE)] = val;
+        for (int i = TEST_SIZE - DIFF_SIZE; s2.size() < TEST_SIZE; i++) {
+            int val = entropy.nextInt(SAMPLE_RANGE);
+            s2.add(val);
+            s2_diff.add(i - (TEST_SIZE - DIFF_SIZE), val);
         }
 
         // strataEstimator
         int seed = entropy.nextInt();
-        StrataEstimator se1 = new StrataEstimator(seed);
-        StrataEstimator se2 = new StrataEstimator(seed);
+        StrataEstimator<Integer> se1 = new IntStrataEstimator(seed);
+        StrataEstimator<Integer> se2 = new IntStrataEstimator(seed);
 
         System.out.println("=========benchmark start==========");
         System.out.print("StrataEstimator.encode(): ");
@@ -79,31 +85,25 @@ public class BenchmarkTest {
         System.out.println("==========");
         // invertible bloom filter
 
-        IntIBF b1 = new IntIBF((int) (diff * 2), seed);
-        IntIBF b2 = new IntIBF((int) (diff * 2), seed);
+        IntIBF b1 = new IntIBF(seed, (int) (diff * 2));
+        IntIBF b2 = new IntIBF(seed, (int) (diff * 2));
 
         // Add elements
         System.out.print("ibf.add(): ");
         long start_add = System.currentTimeMillis();
-        for (int i = 0; i < TEST_SIZE; i++) {
-            b1.add(s1[i]);
-        }
+        s1.forEach(element -> b1.add(element));
         long end_add = System.currentTimeMillis();
         printStat(start_add, end_add);
 
         // Check for existing elements with contains()
         System.out.print("ibf.contains(), existing: ");
         long start_contains = System.currentTimeMillis();
-        for (int i = 0; i < TEST_SIZE; i++) {
-            b1.contains(s1[i]);
-        }
+        s1.forEach(element -> b1.contains(element));
         long end_contains = System.currentTimeMillis();
         printStat(start_contains, end_contains);
 
         // subtract invertible bloom filter
-        for (int i = 0; i < TEST_SIZE; i++) {
-            b2.add(s2[i]);
-        }
+        s2.forEach(element -> b2.add(element));
         System.out.print("ibf.subtract()");
         long start_subtract = System.currentTimeMillis();
         IBF<Integer> res = b1.subtract(b2);
@@ -125,14 +125,14 @@ public class BenchmarkTest {
         assertEquals(DIFF_SIZE, decodeResult.missing().size(), "Incorrect differences missing");
         Collections.sort(decodeResult.added());
         Collections.sort(decodeResult.missing());
-        Arrays.sort(s1_diff);
-        Arrays.sort(s2_diff);
+        Collections.sort(s1_diff);
+        Collections.sort(s2_diff);
         for (int i = 0; i < DIFF_SIZE; i++) {
-            String str = s1_diff[i] + ":" + decodeResult.added().get(i) + "," + s2_diff[i] + ":"
+            String str = s1_diff.get(i) + ":" + decodeResult.added().get(i) + "," + s2_diff.get(i) + ":"
                     + decodeResult.missing().get(i);
             printInfo(str);
-            assertEquals(s1_diff[i], decodeResult.added().get(i), "S1 diff does not match decode added result");
-            assertEquals(s2_diff[i], decodeResult.missing().get(i), "S2 diff does not match decode missing result");
+            assertEquals(s1_diff.get(i), decodeResult.added().get(i), "S1 diff does not match decode added result");
+            assertEquals(s2_diff.get(i), decodeResult.missing().get(i), "S2 diff does not match decode missing result");
         }
         printInfo("decode success");
     }

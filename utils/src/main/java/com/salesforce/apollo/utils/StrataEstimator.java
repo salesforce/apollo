@@ -1,26 +1,89 @@
 package com.salesforce.apollo.utils;
 
-import com.salesforce.apollo.utils.IBF.Decode;
-import com.salesforce.apollo.utils.IBF.IntIBF;
+import java.util.Collection;
+import java.util.stream.Stream;
 
-public class StrataEstimator {
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.utils.IBF.Decode;
+import com.salesforce.apollo.utils.IBF.DigestIBF;
+import com.salesforce.apollo.utils.IBF.IntIBF;
+import com.salesforce.apollo.utils.IBF.LongIBF;
+
+public abstract class StrataEstimator<T> {
+
+    public static class DigestStrataEstimator extends StrataEstimator<Digest> {
+        private final DigestAlgorithm digestAlgorithm;
+
+        public DigestStrataEstimator(DigestAlgorithm digestAlgorithm, int seed) {
+            super(seed);
+            this.digestAlgorithm = digestAlgorithm;
+        }
+
+        public DigestStrataEstimator(DigestAlgorithm digestAlgorithm, int seed, int L) {
+            super(seed, L);
+            this.digestAlgorithm = digestAlgorithm;
+        }
+
+        @Override
+        IBF<Digest> newIBF(long seed) {
+            return new DigestIBF(digestAlgorithm, seed, 200);
+        }
+
+    }
+
+    public static class IntStrataEstimator extends StrataEstimator<Integer> {
+
+        public IntStrataEstimator(int seed) {
+            super(seed);
+        }
+
+        public IntStrataEstimator(int seed, int L) {
+            super(seed, L);
+        }
+
+        @Override
+        IBF<Integer> newIBF(long seed) {
+            return new IntIBF(seed, 200);
+        }
+
+    }
+
+    public static class LongStrataEstimator extends StrataEstimator<Long> {
+
+        public LongStrataEstimator(int seed) {
+            super(seed);
+        }
+
+        public LongStrataEstimator(int seed, int L) {
+            super(seed, L);
+        }
+
+        @Override
+        IBF<Long> newIBF(long seed) {
+            return new LongIBF(seed, 200);
+        }
+
+    }
+
     private static final int L = 32;// Is U the hash range? the ith partition covers 1/2^(i+1) of U
 
-    private final IntIBF[] ibfs;
+    private final IBF<T>[] ibfs;
 
     public StrataEstimator(int seed) {
         this(seed, L);
     }
 
+    @SuppressWarnings("unchecked")
     public StrataEstimator(int seed, int L) {
-        ibfs = new IntIBF[L];
+        ibfs = (IBF<T>[]) new IntIBF[L];
         for (int i = 0; i < ibfs.length; i++) {
             // ?? how to determine the approximate size of the ibfs[i]?
-            ibfs[i] = new IntIBF(100, seed);
+            ibfs[i] = newIBF(seed);
         }
     }
 
-    public int decode(StrataEstimator se) {
+    public int decode(StrataEstimator<T> se) {
         @SuppressWarnings("rawtypes")
         IBF[] ibfs2 = se.ibfs;
         int count = 0;
@@ -28,8 +91,8 @@ public class StrataEstimator {
             if (i < 0)
                 return count * (int) Math.pow(2, i + 1);
             @SuppressWarnings("unchecked")
-            IBF<Integer> subResult = ibfs[i].subtract(ibfs2[i]);
-            Decode<Integer> decResult = ibfs[i].decode(subResult);
+            IBF<T> subResult = ibfs[i].subtract(ibfs2[i]);
+            Decode<T> decResult = ibfs[i].decode(subResult);
             if (decResult == null)
                 return count * (int) Math.pow(2, i + 1);
             count += decResult.added().size() + decResult.missing().size();
@@ -37,16 +100,25 @@ public class StrataEstimator {
         return count;
     }
 
-    public IntIBF[] encode(int[] s) {
-        for (int element : s) {
+    public IBF<T>[] encode(Collection<T> s) {
+        s.forEach(element -> {
             int i = Math.min(ibfs.length - 1, Integer.numberOfTrailingZeros(ibfs[0].keyHashOf(element)));
             ibfs[i].add(element);
-        }
+        });
         return ibfs;
     }
 
-    public IBF.IntIBF[] getIbfs() {
+    public IBF<T>[] encode(Stream<T> s) {
+        s.forEach(element -> {
+            int i = Math.min(ibfs.length - 1, Integer.numberOfTrailingZeros(ibfs[0].keyHashOf(element)));
+            ibfs[i].add(element);
+        });
         return ibfs;
     }
 
+    public IBF<T>[] getIbfs() {
+        return ibfs;
+    }
+
+    abstract IBF<T> newIBF(long seed);
 }

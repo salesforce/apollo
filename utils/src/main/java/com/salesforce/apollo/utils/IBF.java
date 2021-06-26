@@ -14,6 +14,7 @@ import java.util.Queue;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.utils.Hash.Hasher.DigestHasher;
 import com.salesforce.apollo.utils.Hash.Hasher.IntHasher;
 import com.salesforce.apollo.utils.Hash.Hasher.LongHasher;
 
@@ -33,6 +34,19 @@ abstract public class IBF<KeyType> implements Cloneable {
         private DigestIBF(Hash<Digest> h, int expandedLength) {
             super(h);
             keySum = new long[expandedLength];
+        }
+
+        public DigestIBF(DigestAlgorithm d, long seed, int m, int k) {
+            this(new Hash<Digest>(seed, m, k) {
+                @Override
+                Hasher<Digest> newHasher(Digest key) {
+                    return new DigestHasher(key, seed);
+                }
+            }, d);
+        }
+
+        public DigestIBF(DigestAlgorithm d, long seed, int m) {
+            this(d, seed, m, DEFAULT_K);
         }
 
         @Override
@@ -80,11 +94,7 @@ abstract public class IBF<KeyType> implements Cloneable {
             keySum = new int[h.m];
         }
 
-        /**
-         * @param i
-         * @param seed
-         */
-        public IntIBF(int m, long seed) {
+        public IntIBF(long seed, int m) {
             this(seed, m, DEFAULT_K);
         }
 
@@ -147,6 +157,10 @@ abstract public class IBF<KeyType> implements Cloneable {
             });
         }
 
+        public LongIBF(long seed, int m) {
+            this(seed, m, DEFAULT_K);
+        }
+
         @Override
         IBF<Long> cloneEmpty() {
             return new LongIBF(h);
@@ -206,6 +220,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         size++;
     }
 
+    @Override
     public IBF<KeyType> clone() {
         try {
             @SuppressWarnings("unchecked")
