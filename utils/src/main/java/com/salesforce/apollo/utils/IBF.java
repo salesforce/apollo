@@ -11,6 +11,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
+import com.salesfoce.apollo.utils.proto.IBiff;
+import com.salesfoce.apollo.utils.proto.IBiffCommon;
+import com.salesfoce.apollo.utils.proto.IBiffCommon.Builder;
+import com.salesfoce.apollo.utils.proto.IntIBiff;
+import com.salesfoce.apollo.utils.proto.LongIBiff;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.Hash.Hasher.DigestHasher;
@@ -24,7 +29,17 @@ import com.salesforce.apollo.utils.Hash.Hasher.LongHasher;
  *
  */
 abstract public class IBF<KeyType> implements Cloneable {
+
     public static class DigestIBF extends IBF<Digest> {
+        static Hash<Digest> newHasher(long seed, int m, int k) {
+            return new Hash<Digest>(seed, m, k) {
+                @Override
+                Hasher<Digest> newHasher() {
+                    return new DigestHasher();
+                }
+            };
+        }
+
         private final long[] keySum;
 
         public DigestIBF(DigestAlgorithm d, long seed, int m) {
@@ -32,12 +47,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         }
 
         public DigestIBF(DigestAlgorithm d, long seed, int m, int k) {
-            this(new Hash<Digest>(seed, m, k) {
-                @Override
-                Hasher<Digest> newHasher() {
-                    return new DigestHasher();
-                }
-            }, d);
+            this(newHasher(seed, m, k), d);
         }
 
         public DigestIBF(Hash<Digest> h, DigestAlgorithm digestAlgorithm) {
@@ -45,9 +55,25 @@ abstract public class IBF<KeyType> implements Cloneable {
             keySum = new long[h.m * digestAlgorithm.longLength()];
         }
 
+        public DigestIBF(IntIBiff ibf) {
+            super(ibf.getCommon(),
+                    newHasher(ibf.getCommon().getSeed(), ibf.getCommon().getK(), ibf.getCommon().getM()));
+            keySum = new long[ibf.getKSumCount()];
+            int index = 0;
+            for (long i : ibf.getKSumList()) {
+                keySum[index++] = i;
+            }
+        }
+
         private DigestIBF(Hash<Digest> h, int expandedLength) {
             super(h);
             keySum = new long[expandedLength];
+        }
+
+        @Override
+        public IBiff toIBiff() {
+            // TODO Auto-generated method stub
+            return null;
         }
 
         @Override
@@ -82,6 +108,15 @@ abstract public class IBF<KeyType> implements Cloneable {
     }
 
     public static class IntIBF extends IBF<Integer> {
+        static Hash<Integer> newHasher(long seed, int m, int k) {
+            return new Hash<Integer>(seed, m, k) {
+                @Override
+                Hasher<Integer> newHasher() {
+                    return new IntHasher();
+                }
+            };
+        }
+
         private final int[] keySum;
 
         public IntIBF(Hash<Integer> h) {
@@ -89,17 +124,35 @@ abstract public class IBF<KeyType> implements Cloneable {
             keySum = new int[h.m];
         }
 
+        public IntIBF(IntIBiff ibf) {
+            super(ibf.getCommon(),
+                    newHasher(ibf.getCommon().getSeed(), ibf.getCommon().getK(), ibf.getCommon().getM()));
+            keySum = new int[ibf.getKSumCount()];
+            int index = 0;
+            for (int i : ibf.getKSumList()) {
+                keySum[index++] = i;
+            }
+        }
+
         public IntIBF(long seed, int m) {
             this(seed, m, DEFAULT_K);
         }
 
         public IntIBF(long seed, int m, int k) {
-            this(new Hash<Integer>(seed, m, k) {
-                @Override
-                Hasher<Integer> newHasher() {
-                    return new IntHasher();
-                }
-            });
+            this(newHasher(seed, m, k));
+        }
+
+        @Override
+        public IBiff toIBiff() {
+            return IBiff.newBuilder().setInteger(toIntIBiff()).build();
+        }
+
+        public IntIBiff toIntIBiff() {
+            IntIBiff.Builder builder = IntIBiff.newBuilder().setCommon(toCommon());
+            for (int i : keySum) {
+                builder.addKSum(i);
+            }
+            return builder.build();
         }
 
         @Override
@@ -131,6 +184,15 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     public static class LongIBF extends IBF<Long> {
 
+        static Hash<Long> newHasher(long seed, int m, int k) {
+            return new Hash<Long>(seed, m, k) {
+                @Override
+                Hasher<Long> newHasher() {
+                    return new LongHasher();
+                }
+            };
+        }
+
         private final long[] keySum;
 
         public LongIBF(Hash<Long> h) {
@@ -138,17 +200,35 @@ abstract public class IBF<KeyType> implements Cloneable {
             keySum = new long[h.m];
         }
 
+        public LongIBF(IntIBiff ibf) {
+            super(ibf.getCommon(),
+                    newHasher(ibf.getCommon().getSeed(), ibf.getCommon().getK(), ibf.getCommon().getM()));
+            keySum = new long[ibf.getKSumCount()];
+            int index = 0;
+            for (long i : ibf.getKSumList()) {
+                keySum[index++] = i;
+            }
+        }
+
         public LongIBF(long seed, int m) {
             this(seed, m, DEFAULT_K);
         }
 
         public LongIBF(long seed, int m, int k) {
-            this(new Hash<Long>(seed, m, k) {
-                @Override
-                Hasher<Long> newHasher() {
-                    return new LongHasher();
-                }
-            });
+            this(newHasher(seed, m, k));
+        }
+
+        @Override
+        public IBiff toIBiff() {
+            return IBiff.newBuilder().setLong(toLongIBiff()).build();
+        }
+
+        public LongIBiff toLongIBiff() {
+            LongIBiff.Builder builder = LongIBiff.newBuilder().setCommon(toCommon());
+            for (long l : keySum) {
+                builder.addKSum(l);
+            }
+            return builder.build();
         }
 
         @Override
@@ -183,7 +263,8 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     private static final int DEFAULT_K = 3;
 
-    int[]               count;
+    int[] count;
+
     final Hash<KeyType> h;
     int[]               hashSum;
     int                 size;
@@ -193,6 +274,24 @@ abstract public class IBF<KeyType> implements Cloneable {
         count = new int[h.m];
         hashSum = new int[h.m];
         size = 0;
+    }
+
+    public IBF(IBiffCommon common, Hash<KeyType> h) {
+        this.h = h;
+
+        count = new int[common.getCountCount()];
+        int index = 0;
+        for (int c : common.getCountList()) {
+            count[index++] = c;
+        }
+
+        hashSum = new int[common.getHashSumCount()];
+        index = 0;
+        for (int hs : common.getHashSumList()) {
+            hashSum[index++] = hs;
+        }
+
+        size = common.getSize();
     }
 
     public void add(KeyType key) {
@@ -255,6 +354,25 @@ abstract public class IBF<KeyType> implements Cloneable {
         return new Decode<>(true, add, miss);
     }
 
+    public <T> IBF<T> from(IBiff ibiff) {
+        if (ibiff.hasInteger()) {
+            @SuppressWarnings("unchecked")
+            IBF<T> ibf = (IBF<T>) new IntIBF(ibiff.getInteger());
+            return ibf;
+        }
+        if (ibiff.hasLong()) {
+            @SuppressWarnings("unchecked")
+            IBF<T> ibf = (IBF<T>) new LongIBF(ibiff.getInteger());
+            return ibf;
+        }
+        if (ibiff.hasDigest()) {
+            @SuppressWarnings("unchecked")
+            IBF<T> ibf = (IBF<T>) new DigestIBF(ibiff.getInteger());
+            return ibf;
+        }
+        throw new IllegalArgumentException("Unknown IBF type");
+    }
+
     public int getM() {
         return h.m;
     }
@@ -271,6 +389,19 @@ abstract public class IBF<KeyType> implements Cloneable {
             resultant.count[i] = count[i] - b.count[i];
         }
         return resultant;
+    }
+
+    abstract public IBiff toIBiff();
+
+    protected IBiffCommon toCommon() {
+        Builder builder = IBiffCommon.newBuilder().setSize(size).setM(h.m).setK(h.k);
+        for (int i : count) {
+            builder.addCount(i);
+        }
+        for (int i : hashSum) {
+            builder.addHashSum(i);
+        }
+        return builder.build();
     }
 
     void add(int cell, KeyType key, int hash) {
