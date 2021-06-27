@@ -115,6 +115,7 @@ public class MessageBuffer {
     public List<Message> merge(List<Message> updates, BiPredicate<Digest, Message> validator) {
         try {
             return updates.stream()
+                          .filter(m -> m.getAge() <= tooOld + 1)
                           .filter(message -> merge(new Digest(message.getKey()), message, validator))
                           .collect(Collectors.toList());
         } finally {
@@ -178,18 +179,13 @@ public class MessageBuffer {
     }
 
     private boolean merge(Digest hash, Message update, BiPredicate<Digest, Message> validator) {
-        if (update.getAge() > tooOld + 1) {
-            log.trace("dropped as too old: {}:{}", hash, update.getSequenceNumber());
-            return false;
-        }
-
-        if (!validator.test(hash, update)) {
-            return false;
-        }
         AtomicBoolean updated = new AtomicBoolean(false);
 
         state.compute(hash, (k, v) -> {
             if (v == null) {
+                if (!validator.test(hash, update)) {
+                    return null;
+                }
                 updated.set(true);
                 log.trace("added: {}:{}", k, update.getSequenceNumber());
                 return update;

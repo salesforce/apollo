@@ -142,8 +142,8 @@ abstract public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 10000;
-        int outstanding = 400;
+        int target = 1_000;
+        int outstanding = 100;
 
         ScheduledExecutorService avaScheduler = Executors.newScheduledThreadPool(2);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(5);

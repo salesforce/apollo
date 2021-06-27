@@ -34,6 +34,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -897,30 +898,32 @@ public class WorkingSet {
         return entries.stream().map(entry -> insert(entry, discovered)).collect(Collectors.toList());
     }
 
-    public List<Digest> insertSerialized(List<Digeste> list, List<ByteString> transactions, long discovered) {
-        List<Digest> keys = new ArrayList<>();
-        for (int i = 0; i < list.size(); i++) {
-            Digest key = digest(list.get(i));
-            keys.add(key);
-            Node node = read(() -> unfinalized.get(key));
-            if (node == null || node.isUnknown()) {
-                ByteString t = transactions.get(i);
-                DagEntry entry;
-                try {
-                    entry = DagEntry.parseFrom(t);
-                } catch (InvalidProtocolBufferException e) {
-                    throw new IllegalArgumentException("Cannot parse dag entry", e);
-                }
-                boolean isNoOp = entry.getDescription() == EntryType.NO_OP;
-                Digest conflictSet = isNoOp ? key : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
-                                            : processor.validate(key, entry);
-                if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
-                    assert entry.getDescription() == EntryType.GENSIS : "Not in the genesis set";
-                }
-                insert(key, entry, isNoOp, discovered, conflictSet);
-            }
+    public List<Digest> insertSerialized(List<Digeste> hashes, List<ByteString> transactions, long discovered) {
+        record Transaction(Digest hash, ByteString encoded) {
         }
-        return keys;
+        return IntStream.range(0, hashes.size())
+                        .mapToObj(i -> new Transaction(new Digest(hashes.get(i)), transactions.get(i)))
+                        .map(t -> {
+                            Node node = read(() -> unfinalized.get(t.hash));
+                            if (node == null || node.isUnknown()) {
+                                DagEntry entry;
+                                try {
+                                    entry = DagEntry.parseFrom(t.encoded);
+                                } catch (InvalidProtocolBufferException e) {
+                                    throw new IllegalArgumentException("Cannot parse dag entry", e);
+                                }
+                                boolean isNoOp = entry.getDescription() == EntryType.NO_OP;
+                                Digest conflictSet = isNoOp ? t.hash()
+                                                            : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
+                                                            : processor.validate(t.hash, entry);
+                                if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
+                                    assert entry.getDescription() == EntryType.GENSIS : "Not in the genesis set";
+                                }
+                                insert(t.hash, entry, isNoOp, discovered, conflictSet);
+                            }
+                            return t.hash;
+                        })
+                        .collect(Collectors.toList());
     }
 
     public boolean isFinalized(Digest key) {
