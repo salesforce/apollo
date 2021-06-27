@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.stereotomy.services.proto";
+option java_outer_classname = "LCDConsoleProto";
+option objc_class_prefix = "LCD";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
+import "util.proto";
+import "stereotomy.proto";
+
+package stereotomy.services;
+
+service Witness {
+    rpc testify(Statements) returns (Attachments) {}
+}
+
+service KerlSource {
+    rpc query(KerlQuery) returns (KerlResults) {}
+}
+
+service Resolver { 
+    rpc lookup (Resolve) returns (Bound) {}
+    rpc resolve (Resolve) returns (KeyState) {}
+    rpc bind(Binding) returns (google.protobuf.Empty) {}
+}
+
+service Validator {
+    rpc validate(KerlQuery) returns (Validations) {}
+}
+
+service DirectValidator {
+    rpc direct(Statements) returns (google.protobuf.Empty) {}
+}
+
+message Statements {
+    utils.Digeste context = 1;
+    repeated KeyEvent events = 2;
+}
+
+message KerlQuery {
+    utils.Digeste context = 1;
+    repeated bytes query = 2;
+}
+
+message Events {
+    repeated KeyEvent requested = 1;
+}
+
+message KeyEvent {
+    oneof event {
+        stereotomy.InceptionEvent inception = 1;
+        stereotomy.RotationEvent rotation = 2;
+        stereotomy.InteractionEvent interaction = 3;
+    }
+}
+
+message Validations {
+    repeated Validation validations = 1;
+}
+
+message Validation {
+    utils.Digeste hash = 1;
+    bytes validation = 2;
+}
+
+message Attachments {
+    repeated stereotomy.AttachmentEvent requested = 1;
+}
+
+message Resolve {
+    utils.Digeste context = 1;
+    Ident identifier = 2;
+    google.protobuf.Duration timeout = 3;
+}
+
+message Binding {
+    utils.Digeste context = 1;
+    Bound binding = 2;
+    google.protobuf.Duration timeout = 3;
+}
+
+message KerlResults {
+    repeated KeyEvent events = 1;
+    repeated AttachmentEvent attachments = 2;
+}

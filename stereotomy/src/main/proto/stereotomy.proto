@@ -11,15 +11,18 @@ import "util.proto";
 
 package stereotomy;
 
+// The KERI Identifier
 message Ident {
     oneof type {
-        utils.PubKey basic = 1;
+        utils.PubKey basic = 1; 
         utils.Digeste selfAddressing = 2;
         utils.Sig selfSigning = 3;
         AID autonomous = 4;
         bool NONE = 5;
     }
 }
+
+// Coordinates of an event
 message EventCoords {
     Ident identifier = 1;
     int64 sequenceNumber = 2;
@@ -27,12 +30,14 @@ message EventCoords {
     utils.Digeste digest = 4;
 }
 
+// Location of an event
 message EventLoc {
     Ident identifier = 1;
     int64 sequenceNumber = 2;
     utils.Digeste digest = 3;
 }
 
+// Location of the delegating event
 message DelegatingEventCoords {
     Ident identifier = 1;
     int64 sequenceNumber = 2;
@@ -40,11 +45,13 @@ message DelegatingEventCoords {
     string ilk = 4;
 }
 
+// Coordinates of a key
 message KeyCoords {
     EventCoords establishment = 1;
     int32 keyIndex = 2;
 }
 
+// Sealed content for events
 message Sealed {
     oneof type {
         EventCoords eventCoordinates = 1;
@@ -55,11 +62,13 @@ message Sealed {
     }
 }
 
+// Autonomous Identifier
 message AID {
     Ident prefix = 1;
     string url = 2;
 }
 
+// Common header for events
 message Header {
     int64 sequenceNumber = 1;
     Ident identifier = 2;
@@ -68,22 +77,26 @@ message Header {
     string ilk = 5;
 }
 
+// Common configuration, signature authentication and coordinates of the previous event
 message EventCommon {
     utils.Digeste configuration = 2;
     EventCoords previous = 3;
     map<int32, utils.Sig> authentication = 4;
 }
 
+// The interaction specification and common event structure
 message InteractionEvent {
     InteractionSpec specification = 1;
     EventCommon common = 2;
 }
 
+// Specification of an interaction
 message InteractionSpec {
     Header header = 1;
     repeated Sealed seals = 2;
 }
 
+// An attactment to an event in the KEL
 message AttachmentEvent {
     Header header = 1;
     EventCommon common = 2;
@@ -92,6 +105,7 @@ message AttachmentEvent {
     repeated Receipt receipts = 6;
 }
 
+// The establishment criteria and record of a key
 message Establishment {
     SigningThreshold signingThreshold = 1;
     repeated utils.PubKey keys = 2;
@@ -99,12 +113,14 @@ message Establishment {
     int32 witnessThreshold = 4;
 }
 
+// The rotation of a key
 message RotationEvent {
     RotationSpec specification = 1; 
     EventCommon common = 2;
     Sealed delegatingSeal = 3; // Delegated rotation event
 }
 
+// The specification of the rotation of a key
 message RotationSpec {
     Header header = 1;
     Establishment establishment = 2;
@@ -113,6 +129,7 @@ message RotationSpec {
     repeated Sealed seals = 5;
 }
 
+// The birth of a key
 message InceptionEvent {
     IdentifierSpec specification = 1;
     EventCommon common = 2;
@@ -121,6 +138,7 @@ message InceptionEvent {
     Sealed delegatingSeal = 5; // Delegated inception event
 }
 
+// The specification of an identififer
 message IdentifierSpec {
     Header header = 1;
     Establishment establishment = 2;
@@ -153,6 +171,7 @@ message Version {
     int32 minor = 3;
 }
 
+// This is the Jesus Nut.  KeyState represents the materialized state of an identifier and corresponding public/private keys, KEL and KERL
 message KeyState {
     Ident identifier = 1;
     utils.Digeste digest = 2;
@@ -172,85 +191,10 @@ message Signatures {
     map<int32, utils.Sig> signatures = 1;
 }
 
-/** Services **/
-
-service Witness {
-    rpc testify(Statements) returns (Attachments) {}
-}
-
-service KerlSource {
-    rpc query(KerlQuery) returns (KerlResults) {}
-}
-
-service Resolver { 
-    rpc lookup (Resolve) returns (Bound) {}
-    rpc resolve (Resolve) returns (KeyState) {}
-    rpc bind(Binding) returns (google.protobuf.Empty) {}
-}
-
-service Validator {
-    rpc validate(KerlQuery) returns (Validations) {}
-}
-
-service DirectValidator {
-    rpc direct(Statements) returns (google.protobuf.Empty) {}
-}
-
-message Statements {
-    utils.Digeste context = 1;
-    repeated KeyEvent events = 2;
-}
-
-message KerlQuery {
-    utils.Digeste context = 1;
-    repeated bytes query = 2;
-}
-
-message Events {
-    repeated KeyEvent requested = 1;
-}
-
-message KeyEvent {
-    oneof event {
-        InceptionEvent inception = 1;
-        RotationEvent rotation = 2;
-        InteractionEvent interaction = 3;
-    }
-}
-
-message Validations {
-    repeated Validation validations = 1;
-}
-
-message Validation {
-    utils.Digeste hash = 1;
-    bytes validation = 2;
-}
-
-message Attachments {
-    repeated AttachmentEvent requested = 1;
-}
-
-message Resolve {
-    utils.Digeste context = 1;
-    Ident identifier = 2;
-    google.protobuf.Duration timeout = 3;
-}
-
-message Binding {
-    utils.Digeste context = 1;
-    Bound binding = 2;
-    google.protobuf.Duration timeout = 3;
-}
-
+// A binding
 message Bound {
     Ident prefix = 1;
     google.protobuf.Any value = 2;
     utils.Sig signature = 3;
     bool timeout = 4;
-}
-
-message KerlResults {
-    repeated KeyEvent events = 1;
-    repeated AttachmentEvent attachments = 2;
 }

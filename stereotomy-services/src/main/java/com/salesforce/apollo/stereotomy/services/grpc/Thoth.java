@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.time.Duration;
@@ -19,8 +18,7 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.Bound;
-import com.salesfoce.apollo.stereotomy.event.proto.Resolve;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesfoce.apollo.stereotomy.services.proto.Resolve;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.ghost.Ghost;
 import com.salesforce.apollo.membership.Context;
@@ -81,9 +79,9 @@ public class Thoth implements Resolver {
             throw new IllegalArgumentException("Identifier must be non transferrable: " + prefix);
         }
         Bound bound = Bound.newBuilder()
-                           .setPrefix(prefix.toByteString())
+                           .setPrefix(prefix.toIdent())
                            .setValue(value)
-                           .setSignature(signature.toByteString())
+                           .setSignature(signature.toSig())
                            .build();
         ghost.bind(qb64(prefix), Any.pack(value), timeout);
     }
@@ -96,10 +94,6 @@ public class Thoth implements Resolver {
         String prefixKey = qb64(prefix);
         ghost.bind(prefixKey, Any.pack(keystate.convertTo(Format.PROTOBUF)), timeout);
 //        ghost.bind(eventCoordinatesKey(keystate), Any.pack(Boxed.newBuilder().setS(prefixKey).build()), timeout);
-    }
-
-    private String eventCoordinatesKey(KeyState keystate) {
-        return qb64(DigestAlgorithm.DEFAULT.digest(keystate.getCoordinates().toByteString()));
     }
 
     @Override
