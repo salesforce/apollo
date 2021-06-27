@@ -6,8 +6,7 @@
  */
 package com.salesforce.apollo.utils;
 
-import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.stream.IntStream;
 
 import com.salesforce.apollo.crypto.Digest;
 
@@ -20,14 +19,6 @@ public abstract class Hash<M> {
     abstract public static class Hasher<M> {
         public static class DigestHasher extends Hasher<Digest> {
 
-            public DigestHasher(Digest key, long seed) {
-                super(key, seed);
-            }
-
-            public long getH1() {
-                return h1;
-            }
-
             @Override
             protected void processIt(Digest key) {
                 process(key);
@@ -36,11 +27,6 @@ public abstract class Hash<M> {
         }
 
         public static class IntHasher extends Hasher<Integer> {
-
-            public IntHasher(Integer key, long seed) {
-                super(key, seed);
-            }
-
             @Override
             protected void processIt(Integer key) {
                 process(key);
@@ -49,10 +35,6 @@ public abstract class Hash<M> {
         }
 
         public static class LongHasher extends Hasher<Long> {
-
-            public LongHasher(Long key, long seed) {
-                super(key, seed);
-            }
 
             @Override
             protected void processIt(Long key) {
@@ -69,42 +51,48 @@ public abstract class Hash<M> {
         long h2;
         int  length;
 
-        Hasher(M key, long seed) {
-            this.h1 = seed;
-            this.h2 = seed;
+        public Hasher<M> establish(M key, long seed) {
+            h1 = seed;
+            h2 = seed;
+            length = 0;
             processIt(key);
             makeHash();
+            return this;
         }
 
-        public int identityHash() {
-            process(207);
-            makeHash();
-            return (int) (h1 & Integer.MAX_VALUE);
+        public long getH1() {
+            return h1;
         }
 
-        public void process(int k, Consumer<Integer> processor, int m) {
-            process(k, hash -> {
-                processor.accept(hash);
-                return true;
-            }, m);
-        }
-
-        public boolean process(int k, Function<Integer, Boolean> processor, int m) {
+        public int[] hashes(int k, M key, int m, long seed) {
+            establish(key, seed);
             long combinedHash = h1;
-            int[] locations = new int[k];
-            int index = 0;
-            while (index < k) {
-                int location = (int) ((combinedHash & Long.MAX_VALUE) % m);
-                if (!contains(locations, location)) {
-                    if (!processor.apply(location)) {
-                        return false;
+            int[] hashes = new int[k];
+            int i = 0;
+            while (i < k) {
+                int hash = (int) ((combinedHash & Long.MAX_VALUE) % m);
+                boolean found = false;
+                for (int j = 0; j < i; j++) {
+                    if (hashes[j] == hash) {
+                        found = true;
+                        break;
                     }
-                    locations[index] = location;
-                    index++;
+                }
+                if (!found) {
+                    hashes[i++] = hash;
                 }
                 combinedHash += h2;
             }
-            return true;
+            return hashes;
+        }
+
+        public int identityHash(M key, long seed) {
+            establish(key, seed);
+            return (int) (h1 ^ ((h1 >> 32) & Integer.MAX_VALUE));
+        }
+
+        public IntStream locations(int k, M key, int m, long seed) {
+            return IntStream.of(hashes(k, key, m, seed));
         }
 
         void process(Digest key) {
@@ -144,15 +132,6 @@ public abstract class Hash<M> {
             h2 = Long.rotateLeft(h2, 31);
             h2 += h1;
             h2 = h2 * 5 + 0x38495ab5;
-        }
-
-        private boolean contains(int[] locations, int location) {
-            for (int i = 0; i < locations.length; i++) {
-                if (locations[i] == location) {
-                    return true;
-                }
-            }
-            return false;
         }
 
         private long fmix64(long k) {
@@ -226,20 +205,23 @@ public abstract class Hash<M> {
         return Math.max(8, (int) (-n * Math.log(p) / (Math.log(2) * Math.log(2))));
     }
 
-    protected final int  k;
-    protected final int  m;
-    protected final long seed;
+    protected final Hasher<M> hasher;
+    protected final int       k;
+    protected final int       m;
+    protected final long      seed;
 
     public Hash(long seed, int n, double p) {
         m = optimalM(n, p);
         k = optimalK(n, m);
         this.seed = seed;
+        hasher = newHasher();
     }
 
     public Hash(long seed, int m, int k) {
         this.seed = seed;
         this.k = k;
         this.m = m;
+        hasher = newHasher();
     }
 
     public int getK() {
@@ -254,17 +236,17 @@ public abstract class Hash<M> {
         return seed;
     }
 
+    public int[] hashes(M key) {
+        return hasher.hashes(k, key, m, seed);
+    }
+
     public int identityHash(M key) {
-        return newHasher(key).identityHash();
+        return hasher.identityHash(key, seed);
     }
 
-    public void process(M key, Consumer<Integer> processor) {
-        newHasher(key).process(k, processor, m);
+    public IntStream locations(M key) {
+        return hasher.locations(k, key, m, seed);
     }
 
-    public boolean process(M key, Function<Integer, Boolean> processor) {
-        return newHasher(key).process(k, processor, m);
-    }
-
-    abstract Hasher<M> newHasher(M key);
+    abstract Hasher<M> newHasher();
 }

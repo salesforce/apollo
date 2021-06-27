@@ -313,7 +313,7 @@ public class AvaTest {
                                                      Messenger.Parameters msgParameters) {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
-            ForkJoinPool fj = ForkJoinPool.commonPool();
+            ForkJoinPool fj = Router.createFjPool();
             AvaAdapter adapter = new AvaAdapter(processed);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);
@@ -324,6 +324,7 @@ public class AvaTest {
                                                     .setConsensus(adapter.getConsensus())
                                                     .setMember(m)
                                                     .setContext(view)
+                                                    .setDispatcher(fj)
                                                     .setMsgParameters(msgParameters)
                                                     .setMaxBatchByteSize(1024 * 1024 * 32)
                                                     .setMaxBatchSize(1000)

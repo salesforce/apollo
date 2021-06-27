@@ -27,8 +27,8 @@ abstract public class BloomFilter<T> {
         public DigestBloomFilter(long seed, int n, double p) {
             super(new Hash<Digest>(seed, n, p) {
                 @Override
-                Hasher<Digest> newHasher(Digest key) {
-                    return new DigestHasher(key, seed);
+                Hasher<Digest> newHasher() {
+                    return new DigestHasher();
                 }
             });
         }
@@ -36,8 +36,8 @@ abstract public class BloomFilter<T> {
         public DigestBloomFilter(long seed, int m, int k, long[] bytes) {
             super(new Hash<Digest>(seed, m, k) {
                 @Override
-                Hasher<Digest> newHasher(Digest key) {
-                    return new DigestHasher(key, seed);
+                Hasher<Digest> newHasher() {
+                    return new DigestHasher();
                 }
             }, BitSet.valueOf(bytes));
         }
@@ -54,8 +54,8 @@ abstract public class BloomFilter<T> {
         public IntBloomFilter(long seed, int n, double p) {
             super(new Hash<Integer>(seed, n, p) {
                 @Override
-                Hasher<Integer> newHasher(Integer key) {
-                    return new IntHasher(key, seed);
+                Hasher<Integer> newHasher() {
+                    return new IntHasher();
                 }
             });
         }
@@ -63,8 +63,8 @@ abstract public class BloomFilter<T> {
         public IntBloomFilter(long seed, int m, int k, long[] bits) {
             super(new Hash<Integer>(seed, m, k) {
                 @Override
-                Hasher<Integer> newHasher(Integer key) {
-                    return new IntHasher(key, seed);
+                Hasher<Integer> newHasher() {
+                    return new IntHasher();
                 }
             }, BitSet.valueOf(bits));
         }
@@ -80,8 +80,8 @@ abstract public class BloomFilter<T> {
         public LongBloomFilter(long seed, int n, double p) {
             super(new Hash<Long>(seed, n, p) {
                 @Override
-                Hasher<Long> newHasher(Long key) {
-                    return new LongHasher(key, seed);
+                Hasher<Long> newHasher() {
+                    return new LongHasher();
                 }
             });
         }
@@ -89,8 +89,8 @@ abstract public class BloomFilter<T> {
         public LongBloomFilter(long seed, int m, int k, long[] bits) {
             super(new Hash<Long>(seed, m, k) {
                 @Override
-                Hasher<Long> newHasher(Long key) {
-                    return new LongHasher(key, seed);
+                Hasher<Long> newHasher() {
+                    return new LongHasher();
                 }
             }, BitSet.valueOf(bits));
         }
@@ -157,9 +157,9 @@ abstract public class BloomFilter<T> {
     }
 
     public void add(T element) {
-        h.process(element, hash -> {
+        for (int hash : h.hashes(element)) {
             bits.set(hash);
-        });
+        }
     }
 
     public void clear() {
@@ -167,9 +167,12 @@ abstract public class BloomFilter<T> {
     }
 
     public boolean contains(T element) {
-        return h.process(element, hash -> {
-            return bits.get(hash);
-        });
+        for (int hash : h.hashes(element)) {
+            if (!bits.get(hash)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

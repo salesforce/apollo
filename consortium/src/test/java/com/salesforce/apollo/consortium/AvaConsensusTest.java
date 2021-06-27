@@ -269,7 +269,7 @@ public class AvaConsensusTest {
             };
             Consortium member = new Consortium(Parameters.newBuilder()
                                                          .setConsensus(adapter.getConsensus())
-                                                         .setDispatcher(dispatcher)
+                                                         .setDispatcher(Router.createFjPool())
                                                          .setMember(m)
                                                          .setContext(view)
                                                          .setMsgParameters(msgParameters)

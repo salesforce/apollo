@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.utils.IBF.Decode;
@@ -18,29 +19,35 @@ import com.salesforce.apollo.utils.StrataEstimator.IntStrataEstimator;
 
 public class BenchmarkTest {
 
-    static final int TEST_SIZE    = 1_000_000;         // Number of elements to test
-    static final int SAMPLE_RANGE = Integer.MAX_VALUE; // range of sampled ints
     static final int DIFF_SIZE    = 10;
+    static final int SAMPLE_RANGE = Integer.MAX_VALUE; // range of sampled ints
+    static final int TEST_SIZE    = 1_000_000;         // Number of elements to test
+
+    public static void printInfo(String info) {
+        System.out.println(info);
+    }
 
     public static void printStat(long start, long end) {
         double diff = (end - start) / 1_000.0;
         System.out.println(diff + "s, " + (TEST_SIZE / diff) + " elements/s");
     }
 
-    public static void printInfo(String info) {
-        System.out.println(info);
-    }
+    private Random        entropy;
+    private Set<Integer>  s1;
+    private List<Integer> s1_diff;
+    private Set<Integer>  s2;
+    private List<Integer> s2_diff;
+    private int           seed;
 
-    @Test
-    public void bench() {
+    @BeforeEach
+    public void before() {
+        entropy = new Random(0x1638);
+        seed = entropy.nextInt();
 
-        final Random entropy = new Random(0x1638);
-
-        // Generate elements first
-        Set<Integer> s1 = new HashSet<>();
-        Set<Integer> s2 = new HashSet<>();
-        List<Integer> s1_diff = new ArrayList<>();
-        List<Integer> s2_diff = new ArrayList<>();
+        s1 = new HashSet<>();
+        s2 = new HashSet<>();
+        s1_diff = new ArrayList<>();
+        s2_diff = new ArrayList<>();
         while (s1.size() < TEST_SIZE - DIFF_SIZE) {
             int val = entropy.nextInt(SAMPLE_RANGE);
             s1.add(val);
@@ -59,9 +66,11 @@ public class BenchmarkTest {
             s2.add(val);
             s2_diff.add(i - (TEST_SIZE - DIFF_SIZE), val);
         }
+    }
 
-        // strataEstimator
-        int seed = entropy.nextInt();
+    @Test
+    public void bench() {
+
         StrataEstimator<Integer> se1 = new IntStrataEstimator(seed);
         StrataEstimator<Integer> se2 = new IntStrataEstimator(seed);
 
@@ -90,7 +99,7 @@ public class BenchmarkTest {
 
         // Add elements
         System.out.print("ibf.add(): ");
-        long start_add = System.currentTimeMillis();
+        long start_add = System.currentTimeMillis(); 
         s1.forEach(element -> b1.add(element));
         long end_add = System.currentTimeMillis();
         printStat(start_add, end_add);
@@ -135,5 +144,12 @@ public class BenchmarkTest {
             assertEquals(s2_diff.get(i), decodeResult.missing().get(i), "S2 diff does not match decode missing result");
         }
         printInfo("decode success");
+    }
+
+//    @Test
+    public void benchPerf() {
+        for (int i = 0; i < 100; i++) {
+            bench();
+        }
     }
 }

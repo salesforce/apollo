@@ -293,7 +293,7 @@ public class TestConsortium {
         members.stream()
                .map(m -> new Consortium(Parameters.newBuilder()
                                                   .setConsensus(consensus)
-                                                  .setDispatcher(dispatcher)
+                                                  .setDispatcher(Router.createFjPool())
                                                   .setMember(m)
                                                   .setContext(view)
                                                   .setMsgParameters(msgParameters)

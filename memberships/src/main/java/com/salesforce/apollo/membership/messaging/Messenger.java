@@ -158,7 +158,7 @@ public class Messenger {
                           context.getId(), member, from, inbound.getRing(), predecessor);
                 return Messages.getDefaultInstance();
             }
-            return buffer.process(BloomFilter.from(inbound.getDigests()), Utils.bitStreamEntropy().nextInt(),
+            return buffer.process(BloomFilter.from(inbound.getDigests()), Utils.bitStreamEntropy().nextLong(),
                                   parameters.falsePositiveRate);
         }
 
@@ -282,7 +282,7 @@ public class Messenger {
         return link.gossip(MessageBff.newBuilder()
                                      .setContext(context.getId().toDigeste())
                                      .setRing(ring)
-                                     .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextInt(),
+                                     .setDigests(buffer.getBff(Utils.bitStreamEntropy().nextLong(),
                                                                parameters.falsePositiveRate)
                                                        .toBff())
                                      .build());

@@ -99,7 +99,7 @@ public class MessageBuffer {
         log.trace("Buffer free after compact: " + (bufferSize - state.size()));
     }
 
-    public BloomFilter<Digest> getBff(int seed, double p) {
+    public BloomFilter<Digest> getBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, bufferSize, p);
         state.keySet().forEach(h -> bff.add(h));
         return bff;
@@ -123,7 +123,7 @@ public class MessageBuffer {
         }
     }
 
-    public Messages process(BloomFilter<Digest> bff, int seed, double p) {
+    public Messages process(BloomFilter<Digest> bff, long seed, double p) {
         Messages.Builder builder = Messages.newBuilder();
         state.entrySet().forEach(entry -> {
             if (!bff.contains(entry.getKey())) {

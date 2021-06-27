@@ -600,7 +600,7 @@ public class MembershipTests {
     private Parameters parameters(SigningMember m, BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus,
                                   TransactionExecutor executor, Messenger.Parameters msgParameters,
                                   Duration gossipDuration, ScheduledExecutorService scheduler) {
-        ForkJoinPool fj = ForkJoinPool.commonPool();
+        ForkJoinPool fj = Router.createFjPool();
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), Utils.bitStreamEntropy().nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -609,6 +609,7 @@ public class MembershipTests {
         return Parameters.newBuilder()
                          .setConsensus(consensus)
                          .setMember(m)
+                         .setDispatcher(fj)
                          .setContext(context)
                          .setMsgParameters(msgParameters)
                          .setMaxBatchByteSize(1024 * 1024 * 32)

@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.utils;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -35,8 +34,8 @@ abstract public class IBF<KeyType> implements Cloneable {
         public DigestIBF(DigestAlgorithm d, long seed, int m, int k) {
             this(new Hash<Digest>(seed, m, k) {
                 @Override
-                Hasher<Digest> newHasher(Digest key) {
-                    return new DigestHasher(key, seed);
+                Hasher<Digest> newHasher() {
+                    return new DigestHasher();
                 }
             }, d);
         }
@@ -83,12 +82,6 @@ abstract public class IBF<KeyType> implements Cloneable {
     }
 
     public static class IntIBF extends IBF<Integer> {
-
-        public static int smear(int hashCode) {
-            hashCode ^= (hashCode >>> 20) ^ (hashCode >>> 12);
-            return hashCode ^ (hashCode >>> 7) ^ (hashCode >>> 4);
-        }
-
         private final int[] keySum;
 
         public IntIBF(Hash<Integer> h) {
@@ -103,8 +96,8 @@ abstract public class IBF<KeyType> implements Cloneable {
         public IntIBF(long seed, int m, int k) {
             this(new Hash<Integer>(seed, m, k) {
                 @Override
-                Hasher<Integer> newHasher(Integer key) {
-                    return new IntHasher(key, seed);
+                Hasher<Integer> newHasher() {
+                    return new IntHasher();
                 }
             });
         }
@@ -149,16 +142,11 @@ abstract public class IBF<KeyType> implements Cloneable {
             this(seed, m, DEFAULT_K);
         }
 
-        /**
-         * @param i
-         * @param nextInt
-         * @param j
-         */
         public LongIBF(long seed, int m, int k) {
             this(new Hash<Long>(seed, m, k) {
                 @Override
-                Hasher<Long> newHasher(Long key) {
-                    return new LongHasher(key, seed);
+                Hasher<Long> newHasher() {
+                    return new LongHasher();
                 }
             });
         }
@@ -195,13 +183,6 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     private static final int DEFAULT_K = 3;
 
-    static ByteBuffer wrap(int i) {
-        ByteBuffer seed = ByteBuffer.allocate(4);
-        seed.putInt(IntIBF.smear(i));
-        seed.flip();
-        return seed;
-    }
-
     int[]               count;
     final Hash<KeyType> h;
     int[]               hashSum;
@@ -216,9 +197,9 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     public void add(KeyType key) {
         int idHash = keyHashOf(key);
-        h.process(key, hash -> {
+        for (int hash : h.hashes(key)) {
             add(hash, key, idHash);
-        });
+        }
         size++;
     }
 
@@ -234,12 +215,12 @@ abstract public class IBF<KeyType> implements Cloneable {
     }
 
     public boolean contains(KeyType key) {
-        return h.process(key, hash -> {
+        for (int hash : h.hashes(key)) {
             if (count[hash] == 0) {
                 return false;
             }
-            return true;
-        });
+        }
+        return true;
     }
 
     public Decode<KeyType> decode(IBF<KeyType> ibf) {
@@ -301,14 +282,14 @@ abstract public class IBF<KeyType> implements Cloneable {
     abstract IBF<KeyType> cloneEmpty();
 
     void decode(int cells, KeyType key, int count, IBF<KeyType> ibf, Queue<Integer> pure, int keyHash) {
-        h.process(key, hash -> {
+        for (int hash : h.hashes(key)) {
             ibf.xor(hash, key);
             ibf.hashSum[hash] ^= keyHash;
             ibf.count[hash] -= count;
             if (ibf.isPure(hash)) {
                 pure.add(hash);
             }
-        });
+        }
     }
 
     void delete(int cell, KeyType key, int hash) {

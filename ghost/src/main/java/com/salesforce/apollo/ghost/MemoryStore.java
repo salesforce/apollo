@@ -85,13 +85,13 @@ public class MemoryStore implements Store {
             NavigableSet<Digest> immutableSubset = immutable.keySet()
                                                             .subSet(interval.getBegin(), true, interval.getEnd(),
                                                                     false);
-            BloomFilter<Digest> immutableBff = new DigestBloomFilter(entropy.nextInt(), immutableSubset.size(), fpr);
+            BloomFilter<Digest> immutableBff = new DigestBloomFilter(entropy.nextLong(), immutableSubset.size(), fpr);
             immutableSubset.forEach(h -> immutableBff.add(h));
             interval.setImmutableBff(immutableBff);
 
             NavigableSet<Digest> mutableSubset = mutable.keySet()
                                                         .subSet(interval.getBegin(), true, interval.getEnd(), false);
-            BloomFilter<Digest> mutableBff = new DigestBloomFilter(entropy.nextInt(), mutableSubset.size(), fpr);
+            BloomFilter<Digest> mutableBff = new DigestBloomFilter(entropy.nextLong(), mutableSubset.size(), fpr);
             mutableSubset.forEach(h -> mutableBff.add(h));
             interval.setMutableBff(mutableBff);
         });

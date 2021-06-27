@@ -75,19 +75,17 @@ public class CheckpointAssembler {
     }
 
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
-        log.info("Scheduling assembly of checkpoint: {} segments: {} period: {} millis on: {}", height,
-                 checkpoint.getSegmentsCount(), duration.toMillis(), member);
         if (checkpoint.getSegmentsCount() == 0) {
             log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
             assembled.complete(new CheckpointState(checkpoint, state));
         } else {
-            scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
+            gossip(scheduler, duration);
         }
         return assembled;
     }
 
     private CheckpointReplication buildRequest() {
-        int seed = Utils.bitStreamEntropy().nextInt();
+        long seed = Utils.bitStreamEntropy().nextLong();
         BloomFilter<Integer> segmentsBff = new BloomFilter.IntBloomFilter(seed, checkpoint.getSegmentsCount(), fpr);
         IntStream.range(0, checkpoint.getSegmentsCount()).filter(i -> state.containsKey(i)).forEach(i -> {
             segmentsBff.add(i);
@@ -131,8 +129,7 @@ public class CheckpointAssembler {
         if (assembled.isDone()) {
             return;
         }
-        log.info("Scheduling assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                 member);
+        log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
         RingIterator<BootstrapService> ringer = new RingIterator<>(context, member, comms, executor);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),

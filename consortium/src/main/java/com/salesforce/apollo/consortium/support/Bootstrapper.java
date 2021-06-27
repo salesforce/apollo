@@ -108,7 +108,7 @@ public class Bootstrapper {
     }
 
     public CompletableFuture<SynchronizedState> synchronize() {
-        scheduleSample();
+        sample();
         return sync;
     }
 
@@ -123,7 +123,7 @@ public class Bootstrapper {
     private ListenableFuture<Blocks> anchor(BootstrapService link, AtomicLong start, long end) {
         log.debug("Attempting Anchor completion ({} to {}) with: {} on: {}", start, end, link.getMember().getId(),
                   params.member.getId());
-        int seed = Utils.bitStreamEntropy().nextInt();
+        long seed = Utils.bitStreamEntropy().nextLong();
         BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, params.maxViewBlocks,
                 params.msgParameters.falsePositiveRate);
 
@@ -144,7 +144,8 @@ public class Bootstrapper {
 
         checkpointView = new HashedCertifiedBlock(params.digestAlgorithm, mostRecent.getCheckpointView());
         store.put(checkpointView);
-        log.info("Checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash, params.member);
+        assert checkpointView.height() != 0 : "Should not attempt when bootstrapping from genesis";
+        log.info("Assembling from checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash, params.member);
 
         CheckpointAssembler assembler = new CheckpointAssembler(checkpoint.height(),
                 CollaboratorContext.checkpointBody(checkpoint.block.getBlock()), params.member, store, comms,
@@ -210,7 +211,7 @@ public class Bootstrapper {
     private ListenableFuture<Blocks> completeViewChain(BootstrapService link, AtomicLong start, long end) {
         log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", start.get(), end,
                   link.getMember().getId(), params.member.getId());
-        int seed = Utils.bitStreamEntropy().nextInt();
+        long seed = Utils.bitStreamEntropy().nextLong();
         BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, params.maxViewBlocks,
                 params.msgParameters.falsePositiveRate);
         start.set(store.lastViewChainFrom(start.get()));
@@ -331,18 +332,20 @@ public class Bootstrapper {
         store.put(genesis);
 
         long anchorTo;
-        if (mostRecent != null) {
+        boolean genesisBootstrap = mostRecent == null
+                || mostRecent.getCheckpointView().getBlock().getHeader().getHeight() == 0;
+        if (!genesisBootstrap) {
             checkpointCompletion(threshold, mostRecent);
             anchorTo = checkpoint.height();
         } else {
             anchorTo = 0;
         }
 
-        scheduleAnchorCompletion(new AtomicLong(anchor.height()), anchorTo);
+        anchor(new AtomicLong(anchor.height()), anchorTo);
 
         // Checkpoint must be assembled, view chain synchronized, and blocks spanning
         // the anchor block to the checkpoint must be filled
-        CompletableFuture<Void> completion = mostRecent != null
+        CompletableFuture<Void> completion = !genesisBootstrap
                 ? CompletableFuture.allOf(checkpointAssembled, viewChainSynchronized, anchorSynchronized)
                 : CompletableFuture.allOf(anchorSynchronized);
 
@@ -380,6 +383,8 @@ public class Bootstrapper {
     }
 
     private void scheduleAnchorCompletion(AtomicLong start, long anchorTo) {
+        assert start.get() != anchorTo : "Should not schedule anchor completion on an empty interval: [" + start.get()
+                + ":" + anchorTo + "]";
         if (sync.isDone()) {
             return;
         }
@@ -411,6 +416,8 @@ public class Bootstrapper {
     }
 
     private void scheduleViewChainCompletion(AtomicLong start, long to) {
+        assert start.get() != to : "Should not schedule view chain completion on an empty interval: [" + start.get()
+                + ":" + to + "]";
         if (sync.isDone()) {
             return;
         }

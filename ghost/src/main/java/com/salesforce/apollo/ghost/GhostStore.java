@@ -162,7 +162,7 @@ public class GhostStore implements Store {
         List<Digest> subSet = new ArrayList<>();
         new Cursor<Digest, byte[]>(immutable.getRootPage(), interval.getBegin(),
                 interval.getEnd()).forEachRemaining(key -> subSet.add(key));
-        BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size(), fpr);
+        BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextLong(), subSet.size(), fpr);
         subSet.forEach(h -> bff.add(h));
         return bff;
     }
@@ -171,7 +171,7 @@ public class GhostStore implements Store {
         List<Digest> subSet = new ArrayList<>();
         new Cursor<Digest, byte[]>(mutable.getRootPage(), interval.getBegin(),
                 interval.getEnd()).forEachRemaining(key -> subSet.add(key));
-        BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextInt(), subSet.size(), fpr);
+        BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextLong(), subSet.size(), fpr);
         subSet.forEach(h -> bff.add(h));
         return bff;
     }

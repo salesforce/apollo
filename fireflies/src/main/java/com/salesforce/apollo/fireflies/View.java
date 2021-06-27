@@ -267,7 +267,7 @@ public class View {
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
             }
-            int seed = Utils.secureEntropy().nextInt();
+            long seed = Utils.secureEntropy().nextLong();
             return Gossip.newBuilder()
                          .setRedirect(false)
                          .setCertificates(processCertificateDigests(from, BloomFilter.from(digests.getCertificateBff()),
@@ -829,7 +829,7 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     Digests commonDigests() {
-        int seed = Utils.secureEntropy().nextInt();
+        long seed = Utils.secureEntropy().nextLong();
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
                       .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
@@ -842,7 +842,7 @@ public class View {
         member.setFailed(true);
     }
 
-    BloomFilter<Digest> getAccusationsBff(int seed, double p) {
+    BloomFilter<Digest> getAccusationsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed,
                 getParameters().cardinality * getParameters().rings, p);
         context.getActive()
@@ -853,7 +853,7 @@ public class View {
         return bff;
     }
 
-    BloomFilter<Digest> getCertificatesBff(int seed, double p) {
+    BloomFilter<Digest> getCertificatesBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, getParameters().cardinality, p);
         view.values().stream().map(m -> m.getCertificateHash()).filter(e -> e != null).forEach(n -> bff.add(n));
         return bff;
@@ -863,7 +863,7 @@ public class View {
         return getParameters().hashAlgorithm;
     }
 
-    BloomFilter<Digest> getNotesBff(int seed, double p) {
+    BloomFilter<Digest> getNotesBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, getParameters().cardinality, p);
         view.values().stream().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
         return bff;
@@ -1103,7 +1103,7 @@ public class View {
      * @param seed
      * @return
      */
-    AccusationGossip processAccusationDigests(BloomFilter<Digest> bff, int seed, double p) {
+    AccusationGossip processAccusationDigests(BloomFilter<Digest> bff, long seed, double p) {
         AccusationGossip.Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
@@ -1118,7 +1118,7 @@ public class View {
         return gossip;
     }
 
-    CertificateGossip processCertificateDigests(Digest from, BloomFilter<Digest> bff, int seed, double p) {
+    CertificateGossip processCertificateDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
         log.trace("process cert digests");
         CertificateGossip.Builder builder = CertificateGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
@@ -1147,7 +1147,7 @@ public class View {
      * @param p
      * @param seed
      */
-    NoteGossip processNoteDigests(Digest from, BloomFilter<Digest> bff, int seed, double p) {
+    NoteGossip processNoteDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
         NoteGossip.Builder builder = NoteGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound
