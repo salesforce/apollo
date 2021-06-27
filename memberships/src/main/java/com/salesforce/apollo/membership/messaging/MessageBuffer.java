@@ -33,7 +33,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.utils.BloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand

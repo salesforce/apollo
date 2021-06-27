@@ -42,8 +42,8 @@ import com.salesforce.apollo.consortium.support.HashedBlock;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.DigestType;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2

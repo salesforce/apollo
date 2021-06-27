@@ -95,8 +95,8 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.utils.BbBackedInputStream;
-import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * Consortium represents the group that owns a linear ledger of blocks. These

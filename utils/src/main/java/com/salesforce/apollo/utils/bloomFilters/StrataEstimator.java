@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.utils;
+package com.salesforce.apollo.utils.bloomFilters;
 
 import java.util.Collection;
 import java.util.stream.Stream;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.IBF.Decode;
-import com.salesforce.apollo.utils.IBF.DigestIBF;
-import com.salesforce.apollo.utils.IBF.IntIBF;
-import com.salesforce.apollo.utils.IBF.LongIBF;
+import com.salesforce.apollo.utils.bloomFilters.IBF.Decode;
+import com.salesforce.apollo.utils.bloomFilters.IBF.DigestIBF;
+import com.salesforce.apollo.utils.bloomFilters.IBF.IntIBF;
+import com.salesforce.apollo.utils.bloomFilters.IBF.LongIBF;
 
 /**
  * A difference estimator based on Invertible Bloom Filters. Provides an

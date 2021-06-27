@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.utils;
+package com.salesforce.apollo.utils.bloomFilters;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -18,9 +18,9 @@ import com.salesfoce.apollo.utils.proto.IntIBiff;
 import com.salesfoce.apollo.utils.proto.LongIBiff;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.Hash.Hasher.DigestHasher;
-import com.salesforce.apollo.utils.Hash.Hasher.IntHasher;
-import com.salesforce.apollo.utils.Hash.Hasher.LongHasher;
+import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.DigestHasher;
+import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.IntHasher;
+import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.LongHasher;
 
 /**
  * Invertible Bloom Filter. Optimized for use in efficient set reconciliation.
@@ -258,7 +258,7 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     }
 
-    record Decode<K> (boolean success, List<K> added, List<K> missing) {
+    public record Decode<K> (boolean success, List<K> added, List<K> missing) {
     }
 
     private static final int DEFAULT_K = 3;
@@ -381,6 +381,16 @@ abstract public class IBF<KeyType> implements Cloneable {
         return size;
     }
 
+    public boolean isPure(int cell) {
+        boolean countCorrect = count[cell] == -1 || count[cell] == 1;
+        if (countCorrect) {
+            int hash = keyHash(cell);
+            int current = hashSum[cell];
+            return hash == current;
+        }
+        return false;
+    }
+
     public IBF<KeyType> subtract(IBF<KeyType> b) {
         IBF<KeyType> resultant = cloneEmpty();
         for (int i = 0; i < h.m; i++) {
@@ -427,16 +437,6 @@ abstract public class IBF<KeyType> implements Cloneable {
         xor(cell, key);
         hashSum[cell] ^= hash;
         count[cell]--;
-    }
-
-    boolean isPure(int cell) {
-        boolean countCorrect = count[cell] == -1 || count[cell] == 1;
-        if (countCorrect) {
-            int hash = keyHash(cell);
-            int current = hashSum[cell];
-            return hash == current;
-        }
-        return false;
     }
 
     int keyHash(int cell) {

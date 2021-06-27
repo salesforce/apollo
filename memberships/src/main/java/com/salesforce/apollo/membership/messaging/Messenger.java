@@ -42,8 +42,8 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 import com.salesforce.apollo.membership.messaging.comms.MessagingServerCommunications;
-import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand

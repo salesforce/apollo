@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.utils;
+package com.salesforce.apollo.utils.bloomFilters;
 
 import java.util.stream.IntStream;
 
@@ -46,6 +46,12 @@ public abstract class Hash<M> {
         private static final long C1         = 0x87c37b91114253d5L;
         private static final long C2         = 0x4cf5ad432745937fL;
         private static final long CHUNK_SIZE = 16;
+
+        private static final int UNSIGNED_MASK = 0xFF;
+
+        public static int toInt(byte value) {
+            return value & UNSIGNED_MASK;
+        }
 
         long h1;
         long h2;
@@ -107,15 +113,22 @@ public abstract class Hash<M> {
         }
 
         void process(int i) {
-            h1 ^= mixK1(0);
-            h2 ^= mixK2(i);
-            length += CHUNK_SIZE / 4;
+            int k1 = 0;
+
+            k1 ^= ((long) i & 0xFF000000) << 24;
+            k1 ^= ((long) i & 0x00FF0000) << 16;
+            k1 ^= ((long) i & 0x0000FF00) << 8;
+            k1 ^= ((long) i & 0x000000FF);
+
+            h1 ^= mixK1(k1);
+            h2 ^= mixK2(0);
+            length += 4;
         }
 
         void process(long l) {
             h1 ^= mixK1(l);
             h2 ^= mixK2(0);
-            length += CHUNK_SIZE / 2;
+            length += 8;
         }
 
         abstract void processIt(M key);

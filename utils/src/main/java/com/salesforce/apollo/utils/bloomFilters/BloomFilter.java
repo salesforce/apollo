@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.utils;
+package com.salesforce.apollo.utils.bloomFilters;
 
 import java.util.BitSet;
 
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.utils.Hash.Hasher.DigestHasher;
-import com.salesforce.apollo.utils.Hash.Hasher.IntHasher;
-import com.salesforce.apollo.utils.Hash.Hasher.LongHasher;
+import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.DigestHasher;
+import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.IntHasher;
+import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.LongHasher;
 
 /**
  * Simplified Bloom filter for multiple types, with setable seeds and other

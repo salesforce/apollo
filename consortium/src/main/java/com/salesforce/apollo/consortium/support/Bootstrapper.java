@@ -36,9 +36,9 @@ import com.salesforce.apollo.consortium.Store;
 import com.salesforce.apollo.consortium.comms.BootstrapService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Pair;
 import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand

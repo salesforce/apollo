@@ -10,7 +10,7 @@ import java.util.function.Predicate;
 
 import com.salesfoce.apollo.ghost.proto.Interval;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.utils.BloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand

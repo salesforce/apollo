@@ -18,7 +18,8 @@ import java.util.Random;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.utils.IBF.Decode;
+import com.salesforce.apollo.utils.bloomFilters.IBF;
+import com.salesforce.apollo.utils.bloomFilters.IBF.Decode;
 
 /**
  * @author hal.hildebrand

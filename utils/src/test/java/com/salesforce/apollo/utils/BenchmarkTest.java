@@ -13,9 +13,11 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.utils.IBF.Decode;
-import com.salesforce.apollo.utils.IBF.IntIBF;
-import com.salesforce.apollo.utils.StrataEstimator.IntStrataEstimator;
+import com.salesforce.apollo.utils.bloomFilters.IBF;
+import com.salesforce.apollo.utils.bloomFilters.IBF.Decode;
+import com.salesforce.apollo.utils.bloomFilters.IBF.IntIBF;
+import com.salesforce.apollo.utils.bloomFilters.StrataEstimator;
+import com.salesforce.apollo.utils.bloomFilters.StrataEstimator.IntStrataEstimator;
 
 public class BenchmarkTest {
 
@@ -66,6 +68,8 @@ public class BenchmarkTest {
             s2.add(val);
             s2_diff.add(i - (TEST_SIZE - DIFF_SIZE), val);
         }
+        Collections.sort(s1_diff);
+        Collections.sort(s2_diff);
     }
 
     @Test
@@ -146,7 +150,7 @@ public class BenchmarkTest {
         printInfo("decode success");
     }
 
-//    @Test
+    @Test
     public void benchPerf() {
         for (int i = 0; i < 100; i++) {
             bench();

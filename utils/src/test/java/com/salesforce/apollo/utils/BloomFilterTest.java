@@ -17,7 +17,8 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.BloomFilter.DigestBloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * @author hal.hildebrand

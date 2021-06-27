@@ -8,7 +8,8 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.utils.StrataEstimator.IntStrataEstimator;
+import com.salesforce.apollo.utils.bloomFilters.StrataEstimator;
+import com.salesforce.apollo.utils.bloomFilters.StrataEstimator.IntStrataEstimator;
 
 public class StrataEstimatorTest {
 

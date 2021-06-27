@@ -62,8 +62,8 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.impl.MemberImpl;
-import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
