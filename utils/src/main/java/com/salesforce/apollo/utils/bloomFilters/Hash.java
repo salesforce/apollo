@@ -113,12 +113,10 @@ public abstract class Hash<M> {
         }
 
         void process(int i) {
-            int k1 = 0;
-
-            k1 ^= ((long) i & 0xFF000000) << 24;
-            k1 ^= ((long) i & 0x00FF0000) << 16;
-            k1 ^= ((long) i & 0x0000FF00) << 8;
-            k1 ^= ((long) i & 0x000000FF);
+            long k1 = ((long) (i & 0xFF000000)) << 24;
+            k1 ^= ((long) (i & 0x00FF0000)) << 16;
+            k1 ^= ((long) (i & 0x0000FF00)) << 8;
+            k1 ^= (long) (i & 0x000000FF);
 
             h1 ^= mixK1(k1);
             h2 ^= mixK2(0);
