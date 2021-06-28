@@ -73,7 +73,7 @@ import com.salesforce.apollo.consortium.TransactionExecutor;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.DigestHasher;
+import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
 
 /**
  * This is ye Jesus Nut of sql state via distribute linear logs. We use H2 as a
