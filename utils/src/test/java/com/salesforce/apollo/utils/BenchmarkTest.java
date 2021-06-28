@@ -150,7 +150,7 @@ public class BenchmarkTest {
         printInfo("decode success");
     }
 
-    @Test
+//    @Test
     public void benchPerf() {
         for (int i = 0; i < 100; i++) {
             bench();
