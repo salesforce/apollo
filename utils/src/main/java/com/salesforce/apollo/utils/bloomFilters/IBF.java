@@ -18,9 +18,6 @@ import com.salesfoce.apollo.utils.proto.IntIBiff;
 import com.salesfoce.apollo.utils.proto.LongIBiff;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.DigestHasher;
-import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.IntHasher;
-import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.LongHasher;
 
 /**
  * Invertible Bloom Filter. Optimized for use in efficient set reconciliation.
@@ -31,7 +28,7 @@ import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.LongHasher;
 abstract public class IBF<KeyType> implements Cloneable {
 
     public static class DigestIBF extends IBF<Digest> {
-        static Hash<Digest> newHasher(long seed, int m, int k) {
+        static Hash<Digest> newHash(long seed, int m, int k) {
             return new Hash<Digest>(seed, m, k) {
                 @Override
                 Hasher<Digest> newHasher() {
@@ -47,7 +44,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         }
 
         public DigestIBF(DigestAlgorithm d, long seed, int m, int k) {
-            this(newHasher(seed, m, k), d);
+            this(newHash(seed, m, k), d);
         }
 
         public DigestIBF(Hash<Digest> h, DigestAlgorithm digestAlgorithm) {
@@ -56,8 +53,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         }
 
         public DigestIBF(IntIBiff ibf) {
-            super(ibf.getCommon(),
-                    newHasher(ibf.getCommon().getSeed(), ibf.getCommon().getK(), ibf.getCommon().getM()));
+            super(ibf.getCommon(), newHash(ibf.getCommon().getSeed(), ibf.getCommon().getK(), ibf.getCommon().getM()));
             keySum = new long[ibf.getKSumCount()];
             int index = 0;
             for (long i : ibf.getKSumList()) {
@@ -108,7 +104,7 @@ abstract public class IBF<KeyType> implements Cloneable {
     }
 
     public static class IntIBF extends IBF<Integer> {
-        static Hash<Integer> newHasher(long seed, int m, int k) {
+        static Hash<Integer> newHash(long seed, int m, int k) {
             return new Hash<Integer>(seed, m, k) {
                 @Override
                 Hasher<Integer> newHasher() {
@@ -125,8 +121,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         }
 
         public IntIBF(IntIBiff ibf) {
-            super(ibf.getCommon(),
-                    newHasher(ibf.getCommon().getSeed(), ibf.getCommon().getK(), ibf.getCommon().getM()));
+            super(ibf.getCommon(), newHash(ibf.getCommon().getSeed(), ibf.getCommon().getK(), ibf.getCommon().getM()));
             keySum = new int[ibf.getKSumCount()];
             int index = 0;
             for (int i : ibf.getKSumList()) {
@@ -139,7 +134,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         }
 
         public IntIBF(long seed, int m, int k) {
-            this(newHasher(seed, m, k));
+            this(newHash(seed, m, k));
         }
 
         @Override
@@ -184,7 +179,7 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     public static class LongIBF extends IBF<Long> {
 
-        static Hash<Long> newHasher(long seed, int m, int k) {
+        static Hash<Long> newHash(long seed, int m, int k) {
             return new Hash<Long>(seed, m, k) {
                 @Override
                 Hasher<Long> newHasher() {
@@ -201,8 +196,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         }
 
         public LongIBF(IntIBiff ibf) {
-            super(ibf.getCommon(),
-                    newHasher(ibf.getCommon().getSeed(), ibf.getCommon().getK(), ibf.getCommon().getM()));
+            super(ibf.getCommon(), newHash(ibf.getCommon().getSeed(), ibf.getCommon().getK(), ibf.getCommon().getM()));
             keySum = new long[ibf.getKSumCount()];
             int index = 0;
             for (long i : ibf.getKSumList()) {
@@ -215,7 +209,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         }
 
         public LongIBF(long seed, int m, int k) {
-            this(newHasher(seed, m, k));
+            this(newHash(seed, m, k));
         }
 
         @Override
@@ -389,6 +383,17 @@ abstract public class IBF<KeyType> implements Cloneable {
             return hash == current;
         }
         return false;
+    }
+
+    /**
+     * Warning: key must have been already inserted for this logic to work correctly
+     */
+    public void remove(KeyType key) {
+        int idHash = keyHashOf(key);
+        for (int hash : h.hashes(key)) {
+            delete(hash, key, idHash);
+        }
+        size--;
     }
 
     public IBF<KeyType> subtract(IBF<KeyType> b) {

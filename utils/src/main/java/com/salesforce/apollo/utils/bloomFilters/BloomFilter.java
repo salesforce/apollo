@@ -10,9 +10,6 @@ import java.util.BitSet;
 
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.DigestHasher;
-import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.IntHasher;
-import com.salesforce.apollo.utils.bloomFilters.Hash.Hasher.LongHasher;
 
 /**
  * Simplified Bloom filter for multiple types, with setable seeds and other

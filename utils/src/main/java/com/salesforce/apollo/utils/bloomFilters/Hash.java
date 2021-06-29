@@ -15,33 +15,21 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public abstract class Hash<M> {
+    public static class DigestHasher extends Hasher<Digest> {
+
+        @Override
+        protected Hasher<Digest> clone() {
+            return new DigestHasher();
+        }
+
+        @Override
+        protected void processIt(Digest key) {
+            process(key);
+        }
+
+    }
 
     abstract public static class Hasher<M> {
-        public static class DigestHasher extends Hasher<Digest> {
-
-            @Override
-            protected void processIt(Digest key) {
-                process(key);
-            }
-
-        }
-
-        public static class IntHasher extends Hasher<Integer> {
-            @Override
-            protected void processIt(Integer key) {
-                process(key);
-            }
-
-        }
-
-        public static class LongHasher extends Hasher<Long> {
-
-            @Override
-            protected void processIt(Long key) {
-                process(key);
-            }
-
-        }
 
         private static final long C1         = 0x87c37b91114253d5L;
         private static final long C2         = 0x4cf5ad432745937fL;
@@ -100,6 +88,8 @@ public abstract class Hash<M> {
         public IntStream locations(int k, M key, int m, long seed) {
             return IntStream.of(hashes(k, key, m, seed));
         }
+
+        protected abstract Hasher<M> clone();
 
         void process(Digest key) {
             long[] hash = key.getLongs();
@@ -183,6 +173,33 @@ public abstract class Hash<M> {
         }
     }
 
+    public static class IntHasher extends Hasher<Integer> {
+        @Override
+        protected Hasher<Integer> clone() {
+            return new IntHasher();
+        }
+
+        @Override
+        protected void processIt(Integer key) {
+            process(key);
+        }
+
+    }
+
+    public static class LongHasher extends Hasher<Long> {
+
+        @Override
+        protected Hasher<Long> clone() {
+            return new LongHasher();
+        }
+
+        @Override
+        protected void processIt(Long key) {
+            process(key);
+        }
+
+    }
+
     /**
      * Computes the optimal k (number of hashes per element inserted in Bloom
      * filter), given the expected insertions and total number of bits in the Bloom
@@ -217,9 +234,10 @@ public abstract class Hash<M> {
     }
 
     protected final Hasher<M> hasher;
-    protected final int       k;
-    protected final int       m;
-    protected final long      seed;
+
+    protected final int  k;
+    protected final int  m;
+    protected final long seed;
 
     public Hash(long seed, int n, double p) {
         m = optimalM(n, p);
@@ -233,6 +251,17 @@ public abstract class Hash<M> {
         this.k = k;
         this.m = m;
         hasher = newHasher();
+    }
+
+    public Hash<M> clone() {
+        Hasher<M> clone = hasher.clone();
+        return new Hash<M>(seed, k, m) {
+
+            @Override
+            Hasher<M> newHasher() {
+                return clone;
+            }
+        };
     }
 
     public int getK() {
