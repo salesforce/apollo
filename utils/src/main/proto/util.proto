@@ -18,7 +18,7 @@ message Biff {
 
 message Digeste {
     int32 type = 1;
-    repeated int64 hash = 2;
+    repeated uint64 hash = 2;
 }
 
 message Sig {
@@ -44,8 +44,8 @@ message IBiffCommon {
     int32 m = 2;
     int32 k = 3;
     int32 size = 4;
-    repeated int32 count = 5;
-    repeated int32 hashSum = 6; 
+    repeated uint32 count = 5;
+    repeated uint32 hashSum = 6; 
 }
 
 message DigestIBiff {
@@ -62,4 +62,12 @@ message IntIBiff {
 message LongIBiff {
     IBiffCommon common = 1;
     repeated int64 kSum = 2;
+}
+
+message BC {
+    int64 seed = 1;
+    int32 m = 2;
+    int32 k = 3;
+    uint64 prefix = 4;
+    bytes counts = 5;
 }

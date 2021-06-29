@@ -14,6 +14,8 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.utils.proto.BC;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -103,9 +105,12 @@ public class BloomClock {
     record ComparisonResult(int comparison, double fpr) {
     }
 
+    public final static int DEFAULT_K = 3;
+    public static final int DEFAULT_M = 100;
+
     private final static Logger log = LoggerFactory.getLogger(BloomClock.class);
 
-    static Hash<Digest> newHash(long seed, int m, int k) {
+    static Hash<Digest> newHash(long seed, int k, int m) {
         return new Hash<Digest>(seed, m, k) {
             @Override
             Hasher<Digest> newHasher() {
@@ -118,10 +123,16 @@ public class BloomClock {
     private final Hash<Digest> hash;
     private long               prefix = 0;
 
+    public BloomClock(BC bc) {
+        hash = newHash(bc.getSeed(), bc.getK(), bc.getM());
+        counts = bc.toByteArray();
+        prefix = bc.getPrefix();
+    }
+
     public BloomClock(long seed, int k, int m) {
         assert m % 2 == 0 : "must be an even number";
         counts = new byte[m / 2];
-        hash = newHash(seed, m, k);
+        hash = newHash(seed, k, m);
     }
 
     /**
@@ -134,7 +145,7 @@ public class BloomClock {
         assert initialValues.length % 2 == 0 : "must be an even number";
 
         counts = new byte[initialValues.length / 2];
-        hash = newHash(seed, initialValues.length, k);
+        hash = newHash(seed, k, initialValues.length);
         int cell = 0;
         int min = IntStream.of(initialValues).min().getAsInt();
         prefix += min;
@@ -178,6 +189,10 @@ public class BloomClock {
 
     public BloomClock clone() {
         return new BloomClock(prefix, hash.clone(), Arrays.copyOf(counts, counts.length));
+    }
+
+    public BloomClock construct(long seed) {
+        return new BloomClock(seed, DEFAULT_K, DEFAULT_M);
     }
 
     @Override
@@ -230,6 +245,16 @@ public class BloomClock {
             rollPrefix();
         }
         return this;
+    }
+
+    public BC toBC() {
+        return BC.newBuilder()
+                 .setSeed(hash.seed)
+                 .setK(hash.k)
+                 .setM(hash.m)
+                 .setPrefix(prefix)
+                 .setCounts(ByteString.copyFrom(counts))
+                 .build();
     }
 
     public String toString() {
@@ -355,7 +380,7 @@ public class BloomClock {
             throw new ClockOverflowException("Prefix has reached maximum count (2^64)");
         }
         byte removed = (byte) (((byte) min << 4) | min);
-        prefix -= min;
+        prefix += min;
         for (int i = 0; i < counts.length; i++) {
             counts[i] -= removed;
         }
