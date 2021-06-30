@@ -6,7 +6,10 @@
  */
 package com.salesforce.apollo.utils.bloomFilters;
 
+import static java.util.stream.IntStream.range;
+
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.stream.IntStream;
@@ -17,9 +20,10 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.utils.proto.BC;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.utils.Utils;
 
 /**
- * 
+ *
  * The BloomClock implements the scheme outlined in the excellent paper By Lum
  * Ramabaja, <a href="https://arxiv.org/abs/1905.13064">The Bloom Clock</a>
  * <p>
@@ -35,7 +39,7 @@ import com.salesforce.apollo.crypto.Digest;
  * will be renormalized, subtracting a common minimum and adding this to the
  * prefix. This allows the Bloom Clock to track 2^65 insertions (2^64 + one more
  * byte).
- * 
+ *
  * @author hal.hildebrand
  *
  */
@@ -56,7 +60,7 @@ public class BloomClock {
         private final double fpr;
 
         /**
-         * 
+         *
          * @param fpr - the False Positive Rate. Acceptable probability from 0.0 -> 1.0
          *            of a false positive when determining precidence.
          */
@@ -90,28 +94,21 @@ public class BloomClock {
 
     }
 
-    public static class ClockOverflowException extends Exception {
-        private static final long serialVersionUID = 1L;
-
-        public ClockOverflowException(String message) {
-            super(message);
-        }
-
-    }
-
     record Comparison(int compared, int sumA, int sumB) {
     }
 
     record ComparisonResult(int comparison, double fpr) {
     }
 
-    public final static int DEFAULT_K = 3;
-    public static final int DEFAULT_M = 100;
+    public static long      DEFAULT_GOOD_SEED = Utils.bitStreamEntropy().nextLong();
+    public final static int DEFAULT_K         = 4;
+    public static final int DEFAULT_M         = 107;
 
-    private final static Logger log = LoggerFactory.getLogger(BloomClock.class);
+    private final static Logger log  = LoggerFactory.getLogger(BloomClock.class);
+    private static int          MASK = 0x0F;
 
     static Hash<Digest> newHash(long seed, int k, int m) {
-        return new Hash<Digest>(seed, m, k) {
+        return new Hash<>(seed, k, m) {
             @Override
             Hasher<Digest> newHasher() {
                 return new DigestHasher();
@@ -119,9 +116,15 @@ public class BloomClock {
         };
     }
 
-    private final byte[]       counts;    // two cells per byte, giving 4 bits per cell
+    private final byte[] counts; // two cells per byte, giving 4 bits per cell
+
     private final Hash<Digest> hash;
-    private long               prefix = 0;
+
+    private long prefix = 0;
+
+    public BloomClock() {
+        this(DEFAULT_GOOD_SEED, DEFAULT_K, DEFAULT_M);
+    }
 
     public BloomClock(BC bc) {
         hash = newHash(bc.getSeed(), bc.getK(), bc.getM());
@@ -129,31 +132,38 @@ public class BloomClock {
         prefix = bc.getPrefix();
     }
 
+    public BloomClock(int[] initialValues) {
+        this(DEFAULT_GOOD_SEED, initialValues, DEFAULT_K);
+    }
+
+    public BloomClock(long seed) {
+        this(seed, DEFAULT_K, DEFAULT_M);
+    }
+
     public BloomClock(long seed, int k, int m) {
-        assert m % 2 == 0 : "must be an even number";
-        counts = new byte[m / 2];
+        counts = new byte[m];
         hash = newHash(seed, k, m);
     }
 
     /**
-     * 
+     *
      * @param seed          - the seed for the Hash function
      * @param initialValues - initial values of the clock
      * @param k             - number of hashes
      */
     public BloomClock(long seed, int[] initialValues, int k) {
-        assert initialValues.length % 2 == 0 : "must be an even number";
-
-        counts = new byte[initialValues.length / 2];
+        if (IntStream.of(initialValues).max().getAsInt() > MASK) {
+            throw new IllegalArgumentException("initial values contain values > " + MASK);
+        }
+        counts = new byte[initialValues.length];
         hash = newHash(seed, k, initialValues.length);
-        int cell = 0;
-        int min = IntStream.of(initialValues).min().getAsInt();
+        int min = 0;
         prefix += min;
-        if (IntStream.of(initialValues).map(i -> i - min).max().getAsInt() > 0x0F) {
+        if (IntStream.of(initialValues).map(i -> i - min).max().getAsInt() > MASK) {
             throw new IllegalArgumentException("Cannot represent with a valid clock value.  Overflow.");
         }
-        for (int i = 0; i < initialValues.length; i = i + 2) {
-            counts[cell++] = (byte) ((initialValues[i] - min) << 4 | (initialValues[i + 1] - min));
+        for (int i = 0; i < initialValues.length; i = i + 1) {
+            set(i, initialValues[i] - min);
         }
     }
 
@@ -166,27 +176,25 @@ public class BloomClock {
     /**
      * Add a digest to this clock. This should be done only once per unique digest.
      */
-    public void add(Digest digest) throws ClockOverflowException {
+    public void add(Digest digest) {
+        boolean roll = false;
         for (int hash : hash.hashes(digest)) {
-            int cell = hash / 2;
-            boolean high = hash % 2 == 0;
-            byte count;
-            if (high) {
-                count = (byte) (counts[cell] >> 4);
-            } else {
-                count = (byte) (counts[cell] & 0x0F);
+            int count = count(hash);
+            if (count + 1 == MASK) {
+                roll = true;
             }
-            if (count == 0x0F) {
-                rollPrefix();
-            }
-            if (high) {
-                counts[cell] += 0x10;
-            } else {
-                counts[cell] += 0x01;
-            }
+            inc(hash);
+        }
+        if (roll) {
+            rollPrefix();
         }
     }
 
+    public void addAll(Collection<Digest> digests) {
+        digests.forEach(d -> add(d));
+    }
+
+    @Override
     public BloomClock clone() {
         return new BloomClock(prefix, hash.clone(), Arrays.copyOf(counts, counts.length));
     }
@@ -207,6 +215,10 @@ public class BloomClock {
         return Arrays.equals(counts, other.counts) && prefix == other.prefix;
     }
 
+    public long getPrefix() {
+        return prefix;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
@@ -220,25 +232,49 @@ public class BloomClock {
      * @return a new Bloom Clock that represents the merged result of the receiver
      *         and the specified clock
      */
-    public BloomClock merge(BloomClock bbc) throws ClockOverflowException {
+    public BloomClock merge(BloomClock bbc) {
         return clone().mergeWith(bbc);
     }
 
     /**
      * Destructively merge the specified clock with the receiver
      */
-    public BloomClock mergeWith(BloomClock bbc) throws ClockOverflowException {
+    public BloomClock mergeWith(BloomClock bbc) {
         if (counts.length != bbc.counts.length) {
             throw new IllegalArgumentException(
                     "Cannot merge as this clock has m: " + hash.m + " and B has m: " + bbc.hash.m);
         }
-        prefix += bbc.prefix;
+        // only one is > 0 if any
+        int aBias = 0;
+        int bBias = 0;
+
+        // Merge prefixes
+        int prefixCompare = Long.compareUnsigned(prefix, bbc.prefix);
+        if (prefixCompare < 0) {
+            long preDiff = bbc.prefix - prefix;
+            prefix = bbc.prefix;
+            if (Long.compareUnsigned(preDiff, MASK) > 0) {
+                for (int i = 0; i < counts.length; i++) {
+                    counts[i] = bbc.counts[i];
+                }
+                return this;
+            }
+            bBias = (int) (preDiff & MASK);
+        } else if (prefixCompare > 0) {
+            long preDiff = prefix - bbc.prefix;
+            if (Long.compareUnsigned(preDiff, MASK) > 0) {
+                return this;
+            }
+            aBias = (int) (preDiff & MASK);
+        }
+
         int overall = 0;
-        for (int i = 0; i < counts.length; i++) {
-            byte a = counts[i];
-            byte b = bbc.counts[i];
-            byte max = (byte) ((byte) Math.max(a >> 4, b >> 4) << 4);
-            counts[i] = (byte) (max | Math.max((a & 0x0F), b & 0x0F));
+        for (int i = 0; i < hash.m; i++) {
+            int a = count(i) + aBias;
+            int b = bbc.count(i) + bBias;
+
+            int max = Math.max(a, b) - aBias - bBias;
+            set(i, max);
             overall = Math.max(max, overall);
         }
         if (overall == 0xFF) {
@@ -257,6 +293,7 @@ public class BloomClock {
                  .build();
     }
 
+    @Override
     public String toString() {
         StringBuilder buff = new StringBuilder();
         if (Long.compareUnsigned(prefix, 0) > 0) {
@@ -266,13 +303,11 @@ public class BloomClock {
         }
         buff.append("[");
         boolean comma = false;
-        for (byte b : counts) {
+        for (int i = 0; i < hash.m; i++) {
             if (comma) {
                 buff.append(',');
             }
-            buff.append((b >> 4));
-            buff.append(',');
-            buff.append((b & 0x0F));
+            buff.append(count(i));
             comma = true;
         }
         buff.append("]");
@@ -285,69 +320,59 @@ public class BloomClock {
         int sumB = 0;
         int lessThan = 0;
         int greaterThan = 0;
+
+        // only one is > 0 if any
         int aBias = 0;
         int bBias = 0;
 
         int prefixCompare = Long.compareUnsigned(prefix, bbc.prefix);
         if (prefixCompare < 0) {
             long preDiff = bbc.prefix - prefix;
-            if (Long.compareUnsigned(preDiff, 0x0F) > 0) {
-                return new Comparison(1, 0, 0x0F * hash.m);
+            if (Long.compareUnsigned(preDiff, MASK) > 0) {
+                return new Comparison(1, 0, MASK * hash.m);
             }
-            bBias = (int) (preDiff & Integer.MAX_VALUE);
+            bBias = (int) (preDiff & MASK);
         } else if (prefixCompare > 0) {
             long preDiff = prefix - bbc.prefix;
-            if (Long.compareUnsigned(preDiff, 0x0F) > 0) {
-                return new Comparison(-1, 0x0F * hash.m, 0);
+            if (Long.compareUnsigned(preDiff, MASK) > 0) {
+                return new Comparison(-1, MASK * hash.m, 0);
             }
-            aBias = (int) (preDiff & Integer.MAX_VALUE);
+            aBias = (int) (preDiff & MASK);
         }
 
-        for (int i = 0; i < counts.length; i++) {
-            int a;
-            int b;
-            // high nibble
-            a = (counts[i] >> 4) + aBias;
+        for (int i = 0; i < hash.m; i++) {
+            int a = count(i) + aBias;
             sumA += a;
-            b = (bbc.counts[i] >> 4) + bBias;
+            int b = bbc.count(i) + bBias;
             sumB += b;
-
             int diff = b - a;
             if (diff > 0) {
                 lessThan++;
             } else if (diff < 0) {
                 greaterThan++;
             }
-
-            // low nibble
-            a = (counts[i] & 0x0F) + aBias;
-            sumA += a;
-            b = (bbc.counts[i] & 0x0F) + bBias;
-            sumB += b;
-
-            diff = b - a;
-            if (diff > 0) {
-                lessThan++;
-            } else if (diff < 0) {
-                greaterThan++;
+            if (greaterThan != 0 && lessThan != 0) {
+                int biasA = aBias;
+                int biasB = bBias;
+                return new Comparison(0, sumA + range(i + 1, hash.m).map(x -> x + biasA).sum(),
+                        sumB + range(i + 1, hash.m).map(x -> x + biasB).sum());
             }
         }
-        if (lessThan != 0) {
-            if (greaterThan != 0) {
-                return new Comparison(0, sumA, sumB);
-            }
-            return new Comparison(-1, sumA, sumB);
-        }
+
         if (greaterThan != 0) {
             return new Comparison(1, sumA, sumB);
         }
         return new Comparison(-1, sumA, sumB);
     }
 
+    private int count(int index) {
+        return counts[index] & MASK;
+    }
+
     private double falsePositiveRate(Comparison c) {
         double x = Math.min(c.sumA, c.sumB);
         double y = Math.max(c.sumA, c.sumB);
-        return Math.pow(1 - Math.pow(1.0 - (1.0 / (double) hash.m), x), y);
+        return Math.pow(1 - Math.pow(1.0 - (1.0 / hash.m), x), y);
     }
 
     private ComparisonResult happenedBefore(BloomClock bbc) {
@@ -357,32 +382,41 @@ public class BloomClock {
         }
         Comparison c = compareWith(bbc);
         return switch (c.compared) {
-        case 0 -> new ComparisonResult(0, 1.0);
-        case 1 -> new ComparisonResult(1, 1.0);
+        case 0 -> new ComparisonResult(0, falsePositiveRate(c));
+        case 1 -> new ComparisonResult(1, falsePositiveRate(c));
         case -1 -> new ComparisonResult(-1, falsePositiveRate(c));
         default -> throw new IllegalArgumentException("Unexpected comparison value: " + c.compared);
         };
     }
 
-    private void rollPrefix() throws ClockOverflowException {
-        int min = 0x0F;
-        for (byte cell : counts) {
-            int tst = cell & 0x0F;
-            min = Math.min(tst, min);
-            tst = cell >> 4;
-            min = Math.min(tst, min);
+    private void inc(int index) {
+        counts[index] += 1;
+    }
+
+    private void rollPrefix() {
+        int min = MASK;
+        for (int i = 0; i < hash.m; i++) {
+            int count = count(i);
+            min = Math.min(min, count);
         }
         if (min == 0x00) {
-            log.info("Cannot roll prefix");
+            log.trace("Overflow");
             return;
         }
         if (prefix == -1L) {
-            throw new ClockOverflowException("Prefix has reached maximum count (2^64)");
+            log.info("Prefix already at max, you win the internet");
+            return;
         }
-        byte removed = (byte) (((byte) min << 4) | min);
         prefix += min;
         for (int i = 0; i < counts.length; i++) {
-            counts[i] -= removed;
+            set(i, count(i) - min);
         }
+    }
+
+    private void set(int index, int value) {
+        if (value < 0 || value > MASK) {
+            throw new IllegalArgumentException();
+        }
+        counts[index] = (byte) (value & MASK);
     }
 }

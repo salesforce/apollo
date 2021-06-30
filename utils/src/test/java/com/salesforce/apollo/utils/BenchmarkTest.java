@@ -103,7 +103,7 @@ public class BenchmarkTest {
 
         // Add elements
         System.out.print("ibf.add(): ");
-        long start_add = System.currentTimeMillis(); 
+        long start_add = System.currentTimeMillis();
         s1.forEach(element -> b1.add(element));
         long end_add = System.currentTimeMillis();
         printStat(start_add, end_add);

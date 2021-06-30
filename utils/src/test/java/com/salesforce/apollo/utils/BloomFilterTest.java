@@ -29,7 +29,7 @@ public class BloomFilterTest {
     @Test
     public void smoke() throws Exception {
         int max = 1_000_000;
-        double target = 0.125;
+        double target = 0.000125;
         BloomFilter<Digest> biff = new DigestBloomFilter(666, max, target);
 
         BitsStreamGenerator random = Utils.bitStreamEntropy();

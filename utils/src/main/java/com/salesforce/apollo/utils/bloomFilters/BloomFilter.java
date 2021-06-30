@@ -31,7 +31,7 @@ abstract public class BloomFilter<T> {
         }
 
         public DigestBloomFilter(long seed, int m, int k, long[] bytes) {
-            super(new Hash<Digest>(seed, m, k) {
+            super(new Hash<Digest>(seed, k, m) {
                 @Override
                 Hasher<Digest> newHasher() {
                     return new DigestHasher();
@@ -58,7 +58,7 @@ abstract public class BloomFilter<T> {
         }
 
         public IntBloomFilter(long seed, int m, int k, long[] bits) {
-            super(new Hash<Integer>(seed, m, k) {
+            super(new Hash<Integer>(seed, k, m) {
                 @Override
                 Hasher<Integer> newHasher() {
                     return new IntHasher();
@@ -84,7 +84,7 @@ abstract public class BloomFilter<T> {
         }
 
         public LongBloomFilter(long seed, int m, int k, long[] bits) {
-            super(new Hash<Long>(seed, m, k) {
+            super(new Hash<Long>(seed, k, m) {
                 @Override
                 Hasher<Long> newHasher() {
                     return new LongHasher();

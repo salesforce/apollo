@@ -29,7 +29,7 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     public static class DigestIBF extends IBF<Digest> {
         static Hash<Digest> newHash(long seed, int m, int k) {
-            return new Hash<Digest>(seed, m, k) {
+            return new Hash<Digest>(seed, k, m) {
                 @Override
                 Hasher<Digest> newHasher() {
                     return new DigestHasher();
@@ -105,7 +105,7 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     public static class IntIBF extends IBF<Integer> {
         static Hash<Integer> newHash(long seed, int m, int k) {
-            return new Hash<Integer>(seed, m, k) {
+            return new Hash<Integer>(seed, k, m) {
                 @Override
                 Hasher<Integer> newHasher() {
                     return new IntHasher();
@@ -180,7 +180,7 @@ abstract public class IBF<KeyType> implements Cloneable {
     public static class LongIBF extends IBF<Long> {
 
         static Hash<Long> newHash(long seed, int m, int k) {
-            return new Hash<Long>(seed, m, k) {
+            return new Hash<Long>(seed, k, m) {
                 @Override
                 Hasher<Long> newHasher() {
                     return new LongHasher();

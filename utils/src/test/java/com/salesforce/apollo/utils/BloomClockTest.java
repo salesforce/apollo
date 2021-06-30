@@ -11,27 +11,153 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.bloomFilters.BloomClock;
 import com.salesforce.apollo.utils.bloomFilters.BloomClock.BcComparator;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock.ClockOverflowException;
 
 /**
  * @author hal.hildebrand
  */
 public class BloomClockTest {
+    private static final long SEED = -772069189919430497L;
 
-    private final Comparator<BloomClock> comparator = new BcComparator(0.1);
+    record Event(BloomClock clockValue, Digest hash, int timestamp) {
+    }
+
+    record Node(Map<Integer, Event> history, AtomicReference<BloomClock> state, Comparator<BloomClock> comparator) {
+
+        BloomClock currentState() {
+            return state.get();
+        }
+
+        void process(Event event) {
+            BloomClock current = state.get();
+            int comparison = comparator.compare(event.clockValue, current);
+            if (comparison < 0) {
+                return; // event in the past, discarding
+            }
+            if (comparison > 0) { // event from our future
+                current.mergeWith(event.clockValue);
+                history.put(event.timestamp, event);
+            }
+            // We can't compare the event with this node's clock, so we have to fall back to
+            // timestamps
+            int localMax = history.keySet().stream().mapToInt(e -> (Integer) e).max().getAsInt();
+            if (event.timestamp > localMax) { // Event's timestamp wins
+                current.mergeWith(event.clockValue);
+                history.put(event.timestamp, event);
+            } else if (event.timestamp == localMax) { // no winner, lexically order e.g.
+                if (history.get(localMax).hash.compareTo(event.hash) <= 0) { // event wins
+                    current.mergeWith(event.clockValue);
+                    history.put(event.timestamp, event);
+                }
+            }
+            // Event was "definitely" in the past and discarded
+        }
+    }
+
+    Digest digest(Random entropy) {
+        byte[] buf = new byte[DigestAlgorithm.DEFAULT.digestLength()];
+        entropy.nextBytes(buf);
+        Digest digest = new Digest(DigestAlgorithm.DEFAULT, buf);
+        return digest;
+    }
+
+    Event newEvent(Node node, Digest digest, int timestamp) {
+        BloomClock clock = node.currentState();
+        clock.add(digest);
+        return new Event(clock, digest, timestamp);
+    }
+
+    @Test
+    public void paperScenario() throws Exception {
+        Comparator<BloomClock> comparator = new BcComparator(0.1);
+        AtomicInteger clock = new AtomicInteger();
+        int K = 3;
+        int M = 200;
+        BloomClock startState = new BloomClock(SEED, K, M);
+
+        Node a = new Node(new HashMap<>(), new AtomicReference<>(startState.clone()), comparator);
+        Node b = new Node(new HashMap<>(), new AtomicReference<>(startState.clone()), comparator);
+        Node c = new Node(new HashMap<>(), new AtomicReference<>(startState.clone()), comparator);
+        Node d = new Node(new HashMap<>(), new AtomicReference<>(startState.clone()), comparator);
+        Node e = new Node(new HashMap<>(), new AtomicReference<>(startState.clone()), comparator);
+
+        final Event t1, t2, t3, t4, t5;
+        Random entropy = new Random(SEED);
+
+        // Node A originates event at t1
+        t1 = newEvent(a, digest(entropy), clock.incrementAndGet());
+
+        // Delivered only to B,D,E
+        b.process(t1);
+        d.process(t1);
+        e.process(t1);
+
+        assertEquals(t1.clockValue, a.currentState());
+        assertEquals(t1.clockValue, b.currentState());
+        assertEquals(t1.clockValue, d.currentState());
+        assertEquals(t1.clockValue, e.currentState());
+
+        // Node B originates event at t2
+        t2 = newEvent(b, digest(entropy), clock.incrementAndGet());
+
+        // Delivered only to A, E
+        a.process(t2);
+        e.process(t2);
+
+        assertEquals(t2.clockValue, b.currentState());
+        assertEquals(t2.clockValue, a.currentState());
+        assertEquals(t2.clockValue, e.currentState());
+
+        // Node D originates event at t3
+        t3 = newEvent(d, digest(entropy), clock.incrementAndGet());
+
+        // Delivered only to C, E
+        c.process(t3);
+        e.process(t3);
+
+        assertEquals(t3.clockValue, d.currentState());
+        assertEquals(t3.clockValue, c.currentState());
+        assertEquals(-1, comparator.compare(t3.clockValue, e.currentState()));
+
+        // Node E cannot decide, but timestamps on the events wins and thus event t3 is
+        // "in the past" for node E
+        assertEquals(-1, comparator.compare(t3.clockValue, e.currentState()));
+
+        // Node E originates event at t4
+        t4 = newEvent(e, digest(entropy), clock.incrementAndGet());
+
+        // Delivered only to D
+        d.process(t4);
+
+        assertEquals(-1, comparator.compare(t4.clockValue, e.currentState()));
+        assertEquals(t4.clockValue, d.currentState());
+
+        // Node C originates event at t4
+        t5 = newEvent(c, digest(entropy), clock.incrementAndGet());
+
+        // Delivered only to D
+        d.process(t5);
+
+        assertEquals(t5.clockValue, c.currentState());
+        assertEquals(-1, comparator.compare(t5.clockValue, d.currentState()));
+    }
 
     @Test
     public void smokin() {
-        BloomClock a = new BloomClock(0x1638, new int[] { 1, 0, 0, 1 }, 3);
-        BloomClock b = new BloomClock(0x1638, new int[] { 1, 1, 0, 1 }, 3);
-        BloomClock c = new BloomClock(0x1638, new int[] { 1, 1, 0, 0 }, 3);
-        BloomClock d = new BloomClock(0x1638, new int[] { 1, 1, 1, 1 }, 3);
+        Comparator<BloomClock> comparator = new BcComparator(0.1);
+        BloomClock a = new BloomClock(new int[] { 1, 0, 0, 1 });
+        BloomClock b = new BloomClock(new int[] { 1, 1, 0, 1 });
+        BloomClock c = new BloomClock(new int[] { 1, 1, 0, 0 });
+        BloomClock d = new BloomClock(new int[] { 1, 1, 1, 1 });
 
         // A proceeds B
         assertEquals(-1, comparator.compare(a, b));
@@ -41,87 +167,5 @@ public class BloomClockTest {
         assertEquals(0, comparator.compare(a, c));
         // D occurs after A
         assertEquals(1, comparator.compare(d, a));
-    }
-
-    @Test
-    public void paperScenario() throws Exception {
-
-        // Example of the causal processing of events partially ordered by Bloom Clocks
-        record Node(Map<Integer, BloomClock> history, AtomicReference<BloomClock> state) {
-            Node initialState() {
-                history.put(0, state.get().clone());
-                return this;
-            }
-
-            BloomClock currentState() {
-                return state.get();
-            }
-
-            void process(BloomClock event, int t) throws ClockOverflowException {
-                state.get().mergeWith(event);
-                history.put(t, state.get().clone());
-            }
-        }
-
-        BloomClock startState = event(new int[] { 0, 0, 0, 0, 0, 0, 0, 0 });
-        Node a = new Node(new HashMap<>(), new AtomicReference<>(startState.clone())).initialState();
-        Node b = new Node(new HashMap<>(), new AtomicReference<>(startState.clone())).initialState();
-        Node c = new Node(new HashMap<>(), new AtomicReference<>(startState.clone())).initialState();
-        Node d = new Node(new HashMap<>(), new AtomicReference<>(startState.clone())).initialState();
-        Node e = new Node(new HashMap<>(), new AtomicReference<>(startState.clone())).initialState();
-
-        BloomClock e1, e2, e3, e4, e5;
-
-        e1 = event(new int[] { 0, 1, 0, 0, 1, 0, 0, 0 });
-
-        a.process(e1, 1); // orginates e1
-        b.process(e1, 1);
-        d.process(e1, 1);
-        e.process(e1, 1);
-
-        assertEquals(e1, a.currentState());
-        assertEquals(e1, b.currentState());
-        assertEquals(e1, d.currentState());
-        assertEquals(e1, e.currentState());
-
-        e2 = event(new int[] { 0, 2, 0, 0, 1, 0, 1, 0 });
-
-        b.process(e2, 2); // orginates e2
-        a.process(e2, 2);
-        e.process(e2, 2);
-
-        assertEquals(e2, b.currentState());
-        assertEquals(e2, a.currentState());
-        assertEquals(e2, e.currentState());
-
-        e3 = event(new int[] { 1, 2, 0, 0, 1, 0, 0, 0 });
-
-        d.process(e3, 3); // orginates e3
-        c.process(e3, 3);
-        e.process(e3, 3);
-
-        assertEquals(e3, d.currentState());
-        assertEquals(e3, c.currentState());
-        assertEquals(event(new int[] { 1, 2, 0, 0, 1, 0, 1, 0 }), e.currentState());
-
-        e4 = event(new int[] { 2, 2, 0, 0, 1, 1, 0, 0 });
-
-        c.process(e4, 4); // orginates e4
-        d.process(e4, 4);
-
-        assertEquals(e4, c.currentState());
-        assertEquals(e4, d.currentState());
-        
-        e5 = event(new int[] { 2, 2, 1, 0, 1, 1, 1, 0 });
-
-        c.process(e5, 5); // orginates e5
-        b.process(e5, 5);
-
-        assertEquals(e5, c.currentState());
-        assertEquals(e5, b.currentState());
-    }
-
-    BloomClock event(int[] vector) {
-        return new BloomClock(0x1638, vector, 3);
     }
 }

@@ -35,12 +35,6 @@ public abstract class Hash<M> {
         private static final long C2         = 0x4cf5ad432745937fL;
         private static final long CHUNK_SIZE = 16;
 
-        private static final int UNSIGNED_MASK = 0xFF;
-
-        public static int toInt(byte value) {
-            return value & UNSIGNED_MASK;
-        }
-
         long h1;
         long h2;
         int  length;
@@ -64,13 +58,14 @@ public abstract class Hash<M> {
             int[] hashes = new int[k];
             int i = 0;
             while (i < k) {
-                int hash = (int) ((combinedHash & Long.MAX_VALUE) % m);
+                int hash = (int) (((combinedHash) & Long.MAX_VALUE) % m);
                 boolean found = false;
                 for (int j = 0; j < i; j++) {
                     if (hashes[j] == hash) {
                         found = true;
                         break;
-                    }
+                    } else
+                        MISSES++;
                 }
                 if (!found) {
                     hashes[i++] = hash;
@@ -200,6 +195,8 @@ public abstract class Hash<M> {
 
     }
 
+    public static int MISSES = 0;
+
     /**
      * Computes the optimal k (number of hashes per element inserted in Bloom
      * filter), given the expected insertions and total number of bits in the Bloom
@@ -211,7 +208,7 @@ public abstract class Hash<M> {
      * @param n expected insertions (must be positive)
      * @param m total number of bits in Bloom filter (must be positive)
      */
-    protected static int optimalK(long n, long m) {
+    public static int optimalK(long n, long m) {
         // (m / n) * log(2), but avoid truncation due to division!
         return Math.max(1, (int) Math.round(((double) m) / ((double) n) * Math.log(2)));
     }
@@ -226,7 +223,7 @@ public abstract class Hash<M> {
      * @param n expected insertions (must be positive)
      * @param p false positive rate (must be 0 < p < 1)
      */
-    protected static int optimalM(long n, double p) {
+    public static int optimalM(long n, double p) {
         if (p == 0) {
             p = Double.MIN_VALUE;
         }
@@ -234,10 +231,9 @@ public abstract class Hash<M> {
     }
 
     protected final Hasher<M> hasher;
-
-    protected final int  k;
-    protected final int  m;
-    protected final long seed;
+    protected final int       k;
+    protected final int       m;
+    protected final long      seed;
 
     public Hash(long seed, int n, double p) {
         m = optimalM(n, p);
@@ -246,7 +242,7 @@ public abstract class Hash<M> {
         hasher = newHasher();
     }
 
-    public Hash(long seed, int m, int k) {
+    public Hash(long seed, int k, int m) {
         this.seed = seed;
         this.k = k;
         this.m = m;
