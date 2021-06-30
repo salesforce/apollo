@@ -64,10 +64,7 @@ message LongIBiff {
     repeated int64 kSum = 2;
 }
 
-message BC {
-    int64 seed = 1;
-    int32 m = 2;
-    int32 k = 3;
-    uint64 prefix = 4;
-    bytes counts = 5;
+message Clock {
+    uint64 prefix = 1;
+    bytes counts = 2;
 }

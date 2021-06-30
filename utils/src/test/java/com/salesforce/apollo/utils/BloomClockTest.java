@@ -20,7 +20,8 @@ import org.junit.jupiter.api.Test;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.bloomFilters.BloomClock;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock.BcComparator;
+import com.salesforce.apollo.utils.bloomFilters.BloomClock.ClockValueComparator;
+import com.salesforce.apollo.utils.bloomFilters.ClockValue;
 
 /**
  * @author hal.hildebrand
@@ -31,7 +32,7 @@ public class BloomClockTest {
     record Event(BloomClock clockValue, Digest hash, int timestamp) {
     }
 
-    record Node(Map<Integer, Event> history, AtomicReference<BloomClock> state, Comparator<BloomClock> comparator) {
+    record Node(Map<Integer, Event> history, AtomicReference<BloomClock> state, Comparator<ClockValue> comparator) {
 
         BloomClock currentState() {
             return state.get();
@@ -78,7 +79,7 @@ public class BloomClockTest {
 
     @Test
     public void paperScenario() throws Exception {
-        Comparator<BloomClock> comparator = new BcComparator(0.1);
+        Comparator<ClockValue> comparator = new ClockValueComparator(0.1);
         AtomicInteger clock = new AtomicInteger();
         int K = 3;
         int M = 200;
@@ -153,7 +154,7 @@ public class BloomClockTest {
 
     @Test
     public void smokin() {
-        Comparator<BloomClock> comparator = new BcComparator(0.1);
+        Comparator<ClockValue> comparator = new ClockValueComparator(0.1);
         BloomClock a = new BloomClock(new int[] { 1, 0, 0, 1 });
         BloomClock b = new BloomClock(new int[] { 1, 1, 0, 1 });
         BloomClock c = new BloomClock(new int[] { 1, 1, 0, 0 });

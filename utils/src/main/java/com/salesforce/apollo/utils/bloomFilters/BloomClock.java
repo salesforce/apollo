@@ -17,8 +17,7 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.utils.proto.BC;
+import com.salesfoce.apollo.utils.proto.Clock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.utils.Utils;
 
@@ -35,7 +34,7 @@ import com.salesforce.apollo.utils.Utils;
  * positives that can result when comparing two Bloom Clocks.
  * <p>
  * This implementation is based on a 4 bit counting bloom filter. To handle
- * overflow a Long prefix is kept. Periodically in insertion, the current count
+ * overflow a Long prefix is kept. Periodically in insertion, the current counts
  * will be renormalized, subtracting a common minimum and adding this to the
  * prefix. This allows the Bloom Clock to track 2^65 insertions (2^64 + one more
  * byte).
@@ -43,20 +42,20 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  *
  */
-public class BloomClock {
+public class BloomClock implements ClockValue {
 
     /**
-     * A comparator for Bloom Clocks. Because the Bloom Clock is a probabalistic
-     * data structure, this comparator requires a provided <b>false positive
-     * rate</b>. This FPR applies when clock A is compared to clock B and the
-     * determination is that A proceeds B. This determination is, however,
+     * A comparator for Bloom Clock values. Because the Bloom Clock is a
+     * probabalistic data structure, this comparator requires a provided <b>false
+     * positive rate</b>. This FPR applies when clock A is compared to clock B and
+     * the determination is that A proceeds B. This determination is, however,
      * probabalistic in that there is still a possibility this is a false positive
      * (the past is "included" in the present and future, so the FPR applies to the
      * "proceeded" relationship). The supplied FPR must be greater than or equal to
      * the calculated FPR of the comparison.
      *
      */
-    public static class BcComparator implements Comparator<BloomClock> {
+    public static class ClockValueComparator implements Comparator<ClockValue> {
         private final double fpr;
 
         /**
@@ -64,14 +63,14 @@ public class BloomClock {
          * @param fpr - the False Positive Rate. Acceptable probability from 0.0 -> 1.0
          *            of a false positive when determining precidence.
          */
-        public BcComparator(double fpr) {
+        public ClockValueComparator(double fpr) {
             this.fpr = fpr;
         }
 
         /**
-         * Provides comparison between two Bloom Clocks. The comparator has a false
-         * positive threshold that determines the acceptable threshold of assurance that
-         * clock A proceeds clock B.
+         * Provides comparison between two Bloom Clock values. The comparator has a
+         * false positive threshold that determines the acceptable threshold of
+         * assurance that clock A proceeds clock B.
          * <p>
          * If clock A is ordered after clock B, then this function returns 1
          * <p>
@@ -80,12 +79,10 @@ public class BloomClock {
          * <p>
          * If clock A proceeds B within this comparator's false positive rate, then this
          * function returns -1.
-         * <p>
-         *
          */
         @Override
-        public int compare(BloomClock a, BloomClock b) {
-            var comparison = a.happenedBefore(b);
+        public int compare(ClockValue a, ClockValue b) {
+            var comparison = a.compareTo(b);
             if (comparison.comparison >= 0) {
                 return comparison.comparison;
             }
@@ -100,12 +97,101 @@ public class BloomClock {
     record ComparisonResult(int comparison, double fpr) {
     }
 
-    public static long      DEFAULT_GOOD_SEED = Utils.bitStreamEntropy().nextLong();
-    public final static int DEFAULT_K         = 4;
-    public static final int DEFAULT_M         = 107;
+    private record BloomClockValue(long prefix, byte[] counts, int m) implements ClockValue {
 
-    private final static Logger log  = LoggerFactory.getLogger(BloomClock.class);
-    private static int          MASK = 0x0F;
+        @Override
+        public ComparisonResult compareTo(ClockValue b) {
+            if (b instanceof BloomClock bc) {
+                return happenedBefore(bc.prefix, bc.counts);
+            } else if (b instanceof BloomClockValue bcv) {
+                return happenedBefore(bcv.prefix, bcv.counts);
+            }
+            throw new IllegalArgumentException("unknown instance of ClockValue");
+        }
+
+        ComparisonResult happenedBefore(long bbcPrefix, byte[] bbcCounts) {
+            if (counts.length != bbcCounts.length) {
+                throw new IllegalArgumentException(
+                        "Cannot compare as this clock has a different count size than the specified clock");
+            }
+            Comparison c = compareWith(bbcPrefix, bbcCounts);
+            return switch (c.compared) {
+            case 0 -> new ComparisonResult(0, falsePositiveRate(c));
+            case 1 -> new ComparisonResult(1, falsePositiveRate(c));
+            case -1 -> new ComparisonResult(-1, falsePositiveRate(c));
+            default -> throw new IllegalArgumentException("Unexpected comparison value: " + c.compared);
+            };
+        }
+
+        double falsePositiveRate(Comparison c) {
+            double x = Math.min(c.sumA, c.sumB);
+            double y = Math.max(c.sumA, c.sumB);
+            return Math.pow(1 - Math.pow(1.0 - (1.0 / m), x), y);
+        }
+
+        Comparison compareWith(long bbcPrefix, byte[] bbcCounts) {
+            int sumA = 0;
+            int sumB = 0;
+            int lessThan = 0;
+            int greaterThan = 0;
+
+            // only one is > 0 if any
+            int aBias = 0;
+            int bBias = 0;
+
+            int prefixCompare = Long.compareUnsigned(prefix, bbcPrefix);
+            if (prefixCompare < 0) {
+                long preDiff = bbcPrefix - prefix;
+                if (Long.compareUnsigned(preDiff, MASK) > 0) {
+                    return new Comparison(1, 0, MASK * m);
+                }
+                bBias = (int) (preDiff & MASK);
+            } else if (prefixCompare > 0) {
+                long preDiff = prefix - bbcPrefix;
+                if (Long.compareUnsigned(preDiff, MASK) > 0) {
+                    return new Comparison(-1, MASK * m, 0);
+                }
+                aBias = (int) (preDiff & MASK);
+            }
+
+            for (int i = 0; i < m; i++) {
+                int a = count(i, counts) + aBias;
+                sumA += a;
+                int b = count(i, bbcCounts) + bBias;
+                sumB += b;
+                int diff = b - a;
+                if (diff > 0) {
+                    lessThan++;
+                } else if (diff < 0) {
+                    greaterThan++;
+                }
+                if (greaterThan != 0 && lessThan != 0) {
+                    int biasA = aBias;
+                    int biasB = bBias;
+                    return new Comparison(0, sumA + range(i + 1, m).map(x -> x + biasA).sum(),
+                            sumB + range(i + 1, m).map(x -> x + biasB).sum());
+                }
+            }
+
+            if (greaterThan != 0) {
+                return new Comparison(1, sumA, sumB);
+            }
+            return new Comparison(-1, sumA, sumB);
+        }
+
+        @Override
+        public Clock toClock() {
+            return Clock.newBuilder().build();
+        }
+    }
+
+    public static long DEFAULT_GOOD_SEED = Utils.bitStreamEntropy().nextLong();
+
+    public final static int     DEFAULT_K = 4;
+    public static final int     DEFAULT_M = 107;
+    private final static Logger log       = LoggerFactory.getLogger(BloomClock.class);
+
+    private static int MASK = 0x0F;
 
     static Hash<Digest> newHash(long seed, int k, int m) {
         return new Hash<>(seed, k, m) {
@@ -116,20 +202,16 @@ public class BloomClock {
         };
     }
 
-    private final byte[] counts; // two cells per byte, giving 4 bits per cell
+    private static int count(int index, byte[] counts) {
+        return counts[index] & MASK;
+    }
 
+    private final byte[]       counts;    // two cells per byte, giving 4 bits per cell
     private final Hash<Digest> hash;
-
-    private long prefix = 0;
+    private long               prefix = 0;
 
     public BloomClock() {
         this(DEFAULT_GOOD_SEED, DEFAULT_K, DEFAULT_M);
-    }
-
-    public BloomClock(BC bc) {
-        hash = newHash(bc.getSeed(), bc.getK(), bc.getM());
-        counts = bc.toByteArray();
-        prefix = bc.getPrefix();
     }
 
     public BloomClock(int[] initialValues) {
@@ -199,8 +281,16 @@ public class BloomClock {
         return new BloomClock(prefix, hash.clone(), Arrays.copyOf(counts, counts.length));
     }
 
-    public BloomClock construct(long seed) {
-        return new BloomClock(seed, DEFAULT_K, DEFAULT_M);
+    @Override
+    public ComparisonResult compareTo(ClockValue b) {
+        return current().compareTo(b);
+    }
+
+    /**
+     * Answer an immutable ClockValue of the current state of the receiver
+     */
+    public ClockValue current() {
+        return new BloomClockValue(prefix, Arrays.copyOf(counts, counts.length), hash.m);
     }
 
     @Override
@@ -219,7 +309,6 @@ public class BloomClock {
         return prefix;
     }
 
-    @Override
     public int hashCode() {
         final int prime = 31;
         int result = 1;
@@ -283,14 +372,9 @@ public class BloomClock {
         return this;
     }
 
-    public BC toBC() {
-        return BC.newBuilder()
-                 .setSeed(hash.seed)
-                 .setK(hash.k)
-                 .setM(hash.m)
-                 .setPrefix(prefix)
-                 .setCounts(ByteString.copyFrom(counts))
-                 .build();
+    @Override
+    public Clock toClock() {
+        return new BloomClockValue(prefix, counts, hash.m).toClock();
     }
 
     @Override
@@ -314,79 +398,8 @@ public class BloomClock {
         return buff.toString();
     }
 
-    private Comparison compareWith(BloomClock bbc) {
-
-        int sumA = 0;
-        int sumB = 0;
-        int lessThan = 0;
-        int greaterThan = 0;
-
-        // only one is > 0 if any
-        int aBias = 0;
-        int bBias = 0;
-
-        int prefixCompare = Long.compareUnsigned(prefix, bbc.prefix);
-        if (prefixCompare < 0) {
-            long preDiff = bbc.prefix - prefix;
-            if (Long.compareUnsigned(preDiff, MASK) > 0) {
-                return new Comparison(1, 0, MASK * hash.m);
-            }
-            bBias = (int) (preDiff & MASK);
-        } else if (prefixCompare > 0) {
-            long preDiff = prefix - bbc.prefix;
-            if (Long.compareUnsigned(preDiff, MASK) > 0) {
-                return new Comparison(-1, MASK * hash.m, 0);
-            }
-            aBias = (int) (preDiff & MASK);
-        }
-
-        for (int i = 0; i < hash.m; i++) {
-            int a = count(i) + aBias;
-            sumA += a;
-            int b = bbc.count(i) + bBias;
-            sumB += b;
-            int diff = b - a;
-            if (diff > 0) {
-                lessThan++;
-            } else if (diff < 0) {
-                greaterThan++;
-            }
-            if (greaterThan != 0 && lessThan != 0) {
-                int biasA = aBias;
-                int biasB = bBias;
-                return new Comparison(0, sumA + range(i + 1, hash.m).map(x -> x + biasA).sum(),
-                        sumB + range(i + 1, hash.m).map(x -> x + biasB).sum());
-            }
-        }
-
-        if (greaterThan != 0) {
-            return new Comparison(1, sumA, sumB);
-        }
-        return new Comparison(-1, sumA, sumB);
-    }
-
     private int count(int index) {
-        return counts[index] & MASK;
-    }
-
-    private double falsePositiveRate(Comparison c) {
-        double x = Math.min(c.sumA, c.sumB);
-        double y = Math.max(c.sumA, c.sumB);
-        return Math.pow(1 - Math.pow(1.0 - (1.0 / hash.m), x), y);
-    }
-
-    private ComparisonResult happenedBefore(BloomClock bbc) {
-        if (counts.length != bbc.counts.length) {
-            throw new IllegalArgumentException(
-                    "Cannot compare as this clock has m: " + hash.m + " and B has m: " + bbc.hash.m);
-        }
-        Comparison c = compareWith(bbc);
-        return switch (c.compared) {
-        case 0 -> new ComparisonResult(0, falsePositiveRate(c));
-        case 1 -> new ComparisonResult(1, falsePositiveRate(c));
-        case -1 -> new ComparisonResult(-1, falsePositiveRate(c));
-        default -> throw new IllegalArgumentException("Unexpected comparison value: " + c.compared);
-        };
+        return count(index, counts);
     }
 
     private void inc(int index) {
