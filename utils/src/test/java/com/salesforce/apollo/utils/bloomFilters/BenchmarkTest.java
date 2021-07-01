@@ -1,4 +1,4 @@
-package com.salesforce.apollo.utils;
+package com.salesforce.apollo.utils.bloomFilters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -13,10 +13,8 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.utils.bloomFilters.IBF;
 import com.salesforce.apollo.utils.bloomFilters.IBF.Decode;
 import com.salesforce.apollo.utils.bloomFilters.IBF.IntIBF;
-import com.salesforce.apollo.utils.bloomFilters.StrataEstimator;
 import com.salesforce.apollo.utils.bloomFilters.StrataEstimator.IntStrataEstimator;
 
 public class BenchmarkTest {

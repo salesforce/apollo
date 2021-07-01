@@ -1,4 +1,4 @@
-package com.salesforce.apollo.utils;
+package com.salesforce.apollo.utils.bloomFilters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -8,7 +8,6 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.utils.bloomFilters.StrataEstimator;
 import com.salesforce.apollo.utils.bloomFilters.StrataEstimator.IntStrataEstimator;
 
 public class StrataEstimatorTest {

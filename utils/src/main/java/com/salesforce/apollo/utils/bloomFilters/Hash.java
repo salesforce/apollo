@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.utils.bloomFilters;
 
+import java.nio.ByteBuffer;
 import java.util.stream.IntStream;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -15,6 +16,20 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public abstract class Hash<M> {
+    public static class BytesHasher extends Hasher<byte[]> {
+
+        @Override
+        protected BytesHasher clone() {
+            return new BytesHasher();
+        }
+
+        @Override
+        protected void processIt(byte[] key) {
+            process(key);
+        }
+
+    }
+
     public static class DigestHasher extends Hasher<Digest> {
 
         @Override
@@ -34,6 +49,10 @@ public abstract class Hash<M> {
         private static final long C1         = 0x87c37b91114253d5L;
         private static final long C2         = 0x4cf5ad432745937fL;
         private static final long CHUNK_SIZE = 16;
+
+        static int toInt(byte value) {
+            return value & 0xFF;
+        }
 
         long h1;
         long h2;
@@ -86,6 +105,17 @@ public abstract class Hash<M> {
 
         protected abstract Hasher<M> clone();
 
+        void process(byte[] key) {
+            ByteBuffer buff = ByteBuffer.wrap(key);
+            while (buff.remaining() >= 16) {
+                bmix64(buff.getLong(), buff.getLong());
+                length += CHUNK_SIZE;
+            }
+            if (buff.hasRemaining()) {
+                processRemaining(buff);
+            }
+        }
+
         void process(Digest key) {
             long[] hash = key.getLongs();
             for (int i = 0; i < hash.length / 2; i += 2) {
@@ -112,6 +142,10 @@ public abstract class Hash<M> {
             h1 ^= mixK1(l);
             h2 ^= mixK2(0);
             length += 8;
+        }
+
+        void process(String key) {
+            process(key.getBytes());
         }
 
         abstract void processIt(M key);
@@ -166,6 +200,50 @@ public abstract class Hash<M> {
             k2 *= C1;
             return k2;
         }
+
+        private void processRemaining(ByteBuffer buff) {
+            long k1 = 0;
+            long k2 = 0;
+            length += buff.remaining();
+            switch (buff.remaining()) {
+            case 15:
+                k2 ^= (long) toInt(buff.get(14)) << 48; // fall through
+            case 14:
+                k2 ^= (long) toInt(buff.get(13)) << 40; // fall through
+            case 13:
+                k2 ^= (long) toInt(buff.get(12)) << 32; // fall through
+            case 12:
+                k2 ^= (long) toInt(buff.get(11)) << 24; // fall through
+            case 11:
+                k2 ^= (long) toInt(buff.get(10)) << 16; // fall through
+            case 10:
+                k2 ^= (long) toInt(buff.get(9)) << 8; // fall through
+            case 9:
+                k2 ^= (long) toInt(buff.get(8)); // fall through
+            case 8:
+                k1 ^= buff.getLong();
+                break;
+            case 7:
+                k1 ^= (long) toInt(buff.get(6)) << 48; // fall through
+            case 6:
+                k1 ^= (long) toInt(buff.get(5)) << 40; // fall through
+            case 5:
+                k1 ^= (long) toInt(buff.get(4)) << 32; // fall through
+            case 4:
+                k1 ^= (long) toInt(buff.get(3)) << 24; // fall through
+            case 3:
+                k1 ^= (long) toInt(buff.get(2)) << 16; // fall through
+            case 2:
+                k1 ^= (long) toInt(buff.get(1)) << 8; // fall through
+            case 1:
+                k1 ^= (long) toInt(buff.get(0));
+                break;
+            default:
+                throw new AssertionError("Should never get here.");
+            }
+            h1 ^= mixK1(k1);
+            h2 ^= mixK2(k2);
+        }
     }
 
     public static class IntHasher extends Hasher<Integer> {
@@ -190,6 +268,20 @@ public abstract class Hash<M> {
 
         @Override
         protected void processIt(Long key) {
+            process(key);
+        }
+
+    }
+
+    public static class StringHasher extends Hasher<String> {
+
+        @Override
+        protected StringHasher clone() {
+            return new StringHasher();
+        }
+
+        @Override
+        protected void processIt(String key) {
             process(key);
         }
 
