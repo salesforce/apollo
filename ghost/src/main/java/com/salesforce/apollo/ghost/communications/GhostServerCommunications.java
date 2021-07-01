@@ -8,9 +8,10 @@ package com.salesforce.apollo.ghost.communications;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 
-import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Bind;
+import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
@@ -37,7 +38,7 @@ public class GhostServerCommunications extends GhostImplBase {
     }
 
     @Override
-    public void get(Get request, StreamObserver<Any> responseObserver) {
+    public void get(Get request, StreamObserver<Content> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
             responseObserver.onNext(s.get(request));
             responseObserver.onCompleted();
@@ -72,7 +73,7 @@ public class GhostServerCommunications extends GhostImplBase {
     }
 
     @Override
-    public void lookup(Lookup request, StreamObserver<Any> responseObserver) {
+    public void lookup(Lookup request, StreamObserver<Binding> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
             responseObserver.onNext(s.lookup(request));
             responseObserver.onCompleted();

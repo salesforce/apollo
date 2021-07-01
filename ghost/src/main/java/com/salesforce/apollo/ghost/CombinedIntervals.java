@@ -68,8 +68,8 @@ public class CombinedIntervals implements Predicate<Digest> {
                         .map(e -> Interval.newBuilder()
                                           .setStart(e.getBegin().toDigeste())
                                           .setEnd(e.getEnd().toDigeste())
-                                          .setImmutableBff(e.getImmutableBff().toBff())
-                                          .setMutableBff(e.getMutableBff().toBff())
+                                          .setContentsBff(e.getContentsBff().toBff())
+                                          .setBindingsBff(e.getBindingsBff().toBff())
                                           .build())
                         .collect(Collectors.toList());
     }

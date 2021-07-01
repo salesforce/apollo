@@ -12,11 +12,11 @@ package ghost;
 
 service Ghost {
 
-    rpc get (Get) returns (google.protobuf.Any) {}
+    rpc get (Get) returns (Content) {}
     rpc put (Entry) returns (google.protobuf.Empty) {}
     rpc purge (Get) returns (google.protobuf.Empty) {}
     
-    rpc lookup (Lookup) returns (google.protobuf.Any) {}
+    rpc lookup (Lookup) returns (Binding) {}
     rpc bind (Bind) returns (google.protobuf.Empty) {}
     rpc remove (Lookup) returns (google.protobuf.Empty) {}
 
@@ -25,17 +25,22 @@ service Ghost {
 
 message Entry {
     utils.Digeste context = 1;
+    Content content = 2;
+}
+
+message Content {
+    utils.Clock clock = 1;
     google.protobuf.Any value = 2;
 }
 
 message Entries {
-    repeated google.protobuf.Any immutable = 1;
-    repeated Binding mutable =  2;
+    repeated Content content = 1;
+    repeated Binding binding =  2;
 }
 
 message Get {
     utils.Digeste context = 1;
-    utils.Digeste id = 2;
+    utils.Digeste cid = 2;
 }
 
 message Lookup {
@@ -49,9 +54,9 @@ message Bind {
 }
 
 message Binding {
-    utils.Digeste key = 1;
+    string key = 1;
     google.protobuf.Any value = 2;
-    int64 version = 3;
+    utils.Clock clock = 3;
 }
 
 message Intervals {
@@ -63,13 +68,6 @@ message Intervals {
 message Interval {
         utils.Digeste start = 1;
         utils.Digeste end = 2;
-        utils.Biff immutableBff = 3;
-        utils.Biff mutableBff = 4;
-}
-
-message StoredBinding {
-    int64 version = 1;
-    utils.Digeste hash = 2;
-    string key = 3;
-    google.protobuf.Any value = 4;
+        utils.Biff contentsBff = 3;
+        utils.Biff bindingsBff = 4;
 }

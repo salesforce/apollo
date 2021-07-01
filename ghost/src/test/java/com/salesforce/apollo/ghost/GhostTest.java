@@ -30,6 +30,8 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -130,9 +132,9 @@ public class GhostTest {
         count.set(0);
         for (Entry<String, Any> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
-                Any found = ghost.lookup(entry.getKey(), timeout).get();
+                Binding found = ghost.lookup(entry.getKey(), timeout).get();
                 assertNotNull(found);
-                assertEquals(entry.getValue(), found);
+                assertEquals(entry.getValue(), found.getValue());
                 if (count.incrementAndGet() % 100 == 0) {
                     System.out.print('.');
                     if (count.get() % 8000 == 0) {
@@ -200,9 +202,9 @@ public class GhostTest {
         count.set(0);
         for (Entry<Digest, Any> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
-                Any found = ghost.get(entry.getKey(), timeout).get();
+                Content found = ghost.get(entry.getKey(), timeout).get();
                 assertNotNull(found);
-                assertEquals(entry.getValue(), found);
+                assertEquals(entry.getValue(), found.getValue());
                 if (count.incrementAndGet() % 100 == 0) {
                     System.out.print('.');
                     if (count.get() % 8000 == 0) {

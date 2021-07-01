@@ -18,57 +18,57 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  */
 public class KeyInterval implements Predicate<Digest> {
     private final Digest        begin;
+    private BloomFilter<Digest> bindingsBff;
+    private BloomFilter<Digest> contentsBff;
     private final Digest        end;
-    private BloomFilter<Digest> immutableBff;
-    private BloomFilter<Digest> mutableBff;
 
     public KeyInterval(Digest begin, Digest end) {
         this(begin, null, end, null);
     }
 
     public KeyInterval(Interval interval) {
-        this(new Digest(interval.getStart()), BloomFilter.from(interval.getMutableBff()), new Digest(interval.getEnd()),
-                BloomFilter.from(interval.getImmutableBff()));
+        this(new Digest(interval.getStart()), BloomFilter.from(interval.getBindingsBff()),
+                new Digest(interval.getEnd()), BloomFilter.from(interval.getContentsBff()));
     }
 
-    private KeyInterval(Digest begin, BloomFilter<Digest> mutableBff, Digest end, BloomFilter<Digest> immutableBff) {
+    private KeyInterval(Digest begin, BloomFilter<Digest> bindingsBff, Digest end, BloomFilter<Digest> contentsBff) {
         assert begin.compareTo(end) < 0 : begin + " >= " + end;
         this.begin = begin;
         this.end = end;
-        this.immutableBff = immutableBff;
-        this.mutableBff = mutableBff;
+        this.contentsBff = contentsBff;
+        this.bindingsBff = bindingsBff;
+    }
+
+    public boolean bindingsContains(Digest e) {
+        return bindingsBff.contains(e);
+    }
+
+    public boolean contentsContains(Digest e) {
+        return contentsBff.contains(e);
     }
 
     public Digest getBegin() {
         return begin;
     }
 
+    public BloomFilter<Digest> getBindingsBff() {
+        return contentsBff;
+    }
+
+    public BloomFilter<Digest> getContentsBff() {
+        return contentsBff;
+    }
+
     public Digest getEnd() {
         return end;
     }
 
-    public BloomFilter<Digest> getImmutableBff() {
-        return immutableBff;
+    public void setBindingsBff(BloomFilter<Digest> bindingsBff) {
+        this.bindingsBff = bindingsBff;
     }
 
-    public BloomFilter<Digest> getMutableBff() {
-        return immutableBff;
-    }
-
-    public boolean immutableContains(Digest e) {
-        return immutableBff.contains(e);
-    }
-
-    public boolean mutableContains(Digest e) {
-        return mutableBff.contains(e);
-    }
-
-    public void setImmutableBff(BloomFilter<Digest> immutableBff) {
-        this.immutableBff = immutableBff;
-    }
-
-    public void setMutableBff(BloomFilter<Digest> mutableBff) {
-        this.mutableBff = mutableBff;
+    public void setContentsBff(BloomFilter<Digest> contentsBff) {
+        this.contentsBff = contentsBff;
     }
 
     @Override

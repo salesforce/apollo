@@ -7,9 +7,10 @@
 package com.salesforce.apollo.ghost.communications;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Bind;
+import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
@@ -51,8 +52,8 @@ public class GhostClientCommunications implements SpaceGhost {
     }
 
     @Override
-    public ListenableFuture<Any> get(Get key) {
-        return client.get(key);
+    public ListenableFuture<Content> get(Get cid) {
+        return client.get(cid);
     }
 
     @Override
@@ -66,7 +67,7 @@ public class GhostClientCommunications implements SpaceGhost {
     }
 
     @Override
-    public ListenableFuture<Any> lookup(Lookup query) {
+    public ListenableFuture<Binding> lookup(Lookup query) {
         return client.lookup(query);
     }
 

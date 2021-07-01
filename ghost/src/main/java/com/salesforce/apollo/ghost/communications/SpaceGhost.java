@@ -10,9 +10,10 @@ import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Bind;
+import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
@@ -43,9 +44,9 @@ public interface SpaceGhost extends Link {
             }
 
             @Override
-            public ListenableFuture<Any> get(Get key) {
-                SettableFuture<Any> f = SettableFuture.create();
-                f.set(service.get(key));
+            public ListenableFuture<Content> get(Get cid) {
+                SettableFuture<Content> f = SettableFuture.create();
+                f.set(service.get(cid));
                 return f;
             }
 
@@ -62,24 +63,24 @@ public interface SpaceGhost extends Link {
             }
 
             @Override
-            public ListenableFuture<Any> lookup(Lookup query) {
-                Any value = service.lookup(query);
-                SettableFuture<Any> f = SettableFuture.create();
+            public ListenableFuture<Binding> lookup(Lookup query) {
+                Binding value = service.lookup(query);
+                SettableFuture<Binding> f = SettableFuture.create();
                 f.set(value);
                 return f;
             }
 
             @Override
-            public ListenableFuture<Empty> purge(Get key) {
-                service.purge(key);
+            public ListenableFuture<Empty> purge(Get cid) {
+                service.purge(cid);
                 SettableFuture<Empty> f = SettableFuture.create();
                 f.set(Empty.getDefaultInstance());
                 return f;
             }
 
             @Override
-            public ListenableFuture<Empty> put(Entry value) {
-                service.put(value);
+            public ListenableFuture<Empty> put(Entry content) {
+                service.put(content);
                 SettableFuture<Empty> f = SettableFuture.create();
                 f.set(Empty.getDefaultInstance());
                 return f;
@@ -97,15 +98,15 @@ public interface SpaceGhost extends Link {
 
     ListenableFuture<Empty> bind(Bind binding);
 
-    ListenableFuture<Any> get(Get key);
+    ListenableFuture<Content> get(Get cid);
 
     ListenableFuture<Entries> intervals(Intervals intervals);
 
-    ListenableFuture<Any> lookup(Lookup query);
+    ListenableFuture<Binding> lookup(Lookup query);
 
-    ListenableFuture<Empty> purge(Get key);
+    ListenableFuture<Empty> purge(Get cid);
 
-    ListenableFuture<Empty> put(Entry value);
+    ListenableFuture<Empty> put(Entry content);
 
     ListenableFuture<Empty> remove(Lookup query);
 }
