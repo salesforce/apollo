@@ -102,7 +102,8 @@ public class Thoth implements Resolver {
             throw new IllegalArgumentException("Identifier must be non-transferrable: " + prefix);
         }
         String key = qb64(prefix);
-        return ghost.lookup(key, timeout).stream().map(v -> decode(key, v)).findFirst();
+//        return ghost.lookup(key, timeout).stream().map(v -> decode(key, v)).findFirst();
+        return null;
     }
 
     @Override
@@ -116,7 +117,8 @@ public class Thoth implements Resolver {
             throw new IllegalArgumentException("Identifier must be transferrable: " + prefix);
         }
         String key = qb64(prefix);
-        return ghost.lookup(key, timeout).stream().map(v -> decodeKeyState(key, v)).findFirst();
+//        return ghost.lookup(key, timeout).stream().map(v -> decodeKeyState(key, v)).findFirst();
+        return null;
     }
 
     private Bound decode(String key, Any value) {
