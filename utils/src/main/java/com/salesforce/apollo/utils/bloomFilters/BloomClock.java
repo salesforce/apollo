@@ -36,8 +36,7 @@ import com.salesforce.apollo.utils.Utils;
  * This implementation is based on a 4 bit counting bloom filter. To handle
  * overflow a Long prefix is kept. Periodically in insertion, the current counts
  * will be renormalized, subtracting a common minimum and adding this to the
- * prefix. This allows the Bloom Clock to track 2^65 insertions (2^64 + one more
- * byte).
+ * prefix. This allows the Bloom Clock to track approximately 2^64 events
  *
  * @author hal.hildebrand
  *
@@ -47,12 +46,13 @@ public class BloomClock implements ClockValue {
     /**
      * A comparator for Bloom Clock values. Because the Bloom Clock is a
      * probabalistic data structure, this comparator requires a provided <b>false
-     * positive rate</b>. This FPR applies when clock A is compared to clock B and
-     * the determination is that A proceeds B. This determination is, however,
-     * probabalistic in that there is still a possibility this is a false positive
-     * (the past is "included" in the present and future, so the FPR applies to the
-     * "proceeded" relationship). The supplied FPR must be greater than or equal to
-     * the calculated FPR of the comparison.
+     * positive rate</b> (FPR). This FPR applies when clock A is compared to clock B
+     * and the determination is that A proceeds B - this is the equivalent of
+     * "contains" in a vanilla Bloom Filter. The "proceeds", or "contains"
+     * determination is however probabalistic in that there is still a possibility
+     * this is a false positive (the past is "contained" in the present and future,
+     * so the FPR applies to the "proceeded" relationship).
+     * <p>
      *
      */
     public static class ClockValueComparator implements Comparator<ClockValue> {
@@ -91,13 +91,10 @@ public class BloomClock implements ClockValue {
 
     }
 
-    record Comparison(int compared, int sumA, int sumB) {
+    public record ComparisonResult(int comparison, double fpr) {
     }
 
-    record ComparisonResult(int comparison, double fpr) {
-    }
-
-    private record BloomClockValue(long prefix, byte[] counts, int m) implements ClockValue {
+    record BloomClockValue(long prefix, byte[] counts, int m) implements ClockValue {
 
         @Override
         public ComparisonResult compareTo(ClockValue b) {
@@ -180,9 +177,12 @@ public class BloomClock implements ClockValue {
         }
 
         @Override
-        public Clock toClock() {
-            return Clock.newBuilder().build();
+        public Clock.Builder toClock() {
+            return Clock.newBuilder();
         }
+    }
+
+    private record Comparison(int compared, int sumA, int sumB) {
     }
 
     public static long DEFAULT_GOOD_SEED = Utils.bitStreamEntropy().nextLong();
@@ -318,21 +318,27 @@ public class BloomClock implements ClockValue {
     }
 
     /**
-     * @return a new Bloom Clock that represents the merged result of the receiver
-     *         and the specified clock
+     * Merge the specified clock with the receiver. The receiver's new state is the
+     * max(receiver, clockB)
+     * 
+     * @return the immutable ClockValue representing the merged state of the
+     *         receiver
      */
-    public BloomClock merge(BloomClock bbc) {
-        return clone().mergeWith(bbc);
-    }
+    public ClockValue merge(ClockValue clockB) {
+        BloomClockValue bbc;
+        if (clockB instanceof BloomClockValue bcv) {
+            bbc = bcv;
+        } else if (clockB instanceof BloomClock bc) {
+            bbc = new BloomClockValue(bc.prefix, bc.counts, bc.hash.m);
+        } else {
+            throw new IllegalArgumentException();
+        }
 
-    /**
-     * Destructively merge the specified clock with the receiver
-     */
-    public BloomClock mergeWith(BloomClock bbc) {
         if (counts.length != bbc.counts.length) {
             throw new IllegalArgumentException(
-                    "Cannot merge as this clock has m: " + hash.m + " and B has m: " + bbc.hash.m);
+                    "Cannot merge as this clock has m: " + hash.m + " and B has m: " + bbc.m);
         }
+
         // only one is > 0 if any
         int aBias = 0;
         int bBias = 0;
@@ -360,7 +366,7 @@ public class BloomClock implements ClockValue {
         int overall = 0;
         for (int i = 0; i < hash.m; i++) {
             int a = count(i) + aBias;
-            int b = bbc.count(i) + bBias;
+            int b = count(i, bbc.counts) + bBias;
 
             int max = Math.max(a, b) - aBias - bBias;
             set(i, max);
@@ -373,7 +379,7 @@ public class BloomClock implements ClockValue {
     }
 
     @Override
-    public Clock toClock() {
+    public Clock.Builder toClock() {
         return new BloomClockValue(prefix, counts, hash.m).toClock();
     }
 
@@ -410,11 +416,11 @@ public class BloomClock implements ClockValue {
         int min = MASK;
         for (int i = 0; i < hash.m; i++) {
             int count = count(i);
+            if (count == 0x00) {
+                log.trace("Overflow");
+                return;
+            }
             min = Math.min(min, count);
-        }
-        if (min == 0x00) {
-            log.trace("Overflow");
-            return;
         }
         if (prefix == -1L) {
             log.info("Prefix already at max, you win the internet");

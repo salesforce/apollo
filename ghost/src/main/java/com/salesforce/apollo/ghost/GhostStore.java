@@ -16,12 +16,14 @@ import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ghost.proto.Binding;
 import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.ghost.mv.BindingType;
+import com.salesforce.apollo.ghost.mv.ContentType;
+import com.salesforce.apollo.utils.DigestType;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -30,36 +32,39 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
  *
  */
 public class GhostStore implements Store {
-    private final static String IMMUTABLE_MAP_TEMPLATE = "%s.immutable.ghostStore";
-    private final static Logger log                    = LoggerFactory.getLogger(GhostStore.class);
-    private final static String MUTABLE_MAP_TEMPLATE   = "%s.mutable.ghostStore";
+    private final static String BINDINGS_MAP_TEMPLATE = "%s.bindings.ghostStore";
+    private final static String CONTENTS_MAP_TEMPLATE = "%s.contents.ghostStore";
+    @SuppressWarnings("unused")
+    private final static Logger log                   = LoggerFactory.getLogger(GhostStore.class);
 
-    private final MVMap<Digest, byte[]> bindings;
-    private final MVMap<Digest, byte[]> contents;
-    private final DigestAlgorithm       digestAlgorithm;
+    private final MVMap<Digest, Binding> bindings;
+    private final MVMap<Digest, Content> contents;
+    private final DigestAlgorithm        digestAlgorithm;
 
     public GhostStore(Digest id, DigestAlgorithm digestAlgorithm, MVStore store) {
-        this(store.openMap(String.format(MUTABLE_MAP_TEMPLATE, id)), digestAlgorithm,
-                store.openMap(String.format(IMMUTABLE_MAP_TEMPLATE, id)));
-    }
-
-    public GhostStore(MVMap<Digest, byte[]> mutable, DigestAlgorithm digestAlgorithm, MVMap<Digest, byte[]> immutable) {
-        this.contents = immutable;
-        this.bindings = mutable;
         this.digestAlgorithm = digestAlgorithm;
+
+        DigestType digestType = new DigestType();
+        this.contents = store.openMap(String.format(CONTENTS_MAP_TEMPLATE, id),
+                                      new MVMap.Builder<Digest, Content>().keyType(digestType)
+                                                                          .valueType(new ContentType()));
+
+        this.bindings = store.openMap(String.format(BINDINGS_MAP_TEMPLATE, id),
+                                      new MVMap.Builder<Digest, Binding>().keyType(digestType)
+                                                                          .valueType(new BindingType()));
     }
 
     @Override
     public void add(List<Content> content) {
         content.forEach(e -> {
             var key = digestAlgorithm.digest(e.toByteString());
-            contents.put(key, e.toByteArray());
+            contents.put(key, e);
         });
     }
 
     @Override
     public void bind(Digest key, Binding binding) {
-        bindings.put(key, binding.toByteArray());
+        bindings.put(key, binding);
     }
 
     @Override
@@ -74,24 +79,14 @@ public class GhostStore implements Store {
 
     @Override
     public Content get(Digest key) {
-        byte[] value = contents.get(key);
-        try {
-            return value == null ? Content.getDefaultInstance() : Content.parseFrom(value);
-        } catch (InvalidProtocolBufferException e) {
-            log.debug("Unable to deserialize: {}", key);
-            throw new IllegalStateException("Unable to deserialize contents for key: " + key);
-        }
+        Content content = contents.get(key);
+        return content == null ? Content.getDefaultInstance() : content;
     }
 
     @Override
     public Binding lookup(Digest key) {
-        byte[] value = bindings.get(key);
-        try {
-            return value == null ? Binding.getDefaultInstance() : Binding.parseFrom(value);
-        } catch (InvalidProtocolBufferException e) {
-            log.debug("Unable to deserialize: {}", key);
-            throw new IllegalStateException("Unable to deserialize binding for key: " + key);
-        }
+        Binding binding = bindings.get(key);
+        return binding == null ? Binding.getDefaultInstance() : binding;
     }
 
     @Override
@@ -110,7 +105,7 @@ public class GhostStore implements Store {
     @Override
     public void put(Digest key, Content content) {
         if (contents.get(key) == null) {
-            contents.putIfAbsent(key, content.toByteArray());
+            contents.putIfAbsent(key, content);
         }
     }
 
@@ -119,42 +114,34 @@ public class GhostStore implements Store {
         bindings.remove(key);
     }
 
-    private void contentsIn(int maxEntries, Entries.Builder builder, KeyInterval interval) {
-        Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(contents.getRootPage(), interval.getBegin(),
-                interval.getEnd());
-        while (cursor.hasNext()) {
-            Digest key = cursor.next();
-            if (!interval.bindingsContains(key)) {
-                try {
-                    byte[] content = contents.get(key);
-                    if (content != null) {
-                        builder.addContent(Content.parseFrom(content));
-                    }
-                } catch (InvalidProtocolBufferException e) {
-                    log.debug("Unable to deserialize contents: {}", key);
-                }
-                if (builder.getContentCount() >= maxEntries) {
-                    break;
-                }
-            }
-        }
-    }
-
     private void bindingsIn(int maxEntries, Entries.Builder builder, KeyInterval interval) {
         Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(bindings.getRootPage(), interval.getBegin(),
                 interval.getEnd());
         while (cursor.hasNext()) {
             Digest key = cursor.next();
             if (!interval.bindingsContains(key)) {
-                try {
-                    byte[] binding = bindings.get(key);
-                    if (binding != null) {
-                        builder.addBinding(Binding.parseFrom(binding));
-                    }
-                } catch (InvalidProtocolBufferException e) {
-                    log.debug("Unable to deserialize binding: {}", key);
+                Binding binding = bindings.get(key);
+                if (binding != null) {
+                    builder.addBinding(binding);
                 }
                 if (builder.getBindingCount() >= maxEntries) {
+                    break;
+                }
+            }
+        }
+    }
+
+    private void contentsIn(int maxEntries, Entries.Builder builder, KeyInterval interval) {
+        Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(contents.getRootPage(), interval.getBegin(),
+                interval.getEnd());
+        while (cursor.hasNext()) {
+            Digest key = cursor.next();
+            if (!interval.bindingsContains(key)) {
+                Content content = contents.get(key);
+                if (content != null) {
+                    builder.addContent(content);
+                }
+                if (builder.getContentCount() >= maxEntries) {
                     break;
                 }
             }

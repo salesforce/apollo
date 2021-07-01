@@ -37,6 +37,7 @@ import com.google.common.collect.Multiset;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
+import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.ghost.proto.Bind;
 import com.salesfoce.apollo.ghost.proto.Binding;
 import com.salesfoce.apollo.ghost.proto.Content;
@@ -45,7 +46,7 @@ import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
-import com.salesfoce.apollo.utils.proto.Clock;
+import com.salesfoce.apollo.ghost.proto.StampedClock;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
@@ -166,8 +167,7 @@ public class Ghost {
         public final DigestAlgorithm digestAlgorithm;
         public final Executor        executor;
         public final double          fpr;
-
-        public final int maxEntries;
+        public final int             maxEntries;
 
         public GhostParameters(DigestAlgorithm digestAlgorithm, Executor executor, double fpr, int maxEntries) {
             this.digestAlgorithm = digestAlgorithm;
@@ -240,11 +240,49 @@ public class Ghost {
         }
     }
 
+    record CausalityClock(Lock lock, BloomClock clock, java.time.Clock wallClock) {
+
+        ClockValue current() {
+            return locked(() -> clock.current());
+        }
+
+        ClockValue merge(ClockValue b) {
+            return locked(() -> clock.merge(b));
+        }
+
+        ClockValue merge(StampedClock b) {
+            return merge(ClockValue.of(b.getClock()));
+        }
+
+        StampedClock.Builder stamp(Digest digest) {
+            return locked(() -> {
+                clock.add(digest);
+                Instant now = wallClock.instant();
+                return StampedClock.newBuilder()
+                                   .setClock(clock.toClock())
+                                   .setStamp(Timestamp.newBuilder()
+                                                      .setSeconds(now.getEpochSecond())
+                                                      .setNanos(now.getNano()));
+            });
+
+        }
+
+        private <T> T locked(Callable<T> call) {
+            lock.lock();
+            try {
+                return call.call();
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+
     public static final int JOIN_MESSAGE_CHANNEL = 3;
 
-    private static final Logger log = LoggerFactory.getLogger(Ghost.class);
-
-    private final SerialBloomClock                          clock;
+    private static final Logger                             log     = LoggerFactory.getLogger(Ghost.class);
+    private final CausalityClock                            clock;
     private final CommonCommunications<SpaceGhost, Service> communications;
     private final Context<Member>                           context;
     private final RingCommunications<SpaceGhost>            gossiper;
@@ -260,51 +298,21 @@ public class Ghost {
 
     public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, MVStore store,
             BloomClock clock) {
-        this(member, p, c, context, new GhostStore(context.getId(), p.digestAlgorithm, store), clock);
+        this(member, p, c, context, new GhostStore(context.getId(), p.digestAlgorithm, store), clock,
+                java.time.Clock.systemUTC());
     }
 
-    public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, Store s,
-            BloomClock clock) {
+    public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, Store s, BloomClock clock,
+            java.time.Clock wallClock) {
         this.member = member;
         parameters = p;
         this.context = context;
         store = s;
-        this.clock = new SerialBloomClock(new ReentrantLock(), clock);
+        this.clock = new CausalityClock(new ReentrantLock(), clock, wallClock);
         communications = c.create(member, context.getId(), service,
                                   r -> new GhostServerCommunications(c.getClientIdentityProvider(), r), getCreate(),
                                   SpaceGhost.localLoopbackFor(member, service));
         gossiper = new RingCommunications<>(context, member, communications, parameters.executor);
-    }
-
-    record SerialBloomClock(Lock lock, BloomClock clock) {
-        // Answer the immutable current state of the clock
-        ClockValue current() {
-            return locked(() -> clock.current());
-        }
-
-        Clock toClock() {
-            return locked(() -> clock.current().toClock());
-        }
-
-        <T> T locked(Callable<T> call) {
-            lock.lock();
-            try {
-                return call.call();
-            } catch (Exception e) {
-                throw new IllegalStateException(e);
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        void locked(Runnable action) {
-            lock.lock();
-            try {
-                action.run();
-            } finally {
-                lock.unlock();
-            }
-        }
     }
 
     /**
@@ -319,8 +327,13 @@ public class Ghost {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
 
-        // Bind the key and value at the current Bloom Clock value
-        Binding binding = Binding.newBuilder().setKey(key).setValue(value).setClock(clock.toClock()).build();
+        // Bind the key and value at the current Bloom Clock value and wall clock
+        // instant
+        Binding binding = Binding.newBuilder()
+                                 .setKey(key)
+                                 .setValue(value)
+                                 .setClock(clock.stamp(parameters.digestAlgorithm.digest(value.toByteString())))
+                                 .build();
 
         new RingIterator<>(context, member, communications,
                 parameters.executor).iterate(hash, () -> majorityComplete(key, majority),
@@ -460,9 +473,12 @@ public class Ghost {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        // Bind the content
-        Content content = Content.newBuilder().setClock(clock.toClock()).setValue(value).build();
-        Entry entry = Entry.newBuilder().setContext(context.getId().toDigeste()).setContent(content).build();
+
+        // Bind the content at current Bloom Clock value and wall clock instant
+        Entry entry = Entry.newBuilder()
+                           .setContext(context.getId().toDigeste())
+                           .setContent(Content.newBuilder().setClock(clock.stamp(key)).setValue(value))
+                           .build();
 
         new RingIterator<>(context, member, communications,
                 parameters.executor).iterate(key, () -> majorityComplete(key, majority),

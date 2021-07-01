@@ -200,12 +200,12 @@ public class Digest implements Comparable<Digest> {
         return new Digest(getAlgorithm(), d.getBytes());
     }
 
-    public Digeste toDigeste() {
+    public Digeste.Builder toDigeste() {
         Builder builder = Digeste.newBuilder().setType(algorithm.digestCode());
         for (long l : hash) {
             builder.addHash(l);
         }
-        return builder.build();
+        return builder;
     }
 
     @Override

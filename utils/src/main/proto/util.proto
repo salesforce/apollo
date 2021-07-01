@@ -67,4 +67,5 @@ message LongIBiff {
 message Clock {
     uint64 prefix = 1;
     bytes counts = 2;
+    int32 m = 3;
 }

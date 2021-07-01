@@ -5,15 +5,23 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.utils.bloomFilters;
- 
+
+import com.salesfoce.apollo.utils.proto.Clock;
+import com.salesforce.apollo.utils.bloomFilters.BloomClock.BloomClockValue;
 import com.salesforce.apollo.utils.bloomFilters.BloomClock.ComparisonResult;
-import com.salesfoce.apollo.utils.proto.*;
+
 /**
  * @author hal.hildebrand
  *
  */
 public interface ClockValue {
+
+    static ClockValue of(Clock clock) {
+        byte[] counts = clock.getCounts().toByteArray();
+        return new BloomClockValue(clock.getPrefix(), counts, counts.length);
+    }
+
     ComparisonResult compareTo(ClockValue b);
 
-    Clock toClock();
+    Clock.Builder toClock();
 }

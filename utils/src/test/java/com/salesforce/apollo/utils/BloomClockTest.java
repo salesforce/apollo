@@ -45,18 +45,18 @@ public class BloomClockTest {
                 return; // event in the past, discarding
             }
             if (comparison > 0) { // event from our future
-                current.mergeWith(event.clockValue);
+                current.merge(event.clockValue);
                 history.put(event.timestamp, event);
             }
             // We can't compare the event with this node's clock, so we have to fall back to
             // timestamps
             int localMax = history.keySet().stream().mapToInt(e -> (Integer) e).max().getAsInt();
             if (event.timestamp > localMax) { // Event's timestamp wins
-                current.mergeWith(event.clockValue);
+                current.merge(event.clockValue);
                 history.put(event.timestamp, event);
             } else if (event.timestamp == localMax) { // no winner, lexically order e.g.
                 if (history.get(localMax).hash.compareTo(event.hash) <= 0) { // event wins
-                    current.mergeWith(event.clockValue);
+                    current.merge(event.clockValue);
                     history.put(event.timestamp, event);
                 }
             }
