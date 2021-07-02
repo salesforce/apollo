@@ -26,14 +26,16 @@ public class Parameters {
         private Context<Member>        context;
         private DigestAlgorithm        digestAlgorithm = DigestAlgorithm.DEFAULT;
         private Executor               executor        = ForkJoinPool.commonPool();
+        private double                 falsePositiveRate;
+        private int                    maxMessages;
         private SigningMember          member;
         private MessagingMetrics       metrics;
         private Duration               tooOld          = Duration.ofMinutes(1);
         private java.time.Clock        wallclock       = Clock.systemUTC();
 
         public Parameters build() {
-            return new Parameters(bufferSize, comparator, context, digestAlgorithm, executor, member, metrics, tooOld,
-                    wallclock);
+            return new Parameters(bufferSize, comparator, maxMessages, context, digestAlgorithm, executor, member,
+                    metrics, tooOld, wallclock, falsePositiveRate);
         }
 
         public int getBufferSize() {
@@ -50,6 +52,18 @@ public class Parameters {
 
         public DigestAlgorithm getDigestAlgorithm() {
             return digestAlgorithm;
+        }
+
+        public Executor getExecutor() {
+            return executor;
+        }
+
+        public double getFalsePositiveRate() {
+            return falsePositiveRate;
+        }
+
+        public int getMaxMessages() {
+            return maxMessages;
         }
 
         public SigningMember getMember() {
@@ -88,6 +102,21 @@ public class Parameters {
             return this;
         }
 
+        public Builder setExecutor(Executor executor) {
+            this.executor = executor;
+            return this;
+        }
+
+        public Builder setFalsePositiveRate(double falsePositiveRate) {
+            this.falsePositiveRate = falsePositiveRate;
+            return this;
+        }
+
+        public Builder setMaxMessages(int maxMessages) {
+            this.maxMessages = maxMessages;
+            return this;
+        }
+
         public Parameters.Builder setMember(SigningMember member) {
             this.member = member;
             return this;
@@ -118,14 +147,16 @@ public class Parameters {
     public final Context<Member>        context;
     public final DigestAlgorithm        digestAlgorithm;
     public final Executor               executor;
+    public final double                 falsePositiveRate;
+    public final int                    maxMessages;
     public final SigningMember          member;
     public final MessagingMetrics       metrics;
     public final Duration               tooOld;
     public final java.time.Clock        wallclock;
 
-    public Parameters(int bufferSize, Comparator<ClockValue> comparator, Context<Member> context,
+    public Parameters(int bufferSize, Comparator<ClockValue> comparator, int maxMessages, Context<Member> context,
             DigestAlgorithm digestAlgorithm, Executor executor, SigningMember member, MessagingMetrics metrics,
-            Duration tooOld, Clock wallclock) {
+            Duration tooOld, Clock wallclock, double falsePositiveRate) {
         this.bufferSize = bufferSize;
         this.comparator = comparator;
         this.context = context;
@@ -135,5 +166,7 @@ public class Parameters {
         this.metrics = metrics;
         this.tooOld = tooOld;
         this.wallclock = wallclock;
+        this.falsePositiveRate = falsePositiveRate;
+        this.maxMessages = maxMessages;
     }
 }
