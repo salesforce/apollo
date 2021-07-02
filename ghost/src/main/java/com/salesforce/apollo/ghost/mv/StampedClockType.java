@@ -13,7 +13,7 @@ import org.h2.mvstore.WriteBuffer;
 import org.h2.mvstore.type.DataType;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.ghost.proto.StampedClock;
+import com.salesfoce.apollo.utils.proto.StampedClock;
 import com.salesforce.apollo.utils.bloomFilters.ClockValue;
 
 /**
