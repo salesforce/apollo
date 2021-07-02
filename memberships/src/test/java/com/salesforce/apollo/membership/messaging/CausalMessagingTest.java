@@ -112,7 +112,7 @@ public class CausalMessagingTest {
     private static final Parameters.Builder parameters = Parameters.newBuilder()
                                                                    .setFalsePositiveRate(0.125)
                                                                    .setComparator(new ClockValueComparator(0.1))
-                                                                   .setBufferSize(1500);
+                                                                   .setBufferSize(500);
 
     @BeforeAll
     public static void beforeClass() {
@@ -146,7 +146,7 @@ public class CausalMessagingTest {
                                                    cert.getX509Certificate().getPublicKey()))
                                            .collect(Collectors.toList());
 
-        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
+        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.01, members.size());
         parameters.setContext(context);
         members.forEach(m -> context.activate(m));
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
