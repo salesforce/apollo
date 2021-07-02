@@ -17,7 +17,10 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.utils.proto.BloomeClock;
 import com.salesfoce.apollo.utils.proto.Clock;
+import com.salesfoce.apollo.utils.proto.StampedBloomeClock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.utils.Utils;
 
@@ -94,7 +97,7 @@ public class BloomClock implements ClockValue {
     public record ComparisonResult(int comparison, double fpr) {
     }
 
-    record BloomClockValue(long prefix, byte[] counts, int m) implements ClockValue {
+    record BloomClockValue(long prefix, byte[] counts) implements ClockValue {
 
         @Override
         public ComparisonResult compareTo(ClockValue b) {
@@ -123,7 +126,11 @@ public class BloomClock implements ClockValue {
         double falsePositiveRate(Comparison c) {
             double x = Math.min(c.sumA, c.sumB);
             double y = Math.max(c.sumA, c.sumB);
-            return Math.pow(1 - Math.pow(1.0 - (1.0 / m), x), y);
+            return Math.pow(1 - Math.pow(1.0 - (1.0 / m()), x), y);
+        }
+
+        private int m() {
+            return BloomClock.m(counts);
         }
 
         Comparison compareWith(long bbcPrefix, byte[] bbcCounts) {
@@ -137,6 +144,7 @@ public class BloomClock implements ClockValue {
             int bBias = 0;
 
             int prefixCompare = Long.compareUnsigned(prefix, bbcPrefix);
+            int m = m();
             if (prefixCompare < 0) {
                 long preDiff = bbcPrefix - prefix;
                 if (Long.compareUnsigned(preDiff, MASK) > 0) {
@@ -177,8 +185,8 @@ public class BloomClock implements ClockValue {
         }
 
         @Override
-        public Clock.Builder toClock() {
-            return Clock.newBuilder();
+        public Clock toClock() {
+            return Clock.newBuilder().setPrefix(prefix).setCounts(ByteString.copyFrom(counts)).build();
         }
     }
 
@@ -187,11 +195,11 @@ public class BloomClock implements ClockValue {
 
     public static long DEFAULT_GOOD_SEED = Utils.bitStreamEntropy().nextLong();
 
-    public final static int     DEFAULT_K = 4;
+    public final static int DEFAULT_K = 4;
+
     public static final int     DEFAULT_M = 107;
     private final static Logger log       = LoggerFactory.getLogger(BloomClock.class);
-
-    private static int MASK = 0x0F;
+    private static int          MASK      = 0x0F;
 
     static Hash<Digest> newHash(long seed, int k, int m) {
         return new Hash<>(seed, k, m) {
@@ -206,12 +214,25 @@ public class BloomClock implements ClockValue {
         return counts[index] & MASK;
     }
 
+    private static int m(byte[] counts) {
+        return counts.length;
+    }
+
     private final byte[]       counts;    // two cells per byte, giving 4 bits per cell
     private final Hash<Digest> hash;
     private long               prefix = 0;
 
     public BloomClock() {
         this(DEFAULT_GOOD_SEED, DEFAULT_K, DEFAULT_M);
+    }
+
+    public BloomClock(BloomClock clock, byte[] initialValues) {
+        this(clock.prefix, clock.hash, initialValues);
+    }
+
+    public BloomClock(BloomeClock clock) {
+        this(clock.getPrefix(), newHash(clock.getSeed(), clock.getK(), clock.getCounts().size()),
+                clock.getCounts().toByteArray());
     }
 
     public BloomClock(int[] initialValues) {
@@ -247,6 +268,12 @@ public class BloomClock implements ClockValue {
         for (int i = 0; i < initialValues.length; i = i + 1) {
             set(i, initialValues[i] - min);
         }
+    }
+
+    public BloomClock(StampedBloomeClock clock) {
+        this(clock.getClock().getPrefix(),
+                newHash(clock.getClock().getSeed(), clock.getClock().getK(), clock.getClock().getCounts().size()),
+                clock.getClock().getCounts().toByteArray());
     }
 
     private BloomClock(long prefix, Hash<Digest> hash, byte[] counts) {
@@ -290,7 +317,7 @@ public class BloomClock implements ClockValue {
      * Answer an immutable ClockValue of the current state of the receiver
      */
     public ClockValue current() {
-        return new BloomClockValue(prefix, Arrays.copyOf(counts, counts.length), hash.m);
+        return new BloomClockValue(prefix, Arrays.copyOf(counts, counts.length));
     }
 
     @Override
@@ -317,6 +344,18 @@ public class BloomClock implements ClockValue {
         return result;
     }
 
+    public boolean isOrigin() {
+        if (prefix != 0) {
+            return false;
+        }
+        for (int i = 0; i < counts.length; i++) {
+            if (counts[i] != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /**
      * Merge the specified clock with the receiver. The receiver's new state is the
      * max(receiver, clockB)
@@ -329,14 +368,14 @@ public class BloomClock implements ClockValue {
         if (clockB instanceof BloomClockValue bcv) {
             bbc = bcv;
         } else if (clockB instanceof BloomClock bc) {
-            bbc = new BloomClockValue(bc.prefix, bc.counts, bc.hash.m);
+            bbc = new BloomClockValue(bc.prefix, bc.counts);
         } else {
             throw new IllegalArgumentException();
         }
 
         if (counts.length != bbc.counts.length) {
             throw new IllegalArgumentException(
-                    "Cannot merge as this clock has m: " + hash.m + " and B has m: " + bbc.m);
+                    "Cannot merge as this clock has m: " + hash.m + " and B has m: " + bbc.m());
         }
 
         // only one is > 0 if any
@@ -378,9 +417,18 @@ public class BloomClock implements ClockValue {
         return this;
     }
 
+    public BloomeClock toBloomeClock() {
+        return BloomeClock.newBuilder()
+                          .setPrefix(prefix)
+                          .setSeed(hash.seed)
+                          .setK(hash.k)
+                          .setCounts(ByteString.copyFrom(counts))
+                          .build();
+    }
+
     @Override
-    public Clock.Builder toClock() {
-        return new BloomClockValue(prefix, counts, hash.m).toClock();
+    public Clock toClock() {
+        return Clock.newBuilder().setPrefix(prefix).setCounts(ByteString.copyFrom(counts)).build();
     }
 
     @Override

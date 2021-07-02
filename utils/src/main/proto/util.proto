@@ -5,6 +5,7 @@ option java_package = "com.salesfoce.apollo.utils.proto";
 option java_outer_classname = "ApolloUtilsProto";
 option objc_class_prefix = "Au";
 import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
 
 package utils;
  
@@ -67,5 +68,22 @@ message LongIBiff {
 message Clock {
     uint64 prefix = 1;
     bytes counts = 2;
-    int32 m = 3;
 }
+
+message StampedClock {
+    Clock clock = 1; 
+    google.protobuf.Timestamp stamp = 2;
+}
+
+message BloomeClock {
+    uint64 prefix = 1;
+    int64 seed = 2;
+    int32 k = 3;
+    bytes counts = 4;
+}
+
+message StampedBloomeClock {
+    BloomeClock clock = 1;
+    google.protobuf.Timestamp stamp = 2;
+}
+

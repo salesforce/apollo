@@ -15,6 +15,11 @@ service Messaging {
     rpc update (Push) returns (google.protobuf.Empty) {}
 }
 
+service CausalMessaging {
+    rpc gossip (MessageBff) returns (Messages) {}
+    rpc update (Push) returns (google.protobuf.Empty) {}
+}
+
 message MessageBff {
     utils.Digeste context = 1; 
     int32 ring = 3;
@@ -37,11 +42,32 @@ message Message {
     google.protobuf.Any content = 7;
 }
 
-message ByteMessage {
-    bytes contents = 1;
-}
-
 message Messages {
     utils.Biff  bff = 1;
     repeated  Message updates = 2;
+}
+
+message CausalPush {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    repeated  CausalMessage updates = 3;
+}
+
+message CausalMessage {
+    utils.Digeste source = 1;
+    utils.StampedBloomeClock clock = 2;
+    utils.Digeste hash = 3; 
+    int32 age = 4;
+    utils.Sig signature = 5;
+    google.protobuf.Any content = 6;
+    bytes streamStart = 7;
+}
+
+message CausalMessages {
+    utils.Biff  bff = 1;
+    repeated  CausalMessage updates = 2;
+}
+
+message ByteMessage {
+    bytes contents = 1;
 }

@@ -6,7 +6,6 @@ option java_outer_classname = "GhostProto";
 option objc_class_prefix = "Gp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
-import "google/protobuf/timestamp.proto";
 import "util.proto";
 
 package ghost; 
@@ -30,7 +29,7 @@ message Entry {
 }
 
 message Content {
-    StampedClock clock = 1;
+    utils.StampedClock clock = 1;
     google.protobuf.Any value = 2;
     utils.Digeste originator = 3;
     utils.Sig signature = 4;
@@ -59,7 +58,7 @@ message Bind {
 message Binding {
     string key = 1;
     google.protobuf.Any value = 2;
-    StampedClock clock = 3;
+    utils.StampedClock clock = 3;
     utils.Digeste originator = 4;
     utils.Sig signature = 5;
 }
@@ -75,9 +74,4 @@ message Interval {
         utils.Digeste end = 2;
         utils.Biff contentsBff = 3;
         utils.Biff bindingsBff = 4;
-}
-
-message StampedClock {
-    utils.Clock clock = 1; 
-    google.protobuf.Timestamp stamp = 2;
 }

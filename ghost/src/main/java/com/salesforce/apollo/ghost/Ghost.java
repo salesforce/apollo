@@ -46,7 +46,7 @@ import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
-import com.salesfoce.apollo.ghost.proto.StampedClock;
+import com.salesfoce.apollo.utils.proto.StampedClock;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;

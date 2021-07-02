@@ -18,10 +18,10 @@ public interface ClockValue {
 
     static ClockValue of(Clock clock) {
         byte[] counts = clock.getCounts().toByteArray();
-        return new BloomClockValue(clock.getPrefix(), counts, counts.length);
+        return new BloomClockValue(clock.getPrefix(), counts);
     }
 
     ComparisonResult compareTo(ClockValue b);
 
-    Clock.Builder toClock();
+    Clock toClock();
 }
