@@ -417,6 +417,14 @@ public class BloomClock implements ClockValue {
         return this;
     }
 
+    public int sum() {
+        int sum = 0;
+        for (int i = 0; i < hash.m; i++) {
+            sum += count(i);
+        }
+        return sum;
+    }
+
     public BloomeClock toBloomeClock() {
         return BloomeClock.newBuilder()
                           .setPrefix(prefix)
@@ -454,7 +462,7 @@ public class BloomClock implements ClockValue {
 
     public boolean validate(StampedBloomeClock clock) {
         BloomeClock vector = clock.getClock();
-        return prefix == vector.getPrefix() && hash.k == vector.getK() && counts.length == vector.getCounts().size();
+        return hash.k == vector.getK() && counts.length == vector.getCounts().size();
     }
 
     private int count(int index) {

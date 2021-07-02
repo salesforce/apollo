@@ -8,6 +8,7 @@ package com.salesforce.apollo.membership.messaging.causal;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -18,6 +19,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -35,6 +37,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomClock;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
@@ -45,19 +48,10 @@ import com.salesforce.apollo.utils.bloomFilters.ClockValue;
  *
  */
 public class CausalBuffer {
-
-    record CausalityClock(Lock lock, BloomClock clock, java.time.Clock wallclock) {
+    private record CausalityClock(Lock lock, BloomClock clock, java.time.Clock wallclock) {
 
         Instant instant() {
             return wallclock.instant();
-        }
-
-        ClockValue current() {
-            return locked(() -> clock.current(), lock);
-        }
-
-        ClockValue merge(ClockValue b) {
-            return locked(() -> clock.merge(b), lock);
         }
 
         Instant observe(Digest digest) {
@@ -81,29 +75,34 @@ public class CausalBuffer {
         }
     }
 
-    record Stream(Digest id, BloomClock clock, PriorityQueue<StampedMessage> queue, Comparator<ClockValue> comparator,
-            Lock lock) {
+    private record Stream(Digest id, BloomClock clock, PriorityQueue<StampedMessage> queue,
+            Comparator<ClockValue> comparator, Lock lock) {
 
-        List<Received> observe(Instant observed, Digest hash) {
+        List<Received> observe(Instant observed, List<Digest> digests) {
             return locked(() -> {
-                clock.add(hash);
+                clock.addAll(digests);
                 List<Received> ready = new ArrayList<>();
                 StampedMessage next = queue.peek();
                 while (next != null) {
-                    int compared = comparator.compare(next.clock, clock);
+                    int compared = comparator.compare(next.clock(), clock);
                     if (compared < 0) {
+                        log.trace("event: {} is delivered", next.hash, observed);
                         queue.poll();
-                        ready.add(new Received(next.hash, next.message));
+                        ready.add(new Received(next.hash(), next.message()));
                         next = queue.peek();
                     } else if (compared == 0) {
-                        Timestamp ts = next.message.getClock().getStamp();
+                        Timestamp ts = next.message().getClock().getStamp();
                         Instant sent = Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos());
                         if (observed.isAfter(sent)) {
                             queue.poll();
-                            ready.add(new Received(next.hash, next.message));
+                            ready.add(new Received(next.hash(), next.message()));
                             next = queue.peek();
+                        } else {
+                            log.trace("event: {} is before the current wall clock: {}", next.hash, observed);
+                            return ready;
                         }
                     } else {
+                        log.trace("event: {} is after the current clock", next.hash);
                         return ready;
                     }
                 }
@@ -114,38 +113,51 @@ public class CausalBuffer {
         void reconcile(BloomFilter<Digest> biff, int limit, List<CausalMessage> reconcilliation) {
             locked(() -> {
                 queue.stream()
-                     .filter(r -> !biff.contains(r.hash))
-                     .map(r -> r.message)
+                     .filter(r -> !biff.contains(r.hash()))
+                     .map(r -> r.message())
                      .limit(limit - reconcilliation.size())
                      .peek(m -> m.setAge(m.getAge() + 1))
                      .forEach(m -> reconcilliation.add(m.build()));
             }, lock);
         }
 
-        void deliver(Digest hash, BloomClock stamp, CausalMessage message, Supplier<Boolean> verify,
-                     Runnable onAccept) {
+        boolean deliver(Digest hash, BloomClock stamp, CausalMessage message, Supplier<Boolean> verify) {
             if (!clock.validate(message.getClock())) {
-                return;
+                log.trace("Invalid clock for: {} from: {} ", hash, id);
+                return false;
             }
-            locked(() -> {
+            return locked(() -> {
                 Iterator<StampedMessage> iterator = queue.iterator();
                 while (iterator.hasNext()) {
                     StampedMessage next = iterator.next();
-                    if (next.hash.equals(hash)) {
-                        int age = next.message.getAge();
-                        next.message.setAge(Math.max(age, message.getAge()));
-                        return;
+                    if (next.hash().equals(hash)) {
+                        int age = next.message().getAge();
+                        next.message().setAge(Math.max(age, message.getAge()));
+                        log.trace("Duplicate: {} from: {} ", hash, id);
+                        return false;
                     }
                 }
                 if (verify.get()) {
+                    log.trace("Verifying: {} from: {} ", hash, id);
                     queue.add(new StampedMessage(hash, stamp, CausalMessage.newBuilder(message)));
-                    onAccept.run();
+                    return true;
+                } else {
+                    log.trace("Rejecting: {} could not verify from: {} ", hash, id);
+                    return false;
                 }
             }, lock);
         }
+
+        void updateAge() {
+            locked(() -> queue.forEach(s -> s.message().setAge(s.message().getAge() + 1)), lock);
+        }
+
+        void forReconcilliation(DigestBloomFilter biff) {
+            locked(() -> queue.forEach(message -> biff.add(message.hash())), lock);
+        }
     }
 
-    record StampedMessage(Digest hash, ClockValue clock, CausalMessage.Builder message)
+    private record StampedMessage(Digest hash, ClockValue clock, CausalMessage.Builder message)
             implements Comparable<StampedMessage> {
 
         @Override
@@ -181,10 +193,9 @@ public class CausalBuffer {
         }
     }
 
-    @SuppressWarnings("unused")
-    private static final Logger log = LoggerFactory.getLogger(CausalMessenger.class);
+    private static final Logger log = LoggerFactory.getLogger(CausalBuffer.class);
 
-    private static <T> T locked(Callable<T> call, final Lock lock) {
+    static <T> T locked(Callable<T> call, final Lock lock) {
         lock.lock();
         try {
             return call.call();
@@ -195,7 +206,7 @@ public class CausalBuffer {
         }
     }
 
-    private static void locked(Runnable call, final Lock lock) {
+    static void locked(Runnable call, final Lock lock) {
         lock.lock();
         try {
             call.run();
@@ -208,6 +219,7 @@ public class CausalBuffer {
     private final ConcurrentMap<Digest, Received>            delivered = new ConcurrentHashMap<>();
     private final Consumer<Map<Digest, List<CausalMessage>>> delivery;
     private final Parameters                                 params;
+    private final AtomicReference<Digest>                    previous  = new AtomicReference<>();
     private final AtomicInteger                              size      = new AtomicInteger();
     private final ConcurrentMap<Digest, Stream>              streams   = new ConcurrentHashMap<>();
 
@@ -215,6 +227,13 @@ public class CausalBuffer {
         this.params = parameters;
         this.clock = new CausalityClock(new ReentrantLock(), clock, params.wallclock);
         this.delivery = delivery;
+        initPrevious();
+    }
+
+    private void initPrevious() {
+        byte[] buff = new byte[params.digestAlgorithm.digestLength()];
+        Utils.secureEntropy().nextBytes(buff);
+        previous.set(new Digest(params.digestAlgorithm, buff));
     }
 
     public void clear() {
@@ -223,12 +242,15 @@ public class CausalBuffer {
     }
 
     public void deliver(List<CausalMessage> messages) {
-        messages.forEach(message -> deliver(message));
+        List<Digest> digests = messages.stream().map(message -> deliver(message)).filter(e -> e != null).toList();
+        size.addAndGet(digests.size());
+        observe(digests);
+
     }
 
     public DigestBloomFilter forReconcilliation(DigestBloomFilter biff) {
-        streams.values().forEach(stream -> stream.queue.forEach(message -> biff.add(message.hash)));
-        delivered.values().forEach(received -> biff.add(received.hash));
+        streams.values().forEach(stream -> stream.forReconcilliation(biff));
+        delivered.values().forEach(received -> biff.add(received.hash()));
 
         return biff;
     }
@@ -237,8 +259,8 @@ public class CausalBuffer {
         List<CausalMessage> reconcilliation = new ArrayList<>();
         delivered.values()
                  .stream()
-                 .filter(r -> !biff.contains(r.hash))
-                 .map(r -> r.message)
+                 .filter(r -> !biff.contains(r.hash()))
+                 .map(r -> r.message())
                  .limit(params.maxMessages - reconcilliation.size())
                  .peek(m -> m.setAge(m.getAge() + 1))
                  .forEach(m -> reconcilliation.add(m.build()));
@@ -250,18 +272,23 @@ public class CausalBuffer {
     }
 
     public CausalMessage send(Any content, SigningMember member) {
-        Digest hash = params.digestAlgorithm.digest(member.sign(content.toByteString()).toByteString());
+        Digest prev = previous.get();
+        Digest hash = params.digestAlgorithm.digest(prev.toDigeste().toByteString(), content.toByteString(),
+                                                    member.getId().toDigeste().toByteString());
 
         StampedBloomeClock stamp = clock.stamp(hash);
 
         Sig sig = member.sign(hash.toDigeste().toByteString(), stamp.toByteString()).toSig();
         CausalMessage.Builder message = CausalMessage.newBuilder()
                                                      .setAge(0)
+                                                     .setSource(member.getId().toDigeste())
                                                      .setClock(stamp)
                                                      .setContent(content)
                                                      .setHash(hash.toDigeste())
                                                      .setSignature(sig);
         delivered.put(hash, new Received(hash, message));
+        size.incrementAndGet();
+        previous.set(hash);
         observe(hash);
         return message.build();
     }
@@ -271,28 +298,31 @@ public class CausalBuffer {
     }
 
     public void tick() {
-        streams.values().forEach(stream -> stream.queue.forEach(s -> s.message.setAge(s.message.getAge() + 1)));
-        delivered.values().forEach(r -> r.message.setAge(r.message.getAge() + 1));
+        streams.values().forEach(stream -> stream.updateAge());
+        delivered.values().forEach(r -> r.message().setAge(r.message().getAge() + 1));
     }
 
-    private void deliver(CausalMessage message) {
+    private Digest deliver(CausalMessage message) {
+        Digest hash = new Digest(message.getHash());
         Digest id = new Digest(message.getSource());
         Member from = params.context.getActiveMember(id);
         if (from == null) {
-            return;
+            log.trace("rejecting: {} as source is NULL on: {}", hash, params.member);
+            return null;
         }
 
-        Digest hash = new Digest(message.getHash());
         Received previous = delivered.get(hash);
         if (previous != null) {
-            previous.message.setAge(Math.max(previous.message.getAge(), message.getAge()));
-            return;
+            previous.message().setAge(Math.max(previous.message().getAge(), message.getAge()));
+            log.trace("duplicate: {} from: {} on: {}", hash, id, params.member);
+            return null;
         }
 
         Timestamp ts = message.getClock().getStamp();
         Instant sent = Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos());
         if (sent.plus(params.tooOld).isBefore(clock.instant())) {
-            return;
+            log.trace("rejecting: {} as to old: {} from: {} on: {}", hash, sent, id, params.member);
+            return null;
         }
 
         BloomClock stamp = new BloomClock(message.getClock());
@@ -300,26 +330,51 @@ public class CausalBuffer {
         if (stamp.isOrigin()) { // Reset of stream by the originating node
             streams.put(id, new Stream(id, new BloomClock(stamp, message.getStreamStart().toByteArray()),
                     new PriorityQueue<>(), params.comparator, new ReentrantLock()));
-            return;
+            log.info("Reset stream: {} event:{} on: {}", id, hash, params.member);
+            return null;
         }
 
-        streams.computeIfAbsent(id, key -> {
+        return streams.computeIfAbsent(id, key -> {
             return new Stream(key, stamp, new PriorityQueue<>(), params.comparator, new ReentrantLock());
-        }).deliver(hash, stamp, message, () -> verify(message, from), () -> observe(hash));
+        }).deliver(hash, stamp, message, () -> verify(message, from)) ? hash : null;
     }
 
     private void observe(Digest hash) {
-        Instant observed = clock.observe(hash);
-        size.incrementAndGet();
+        observe(Collections.singletonList(hash), params.wallclock.instant());
+    }
+
+    private void observe(List<Digest> digests) {
+        if (digests.isEmpty()) {
+            return;
+        }
+        Instant observed = params.wallclock.instant();
+        for (Digest hash : digests) {
+            observed = clock.observe(hash);
+        }
+        log.trace("Observing: {} at: {} on: {}", digests, params.member);
+        observe(digests, observed);
+    }
+
+    private void observe(List<Digest> digests, Instant observed) {
         Map<Digest, List<CausalMessage>> mail = new HashMap<>();
         streams.values().forEach(stream -> {
-            List<Received> msgs = stream.observe(observed, hash);
+            var msgs = stream.observe(observed, digests)
+                             .stream()
+                             .peek(r -> delivered.put(r.hash(), r))
+                             .map(r -> r.message().build())
+                             .toList();
             if (!msgs.isEmpty()) {
-                mail.put(stream.id, msgs.stream().map(r -> r.message.build()).toList());
-                msgs.forEach(r -> delivered.put(r.hash, r));
+                mail.put(stream.id(), msgs);
             }
         });
-        delivery.accept(mail);
+
+        if (!mail.isEmpty()) {
+            delivery.accept(mail);
+            if (log.isTraceEnabled()) {
+                log.trace("Context: {} on: {} delivered: {}", params.context.getId(), params.member,
+                          mail.values().stream().flatMap(msgs -> msgs.stream()).count());
+            }
+        }
     }
 
     private boolean verify(CausalMessage message, Member from) {

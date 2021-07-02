@@ -27,7 +27,7 @@ public class Parameters {
         private DigestAlgorithm        digestAlgorithm = DigestAlgorithm.DEFAULT;
         private Executor               executor        = ForkJoinPool.commonPool();
         private double                 falsePositiveRate;
-        private int                    maxMessages;
+        private int                    maxMessages     = 100;
         private SigningMember          member;
         private MessagingMetrics       metrics;
         private Duration               tooOld          = Duration.ofMinutes(1);

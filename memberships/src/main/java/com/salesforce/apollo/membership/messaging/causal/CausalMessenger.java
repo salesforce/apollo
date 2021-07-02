@@ -26,10 +26,10 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.messaging.proto.CausalMessage;
 import com.salesfoce.apollo.messaging.proto.CausalMessages;
 import com.salesfoce.apollo.messaging.proto.CausalPush;
-import com.salesfoce.apollo.messaging.proto.Message;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router;
@@ -72,15 +72,34 @@ public class CausalMessenger {
     public class Service {
 
         public CausalMessages gossip(MessageBff request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            Member predecessor = params.context.ring(request.getRing()).predecessor(params.member);
+            if (predecessor == null || !from.equals(predecessor.getId())) {
+                log.trace("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
+                          params.context.getId(), params.member, from, request.getRing(), predecessor);
+                return CausalMessages.getDefaultInstance();
+            }
+            return CausalMessages.newBuilder()
+                                 .addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests())))
+                                 .setBff(buffer.forReconcilliation(new DigestBloomFilter(
+                                         Utils.bitStreamEntropy().nextLong(), params.bufferSize,
+                                         params.falsePositiveRate)).toBff())
+                                 .build();
         }
 
         public void update(CausalPush request, Digest from) {
-            // TODO Auto-generated method stub
-
+            if (request.getRing() < 0 || request.getRing() >= params.context.getRingCount()) {
+                log.trace("Invalid inbound messages update on {}:{} from: {} on invalid ring: {}",
+                          params.context.getId(), params.member, from, request.getRing());
+                return;
+            }
+            Member predecessor = params.context.ring(request.getRing()).predecessor(params.member);
+            if (predecessor == null || !from.equals(predecessor.getId())) {
+                log.trace("Invalid inbound messages update on: {}:{} from: {} on ring: {} - not predecessor: {}",
+                          params.context.getId(), params.member, from, request.getRing(), predecessor);
+                return;
+            }
+            buffer.deliver(request.getUpdatesList());
         }
-
     }
 
     private static final Logger log = LoggerFactory.getLogger(CausalMessenger.class);
