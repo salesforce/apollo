@@ -452,6 +452,11 @@ public class BloomClock implements ClockValue {
         return buff.toString();
     }
 
+    public boolean validate(StampedBloomeClock clock) {
+        BloomeClock vector = clock.getClock();
+        return prefix == vector.getPrefix() && hash.k == vector.getK() && counts.length == vector.getCounts().size();
+    }
+
     private int count(int index) {
         return count(index, counts);
     }

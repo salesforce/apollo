@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
-import static com.salesforce.apollo.membership.messaging.comms.MessagingClientCommunications.getCreate;
+import static com.salesforce.apollo.membership.messaging.comms.MessagingClient.getCreate;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -41,7 +41,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
-import com.salesforce.apollo.membership.messaging.comms.MessagingServerCommunications;
+import com.salesforce.apollo.membership.messaging.comms.MessagingServer;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
@@ -199,7 +199,7 @@ public class Messenger {
         this.context = (Context<Member>) context;
         this.buffer = new MessageBuffer(parameters.digestAlgorithm, parameters.bufferSize, context.timeToLive());
         this.comm = communications.create(member, context.getId(), new Service(),
-                                          r -> new MessagingServerCommunications(
+                                          r -> new MessagingServer(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
                                           getCreate(parameters.metrics, executor), Messaging.getLocalLoopback(member));
         gossiper = new RingCommunications<>(this.context, member, this.comm, executor);

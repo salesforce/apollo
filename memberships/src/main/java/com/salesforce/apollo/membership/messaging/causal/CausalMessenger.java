@@ -6,7 +6,8 @@
  */
 package com.salesforce.apollo.membership.messaging.causal;
 
-import java.time.Duration;
+import static com.salesforce.apollo.membership.messaging.comms.CausalMessagingClient.getCreate;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -21,7 +22,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -30,13 +30,19 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.messaging.proto.CausalMessage;
+import com.salesfoce.apollo.messaging.proto.CausalMessages;
+import com.salesfoce.apollo.messaging.proto.CausalPush;
+import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesfoce.apollo.utils.proto.StampedBloomeClock;
+import com.salesforce.apollo.comm.RingCommunications;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.messaging.comms.CausalMessagingServer;
 import com.salesforce.apollo.utils.bloomFilters.BloomClock;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.ClockValue;
@@ -46,6 +52,20 @@ import com.salesforce.apollo.utils.bloomFilters.ClockValue;
  *
  */
 public class CausalMessenger {
+    public class Service {
+
+        public CausalMessages gossip(MessageBff request, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        public void update(CausalPush request, Digest from) {
+            // TODO Auto-generated method stub
+
+        }
+
+    }
+
     record CausalityClock(Lock lock, BloomClock clock, java.time.Clock wallclock) {
 
         Instant instant() {
@@ -124,6 +144,9 @@ public class CausalMessenger {
 
         void deliver(Digest hash, BloomClock stamp, CausalMessage message, Supplier<Boolean> verify,
                      Runnable onAccept) {
+            if (!clock.validate(message.getClock())) {
+                return;
+            }
             locked(() -> {
                 Iterator<StampedMessage> iterator = queue.iterator();
                 while (iterator.hasNext()) {
@@ -201,25 +224,24 @@ public class CausalMessenger {
         }
     }
 
-    private final int                                        bufferSize;
-    private final CausalityClock                             clock;
-    private final Comparator<ClockValue>                     comparator;
-    private final ConcurrentMap<Digest, Received>            delivered = new ConcurrentHashMap<>();
-    private final DigestAlgorithm                            digestAlgorithm;
-    private final AtomicInteger                              size      = new AtomicInteger();
-    private final ConcurrentMap<Digest, Stream>              streams   = new ConcurrentHashMap<>();
-    private final Duration                                   tooOld;
-    private final Consumer<Map<Digest, List<CausalMessage>>> delivery;
+    private final CausalityClock                                 clock;
+    private final CommonCommunications<CausalMessaging, Service> comm;
+    private final ConcurrentMap<Digest, Received>                delivered = new ConcurrentHashMap<>();
+    private final Parameters                                     params;
+    private final AtomicInteger                                  size      = new AtomicInteger();
+    private final ConcurrentMap<Digest, Stream>                  streams   = new ConcurrentHashMap<>();
+    @SuppressWarnings("unused")
+    private final RingCommunications<CausalMessaging>            gossiper;
 
-    public CausalMessenger(Comparator<ClockValue> comparator, BloomClock clock, DigestAlgorithm digestAlgorithm,
-            int bufferSize, java.time.Clock wallclock, Duration tooOld,
-            Consumer<Map<Digest, List<CausalMessage>>> delivery) {
-        this.comparator = comparator;
-        this.clock = new CausalityClock(new ReentrantLock(), clock, wallclock);
-        this.digestAlgorithm = digestAlgorithm;
-        this.bufferSize = bufferSize;
-        this.tooOld = tooOld;
-        this.delivery = delivery;
+    public CausalMessenger(Parameters parameters, BloomClock clock, Router communications) {
+        this.params = parameters;
+        this.clock = new CausalityClock(new ReentrantLock(), clock, params.wallclock);
+        this.comm = communications.create(params.member, params.context.getId(), new Service(),
+                                          r -> new CausalMessagingServer(communications.getClientIdentityProvider(),
+                                                  parameters.metrics, r),
+                                          getCreate(parameters.metrics, params.executor),
+                                          CausalMessaging.getLocalLoopback(params.member));
+        gossiper = new RingCommunications<>(params.context, params.member, this.comm, params.executor);
     }
 
     public void deliver(CausalMessage message, Member from) {
@@ -231,21 +253,20 @@ public class CausalMessenger {
         }
         Timestamp ts = message.getClock().getStamp();
         Instant sent = Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos());
-        if (sent.plus(tooOld).isBefore(clock.instant())) {
+        if (sent.plus(params.tooOld).isBefore(clock.instant())) {
             return;
         }
 
         BloomClock stamp = new BloomClock(message.getClock());
 
         if (stamp.isOrigin()) { // Reset of stream by the originating node
-            BloomClock streamClock = new BloomClock(stamp, message.getStreamStart().toByteArray());
-            Stream stream = new Stream(from, streamClock, new PriorityQueue<>(), comparator, new ReentrantLock());
-            streams.put(from.getId(), stream);
+            streams.put(from.getId(), new Stream(from, new BloomClock(stamp, message.getStreamStart().toByteArray()),
+                    new PriorityQueue<>(), params.comparator, new ReentrantLock()));
             return;
         }
 
         streams.computeIfAbsent(from.getId(), id -> {
-            return new Stream(from, stamp, new PriorityQueue<>(), comparator, new ReentrantLock());
+            return new Stream(from, stamp, new PriorityQueue<>(), params.comparator, new ReentrantLock());
         }).deliver(hash, stamp, message, () -> verify(message, from), () -> observe(hash));
     }
 
@@ -273,7 +294,7 @@ public class CausalMessenger {
     }
 
     public CausalMessage send(Any content, Signer signer) {
-        Digest hash = digestAlgorithm.digest(signer.sign(content.toByteString()).toByteString());
+        Digest hash = params.digestAlgorithm.digest(signer.sign(content.toByteString()).toByteString());
 
         StampedBloomeClock stamp = clock.stamp(hash);
 
@@ -289,23 +310,32 @@ public class CausalMessenger {
         return message.build();
     }
 
+    public int size() {
+        return size.get();
+    }
+
     public void tick() {
         streams.values().forEach(stream -> stream.queue.forEach(s -> s.message.setAge(s.message.getAge() + 1)));
         delivered.values().forEach(r -> r.message.setAge(r.message.getAge() + 1));
     }
 
+    private void delivery(Map<Digest, List<CausalMessage>> mail) {
+        // TODO Auto-generated method stub
+
+    }
+
     private void observe(Digest hash) {
-        size.incrementAndGet();
         Instant observed = clock.observe(hash);
+        size.incrementAndGet();
         Map<Digest, List<CausalMessage>> mail = new HashMap<>();
         streams.values().forEach(stream -> {
             List<Received> msgs = stream.observe(observed, hash);
             if (!msgs.isEmpty()) {
                 mail.put(stream.member.getId(), msgs.stream().map(r -> r.message.build()).toList());
+                msgs.forEach(r -> delivered.put(r.hash, r));
             }
-            msgs.forEach(r -> delivered.put(r.hash, r));
         });
-        delivery.accept(mail);
+        delivery(mail);
     }
 
     private boolean verify(CausalMessage message, Member from) {

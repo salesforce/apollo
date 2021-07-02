@@ -7,14 +7,14 @@
 package com.salesforce.apollo.membership.messaging.comms;
 
 import com.google.protobuf.Empty;
+import com.salesfoce.apollo.messaging.proto.CausalMessages;
+import com.salesfoce.apollo.messaging.proto.CausalMessagingGrpc.CausalMessagingImplBase;
+import com.salesfoce.apollo.messaging.proto.CausalPush;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
-import com.salesfoce.apollo.messaging.proto.Messages;
-import com.salesfoce.apollo.messaging.proto.MessagingGrpc.MessagingImplBase;
-import com.salesfoce.apollo.messaging.proto.Push;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.messaging.MessagingMetrics;
-import com.salesforce.apollo.membership.messaging.Messenger.Service;
+import com.salesforce.apollo.membership.messaging.causal.CausalMessenger.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.stub.StreamObserver;
@@ -23,16 +23,16 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  *
  */
-public class MessagingServerCommunications extends MessagingImplBase {
+public class CausalMessagingServer extends CausalMessagingImplBase {
     @Override
-    public void gossip(MessageBff request, StreamObserver<Messages> responseObserver) {
+    public void gossip(MessageBff request, StreamObserver<CausalMessages> responseObserver) {
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Digest from = identity.getFrom();
             if (from == null) {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));
                 return;
             }
-            Messages response = s.gossip(request, from);
+            CausalMessages response = s.gossip(request, from);
             responseObserver.onNext(response);
             responseObserver.onCompleted();
             if (metrics != null) {
@@ -46,7 +46,7 @@ public class MessagingServerCommunications extends MessagingImplBase {
     }
 
     @Override
-    public void update(Push request, StreamObserver<Empty> responseObserver) {
+    public void update(CausalPush request, StreamObserver<Empty> responseObserver) {
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Digest from = identity.getFrom();
             if (from == null) {
@@ -68,8 +68,7 @@ public class MessagingServerCommunications extends MessagingImplBase {
     private final MessagingMetrics         metrics;
     private final RoutableService<Service> routing;
 
-    public MessagingServerCommunications(ClientIdentity identity, MessagingMetrics metrics,
-            RoutableService<Service> routing) {
+    public CausalMessagingServer(ClientIdentity identity, MessagingMetrics metrics, RoutableService<Service> routing) {
         this.metrics = metrics;
         this.identity = identity;
         this.routing = routing;

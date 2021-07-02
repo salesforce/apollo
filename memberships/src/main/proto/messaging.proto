@@ -16,8 +16,8 @@ service Messaging {
 }
 
 service CausalMessaging {
-    rpc gossip (MessageBff) returns (Messages) {}
-    rpc update (Push) returns (google.protobuf.Empty) {}
+    rpc gossip (MessageBff) returns (CausalMessages) {}
+    rpc update (CausalPush) returns (google.protobuf.Empty) {}
 }
 
 message MessageBff {
