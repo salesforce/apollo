@@ -7,7 +7,6 @@
 package com.salesforce.apollo.utils.bloomFilters;
 
 import com.salesfoce.apollo.utils.proto.Clock;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock.BloomClockValue;
 import com.salesforce.apollo.utils.bloomFilters.BloomClock.ComparisonResult;
 
 /**
@@ -20,6 +19,8 @@ public interface ClockValue {
         byte[] counts = clock.getCounts().toByteArray();
         return new BloomClockValue(clock.getPrefix(), counts);
     }
+
+    BloomClockValue toBloomClockValue();
 
     ComparisonResult compareTo(ClockValue b);
 

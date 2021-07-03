@@ -51,6 +51,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Callable;
+import java.util.concurrent.locks.Lock;
 import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
@@ -74,7 +76,6 @@ import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
  */
 
 public class Utils {
-
     private static enum ParsingState {
         BRACKET, DOLLAR, PASS_THROUGH
     }
@@ -319,12 +320,12 @@ public class Utils {
         if (sourceLocation.isDirectory()) {
             if (!targetLocation.exists()) {
                 if (!targetLocation.mkdirs()) {
-                    throw new IllegalArgumentException(
-                            String.format("Cannot create directory [%s]", targetLocation.getAbsolutePath()));
+                    throw new IllegalArgumentException(String.format("Cannot create directory [%s]",
+                                                                     targetLocation.getAbsolutePath()));
                 }
             } else if (targetLocation.isFile()) {
-                throw new IllegalArgumentException(
-                        String.format("Target location must be a directory [%s]", targetLocation.getAbsolutePath()));
+                throw new IllegalArgumentException(String.format("Target location must be a directory [%s]",
+                                                                 targetLocation.getAbsolutePath()));
             }
 
             String[] children = sourceLocation.list();
@@ -338,8 +339,8 @@ public class Utils {
                 }
             }
         } else {
-            throw new IllegalArgumentException(
-                    String.format("[%s] is not a directory", sourceLocation.getAbsolutePath()));
+            throw new IllegalArgumentException(String.format("[%s] is not a directory",
+                                                             sourceLocation.getAbsolutePath()));
         }
     }
 
@@ -374,8 +375,8 @@ public class Utils {
     }
 
     public static BcX500NameDnImpl encode(Digest digest, String host, int port, PublicKey signingKey) {
-        return new BcX500NameDnImpl(
-                String.format("CN=%s, L=%s, UID=%s, DC=%s", host, port, qb64(digest), qb64(signingKey)));
+        return new BcX500NameDnImpl(String.format("CN=%s, L=%s, UID=%s, DC=%s", host, port, qb64(digest),
+                                                  qb64(signingKey)));
     }
 
     /**
@@ -615,8 +616,7 @@ public class Utils {
         if (ifaceName == null) {
             NetworkInterface iface = NetworkInterface.getByIndex(1);
             if (iface == null) {
-                throw new IllegalArgumentException(
-                        "Supplied ANY address for endpoint: %s with no networkInterface defined, cannot find network interface 1 ");
+                throw new IllegalArgumentException("Supplied ANY address for endpoint: %s with no networkInterface defined, cannot find network interface 1 ");
             }
             return iface;
         } else {
@@ -704,7 +704,27 @@ public class Utils {
      */
     public static boolean isClosedConnection(IOException ioe) {
         return ioe instanceof ClosedChannelException || "Broken pipe".equals(ioe.getMessage())
-                || "Connection reset by peer".equals(ioe.getMessage());
+        || "Connection reset by peer".equals(ioe.getMessage());
+    }
+
+    public static <T> T locked(Callable<T> call, final Lock lock) {
+        lock.lock();
+        try {
+            return call.call();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public static void locked(Runnable call, final Lock lock) {
+        lock.lock();
+        try {
+            call.run();
+        } finally {
+            lock.unlock();
+        }
     }
 
     public static File relativize(File parent, File child) {

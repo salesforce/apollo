@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.utils.bloomFilters;
 
-import static java.util.stream.IntStream.range;
-
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
@@ -94,115 +92,27 @@ public class BloomClock implements ClockValue {
 
     }
 
-    public record ComparisonResult(int comparison, double fpr) {
-    }
+    record ComparisonResult(int comparison, double fpr) {}
 
-    record BloomClockValue(long prefix, byte[] counts) implements ClockValue {
+    record Comparison(int compared, int sumA, int sumB) {}
 
-        @Override
-        public ComparisonResult compareTo(ClockValue b) {
-            if (b instanceof BloomClock bc) {
-                return happenedBefore(bc.prefix, bc.counts);
-            } else if (b instanceof BloomClockValue bcv) {
-                return happenedBefore(bcv.prefix, bcv.counts);
-            }
-            throw new IllegalArgumentException("unknown instance of ClockValue");
-        }
+    public static long      DEFAULT_GOOD_SEED = Utils.bitStreamEntropy().nextLong();
+    public final static int DEFAULT_K         = 3;
+    public static final int DEFAULT_M         = 200;
+    public static int       MASK              = 0x0F;
 
-        ComparisonResult happenedBefore(long bbcPrefix, byte[] bbcCounts) {
-            if (counts.length != bbcCounts.length) {
-                throw new IllegalArgumentException(
-                        "Cannot compare as this clock has a different count size than the specified clock");
-            }
-            Comparison c = compareWith(bbcPrefix, bbcCounts);
-            return switch (c.compared) {
-            case 0 -> new ComparisonResult(0, falsePositiveRate(c));
-            case 1 -> new ComparisonResult(1, falsePositiveRate(c));
-            case -1 -> new ComparisonResult(-1, falsePositiveRate(c));
-            default -> throw new IllegalArgumentException("Unexpected comparison value: " + c.compared);
-            };
-        }
-
-        double falsePositiveRate(Comparison c) {
-            double x = Math.min(c.sumA, c.sumB);
-            double y = Math.max(c.sumA, c.sumB);
-            return Math.pow(1 - Math.pow(1.0 - (1.0 / m()), x), y);
-        }
-
-        private int m() {
-            return BloomClock.m(counts);
-        }
-
-        Comparison compareWith(long bbcPrefix, byte[] bbcCounts) {
-            int sumA = 0;
-            int sumB = 0;
-            int lessThan = 0;
-            int greaterThan = 0;
-
-            // only one is > 0 if any
-            int aBias = 0;
-            int bBias = 0;
-
-            int prefixCompare = Long.compareUnsigned(prefix, bbcPrefix);
-            int m = m();
-            if (prefixCompare < 0) {
-                long preDiff = bbcPrefix - prefix;
-                if (Long.compareUnsigned(preDiff, MASK) > 0) {
-                    return new Comparison(1, 0, MASK * m);
-                }
-                bBias = (int) (preDiff & MASK);
-            } else if (prefixCompare > 0) {
-                long preDiff = prefix - bbcPrefix;
-                if (Long.compareUnsigned(preDiff, MASK) > 0) {
-                    return new Comparison(-1, MASK * m, 0);
-                }
-                aBias = (int) (preDiff & MASK);
-            }
-
-            for (int i = 0; i < m; i++) {
-                int a = count(i, counts) + aBias;
-                sumA += a;
-                int b = count(i, bbcCounts) + bBias;
-                sumB += b;
-                int diff = b - a;
-                if (diff > 0) {
-                    lessThan++;
-                } else if (diff < 0) {
-                    greaterThan++;
-                }
-                if (greaterThan != 0 && lessThan != 0) {
-                    int biasA = aBias;
-                    int biasB = bBias;
-                    return new Comparison(0, sumA + range(i + 1, m).map(x -> x + biasA).sum(),
-                            sumB + range(i + 1, m).map(x -> x + biasB).sum());
-                }
-            }
-
-            if (greaterThan != 0) {
-                return new Comparison(1, sumA, sumB);
-            }
-            return new Comparison(-1, sumA, sumB);
-        }
-
-        @Override
-        public Clock toClock() {
-            return Clock.newBuilder().setPrefix(prefix).setCounts(ByteString.copyFrom(counts)).build();
-        }
-    }
-
-    private record Comparison(int compared, int sumA, int sumB) {
-    }
-
-    public static long DEFAULT_GOOD_SEED = Utils.bitStreamEntropy().nextLong();
-
-    public final static int DEFAULT_K = 4;
-
-    public static final int     DEFAULT_M = 107;
-    private final static Logger log       = LoggerFactory.getLogger(BloomClock.class);
-    private static int          MASK      = 0x0F;
+    private final static Logger log = LoggerFactory.getLogger(BloomClock.class);
 
     public static boolean validate(int m, byte[] counts) {
         return m == counts.length;
+    }
+
+    static int count(int index, byte[] counts) {
+        return counts[index] & MASK;
+    }
+
+    static int m(byte[] counts) {
+        return counts.length;
     }
 
     static Hash<Digest> newHash(long seed, int k, int m) {
@@ -214,18 +124,9 @@ public class BloomClock implements ClockValue {
         };
     }
 
-    private static int count(int index, byte[] counts) {
-        return counts[index] & MASK;
-    }
-
-    private static int m(byte[] counts) {
-        return counts.length;
-    }
-
-    private final byte[]       counts; // two cells per byte, giving 4 bits per cell
+    private final byte[]       counts;    // two cells per byte, giving 4 bits per cell
     private final Hash<Digest> hash;
-
-    private long prefix = 0;
+    private long               prefix = 0;
 
     public BloomClock() {
         this(DEFAULT_GOOD_SEED, DEFAULT_K, DEFAULT_M);
@@ -237,7 +138,7 @@ public class BloomClock implements ClockValue {
 
     public BloomClock(BloomeClock clock) {
         this(clock.getPrefix(), newHash(clock.getSeed(), clock.getK(), clock.getCounts().size()),
-                clock.getCounts().toByteArray());
+             clock.getCounts().toByteArray());
     }
 
     public BloomClock(int[] initialValues) {
@@ -251,6 +152,16 @@ public class BloomClock implements ClockValue {
     public BloomClock(long seed, byte[] counts, int k) {
         this.counts = counts;
         this.hash = newHash(seed, k, counts.length);
+    }
+
+    public BloomClock(long seed, Clock clock, int k, int m) {
+        byte[] initialCounts = clock.getCounts().toByteArray();
+        if (initialCounts.length != m) {
+            throw new IllegalArgumentException("invalid counts.length: " + initialCounts.length + " expected: " + m);
+        }
+        prefix = clock.getPrefix();
+        counts = initialCounts;
+        hash = newHash(seed, k, m);
     }
 
     public BloomClock(long seed, int k, int m) {
@@ -282,24 +193,14 @@ public class BloomClock implements ClockValue {
 
     public BloomClock(StampedBloomeClock clock) {
         this(clock.getClock().getPrefix(),
-                newHash(clock.getClock().getSeed(), clock.getClock().getK(), clock.getClock().getCounts().size()),
-                clock.getClock().getCounts().toByteArray());
+             newHash(clock.getClock().getSeed(), clock.getClock().getK(), clock.getClock().getCounts().size()),
+             clock.getClock().getCounts().toByteArray());
     }
 
     private BloomClock(long prefix, Hash<Digest> hash, byte[] counts) {
         this.hash = hash;
         this.counts = counts;
         this.prefix = prefix;
-    }
-
-    public BloomClock(long seed, Clock clock, int k, int m) {
-        byte[] initialCounts = clock.getCounts().toByteArray();
-        if (initialCounts.length != m) {
-            throw new IllegalArgumentException("invalid counts.length: " + initialCounts.length + " expected: " + m);
-        }
-        prefix = clock.getPrefix();
-        counts = initialCounts;
-        hash = newHash(seed, k, m);
     }
 
     /**
@@ -336,7 +237,7 @@ public class BloomClock implements ClockValue {
     /**
      * Answer an immutable ClockValue of the current state of the receiver
      */
-    public ClockValue current() {
+    public BloomClockValue current() {
         return new BloomClockValue(prefix, Arrays.copyOf(counts, counts.length));
     }
 
@@ -384,18 +285,11 @@ public class BloomClock implements ClockValue {
      *         receiver
      */
     public ClockValue merge(ClockValue clockB) {
-        BloomClockValue bbc;
-        if (clockB instanceof BloomClockValue bcv) {
-            bbc = bcv;
-        } else if (clockB instanceof BloomClock bc) {
-            bbc = new BloomClockValue(bc.prefix, bc.counts);
-        } else {
-            throw new IllegalArgumentException();
-        }
+        BloomClockValue bbc = clockB.toBloomClockValue();
 
-        if (counts.length != bbc.counts.length) {
-            throw new IllegalArgumentException(
-                    "Cannot merge as this clock has m: " + hash.m + " and B has m: " + bbc.m());
+        if (counts.length != bbc.counts().length) {
+            throw new IllegalArgumentException("Cannot merge as this clock has m: " + hash.m + " and B has m: "
+            + bbc.m());
         }
 
         // only one is > 0 if any
@@ -403,19 +297,19 @@ public class BloomClock implements ClockValue {
         int bBias = 0;
 
         // Merge prefixes
-        int prefixCompare = Long.compareUnsigned(prefix, bbc.prefix);
+        int prefixCompare = Long.compareUnsigned(prefix, bbc.prefix());
         if (prefixCompare < 0) {
-            long preDiff = bbc.prefix - prefix;
-            prefix = bbc.prefix;
+            long preDiff = bbc.prefix() - prefix;
+            prefix = bbc.prefix();
             if (Long.compareUnsigned(preDiff, MASK) > 0) {
                 for (int i = 0; i < counts.length; i++) {
-                    counts[i] = bbc.counts[i];
+                    counts[i] = bbc.counts()[i];
                 }
                 return this;
             }
             bBias = (int) (preDiff & MASK);
         } else if (prefixCompare > 0) {
-            long preDiff = prefix - bbc.prefix;
+            long preDiff = prefix - bbc.prefix();
             if (Long.compareUnsigned(preDiff, MASK) > 0) {
                 return this;
             }
@@ -425,7 +319,7 @@ public class BloomClock implements ClockValue {
         int overall = 0;
         for (int i = 0; i < hash.m; i++) {
             int a = count(i) + aBias;
-            int b = count(i, bbc.counts) + bBias;
+            int b = count(i, bbc.counts()) + bBias;
 
             int max = Math.max(a, b) - aBias - bBias;
             set(i, max);
@@ -445,13 +339,14 @@ public class BloomClock implements ClockValue {
         return sum;
     }
 
+    @Override
+    public BloomClockValue toBloomClockValue() {
+        return new BloomClockValue(prefix, counts);
+    }
+
     public BloomeClock toBloomeClock() {
-        return BloomeClock.newBuilder()
-                          .setPrefix(prefix)
-                          .setSeed(hash.seed)
-                          .setK(hash.k)
-                          .setCounts(ByteString.copyFrom(counts))
-                          .build();
+        return BloomeClock.newBuilder().setPrefix(prefix).setSeed(hash.seed).setK(hash.k)
+                          .setCounts(ByteString.copyFrom(counts)).build();
     }
 
     @Override

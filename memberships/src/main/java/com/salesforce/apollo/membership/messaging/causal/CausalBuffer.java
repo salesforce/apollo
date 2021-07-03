@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.membership.messaging.causal;
 
+import static com.salesforce.apollo.utils.Utils.locked;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,7 +19,6 @@ import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.TreeMap;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Semaphore;
@@ -43,6 +44,7 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomClock;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.CausalityClock;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.ClockValue;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
@@ -132,30 +134,6 @@ public class CausalBuffer {
 
     }
 
-    private record CausalityClock(BloomClock clock, java.time.Clock wallclock, Lock lock) {
-
-        Instant instant() {
-            return wallclock.instant();
-        }
-
-        Instant observe(Digest digest) {
-            return locked(() -> {
-                clock.add(digest);
-                return wallclock.instant();
-            }, lock);
-        }
-
-        StampedClock stamp(Digest digest) {
-            return locked(() -> {
-                clock.add(digest);
-                Instant now = wallclock.instant();
-                return StampedClock.newBuilder().setStamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond())
-                                                                   .setNanos(now.getNano()))
-                                   .setClock(clock.toClock()).build();
-            }, lock);
-        }
-    }
-
     private record StampedMessage(Digest hash, ClockValue clock, Digest from, Instant instant,
                                   CausalMessage.Builder message)
                                  implements Comparable<StampedMessage> {
@@ -179,28 +157,7 @@ public class CausalBuffer {
     }
 
     private static final AgeComparator AGE_COMPARATOR = new AgeComparator();
-
-    private static final Logger log = LoggerFactory.getLogger(CausalBuffer.class);
-
-    static <T> T locked(Callable<T> call, final Lock lock) {
-        lock.lock();
-        try {
-            return call.call();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    static void locked(Runnable call, final Lock lock) {
-        lock.lock();
-        try {
-            call.run();
-        } finally {
-            lock.unlock();
-        }
-    }
+    private static final Logger        log            = LoggerFactory.getLogger(CausalBuffer.class);
 
     private final CausalityClock                             clock;
     private final ConcurrentMap<Digest, StampedMessage>      delivered         = new ConcurrentHashMap<>();
