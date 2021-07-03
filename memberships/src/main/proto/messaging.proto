@@ -55,12 +55,12 @@ message CausalPush {
 
 message CausalMessage {
     utils.Digeste source = 1;
-    utils.StampedBloomeClock clock = 2;
-    utils.Digeste hash = 3; 
+    utils.StampedClock clock = 2;
+    utils.Digeste hash = 3;
     int32 age = 4;
     utils.Sig signature = 5;
     google.protobuf.Any content = 6;
-    bytes streamStart = 7;
+    bool streamReset = 7;
 }
 
 message CausalMessages {

@@ -22,6 +22,8 @@ import com.salesforce.apollo.utils.bloomFilters.ClockValue;
 public class Parameters {
     public static class Builder {
         private int                    bufferSize      = 500;
+        private int                    clockK          = 4;
+        private int                    clockM          = 200;
         private Comparator<ClockValue> comparator;
         private Context<Member>        context;
         private DigestAlgorithm        digestAlgorithm = DigestAlgorithm.DEFAULT;
@@ -35,11 +37,19 @@ public class Parameters {
 
         public Parameters build() {
             return new Parameters(bufferSize, comparator, maxMessages, context, digestAlgorithm, executor, member,
-                    metrics, tooOld, wallclock, falsePositiveRate);
+                    metrics, tooOld, wallclock, falsePositiveRate, clockK, clockM);
         }
 
         public int getBufferSize() {
             return bufferSize;
+        }
+
+        public int getClockK() {
+            return clockK;
+        }
+
+        public int getClockM() {
+            return clockM;
         }
 
         public Comparator<ClockValue> getComparator() {
@@ -84,6 +94,16 @@ public class Parameters {
 
         public Parameters.Builder setBufferSize(int bufferSize) {
             this.bufferSize = bufferSize;
+            return this;
+        }
+
+        public Builder setClockK(int clockK) {
+            this.clockK = clockK;
+            return this;
+        }
+
+        public Builder setClockM(int clockM) {
+            this.clockM = clockM;
             return this;
         }
 
@@ -143,6 +163,8 @@ public class Parameters {
     }
 
     public final int                    bufferSize;
+    public final int                    clockK;
+    public final int                    clockM;
     public final Comparator<ClockValue> comparator;
     public final Context<Member>        context;
     public final DigestAlgorithm        digestAlgorithm;
@@ -156,7 +178,7 @@ public class Parameters {
 
     public Parameters(int bufferSize, Comparator<ClockValue> comparator, int maxMessages, Context<Member> context,
             DigestAlgorithm digestAlgorithm, Executor executor, SigningMember member, MessagingMetrics metrics,
-            Duration tooOld, Clock wallclock, double falsePositiveRate) {
+            Duration tooOld, Clock wallclock, double falsePositiveRate, int clockK, int clockM) {
         this.bufferSize = bufferSize;
         this.comparator = comparator;
         this.context = context;
@@ -168,5 +190,7 @@ public class Parameters {
         this.wallclock = wallclock;
         this.falsePositiveRate = falsePositiveRate;
         this.maxMessages = maxMessages;
+        this.clockM = clockM;
+        this.clockK = clockK;
     }
 }

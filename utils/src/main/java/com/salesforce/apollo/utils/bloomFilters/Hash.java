@@ -103,9 +103,7 @@ public abstract class Hash<M> {
             return IntStream.of(hashes(k, key, m, seed));
         }
 
-        protected abstract Hasher<M> clone();
-
-        void process(byte[] key) {
+        public void process(byte[] key) {
             ByteBuffer buff = ByteBuffer.wrap(key);
             while (buff.remaining() >= 16) {
                 bmix64(buff.getLong(), buff.getLong());
@@ -116,7 +114,7 @@ public abstract class Hash<M> {
             }
         }
 
-        void process(Digest key) {
+        public void process(Digest key) {
             long[] hash = key.getLongs();
             for (int i = 0; i < hash.length / 2; i += 2) {
                 bmix64(hash[i], hash[i + 1]);
@@ -127,7 +125,7 @@ public abstract class Hash<M> {
             }
         }
 
-        void process(int i) {
+        public void process(int i) {
             long k1 = ((long) (i & 0xFF000000)) << 24;
             k1 ^= ((long) (i & 0x00FF0000)) << 16;
             k1 ^= ((long) (i & 0x0000FF00)) << 8;
@@ -138,15 +136,17 @@ public abstract class Hash<M> {
             length += 4;
         }
 
-        void process(long l) {
+        public void process(long l) {
             h1 ^= mixK1(l);
             h2 ^= mixK2(0);
             length += 8;
         }
 
-        void process(String key) {
+        public void process(String key) {
             process(key.getBytes());
         }
+
+        protected abstract Hasher<M> clone();
 
         abstract void processIt(M key);
 

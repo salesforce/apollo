@@ -112,7 +112,7 @@ public class CausalMessagingTest {
     private static final Parameters.Builder parameters = Parameters.newBuilder()
                                                                    .setFalsePositiveRate(0.125)
                                                                    .setComparator(new ClockValueComparator(0.1))
-                                                                   .setBufferSize(500);
+                                                                   .setBufferSize(1500);
 
     @BeforeAll
     public static void beforeClass() {
@@ -183,14 +183,10 @@ public class CausalMessagingTest {
             buf.put(rand);
             buf.flip();
             assert buf.remaining() > 0;
-            messengers.stream().forEach(view -> {
+            messengers.parallelStream().forEach(view -> {
                 ByteString packed = ByteString.copyFrom(buf.array());
                 assertEquals(36, packed.size());
                 view.publish(ByteMessage.newBuilder().setContents(packed).build(), true);
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e) {
-                }
             });
             boolean success = round.await(20, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());

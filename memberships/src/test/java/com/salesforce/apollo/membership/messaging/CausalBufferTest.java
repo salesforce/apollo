@@ -33,7 +33,6 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.causal.CausalBuffer;
 import com.salesforce.apollo.membership.messaging.causal.Parameters;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock;
 import com.salesforce.apollo.utils.bloomFilters.BloomClock.ClockValueComparator;
 
 /**
@@ -47,9 +46,7 @@ public class CausalBufferTest {
     private Context<Member>                            context;
     private Cuckoo                                     clock;
     private Parameters.Builder                         parameters;
-    private BloomClock                                 bloomClockA;
     private List<Map<Digest, List<CausalMessage>>>     aDelivered;
-    private BloomClock                                 bloomClockB;
     private List<Map<Digest, List<CausalMessage>>>     bDelivered;
     private Any                                        content;
     private List<CausalMessage>                        aSends;
@@ -93,16 +90,14 @@ public class CausalBufferTest {
                                .setComparator(new ClockValueComparator(0.1))
                                .setWallclock(clock)
                                .setContext(context);
-        bloomClockA = new BloomClock(0x1638);
         aDelivered = new ArrayList<>();
-        bloomClockB = new BloomClock(0x1638);
         bDelivered = new ArrayList<>();
         aSends = new ArrayList<>();
         bSends = new ArrayList<>();
         aDelivery = mail -> aDelivered.add(mail);
         bDelivery = mail -> bDelivered.add(mail);
-        bufferA = new CausalBuffer(parameters.setMember(memberA).build(), bloomClockA, aDelivery);
-        bufferB = new CausalBuffer(parameters.setMember(memberB).build(), bloomClockB, bDelivery);
+        bufferA = new CausalBuffer(parameters.setMember(memberA).build(), aDelivery);
+        bufferB = new CausalBuffer(parameters.setMember(memberB).build(), bDelivery);
         content = Any.pack(ByteMessage.getDefaultInstance());
     }
 
@@ -113,14 +108,12 @@ public class CausalBufferTest {
 
         assertNotNull(aEvent);
         assertEquals(memberA.getId(), new Digest(aEvent.getSource()));
-        assertEquals(4, bloomClockA.sum());
         assertEquals(0, aDelivered.size());
 
         bEvent = sendB();
 
         assertNotNull(bEvent);
         assertEquals(memberB.getId(), new Digest(bEvent.getSource()));
-        assertEquals(4, bloomClockB.sum());
         assertEquals(0, aDelivered.size());
 
         deliverA(bEvent);

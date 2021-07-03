@@ -201,6 +201,10 @@ public class BloomClock implements ClockValue {
     private final static Logger log       = LoggerFactory.getLogger(BloomClock.class);
     private static int          MASK      = 0x0F;
 
+    public static boolean validate(int m, byte[] counts) {
+        return m == counts.length;
+    }
+
     static Hash<Digest> newHash(long seed, int k, int m) {
         return new Hash<>(seed, k, m) {
             @Override
@@ -218,9 +222,10 @@ public class BloomClock implements ClockValue {
         return counts.length;
     }
 
-    private final byte[]       counts;    // two cells per byte, giving 4 bits per cell
+    private final byte[]       counts; // two cells per byte, giving 4 bits per cell
     private final Hash<Digest> hash;
-    private long               prefix = 0;
+
+    private long prefix = 0;
 
     public BloomClock() {
         this(DEFAULT_GOOD_SEED, DEFAULT_K, DEFAULT_M);
@@ -241,6 +246,11 @@ public class BloomClock implements ClockValue {
 
     public BloomClock(long seed) {
         this(seed, DEFAULT_K, DEFAULT_M);
+    }
+
+    public BloomClock(long seed, byte[] counts, int k) {
+        this.counts = counts;
+        this.hash = newHash(seed, k, counts.length);
     }
 
     public BloomClock(long seed, int k, int m) {
@@ -280,6 +290,16 @@ public class BloomClock implements ClockValue {
         this.hash = hash;
         this.counts = counts;
         this.prefix = prefix;
+    }
+
+    public BloomClock(long seed, Clock clock, int k, int m) {
+        byte[] initialCounts = clock.getCounts().toByteArray();
+        if (initialCounts.length != m) {
+            throw new IllegalArgumentException("invalid counts.length: " + initialCounts.length + " expected: " + m);
+        }
+        prefix = clock.getPrefix();
+        counts = initialCounts;
+        hash = newHash(seed, k, m);
     }
 
     /**
