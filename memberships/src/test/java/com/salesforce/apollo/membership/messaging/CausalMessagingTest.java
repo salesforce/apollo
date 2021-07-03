@@ -109,16 +109,14 @@ public class CausalMessagingTest {
     public static final String                            DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
     private static Map<Digest, CertificateWithPrivateKey> certs;
 
-    private static final Parameters.Builder parameters = Parameters.newBuilder()
+    private static final Parameters.Builder parameters = Parameters.newBuilder().setMaxMessages(500)
                                                                    .setFalsePositiveRate(0.125)
                                                                    .setComparator(new ClockValueComparator(0.1))
-                                                                   .setBufferSize(1500);
+                                                                   .setBufferSize(700);
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 101)
-                         .parallel()
-                         .mapToObj(i -> getMember(i))
+        certs = IntStream.range(1, 101).parallel().mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -137,13 +135,12 @@ public class CausalMessagingTest {
 
     @Test
     public void broadcast() throws Exception {
-        List<SigningMember> members = certs.values()
-                                           .stream()
-                                           .map(cert -> new SigningMemberImpl(
-                                                   Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                   cert.getX509Certificate(), cert.getPrivateKey(),
-                                                   new Signer(0, cert.getPrivateKey()),
-                                                   cert.getX509Certificate().getPublicKey()))
+        List<SigningMember> members = certs.values().stream()
+                                           .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                                              cert.getX509Certificate(),
+                                                                              cert.getPrivateKey(),
+                                                                              new Signer(0, cert.getPrivateKey()),
+                                                                              cert.getX509Certificate().getPublicKey()))
                                            .collect(Collectors.toList());
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.01, members.size());
@@ -157,7 +154,7 @@ public class CausalMessagingTest {
             communications.add(comms);
             comms.start();
             return new CausalMessenger(parameters.setMember(node).build(),
-                    new BloomClock(Utils.bitStreamEntropy().nextLong(), 4, 200), comms);
+                                       new BloomClock(Utils.bitStreamEntropy().nextLong(), 4, 200), comms);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");

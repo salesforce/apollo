@@ -79,11 +79,12 @@ public class CausalMessenger {
                 return CausalMessages.getDefaultInstance();
             }
             return CausalMessages.newBuilder()
-                                 .addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests())))
-                                 .setBff(buffer.forReconcilliation(new DigestBloomFilter(
-                                         Utils.bitStreamEntropy().nextLong(), params.bufferSize,
-                                         params.falsePositiveRate)).toBff())
-                                 .build();
+                    .addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests())))
+                    .setBff(buffer
+                            .forReconcilliation(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
+                                    params.bufferSize, params.falsePositiveRate))
+                            .toBff())
+                    .build();
         }
 
         public void update(CausalPush request, Digest from) {
@@ -189,9 +190,9 @@ public class CausalMessenger {
             return;
         }
         List<Msg> newMsgs = mail.entrySet()
-                                .stream()
-                                .flatMap(e -> e.getValue().stream().map(m -> new Msg(e.getKey(), m.getContent())))
-                                .toList();
+                .stream()
+                .flatMap(e -> e.getValue().stream().map(m -> new Msg(e.getKey(), m.getContent())))
+                .toList();
         channelHandlers.forEach(handler -> {
             try {
                 handler.message(params.context.getId(), newMsgs);
@@ -205,15 +206,14 @@ public class CausalMessenger {
         if (!started.get()) {
             return null;
         }
-        int gossipRound = round.incrementAndGet();
-        log.trace("causal gossiping[{}] from {} with {} on {}", gossipRound, params.member, link.getMember(), ring);
+        log.trace("causal gossiping[{}] from {} with {} on {}", round.get(), params.member, link.getMember(), ring);
         DigestBloomFilter biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), params.bufferSize,
                 params.falsePositiveRate);
         return link.gossip(MessageBff.newBuilder()
-                                     .setContext(params.context.getId().toDigeste())
-                                     .setRing(ring)
-                                     .setDigests(buffer.forReconcilliation(biff).toBff())
-                                     .build());
+                .setContext(params.context.getId().toDigeste())
+                .setRing(ring)
+                .setDigests(buffer.forReconcilliation(biff).toBff())
+                .build());
     }
 
     private void handle(Optional<ListenableFuture<CausalMessages>> futureSailor, CausalMessaging link, int ring,
@@ -235,15 +235,16 @@ public class CausalMessenger {
             buffer.deliver(gossip.getUpdatesList());
             try {
                 link.update(CausalPush.newBuilder()
-                                      .setContext(params.context.getId().toDigeste())
-                                      .setRing(ring)
-                                      .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getBff())))
-                                      .build());
+                        .setContext(params.context.getId().toDigeste())
+                        .setRing(ring)
+                        .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getBff())))
+                        .build());
             } catch (Throwable e) {
                 log.debug("error updating {}", link.getMember(), e);
             }
         } finally {
             if (started.get()) {
+                scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
                 int gossipRound = round.get();
                 roundListeners.forEach(l -> {
                     try {
@@ -252,7 +253,7 @@ public class CausalMessenger {
                         log.error("error sending round() to listener: " + l, e);
                     }
                 });
-                scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
+                buffer.tick(gossipRound);
             }
         }
     }
