@@ -45,6 +45,7 @@ public class BloomClockTest {
             if (comparison > 0) { // event from our future
                 current.merge(event.clockValue);
                 history.put(event.timestamp, event);
+                return;
             }
             // We can't compare the event with this node's clock, so we have to fall back to
             // timestamps
@@ -154,6 +155,7 @@ public class BloomClockTest {
     public void smokin() {
         Comparator<ClockValue> comparator = new ClockValueComparator(0.1);
         BloomClock a = new BloomClock(new int[] { 1, 0, 0, 1 });
+        a.toString();
         BloomClock b = new BloomClock(new int[] { 1, 1, 0, 1 });
         BloomClock c = new BloomClock(new int[] { 1, 1, 0, 0 });
         BloomClock d = new BloomClock(new int[] { 1, 1, 1, 1 });

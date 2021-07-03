@@ -8,12 +8,12 @@ package com.salesforce.apollo.utils.bloomFilters;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -34,7 +34,7 @@ public class BloomFilterTest {
         double target = 0.000125;
         BloomFilter<Digest> biff = new DigestBloomFilter(666, max, target);
 
-        BitsStreamGenerator random = Utils.bitStreamEntropy();
+        SecureRandom random = Utils.secureEntropy();
         List<Digest> added = new ArrayList<>();
         for (int i = 0; i < max; i++) {
             byte[] hash = new byte[DigestAlgorithm.DEFAULT.digestLength()];
