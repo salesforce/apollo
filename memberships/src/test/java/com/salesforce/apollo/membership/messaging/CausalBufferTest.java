@@ -86,10 +86,8 @@ public class CausalBufferTest {
 
         clock = new Cuckoo();
 
-        parameters = Parameters.newBuilder()
-                               .setComparator(new ClockValueComparator(0.01))
-                               .setWallclock(clock)
-                               .setContext(context);
+        parameters = Parameters.newBuilder().setBufferSize(4000).setComparator(new ClockValueComparator(0.01))
+                               .setWallclock(clock).setContext(context);
         aDelivered = new ArrayList<>();
         bDelivered = new ArrayList<>();
         aSends = new ArrayList<>();
