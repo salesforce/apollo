@@ -107,10 +107,10 @@ public class CausalMessagingTest {
     }
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(1_000)
+    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(500)
                                                                                  .setFalsePositiveRate(0.0125)
                                                                                  .setComparator(new ClockValueComparator(0.1))
-                                                                                 .setBufferSize(1_500);
+                                                                                 .setBufferSize(700);
 
     @BeforeAll
     public static void beforeClass() {
@@ -164,7 +164,7 @@ public class CausalMessagingTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = 300;
+        int rounds = 30;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch round = new CountDownLatch(messengers.size());
             for (Receiver receiver : receivers.values()) {
