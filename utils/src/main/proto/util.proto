@@ -14,7 +14,7 @@ message Biff {
         int32 k = 2;
         int64 seed = 3;
         int32 type = 4;
-        repeated int64 bits = 5;
+        repeated uint64 bits = 5;
 }
 
 message Digeste {
@@ -41,7 +41,7 @@ message IBiff {
 }
 
 message IBiffCommon {
-    int64 seed = 1;
+    uint64 seed = 1;
     int32 m = 2;
     int32 k = 3;
     int32 size = 4;
@@ -75,9 +75,19 @@ message StampedClock {
     google.protobuf.Timestamp stamp = 2;
 }
 
+message IntStampedClock {
+    uint32 stamp = 1;
+    Clock clock = 2; 
+}
+
+message LongStampedClock {
+    uint64 stamp = 1;
+    Clock clock = 2; 
+}
+
 message BloomeClock {
     uint64 prefix = 1;
-    int64 seed = 2;
+    uint64 seed = 2;
     int32 k = 3;
     bytes counts = 4;
 }

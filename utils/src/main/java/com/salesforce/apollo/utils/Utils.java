@@ -51,9 +51,9 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.locks.Lock;
-import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
@@ -1070,5 +1070,27 @@ public class Utils {
 
     public static boolean waitForCondition(int maxWaitTime, Supplier<Boolean> condition) {
         return waitForCondition(maxWaitTime, 100, condition);
+    }
+
+    public static <T> Callable<T> wrapped(Callable<T> c, Logger log) {
+        return () -> {
+            try {
+                return c.call();
+            } catch (Exception e) {
+                log.error("Error in call", e);
+                throw new IllegalStateException(e);
+            }
+        };
+    }
+
+    public static Runnable wrapped(Runnable r, Logger log) {
+        return () -> {
+            try {
+                r.run();
+            } catch (Throwable e) {
+                log.error("Error in execution", e);
+                throw new IllegalStateException(e);
+            }
+        };
     }
 }

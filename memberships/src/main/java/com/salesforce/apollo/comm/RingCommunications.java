@@ -24,6 +24,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -58,12 +59,13 @@ public class RingCommunications<Comm extends Link> {
     final List<Integer>                 traversalOrder;
 
     public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-            Executor executor) {
+                              Executor executor) {
         this(Direction.SUCCESSOR, context, member, comm, executor);
     }
 
     public RingCommunications(Direction direction, Context<Member> context, SigningMember member,
-            CommonCommunications<Comm, ?> comm, Executor executor) {
+                              CommonCommunications<Comm, ?> comm, Executor executor) {
+        assert executor != null && direction != null && context != null && member != null && comm != null;
         this.direction = direction;
         this.context = context;
         this.executor = executor;
@@ -130,9 +132,9 @@ public class RingCommunications<Comm extends Link> {
             if (futureSailor == null) {
                 handler.handle(Optional.empty(), link, current);
             } else {
-                futureSailor.addListener(() -> {
+                futureSailor.addListener(Utils.wrapped(() -> {
                     handler.handle(Optional.of(futureSailor), link, current);
-                }, executor);
+                }, log), executor);
             }
         }
     }

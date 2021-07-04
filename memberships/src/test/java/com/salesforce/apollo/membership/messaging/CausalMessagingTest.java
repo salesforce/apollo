@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -108,7 +109,7 @@ public class CausalMessagingTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(500)
-                                                                                 .setFalsePositiveRate(0.0125)
+                                                                                 .setFalsePositiveRate(0.125)
                                                                                  .setComparator(new ClockValueComparator(0.1))
                                                                                  .setBufferSize(700);
 
@@ -144,14 +145,16 @@ public class CausalMessagingTest {
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.01, members.size());
         parameters.setContext(context);
         members.forEach(m -> context.activate(m));
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
+        
+        // 3 threads
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        Executor executor = Executors.newFixedThreadPool(2);
 
-        ForkJoinPool executor = Router.createFjPool();
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
             comms.start();
-            return new CausalMessenger(parameters.setMember(node).build(), comms);
+            return new CausalMessenger(parameters.setMember(node).setExecutor(executor).build(), comms);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
@@ -164,7 +167,7 @@ public class CausalMessagingTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = 30;
+        int rounds = 300;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch round = new CountDownLatch(messengers.size());
             for (Receiver receiver : receivers.values()) {

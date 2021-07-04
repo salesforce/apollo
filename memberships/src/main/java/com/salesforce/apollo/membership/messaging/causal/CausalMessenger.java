@@ -18,7 +18,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -94,7 +93,6 @@ public class CausalMessenger {
     private final CommonCommunications<CausalMessaging, Service> comm;
     private final RingCommunications<CausalMessaging>            gossiper;
     private final Parameters                                     params;
-    private final AtomicInteger                                  round           = new AtomicInteger();
     private final List<Consumer<Integer>>                        roundListeners  = new CopyOnWriteArrayList<>();
     private final AtomicBoolean                                  started         = new AtomicBoolean();
 
@@ -123,7 +121,7 @@ public class CausalMessenger {
     }
 
     public int getRound() {
-        return round.get();
+        return buffer.round();
     }
 
     public void publish(Message message) {
@@ -165,7 +163,6 @@ public class CausalMessenger {
         log.info("Stopping Causal Messenger[{}] for {}", params.context.getId(), params.member);
         buffer.clear();
         gossiper.reset();
-        round.set(0);
         comm.deregister(params.context.getId());
     }
 
@@ -187,7 +184,7 @@ public class CausalMessenger {
         if (!started.get()) {
             return null;
         }
-        log.trace("causal gossiping[{}] from {} with {} on {}", round.get(), params.member, link.getMember(), ring);
+        log.trace("causal gossiping[{}] from {} with {} on {}", buffer.round(), params.member, link.getMember(), ring);
         DigestBloomFilter biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), params.bufferSize,
                                                        params.falsePositiveRate);
         return link.gossip(MessageBff.newBuilder().setContext(params.context.getId().toDigeste()).setRing(ring)
@@ -220,7 +217,8 @@ public class CausalMessenger {
         } finally {
             if (started.get()) {
                 scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
-                int gossipRound = round.get();
+                buffer.tick();
+                int gossipRound = buffer.round();
                 roundListeners.forEach(l -> {
                     try {
                         l.accept(gossipRound);
@@ -228,7 +226,6 @@ public class CausalMessenger {
                         log.error("error sending round() to listener: " + l, e);
                     }
                 });
-                buffer.tick(gossipRound);
             }
         }
     }

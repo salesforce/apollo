@@ -10,7 +10,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
@@ -22,12 +21,12 @@ import com.salesforce.apollo.utils.bc.ClockValue;
 public class Parameters {
     public static class Builder {
         private int                    bufferSize      = 500;
-        private int                    clockK          = 4;
-        private int                    clockM          = 200;
+        private int                    clockK          = 3;
+        private int                    clockM          = 128;
         private Comparator<ClockValue> comparator;
         private Context<Member>        context;
         private DigestAlgorithm        digestAlgorithm = DigestAlgorithm.DEFAULT;
-        private Executor               executor        = ForkJoinPool.commonPool();
+        private Executor               executor;
         private double                 falsePositiveRate;
         private int                    maxMessages     = 100;
         private SigningMember          member;
@@ -37,7 +36,7 @@ public class Parameters {
 
         public Parameters build() {
             return new Parameters(bufferSize, comparator, maxMessages, context, digestAlgorithm, executor, member,
-                    metrics, tooOld, wallclock, falsePositiveRate, clockK, clockM);
+                                  metrics, tooOld, wallclock, falsePositiveRate, clockK, clockM);
         }
 
         public int getBufferSize() {
@@ -177,8 +176,9 @@ public class Parameters {
     public final java.time.Clock        wallclock;
 
     public Parameters(int bufferSize, Comparator<ClockValue> comparator, int maxMessages, Context<Member> context,
-            DigestAlgorithm digestAlgorithm, Executor executor, SigningMember member, MessagingMetrics metrics,
-            Duration tooOld, Clock wallclock, double falsePositiveRate, int clockK, int clockM) {
+                      DigestAlgorithm digestAlgorithm, Executor executor, SigningMember member,
+                      MessagingMetrics metrics, Duration tooOld, Clock wallclock, double falsePositiveRate, int clockK,
+                      int clockM) {
         this.bufferSize = bufferSize;
         this.comparator = comparator;
         this.context = context;

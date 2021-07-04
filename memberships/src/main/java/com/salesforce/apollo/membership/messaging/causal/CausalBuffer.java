@@ -45,7 +45,7 @@ import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bc.BloomClock;
 import com.salesforce.apollo.utils.bc.CausalityClock;
 import com.salesforce.apollo.utils.bc.ClockValue;
-import com.salesforce.apollo.utils.bc.StampedClockValue;
+import com.salesforce.apollo.utils.bc.TimeStampedClockValue;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
@@ -55,7 +55,7 @@ import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
  *
  */
 public class CausalBuffer {
-    public record StampedMessage(Digest hash, StampedClockValue clock, Digest from, CausalMessage.Builder message)
+    public record StampedMessage(Digest hash, TimeStampedClockValue clock, Digest from, CausalMessage.Builder message)
                                 implements Comparable<StampedMessage> {
 
         @Override
@@ -165,10 +165,9 @@ public class CausalBuffer {
     private final int                                         maxAge;
     private final Parameters                                  params;
     private final AtomicReference<Digest>                     previous          = new AtomicReference<>();
-
-    private final AtomicInteger size = new AtomicInteger();
-
-    private final ConcurrentMap<Digest, Stream> streams = new ConcurrentHashMap<>();
+    private final AtomicInteger                               round             = new AtomicInteger();
+    private final AtomicInteger                               size              = new AtomicInteger();
+    private final ConcurrentMap<Digest, Stream>               streams           = new ConcurrentHashMap<>();
 
     public CausalBuffer(Parameters parameters, Consumer<Map<Digest, List<StampedMessage>>> delivery) {
         this.params = parameters;
@@ -180,8 +179,11 @@ public class CausalBuffer {
     }
 
     public void clear() {
-        // TODO Auto-generated method stub
-
+        round.set(0);
+        delivered.clear();
+        initPrevious();
+        size.set(0);
+        streams.clear();
     }
 
     public void deliver(List<CausalMessage> messages) {
@@ -195,7 +197,7 @@ public class CausalBuffer {
                             return null;
                         }
                         return new ArrayList<>();
-                    }).add(new StampedMessage(f.hash, StampedClockValue.from(f.message.getClock()), f.id,
+                    }).add(new StampedMessage(f.hash, TimeStampedClockValue.from(f.message.getClock()), f.id,
                                               CausalMessage.newBuilder(f.message)));
                 });
         List<List<Digest>> digests = deliver(binned);
@@ -222,6 +224,10 @@ public class CausalBuffer {
         return reconciled;
     }
 
+    public int round() {
+        return round.get();
+    }
+
     public StampedMessage send(Any content, SigningMember member) {
         Digest prev = previous.get();
         Digest hash = params.digestAlgorithm.digest(prev.toDigeste().toByteString(), content.toByteString(),
@@ -233,7 +239,7 @@ public class CausalBuffer {
         CausalMessage.Builder message = CausalMessage.newBuilder().setAge(0).setSource(member.getId().toDigeste())
                                                      .setClock(stamp).setContent(content).setHash(hash.toDigeste())
                                                      .setSignature(sig);
-        StampedMessage stamped = new StampedMessage(hash, StampedClockValue.from(stamp), member.getId(), message);
+        StampedMessage stamped = new StampedMessage(hash, TimeStampedClockValue.from(stamp), member.getId(), message);
         delivered.put(hash, stamped);
         size.incrementAndGet();
         previous.set(hash);
@@ -246,7 +252,8 @@ public class CausalBuffer {
         return size.get();
     }
 
-    public void tick(int round) {
+    public void tick() {
+        round.incrementAndGet();
         streams.values().forEach(stream -> stream.updateAge());
         delivered.values().forEach(r -> r.message().setAge(r.message().getAge() + 1));
     }

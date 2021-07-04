@@ -22,6 +22,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -34,12 +35,12 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     private volatile boolean majoritySucceed = false;
 
     public RingIterator(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-            Executor executor) {
+                        Executor executor) {
         super(context, member, comm, executor);
     }
 
     public RingIterator(Direction direction, Context<Member> context, SigningMember member,
-            CommonCommunications<Comm, ?> comm, Executor executor) {
+                        CommonCommunications<Comm, ?> comm, Executor executor) {
         super(direction, context, member, comm, executor);
     }
 
@@ -56,7 +57,9 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     public <T> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                             Runnable failedMajority, PredicateHandler<T, Comm> handler, Runnable onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
-        executor.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally));
+        executor.execute(Utils.wrapped(() -> internalIterate(digest, onMajority, round, failedMajority, handler,
+                                                             onComplete, tally),
+                                       log));
 
     }
 
@@ -88,9 +91,9 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
                 allowed.accept(allow);
                 return;
             }
-            futureSailor.addListener(() -> {
+            futureSailor.addListener(Utils.wrapped(() -> {
                 allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, current));
-            }, executor);
+            }, log), executor);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
@@ -125,7 +128,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
             }
         } else if (allow) {
             log.trace("Proceeding on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
-            executor.execute(proceed);
+            executor.execute(Utils.wrapped(proceed, log));
         } else {
             log.trace("Termination on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
         }

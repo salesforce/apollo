@@ -6,45 +6,14 @@
  */
 package com.salesforce.apollo.utils.bc;
 
-import java.time.Instant;
-
-import com.google.protobuf.Timestamp;
-import com.salesfoce.apollo.utils.proto.Clock;
-import com.salesfoce.apollo.utils.proto.StampedClock;
-import com.salesforce.apollo.utils.bc.BloomClock.ComparisonResult;
-
 /**
  * @author hal.hildebrand
  *
  */
-public record StampedClockValue(BloomClockValue clock, Instant stamp) implements ClockValue {
+public interface StampedClockValue<T extends Comparable<T>, S> extends ClockValue {
 
-    public static StampedClockValue from(StampedClock c) {
-        Timestamp ts = c.getStamp();
-        return new StampedClockValue(ClockValue.of(c.getClock()),
-                                     Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos()));
-    }
+    T instant();
 
-    @Override
-    public BloomClockValue toBloomClockValue() {
-        return clock;
-    }
-
-    public StampedClock toStampedClock() {
-        return StampedClock.newBuilder().setClock(clock.toClock())
-                           .setStamp(Timestamp.newBuilder().setSeconds(stamp.getEpochSecond())
-                                              .setNanos(stamp.getNano()))
-                           .build();
-    }
-
-    @Override
-    public ComparisonResult compareTo(ClockValue b) {
-        return clock.compareTo(b);
-    }
-
-    @Override
-    public Clock toClock() {
-        return clock.toClock();
-    }
+    S toStampedClock();
 
 }
