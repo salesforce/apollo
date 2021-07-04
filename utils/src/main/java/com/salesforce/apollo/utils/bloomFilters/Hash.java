@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.utils.bloomFilters;
 
+import static com.salesforce.apollo.utils.bloomFilters.Primes.PRIMES;
+
 import java.nio.ByteBuffer;
 import java.util.stream.IntStream;
 
@@ -46,17 +48,24 @@ public abstract class Hash<M> {
 
     abstract public static class Hasher<M> {
 
-        private static final long C1         = 0x87c37b91114253d5L;
-        private static final long C2         = 0x4cf5ad432745937fL;
-        private static final long CHUNK_SIZE = 16;
+        private static final long C1                   = 0x87c37b91114253d5L;
+        private static final long C2                   = 0x4cf5ad432745937fL;
+        private static final long CHUNK_SIZE           = 16;
+        private static final int  MAX_HASHING_ATTEMPTS = 500;
 
         static int toInt(byte value) {
             return value & 0xFF;
         }
 
+        private static void throwMax(int k, int m, int[] hashes) {
+            throw new IllegalStateException("Cannot find: " + k + " unique hashes for m: " + m + " after: "
+            + MAX_HASHING_ATTEMPTS + " hashing attempts.  found: " + IntStream.of(hashes).mapToObj(e -> e).toList());
+        }
+
         long h1;
         long h2;
-        int  length;
+
+        int length;
 
         public Hasher<M> establish(M key, long seed) {
             h1 = seed;
@@ -71,23 +80,36 @@ public abstract class Hash<M> {
             return h1;
         }
 
+        /**
+         * Generate K unique hash locations for M elements, using the seed.
+         */
         public int[] hashes(int k, M key, int m, long seed) {
             establish(key, seed);
             long combinedHash = h1;
             int[] hashes = new int[k];
+            int attempts = 0;
             int i = 0;
+            int prime = 0;
             while (i < k) {
-                int hash = (int) (((combinedHash) & Long.MAX_VALUE) % m);
+                if (attempts++ > MAX_HASHING_ATTEMPTS) {
+                    throwMax(k, m, hashes);
+                }
+                int hash = (int) ((combinedHash & Long.MAX_VALUE) % m);
+                // see if we have generated this before - mod M when M is small or even, or
+                // common factors in keys, etc
                 boolean found = false;
                 for (int j = 0; j < i; j++) {
                     if (hashes[j] == hash) {
                         found = true;
                         break;
-                    } else
-                        MISSES++;
+                    }
                 }
                 if (!found) {
                     hashes[i++] = hash;
+                } else {
+                    // Make the next hash candidate odd by adding primes
+                    h2 += PRIMES[prime];
+                    prime = ++prime % PRIMES.length;
                 }
                 combinedHash += h2;
             }
@@ -286,8 +308,6 @@ public abstract class Hash<M> {
         }
 
     }
-
-    public static int MISSES = 0;
 
     /**
      * Computes the optimal k (number of hashes per element inserted in Bloom
