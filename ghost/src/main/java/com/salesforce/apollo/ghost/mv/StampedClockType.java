@@ -14,7 +14,7 @@ import org.h2.mvstore.type.DataType;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.utils.proto.StampedClock;
-import com.salesforce.apollo.utils.bloomFilters.ClockValue;
+import com.salesforce.apollo.utils.bc.ClockValue;
 
 /**
  * @author hal.hildebrand

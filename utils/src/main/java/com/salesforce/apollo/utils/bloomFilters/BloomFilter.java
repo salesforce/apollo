@@ -25,7 +25,7 @@ abstract public class BloomFilter<T> {
         public BytesBloomFilter(long seed, int n, double p) {
             super(new Hash<byte[]>(seed, n, p) {
                 @Override
-                Hasher<byte[]> newHasher() {
+                protected Hasher<byte[]> newHasher() {
                     return new BytesHasher();
                 }
             });
@@ -34,7 +34,7 @@ abstract public class BloomFilter<T> {
         public BytesBloomFilter(long seed, int m, int k, long[] bytes) {
             super(new Hash<byte[]>(seed, k, m) {
                 @Override
-                Hasher<byte[]> newHasher() {
+                protected Hasher<byte[]> newHasher() {
                     return new BytesHasher();
                 }
             }, BitSet.valueOf(bytes));
@@ -51,7 +51,7 @@ abstract public class BloomFilter<T> {
         public DigestBloomFilter(long seed, int n, double p) {
             super(new Hash<Digest>(seed, n, p) {
                 @Override
-                Hasher<Digest> newHasher() {
+                protected Hasher<Digest> newHasher() {
                     return new DigestHasher();
                 }
             });
@@ -60,7 +60,7 @@ abstract public class BloomFilter<T> {
         public DigestBloomFilter(long seed, int m, int k, long[] bytes) {
             super(new Hash<Digest>(seed, k, m) {
                 @Override
-                Hasher<Digest> newHasher() {
+                protected Hasher<Digest> newHasher() {
                     return new DigestHasher();
                 }
             }, BitSet.valueOf(bytes));
@@ -78,7 +78,7 @@ abstract public class BloomFilter<T> {
         public IntBloomFilter(long seed, int n, double p) {
             super(new Hash<Integer>(seed, n, p) {
                 @Override
-                Hasher<Integer> newHasher() {
+                protected Hasher<Integer> newHasher() {
                     return new IntHasher();
                 }
             });
@@ -87,7 +87,7 @@ abstract public class BloomFilter<T> {
         public IntBloomFilter(long seed, int m, int k, long[] bits) {
             super(new Hash<Integer>(seed, k, m) {
                 @Override
-                Hasher<Integer> newHasher() {
+                protected Hasher<Integer> newHasher() {
                     return new IntHasher();
                 }
             }, BitSet.valueOf(bits));
@@ -104,7 +104,7 @@ abstract public class BloomFilter<T> {
         public LongBloomFilter(long seed, int n, double p) {
             super(new Hash<Long>(seed, n, p) {
                 @Override
-                Hasher<Long> newHasher() {
+                protected Hasher<Long> newHasher() {
                     return new LongHasher();
                 }
             });
@@ -113,7 +113,7 @@ abstract public class BloomFilter<T> {
         public LongBloomFilter(long seed, int m, int k, long[] bits) {
             super(new Hash<Long>(seed, k, m) {
                 @Override
-                Hasher<Long> newHasher() {
+                protected Hasher<Long> newHasher() {
                     return new LongHasher();
                 }
             }, BitSet.valueOf(bits));
@@ -131,7 +131,7 @@ abstract public class BloomFilter<T> {
         public StringBloomFilter(long seed, int n, double p) {
             super(new Hash<String>(seed, n, p) {
                 @Override
-                Hasher<String> newHasher() {
+                protected Hasher<String> newHasher() {
                     return new StringHasher();
                 }
             });
@@ -140,7 +140,7 @@ abstract public class BloomFilter<T> {
         public StringBloomFilter(long seed, int m, int k, long[] bytes) {
             super(new Hash<String>(seed, k, m) {
                 @Override
-                Hasher<String> newHasher() {
+                protected Hasher<String> newHasher() {
                     return new StringHasher();
                 }
             }, BitSet.valueOf(bytes));

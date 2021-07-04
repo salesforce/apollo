@@ -19,7 +19,9 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock.ClockValueComparator;
+import com.salesforce.apollo.utils.bc.BloomClock;
+import com.salesforce.apollo.utils.bc.ClockValue;
+import com.salesforce.apollo.utils.bc.ClockValueComparator;
 
 /**
  * @author hal.hildebrand
@@ -27,8 +29,7 @@ import com.salesforce.apollo.utils.bloomFilters.BloomClock.ClockValueComparator;
 public class BloomClockTest {
     private static final long SEED = -772069189919430497L;
 
-    record Event(BloomClock clockValue, Digest hash, int timestamp) {
-    }
+    record Event(BloomClock clockValue, Digest hash, int timestamp) {}
 
     record Node(Map<Integer, Event> history, AtomicReference<BloomClock> state, Comparator<ClockValue> comparator) {
 

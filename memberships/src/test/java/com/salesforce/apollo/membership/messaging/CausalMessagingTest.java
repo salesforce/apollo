@@ -46,12 +46,12 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.messaging.causal.CausalBuffer.StampedMessage;
 import com.salesforce.apollo.membership.messaging.causal.CausalMessenger;
 import com.salesforce.apollo.membership.messaging.causal.CausalMessenger.MessageHandler;
 import com.salesforce.apollo.membership.messaging.causal.Parameters;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock.ClockValueComparator;
+import com.salesforce.apollo.utils.bc.ClockValueComparator;
 
 /**
  * @author hal.hildebrand
@@ -69,18 +69,18 @@ public class CausalMessagingTest {
         }
 
         @Override
-        public void message(Digest context, List<Msg> messages) {
-            messages.forEach(message -> {
-                assert message.from != null : "null member";
+        public void message(Digest context, List<StampedMessage> messages) {
+            messages.forEach(m -> {
+                assert m.from() != null : "null member";
                 ByteBuffer buf;
                 try {
-                    buf = message.content.unpack(ByteMessage.class).getContents().asReadOnlyByteBuffer();
+                    buf = m.message().getContent().unpack(ByteMessage.class).getContents().asReadOnlyByteBuffer();
                 } catch (InvalidProtocolBufferException e) {
                     throw new IllegalStateException(e);
                 }
                 assert buf.remaining() > 4 : "buffer: " + buf.remaining();
                 if (buf.getInt() == current.get() + 1) {
-                    if (counted.add(message.from)) {
+                    if (counted.add(m.from())) {
                         int totalCount = totalReceived.incrementAndGet();
                         if (totalCount % 1_000 == 0) {
                             System.out.print(".");
@@ -106,13 +106,11 @@ public class CausalMessagingTest {
 
     }
 
-    public static final String                            DEFAULT_SIGNATURE_ALGORITHM = "SHA256withRSA";
     private static Map<Digest, CertificateWithPrivateKey> certs;
-
-    private static final Parameters.Builder parameters = Parameters.newBuilder().setMaxMessages(500)
-                                                                   .setFalsePositiveRate(0.125)
-                                                                   .setComparator(new ClockValueComparator(0.1))
-                                                                   .setBufferSize(700);
+    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(1_000)
+                                                                                 .setFalsePositiveRate(0.0125)
+                                                                                 .setComparator(new ClockValueComparator(0.1))
+                                                                                 .setBufferSize(1_500);
 
     @BeforeAll
     public static void beforeClass() {
@@ -153,8 +151,7 @@ public class CausalMessagingTest {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
             comms.start();
-            return new CausalMessenger(parameters.setMember(node).build(),
-                                       new BloomClock(Utils.bitStreamEntropy().nextLong(), 4, 200), comms);
+            return new CausalMessenger(parameters.setMember(node).build(), comms);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
@@ -167,7 +164,7 @@ public class CausalMessagingTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = 30;
+        int rounds = 300;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch round = new CountDownLatch(messengers.size());
             for (Receiver receiver : receivers.values()) {

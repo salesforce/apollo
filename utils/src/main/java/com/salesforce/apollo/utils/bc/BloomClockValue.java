@@ -4,13 +4,16 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.utils.bloomFilters;
+package com.salesforce.apollo.utils.bc;
 
+import static com.salesforce.apollo.utils.bc.BloomClock.MASK;
+import static com.salesforce.apollo.utils.bc.BloomClock.count;
 import static java.util.stream.IntStream.range;
-import static com.salesforce.apollo.utils.bloomFilters.BloomClock.*;
+
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.utils.proto.Clock;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock.ComparisonResult;
+import com.salesforce.apollo.utils.bc.BloomClock.Comparison;
+import com.salesforce.apollo.utils.bc.BloomClock.ComparisonResult;
 
 /**
  * @author hal.hildebrand

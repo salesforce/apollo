@@ -17,7 +17,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.MessagingMetrics;
-import com.salesforce.apollo.utils.bloomFilters.ClockValue;
+import com.salesforce.apollo.utils.bc.ClockValue;
 
 public class Parameters {
     public static class Builder {

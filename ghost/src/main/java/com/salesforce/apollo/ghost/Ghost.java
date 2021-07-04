@@ -60,8 +60,8 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock;
-import com.salesforce.apollo.utils.bloomFilters.ClockValue;
+import com.salesforce.apollo.utils.bc.BloomClock;
+import com.salesforce.apollo.utils.bc.ClockValue;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;

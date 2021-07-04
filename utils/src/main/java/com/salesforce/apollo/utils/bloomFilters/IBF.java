@@ -31,7 +31,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         static Hash<Digest> newHash(long seed, int m, int k) {
             return new Hash<Digest>(seed, k, m) {
                 @Override
-                Hasher<Digest> newHasher() {
+                protected Hasher<Digest> newHasher() {
                     return new DigestHasher();
                 }
             };
@@ -107,7 +107,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         static Hash<Integer> newHash(long seed, int m, int k) {
             return new Hash<Integer>(seed, k, m) {
                 @Override
-                Hasher<Integer> newHasher() {
+                protected Hasher<Integer> newHasher() {
                     return new IntHasher();
                 }
             };
@@ -182,7 +182,7 @@ abstract public class IBF<KeyType> implements Cloneable {
         static Hash<Long> newHash(long seed, int m, int k) {
             return new Hash<Long>(seed, k, m) {
                 @Override
-                Hasher<Long> newHasher() {
+                protected Hasher<Long> newHasher() {
                     return new LongHasher();
                 }
             };
@@ -252,8 +252,7 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     }
 
-    public record Decode<K> (boolean success, List<K> added, List<K> missing) {
-    }
+    public record Decode<K> (boolean success, List<K> added, List<K> missing) {}
 
     private static final int DEFAULT_K = 3;
 

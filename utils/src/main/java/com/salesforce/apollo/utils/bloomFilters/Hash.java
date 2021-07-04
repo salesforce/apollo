@@ -322,10 +322,11 @@ public abstract class Hash<M> {
         return Math.max(8, (int) (-n * Math.log(p) / (Math.log(2) * Math.log(2))));
     }
 
+    public final int  k;
+    public final int  m;
+    public final long seed;
+
     protected final Hasher<M> hasher;
-    protected final int       k;
-    protected final int       m;
-    protected final long      seed;
 
     public Hash(long seed, int n, double p) {
         m = optimalM(n, p);
@@ -346,7 +347,7 @@ public abstract class Hash<M> {
         return new Hash<M>(seed, k, m) {
 
             @Override
-            Hasher<M> newHasher() {
+            protected Hasher<M> newHasher() {
                 return clone;
             }
         };
@@ -376,5 +377,5 @@ public abstract class Hash<M> {
         return hasher.locations(k, key, m, seed);
     }
 
-    abstract Hasher<M> newHasher();
+    abstract protected Hasher<M> newHasher();
 }

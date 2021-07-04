@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.messaging.proto.CausalMessage;
 import com.salesfoce.apollo.messaging.proto.CausalMessages;
 import com.salesfoce.apollo.messaging.proto.CausalPush;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
@@ -37,10 +36,9 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.causal.CausalMessenger.MessageHandler.Msg;
+import com.salesforce.apollo.membership.messaging.causal.CausalBuffer.StampedMessage;
 import com.salesforce.apollo.membership.messaging.comms.CausalMessagingServer;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -51,22 +49,8 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 public class CausalMessenger {
     @FunctionalInterface
     public interface MessageHandler {
-        class Msg {
-            public final Any    content;
-            public final Digest from;
 
-            public Msg(Digest from, Any any) {
-                this.from = from;
-                this.content = any;
-            }
-
-            @Override
-            public String toString() {
-                return "Msg [from=" + from + "]";
-            }
-        }
-
-        void message(Digest context, List<Msg> messages);
+        void message(Digest context, List<StampedMessage> messages);
     }
 
     public class Service {
@@ -78,13 +62,13 @@ public class CausalMessenger {
                           params.context.getId(), params.member, from, request.getRing(), predecessor);
                 return CausalMessages.getDefaultInstance();
             }
-            return CausalMessages.newBuilder()
-                    .addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests())))
-                    .setBff(buffer
-                            .forReconcilliation(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
-                                    params.bufferSize, params.falsePositiveRate))
-                            .toBff())
-                    .build();
+            return CausalMessages.newBuilder().addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests())))
+                                 .setBff(buffer.forReconcilliation(new DigestBloomFilter(Utils.bitStreamEntropy()
+                                                                                              .nextLong(),
+                                                                                         params.bufferSize,
+                                                                                         params.falsePositiveRate))
+                                               .toBff())
+                                 .build();
         }
 
         public void update(CausalPush request, Digest from) {
@@ -114,11 +98,11 @@ public class CausalMessenger {
     private final List<Consumer<Integer>>                        roundListeners  = new CopyOnWriteArrayList<>();
     private final AtomicBoolean                                  started         = new AtomicBoolean();
 
-    public CausalMessenger(Parameters parameters, BloomClock clock, Router communications) {
+    public CausalMessenger(Parameters parameters, Router communications) {
         this.params = parameters;
         this.comm = communications.create(params.member, params.context.getId(), new Service(),
                                           r -> new CausalMessagingServer(communications.getClientIdentityProvider(),
-                                                  parameters.metrics, r),
+                                                                         parameters.metrics, r),
                                           getCreate(parameters.metrics, params.executor),
                                           CausalMessaging.getLocalLoopback(params.member));
         gossiper = new RingCommunications<>(params.context, params.member, this.comm, params.executor);
@@ -150,7 +134,7 @@ public class CausalMessenger {
         if (!started.get()) {
             return;
         }
-        CausalMessage m = buffer.send(Any.pack(message), params.member);
+        StampedMessage m = buffer.send(Any.pack(message), params.member);
         if (notifyLocal) {
             deliver(Map.of(params.member.getId(), Collections.singletonList(m)));
         }
@@ -185,14 +169,11 @@ public class CausalMessenger {
         comm.deregister(params.context.getId());
     }
 
-    private void deliver(Map<Digest, List<CausalMessage>> mail) {
+    private void deliver(Map<Digest, List<StampedMessage>> mail) {
         if (mail.isEmpty()) {
             return;
         }
-        List<Msg> newMsgs = mail.entrySet()
-                .stream()
-                .flatMap(e -> e.getValue().stream().map(m -> new Msg(e.getKey(), m.getContent())))
-                .toList();
+        List<StampedMessage> newMsgs = mail.entrySet().stream().flatMap(e -> e.getValue().stream()).toList();
         channelHandlers.forEach(handler -> {
             try {
                 handler.message(params.context.getId(), newMsgs);
@@ -208,12 +189,9 @@ public class CausalMessenger {
         }
         log.trace("causal gossiping[{}] from {} with {} on {}", round.get(), params.member, link.getMember(), ring);
         DigestBloomFilter biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), params.bufferSize,
-                params.falsePositiveRate);
-        return link.gossip(MessageBff.newBuilder()
-                .setContext(params.context.getId().toDigeste())
-                .setRing(ring)
-                .setDigests(buffer.forReconcilliation(biff).toBff())
-                .build());
+                                                       params.falsePositiveRate);
+        return link.gossip(MessageBff.newBuilder().setContext(params.context.getId().toDigeste()).setRing(ring)
+                                     .setDigests(buffer.forReconcilliation(biff).toBff()).build());
     }
 
     private void handle(Optional<ListenableFuture<CausalMessages>> futureSailor, CausalMessaging link, int ring,
@@ -234,11 +212,8 @@ public class CausalMessenger {
             }
             buffer.deliver(gossip.getUpdatesList());
             try {
-                link.update(CausalPush.newBuilder()
-                        .setContext(params.context.getId().toDigeste())
-                        .setRing(ring)
-                        .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getBff())))
-                        .build());
+                link.update(CausalPush.newBuilder().setContext(params.context.getId().toDigeste()).setRing(ring)
+                                      .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getBff()))).build());
             } catch (Throwable e) {
                 log.debug("error updating {}", link.getMember(), e);
             }

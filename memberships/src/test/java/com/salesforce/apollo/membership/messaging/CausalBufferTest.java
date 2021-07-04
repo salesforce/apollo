@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
-import com.salesfoce.apollo.messaging.proto.CausalMessage;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
@@ -32,8 +31,9 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.causal.CausalBuffer;
+import com.salesforce.apollo.membership.messaging.causal.CausalBuffer.StampedMessage;
 import com.salesforce.apollo.membership.messaging.causal.Parameters;
-import com.salesforce.apollo.utils.bloomFilters.BloomClock.ClockValueComparator;
+import com.salesforce.apollo.utils.bc.ClockValueComparator;
 
 /**
  * @author hal.hildebrand
@@ -41,20 +41,20 @@ import com.salesforce.apollo.utils.bloomFilters.BloomClock.ClockValueComparator;
  */
 public class CausalBufferTest {
 
-    private SigningMember                              memberA;
-    private SigningMember                              memberB;
-    private Context<Member>                            context;
-    private Cuckoo                                     clock;
-    private Parameters.Builder                         parameters;
-    private List<Map<Digest, List<CausalMessage>>>     aDelivered;
-    private List<Map<Digest, List<CausalMessage>>>     bDelivered;
-    private Any                                        content;
-    private List<CausalMessage>                        aSends;
-    private List<CausalMessage>                        bSends;
-    private Consumer<Map<Digest, List<CausalMessage>>> aDelivery;
-    private Consumer<Map<Digest, List<CausalMessage>>> bDelivery;
-    private CausalBuffer                               bufferA;
-    private CausalBuffer                               bufferB;
+    private SigningMember                               memberA;
+    private SigningMember                               memberB;
+    private Context<Member>                             context;
+    private Cuckoo                                      clock;
+    private Parameters.Builder                          parameters;
+    private List<Map<Digest, List<StampedMessage>>>     aDelivered;
+    private List<Map<Digest, List<StampedMessage>>>     bDelivered;
+    private Any                                         content;
+    private List<StampedMessage>                        aSends;
+    private List<StampedMessage>                        bSends;
+    private Consumer<Map<Digest, List<StampedMessage>>> aDelivery;
+    private Consumer<Map<Digest, List<StampedMessage>>> bDelivery;
+    private CausalBuffer                                bufferA;
+    private CausalBuffer                                bufferB;
 
     private static class Cuckoo extends Clock {
         long instant = 0;
@@ -101,17 +101,17 @@ public class CausalBufferTest {
 
     @Test
     public void smokeIt() {
-        CausalMessage aEvent, bEvent;
+        StampedMessage aEvent, bEvent;
         aEvent = sendA();
 
         assertNotNull(aEvent);
-        assertEquals(memberA.getId(), new Digest(aEvent.getSource()));
+        assertEquals(memberA.getId(), aEvent.from());
         assertEquals(0, aDelivered.size());
 
         bEvent = sendB();
 
         assertNotNull(bEvent);
-        assertEquals(memberB.getId(), new Digest(bEvent.getSource()));
+        assertEquals(memberB.getId(), bEvent.from());
         assertEquals(0, aDelivered.size());
 
         deliverA(bEvent);
@@ -149,26 +149,26 @@ public class CausalBufferTest {
         assertEquals(sends + 1, bDelivered.size());
     }
 
-    private void deliverB(CausalMessage aEvent) {
-        bufferB.deliver(Arrays.asList(aEvent));
+    private void deliverB(StampedMessage aEvent) {
+        bufferB.deliver(Arrays.asList(aEvent.message().build()));
     }
 
-    private void deliverA(CausalMessage bEvent) {
-        bufferA.deliver(Arrays.asList(bEvent));
+    private void deliverA(StampedMessage bEvent) {
+        bufferA.deliver(Arrays.asList(bEvent.message().build()));
     }
 
-    private CausalMessage sendB() {
+    private StampedMessage sendB() {
         clock.instant += 1;
-        CausalMessage bEvent;
+        StampedMessage bEvent;
         bEvent = bufferB.send(content, memberB);
         bSends.add(bEvent);
         clock.instant += 1;
         return bEvent;
     }
 
-    private CausalMessage sendA() {
+    private StampedMessage sendA() {
         clock.instant += 1;
-        CausalMessage aEvent;
+        StampedMessage aEvent;
         aEvent = bufferA.send(content, memberA);
         aSends.add(aEvent);
         clock.instant += 1;
