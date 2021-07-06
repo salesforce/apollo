@@ -21,6 +21,7 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
@@ -200,6 +201,7 @@ public class CausalBuffer {
     private final AtomicInteger                                         sequenceNumber    = new AtomicInteger();
     private final AtomicInteger                                         size              = new AtomicInteger();
     private final ConcurrentMap<Digest, Stream>                         streams           = new ConcurrentHashMap<>();
+    private final Semaphore                                             tickGate          = new Semaphore(1);
 
     public CausalBuffer(Parameters parameters, Consumer<Map<Digest, List<StampedMessage>>> delivery) {
         this.params = parameters;
@@ -285,19 +287,33 @@ public class CausalBuffer {
 
     public void tick() {
         round.incrementAndGet();
-        streams.values().forEach(stream -> size.addAndGet(-stream.updateAge(maxAge)));
-        var trav = delivered.entrySet().iterator();
-        while (trav.hasNext()) {
-            var next = trav.next().getValue();
-            if (next.message.getAge() >= maxAge) {
-                log.trace("GC'ing: {} from: {} as buffer too full: {} > {} on: {}", next.hash, next.from, size.get(),
-                          params.bufferSize, params.member);
-                trav.remove();
-                size.decrementAndGet();
-            } else {
-                next.message.setAge(next.message.getAge() + 1);
+        params.executor.execute(Utils.wrapped(() -> {
+            try {
+                if (!tickGate.tryAcquire(500, TimeUnit.MILLISECONDS)) {
+                    log.error("Unable to acquire tick gate for: {} on: {}", params.context.getId(), params.member);
+                    return;
+                }
+            } catch (InterruptedException e) {
+                log.error("Unable to acquire tick gate for: {} on: {}", params.context.getId(), params.member, e);
             }
-        }
+            try {
+                streams.values().forEach(stream -> size.addAndGet(-stream.updateAge(maxAge)));
+                var trav = delivered.entrySet().iterator();
+                while (trav.hasNext()) {
+                    var next = trav.next().getValue();
+                    if (next.message.getAge() >= maxAge) {
+                        log.trace("GC'ing: {} from: {} as buffer too full: {} > {} on: {}", next.hash, next.from,
+                                  size.get(), params.bufferSize, params.member);
+                        trav.remove();
+                        size.decrementAndGet();
+                    } else {
+                        next.message.setAge(next.message.getAge() + 1);
+                    }
+                }
+            } finally {
+                tickGate.release();
+            }
+        }, log));
     }
 
     private boolean dup(Digest hash, int age) {
@@ -342,7 +358,7 @@ public class CausalBuffer {
                 int freed = bufferSize - currentSize;
                 if (freed > 0) {
                     log.debug("Buffer freed: {} after compact for: {} on: {} ", freed, params.context.getId(),
-                             params.member);
+                              params.member);
                 }
             } finally {
                 garbageCollecting.release();
@@ -449,7 +465,7 @@ public class CausalBuffer {
 
     private void purgeTheAged() {
         log.debug("Purging the aged of: {} buffer size: {} delivered: {} on: {}", params.context.getId(), size.get(),
-                 delivered.size(), params.member);
+                  delivered.size(), params.member);
         Queue<StampedMessage> candidates = new PriorityQueue<>(Collections.reverseOrder((a,
                                                                                          b) -> Integer.compare(a.message.getAge(),
                                                                                                                b.message.getAge())));
