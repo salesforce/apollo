@@ -114,7 +114,7 @@ public class LongIBFTest {
         }
     }
 
-    @Test
+//    @Test
     public void list() {
         r = new SecureRandom();
         
@@ -125,7 +125,7 @@ public class LongIBFTest {
             state.add(r.nextLong());
         }
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 30; i++) {
             ibfs.add(new IBF.LongIBF(Utils.bitStreamEntropy().nextLong(), expected , 3));
         }
         

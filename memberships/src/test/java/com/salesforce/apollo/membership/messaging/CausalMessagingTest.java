@@ -107,8 +107,8 @@ public class CausalMessagingTest {
     }
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(15000)
-                                                                                 .setFalsePositiveRate(0.000125)
+    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(500)
+                                                                                 .setFalsePositiveRate(0.0125)
                                                                                  .setBufferSize(1500);
 
     @BeforeAll
@@ -156,7 +156,7 @@ public class CausalMessagingTest {
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
-        messengers.forEach(view -> view.start(Duration.ofMillis(100), scheduler));
+        messengers.forEach(view -> view.start(Duration.ofMillis(10), scheduler));
 
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);
@@ -165,7 +165,7 @@ public class CausalMessagingTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = 300;
+        int rounds = 30;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch round = new CountDownLatch(messengers.size());
             for (Receiver receiver : receivers.values()) {
