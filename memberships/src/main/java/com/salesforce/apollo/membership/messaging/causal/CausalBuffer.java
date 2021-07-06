@@ -89,6 +89,23 @@ public class CausalBuffer {
     private record Stream(Digest from, IntCausalClock clock, Digest establishing,
                           TreeMap<StampedMessage, StampedMessage> queue, Lock lock) {
 
+        @Override
+        public int hashCode() {
+            return from.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof Stream)) {
+                return false;
+            }
+            Stream other = (Stream) obj;
+            return from.equals(other.from);
+        }
+
         List<StampedMessage> observe(StampedClockValueComparator<Integer, IntStampedClock> comparator,
                                      List<StampedMessage> sent) {
             return locked(() -> {
@@ -118,8 +135,24 @@ public class CausalBuffer {
             }, lock);
         }
 
-        void updateAge() {
-            locked(() -> queue.values().forEach(s -> s.message().setAge(s.message().getAge() + 1)), lock);
+        int updateAge(int maxAge) {
+            return locked(() -> {
+                int purged = 0;
+                var trav = queue.entrySet().iterator();
+                while (trav.hasNext()) {
+                    var next = trav.next().getValue();
+                    if (next.message.getAge() >= maxAge) {
+                        trav.remove();
+                        log.trace("GC'ing: {} from: {} as buffer too full: {} > {} on: {}", next.hash, next.from,
+                                  maxAge);
+                        purged++;
+                    } else {
+                        next.message().setAge(next.message().getAge() + 1);
+                    }
+                }
+                queue.values().forEach(s -> s.message().setAge(s.message().getAge() + 1));
+                return purged;
+            }, lock);
         }
 
         void forReconcilliation(DigestBloomFilter biff) {
@@ -129,7 +162,7 @@ public class CausalBuffer {
         int purgeTheAged(int maxAge, Digest member) {
             return locked(() -> {
                 if (queue.size() > 0) {
-                    log.info("backlog: {} for: {} on: {}", queue.size(), from, member);
+                    log.trace("backlog: {} for: {} on: {}", queue.size(), from, member);
                 }
                 int purged = 0;
                 var trav = queue.entrySet().iterator();
@@ -138,6 +171,7 @@ public class CausalBuffer {
                     if (m.message.getAge() > maxAge) {
                         purged++;
                         trav.remove();
+                        log.trace("GC'ing: {} from: {} as buffer too full: {} > {} on: {}", m.hash, m.from, maxAge);
                     }
                 }
                 return purged;
@@ -155,6 +189,7 @@ public class CausalBuffer {
     private static final Logger        log            = LoggerFactory.getLogger(CausalBuffer.class);
 
     private final IntCausalClock                                        clock;
+    private final StampedClockValueComparator<Integer, IntStampedClock> comparator;
     private final ConcurrentMap<Digest, StampedMessage>                 delivered         = new ConcurrentHashMap<>();
     private final Consumer<Map<Digest, List<StampedMessage>>>           delivery;
     private final Semaphore                                             garbageCollecting = new Semaphore(1);
@@ -165,7 +200,6 @@ public class CausalBuffer {
     private final AtomicInteger                                         sequenceNumber    = new AtomicInteger();
     private final AtomicInteger                                         size              = new AtomicInteger();
     private final ConcurrentMap<Digest, Stream>                         streams           = new ConcurrentHashMap<>();
-    private final StampedClockValueComparator<Integer, IntStampedClock> comparator;
 
     public CausalBuffer(Parameters parameters, Consumer<Map<Digest, List<StampedMessage>>> delivery) {
         this.params = parameters;
@@ -251,8 +285,19 @@ public class CausalBuffer {
 
     public void tick() {
         round.incrementAndGet();
-        streams.values().forEach(stream -> stream.updateAge());
-        delivered.values().forEach(r -> r.message().setAge(r.message().getAge() + 1));
+        streams.values().forEach(stream -> size.addAndGet(-stream.updateAge(maxAge)));
+        var trav = delivered.entrySet().iterator();
+        while (trav.hasNext()) {
+            var next = trav.next().getValue();
+            if (next.message.getAge() >= maxAge) {
+                log.trace("GC'ing: {} from: {} as buffer too full: {} > {} on: {}", next.hash, next.from, size.get(),
+                          params.bufferSize, params.member);
+                trav.remove();
+                size.decrementAndGet();
+            } else {
+                next.message.setAge(next.message.getAge() + 1);
+            }
+        }
     }
 
     private boolean dup(Digest hash, int age) {
@@ -296,8 +341,8 @@ public class CausalBuffer {
                 }
                 int freed = bufferSize - currentSize;
                 if (freed > 0) {
-                    log.info("Buffer freed: {} after compact for: {} on: {} ", freed, params.context.getId(),
-                              params.member);
+                    log.debug("Buffer freed: {} after compact for: {} on: {} ", freed, params.context.getId(),
+                             params.member);
                 }
             } finally {
                 garbageCollecting.release();
@@ -403,7 +448,7 @@ public class CausalBuffer {
     }
 
     private void purgeTheAged() {
-        log.info("Purging the aged of: {} buffer size: {} delivered: {} on: {}", params.context.getId(), size.get(),
+        log.debug("Purging the aged of: {} buffer size: {} delivered: {} on: {}", params.context.getId(), size.get(),
                  delivered.size(), params.member);
         Queue<StampedMessage> candidates = new PriorityQueue<>(Collections.reverseOrder((a,
                                                                                          b) -> Integer.compare(a.message.getAge(),
@@ -429,7 +474,7 @@ public class CausalBuffer {
     }
 
     private long seedFor(Digest id) {
-        DigestHasher hasher = new DigestHasher(id, 0); 
+        DigestHasher hasher = new DigestHasher(id, 0);
         hasher.processAdditional(params.context.getId());
         return hasher.identityHash();
     }
