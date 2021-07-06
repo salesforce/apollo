@@ -12,7 +12,6 @@ import java.nio.ByteBuffer;
 import java.util.stream.IntStream;
 
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.utils.BUZ;
 
 /**
  * @author hal.hildebrand
@@ -190,7 +189,7 @@ public abstract class Hash<M> {
 
         Hasher<M> process(M key, long seed) {
             h1 = seed;
-            h2 = seed;
+            h2 = Long.reverse(seed);
             length = 0;
             processIt(key);
             makeHash();
@@ -444,12 +443,12 @@ public abstract class Hash<M> {
     public Hash(long seed, int n, double p) {
         m = optimalM(n, p);
         k = optimalK(n, m);
-        this.seed = BUZ.buzhash(seed);
+        this.seed = seed;
         hasher = newHasher();
     }
 
     public Hash(long seed, int k, int m) {
-        this.seed = BUZ.buzhash(seed);
+        this.seed = seed;
         this.k = k;
         this.m = m;
         hasher = newHasher();

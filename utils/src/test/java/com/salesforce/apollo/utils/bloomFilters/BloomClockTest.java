@@ -27,7 +27,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
  * @author hal.hildebrand
  */
 public class BloomClockTest {
-    private static final long SEED = -772069189919430497L;
 
     record Event(BloomClock clockValue, Digest hash, int timestamp) {}
 
@@ -82,7 +81,7 @@ public class BloomClockTest {
         AtomicInteger clock = new AtomicInteger();
         int K = 3;
         int M = 200;
-        BloomClock startState = new BloomClock(SEED, K, M);
+        BloomClock startState = new BloomClock(K, M);
         Comparator<ClockValue> comparator = new ClockValueComparator(Hash.fpp(K, M, 5));
 
         Node a = new Node(new HashMap<>(), new AtomicReference<>(startState.clone()), comparator);
@@ -92,7 +91,7 @@ public class BloomClockTest {
         Node e = new Node(new HashMap<>(), new AtomicReference<>(startState.clone()), comparator);
 
         final Event t1, t2, t3, t4, t5;
-        Random entropy = new Random(SEED);
+        Random entropy = new Random(0x1638);
 
         // Node A originates event at t1
         t1 = newEvent(a, digest(entropy), clock.incrementAndGet());
@@ -169,7 +168,7 @@ public class BloomClockTest {
         assertEquals(0, comparator.compare(a, c));
         // D occurs after A
         assertEquals(1, comparator.compare(d, a));
-        
+
 //        System.out.println();
 //        System.out.println("HITS: " + Hash.HITS);
 //        System.out.println("MISSES: " + Hash.MISSES);

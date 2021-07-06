@@ -21,6 +21,7 @@ import com.salesfoce.apollo.utils.proto.BloomeClock;
 import com.salesfoce.apollo.utils.proto.Clock;
 import com.salesfoce.apollo.utils.proto.StampedBloomeClock;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.utils.BUZ;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.Hash;
 
@@ -161,8 +162,8 @@ public class BloomClock implements ClockValue {
         return counts.length;
     }
 
-    static Hash<Digest> newHash(long seed, int k, int m) {
-        return new Hash<>(seed, k, m) {
+    static Hash<Digest> newHash(int k, int m) {
+        return new Hash<>(BUZ.buzhash(0), k, m) {
             @Override
             protected Hasher<Digest> newHasher() {
                 return new DigestHasher();
@@ -177,7 +178,7 @@ public class BloomClock implements ClockValue {
     private long prefix = 0;
 
     public BloomClock() {
-        this(DEFAULT_GOOD_SEED, DEFAULT_K, DEFAULT_M);
+        this(DEFAULT_K, DEFAULT_M);
     }
 
     public BloomClock(BloomClock clock, byte[] initialValues) {
@@ -185,36 +186,31 @@ public class BloomClock implements ClockValue {
     }
 
     public BloomClock(BloomeClock clock) {
-        this(clock.getPrefix(), newHash(clock.getSeed(), clock.getK(), clock.getCounts().size()),
-             clock.getCounts().toByteArray());
+        this(clock.getPrefix(), newHash(clock.getK(), clock.getCounts().size()), clock.getCounts().toByteArray());
     }
 
     public BloomClock(int[] initialValues) {
         this(DEFAULT_GOOD_SEED, initialValues, DEFAULT_K);
     }
 
-    public BloomClock(long seed) {
-        this(seed, DEFAULT_K, DEFAULT_M);
-    }
-
-    public BloomClock(long seed, byte[] counts, int k) {
+    public BloomClock(byte[] counts, int k) {
         this.counts = counts;
-        this.hash = newHash(seed, k, counts.length);
+        this.hash = newHash(k, counts.length);
     }
 
-    public BloomClock(long seed, Clock clock, int k, int m) {
+    public BloomClock(Clock clock, int k, int m) {
         byte[] initialCounts = clock.getCounts().toByteArray();
         if (m(initialCounts) != m) {
             throw new IllegalArgumentException("invalid counts.length: " + m(initialCounts) + " expected: " + m);
         }
         prefix = clock.getPrefix();
         counts = initialCounts;
-        hash = newHash(seed, k, m);
+        hash = newHash(k, m);
     }
 
-    public BloomClock(long seed, int k, int m) {
+    public BloomClock(int k, int m) {
         counts = new byte[m];
-        hash = newHash(seed, k, m);
+        hash = newHash(k, m);
     }
 
     /**
@@ -228,7 +224,7 @@ public class BloomClock implements ClockValue {
             throw new IllegalArgumentException("initial values contain values > " + MASK);
         }
         counts = new byte[initialValues.length];
-        hash = newHash(seed, k, initialValues.length);
+        hash = newHash(k, initialValues.length);
         int min = 0;
         prefix += min;
         if (IntStream.of(initialValues).map(i -> i - min).max().getAsInt() > MASK) {
@@ -240,8 +236,7 @@ public class BloomClock implements ClockValue {
     }
 
     public BloomClock(StampedBloomeClock clock) {
-        this(clock.getClock().getPrefix(),
-             newHash(clock.getClock().getSeed(), clock.getClock().getK(), clock.getClock().getCounts().size()),
+        this(clock.getClock().getPrefix(), newHash(clock.getClock().getK(), clock.getClock().getCounts().size()),
              clock.getClock().getCounts().toByteArray());
     }
 
@@ -405,8 +400,7 @@ public class BloomClock implements ClockValue {
     }
 
     public BloomeClock toBloomeClock() {
-        return BloomeClock.newBuilder().setPrefix(prefix).setSeed(hash.seed).setK(hash.k)
-                          .setCounts(ByteString.copyFrom(counts)).build();
+        return BloomeClock.newBuilder().setPrefix(prefix).setK(hash.k).setCounts(ByteString.copyFrom(counts)).build();
     }
 
     @Override

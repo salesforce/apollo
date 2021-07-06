@@ -144,7 +144,7 @@ public class CausalMessagingTest {
         parameters.setContext(context);
         members.forEach(m -> context.activate(m));
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(100);
         Executor commExec = Executors.newCachedThreadPool();
 
         messengers = members.stream().map(node -> {
@@ -165,7 +165,7 @@ public class CausalMessagingTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = 30;
+        int rounds = 300;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch round = new CountDownLatch(messengers.size());
             for (Receiver receiver : receivers.values()) {

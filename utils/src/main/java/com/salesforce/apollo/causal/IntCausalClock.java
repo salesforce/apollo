@@ -52,10 +52,10 @@ public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Loc
     }
 
     @Override
-    public Integer observe(Digest digest) {
+    public StampedClockValue<Integer, IntStampedClock> observe(Digest digest) {
         return locked(() -> {
             clock.add(digest);
-            return instant();
+            return new IntStampedClockValue(clock.toBloomClockValue(), sequenceNumber.get());
         }, lock);
     }
 
@@ -71,11 +71,9 @@ public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Loc
 
     @Override
     public IntStampedClock stamp(Digest digest) {
-        return locked(() -> {
-            clock.add(digest);
-            int seq = sequenceNumber.incrementAndGet();
-            return IntStampedClock.newBuilder().setStamp(seq).setClock(clock.toClock()).build();
-        }, lock);
+        return locked(() -> IntStampedClock.newBuilder().setStamp(sequenceNumber.incrementAndGet())
+                                           .setClock(clock.toClock()).build(),
+                      lock);
     }
 
     @Override

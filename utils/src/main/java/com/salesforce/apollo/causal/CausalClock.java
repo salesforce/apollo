@@ -23,7 +23,7 @@ public interface CausalClock<T extends Comparable<T>, S> extends StampedClockVal
 
     StampedClockValue<T, S> current();
 
-    T observe(Digest digest);
+    StampedClockValue<T, S> observe(Digest digest);
 
     void reset();
 }

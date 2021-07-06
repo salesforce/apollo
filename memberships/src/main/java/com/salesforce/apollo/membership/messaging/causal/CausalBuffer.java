@@ -49,7 +49,6 @@ import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.Hash;
-import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
 
 /**
  * @author hal.hildebrand
@@ -87,8 +86,7 @@ public class CausalBuffer {
         }
     }
 
-    private record Stream(Digest from, IntCausalClock clock, Digest establishing,
-                          TreeMap<StampedMessage, StampedMessage> queue, Lock lock) {
+    private record Stream(Digest from, IntCausalClock clock, TreeMap<StampedMessage, StampedMessage> queue, Lock lock) {
 
         @Override
         public int hashCode() {
@@ -107,25 +105,24 @@ public class CausalBuffer {
             return from.equals(other.from);
         }
 
-        List<StampedMessage> observe(StampedClockValueComparator<Integer, IntStampedClock> comparator,
-                                     List<StampedMessage> sent) {
+        Delivered observe(StampedClockValueComparator<Integer, IntStampedClock> comparator, StampedMessage sent) {
             return locked(() -> {
-                clock.observeAll(sent.stream().map(e -> e.hash).filter(d -> !d.equals(establishing)).toList());
+                var current = clock.observe(sent.hash);
                 List<StampedMessage> ready = new ArrayList<>();
                 var trav = queue.entrySet().iterator();
                 while (trav.hasNext()) {
                     var entry = trav.next();
                     var next = entry.getValue();
-                    int compared = comparator.compare(next.clock, clock);
+                    int compared = comparator.compare(next.clock, current);
                     if (compared >= 0) {
                         ready.add(next);
-                        clock.merge(next.clock);
+                        current = clock.merge(next.clock);
                         trav.remove();
                     } else {
                         break;
                     }
                 }
-                return ready;
+                return new Delivered(this, ready);
             }, lock);
         }
 
@@ -205,8 +202,8 @@ public class CausalBuffer {
 
     public CausalBuffer(Parameters parameters, Consumer<Map<Digest, List<StampedMessage>>> delivery) {
         this.params = parameters;
-        this.clock = new IntCausalClock(new BloomClock(seedFor(params.member.getId()), params.clockK, params.clockM),
-                                        sequenceNumber, new ReentrantLock());
+        this.clock = new IntCausalClock(new BloomClock(params.clockK, params.clockM), sequenceNumber,
+                                        new ReentrantLock());
         this.delivery = delivery;
         this.maxAge = params.context.timeToLive();
         comparator = new StampedClockValueComparator<>(Hash.fpp(params.clockK, params.clockM, params.eventWindow));
@@ -222,6 +219,10 @@ public class CausalBuffer {
         clock.reset();
     }
 
+    record StreamedSM(Stream stream, StampedMessage sm) {}
+
+    record Delivered(Stream stream, List<StampedMessage> delivered) {}
+
     public void deliver(List<CausalMessage> messages) {
         if (messages.size() == 0) {
             return;
@@ -231,10 +232,15 @@ public class CausalBuffer {
                         .map(cm -> new StampedMessage(new Digest(cm.getSource()), new Digest(cm.getHash()),
                                                       IntStampedClockValue.from(cm.getClock()),
                                                       CausalMessage.newBuilder(cm)))
-                        .filter(f -> !dup(f.hash, f.message.getAge()))
-                        .collect(Collectors.groupingBy(sm -> streamOf(sm))).entrySet().stream()
-                        .flatMap(e -> e.getValue().stream().sorted().map(sm -> process(sm, e.getKey())))
-                        .filter(e -> e != null).peek(sm -> size.incrementAndGet()).toList());
+                        .filter(f -> !dup(f.hash, f.message.getAge())).map(sm -> process(sm, streamOf(sm)))
+                        .filter(e -> e != null).peek(sm -> size.incrementAndGet())
+                        .peek(ssm -> delivered.put(ssm.sm.hash(), ssm.sm))
+                        .map(ssm -> streams.values().stream().parallel()
+                                           .map(stream -> stream.observe(comparator, ssm.sm)))
+                        .flatMap(e -> e).filter(e -> e != null)
+                        .collect(Collectors.groupingBy(delivered -> delivered.stream.from, () -> new HashMap<>(),
+                                                       Collectors.flatMapping(d -> d.delivered.stream().sorted(),
+                                                                              Collectors.toList()))));
         gc();
     }
 
@@ -273,11 +279,9 @@ public class CausalBuffer {
                                                      .setClock(stamp).setContent(content).setHash(hash.toDigeste())
                                                      .setSignature(sig);
         StampedMessage stamped = new StampedMessage(member.getId(), hash, IntStampedClockValue.from(stamp), message);
-        delivered.put(hash, stamped);
-        size.incrementAndGet();
         previous.set(hash);
         log.trace("Send message:{} on: {}", hash, params.member);
-        observe(Collections.singletonList(stamped));
+        deliver(Collections.singletonList(stamped.message.build()));
         return stamped;
     }
 
@@ -406,21 +410,7 @@ public class CausalBuffer {
         previous.set(new Digest(params.digestAlgorithm, buff));
     }
 
-    private void observe(List<StampedMessage> sent) {
-        if (sent.isEmpty()) {
-            return;
-        }
-        if (log.isTraceEnabled()) {
-            log.trace("Observing: {} on: {}", sent.stream().map(e -> e.hash).toList(), params.member);
-        }
-        Map<Digest, List<StampedMessage>> mail = new HashMap<>();
-        streams.values().forEach(stream -> {
-            var msgs = stream.observe(comparator, sent).stream().peek(r -> delivered.put(r.hash(), r)).toList();
-            if (!msgs.isEmpty()) {
-                mail.put(stream.from(), msgs);
-            }
-        });
-
+    private void observe(Map<Digest, List<StampedMessage>> mail) {
         if (!mail.isEmpty()) {
             delivery.accept(mail);
             if (log.isTraceEnabled()) {
@@ -431,7 +421,7 @@ public class CausalBuffer {
         }
     }
 
-    private StampedMessage process(StampedMessage candidate, Stream stream) {
+    private StreamedSM process(StampedMessage candidate, Stream stream) {
         StampedMessage found = locked(() -> stream.queue().get(candidate), stream.lock);
         if (found == null) {
             if (comparator.compare(candidate.clock, clock) > 0) {
@@ -440,7 +430,7 @@ public class CausalBuffer {
             }
             if (verify(candidate.message, params.context.getActiveMember(candidate.from))) {
                 locked(() -> stream.queue().put(candidate, candidate), stream.lock);
-                return candidate;
+                return new StreamedSM(stream, candidate);
             } else {
                 log.debug("Rejecting: {} could not verify from: {} on: {}", candidate.hash, stream.from(),
                           params.member);
@@ -489,12 +479,6 @@ public class CausalBuffer {
         }
     }
 
-    private long seedFor(Digest id) {
-        DigestHasher hasher = new DigestHasher(id, 0);
-        hasher.processAdditional(params.context.getId());
-        return hasher.identityHash();
-    }
-
     private Stream streamOf(StampedMessage candidate) {
         return streams.compute(candidate.from, (k, v) -> {
             if (v == null || candidate.message.getStreamReset()) {
@@ -502,10 +486,10 @@ public class CausalBuffer {
                     log.warn("Reset stream: {} event:{} on: {}", candidate.from, candidate.hash, params.member);
                 }
                 return new Stream(candidate.from,
-                                  new IntCausalClock(new BloomClock(seedFor(candidate.from), candidate.clock.toClock(),
-                                                                    params.clockK, params.clockM),
+                                  new IntCausalClock(new BloomClock(candidate.clock.toClock(), params.clockK,
+                                                                    params.clockM),
                                                      new AtomicInteger(candidate.clock.stamp()), new ReentrantLock()),
-                                  candidate.hash, new TreeMap<>(), new ReentrantLock());
+                                  new TreeMap<>(), new ReentrantLock());
             }
             return v;
         });

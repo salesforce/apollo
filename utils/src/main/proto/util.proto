@@ -86,10 +86,9 @@ message LongStampedClock {
 }
 
 message BloomeClock {
-    uint64 prefix = 1;
-    uint64 seed = 2;
-    int32 k = 3;
-    bytes counts = 4;
+    uint64 prefix = 1; 
+    int32 k = 2;
+    bytes counts = 3;
 }
 
 message StampedBloomeClock {
