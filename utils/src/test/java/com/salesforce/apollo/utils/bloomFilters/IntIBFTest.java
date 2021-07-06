@@ -90,8 +90,7 @@ public class IntIBFTest {
         Arrays.sort(b1sb2);
         Arrays.sort(b2sb1);
 
-        IBF<Integer> res = b1.subtract(b2);
-        Decode<Integer> diff = b1.decode(res);
+        Decode<Integer> diff = b1.subtract(b2).decode();
         assertNotNull(diff);
         assertEquals(b1sb2.length, diff.added().size(), "invalid added");
         assertEquals(b2sb1.length, diff.missing().size(), "invalid missing");

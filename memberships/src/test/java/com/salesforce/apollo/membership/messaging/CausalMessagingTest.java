@@ -52,7 +52,6 @@ import com.salesforce.apollo.membership.messaging.causal.CausalMessenger;
 import com.salesforce.apollo.membership.messaging.causal.CausalMessenger.MessageHandler;
 import com.salesforce.apollo.membership.messaging.causal.Parameters;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.utils.bc.ClockValueComparator;
 
 /**
  * @author hal.hildebrand
@@ -108,10 +107,9 @@ public class CausalMessagingTest {
     }
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(500)
-                                                                                 .setFalsePositiveRate(0.125)
-                                                                                 .setComparator(new ClockValueComparator(0.1))
-                                                                                 .setBufferSize(700);
+    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(15000)
+                                                                                 .setFalsePositiveRate(0.000125)
+                                                                                 .setBufferSize(1500);
 
     @BeforeAll
     public static void beforeClass() {
@@ -145,16 +143,16 @@ public class CausalMessagingTest {
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.01, members.size());
         parameters.setContext(context);
         members.forEach(m -> context.activate(m));
-        
-        // 3 threads
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-        Executor executor = Executors.newFixedThreadPool(2);
+
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+        Executor commExec = Executors.newCachedThreadPool();
 
         messengers = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
+            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), commExec);
             communications.add(comms);
             comms.start();
-            return new CausalMessenger(parameters.setMember(node).setExecutor(executor).build(), comms);
+            return new CausalMessenger(parameters.setMember(node).setExecutor(ForkJoinPool.commonPool()).build(),
+                                       comms);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");

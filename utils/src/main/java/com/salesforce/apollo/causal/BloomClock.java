@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.utils.bc;
+package com.salesforce.apollo.causal;
+
+import static java.util.stream.IntStream.range;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -55,12 +57,104 @@ public class BloomClock implements ClockValue {
 
     private final static Logger log = LoggerFactory.getLogger(BloomClock.class);
 
+    public static String print(BloomClockValue clock) {
+        StringBuilder buff = new StringBuilder();
+        if (Long.compareUnsigned(clock.prefix(), 0) > 0) {
+            buff.append("(");
+            buff.append(Long.toUnsignedString(clock.prefix()));
+            buff.append(")");
+        }
+        buff.append("[");
+        boolean comma = false;
+        byte[] counts = clock.counts();
+        for (int i = 0; i < m(counts); i++) {
+            if (comma) {
+                buff.append(',');
+            }
+            buff.append(count(i, counts));
+            comma = true;
+        }
+        buff.append("]");
+        return buff.toString();
+    }
+
     public static boolean validate(int m, byte[] counts) {
         return m == counts.length;
     }
 
+    static Comparison compareWith(long abcPrefix, byte[] abcCounts, long bbcPrefix, byte[] bbcCounts) {
+        int sumA = 0;
+        int sumB = 0;
+        int lessThan = 0;
+        int greaterThan = 0;
+
+        // only one is > 0 if any
+        int aBias = 0;
+        int bBias = 0;
+
+        int prefixCompare = Long.compareUnsigned(abcPrefix, bbcPrefix);
+        int m = m(abcCounts);
+        if (prefixCompare < 0) {
+            long preDiff = bbcPrefix - abcPrefix;
+            if (Long.compareUnsigned(preDiff, MASK) > 0) {
+                return new Comparison(1, 0, MASK * m);
+            }
+            bBias = (int) (preDiff & MASK);
+        } else if (prefixCompare > 0) {
+            long preDiff = abcPrefix - bbcPrefix;
+            if (Long.compareUnsigned(preDiff, MASK) > 0) {
+                return new Comparison(-1, MASK * m, 0);
+            }
+            aBias = (int) (preDiff & MASK);
+        }
+
+        for (int i = 0; i < m; i++) {
+            int a = count(i, abcCounts) + aBias;
+            sumA += a;
+            int b = count(i, bbcCounts) + bBias;
+            sumB += b;
+            int diff = b - a;
+            if (diff > 0) {
+                lessThan++;
+            } else if (diff < 0) {
+                greaterThan++;
+            }
+            if (greaterThan != 0 && lessThan != 0) {
+                int biasA = aBias;
+                int biasB = bBias;
+                return new Comparison(0, sumA + range(i + 1, m).map(x -> x + biasA).sum(),
+                                      sumB + range(i + 1, m).map(x -> x + biasB).sum());
+            }
+        }
+
+        if (greaterThan != 0) {
+            return new Comparison(1, sumA, sumB);
+        }
+        return lessThan == 0 ? new Comparison(0, sumA, sumB) : new Comparison(-1, sumA, sumB);
+    }
+
     static int count(int index, byte[] counts) {
         return counts[index] & MASK;
+    }
+
+    static double falsePositiveRate(Comparison c, int m) {
+        double x = Math.min(c.sumA(), c.sumB());
+        double y = Math.max(c.sumA(), c.sumB());
+        return Math.pow(1 - Math.pow(1.0 - (1.0 / m), x), y);
+    }
+
+    static ComparisonResult happenedBefore(long abcPrefix, byte[] abcCounts, long bbcPrefix, byte[] bbcCounts) {
+        if (abcCounts.length != bbcCounts.length) {
+            throw new IllegalArgumentException("Cannot compare as this clock has a different count size than the specified clock");
+        }
+        Comparison c = compareWith(abcPrefix, abcCounts, bbcPrefix, bbcCounts);
+        int m = m(abcCounts);
+        return switch (c.compared()) {
+        case 0 -> new ComparisonResult(0, falsePositiveRate(c, m));
+        case 1 -> new ComparisonResult(1, falsePositiveRate(c, m));
+        case -1 -> new ComparisonResult(-1, falsePositiveRate(c, m));
+        default -> throw new IllegalArgumentException("Unexpected comparison value: " + c.compared());
+        };
     }
 
     static int m(byte[] counts) {
@@ -76,9 +170,11 @@ public class BloomClock implements ClockValue {
         };
     }
 
-    private final byte[]       counts;    // two cells per byte, giving 4 bits per cell
+    private final byte[] counts; // two cells per byte, giving 4 bits per cell
+
     private final Hash<Digest> hash;
-    private long               prefix = 0;
+
+    private long prefix = 0;
 
     public BloomClock() {
         this(DEFAULT_GOOD_SEED, DEFAULT_K, DEFAULT_M);
@@ -108,8 +204,8 @@ public class BloomClock implements ClockValue {
 
     public BloomClock(long seed, Clock clock, int k, int m) {
         byte[] initialCounts = clock.getCounts().toByteArray();
-        if (initialCounts.length != m) {
-            throw new IllegalArgumentException("invalid counts.length: " + initialCounts.length + " expected: " + m);
+        if (m(initialCounts) != m) {
+            throw new IllegalArgumentException("invalid counts.length: " + m(initialCounts) + " expected: " + m);
         }
         prefix = clock.getPrefix();
         counts = initialCounts;
@@ -183,7 +279,8 @@ public class BloomClock implements ClockValue {
 
     @Override
     public ComparisonResult compareTo(ClockValue b) {
-        return current().compareTo(b);
+        BloomClockValue bbc = b.toBloomClockValue();
+        return happenedBefore(prefix, counts, bbc.prefix(), bbc.counts());
     }
 
     /**
@@ -203,6 +300,10 @@ public class BloomClock implements ClockValue {
         }
         BloomClock other = (BloomClock) obj;
         return Arrays.equals(counts, other.counts) && prefix == other.prefix;
+    }
+
+    public double fpp(int n) {
+        return hash.fpp(n);
     }
 
     public long getPrefix() {
@@ -281,6 +382,13 @@ public class BloomClock implements ClockValue {
             rollPrefix();
         }
         return this;
+    }
+
+    public void reset() {
+        for (int i = 0; i < counts.length; i++) {
+            counts[i] = 0;
+        }
+        prefix = 0;
     }
 
     public int sum() {

@@ -9,6 +9,7 @@ package com.salesforce.apollo.utils.bloomFilters;
 import static com.salesforce.apollo.utils.bloomFilters.Primes.PRIMES;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -18,6 +19,9 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public abstract class Hash<M> {
+//    public static int HITS = 0;
+//    public static int MISSES = 0;
+
     public static class BytesHasher extends Hasher<byte[]> {
 
         @Override
@@ -67,9 +71,9 @@ public abstract class Hash<M> {
 
         int length;
 
-        public Hasher<M> establish(M key, long seed) {
+        public Hasher<M> process(M key, long seed) {
             h1 = seed;
-            h2 = seed;
+            h2 = Long.reverse(seed);
             length = 0;
             processIt(key);
             makeHash();
@@ -84,19 +88,17 @@ public abstract class Hash<M> {
          * Generate K unique hash locations for M elements, using the seed.
          */
         public int[] hashes(int k, M key, int m, long seed) {
-            establish(key, seed);
+            process(key, seed);
             long combinedHash = h1;
             int[] hashes = new int[k];
             int attempts = 0;
             int i = 0;
             int prime = 0;
             while (i < k) {
-                if (attempts++ > MAX_HASHING_ATTEMPTS) {
+                if (attempts++ > MAX_HASHING_ATTEMPTS) { // limit the pain
                     throwMax(k, m, hashes);
                 }
-                int hash = (int) ((combinedHash & Long.MAX_VALUE) % m);
-                // see if we have generated this before - mod M when M is small or even, or
-                // common factors in keys, etc
+                int hash = (int) ((combinedHash ^ (combinedHash >> 32)) & Integer.MAX_VALUE) % m;
                 boolean found = false;
                 for (int j = 0; j < i; j++) {
                     if (hashes[j] == hash) {
@@ -106,27 +108,32 @@ public abstract class Hash<M> {
                 }
                 if (!found) {
                     hashes[i++] = hash;
+//                    HITS++;
                 } else {
-                    // Make the next hash candidate odd by adding primes
                     h2 += PRIMES[prime];
                     prime = ++prime % PRIMES.length;
+//                    MISSES++;
                 }
                 combinedHash += h2;
             }
             return hashes;
         }
 
-        public int identityHash(M key, long seed) {
-            establish(key, seed);
-            return (int) (h1 ^ ((h1 >> 32) & Integer.MAX_VALUE));
+        public long identityHash(M key, long seed) {
+            process(key, seed);
+            return h1;
         }
 
-        public IntStream locations(int k, M key, int m, long seed) {
+        IntStream locations(int k, M key, int m, long seed) {
             return IntStream.of(hashes(k, key, m, seed));
         }
 
-        public void process(byte[] key) {
+        void process(byte[] key) {
             ByteBuffer buff = ByteBuffer.wrap(key);
+            process(buff);
+        }
+
+        private void process(ByteBuffer buff) {
             while (buff.remaining() >= 16) {
                 bmix64(buff.getLong(), buff.getLong());
                 length += CHUNK_SIZE;
@@ -136,7 +143,7 @@ public abstract class Hash<M> {
             }
         }
 
-        public void process(Digest key) {
+        void process(Digest key) {
             long[] hash = key.getLongs();
             for (int i = 0; i < hash.length / 2; i += 2) {
                 bmix64(hash[i], hash[i + 1]);
@@ -147,24 +154,23 @@ public abstract class Hash<M> {
             }
         }
 
-        public void process(int i) {
-            long k1 = ((long) (i & 0xFF000000)) << 24;
-            k1 ^= ((long) (i & 0x00FF0000)) << 16;
-            k1 ^= ((long) (i & 0x0000FF00)) << 8;
-            k1 ^= (long) (i & 0x000000FF);
-
-            h1 ^= mixK1(k1);
-            h2 ^= mixK2(0);
-            length += 4;
+        void process(int i) {
+            int reversed = Integer.reverse(i);
+            ByteBuffer bb = ByteBuffer.wrap(new byte[2 * 8]);
+            bb.putInt(i);
+            bb.putInt(i + PRIMES[(i & Integer.MAX_VALUE) % PRIMES.length]);
+            bb.putInt(reversed);
+            bb.putInt(reversed + PRIMES[((i + 1) & Integer.MAX_VALUE) % PRIMES.length]);
+            bb.flip();
+            process(bb);
         }
 
-        public void process(long l) {
-            h1 ^= mixK1(l);
-            h2 ^= mixK2(0);
-            length += 8;
+        void process(long l) {
+            bmix64(l, Long.reverse(l));
+            length += CHUNK_SIZE;
         }
 
-        public void process(String key) {
+        void process(String key) {
             process(key.getBytes());
         }
 
@@ -309,6 +315,36 @@ public abstract class Hash<M> {
 
     }
 
+    public static final long MERSENNE_31 = (long) (Math.pow(2, 32) - 1); // 2147483647
+
+    /**
+     * @param k - the number of hashes
+     * @param m - the number of entries, bits or counters that K hashes to
+     * @param n - the number of elements in the set
+     * 
+     * @return the false positive probability for the specified number of hashes K,
+     *         population M entries and N elements
+     */
+    public static double fpp(int k, int m, int n) {
+        double Kd = (double) k;
+        double Md = (double) m;
+        double Nd = (double) n;
+        return Math.pow(1 - Math.exp(-Kd / (Md / Nd)), Kd);
+    }
+
+    /**
+     * @param m   - the number of entries (bits)
+     * @param k   - the number of hahes
+     * @param fpp - the false positive probability
+     * @return the number of elements that a bloom filter can hold with M entries
+     *         (bits) K hashes and the specified false positive rate
+     */
+    public static int n(int m, int k, double fpp) {
+        double Kd = (double) k;
+        double Md = (double) m;
+        return (int) Math.ceil(Md / (-Kd / Math.log(1 - Math.exp(Math.log(fpp) / Kd))));
+    }
+
     /**
      * Computes the optimal k (number of hashes per element inserted in Bloom
      * filter), given the expected insertions and total number of bits in the Bloom
@@ -373,6 +409,10 @@ public abstract class Hash<M> {
         };
     }
 
+    public double fpp(int n) {
+        return fpp(k, m, n);
+    }
+
     public int getK() {
         return k;
     }
@@ -389,7 +429,7 @@ public abstract class Hash<M> {
         return hasher.hashes(k, key, m, seed);
     }
 
-    public int identityHash(M key) {
+    public long identityHash(M key) {
         return hasher.identityHash(key, seed);
     }
 

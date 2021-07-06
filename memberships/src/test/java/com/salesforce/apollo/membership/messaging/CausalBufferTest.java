@@ -10,13 +10,11 @@ import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +31,6 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.causal.CausalBuffer;
 import com.salesforce.apollo.membership.messaging.causal.CausalBuffer.StampedMessage;
 import com.salesforce.apollo.membership.messaging.causal.Parameters;
-import com.salesforce.apollo.utils.bc.ClockValueComparator;
 
 /**
  * @author hal.hildebrand
@@ -44,7 +41,6 @@ public class CausalBufferTest {
     private SigningMember                               memberA;
     private SigningMember                               memberB;
     private Context<Member>                             context;
-    private Cuckoo                                      clock;
     private Parameters.Builder                          parameters;
     private List<Map<Digest, List<StampedMessage>>>     aDelivered;
     private List<Map<Digest, List<StampedMessage>>>     bDelivered;
@@ -56,26 +52,6 @@ public class CausalBufferTest {
     private CausalBuffer                                bufferA;
     private CausalBuffer                                bufferB;
 
-    private static class Cuckoo extends Clock {
-        long instant = 0;
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneId.systemDefault();
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return null;
-        }
-
-        @Override
-        public Instant instant() {
-            return Instant.ofEpochMilli(instant);
-        }
-
-    }
-
     @BeforeEach
     public void setup() {
         memberA = new SigningMemberImpl(getMember(0));
@@ -84,10 +60,8 @@ public class CausalBufferTest {
         context.activate(memberA);
         context.activate(memberB);
 
-        clock = new Cuckoo();
-
-        parameters = Parameters.newBuilder().setBufferSize(4000).setComparator(new ClockValueComparator(0.01))
-                               .setWallclock(clock).setContext(context);
+        parameters = Parameters.newBuilder().setBufferSize(4000).setExecutor(ForkJoinPool.commonPool())
+                               .setContext(context);
         aDelivered = new ArrayList<>();
         bDelivered = new ArrayList<>();
         aSends = new ArrayList<>();
@@ -158,20 +132,16 @@ public class CausalBufferTest {
     }
 
     private StampedMessage sendB() {
-        clock.instant += 1;
         StampedMessage bEvent;
         bEvent = bufferB.send(content, memberB);
         bSends.add(bEvent);
-        clock.instant += 1;
         return bEvent;
     }
 
     private StampedMessage sendA() {
-        clock.instant += 1;
         StampedMessage aEvent;
         aEvent = bufferA.send(content, memberA);
         aSends.add(aEvent);
-        clock.instant += 1;
         return aEvent;
     }
 }

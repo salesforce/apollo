@@ -233,6 +233,10 @@ abstract public class BloomFilter<T> {
         return true;
     }
 
+    public double fpp(int n) {
+        return h.fpp(n);
+    }
+
     /**
      * Estimates the current population of the Bloom filter (see:
      * http://en.wikipedia.org/wiki/Bloom_filter#Approximating_the_number_of_items_in_a_Bloom_filter

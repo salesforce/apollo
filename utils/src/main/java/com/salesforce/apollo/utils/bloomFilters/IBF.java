@@ -315,36 +315,64 @@ abstract public class IBF<KeyType> implements Cloneable {
         return true;
     }
 
-    public Decode<KeyType> decode(IBF<KeyType> ibf) {
+    public Decode<KeyType> decode() {
         List<KeyType> add = new ArrayList<>();
         List<KeyType> miss = new ArrayList<>();
         Queue<Integer> pure = new LinkedList<>();
 
         for (int i = 0; i < h.m; i++) {
-            if (ibf.isPure(i))
+            if (isPure(i))
                 pure.add(i);
         }
 
         while (!pure.isEmpty()) {
             int i = pure.poll();
-            if (!ibf.isPure(i)) {
+            if (!isPure(i)) {
                 continue;
             }
-            KeyType sum = ibf.keySum(i);
+            KeyType sum = keySum(i);
             int keyHash = keyHashOf(sum);
-            int cnt = ibf.count[i];
+            int cnt = count[i];
             if (cnt > 0)
                 add.add(sum);
             else
                 miss.add(sum);
-            decode(h.m, sum, cnt, ibf, pure, keyHash);
+            decode(h.m, sum, cnt, pure, keyHash);
         }
 
         for (int i = 0; i < h.m; i++) {
-            if (ibf.hashSum[i] != 0 || ibf.count[i] != 0)
+            if (hashSum[i] != 0 || count[i] != 0)
                 return new Decode<>(false, add, miss);
         }
         return new Decode<>(true, add, miss);
+    }
+
+    public List<KeyType> list() {
+        List<KeyType> add = new ArrayList<>();
+        Queue<Integer> pure = new LinkedList<>();
+
+        for (int i = 0; i < h.m; i++) {
+            if (isPure(i))
+                pure.add(i);
+        }
+
+        while (!pure.isEmpty()) {
+            int i = pure.poll();
+            if (!isPure(i)) {
+                continue;
+            }
+            KeyType sum = keySum(i);
+            int cnt = count[i];
+            if (cnt > 0)
+                add.add(sum);
+            decode(h.m, sum, cnt, pure);
+        }
+
+        for (int i = 0; i < h.m; i++) {
+            if (hashSum[i] != 0 || count[i] != 0)
+                return add;
+        }
+        return add;
     }
 
     public <T> IBF<T> from(IBiff ibiff) {
@@ -426,12 +454,22 @@ abstract public class IBF<KeyType> implements Cloneable {
 
     abstract IBF<KeyType> cloneEmpty();
 
-    void decode(int cells, KeyType key, int count, IBF<KeyType> ibf, Queue<Integer> pure, int keyHash) {
+    void decode(int cells, KeyType key, int c, Queue<Integer> pure) {
         for (int hash : h.hashes(key)) {
-            ibf.xor(hash, key);
-            ibf.hashSum[hash] ^= keyHash;
-            ibf.count[hash] -= count;
-            if (ibf.isPure(hash)) {
+            xor(hash, key);
+            count[hash] -= c;
+            if (isPure(hash)) {
+                pure.add(hash);
+            }
+        }
+    }
+
+    void decode(int cells, KeyType key, int c, Queue<Integer> pure, int keyHash) {
+        for (int hash : h.hashes(key)) {
+            xor(hash, key);
+            hashSum[hash] ^= keyHash;
+            count[hash] -= c;
+            if (isPure(hash)) {
                 pure.add(hash);
             }
         }
@@ -444,11 +482,11 @@ abstract public class IBF<KeyType> implements Cloneable {
     }
 
     int keyHash(int cell) {
-        return h.identityHash(keySum(cell));
+        return identityHash(keySum(cell));
     }
 
     int keyHashOf(KeyType key) {
-        return h.identityHash(key);
+        return identityHash(key);
     }
 
     abstract KeyType keySum(int i);
@@ -458,4 +496,9 @@ abstract public class IBF<KeyType> implements Cloneable {
     abstract void xor(int cell, KeyType key);
 
     abstract KeyType xorResult(int i, KeyType idSum);
+
+    private int identityHash(KeyType key) {
+        long hash = h.identityHash(key);
+        return (int) (hash ^ (hash >> 32));
+    }
 }

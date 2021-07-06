@@ -30,7 +30,7 @@ public class BloomFilterTest {
     public void smoke() throws Exception {
         int max = 1_000_000;
         double target = 0.000125;
-        BloomFilter<Digest> biff = new DigestBloomFilter(666, max, target);
+        BloomFilter<Digest> biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), max, target);
 
         SecureRandom random = Utils.secureEntropy();
         List<Digest> added = new ArrayList<>();
@@ -66,9 +66,9 @@ public class BloomFilterTest {
         System.out.println();
         double failureRate = (double) failed.size() / (double) unknownSample;
         DecimalFormat format = new DecimalFormat("#.#############");
-        double targetWithSlop = target + (target * 0.05);
+        double targetWithSlop = target + (target * 0.1);
         System.out.print("Target failure rate: " + format.format(target) + " measured: " + format.format(failureRate)
-                + "; failed: " + failed.size() + " out of " + unknownSample + " random probes");
+        + "; failed: " + failed.size() + " out of " + unknownSample + " random probes");
         assertTrue(targetWithSlop >= failureRate);
     }
 }

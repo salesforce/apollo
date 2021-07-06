@@ -7,7 +7,8 @@
 package com.salesforce.apollo.utils.bloomFilters;
 
 import java.util.Collection;
-import java.util.stream.Stream;
+
+import org.apache.commons.math3.stat.Frequency;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -42,24 +43,24 @@ public abstract class StrataEstimator<T> {
 
         @Override
         IBF<Digest> newIBF(long seed) {
-            return new DigestIBF(digestAlgorithm, seed, 200);
+            return new DigestIBF(digestAlgorithm, seed, 80);
         }
 
     }
 
     public static class IntStrataEstimator extends StrataEstimator<Integer> {
 
-        public IntStrataEstimator(int seed) {
+        public IntStrataEstimator(long seed) {
             super(seed);
         }
 
-        public IntStrataEstimator(int seed, int L) {
+        public IntStrataEstimator(long seed, int L) {
             super(seed, L);
         }
 
         @Override
         IBF<Integer> newIBF(long seed) {
-            return new IntIBF(seed, 200);
+            return new IntIBF(seed, 80);
         }
 
     }
@@ -76,24 +77,23 @@ public abstract class StrataEstimator<T> {
 
         @Override
         IBF<Long> newIBF(long seed) {
-            return new LongIBF(seed, 200);
+            return new LongIBF(seed, 200, 4);
         }
 
     }
 
-    private static final int L = 32;// Is U the hash range? the ith partition covers 1/2^(i+1) of U
+    private static final int L = 32;
 
     private final IBF<T>[] ibfs;
 
-    public StrataEstimator(int seed) {
+    public StrataEstimator(long seed) {
         this(seed, L);
     }
 
     @SuppressWarnings("unchecked")
-    public StrataEstimator(int seed, int L) {
+    public StrataEstimator(long seed, int L) {
         ibfs = (IBF<T>[]) new IntIBF[L];
         for (int i = 0; i < ibfs.length; i++) {
-            // ?? how to determine the approximate size of the ibfs[i]?
             ibfs[i] = newIBF(seed);
         }
     }
@@ -104,10 +104,9 @@ public abstract class StrataEstimator<T> {
         int count = 0;
         for (int i = ibfs.length - 1; i >= -1; i--) {
             if (i < 0)
-                return count * (int) Math.pow(2, i + 1);
+                return count * (int) Math.pow(2, i + 1); 
             @SuppressWarnings("unchecked")
-            IBF<T> subResult = ibfs[i].subtract(ibfs2[i]);
-            Decode<T> decResult = ibfs[i].decode(subResult);
+            Decode<T> decResult = ibfs[i].subtract(ibfs2[i]).decode();
             if (decResult == null)
                 return count * (int) Math.pow(2, i + 1);
             count += decResult.added().size() + decResult.missing().size();
@@ -116,18 +115,15 @@ public abstract class StrataEstimator<T> {
     }
 
     public IBF<T>[] encode(Collection<T> s) {
+        Frequency frequency = new Frequency();
         s.forEach(element -> {
-            int i = Math.min(ibfs.length - 1, Integer.numberOfTrailingZeros(ibfs[0].keyHashOf(element)));
+            int hash = ibfs[0].keyHashOf(element);
+            int i = Math.min(ibfs.length - 1, Integer.numberOfTrailingZeros(hash));
+            frequency.addValue(i);
             ibfs[i].add(element);
         });
-        return ibfs;
-    }
-
-    public IBF<T>[] encode(Stream<T> s) {
-        s.forEach(element -> {
-            int i = Math.min(ibfs.length - 1, Integer.numberOfTrailingZeros(ibfs[0].keyHashOf(element)));
-            ibfs[i].add(element);
-        });
+        System.out.println();
+        System.out.println(frequency);
         return ibfs;
     }
 

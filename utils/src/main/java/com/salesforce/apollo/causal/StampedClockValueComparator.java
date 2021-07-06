@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.utils.bc;
+package com.salesforce.apollo.causal;
 
 import java.util.Comparator;
 
@@ -19,10 +19,10 @@ import java.util.Comparator;
  * requires a provided <b>false positive rate</b> (FPR). This FPR applies when
  * clock A is compared to clock B and the determination is that A proceeds B -
  * this is the equivalent of "contains" in a vanilla Bloom Filter. The
- * "proceeds", or "contains" determination is however probabalistic in that
- * there is still a possibility this is a false positive (the past is
- * "contained" in the present and future, so the FPR applies to the "proceeded"
- * relationship).
+ * "proceeds", or "contains" function is probabalistic in that there is still a
+ * possibility this is a false positive (the past is "contained" in the present
+ * and future - the past is a "member" of the set of the present, or current
+ * value of the clock - so the FPR applies to the "proceeded" relationship).
  * <p>
  *
  */
@@ -45,7 +45,7 @@ public class StampedClockValueComparator<T extends Comparable<T>, S> implements 
      * that determines the acceptable threshold of assurance that clock A proceeds
      * clock B.
      * <p>
-     * If clock A is ordered after clock B, then this function returns 1
+     * If clock A occurs after clock B, then this function returns 1
      * <p>
      * If clocks A and B are not comparable, i.e. they are "simultaneous", then this
      * function returns 0.
@@ -61,7 +61,11 @@ public class StampedClockValueComparator<T extends Comparable<T>, S> implements 
         } else if (comparison.comparison() == 0) {
             return a.instant().compareTo(b.instant());
         }
-        return comparison.fpr() <= fpr ? -1 : a.instant().compareTo(b.instant());
+        if (comparison.fpr() <= fpr) {
+            return a.instant().compareTo(b.instant());
+        } else {
+            return -1;
+        }
     }
 
 }

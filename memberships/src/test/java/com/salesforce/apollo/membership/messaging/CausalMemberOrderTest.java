@@ -45,7 +45,6 @@ import com.salesforce.apollo.membership.messaging.causal.CausalBuffer.StampedMes
 import com.salesforce.apollo.membership.messaging.causal.CausalMessenger;
 import com.salesforce.apollo.membership.messaging.causal.Parameters;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.utils.bc.ClockValueComparator;
 
 /**
  * @author hal.hildebrand
@@ -93,9 +92,7 @@ public class CausalMemberOrderTest {
     }
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final Parameters.Builder               parameters = Parameters.newBuilder()
-                                                                                 .setComparator(new ClockValueComparator(0.1))
-                                                                                 .setMaxMessages(1500)
+    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(1500)
                                                                                  .setFalsePositiveRate(0.0125)
                                                                                  .setBufferSize(1_500);
 

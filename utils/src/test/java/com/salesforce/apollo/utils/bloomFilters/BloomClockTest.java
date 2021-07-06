@@ -17,11 +17,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.causal.BloomClock;
+import com.salesforce.apollo.causal.ClockValue;
+import com.salesforce.apollo.causal.ClockValueComparator;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.bc.BloomClock;
-import com.salesforce.apollo.utils.bc.ClockValue;
-import com.salesforce.apollo.utils.bc.ClockValueComparator;
 
 /**
  * @author hal.hildebrand
@@ -79,11 +79,11 @@ public class BloomClockTest {
 
     @Test
     public void paperScenario() throws Exception {
-        Comparator<ClockValue> comparator = new ClockValueComparator(0.1);
         AtomicInteger clock = new AtomicInteger();
         int K = 3;
         int M = 200;
         BloomClock startState = new BloomClock(SEED, K, M);
+        Comparator<ClockValue> comparator = new ClockValueComparator(Hash.fpp(K, M, 5));
 
         Node a = new Node(new HashMap<>(), new AtomicReference<>(startState.clone()), comparator);
         Node b = new Node(new HashMap<>(), new AtomicReference<>(startState.clone()), comparator);
@@ -139,7 +139,7 @@ public class BloomClockTest {
         // Delivered only to D
         d.process(t4);
 
-        assertEquals(-1, comparator.compare(t4.clockValue, e.currentState()));
+        assertEquals(0, comparator.compare(t4.clockValue, e.currentState()));
         assertEquals(t4.clockValue, d.currentState());
 
         // Node C originates event at t4
@@ -154,7 +154,7 @@ public class BloomClockTest {
 
     @Test
     public void smokin() {
-        Comparator<ClockValue> comparator = new ClockValueComparator(0.1);
+        Comparator<ClockValue> comparator = new ClockValueComparator(Hash.fpp(3, 4, 5));
         BloomClock a = new BloomClock(new int[] { 1, 0, 0, 1 });
         a.toString();
         BloomClock b = new BloomClock(new int[] { 1, 1, 0, 1 });
@@ -169,5 +169,9 @@ public class BloomClockTest {
         assertEquals(0, comparator.compare(a, c));
         // D occurs after A
         assertEquals(1, comparator.compare(d, a));
+        
+//        System.out.println();
+//        System.out.println("HITS: " + Hash.HITS);
+//        System.out.println("MISSES: " + Hash.MISSES);
     }
 }

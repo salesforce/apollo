@@ -3,6 +3,7 @@ package com.salesforce.apollo.utils.bloomFilters;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -19,7 +20,7 @@ import com.salesforce.apollo.utils.bloomFilters.StrataEstimator.IntStrataEstimat
 
 public class BenchmarkTest {
 
-    static final int DIFF_SIZE    = 10;
+    static final int DIFF_SIZE    = 50;
     static final int SAMPLE_RANGE = Integer.MAX_VALUE; // range of sampled ints
     static final int TEST_SIZE    = 1_000_000;         // Number of elements to test
 
@@ -41,7 +42,7 @@ public class BenchmarkTest {
 
     @BeforeEach
     public void before() {
-        entropy = new Random(0x1638);
+        entropy = new SecureRandom();
         seed = entropy.nextInt();
 
         s1 = new HashSet<>();
@@ -77,18 +78,18 @@ public class BenchmarkTest {
         StrataEstimator<Integer> se2 = new IntStrataEstimator(seed);
 
         System.out.println("=========benchmark start==========");
-        System.out.print("StrataEstimator.encode(): ");
         long start_se_encode = System.currentTimeMillis();
         se1.encode(s1);
         long end_se_encode = System.currentTimeMillis();
+        System.out.print("StrataEstimator.encode(): ");
         printStat(start_se_encode, end_se_encode);
 
         se2.encode(s2);
 
-        System.out.print("StrataEstimator.decode(): ");
         long start_se_decode = System.currentTimeMillis();
         int diff = se1.decode(se2);
         long end_se_decode = System.currentTimeMillis();
+        System.out.print("StrataEstimator.decode(): ");
         printStat(start_se_decode, end_se_decode);
 
         printInfo("the size of the set diffence:" + DIFF_SIZE * 2 + ",the result of estimating:" + diff);
@@ -124,7 +125,7 @@ public class BenchmarkTest {
         // decode the result of the subtract operation
         System.out.print("ibf.decode()");
         long start_decode = System.currentTimeMillis();
-        Decode<Integer> decodeResult = b1.decode(res);
+        Decode<Integer> decodeResult = res.decode();
         long end_decode = System.currentTimeMillis();
         printStat(start_decode, end_decode);
 
@@ -140,7 +141,7 @@ public class BenchmarkTest {
         Collections.sort(s2_diff);
         for (int i = 0; i < DIFF_SIZE; i++) {
             String str = s1_diff.get(i) + ":" + decodeResult.added().get(i) + "," + s2_diff.get(i) + ":"
-                    + decodeResult.missing().get(i);
+            + decodeResult.missing().get(i);
             printInfo(str);
             assertEquals(s1_diff.get(i), decodeResult.added().get(i), "S1 diff does not match decode added result");
             assertEquals(s2_diff.get(i), decodeResult.missing().get(i), "S2 diff does not match decode missing result");

@@ -590,7 +590,7 @@ public class SqlStateMachine {
     }
 
     private void beginBlock(long height, Digest hash) {
-        getSession().getRandom().setSeed(new DigestHasher().establish(hash, height).getH1());
+        getSession().getRandom().setSeed(new DigestHasher().process(hash, height).getH1());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
             secureEntropy.setSeed(hash.getBytes());

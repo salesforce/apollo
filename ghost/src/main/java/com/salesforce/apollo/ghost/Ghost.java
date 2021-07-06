@@ -47,6 +47,8 @@ import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
 import com.salesfoce.apollo.utils.proto.StampedClock;
+import com.salesforce.apollo.causal.BloomClock;
+import com.salesforce.apollo.causal.ClockValue;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
@@ -60,8 +62,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.utils.bc.BloomClock;
-import com.salesforce.apollo.utils.bc.ClockValue;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;

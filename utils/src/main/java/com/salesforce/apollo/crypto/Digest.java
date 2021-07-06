@@ -78,8 +78,8 @@ public class Digest implements Comparable<Digest> {
         assert bytes != null && algorithm != null;
 
         if (bytes.length != algorithm.digestLength()) {
-            throw new IllegalArgumentException(
-                    "Invalid bytes length.  Require: " + algorithm.digestLength() + " found: " + bytes.length);
+            throw new IllegalArgumentException("Invalid bytes length.  Require: " + algorithm.digestLength()
+            + " found: " + bytes.length);
         }
         this.algorithm = algorithm;
         int length = algorithm.longLength();
@@ -164,7 +164,7 @@ public class Digest implements Comparable<Digest> {
     public int hashCode() {
         for (long l : hash) {
             if (l != 0) {
-                return (int) (l & 0xFFFFFFFF);
+                return (int) (l ^ (l >>> 32));
             }
         }
         return 0;

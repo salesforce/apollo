@@ -55,7 +55,7 @@ message CausalPush {
 
 message CausalMessage {
     utils.Digeste source = 1;
-    utils.StampedClock clock = 2;
+    utils.IntStampedClock clock = 2;
     utils.Digeste hash = 3;
     int32 age = 4;
     utils.Sig signature = 5;

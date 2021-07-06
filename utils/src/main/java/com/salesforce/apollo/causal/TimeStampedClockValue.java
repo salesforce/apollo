@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.utils.bc;
+package com.salesforce.apollo.causal;
 
 import java.time.Instant;
 
 import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.utils.proto.Clock;
 import com.salesfoce.apollo.utils.proto.StampedClock;
-import com.salesforce.apollo.utils.bc.BloomClock.ComparisonResult;
+import com.salesforce.apollo.causal.BloomClock.ComparisonResult;
 
 /**
  * @author hal.hildebrand
