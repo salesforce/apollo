@@ -261,8 +261,8 @@ public class SqlStateMachine {
             }
         } else {
             if (!checkpointDirectory.mkdirs()) {
-                throw new IllegalArgumentException(
-                        "Cannot create checkpoint directory: " + checkpointDirectory.getAbsolutePath());
+                throw new IllegalArgumentException("Cannot create checkpoint directory: "
+                + checkpointDirectory.getAbsolutePath());
             }
         }
         try {
@@ -337,8 +337,8 @@ public class SqlStateMachine {
                 }
                 File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s--%s.gzip", height, rndm));
                 try (FileInputStream fis = new FileInputStream(temp);
-                        FileOutputStream fos = new FileOutputStream(checkpoint);
-                        GZIPOutputStream gzos = new GZIPOutputStream(fos);) {
+                FileOutputStream fos = new FileOutputStream(checkpoint);
+                GZIPOutputStream gzos = new GZIPOutputStream(fos);) {
 
                     byte[] buffer = new byte[6 * 1024];
                     for (int read = fis.read(buffer); read > 0; read = fis.read(buffer)) {
@@ -574,9 +574,8 @@ public class SqlStateMachine {
 
         if (call == null) {
             throw DbException.get(ErrorCode.SYNTAX_ERROR_1,
-                                  new IllegalArgumentException(
-                                          "Must contain invocation method named: " + callName + "(...)"),
-                                  script.getSource());
+                                  new IllegalArgumentException("Must contain invocation method named: " + callName
+                                  + "(...)"), script.getSource());
         }
 
         Object returnValue = new JavaMethod(call).getValue(instance, getSession(), args);
@@ -590,7 +589,7 @@ public class SqlStateMachine {
     }
 
     private void beginBlock(long height, Digest hash) {
-        getSession().getRandom().setSeed(new DigestHasher().process(hash, height).getH1());
+        getSession().getRandom().setSeed(new DigestHasher(hash, height).identityHash());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
             secureEntropy.setSeed(hash.getBytes());
@@ -786,7 +785,7 @@ public class SqlStateMachine {
             exec = psCache.get(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof JdbcSQLNonTransientException
-                    || e.getCause() instanceof JdbcSQLNonTransientConnectionException) {
+            || e.getCause() instanceof JdbcSQLNonTransientConnectionException) {
                 return;
             }
             log.error("Error publishing events", e.getCause());
