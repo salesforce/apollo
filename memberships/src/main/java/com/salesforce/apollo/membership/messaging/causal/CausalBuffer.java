@@ -429,10 +429,9 @@ public class CausalBuffer {
     }
 
     private long seedFor(Digest id) {
-        DigestHasher hasher = new DigestHasher();
-        hasher.process(id, 0);
-        hasher.process(params.context.getId());
-        return hasher.getH1();
+        DigestHasher hasher = new DigestHasher(id, 0); 
+        hasher.processAdditional(params.context.getId());
+        return hasher.identityHash();
     }
 
     private Stream streamOf(StampedMessage candidate) {

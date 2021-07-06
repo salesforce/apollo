@@ -9,7 +9,6 @@ package com.salesforce.apollo.utils.bloomFilters;
 import static com.salesforce.apollo.utils.bloomFilters.Primes.PRIMES;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -23,6 +22,13 @@ public abstract class Hash<M> {
 //    public static int MISSES = 0;
 
     public static class BytesHasher extends Hasher<byte[]> {
+
+        public BytesHasher() {
+        }
+
+        public BytesHasher(byte[] key, long seed) {
+            super(key, seed);
+        }
 
         @Override
         protected BytesHasher clone() {
@@ -38,6 +44,14 @@ public abstract class Hash<M> {
 
     public static class DigestHasher extends Hasher<Digest> {
 
+        public DigestHasher() {
+            super();
+        }
+
+        public DigestHasher(Digest key, long seed) {
+            super(key, seed);
+        }
+
         @Override
         protected Hasher<Digest> clone() {
             return new DigestHasher();
@@ -47,7 +61,6 @@ public abstract class Hash<M> {
         protected void processIt(Digest key) {
             process(key);
         }
-
     }
 
     abstract public static class Hasher<M> {
@@ -68,20 +81,13 @@ public abstract class Hash<M> {
 
         long h1;
         long h2;
+        int  length;
 
-        int length;
-
-        public Hasher<M> process(M key, long seed) {
-            h1 = seed;
-            h2 = Long.reverse(seed);
-            length = 0;
-            processIt(key);
-            makeHash();
-            return this;
+        public Hasher() {
         }
 
-        public long getH1() {
-            return h1;
+        public Hasher(M key, long seed) {
+            process(key, seed);
         }
 
         /**
@@ -119,10 +125,31 @@ public abstract class Hash<M> {
             return hashes;
         }
 
+        public long identityHash() {
+            return h1;
+        }
+
         public long identityHash(M key, long seed) {
             process(key, seed);
             return h1;
         }
+
+        public void processAdditional(int value) {
+            process(value);
+            makeHash();
+        }
+
+        public void processAdditional(long value) {
+            process(value);
+            makeHash();
+        }
+
+        public void processAdditional(M value) {
+            processIt(value);
+            makeHash();
+        }
+
+        protected abstract Hasher<M> clone();
 
         IntStream locations(int k, M key, int m, long seed) {
             return IntStream.of(hashes(k, key, m, seed));
@@ -131,16 +158,6 @@ public abstract class Hash<M> {
         void process(byte[] key) {
             ByteBuffer buff = ByteBuffer.wrap(key);
             process(buff);
-        }
-
-        private void process(ByteBuffer buff) {
-            while (buff.remaining() >= 16) {
-                bmix64(buff.getLong(), buff.getLong());
-                length += CHUNK_SIZE;
-            }
-            if (buff.hasRemaining()) {
-                processRemaining(buff);
-            }
         }
 
         void process(Digest key) {
@@ -170,11 +187,18 @@ public abstract class Hash<M> {
             length += CHUNK_SIZE;
         }
 
+        Hasher<M> process(M key, long seed) {
+            h1 = seed;
+            h2 = Long.reverse(seed);
+            length = 0;
+            processIt(key);
+            makeHash();
+            return this;
+        }
+
         void process(String key) {
             process(key.getBytes());
         }
-
-        protected abstract Hasher<M> clone();
 
         abstract void processIt(M key);
 
@@ -229,6 +253,16 @@ public abstract class Hash<M> {
             return k2;
         }
 
+        private void process(ByteBuffer buff) {
+            while (buff.remaining() >= 16) {
+                bmix64(buff.getLong(), buff.getLong());
+                length += CHUNK_SIZE;
+            }
+            if (buff.hasRemaining()) {
+                processRemaining(buff);
+            }
+        }
+
         private void processRemaining(ByteBuffer buff) {
             long k1 = 0;
             long k2 = 0;
@@ -275,6 +309,14 @@ public abstract class Hash<M> {
     }
 
     public static class IntHasher extends Hasher<Integer> {
+        public IntHasher() {
+            super();
+        }
+
+        public IntHasher(Integer key, long seed) {
+            super(key, seed);
+        }
+
         @Override
         protected Hasher<Integer> clone() {
             return new IntHasher();
@@ -289,6 +331,13 @@ public abstract class Hash<M> {
 
     public static class LongHasher extends Hasher<Long> {
 
+        public LongHasher() {
+        }
+
+        public LongHasher(Long key, long seed) {
+            super(key, seed);
+        }
+
         @Override
         protected Hasher<Long> clone() {
             return new LongHasher();
@@ -302,6 +351,13 @@ public abstract class Hash<M> {
     }
 
     public static class StringHasher extends Hasher<String> {
+
+        public StringHasher() {
+        }
+
+        public StringHasher(String key, long seed) {
+            super(key, seed);
+        }
 
         @Override
         protected StringHasher clone() {
