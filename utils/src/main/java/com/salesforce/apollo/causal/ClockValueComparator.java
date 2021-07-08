@@ -52,16 +52,12 @@ public class ClockValueComparator implements Comparator<ClockValue> {
      */
     @Override
     public int compare(ClockValue a, ClockValue b) {
-        var comparison = a.compareTo(b);
-        if (comparison.comparison() >= 0) {
-            return comparison.comparison();
-        }
-        return comparison.fpr() <= fpr ? -1 : 0;
+        return a.compareTo(fpr, b);
     }
 
     @Override
     public String toString() {
-        return "ClockValueComparator [fpr=" + fpr + "]";
+        return "CVC [fpr=" + fpr + "]";
     }
 
 }

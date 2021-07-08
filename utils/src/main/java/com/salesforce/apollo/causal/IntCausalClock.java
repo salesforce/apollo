@@ -14,7 +14,6 @@ import java.util.concurrent.locks.Lock;
 
 import com.salesfoce.apollo.utils.proto.Clock;
 import com.salesfoce.apollo.utils.proto.IntStampedClock;
-import com.salesforce.apollo.causal.BloomClock.ComparisonResult;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -30,8 +29,8 @@ public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Loc
     }
 
     @Override
-    public ComparisonResult compareTo(ClockValue b) {
-        return locked(() -> clock.compareTo(b), lock);
+    public int compareTo(double fpr, ClockValue b) {
+        return locked(() -> clock.compareTo(fpr, b), lock);
     }
 
     @Override
@@ -70,7 +69,7 @@ public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Loc
     }
 
     @Override
-    public IntStampedClock stamp(Digest digest) {
+    public IntStampedClock stamp() {
         return locked(() -> IntStampedClock.newBuilder().setStamp(sequenceNumber.incrementAndGet())
                                            .setClock(clock.toClock()).build(),
                       lock);
@@ -99,5 +98,10 @@ public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Loc
     @Override
     public String toString() {
         return "ICC[" + current() + "]";
+    }
+
+    @Override
+    public int sum() {
+        return clock.sum();
     }
 }

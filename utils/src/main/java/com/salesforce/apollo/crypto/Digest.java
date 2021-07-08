@@ -12,6 +12,8 @@ import org.bouncycastle.util.encoders.Hex;
 
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesfoce.apollo.utils.proto.Digeste.Builder;
+import com.salesforce.apollo.utils.BUZ;
+import com.salesforce.apollo.utils.bloomFilters.Hash;
 
 /**
  * A computed digest
@@ -59,6 +61,7 @@ public class Digest implements Comparable<Digest> {
     private final DigestAlgorithm algorithm;
 
     private final long[] hash;
+    private volatile int hashCode = 0;
 
     public Digest(byte code, long[] hash) {
         algorithm = DigestAlgorithm.fromDigestCode(code);
@@ -109,6 +112,9 @@ public class Digest implements Comparable<Digest> {
 
     @Override
     public int compareTo(Digest id) {
+        if (id == this) {
+            return 0;
+        }
         for (int i = 0; i < hash.length; i++) {
             int compare = Long.compareUnsigned(hash[i], id.hash[i]);
             if (compare != 0) {
@@ -162,12 +168,22 @@ public class Digest implements Comparable<Digest> {
 
     @Override
     public int hashCode() {
+        final int current = hashCode;
+        if (current != 0) {
+            return current;
+        }
         for (long l : hash) {
             if (l != 0) {
-                return (int) (l ^ (l >>> 32));
+                int proposed = (int) (BUZ.buzhash(l) % Hash.MERSENNE_31);
+                if (proposed == 0) {
+                    hashCode = 31;
+                } else {
+                    hashCode = proposed;
+                }
+                return proposed;
             }
         }
-        return 0;
+        return hashCode = 31;
     }
 
     public Digest prefix(byte[]... prefixes) {

@@ -39,7 +39,6 @@ import com.salesforce.apollo.membership.messaging.causal.CausalBuffer.StampedMes
 import com.salesforce.apollo.membership.messaging.comms.CausalMessagingServer;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -61,13 +60,9 @@ public class CausalMessenger {
                           params.context.getId(), params.member, from, request.getRing(), predecessor);
                 return CausalMessages.getDefaultInstance();
             }
-            return CausalMessages.newBuilder().addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests())))
-                                 .setBff(buffer.forReconcilliation(new DigestBloomFilter(Utils.bitStreamEntropy()
-                                                                                              .nextLong(),
-                                                                                         params.bufferSize,
-                                                                                         params.falsePositiveRate))
-                                               .toBff())
-                                 .build();
+            return CausalMessages.newBuilder()
+                                 .addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests()), from))
+                                 .setBff(buffer.forReconcilliation().toBff()).build();
         }
 
         public void update(CausalPush request, Digest from) {
@@ -82,7 +77,7 @@ public class CausalMessenger {
                           params.context.getId(), params.member, from, request.getRing(), predecessor);
                 return;
             }
-            buffer.deliver(request.getUpdatesList());
+            buffer.receive(request.getUpdatesList());
         }
     }
 
@@ -170,7 +165,12 @@ public class CausalMessenger {
         if (mail.isEmpty()) {
             return;
         }
-        List<StampedMessage> newMsgs = mail.entrySet().stream().flatMap(e -> e.getValue().stream()).toList();
+        List<StampedMessage> newMsgs = mail.entrySet().stream().filter(e -> !e.getValue().isEmpty())
+                                           .flatMap(e -> e.getValue().stream()).toList();
+        if (newMsgs.isEmpty()) {
+            return;
+        }
+        log.trace("Delivering: {} msgs for context: {} on: {} ", newMsgs.size(), params.context.getId(), params.member);
         channelHandlers.forEach(handler -> {
             try {
                 handler.message(params.context.getId(), newMsgs);
@@ -185,10 +185,8 @@ public class CausalMessenger {
             return null;
         }
         log.trace("causal gossiping[{}] from {} with {} on {}", buffer.round(), params.member, link.getMember(), ring);
-        DigestBloomFilter biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), params.bufferSize,
-                                                       params.falsePositiveRate);
         return link.gossip(MessageBff.newBuilder().setContext(params.context.getId().toDigeste()).setRing(ring)
-                                     .setDigests(buffer.forReconcilliation(biff).toBff()).build());
+                                     .setDigests(buffer.forReconcilliation().toBff()).build());
     }
 
     private void handle(Optional<ListenableFuture<CausalMessages>> futureSailor, CausalMessaging link, int ring,
@@ -207,10 +205,12 @@ public class CausalMessenger {
                 log.debug("error gossiping with {}", link.getMember(), e.getCause());
                 return;
             }
-            buffer.deliver(gossip.getUpdatesList());
+            buffer.receive(gossip.getUpdatesList());
             try {
                 link.update(CausalPush.newBuilder().setContext(params.context.getId().toDigeste()).setRing(ring)
-                                      .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getBff()))).build());
+                                      .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getBff()),
+                                                                      link.getMember().getId()))
+                                      .build());
             } catch (Throwable e) {
                 log.debug("error updating {}", link.getMember(), e);
             }

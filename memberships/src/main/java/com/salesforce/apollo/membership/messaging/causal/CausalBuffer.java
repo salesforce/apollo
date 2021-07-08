@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.membership.messaging.causal;
 
-import static com.salesforce.apollo.utils.Utils.locked;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -17,14 +15,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
-import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -33,15 +29,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.Any;
+import com.salesfoce.apollo.messaging.proto.CausalEnvelope;
+import com.salesfoce.apollo.messaging.proto.CausalEnvelopeOrBuilder;
 import com.salesfoce.apollo.messaging.proto.CausalMessage;
-import com.salesfoce.apollo.messaging.proto.CausalMessageOrBuilder;
 import com.salesfoce.apollo.utils.proto.IntStampedClock;
-import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.causal.BloomClock;
+import com.salesforce.apollo.causal.ClockValueComparator;
 import com.salesforce.apollo.causal.IntCausalClock;
 import com.salesforce.apollo.causal.IntStampedClockValue;
-import com.salesforce.apollo.causal.StampedClockValueComparator;
+import com.salesforce.apollo.causal.StampedClockValue;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -55,7 +53,7 @@ import com.salesforce.apollo.utils.bloomFilters.Hash;
  *
  */
 public class CausalBuffer {
-    public record StampedMessage(Digest from, Digest hash, IntStampedClockValue clock, CausalMessage.Builder message)
+    public record StampedMessage(Digest from, Digest hash, IntStampedClockValue clock, CausalEnvelope.Builder message)
                                 implements Comparable<StampedMessage> {
 
         @Override
@@ -79,14 +77,18 @@ public class CausalBuffer {
         }
     }
 
-    private static class AgeComparator implements Comparator<CausalMessage> {
+    record StreamedSM(Stream stream, StampedMessage sm) {}
+
+    record Delivered(Digest event, Stream stream, List<StampedMessage> delivered) {}
+
+    private static class AgeComparator implements Comparator<CausalEnvelope> {
         @Override
-        public int compare(CausalMessage a, CausalMessage b) {
+        public int compare(CausalEnvelope a, CausalEnvelope b) {
             return Integer.compare(a.getAge(), b.getAge());
         }
     }
 
-    private record Stream(Digest from, IntCausalClock clock, TreeMap<StampedMessage, StampedMessage> queue, Lock lock) {
+    private record Stream(Digest from, IntCausalClock clock, ConcurrentSkipListMap<Digest, StampedMessage> queue) {
 
         @Override
         public int hashCode() {
@@ -105,80 +107,75 @@ public class CausalBuffer {
             return from.equals(other.from);
         }
 
-        Delivered observe(StampedClockValueComparator<Integer, IntStampedClock> comparator, StampedMessage sent) {
-            return locked(() -> {
-                var current = clock.observe(sent.hash);
-                List<StampedMessage> ready = new ArrayList<>();
-                var trav = queue.entrySet().iterator();
-                while (trav.hasNext()) {
-                    var entry = trav.next();
-                    var next = entry.getValue();
-                    int compared = comparator.compare(next.clock, current);
-                    if (compared >= 0) {
-                        ready.add(next);
-                        current = clock.merge(next.clock);
-                        trav.remove();
-                    } else {
-                        break;
-                    }
+        Delivered observe(ClockValueComparator comparator, StampedMessage sent, Map<Digest, StampedMessage> delivered) {
+            var current = clock.observe(sent.hash);
+            List<StampedMessage> ready = new ArrayList<>();
+            var trav = queue.entrySet().iterator();
+            while (trav.hasNext()) {
+                var entry = trav.next();
+                var next = entry.getValue();
+                int compared = comparator.compare(next.clock, current);
+                if (compared < 0 || (compared == 0 && sent.clock.instant() - current.instant() <= 1)) {
+                    delivered.put(next.hash, next);
+                    ready.add(next);
+                    current = clock.merge(next.clock);
+                    trav.remove();
+                } else {
+                    break;
                 }
-                return new Delivered(this, ready);
-            }, lock);
+            }
+//            log.trace("Observing: {} resulted in: {} deliveries, backlog: {} clock: {} head: {} from: {}", sent.hash,
+//                      ready.size(), queue.size(), clock.instant(),
+//                      queue.size() > 0 ? queue.firstKey().clock.instant() : "<->", from);
+            return new Delivered(sent.hash, this, ready);
         }
 
-        void reconcile(BloomFilter<Digest> biff, Queue<CausalMessage> mailBin, int maxAge) {
-            locked(() -> {
-                queue.values().stream().filter(r -> r.message.getAge() < maxAge).filter(r -> !biff.contains(r.hash()))
-                     .forEach(m -> mailBin.add(m.message().build()));
-            }, lock);
+        void reconcile(BloomFilter<Digest> biff, Queue<CausalEnvelope> mailBin, int maxAge) {
+            queue.values().stream().filter(r -> r.message.getAge() < maxAge).filter(r -> !biff.contains(r.hash()))
+                 .forEach(m -> mailBin.add(m.message().build()));
         }
 
-        int updateAge(int maxAge) {
-            return locked(() -> {
-                int purged = 0;
-                var trav = queue.entrySet().iterator();
-                while (trav.hasNext()) {
-                    var next = trav.next().getValue();
-                    if (next.message.getAge() >= maxAge) {
-                        trav.remove();
-                        log.trace("GC'ing: {} from: {} as buffer too full: {} > {} on: {}", next.hash, next.from,
-                                  maxAge);
-                        purged++;
-                    } else {
-                        next.message().setAge(next.message().getAge() + 1);
-                    }
+        void updateAge(int maxAge) {
+            var trav = queue.entrySet().iterator();
+            while (trav.hasNext()) {
+                var next = trav.next().getValue();
+                int age = next.message.getAge();
+                if (age >= maxAge) {
+                    trav.remove();
+                    log.trace("GC'ing: {} from: {} age: {} > {}", next.hash, next.from, age, maxAge);
+                } else {
+                    next.message().setAge(next.message().getAge() + 1);
                 }
-                queue.values().forEach(s -> s.message().setAge(s.message().getAge() + 1));
-                return purged;
-            }, lock);
+            }
+            queue.values().forEach(s -> s.message().setAge(s.message().getAge() + 1));
+        }
+
+        int backlog() {
+            return queue.size();
         }
 
         void forReconcilliation(DigestBloomFilter biff) {
-            locked(() -> queue.values().forEach(message -> biff.add(message.hash())), lock);
+            queue.values().forEach(message -> biff.add(message.hash()));
         }
 
-        int purgeTheAged(int maxAge, Digest member) {
-            return locked(() -> {
-                if (queue.size() > 0) {
-                    log.trace("backlog: {} for: {} on: {}", queue.size(), from, member);
+        void purgeTheAged(int maxAge, Digest member) {
+            if (queue.size() > 0) {
+                log.trace("backlog: {} for: {} on: {}", queue.size(), from, member);
+            }
+            var trav = queue.entrySet().iterator();
+            while (trav.hasNext()) {
+                var m = trav.next().getValue();
+                int age = m.message.getAge();
+                if (age > maxAge) {
+                    trav.remove();
+                    log.trace("GC'ing: {} from: {} age: {} > {}", m.hash, m.from, age, maxAge);
                 }
-                int purged = 0;
-                var trav = queue.entrySet().iterator();
-                while (trav.hasNext()) {
-                    var m = trav.next().getValue();
-                    if (m.message.getAge() > maxAge) {
-                        purged++;
-                        trav.remove();
-                        log.trace("GC'ing: {} from: {} as buffer too full: {} > {} on: {}", m.hash, m.from, maxAge);
-                    }
-                }
-                return purged;
-            }, lock);
+            }
 
         }
 
-        public int trimAged() {
-            return 0;
+        public boolean trimAged() {
+            return false;
         }
 
     }
@@ -186,19 +183,22 @@ public class CausalBuffer {
     private static final AgeComparator AGE_COMPARATOR = new AgeComparator();
     private static final Logger        log            = LoggerFactory.getLogger(CausalBuffer.class);
 
-    private final IntCausalClock                                        clock;
-    private final StampedClockValueComparator<Integer, IntStampedClock> comparator;
-    private final ConcurrentMap<Digest, StampedMessage>                 delivered         = new ConcurrentHashMap<>();
-    private final Consumer<Map<Digest, List<StampedMessage>>>           delivery;
-    private final Semaphore                                             garbageCollecting = new Semaphore(1);
-    private final int                                                   maxAge;
-    private final Parameters                                            params;
-    private final AtomicReference<Digest>                               previous          = new AtomicReference<>();
-    private final AtomicInteger                                         round             = new AtomicInteger();
-    private final AtomicInteger                                         sequenceNumber    = new AtomicInteger();
-    private final AtomicInteger                                         size              = new AtomicInteger();
-    private final ConcurrentMap<Digest, Stream>                         streams           = new ConcurrentHashMap<>();
-    private final Semaphore                                             tickGate          = new Semaphore(1);
+    public static Digest hashOf(CausalEnvelope cm, DigestAlgorithm algorithm) {
+        return JohnHancock.of(cm.getSignature()).toDigest(algorithm);
+    }
+
+    private final IntCausalClock                              clock;
+    private final ClockValueComparator                        comparator;
+    private final ConcurrentMap<Digest, StampedMessage>       delivered         = new ConcurrentHashMap<>();
+    private final Consumer<Map<Digest, List<StampedMessage>>> delivery;
+    private final Semaphore                                   garbageCollecting = new Semaphore(1);
+    private final int                                         maxAge;
+    private final Parameters                                  params;
+    private final AtomicReference<Digest>                     previous          = new AtomicReference<>();
+    private final AtomicInteger                               round             = new AtomicInteger();
+    private final AtomicInteger                               sequenceNumber    = new AtomicInteger();
+    private final ConcurrentMap<Digest, Stream>               streams           = new ConcurrentHashMap<>();
+    private final Semaphore                                   tickGate          = new Semaphore(1);
 
     public CausalBuffer(Parameters parameters, Consumer<Map<Digest, List<StampedMessage>>> delivery) {
         this.params = parameters;
@@ -206,7 +206,7 @@ public class CausalBuffer {
                                         new ReentrantLock());
         this.delivery = delivery;
         this.maxAge = params.context.timeToLive();
-        comparator = new StampedClockValueComparator<>(Hash.fpp(params.clockK, params.clockM, params.eventWindow));
+        comparator = new ClockValueComparator(Hash.fpp(params.clockK, params.clockM, params.eventWindow));
         initPrevious();
     }
 
@@ -214,51 +214,68 @@ public class CausalBuffer {
         round.set(0);
         delivered.clear();
         initPrevious();
-        size.set(0);
         streams.clear();
         clock.reset();
     }
 
-    record StreamedSM(Stream stream, StampedMessage sm) {}
-
-    record Delivered(Stream stream, List<StampedMessage> delivered) {}
-
-    public void deliver(List<CausalMessage> messages) {
-        if (messages.size() == 0) {
-            return;
-        }
-        log.trace("delivering {} msgs on: {}", messages.size(), params.member);
-        observe(messages.stream()
-                        .map(cm -> new StampedMessage(new Digest(cm.getSource()), new Digest(cm.getHash()),
-                                                      IntStampedClockValue.from(cm.getClock()),
-                                                      CausalMessage.newBuilder(cm)))
-                        .filter(f -> !dup(f.hash, f.message.getAge())).map(sm -> process(sm, streamOf(sm)))
-                        .filter(e -> e != null).peek(sm -> size.incrementAndGet())
-                        .peek(ssm -> delivered.put(ssm.sm.hash(), ssm.sm))
-                        .map(ssm -> streams.values().stream().parallel()
-                                           .map(stream -> stream.observe(comparator, ssm.sm)))
-                        .flatMap(e -> e).filter(e -> e != null)
-                        .collect(Collectors.groupingBy(delivered -> delivered.stream.from, () -> new HashMap<>(),
-                                                       Collectors.flatMapping(d -> d.delivered.stream().sorted(),
-                                                                              Collectors.toList()))));
-        gc();
+    public StampedClockValue<Integer, IntStampedClock> current() {
+        return clock.current();
     }
 
-    public DigestBloomFilter forReconcilliation(DigestBloomFilter biff) {
+    public DigestBloomFilter forReconcilliation() {
+        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), params.bufferSize,
+                                         params.falsePositiveRate);
         streams.values().forEach(stream -> stream.forReconcilliation(biff));
         delivered.values().forEach(received -> biff.add(received.hash()));
 
         return biff;
     }
 
-    public List<CausalMessage> reconcile(BloomFilter<Digest> biff) {
-        Queue<CausalMessage> mailBin = new PriorityQueue<>(AGE_COMPARATOR);
-        delivered.values().stream().filter(r -> !biff.contains(r.hash())).filter(m -> m.message.getAge() < maxAge)
-                 .forEach(m -> mailBin.add(m.message.build()));
-        streams.values().forEach(stream -> stream.reconcile(biff, mailBin, maxAge));
-        List<CausalMessage> reconciled = new ArrayList<>();
+    public ClockValueComparator getComparator() {
+        return comparator;
+    }
+
+    public void receive(List<CausalEnvelope> messages) {
+        if (messages.size() == 0) {
+            return;
+        }
+        log.trace("receiving: {} msgs on: {}", messages.size(), params.member);
+        observe(messages.stream()
+                        .map(cm -> new StampedMessage(new Digest(cm.getContent().getSource()),
+                                                      hashOf(cm, params.digestAlgorithm),
+                                                      IntStampedClockValue.from(cm.getContent().getClock()),
+                                                      CausalEnvelope.newBuilder(cm)))
+                        .filter(sm -> !isSelf(sm)).filter(f -> !dup(f.hash, f.message.getAge()))
+                        .map(sm -> process(sm, streamOf(sm))).filter(e -> e != null)
+                        .flatMap(ssm -> streams.values().stream().map(stream -> {
+                            return stream.observe(comparator, ssm.sm, delivered);
+                        })).filter(d -> !d.delivered.isEmpty())
+                        .peek(d -> log.trace("event: {} produced: {} deliveries from: {} for: {} on: {}", d.event,
+                                             d.delivered.size(), d.stream.from, params.context.getId(), params.member))
+                        .collect(Collectors.groupingBy(d -> d.stream.from, () -> new HashMap<>(),
+                                                       Collectors.flatMapping(d -> d.delivered.stream().sorted(),
+                                                                              Collectors.toList()))));
+        gc();
+    }
+
+    public List<CausalEnvelope> reconcile(BloomFilter<Digest> biff, Digest partner) {
+        Queue<CausalEnvelope> mailBin = new PriorityQueue<>(AGE_COMPARATOR);
+
+        delivered.values().stream().filter(r -> !biff.contains(r.hash())).filter(m -> !m.from.equals(partner))
+                 .filter(m -> m.message.getAge() < maxAge).forEach(m -> mailBin.add(m.message.build()));
+        streams.values().stream().filter(stream -> !stream.from.equals(partner))
+               .forEach(stream -> stream.reconcile(biff, mailBin, maxAge));
+
+        List<CausalEnvelope> reconciled = new ArrayList<>();
+
         while (!mailBin.isEmpty() && reconciled.size() < params.maxMessages) {
-            reconciled.add(mailBin.poll());
+            CausalEnvelope cm = mailBin.poll();
+            log.trace("reconciling: {} for: {} on: {}", hashOf(cm, params.digestAlgorithm), partner, params.member);
+            reconciled.add(cm);
+        }
+
+        if (!reconciled.isEmpty()) {
+            log.trace("reconciled: {} for: {} on: {}", reconciled.size(), partner, params.member);
         }
         return reconciled;
     }
@@ -269,60 +286,57 @@ public class CausalBuffer {
 
     public StampedMessage send(Any content, SigningMember member) {
         Digest prev = previous.get();
-        Digest hash = params.digestAlgorithm.digest(prev.toDigeste().toByteString(), content.toByteString(),
-                                                    member.getId().toDigeste().toByteString());
 
-        IntStampedClock stamp = clock.stamp(hash);
-
-        Sig sig = member.sign(hash.toDigeste().toByteString(), stamp.toByteString()).toSig();
-        CausalMessage.Builder message = CausalMessage.newBuilder().setAge(0).setSource(member.getId().toDigeste())
-                                                     .setClock(stamp).setContent(content).setHash(hash.toDigeste())
-                                                     .setSignature(sig);
-        StampedMessage stamped = new StampedMessage(member.getId(), hash, IntStampedClockValue.from(stamp), message);
-        previous.set(hash);
+        IntStampedClock stamp = clock.stamp();
+        CausalMessage message = CausalMessage.newBuilder().setSource(member.getId().toDigeste()).setClock(stamp)
+                                             .setContent(content).addParents(prev.toDigeste()).build();
+        var sig = member.sign(message.toByteString());
+        var hash = sig.toDigest(params.digestAlgorithm);
+        StampedMessage stamped = new StampedMessage(member.getId(), hash, IntStampedClockValue.from(stamp),
+                                                    CausalEnvelope.newBuilder().setAge(0).setSignature(sig.toSig())
+                                                                  .setContent(message));
+        previous.compareAndSet(prev, hash);
+        clock.observe(stamped.hash);
+        clock.merge(stamped.clock);
+        delivered.put(hash, stamped);
         log.trace("Send message:{} on: {}", hash, params.member);
-        deliver(Collections.singletonList(stamped.message.build()));
         return stamped;
     }
 
     public int size() {
-        return size.get();
+        return delivered.size() + streams.values().stream().mapToInt(s -> s.backlog()).sum();
     }
 
     public void tick() {
         round.incrementAndGet();
-        params.executor.execute(Utils.wrapped(() -> {
-            try {
-                if (!tickGate.tryAcquire(500, TimeUnit.MILLISECONDS)) {
-                    log.error("Unable to acquire tick gate for: {} on: {}", params.context.getId(), params.member);
-                    return;
+        if (!tickGate.tryAcquire()) {
+            log.error("Unable to acquire tick gate for: {} tick already in progress on: {}", params.context.getId(),
+                      params.member);
+            return;
+        }
+        try {
+//            log.trace("tick: {} buffer size: {} on: {}", round.get(), size(), params.member);
+            streams.values().forEach(stream -> stream.updateAge(maxAge));
+            var trav = delivered.entrySet().iterator();
+            while (trav.hasNext()) {
+                var next = trav.next().getValue();
+                int age = next.message.getAge();
+                if (age >= maxAge) {
+                    trav.remove();
+                    log.trace("GC'ing: {} from: {} age: {} > {} on: {}", next.hash, next.from, age + 1, maxAge,
+                              params.member);
+                } else {
+                    next.message.setAge(age + 1);
                 }
-            } catch (InterruptedException e) {
-                log.error("Unable to acquire tick gate for: {} on: {}", params.context.getId(), params.member, e);
             }
-            try {
-                streams.values().forEach(stream -> size.addAndGet(-stream.updateAge(maxAge)));
-                var trav = delivered.entrySet().iterator();
-                while (trav.hasNext()) {
-                    var next = trav.next().getValue();
-                    if (next.message.getAge() >= maxAge) {
-                        log.trace("GC'ing: {} from: {} as buffer too full: {} > {} on: {}", next.hash, next.from,
-                                  size.get(), params.bufferSize, params.member);
-                        trav.remove();
-                        size.decrementAndGet();
-                    } else {
-                        next.message.setAge(next.message.getAge() + 1);
-                    }
-                }
-            } finally {
-                tickGate.release();
-            }
-        }, log));
+        } finally {
+            tickGate.release();
+        }
     }
 
     private boolean dup(Digest hash, int age) {
         if (age > maxAge) {
-            log.trace("Rejecting message too old: {} age: {} on: {}", hash, age, params.member);
+            log.trace("Rejecting message too old: {} age: {} > {} on: {}", hash, age, maxAge, params.member);
             return false;
         }
         StampedMessage previous = delivered.get(hash);
@@ -333,14 +347,14 @@ public class CausalBuffer {
             } else if (previous.message.getAge() != nextAge) {
                 previous.message().setAge(nextAge);
             }
-            log.debug("duplicate event: {} on: {}", hash, params.member);
+//            log.debug("duplicate event: {} on: {}", hash, params.member);
             return true;
         }
         return false;
     }
 
     private void gc() {
-        if (size.get() < params.bufferSize) {
+        if (size() < params.bufferSize) {
             return;
         }
         if (!garbageCollecting.tryAcquire()) {
@@ -348,13 +362,13 @@ public class CausalBuffer {
         }
         params.executor.execute(Utils.wrapped(() -> {
             try {
-                int bufferSize = size.get();
+                int bufferSize = size();
                 if (bufferSize < params.bufferSize) {
                     return;
                 }
                 log.trace("Compacting buffer: {} size: {} on: {}", params.context.getId(), bufferSize, params.member);
                 purgeTheAged();
-                int currentSize = size.get();
+                int currentSize = size();
                 if (currentSize > params.bufferSize) {
                     log.warn("Buffer overflow: {} > {} after compact for: {} on: {} ", currentSize, params.bufferSize,
                              params.context.getId(), params.member);
@@ -372,30 +386,28 @@ public class CausalBuffer {
     }
 
     private void gcDelivered(Iterator<StampedMessage> processing) {
-        log.debug("GC'ing: {} as buffer too full: {} > {} on: {}", params.context.getId(), size.get(),
-                  params.bufferSize, params.member);
-        while (processing.hasNext() && params.bufferSize < size.get()) {
+        log.debug("GC'ing: {} as buffer too full: {} > {} on: {}", params.context.getId(), size(), params.bufferSize,
+                  params.member);
+        while (processing.hasNext() && params.bufferSize < size()) {
             var m = processing.next();
-            if (m.message.getAge() > maxAge) {
-                delivered.remove(m.hash);
-                log.trace("GC'ing: {} as buffer too full: {} > {} on: {}", m.hash, size.get(), params.bufferSize,
-                          params.member);
-                size.decrementAndGet();
+            int age = m.message.getAge();
+            if (age > maxAge) {
+                if (delivered.remove(m.hash) != null) {
+                    log.trace("GC'ing: {} age: {} > {} on: {}", m.hash, age, maxAge, params.member);
+                }
             }
         }
     }
 
     private void gcPending() {
-        log.debug("GC'ing pending messages on: {} as buffer too full: {} > {} on: {}", params.context.getId(),
-                  size.get(), params.bufferSize, params.member);
+        log.debug("GC'ing pending messages on: {} as buffer too full: {} > {} on: {}", params.context.getId(), size(),
+                  params.bufferSize, params.member);
         boolean gcd;
-        while (params.bufferSize > size.get()) {
+        while (params.bufferSize > size()) {
             gcd = false;
             for (Stream stream : streams.values()) {
-                int trimmed = stream.trimAged();
-                if (trimmed > 0) {
+                if (stream.trimAged()) {
                     gcd = true;
-                    size.addAndGet(-trimmed);
                 }
             }
             if (!gcd) {
@@ -410,26 +422,33 @@ public class CausalBuffer {
         previous.set(new Digest(params.digestAlgorithm, buff));
     }
 
+    private boolean isSelf(StampedMessage sm) {
+        if (params.member.getId().equals(sm.from)) {
+            log.trace("Rejecting self sent: {} on: {}", sm.hash, params.member);
+            return true;
+        }
+        return false;
+    }
+
     private void observe(Map<Digest, List<StampedMessage>> mail) {
-        if (!mail.isEmpty()) {
+        if (mail.size() > 0) {
             delivery.accept(mail);
             if (log.isTraceEnabled()) {
-                log.trace("Delivered: {} msgs for context: {} on: {} ",
-                          mail.values().stream().flatMap(msgs -> msgs.stream()).count(), params.context.getId(),
-                          params.member);
+                int sum = mail.values().stream().mapToInt(msgs -> msgs.size()).sum();
+                if (sum != 0) {
+                    log.trace("Delivered: {} msgs for context: {} on: {} ", sum, params.context.getId(), params.member);
+                }
             }
         }
     }
 
     private StreamedSM process(StampedMessage candidate, Stream stream) {
-        StampedMessage found = locked(() -> stream.queue().get(candidate), stream.lock);
+        log.trace("processing: {} from: {} on: {}", candidate.hash, stream.from(), params.member);
+        StampedMessage found = stream.queue().get(candidate.hash);
         if (found == null) {
-            if (comparator.compare(candidate.clock, clock) > 0) {
-                log.debug("Rejecting stale event: {} from: {} on: {}", candidate.hash, stream.from(), params.member);
-                return null;
-            }
             if (verify(candidate.message, params.context.getActiveMember(candidate.from))) {
-                locked(() -> stream.queue().put(candidate, candidate), stream.lock);
+                log.trace("Verified: {} from: {} on: {}", candidate.hash, stream.from(), params.member);
+                stream.queue().putIfAbsent(candidate.hash, candidate);
                 return new StreamedSM(stream, candidate);
             } else {
                 log.debug("Rejecting: {} could not verify from: {} on: {}", candidate.hash, stream.from(),
@@ -445,8 +464,9 @@ public class CausalBuffer {
         int age = candidate.message.getAge();
         int nextAge = Math.max(age, found.message.getAge());
         if (nextAge > maxAge) {
-            size.decrementAndGet();
-            locked(() -> stream.queue.remove(candidate), stream.lock());
+            stream.queue.remove(candidate.hash);
+            log.trace("GC'ing: {} from: {} age: {} > {} on: {}", candidate.hash, candidate.from,
+                      candidate.message.getAge() + 1, maxAge, params.member);
         } else if (age != nextAge) {
             found.message().setAge(nextAge);
         }
@@ -454,7 +474,7 @@ public class CausalBuffer {
     }
 
     private void purgeTheAged() {
-        log.debug("Purging the aged of: {} buffer size: {} delivered: {} on: {}", params.context.getId(), size.get(),
+        log.debug("Purging the aged of: {} buffer size: {} delivered: {} on: {}", params.context.getId(), size(),
                   delivered.size(), params.member);
         Queue<StampedMessage> candidates = new PriorityQueue<>(Collections.reverseOrder((a,
                                                                                          b) -> Integer.compare(a.message.getAge(),
@@ -465,16 +485,17 @@ public class CausalBuffer {
             var m = processing.next();
             if (m.message.getAge() > maxAge) {
                 delivered.remove(m.hash);
-                size.decrementAndGet();
+                log.trace("GC'ing: {} from: {} age: {} > {} on: {}", m.hash, m.from, m.message.getAge() + 1, maxAge,
+                          params.member);
             } else {
                 break;
             }
         }
-        streams.values().forEach(stream -> size.addAndGet(-stream.purgeTheAged(maxAge, params.member.getId())));
-        if (params.bufferSize < size.get()) {
+        streams.values().forEach(stream -> stream.purgeTheAged(maxAge, params.member.getId()));
+        if (params.bufferSize < size()) {
             gcDelivered(processing);
         }
-        if (params.bufferSize < size.get()) {
+        if (params.bufferSize < size()) {
             gcPending();
         }
     }
@@ -489,15 +510,14 @@ public class CausalBuffer {
                                   new IntCausalClock(new BloomClock(candidate.clock.toClock(), params.clockK,
                                                                     params.clockM),
                                                      new AtomicInteger(candidate.clock.stamp()), new ReentrantLock()),
-                                  new TreeMap<>(), new ReentrantLock());
+                                  new ConcurrentSkipListMap<>());
             }
             return v;
         });
 
     }
 
-    private boolean verify(CausalMessageOrBuilder message, Member from) {
-        return from.verify(new JohnHancock(message.getSignature()), message.getHash().toByteString(),
-                           message.getClock().toByteString());
+    private boolean verify(CausalEnvelopeOrBuilder message, Member from) {
+        return from.verify(new JohnHancock(message.getSignature()), message.getContent().toByteString());
     }
 }

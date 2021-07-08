@@ -16,15 +16,15 @@ import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 
 public class Parameters {
     public static class Builder {
-        private int              bufferSize      = 500;
-        private int              clockK          = 3;
-        private int              clockM          = 512;
+        private int              bufferSize        = 500;
+        private int              clockK            = 3;
+        private int              clockM            = 512;
         private Context<Member>  context;
-        private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
-        private int              eventWindow     = 100;
+        private DigestAlgorithm  digestAlgorithm   = DigestAlgorithm.DEFAULT;
+        private int              eventWindow       = 100;
         private Executor         executor;
-        private double           falsePositiveRate;
-        private int              maxMessages     = 100;
+        private double           falsePositiveRate = 0.125;
+        private int              maxMessages       = 100;
         private SigningMember    member;
         private MessagingMetrics metrics;
 

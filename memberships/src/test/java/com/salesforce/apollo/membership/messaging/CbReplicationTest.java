@@ -6,18 +6,20 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
+import static com.salesforce.apollo.membership.messaging.causal.CausalBuffer.hashOf;
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +40,7 @@ import com.salesforce.apollo.membership.messaging.causal.Parameters;
  * @author hal.hildebrand
  *
  */
-public class CausalBufferTest {
+public class CbReplicationTest {
 
     private SigningMember                           memberA;
     private SigningMember                           memberB;
@@ -61,7 +63,7 @@ public class CausalBufferTest {
         context.activate(memberB);
 
         parameters = Parameters.newBuilder().setClockK(2).setClockM(512).setClockK(4).setBufferSize(4000)
-                               .setExecutor(ForkJoinPool.commonPool()).setContext(context);
+                               .setFalsePositiveRate(0.0125).setExecutor(ForkJoinPool.commonPool()).setContext(context);
         aDelivered = new ArrayList<>();
         bDelivered = new ArrayList<>();
         aSends = new ArrayList<>();
@@ -78,82 +80,63 @@ public class CausalBufferTest {
     }
 
     @Test
-    public void smokeIt() {
-        StampedMessage aEvent, bEvent;
-        var comparator = bufferA.getComparator();
+    public void idealReplication() {
+        var sentA = new HashMap<>();
+        var sentB = new HashMap<>();
 
-        aEvent = sendA();
-        assertEquals(0, aEvent.clock().sum());
-        assertNotEquals(0, bufferA.current().sum());
+        Set<Digest> receivedA = new HashSet<>();
+        Set<Digest> receivedB = new HashSet<>();
 
-        assertNotNull(aEvent);
-        assertEquals(memberA.getId(), aEvent.from());
-        assertEquals(0, aDelivered.size());
-
-        bEvent = sendB();
-        assertEquals(0, bEvent.clock().sum());
-        assertNotEquals(0, bufferB.current().sum());
-
-        assertNotNull(bEvent);
-        assertEquals(memberB.getId(), bEvent.from());
-        assertEquals(0, aDelivered.size());
-
-        assertEquals(0, comparator.compare(bEvent.clock(), bufferA.current()));
-        deliverA(bEvent);
-        assertEquals(1, aDelivered.size());
-
-        deliverA(bEvent);
-        assertEquals(1, aDelivered.size());
-
-        assertEquals(0, comparator.compare(aEvent.clock(), bufferB.current()));
-        deliverB(aEvent);
-        assertEquals(1, bDelivered.size());
-
-        deliverB(aEvent);
-        assertEquals(1, bDelivered.size());
-
-        int sends = 1_000;
-        int tst;
-        for (int i = 0; i < sends; i++) {
-            aEvent = sendA();
-            assertNotEquals(0, aEvent.clock().sum());
-            var current = bufferA.current();
-            assertNotEquals(0, current.sum());
-            tst = comparator.compare(aEvent.clock(), current);
-            assertTrue(tst <= 0);
-            assertEquals(i + 2, aEvent.clock().instant());
-            assertEquals(aEvent.clock().instant(), current.instant());
-            deliverB(aEvent);
-
-            bEvent = sendB();
-            assertNotEquals(0, aEvent.clock().sum());
-            current = bufferB.current();
-            assertNotEquals(0, current.sum());
-            tst = comparator.compare(bEvent.clock(), current);
-            assertTrue(tst <= 0);
-            assertEquals(i + 2, bEvent.clock().instant());
-            assertEquals(bEvent.clock().instant(), current.instant());
-            deliverA(bEvent);
-
-            boolean pass = i + 2 == aDelivered.size();
-            if (!pass) {
-                deliverA(bEvent);
-            }
-            assertEquals(i + 2, aDelivered.size());
-            boolean pass2 = i + 2 == bDelivered.size();
-            if (!pass2) {
-                deliverB(aEvent);
-            }
-            assertEquals(i + 2, bDelivered.size());
+        for (int i = 0; i < 1000; i++) {
+            StampedMessage a = sendA();
+            sentA.put(a.hash(), a);
+            StampedMessage b = sendB();
+            sentB.put(b.hash(), b);
         }
-        assertEquals(sends + 1, aDelivered.size());
-        assertEquals(sends + 1, bDelivered.size());
+
+        for (int i = 0; i < 1000 / parameters.getMaxMessages(); i++) {
+            var reconA = bufferA.forReconcilliation();
+            var reconB = bufferB.forReconcilliation();
+
+            var reconciled = bufferA.reconcile(reconB, memberB.getId());
+            assertEquals(parameters.getMaxMessages(), reconciled.size(), "Failed on: " + i);
+            receivedB.addAll(reconciled.stream().map(e -> hashOf(e, parameters.getDigestAlgorithm())).toList());
+            bufferB.receive(reconciled);
+
+            reconciled = bufferB.reconcile(reconA, memberA.getId());
+            assertEquals(parameters.getMaxMessages(), reconciled.size(), "Failed on: " + i);
+            receivedA.addAll(reconciled.stream().map(e -> hashOf(e, parameters.getDigestAlgorithm())).toList());
+            bufferA.receive(reconciled);
+
+            int expected = (i + 1) * parameters.getMaxMessages();
+            assertEquals(expected, receivedA.size(), "Failed on: " + i);
+            assertEquals(expected, receivedB.size(), "Failed on: " + i);
+            assertEquals(i + 1, aDelivered.size(), "Failed on: " + i);
+            assertEquals(i + 1, bDelivered.size(), "Failed on: " + i);
+        }
+
+        assertEquals(1000, aDelivered.stream().flatMap(m -> m.values().stream()).flatMap(l -> l.stream())
+                                     .collect(Collectors.toSet()).size());
+        assertEquals(1000, bDelivered.stream().flatMap(m -> m.values().stream()).flatMap(l -> l.stream())
+                     .collect(Collectors.toSet()).size());
+
+        for (int i = 0; i < 1000; i++) {
+            var reconA = bufferA.forReconcilliation();
+            var reconB = bufferB.forReconcilliation();
+
+            var reconciled = bufferA.reconcile(reconB, memberB.getId());
+            assertEquals(0, reconciled.size(), "Failed on: " + i);
+            reconciled = bufferB.reconcile(reconA, memberA.getId());
+            assertEquals(0, reconciled.size(), "Failed on: " + i);
+        }
     }
 
+    @SuppressWarnings("unused")
     private void deliverB(StampedMessage aEvent) {
         bufferB.receive(Arrays.asList(aEvent.message().build()));
     }
 
+    @SuppressWarnings("unused")
     private void deliverA(StampedMessage bEvent) {
         bufferA.receive(Arrays.asList(bEvent.message().build()));
     }

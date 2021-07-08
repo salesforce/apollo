@@ -7,7 +7,6 @@
 package com.salesforce.apollo.causal;
 
 import com.salesfoce.apollo.utils.proto.Clock;
-import com.salesforce.apollo.causal.BloomClock.ComparisonResult;
 
 /**
  * @author hal.hildebrand
@@ -22,7 +21,7 @@ public interface ClockValue {
 
     BloomClockValue toBloomClockValue();
 
-    ComparisonResult compareTo(ClockValue b);
+    int compareTo(double fbr, ClockValue b);
 
     Clock toClock();
 }

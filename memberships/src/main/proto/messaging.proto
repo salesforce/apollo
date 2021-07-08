@@ -50,22 +50,26 @@ message Messages {
 message CausalPush {
     utils.Digeste context = 1;
     int32 ring = 2;
-    repeated  CausalMessage updates = 3;
+    repeated  CausalEnvelope updates = 3;
 }
 
 message CausalMessage {
     utils.Digeste source = 1;
     utils.IntStampedClock clock = 2;
-    utils.Digeste hash = 3;
-    int32 age = 4;
-    utils.Sig signature = 5;
-    google.protobuf.Any content = 6;
-    bool streamReset = 7;
+    google.protobuf.Any content = 3;
+    repeated utils.Digeste parents = 4;
+}
+
+message CausalEnvelope {
+    CausalMessage content = 1;
+    utils.Sig signature = 2;
+    int32 age = 3;
+    bool streamReset = 4;
 }
 
 message CausalMessages {
     utils.Biff  bff = 1;
-    repeated  CausalMessage updates = 2;
+    repeated  CausalEnvelope updates = 2;
 }
 
 message ByteMessage {

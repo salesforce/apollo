@@ -74,7 +74,8 @@ public class CausalMessagingTest {
                 assert m.from() != null : "null member";
                 ByteBuffer buf;
                 try {
-                    buf = m.message().getContent().unpack(ByteMessage.class).getContents().asReadOnlyByteBuffer();
+                    buf = m.message().getContent().getContent().unpack(ByteMessage.class).getContents()
+                           .asReadOnlyByteBuffer();
                 } catch (InvalidProtocolBufferException e) {
                     throw new IllegalStateException(e);
                 }
@@ -107,9 +108,9 @@ public class CausalMessagingTest {
     }
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(500)
+    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(100)
                                                                                  .setFalsePositiveRate(0.0125)
-                                                                                 .setBufferSize(1500);
+                                                                                 .setBufferSize(500);
 
     @BeforeAll
     public static void beforeClass() {
@@ -144,7 +145,7 @@ public class CausalMessagingTest {
         parameters.setContext(context);
         members.forEach(m -> context.activate(m));
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(100);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
         Executor commExec = Executors.newCachedThreadPool();
 
         messengers = members.stream().map(node -> {
@@ -165,7 +166,7 @@ public class CausalMessagingTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = 300;
+        int rounds = 30;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch round = new CountDownLatch(messengers.size());
             for (Receiver receiver : receivers.values()) {

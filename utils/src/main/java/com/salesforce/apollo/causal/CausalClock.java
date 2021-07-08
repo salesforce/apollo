@@ -19,7 +19,7 @@ public interface CausalClock<T extends Comparable<T>, S> extends StampedClockVal
 
     public T observeAll(Collection<Digest> digests);
 
-    public S stamp(Digest digest);
+    public S stamp();
 
     StampedClockValue<T, S> current();
 

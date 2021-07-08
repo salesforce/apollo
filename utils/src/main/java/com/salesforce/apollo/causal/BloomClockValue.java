@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.causal;
 
+import static com.salesforce.apollo.causal.BloomClock.count;
+
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.utils.proto.Clock;
-import com.salesforce.apollo.causal.BloomClock.Comparison;
-import com.salesforce.apollo.causal.BloomClock.ComparisonResult;
 
 /**
  * @author hal.hildebrand
@@ -19,22 +19,17 @@ import com.salesforce.apollo.causal.BloomClock.ComparisonResult;
 public record BloomClockValue(long prefix, byte[] counts) implements ClockValue {
 
     @Override
-    public ComparisonResult compareTo(ClockValue b) {
+    public int compareTo(double fpr, ClockValue b) {
         var bcv = b.toBloomClockValue();
-        return happenedBefore(bcv.prefix, bcv.counts);
+        return happenedBefore(fpr, bcv.prefix, bcv.counts);
     }
 
-    public ComparisonResult happenedBefore(long bbcPrefix, byte[] bbcCounts) {
-        return BloomClock.happenedBefore(prefix, counts, bbcPrefix, bbcCounts);
+    public int happenedBefore(double fpr, long bbcPrefix, byte[] bbcCounts) {
+        return BloomClock.happenedBefore(fpr, prefix, counts, bbcPrefix, bbcCounts);
     }
 
     public int m() {
         return BloomClock.m(counts);
-    }
-
-    public Comparison compareWith(long bbcPrefix, byte[] bbcCounts) {
-        return BloomClock.compareWith(prefix, counts, bbcPrefix, bbcCounts);
-
     }
 
     @Override
@@ -45,5 +40,13 @@ public record BloomClockValue(long prefix, byte[] counts) implements ClockValue 
     @Override
     public BloomClockValue toBloomClockValue() {
         return this;
+    }
+
+    public int sum() {
+        int sum = 0;
+        for (int i = 0; i < m(); i++) {
+            sum += count(i, counts);
+        }
+        return sum;
     }
 }

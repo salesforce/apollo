@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.causal;
 
-import static java.util.stream.IntStream.range;
-
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Objects;
@@ -80,17 +78,18 @@ public class BloomClock implements ClockValue {
     }
 
     public static boolean validate(int m, byte[] counts) {
-        return m == counts.length;
+        return m == m(counts);
     }
 
-    static Comparison compareWith(long abcPrefix, byte[] abcCounts, long bbcPrefix, byte[] bbcCounts) {
+    static int happenedBefore(double fpr, long abcPrefix, byte[] abcCounts, long bbcPrefix, byte[] bbcCounts) {
+        assert abcCounts.length == bbcCounts.length;
+
         int sumA = 0;
         int sumB = 0;
-        int lessThan = 0;
-        int greaterThan = 0;
+        int aGreater = 0;
+        int bGreater = 0;
 
-        // only one is > 0 if any
-        int aBias = 0;
+        int aBias = 0; // only one is > 0 if any
         int bBias = 0;
 
         int prefixCompare = Long.compareUnsigned(abcPrefix, bbcPrefix);
@@ -98,13 +97,13 @@ public class BloomClock implements ClockValue {
         if (prefixCompare < 0) {
             long preDiff = bbcPrefix - abcPrefix;
             if (Long.compareUnsigned(preDiff, MASK) > 0) {
-                return new Comparison(1, 0, MASK * m);
+                return -1;
             }
             bBias = (int) (preDiff & MASK);
         } else if (prefixCompare > 0) {
             long preDiff = abcPrefix - bbcPrefix;
             if (Long.compareUnsigned(preDiff, MASK) > 0) {
-                return new Comparison(-1, MASK * m, 0);
+                return 1;
             }
             aBias = (int) (preDiff & MASK);
         }
@@ -114,48 +113,60 @@ public class BloomClock implements ClockValue {
             sumA += a;
             int b = count(i, bbcCounts) + bBias;
             sumB += b;
-            int diff = b - a;
-            if (diff > 0) {
-                lessThan++;
-            } else if (diff < 0) {
-                greaterThan++;
-            }
-            if (greaterThan != 0 && lessThan != 0) {
-                int biasA = aBias;
-                int biasB = bBias;
-                return new Comparison(0, sumA + range(i + 1, m).map(x -> x + biasA).sum(),
-                                      sumB + range(i + 1, m).map(x -> x + biasB).sum());
+            if (a < b) {
+                bGreater++;
+            } else if (a > b) {
+                aGreater++;
             }
         }
 
-        if (greaterThan != 0) {
-            return new Comparison(1, sumA, sumB);
+        // check for equality
+        if (aGreater == 0 & bGreater == 0) {
+            return 0;
         }
-        return lessThan == 0 ? new Comparison(0, sumA, sumB) : new Comparison(-1, sumA, sumB);
+
+        // A and B are not comparable as both are greater in some count than the other
+        if (aGreater != 0 & bGreater != 0) {
+            return 0;
+        }
+
+        // one of A or B == 0
+
+        // is A > B
+        if (bGreater == 0) { // all A >= B and at least 1 count of A is > B
+            double cFPR = falsePositiveRate(sumA, sumB, m(abcCounts));
+            assert cFPR >= 0.0;
+            if (cFPR <= fpr) {
+                return 1; // fell under the threshold, so it's not a false positive
+            }
+            return 0; // consider this a false positive, therefore uncomparable
+        }
+
+        // all A <= B 
+        double cFPR = falsePositiveRate(sumA, sumB, m(abcCounts));
+        assert cFPR >= 0.0;
+        if (cFPR <= fpr) {
+            return -1; // fell under the threshold, so it's not a false positive
+        }
+        return 0; // consider this a false positive, therefore uncomparable
+
     }
 
     static int count(int index, byte[] counts) {
         return counts[index] & MASK;
     }
 
+    static double falsePositiveRate(int sumA, int sumB, int m) {
+        double X = sumB;
+        double Y = sumA;
+        double M = (double) m;
+        return Math.pow(1.0 - Math.pow(1.0 - (1.0 / M), X), Y);
+    }
+
     static double falsePositiveRate(Comparison c, int m) {
         double x = Math.min(c.sumA(), c.sumB());
         double y = Math.max(c.sumA(), c.sumB());
         return Math.pow(1 - Math.pow(1.0 - (1.0 / m), x), y);
-    }
-
-    static ComparisonResult happenedBefore(long abcPrefix, byte[] abcCounts, long bbcPrefix, byte[] bbcCounts) {
-        if (abcCounts.length != bbcCounts.length) {
-            throw new IllegalArgumentException("Cannot compare as this clock has a different count size than the specified clock");
-        }
-        Comparison c = compareWith(abcPrefix, abcCounts, bbcPrefix, bbcCounts);
-        int m = m(abcCounts);
-        return switch (c.compared()) {
-        case 0 -> new ComparisonResult(0, falsePositiveRate(c, m));
-        case 1 -> new ComparisonResult(1, falsePositiveRate(c, m));
-        case -1 -> new ComparisonResult(-1, falsePositiveRate(c, m));
-        default -> throw new IllegalArgumentException("Unexpected comparison value: " + c.compared());
-        };
     }
 
     static int m(byte[] counts) {
@@ -273,9 +284,9 @@ public class BloomClock implements ClockValue {
     }
 
     @Override
-    public ComparisonResult compareTo(ClockValue b) {
+    public int compareTo(double fpr, ClockValue b) {
         BloomClockValue bbc = b.toBloomClockValue();
-        return happenedBefore(prefix, counts, bbc.prefix(), bbc.counts());
+        return happenedBefore(fpr, prefix, counts, bbc.prefix(), bbc.counts());
     }
 
     /**

@@ -8,7 +8,6 @@ package com.salesforce.apollo.causal;
 
 import com.salesfoce.apollo.utils.proto.Clock;
 import com.salesfoce.apollo.utils.proto.IntStampedClock;
-import com.salesforce.apollo.causal.BloomClock.ComparisonResult;
 
 /**
  * @author hal.hildebrand
@@ -31,8 +30,8 @@ public record IntStampedClockValue(BloomClockValue clock, int stamp)
     }
 
     @Override
-    public ComparisonResult compareTo(ClockValue b) {
-        return clock.compareTo(b);
+    public int compareTo(double fpr, ClockValue b) {
+        return clock.compareTo(fpr, b);
     }
 
     @Override
@@ -48,5 +47,10 @@ public record IntStampedClockValue(BloomClockValue clock, int stamp)
     @Override
     public String toString() {
         return "{" + instant() + ":" + BloomClock.print(clock) + "}";
+    }
+
+    @Override
+    public int sum() {
+        return clock.sum();
     }
 }

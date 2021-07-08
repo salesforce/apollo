@@ -32,6 +32,10 @@ public class JohnHancock {
         return new JohnHancock(signature);
     }
 
+    public static JohnHancock of(Sig signature) {
+        return new JohnHancock(signature);
+    }
+
     final byte[] bytes;
 
     private final SignatureAlgorithm algorithm;
@@ -91,6 +95,15 @@ public class JohnHancock {
         } catch (IOException e) {
             throw new IllegalStateException("Cannot deserialize to ByteString", e);
         }
+    }
+
+    public Digest toDigest(DigestAlgorithm digestAlgorithm) {
+        if (digestAlgorithm.digestLength() * 2 != algorithm.signatureLength()) {
+            throw new IllegalArgumentException("Cannot convert to a hash, as digest and signature length are not compatible");
+        }
+        Digest a = new Digest(digestAlgorithm, Arrays.copyOf(bytes, digestAlgorithm.digestLength()));
+        Digest b = new Digest(digestAlgorithm, Arrays.copyOfRange(bytes, digestAlgorithm.digestLength(), bytes.length));
+        return a.xor(b);
     }
 
     public Sig toSig() {

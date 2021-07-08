@@ -11,7 +11,6 @@ import java.time.Instant;
 import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.utils.proto.Clock;
 import com.salesfoce.apollo.utils.proto.StampedClock;
-import com.salesforce.apollo.causal.BloomClock.ComparisonResult;
 
 /**
  * @author hal.hildebrand
@@ -40,8 +39,8 @@ public record TimeStampedClockValue(BloomClockValue clock, Instant stamp)
     }
 
     @Override
-    public ComparisonResult compareTo(ClockValue b) {
-        return clock.compareTo(b);
+    public int compareTo(double fpr, ClockValue b) {
+        return clock.compareTo(fpr, b);
     }
 
     @Override
@@ -52,6 +51,11 @@ public record TimeStampedClockValue(BloomClockValue clock, Instant stamp)
     @Override
     public Instant instant() {
         return null;
+    }
+
+    @Override
+    public int sum() {
+        return clock.sum();
     }
 
 }

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.utils.bloomFilters;
+package com.salesforce.apollo.utils.causal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -22,6 +22,7 @@ import com.salesforce.apollo.causal.ClockValue;
 import com.salesforce.apollo.causal.ClockValueComparator;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.utils.bloomFilters.Hash;
 
 /**
  * @author hal.hildebrand

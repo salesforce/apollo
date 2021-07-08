@@ -14,5 +14,7 @@ public interface StampedClockValue<T extends Comparable<T>, S> extends ClockValu
 
     T instant();
 
+    int sum();
+
     S toStampedClock();
 }

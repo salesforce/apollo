@@ -55,17 +55,17 @@ public class StampedClockValueComparator<T extends Comparable<T>, S> implements 
      */
     @Override
     public int compare(StampedClockValue<T, S> a, StampedClockValue<T, S> b) {
-        var comparison = a.compareTo(b);
-        if (comparison.comparison() > 0) {
-            return comparison.comparison();
-        } else if (comparison.comparison() == 0) {
+        var comparison = a.compareTo(fpr, b);
+        if (comparison > 0) {
+            return 1;
+        } else if (comparison == 0) {
             return a.instant().compareTo(b.instant());
         }
-        if (comparison.fpr() <= fpr) {
-            return a.instant().compareTo(b.instant());
-        } else {
-            return -1;
-        }
+        return -1;
     }
 
+    @Override
+    public String toString() {
+        return "SCVC [fpr=" + fpr + "]";
+    }
 }
